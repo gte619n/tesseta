@@ -9,6 +9,10 @@ desktop.ini
 *.iml
 *.swp
 .fleet/
+.classpath
+.project
+.settings/
+bin/
 
 # Env + secrets
 .env
