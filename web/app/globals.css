@@ -1,10 +1,73 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-sans), "Inter", "SF Pro Text", -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: var(--font-mono), "SF Mono", ui-monospace, "Cascadia Code",
+    monospace;
+
+  /* Color tokens — single source of truth from the design spec. */
+  --color-canvas: #F0EBE0;
+  --color-canvas-muted: #EBE4D0;
+  --color-canvas-sunken: #F0EBE0;
+  --color-surface: #FFFFFF;
+
+  --color-border-subtle: #EFE7D2;
+  --color-border-default: #E6DFCF;
+  --color-border-strong: #DDD3BB;
+
+  --color-primary: #1F2419;
+  --color-secondary: #6B6856;
+  --color-tertiary: #8A8770;
+  --color-quaternary: #B5B09C;
+  --color-inverse: #F0EBE0;
+
+  --color-accent: #5C7A2E;
+  --color-accent-dim: #3D5A1E;
+  --color-accent-bg: #E8EBD8;
+
+  --color-good: #5C7A2E;
+  --color-good-bg: #E8EBD8;
+  --color-good-alt: #8A9F5C;
+  --color-warn: #A06A1F;
+  --color-warn-bg: #FBE9DA;
+  --color-alert: #A8473A;
+  --color-alert-bg: #F7E1DC;
+  --color-neutral: #3B6B8E;
+  --color-muted: #B5B09C;
+
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  --tracking-caps: 0.08em;
+}
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 html,
 body {
   height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01" on;
+}
+
+/* Tabular figures everywhere a number appears. The mono utility opts in. */
+.font-mono,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Project-specific tokens not in the Tailwind theme. */
+.caps-mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
 }

@@ -3,32 +3,32 @@ package com.gte619n.healthfitness.mobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import com.gte619n.healthfitness.mobile.dashboard.FoldableDashboardScreen
+import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
+import com.gte619n.healthfitness.ui.theme.Hf
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             HealthFitnessTheme {
+                val windowSize = calculateWindowSizeClass(this)
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
+                    color = Hf.colors.canvas,
                 ) {
-                    HelloScreen()
+                    DashboardRoot(widthClass = windowSize.widthSizeClass)
                 }
             }
         }
@@ -36,24 +36,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HelloScreen() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("Health & Fitness", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Hello from Android",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+fun DashboardRoot(widthClass: WindowWidthSizeClass) {
+    // Compact (< 600 dp) → phone Today screen.
+    // Medium / Expanded (≥ 600 dp) → foldable/tablet dashboard with icon-only sidebar.
+    when (widthClass) {
+        WindowWidthSizeClass.Compact -> PhoneTodayScreen()
+        else -> FoldableDashboardScreen()
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun HelloScreenPreview() {
-    HealthFitnessTheme { HelloScreen() }
 }

@@ -43,3 +43,4 @@ coverage/
 # Temp
 tmp/
 .tmp/
+.playwright-mcp/
