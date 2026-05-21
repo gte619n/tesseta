@@ -356,9 +356,17 @@ Manual one-time steps documented in `infra/README.md` updates:
 3. `curl -i -H "Authorization: Bearer <real Google ID token>" $BACKEND_URL/api/me`
    → 200 with `{userId, email, displayName}` and a `users/{sub}` document
    exists in Firestore.
-4. Visit `https://<web-cloud-run>/me` in an incognito window. Sign in
-   with Google. `/me` renders the user's email. Close the browser,
-   reopen days later, hit `/me` directly — still signed in.
+4. Visit `https://<web-cloud-run>/me` in a regular (non-incognito) Chrome
+   window. Sign in with Google. `/me` renders the user's email. Close the
+   browser, reopen days later, hit `/me` directly — still signed in.
+
+   *Known caveat:* Chrome incognito blocks third-party cookies, which
+   breaks Google's `accounts.youtube.com/SetSID` session-distribution
+   step at the end of the OAuth flow. The user lands on a Google 400
+   page instead of `/me`. This is structural to Google's OAuth + Chrome's
+   incognito cookie policy, not a bug in our setup. Test sign-in in a
+   regular window; if you want to use a clean profile, create a new
+   Chrome profile rather than incognito.
 5. Fresh install of the phone APK. Tap "Continue with Google", complete
    the picker. Dashboard loads. Force-stop. Reopen weeks later — no
    re-prompt, dashboard loads silently with a fresh token.

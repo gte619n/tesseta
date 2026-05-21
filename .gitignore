@@ -35,6 +35,7 @@ health-fitness-release.keystore
 **/.next/
 **/node_modules/
 **/.gradle/
+**/.kotlin/
 
 # Logs
 *.log
