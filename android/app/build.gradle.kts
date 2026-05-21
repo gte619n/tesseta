@@ -29,7 +29,23 @@ android {
         buildConfigField("String", "WEB_OAUTH_CLIENT_ID", "\"$webOauthClientId\"")
     }
 
+    // IMPL-02: pin debug signing to the checked-in keystore at android/debug.keystore
+    // so every developer's debug APK has the SHA-1 we registered with Google's
+    // OAuth client. Without this, AGP defaults to ~/.android/debug.keystore and
+    // Credential Manager will reject the sign-in with DEVELOPER_ERROR.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

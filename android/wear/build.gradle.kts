@@ -16,7 +16,21 @@ android {
         versionName = "0.1.0"
     }
 
+    // IMPL-02: same checked-in keystore as phone, so wear-side Credential Manager
+    // / Google identity checks use the SHA-1 we registered with Google's OAuth.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
