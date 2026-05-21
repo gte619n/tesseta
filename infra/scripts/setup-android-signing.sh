@@ -4,6 +4,9 @@ set -euo pipefail
 # Idempotent: generates the Android release keystore + a shared debug keystore,
 # stores the release artifacts in Secret Manager, and prints SHA-1 fingerprints
 # needed to register the Android OAuth clients in GCP Console.
+#
+# Safe to re-run: existing keystores are reused, and Secret Manager uploads
+# always run (creating either the secret or a new version).
 
 PROJECT_ID="health-fitness-160"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,21 +22,40 @@ require keytool
 require gcloud
 require openssl
 
+# Reads a password twice (with confirmation), assigns it to the variable
+# named in $1. Uses an out-variable instead of command substitution because
+# capturing stdout swallows password characters into shell newline-stripping
+# rules and breaks downstream tools that get the password as an argument.
+# All UI (prompts and the trailing newline after each silent read) goes to
+# stderr so callers can run this without redirection tricks.
 read_password() {
-  local prompt="$1"
+  local outvar="$1" prompt="$2"
   local pw1 pw2
   while true; do
-    read -r -s -p "$prompt: " pw1; echo
-    read -r -s -p "Confirm: " pw2; echo
+    printf '%s: ' "$prompt" >&2
+    IFS= read -r -s pw1
+    printf '\n' >&2
+    printf 'Confirm: ' >&2
+    IFS= read -r -s pw2
+    printf '\n' >&2
     if [[ "$pw1" == "$pw2" && -n "$pw1" ]]; then
-      printf '%s' "$pw1"
+      printf -v "$outvar" '%s' "$pw1"
       return 0
     fi
-    echo "    passwords do not match or empty, try again" >&2
+    printf '    passwords do not match or empty, try again\n' >&2
   done
 }
 
-secret_create_or_add() {
+read_password_once() {
+  local outvar="$1" prompt="$2"
+  local pw
+  printf '%s: ' "$prompt" >&2
+  IFS= read -r -s pw
+  printf '\n' >&2
+  printf -v "$outvar" '%s' "$pw"
+}
+
+secret_upload_file() {
   local name="$1"
   local file="$2"
   if gcloud secrets describe "$name" --project="$PROJECT_ID" &>/dev/null; then
@@ -43,6 +65,22 @@ secret_create_or_add() {
   else
     gcloud secrets create "$name" \
       --replication-policy=automatic --data-file="$file" --project="$PROJECT_ID" >/dev/null
+    echo "    created $name"
+  fi
+}
+
+# Uploads stdin bytes as the secret payload using gcloud's documented `-`
+# convention. Wrapper because we want both create-or-add behavior and
+# stdin input, which gcloud splits across two flags.
+secret_upload_stdin() {
+  local name="$1"
+  if gcloud secrets describe "$name" --project="$PROJECT_ID" &>/dev/null; then
+    gcloud secrets versions add "$name" \
+      --data-file=- --project="$PROJECT_ID" >/dev/null
+    echo "    added new version to $name"
+  else
+    gcloud secrets create "$name" \
+      --replication-policy=automatic --data-file=- --project="$PROJECT_ID" >/dev/null
     echo "    created $name"
   fi
 }
@@ -77,14 +115,18 @@ fi
 
 # --- Release keystore (NOT checked in; lives in Secret Manager) ---
 
+RELEASE_STORE_PW=""
+RELEASE_KEY_PW=""
+
 echo "==> Release keystore"
 if [[ -f "$RELEASE_KEYSTORE" ]]; then
-  echo "    local file exists at $RELEASE_KEYSTORE, skipping generation"
-  read -r -s -p "Enter release store password (to print fingerprint): " RELEASE_STORE_PW; echo
+  echo "    local file exists at $RELEASE_KEYSTORE, will re-upload to Secret Manager"
+  read_password_once RELEASE_STORE_PW "Enter existing release store password"
+  read_password_once RELEASE_KEY_PW   "Enter existing release key password (often the same)"
 else
   echo "    no local release keystore found; generating"
-  RELEASE_STORE_PW="$(read_password 'Choose a release store password (save it somewhere safe)')"
-  RELEASE_KEY_PW="$(read_password 'Choose a release key password (can be the same)')"
+  read_password RELEASE_STORE_PW "Choose a release store password (save it somewhere safe)"
+  read_password RELEASE_KEY_PW   "Choose a release key password (can be the same)"
   read -r -p "Common Name (CN) for the cert [Evan Ruff]: " CN
   CN="${CN:-Evan Ruff}"
   keytool -genkeypair -v \
@@ -96,12 +138,20 @@ else
     -storetype PKCS12 \
     -dname "CN=${CN},O=health-fitness-160,C=US" >/dev/null
   echo "    created $RELEASE_KEYSTORE"
-
-  echo "==> Uploading release keystore + passwords to Secret Manager"
-  secret_create_or_add "android-release-keystore" "$RELEASE_KEYSTORE"
-  echo -n "$RELEASE_STORE_PW" | secret_create_or_add "android-release-keystore-password" /dev/stdin
-  echo -n "$RELEASE_KEY_PW"   | secret_create_or_add "android-release-key-password"      /dev/stdin
 fi
+
+# Verify the password unlocks the keystore before we upload anything.
+# A wrong password here would otherwise poison Secret Manager.
+if ! print_sha1 "$RELEASE_KEYSTORE" "$RELEASE_ALIAS" "$RELEASE_STORE_PW" >/dev/null; then
+  echo "ERROR: could not read $RELEASE_KEYSTORE with the supplied store password." >&2
+  echo "       Aborting before any Secret Manager upload." >&2
+  exit 1
+fi
+
+echo "==> Uploading release keystore + passwords to Secret Manager"
+secret_upload_file "android-release-keystore" "$RELEASE_KEYSTORE"
+printf '%s' "$RELEASE_STORE_PW" | secret_upload_stdin "android-release-keystore-password"
+printf '%s' "$RELEASE_KEY_PW"   | secret_upload_stdin "android-release-key-password"
 
 # --- Fingerprints ---
 
