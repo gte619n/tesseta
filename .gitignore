@@ -22,6 +22,10 @@ bin/
 *.key
 service-account*.json
 credentials*.json
+# Android signing — release keystore lives only in Secret Manager.
+# The shared debug keystore at android/debug.keystore IS intentionally tracked.
+*-release.keystore
+health-fitness-release.keystore
 
 # Build outputs (component-specific gitignores narrow further)
 **/build/

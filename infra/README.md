@@ -7,14 +7,20 @@ Idempotent — safe to re-run.
 
 1. `gcloud auth login`
 2. `gcloud config set project health-fitness-160`
-3. `chmod +x scripts/enable-apis.sh scripts/bootstrap-gcp.sh`
+3. `chmod +x scripts/*.sh`
 4. `./scripts/enable-apis.sh`
 5. `./scripts/bootstrap-gcp.sh`
 6. Follow the two Console steps printed at the end of the bootstrap script
    (OAuth consent screen + OAuth 2.0 Client ID).
 7. Store the OAuth client secret and client ID in Secret Manager using the
    `gcloud secrets create ...` commands printed at the end of the bootstrap.
-8. Download the Google Health API Parity context file from
+8. `./scripts/setup-android-signing.sh` — generates the Android release
+   keystore, the shared debug keystore, stores both in Secret Manager, and
+   prints SHA-1 fingerprints. Then follow the three Console steps printed at
+   the end (web + android phone + android wear OAuth clients). See
+   [`docs/specs/IMPL-02-google-auth.md`](../docs/specs/IMPL-02-google-auth.md)
+   for context.
+9. Download the Google Health API Parity context file from
    <https://developers.google.com/health/get-started> and paste it into
    `AGENTS.md` at the repo root.
 
