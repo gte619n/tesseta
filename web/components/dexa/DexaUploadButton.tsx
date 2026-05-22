@@ -3,63 +3,82 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-// Dashed-border tile + full-page drop overlay + multi-step progress
-// overlay. The actual upload goes to /api/dexa/upload (a Next.js route
-// handler that proxies to the backend with auth), which streams back
-// SSE events {phase, message?, scan?, error?}.
+// Dashed-border tile + full-page drop overlay + per-file progress
+// overlay. Each upload streams its own SSE response from
+// /api/dexa/upload (which proxies to the backend with auth).
 //
-// Phases (mirror the backend contract in DexaScanController):
+// Multi-file behavior: drop or pick N PDFs → all upload in parallel,
+// each tracked independently in the overlay. The page refresh happens
+// after the LAST upload completes; failures don't block the others.
+//
+// Phase strings mirror the backend contract in DexaScanController:
 //   uploading  → "Saving your PDF"
 //   extracting → "Reading the scan with Gemini"
 //   saving     → "Storing the results"
-//   complete   → done, payload includes the saved scan
+//   complete   → done
 //   failed     → fatal, payload includes an error message
 
-type Phase = "uploading" | "extracting" | "saving" | "complete";
-type Status =
-  | { kind: "idle" }
-  | { kind: "running"; phase: Phase }
-  | { kind: "done" }
-  | { kind: "failed"; error: string };
+type Phase = "uploading" | "extracting" | "saving";
+type Status = Phase | "queued" | "complete" | "failed";
 
-const STEPS: { id: Phase; label: string }[] = [
-  { id: "uploading", label: "Saving your PDF" },
-  { id: "extracting", label: "Reading the scan with Gemini" },
-  { id: "saving", label: "Storing the results" },
-];
+type FileState = {
+  id: string;
+  name: string;
+  status: Status;
+  error?: string;
+};
+
+const PHASE_LABEL: Record<Status, string> = {
+  queued: "Queued",
+  uploading: "Saving PDF",
+  extracting: "Reading with Gemini",
+  saving: "Storing results",
+  complete: "Done",
+  failed: "Failed",
+};
 
 export function DexaUploadButton() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [files, setFiles] = useState<FileState[]>([]);
   const dragDepth = useRef(0);
 
-  const busy = status.kind === "running";
+  const busy = files.some(
+    (f) => f.status !== "complete" && f.status !== "failed",
+  );
+  const overlayOpen = files.length > 0;
 
-  async function submit(file: File) {
+  function updateOne(id: string, patch: Partial<FileState>) {
+    setFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    );
+  }
+
+  async function uploadOne(state: FileState, file: File) {
     if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-      setStatus({ kind: "failed", error: "Drop a PDF file." });
+      updateOne(state.id, { status: "failed", error: "Not a PDF" });
       return;
     }
-    setStatus({ kind: "running", phase: "uploading" });
+
     const fd = new FormData();
     fd.set("file", file);
+    updateOne(state.id, { status: "uploading" });
 
     let res: Response;
     try {
       res = await fetch("/api/dexa/upload", { method: "POST", body: fd });
     } catch (err) {
-      setStatus({
-        kind: "failed",
+      updateOne(state.id, {
+        status: "failed",
         error: err instanceof Error ? err.message : "Network error",
       });
       return;
     }
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => "");
-      setStatus({
-        kind: "failed",
+      updateOne(state.id, {
+        status: "failed",
         error: text || `Upload failed (${res.status})`,
       });
       return;
@@ -68,13 +87,10 @@ export function DexaUploadButton() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let succeeded = false;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      // SSE events are separated by a blank line. Each event's payload
-      // is the concatenation of its `data:` lines.
       let sep: number;
       while ((sep = buffer.indexOf("\n\n")) !== -1) {
         const raw = buffer.slice(0, sep);
@@ -87,31 +103,47 @@ export function DexaUploadButton() {
         if (!data) continue;
         try {
           const event = JSON.parse(data) as
-            | { phase: Phase; message?: string }
-            | { phase: "complete"; scan: unknown }
+            | { phase: Phase }
+            | { phase: "complete" }
             | { phase: "failed"; error: string };
           if (event.phase === "complete") {
-            succeeded = true;
-            setStatus({ kind: "done" });
+            updateOne(state.id, { status: "complete" });
           } else if (event.phase === "failed") {
-            setStatus({
-              kind: "failed",
+            updateOne(state.id, {
+              status: "failed",
               error: (event as { error: string }).error,
             });
           } else {
-            setStatus({ kind: "running", phase: event.phase });
+            updateOne(state.id, { status: event.phase });
           }
         } catch {
-          // Skip malformed events — better to keep the stream alive.
+          // Malformed event — skip and keep the stream alive.
         }
       }
     }
-    if (succeeded) {
-      // Refresh the page so the new scan appears in the table. Hold
-      // the success overlay for a beat so the user sees confirmation.
-      router.refresh();
-      setTimeout(() => setStatus({ kind: "idle" }), 900);
-    }
+  }
+
+  async function submit(picked: File[]) {
+    if (picked.length === 0) return;
+    const initial: FileState[] = picked.map((f) => ({
+      id:
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`,
+      name: f.name,
+      status: "queued",
+    }));
+    setFiles((prev) => [...prev, ...initial]);
+
+    // Run all uploads in parallel. The backend's virtual-thread pool
+    // can comfortably handle several concurrent Gemini calls; if we
+    // ever start hitting API quota, we'll add a small concurrency
+    // limit here.
+    await Promise.all(
+      initial.map((state, i) => uploadOne(state, picked[i]!)),
+    );
+
+    router.refresh();
   }
 
   useEffect(() => {
@@ -133,8 +165,8 @@ export function DexaUploadButton() {
       e.preventDefault();
       dragDepth.current = 0;
       setDragOver(false);
-      const file = e.dataTransfer.files[0];
-      if (file) submit(file);
+      const list = Array.from(e.dataTransfer.files);
+      if (list.length > 0) submit(list);
     }
     window.addEventListener("dragenter", onDragEnter);
     window.addEventListener("dragleave", onDragLeave);
@@ -151,10 +183,19 @@ export function DexaUploadButton() {
   }, []);
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const picked = Array.from(e.target.files ?? []);
     if (inputRef.current) inputRef.current.value = "";
-    if (file) submit(file);
+    if (picked.length > 0) submit(picked);
   }
+
+  function dismiss() {
+    setFiles([]);
+  }
+
+  const doneCount = files.filter((f) => f.status === "complete").length;
+  const failedCount = files.filter((f) => f.status === "failed").length;
+  const allSettled =
+    files.length > 0 && doneCount + failedCount === files.length;
 
   return (
     <>
@@ -162,6 +203,7 @@ export function DexaUploadButton() {
         ref={inputRef}
         type="file"
         accept="application/pdf,.pdf"
+        multiple
         onChange={onPick}
         disabled={busy}
         aria-hidden
@@ -183,7 +225,7 @@ export function DexaUploadButton() {
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
-        title="Drag a DEXA PDF onto the page, or click to choose"
+        title="Drag DEXA PDFs onto the page, or click to choose"
         className="group flex items-center gap-2 rounded-[8px] border border-dashed border-border-strong bg-canvas px-2.5 py-1.5 text-[11px] font-medium text-secondary transition hover:border-accent hover:bg-surface hover:text-primary disabled:opacity-60"
       >
         <svg
@@ -202,78 +244,73 @@ export function DexaUploadButton() {
             strokeLinejoin="round"
           />
         </svg>
-        <span>Drop DEXA PDF</span>
+        <span>Drop DEXA PDFs</span>
       </button>
 
-      {dragOver && status.kind === "idle" && (
+      {dragOver && !overlayOpen && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-canvas/85 backdrop-blur-sm">
           <div className="rounded-[14px] border-2 border-dashed border-accent bg-surface px-10 py-8 text-center shadow-[0_24px_64px_rgba(0,0,0,0.12)]">
             <div className="text-[22px] font-medium tracking-[-0.015em] text-primary">
-              Drop your DEXA PDF
+              Drop your DEXA PDFs
             </div>
             <div className="mt-2 font-mono text-[12px] text-tertiary">
-              We&apos;ll extract the scan and add it to your readings.
+              Multiple files supported — we&apos;ll read them in parallel.
             </div>
           </div>
         </div>
       )}
 
-      {(status.kind === "running" ||
-        status.kind === "done" ||
-        status.kind === "failed") && (
+      {overlayOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/75 backdrop-blur-sm">
-          <div className="w-[400px] rounded-[14px] border-[0.5px] border-border-default bg-surface px-7 py-6 shadow-[0_24px_64px_rgba(0,0,0,0.12)]">
-            <div className="text-[15px] font-medium tracking-[-0.01em] text-primary">
-              {status.kind === "done"
-                ? "Scan saved"
-                : status.kind === "failed"
-                ? "Couldn’t read your scan"
-                : "Reading your DEXA scan"}
-            </div>
-            {status.kind === "failed" ? (
-              <>
-                <div className="mt-3 font-mono text-[12px] leading-[1.5] text-secondary">
-                  {status.error}
+          <div className="w-[440px] rounded-[14px] border-[0.5px] border-border-default bg-surface px-7 py-6 shadow-[0_24px_64px_rgba(0,0,0,0.12)]">
+            <div className="flex items-baseline justify-between">
+              <div className="text-[15px] font-medium tracking-[-0.01em] text-primary">
+                {allSettled
+                  ? failedCount === 0
+                    ? `Saved ${doneCount} scan${doneCount === 1 ? "" : "s"}`
+                    : `${doneCount}/${files.length} saved`
+                  : `Reading ${files.length} scan${files.length === 1 ? "" : "s"}`}
+              </div>
+              {!busy && (
+                <div className="font-mono text-[11px] text-tertiary">
+                  {doneCount + failedCount}/{files.length}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setStatus({ kind: "idle" })}
-                  className="mt-5 cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
-                >
-                  Dismiss
-                </button>
-              </>
-            ) : (
-              <ol className="mt-4 space-y-2.5">
-                {STEPS.map((step, idx) => {
-                  const currentIdx =
-                    status.kind === "running"
-                      ? STEPS.findIndex((s) => s.id === status.phase)
-                      : STEPS.length; // done → all complete
-                  const state =
-                    idx < currentIdx
-                      ? "done"
-                      : idx === currentIdx
-                      ? "active"
-                      : "pending";
-                  return (
-                    <li key={step.id} className="flex items-center gap-3">
-                      <StepIcon state={state} />
-                      <span
-                        className={
-                          state === "pending"
-                            ? "font-mono text-[12px] text-quaternary"
-                            : state === "active"
-                            ? "font-mono text-[12px] text-primary"
-                            : "font-mono text-[12px] text-secondary"
-                        }
-                      >
-                        {step.label}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
+              )}
+            </div>
+
+            <ol className="mt-4 max-h-[280px] space-y-2 overflow-y-auto">
+              {files.map((f) => (
+                <li key={f.id} className="flex items-center gap-3">
+                  <StatusIcon status={f.status} />
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="truncate font-mono text-[12px] text-primary"
+                      title={f.name}
+                    >
+                      {f.name}
+                    </div>
+                    <div
+                      className={`font-mono text-[10px] ${
+                        f.status === "failed" ? "text-red-600" : "text-tertiary"
+                      }`}
+                    >
+                      {f.status === "failed"
+                        ? f.error ?? "Failed"
+                        : PHASE_LABEL[f.status]}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            {allSettled && (
+              <button
+                type="button"
+                onClick={dismiss}
+                className="mt-5 cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
+              >
+                Close
+              </button>
             )}
           </div>
         </div>
@@ -282,8 +319,8 @@ export function DexaUploadButton() {
   );
 }
 
-function StepIcon({ state }: { state: "pending" | "active" | "done" }) {
-  if (state === "done") {
+function StatusIcon({ status }: { status: Status }) {
+  if (status === "complete") {
     return (
       <span
         className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent text-inverse"
@@ -301,29 +338,61 @@ function StepIcon({ state }: { state: "pending" | "active" | "done" }) {
       </span>
     );
   }
-  if (state === "active") {
+  if (status === "failed") {
     return (
       <span
-        className="flex h-4 w-4 shrink-0 items-center justify-center"
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-600 text-inverse"
         aria-hidden
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="animate-spin">
-          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.6" className="text-border-strong" opacity="0.3" />
+        <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
           <path
-            d="M8 2a6 6 0 016 6"
+            d="M3 3l6 6M9 3l-6 6"
             stroke="currentColor"
             strokeWidth="1.6"
             strokeLinecap="round"
-            className="text-accent"
           />
         </svg>
       </span>
     );
   }
+  if (status === "queued") {
+    return (
+      <span
+        className="h-1.5 w-1.5 shrink-0 rounded-full bg-quaternary"
+        aria-hidden
+      />
+    );
+  }
+  // Any active phase: animated spinner.
   return (
     <span
-      className="h-1.5 w-1.5 shrink-0 rounded-full bg-quaternary"
+      className="flex h-4 w-4 shrink-0 items-center justify-center"
       aria-hidden
-    />
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        className="animate-spin"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          className="text-border-strong"
+          opacity="0.3"
+        />
+        <path
+          d="M8 2a6 6 0 016 6"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          className="text-accent"
+        />
+      </svg>
+    </span>
   );
 }

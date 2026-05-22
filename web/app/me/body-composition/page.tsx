@@ -223,7 +223,9 @@ export default async function BodyCompositionPage() {
                   {rows.slice(0, 100).map((r) => (
                     <tr
                       key={r.key}
-                      className="border-t-[0.5px] border-border-subtle"
+                      className={`border-t-[0.5px] border-border-subtle ${
+                        r.isDexa ? "bg-canvas/40" : ""
+                      }`}
                     >
                       <td className="px-5 py-2 text-secondary">
                         {r.detailHref ? (

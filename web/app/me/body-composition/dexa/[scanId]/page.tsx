@@ -96,6 +96,12 @@ export default async function DexaScanDetailPage({
               value={scan.androidGynoidRatio}
               unit=""
               fractionDigits={2}
+              tooltip={
+                <AgBreakdown
+                  android={scan.android}
+                  gynoid={scan.gynoid}
+                />
+              }
             />
           </div>
         </Section>
@@ -104,8 +110,6 @@ export default async function DexaScanDetailPage({
           <RegionTable
             rows={[
               { label: "Trunk", region: scan.trunk },
-              { label: "Android", region: scan.android },
-              { label: "Gynoid", region: scan.gynoid },
               { label: "Arms (total)", region: scan.armsTotal },
               { label: "Arms — right", region: scan.armsRight, sub: true },
               { label: "Arms — left", region: scan.armsLeft, sub: true },
@@ -160,16 +164,28 @@ function Stat({
   value,
   unit,
   fractionDigits = 1,
+  tooltip,
 }: {
   label: string;
   value: number | null;
   unit: string;
   fractionDigits?: number;
+  tooltip?: React.ReactNode;
 }) {
-  return (
-    <div>
-      <div className="font-mono text-[10px] uppercase tracking-[0.06em] text-tertiary">
-        {label}
+  const body = (
+    <>
+      <div className="flex items-center gap-1.5">
+        <div className="font-mono text-[10px] uppercase tracking-[0.06em] text-tertiary">
+          {label}
+        </div>
+        {tooltip && (
+          <span
+            className="font-mono text-[9px] text-quaternary"
+            aria-hidden
+          >
+            ⓘ
+          </span>
+        )}
       </div>
       <div className="mt-1 font-mono text-[20px] font-medium tabular text-primary">
         {value !== null ? value.toFixed(fractionDigits) : "—"}
@@ -177,7 +193,80 @@ function Stat({
           <span className="ml-1 text-[12px] text-secondary">{unit}</span>
         )}
       </div>
+    </>
+  );
+
+  if (!tooltip) return <div>{body}</div>;
+
+  // Hover popover. Pure CSS via group-hover keeps this a server
+  // component — no useState, no client boundary.
+  return (
+    <div className="group relative cursor-help">
+      {body}
+      <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-[280px] opacity-0 transition-opacity duration-100 group-hover:opacity-100">
+        <div className="rounded-[10px] border-[0.5px] border-border-default bg-surface px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.12)]">
+          {tooltip}
+        </div>
+      </div>
     </div>
+  );
+}
+
+// Compact android + gynoid breakdown for the A/G ratio tooltip.
+function AgBreakdown({
+  android,
+  gynoid,
+}: {
+  android: DexaRegion | null;
+  gynoid: DexaRegion | null;
+}) {
+  return (
+    <>
+      <div className="caps-mono text-[9px] tracking-[0.08em] text-tertiary">
+        Android / Gynoid regions
+      </div>
+      <table className="mt-2 w-full font-mono text-[11px] tabular">
+        <thead>
+          <tr className="text-tertiary">
+            <th className="py-0.5 text-left font-normal" />
+            <th className="py-0.5 text-right font-normal">Total</th>
+            <th className="py-0.5 text-right font-normal">Lean</th>
+            <th className="py-0.5 text-right font-normal">Fat</th>
+            <th className="py-0.5 text-right font-normal">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <AgRow label="Android" region={android} />
+          <AgRow label="Gynoid" region={gynoid} />
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function AgRow({
+  label,
+  region,
+}: {
+  label: string;
+  region: DexaRegion | null;
+}) {
+  return (
+    <tr className="border-t-[0.5px] border-border-subtle">
+      <td className="py-1 text-secondary">{label}</td>
+      <td className="py-1 text-right text-primary">
+        {fmt(region?.totalMassLb, "")}
+      </td>
+      <td className="py-1 text-right text-primary">
+        {fmt(region?.leanTissueLb, "")}
+      </td>
+      <td className="py-1 text-right text-primary">
+        {fmt(region?.fatTissueLb, "")}
+      </td>
+      <td className="py-1 text-right text-primary">
+        {fmt(region?.regionFatPercent, "%")}
+      </td>
+    </tr>
   );
 }
 
