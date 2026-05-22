@@ -61,7 +61,7 @@ class GoogleHealthClientTest {
         assertThat(req.query)
             .containsEntry("filter",
                 "weight.sample_time.physical_time >= \"2026-04-20T00:00:00Z\" AND "
-                    + "weight.sample_time.physical_time <= \"2026-05-20T00:00:00Z\"");
+                    + "weight.sample_time.physical_time < \"2026-05-20T00:00:00Z\"");
         assertThat(req.query).containsKey("page_size");
     }
 

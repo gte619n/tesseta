@@ -3,12 +3,13 @@ package com.gte619n.healthfitness.integrations.googlehealth;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMetric;
 
 // Maps our internal metric enum to Google Health API data-type identifiers.
-// REST uses kebab-case in the URL path. Filter expressions use snake_case
-// for the field name within the data point.
+// REST uses kebab-case in the URL path (.../dataTypes/body-fat/dataPoints).
+// Filter expressions use camelCase for the data-type prefix and snake_case
+// for the rest (bodyFat.sample_time.physical_time).
 public enum GoogleHealthDataType {
     WEIGHT("weight", "weight"),
-    BODY_FAT("body-fat", "body_fat"),
-    LEAN_MASS("lean-mass", "lean_mass"),
+    BODY_FAT("body-fat", "bodyFat"),
+    LEAN_MASS("lean-mass", "leanMass"),
     BMI("bmi", "bmi");
 
     private final String urlSegment;
@@ -51,6 +52,13 @@ public enum GoogleHealthDataType {
                 return t;
             }
         }
-        throw new IllegalArgumentException("Unknown Google Health data type: " + apiName);
+        // Legacy snake_case names — kept for back-compat in case Google
+        // sends the older form in webhook notifications.
+        return switch (apiName) {
+            case "body_fat" -> BODY_FAT;
+            case "lean_mass" -> LEAN_MASS;
+            default -> throw new IllegalArgumentException(
+                "Unknown Google Health data type: " + apiName);
+        };
     }
 }

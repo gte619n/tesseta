@@ -25,8 +25,15 @@ export async function apiFetch(
     throw new Error("BACKEND_URL is not configured");
   }
   const session = await auth();
-  if (!session || session.error || !session.idToken) {
+  if (!session || !session.idToken) {
     throw new UnauthenticatedError("no valid session");
+  }
+  // Only treat refresh failures as fatal — GoogleHealthConnectError just
+  // means a one-time forward to the backend didn't land. The rest of the
+  // session is still valid and the user should be able to retry the
+  // connect flow.
+  if (session.error === "RefreshAccessTokenError") {
+    throw new UnauthenticatedError("session refresh failed");
   }
   const url = `${BACKEND_URL.replace(/\/$/, "")}${path}`;
   return fetch(url, {

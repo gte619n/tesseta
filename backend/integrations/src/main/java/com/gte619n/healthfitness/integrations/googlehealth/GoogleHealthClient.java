@@ -61,8 +61,12 @@ public class GoogleHealthClient {
         Instant to,
         String pageToken
     ) {
+        // Google Health filter only supports `>=` and `<` on physical_time
+        // — neither `<=`, `=`, nor BETWEEN are accepted. We treat `to` as
+        // exclusive in this client; callers wanting an inclusive upper
+        // bound should pass `to.plusSeconds(1)` or similar.
         String filter = String.format(
-            "%s.sample_time.physical_time >= \"%s\" AND %s.sample_time.physical_time <= \"%s\"",
+            "%s.sample_time.physical_time >= \"%s\" AND %s.sample_time.physical_time < \"%s\"",
             dataType.filterFieldName(), from,
             dataType.filterFieldName(), to);
         StringBuilder url = new StringBuilder(apiBaseUrl)
