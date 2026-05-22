@@ -34,6 +34,52 @@ Idempotent — safe to re-run.
 - Cloud Build SA bindings to deploy to Cloud Run and write to Artifact Registry.
 - Firestore default database (native mode, `us-central1`).
 
+## IMPL-04: Google Health API additions
+
+The first IMPL-04 deploy adds the following resources (already provisioned
+on `health-fitness-160` — listed here so a fresh-project re-bootstrap
+covers them):
+
+- Cloud KMS API enabled.
+- Keyring `auth` in `us-central1` with symmetric key
+  `google-health-refresh-tokens` (90-day automatic rotation). Runtime SA
+  bound to `roles/cloudkms.cryptoKeyEncrypterDecrypter` on that key only
+  (not project-wide).
+- Secret Manager: `google-health-webhook-secret`. Stored as
+  `Bearer <random32>` because Google requires the full Authorization
+  header value with scheme prefix.
+- Runtime SA bound to `roles/secretmanager.secretAccessor` on the new
+  secret.
+- Firestore composite index: `bodyComposition (metric ASC, sampleTime
+  DESC)` — see `infra/firestore/firestore.indexes.json`.
+- Project owner / developer user granted `roles/health.admin`. Project
+  ownership does **not** inherit Health API permissions; you must grant
+  this explicitly even if you already have `roles/owner`.
+- One webhook subscriber registered via
+  `scripts/setup-google-health-subscriber.sh`. Note the script uses the
+  project **number** (not ID) — the Health API rejects the ID form with
+  a generic 403.
+
+### OAuth scope — production review pending
+
+The Google Health API scopes are **Restricted**, which means:
+
+- In the OAuth client's "Testing" audience, up to **100 test users** can
+  grant the scope without any review. Test users must be listed
+  explicitly on the [OAuth consent screen page](https://console.cloud.google.com/apis/credentials/consent?project=health-fitness-160).
+- To support more than 100 users — i.e., to move the OAuth client from
+  "Testing" to "In production" — Google requires a third-party security
+  review. Submission is via the same OAuth consent screen page:
+  *Publishing status* → *Publish app* → fills out the questionnaire and
+  the security review form. Turnaround historically 4–6 weeks.
+- Test-audience refresh tokens expire after 7 days. Production refresh
+  tokens generally don't expire. If the connect flow stops working
+  after a week, the cause is the test-audience refresh-token TTL —
+  reconnecting from the body-comp page mints a fresh one.
+
+Current state: `evan.ruff@oxos.com` is on the test users list. No
+production review submitted yet.
+
 ## Terraform
 
 `terraform/` is a placeholder; no modules yet. Bootstrap is shell scripts
