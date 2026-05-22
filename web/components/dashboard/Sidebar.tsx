@@ -1,6 +1,12 @@
-import { devices, navItems, user } from "@/lib/fixtures/dashboard";
+import { devices, navItems } from "@/lib/fixtures/dashboard";
 
-export function Sidebar() {
+export type SidebarUser = {
+  name: string;
+  email: string | null;
+  initials: string;
+};
+
+export function Sidebar({ user }: { user: SidebarUser }) {
   return (
     <aside className="flex min-h-[880px] flex-col border-r-[0.5px] border-border-strong bg-canvas-muted px-3.5 py-[22px]">
       <div className="mb-2.5 flex items-center gap-[11px] border-b-[0.5px] border-border-strong px-1.5 pb-[18px]">
@@ -50,11 +56,11 @@ export function Sidebar() {
             {user.initials}
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <div className="text-[12px] font-medium leading-[1.1] text-primary">
+            <div className="truncate text-[12px] font-medium leading-[1.1] text-primary">
               {user.name}
             </div>
-            <div className="mt-px caps-mono text-[9px] tracking-[0.04em] text-tertiary">
-              {user.role}
+            <div className="mt-px truncate caps-mono text-[9px] tracking-[0.04em] text-tertiary">
+              {user.email ?? ""}
             </div>
           </div>
           <i className="ti ti-selector text-[14px] text-tertiary" aria-hidden />

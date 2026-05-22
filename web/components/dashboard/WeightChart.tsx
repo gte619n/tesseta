@@ -4,20 +4,32 @@ import {
   toAreaPath,
   toLinePath,
 } from "@/lib/chart";
-import { bodyComp, weightSeries } from "@/lib/fixtures/dashboard";
 
 type Props = {
   variant?: "desktop" | "foldable";
+  // Weight series in lb, oldest → newest.
+  series: number[];
+  // Y-axis visible range. Caller computes from data with a little padding.
+  yMin: number;
+  yMax: number;
+  // X-axis tick labels at fixed pixel positions in the 600-wide viewBox.
+  xLabels: { x: number; label: string }[];
 };
 
-export function WeightChart({ variant = "desktop" }: Props) {
+export function WeightChart({
+  variant = "desktop",
+  series,
+  yMin,
+  yMax,
+  xLabels,
+}: Props) {
   const isFoldable = variant === "foldable";
   const geom = isFoldable
-    ? { width: 600, height: 140, yMin: 188, yMax: 194, padX: 26, padBottom: 14 }
-    : { width: 600, height: 160, yMin: 188, yMax: 194, padX: 24, padBottom: 20 };
+    ? { width: 600, height: 140, yMin, yMax, padX: 26, padBottom: 14 }
+    : { width: 600, height: 160, yMin, yMax, padX: 24, padBottom: 20 };
 
-  const projected = projectSeries(weightSeries, geom);
-  const ma = projectSeries(movingAverage(weightSeries, 7), geom);
+  const projected = projectSeries(series, geom);
+  const ma = projectSeries(movingAverage(series, 7), geom);
   const baselineY = geom.height - (isFoldable ? 22 : 20);
   const linePath = toLinePath(projected);
   const areaPath = toAreaPath(projected, baselineY);
@@ -25,19 +37,8 @@ export function WeightChart({ variant = "desktop" }: Props) {
   const current = projected[projected.length - 1];
 
   const gridLines = isFoldable ? [26, 62, 98] : [30, 70, 110];
-  const yAxis = isFoldable
-    ? [
-        { y: 24, label: "194" },
-        { y: 60, label: "192" },
-        { y: 96, label: "190" },
-        { y: 128, label: "188" },
-      ]
-    : [
-        { y: 28, label: "194" },
-        { y: 68, label: "192" },
-        { y: 108, label: "190" },
-        { y: 146, label: "188" },
-      ];
+  const yAxisYs = isFoldable ? [24, 60, 96, 128] : [28, 68, 108, 146];
+  const yAxisLabels = yAxisLabelsFor(yMin, yMax);
   const xLabelY = isFoldable ? 138 : 155;
   const fontSize = isFoldable ? 8 : 9;
 
@@ -45,7 +46,7 @@ export function WeightChart({ variant = "desktop" }: Props) {
     <svg
       viewBox={`0 0 ${geom.width} ${geom.height}`}
       className="block h-auto w-full"
-      aria-label="Weight trend over the past 90 days"
+      aria-label="Weight trend"
     >
       {gridLines.map((y) => (
         <line
@@ -59,16 +60,16 @@ export function WeightChart({ variant = "desktop" }: Props) {
           strokeDasharray="2 3"
         />
       ))}
-      {yAxis.map((a) => (
+      {yAxisYs.map((y, i) => (
         <text
-          key={a.label}
+          key={y}
           x={4}
-          y={a.y}
+          y={y}
           fontSize={fontSize}
           fill="var(--color-quaternary)"
           fontFamily="var(--font-mono)"
         >
-          {a.label}
+          {yAxisLabels[i]}
         </text>
       ))}
       <path d={areaPath} fill="var(--color-accent)" fillOpacity="0.06" stroke="none" />
@@ -99,9 +100,9 @@ export function WeightChart({ variant = "desktop" }: Props) {
           strokeWidth="2"
         />
       ) : null}
-      {bodyComp.axis.xLabels.map((x) => (
+      {xLabels.map((x) => (
         <text
-          key={x.label}
+          key={x.label + x.x}
           x={x.x}
           y={xLabelY}
           fontSize={fontSize}
@@ -113,4 +114,11 @@ export function WeightChart({ variant = "desktop" }: Props) {
       ))}
     </svg>
   );
+}
+
+// Four evenly-spaced y-axis labels (top → bottom).
+function yAxisLabelsFor(yMin: number, yMax: number): string[] {
+  const top = yMax;
+  const step = (yMax - yMin) / 3;
+  return [0, 1, 2, 3].map((i) => (top - i * step).toFixed(0));
 }
