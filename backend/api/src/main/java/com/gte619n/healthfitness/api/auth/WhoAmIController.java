@@ -5,6 +5,8 @@ import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,4 +29,17 @@ public class WhoAmIController {
             .orElse(null);
         return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), heightCm);
     }
+
+    // Partial profile update. Only `heightCm` is supported today; the
+    // PATCH shape keeps the door open for additional editable profile
+    // fields (date of birth, sex, units preference) without another
+    // endpoint.
+    @PatchMapping
+    public WhoAmIResponse update(@RequestBody UpdateProfileRequest body) {
+        CurrentUser cu = currentUser.get();
+        users.updateHeightCm(cu.userId(), body.heightCm());
+        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), body.heightCm());
+    }
+
+    public record UpdateProfileRequest(Integer heightCm) {}
 }

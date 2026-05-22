@@ -17,6 +17,9 @@ public record DexaScan(
     LocalDate measuredOn,
     String sourceFacility,
     String pdfStoragePath,
+    // SHA-256 hex of the original PDF bytes. Used to dedupe re-uploads
+    // of the same file — see DexaScanRepository.existsByContentHash.
+    String contentHash,
 
     // Whole-body summary
     Double totalMassLb,

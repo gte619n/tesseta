@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TessetaMark } from "@/components/brand/TessetaMark";
 import { devices, navItems } from "@/lib/fixtures/dashboard";
 import { SidebarNavItem } from "@/components/dashboard/SidebarNavItem";
@@ -41,17 +42,14 @@ export function Sidebar({ user }: { user: SidebarUser }) {
       ))}
 
       <div className="mt-auto border-t-[0.5px] border-border-strong pt-3.5">
-        <button
-          type="button"
-          className="mb-0.5 flex w-full items-center gap-[11px] rounded-md bg-transparent px-[11px] py-[9px] text-left"
+        <Link
+          href="/me/profile"
+          className="mb-0.5 flex w-full items-center gap-[11px] rounded-md bg-transparent px-[11px] py-[9px] text-left hover:bg-canvas-muted"
         >
           <i className="ti ti-settings text-[16px] text-tertiary" aria-hidden />
           <span className="text-[13px] font-normal text-secondary">Settings</span>
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-2.5 rounded-lg border-[0.5px] border-border-strong bg-surface px-[11px] py-[7px]"
-        >
+        </Link>
+        <div className="flex w-full items-center gap-2.5 rounded-lg border-[0.5px] border-border-strong bg-surface px-[11px] py-[7px]">
           <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-medium text-inverse">
             {user.initials}
           </div>
@@ -63,8 +61,7 @@ export function Sidebar({ user }: { user: SidebarUser }) {
               {user.email ?? ""}
             </div>
           </div>
-          <i className="ti ti-selector text-[14px] text-tertiary" aria-hidden />
-        </button>
+        </div>
       </div>
     </aside>
   );

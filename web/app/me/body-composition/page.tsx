@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { revalidatePath } from "next/cache";
 import { signIn } from "@/auth";
-import { apiFetch, apiJson } from "@/lib/api";
+import { apiJson } from "@/lib/api";
 import { DexaUploadButton } from "@/components/dexa/DexaUploadButton";
 
 type WhoAmI = {
@@ -87,17 +86,6 @@ export default async function BodyCompositionPage() {
         prompt: "consent",
       },
     );
-  }
-
-  async function disconnect() {
-    "use server";
-    const res = await apiFetch("/api/me/google-health/connect", {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      throw new Error(`Disconnect failed: ${res.status}`);
-    }
-    revalidatePath("/me/body-composition");
   }
 
   if (!status.connected) {
@@ -286,14 +274,16 @@ export default async function BodyCompositionPage() {
           )}
         </section>
 
-        <form action={disconnect}>
-          <button
-            type="submit"
-            className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
-          >
-            Disconnect Google Health
-          </button>
-        </form>
+        <div className="flex gap-6 caps-mono text-[10px] tracking-[0.06em] text-tertiary">
+          <span>
+            <span className="text-secondary">{dexaScans.length}</span> DEXA
+            scan{dexaScans.length === 1 ? "" : "s"}
+          </span>
+          <span>
+            <span className="text-secondary">{sessions.length}</span> Fitbit
+            session{sessions.length === 1 ? "" : "s"}
+          </span>
+        </div>
       </div>
     </main>
   );

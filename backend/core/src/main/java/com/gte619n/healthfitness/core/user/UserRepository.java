@@ -8,4 +8,6 @@ public interface UserRepository {
     void save(User user);
     void recordGoogleHealthConnection(String userId, GoogleHealthConnection connection);
     void clearGoogleHealthConnection(String userId);
+    // Pass null to clear; an Integer cm value to set.
+    void updateHeightCm(String userId, Integer heightCm);
 }

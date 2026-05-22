@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { apiFetch, apiJson, BackendError } from "@/lib/api";
+import { EditableNumber } from "@/components/dexa/EditableNumber";
+import { DeleteDexaButton } from "@/components/dexa/DeleteDexaButton";
 
 type DexaRegion = {
   totalMassLb: number | null;
@@ -52,6 +55,36 @@ export default async function DexaScanDetailPage({
     throw e;
   }
 
+  // Server action passed to every editable cell. Each click-to-edit
+  // save round-trips through here; revalidatePath flushes the cached
+  // Server Component output so the new value shows on next render.
+  async function patchField(path: string, value: number | null) {
+    "use server";
+    const res = await apiFetch(`/api/me/dexa/scans/${scanId}/field`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, value }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Update failed: ${res.status}`);
+    }
+    revalidatePath(`/me/body-composition/dexa/${scanId}`);
+  }
+
+  async function deleteScan() {
+    "use server";
+    const res = await apiFetch(`/api/me/dexa/scans/${scanId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Delete failed: ${res.status}`);
+    }
+    // Invalidate the list page so the deleted row disappears.
+    revalidatePath("/me/body-composition");
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[920px] space-y-6">
@@ -81,21 +114,27 @@ export default async function DexaScanDetailPage({
 
         <Section title="Whole body">
           <div className="grid grid-cols-4 gap-3">
-            <Stat label="Total mass" value={scan.totalMassLb} unit="lb" />
-            <Stat label="Lean tissue" value={scan.leanTissueLb} unit="lb" />
-            <Stat label="Fat tissue" value={scan.fatTissueLb} unit="lb" />
-            <Stat label="Body fat" value={scan.totalBodyFatPercent} unit="%" />
+            <Stat label="Total mass" value={scan.totalMassLb} unit="lb"
+              onSave={patchField.bind(null, "totalMassLb")} />
+            <Stat label="Lean tissue" value={scan.leanTissueLb} unit="lb"
+              onSave={patchField.bind(null, "leanTissueLb")} />
+            <Stat label="Fat tissue" value={scan.fatTissueLb} unit="lb"
+              onSave={patchField.bind(null, "fatTissueLb")} />
+            <Stat label="Body fat" value={scan.totalBodyFatPercent} unit="%"
+              onSave={patchField.bind(null, "totalBodyFatPercent")} />
           </div>
         </Section>
 
         <Section title="Abdomen">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="Visceral fat" value={scan.visceralFatLb} unit="lb" />
+            <Stat label="Visceral fat" value={scan.visceralFatLb} unit="lb"
+              onSave={patchField.bind(null, "visceralFatLb")} />
             <Stat
               label="A/G ratio"
               value={scan.androidGynoidRatio}
               unit=""
               fractionDigits={2}
+              onSave={patchField.bind(null, "androidGynoidRatio")}
               tooltip={
                 <AgBreakdown
                   android={scan.android}
@@ -109,34 +148,33 @@ export default async function DexaScanDetailPage({
         <Section title="Regions">
           <RegionTable
             rows={[
-              { label: "Trunk", region: scan.trunk },
-              { label: "Arms (total)", region: scan.armsTotal },
-              { label: "Arms — right", region: scan.armsRight, sub: true },
-              { label: "Arms — left", region: scan.armsLeft, sub: true },
-              { label: "Legs (total)", region: scan.legsTotal },
-              { label: "Legs — right", region: scan.legsRight, sub: true },
-              { label: "Legs — left", region: scan.legsLeft, sub: true },
+              { label: "Trunk", region: scan.trunk, key: "trunk" },
+              { label: "Arms (total)", region: scan.armsTotal, key: "armsTotal" },
+              { label: "Arms — right", region: scan.armsRight, key: "armsRight", sub: true },
+              { label: "Arms — left", region: scan.armsLeft, key: "armsLeft", sub: true },
+              { label: "Legs (total)", region: scan.legsTotal, key: "legsTotal" },
+              { label: "Legs — right", region: scan.legsRight, key: "legsRight", sub: true },
+              { label: "Legs — left", region: scan.legsLeft, key: "legsLeft", sub: true },
             ]}
+            patchField={patchField}
           />
         </Section>
 
         <Section title="Bone density">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label="T-score" value={scan.bmdTScore} unit="" fractionDigits={1} />
-            <Stat label="Z-score" value={scan.bmdZScore} unit="" fractionDigits={1} />
+            <Stat label="T-score" value={scan.bmdTScore} unit="" fractionDigits={1}
+              onSave={patchField.bind(null, "bmdTScore")} />
+            <Stat label="Z-score" value={scan.bmdZScore} unit="" fractionDigits={1}
+              onSave={patchField.bind(null, "bmdZScore")} />
           </div>
         </Section>
 
-        <Section title="Metabolism">
-          <div className="grid grid-cols-2 gap-3">
-            <Stat
-              label="RMR"
-              value={scan.restingMetabolicRateKcal}
-              unit="kcal/day"
-              fractionDigits={0}
-            />
-          </div>
-        </Section>
+        <div className="flex justify-end pt-2">
+          <DeleteDexaButton
+            scanDate={scan.measuredOn}
+            deleteAction={deleteScan}
+          />
+        </div>
       </div>
     </main>
   );
@@ -165,12 +203,14 @@ function Stat({
   unit,
   fractionDigits = 1,
   tooltip,
+  onSave,
 }: {
   label: string;
   value: number | null;
   unit: string;
   fractionDigits?: number;
   tooltip?: React.ReactNode;
+  onSave?: (next: number | null) => Promise<void>;
 }) {
   const body = (
     <>
@@ -187,10 +227,21 @@ function Stat({
           </span>
         )}
       </div>
-      <div className="mt-1 font-mono text-[20px] font-medium tabular text-primary">
-        {value !== null ? value.toFixed(fractionDigits) : "—"}
-        {unit && value !== null && (
-          <span className="ml-1 text-[12px] text-secondary">{unit}</span>
+      <div className="mt-1 -ml-1">
+        {onSave ? (
+          <EditableNumber
+            value={value}
+            fractionDigits={fractionDigits}
+            unit={unit}
+            onSave={onSave}
+          />
+        ) : (
+          <span className="font-mono text-[20px] font-medium tabular text-primary">
+            {value !== null ? value.toFixed(fractionDigits) : "—"}
+            {unit && value !== null && (
+              <span className="ml-1 text-[12px] text-secondary">{unit}</span>
+            )}
+          </span>
         )}
       </div>
     </>
@@ -229,7 +280,6 @@ function AgBreakdown({
         <thead>
           <tr className="text-tertiary">
             <th className="py-0.5 text-left font-normal" />
-            <th className="py-0.5 text-right font-normal">Total</th>
             <th className="py-0.5 text-right font-normal">Lean</th>
             <th className="py-0.5 text-right font-normal">Fat</th>
             <th className="py-0.5 text-right font-normal">%</th>
@@ -255,9 +305,6 @@ function AgRow({
     <tr className="border-t-[0.5px] border-border-subtle">
       <td className="py-1 text-secondary">{label}</td>
       <td className="py-1 text-right text-primary">
-        {fmt(region?.totalMassLb, "")}
-      </td>
-      <td className="py-1 text-right text-primary">
         {fmt(region?.leanTissueLb, "")}
       </td>
       <td className="py-1 text-right text-primary">
@@ -272,15 +319,21 @@ function AgRow({
 
 function RegionTable({
   rows,
+  patchField,
 }: {
-  rows: { label: string; region: DexaRegion | null; sub?: boolean }[];
+  rows: {
+    label: string;
+    region: DexaRegion | null;
+    key: string;
+    sub?: boolean;
+  }[];
+  patchField: (path: string, value: number | null) => Promise<void>;
 }) {
   return (
     <table className="w-full font-mono text-[12px] tabular">
       <thead>
         <tr className="text-left text-tertiary">
           <th className="py-1.5 font-normal">Region</th>
-          <th className="py-1.5 text-right font-normal">Total</th>
           <th className="py-1.5 text-right font-normal">Lean</th>
           <th className="py-1.5 text-right font-normal">Fat</th>
           <th className="py-1.5 text-right font-normal">Fat %</th>
@@ -289,7 +342,7 @@ function RegionTable({
       <tbody>
         {rows.map((row) => (
           <tr
-            key={row.label}
+            key={row.key}
             className="border-t-[0.5px] border-border-subtle"
           >
             <td
@@ -297,22 +350,48 @@ function RegionTable({
             >
               {row.label}
             </td>
-            <td className="py-1.5 text-right text-primary">
-              {fmt(row.region?.totalMassLb, "lb")}
-            </td>
-            <td className="py-1.5 text-right text-primary">
-              {fmt(row.region?.leanTissueLb, "lb")}
-            </td>
-            <td className="py-1.5 text-right text-primary">
-              {fmt(row.region?.fatTissueLb, "lb")}
-            </td>
-            <td className="py-1.5 text-right text-primary">
-              {fmt(row.region?.regionFatPercent, "%")}
-            </td>
+            <RegionCell
+              value={row.region?.leanTissueLb ?? null}
+              unit="lb"
+              onSave={patchField.bind(null, `${row.key}.leanTissueLb`)}
+            />
+            <RegionCell
+              value={row.region?.fatTissueLb ?? null}
+              unit="lb"
+              onSave={patchField.bind(null, `${row.key}.fatTissueLb`)}
+            />
+            <RegionCell
+              value={row.region?.regionFatPercent ?? null}
+              unit="%"
+              onSave={patchField.bind(null, `${row.key}.regionFatPercent`)}
+            />
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+function RegionCell({
+  value,
+  unit,
+  onSave,
+}: {
+  value: number | null;
+  unit: string;
+  onSave: (next: number | null) => Promise<void>;
+}) {
+  return (
+    <td className="py-1 text-right text-primary">
+      <EditableNumber
+        value={value}
+        fractionDigits={1}
+        unit={unit}
+        fontClassName="font-mono text-[12px] tabular text-primary"
+        unitClassName="ml-1 text-tertiary"
+        onSave={onSave}
+      />
+    </td>
   );
 }
 

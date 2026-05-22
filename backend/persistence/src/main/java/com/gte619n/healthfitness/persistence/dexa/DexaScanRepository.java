@@ -62,6 +62,17 @@ public class DexaScanRepository implements com.gte619n.healthfitness.core.dexa.D
     }
 
     @Override
+    public Optional<DexaScan> findByContentHash(String userId, String contentHash) {
+        if (contentHash == null) return Optional.empty();
+        List<QueryDocumentSnapshot> docs = await(collection(userId)
+            .whereEqualTo("contentHash", contentHash)
+            .limit(1)
+            .get()).getDocuments();
+        if (docs.isEmpty()) return Optional.empty();
+        return Optional.of(toScan(userId, docs.get(0)));
+    }
+
+    @Override
     public void delete(String userId, String scanId) {
         await(collection(userId).document(scanId).delete());
     }
@@ -75,6 +86,7 @@ public class DexaScanRepository implements com.gte619n.healthfitness.core.dexa.D
         body.put("measuredOn", s.measuredOn() == null ? null : s.measuredOn().toString());
         body.put("sourceFacility", s.sourceFacility());
         body.put("pdfStoragePath", s.pdfStoragePath());
+        body.put("contentHash", s.contentHash());
 
         body.put("totalMassLb", s.totalMassLb());
         body.put("leanTissueLb", s.leanTissueLb());
@@ -133,6 +145,7 @@ public class DexaScanRepository implements com.gte619n.healthfitness.core.dexa.D
             measuredOn == null ? null : LocalDate.parse(measuredOn),
             s.getString("sourceFacility"),
             s.getString("pdfStoragePath"),
+            s.getString("contentHash"),
             s.getDouble("totalMassLb"),
             s.getDouble("leanTissueLb"),
             s.getDouble("fatTissueLb"),

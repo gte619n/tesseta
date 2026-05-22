@@ -11,5 +11,10 @@ public interface DexaScanRepository {
     // Newest-first.
     List<DexaScan> findByUser(String userId);
 
+    // Returns an existing scan matching this user + PDF content hash,
+    // if any. Used to short-circuit re-uploads of the same file before
+    // we spend money on a Gemini call.
+    Optional<DexaScan> findByContentHash(String userId, String contentHash);
+
     void delete(String userId, String scanId);
 }

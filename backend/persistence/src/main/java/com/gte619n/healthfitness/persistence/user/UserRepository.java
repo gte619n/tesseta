@@ -81,6 +81,17 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    public void updateHeightCm(String userId, Integer heightCm) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        body.put("heightCm", heightCm == null
+            ? com.google.cloud.firestore.FieldValue.delete()
+            : heightCm);
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
     public void clearGoogleHealthConnection(String userId) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();

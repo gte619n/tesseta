@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.api.dexa.DexaScanResponse;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.dexa.DexaScan;
 import com.gte619n.healthfitness.core.dexa.DexaScanRepository;
+import com.gte619n.healthfitness.integrations.dexa.DexaDuplicateException;
 import com.gte619n.healthfitness.integrations.dexa.DexaExtractionException;
 import com.gte619n.healthfitness.integrations.dexa.DexaPdfStorage;
 import java.io.IOException;
@@ -20,8 +21,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -103,6 +106,9 @@ public class DexaScanController {
                 done.put("scan", DexaScanResponse.from(scan));
                 sendData(emitter, done);
                 emitter.complete();
+            } catch (DexaDuplicateException e) {
+                sendFailure(emitter, e.getMessage());
+                emitter.complete();
             } catch (DexaExtractionException e) {
                 sendFailure(emitter, "Could not read the DEXA report: " + e.getMessage());
                 emitter.complete();
@@ -139,6 +145,25 @@ public class DexaScanController {
             .header("Content-Disposition", "inline; filename=\"dexa-" + scanId + ".pdf\"")
             .body(pdf);
     }
+
+    @PatchMapping("/{scanId}/field")
+    public DexaScanResponse updateField(
+        @PathVariable String scanId,
+        @RequestBody UpdateFieldRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        if (scans.findById(userId, scanId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        try {
+            DexaScan updated = service.updateField(userId, scanId, body.path(), body.value());
+            return DexaScanResponse.from(updated);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    public record UpdateFieldRequest(String path, Double value) {}
 
     @DeleteMapping("/{scanId}")
     public ResponseEntity<Void> delete(@PathVariable String scanId) {

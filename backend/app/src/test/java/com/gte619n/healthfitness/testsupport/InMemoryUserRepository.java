@@ -64,4 +64,19 @@ public class InMemoryUserRepository implements UserRepository {
             Instant.now()
         ));
     }
+
+    @Override
+    public void updateHeightCm(String userId, Integer heightCm) {
+        User existing = store.get(userId);
+        if (existing == null) return;
+        store.put(userId, new User(
+            existing.userId(),
+            existing.email(),
+            existing.displayName(),
+            existing.googleHealth(),
+            heightCm,
+            existing.createdAt(),
+            Instant.now()
+        ));
+    }
 }
