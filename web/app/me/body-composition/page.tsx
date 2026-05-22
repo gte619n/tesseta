@@ -76,13 +76,11 @@ export default async function BodyCompositionPage() {
           <p className="mt-4 text-[14px] leading-[1.55] text-secondary">
             Connect your Google Health account to sync weight, body fat,
             lean mass, and BMI from your scale or other connected devices.
-            We&apos;ll backfill the last 4 years of measurements and keep
-            them current via push notifications.
           </p>
           <form action={connect} className="mt-6">
             <button
               type="submit"
-              className="cursor-pointer rounded-md bg-accent-signal px-4 py-2 text-[13px] font-medium text-inverse"
+              className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse"
             >
               Connect Google Health
             </button>
