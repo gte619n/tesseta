@@ -17,10 +17,19 @@ type Reading = {
   recordingMethod: string | null;
 };
 
+type Session = {
+  sampleTime: string;
+  sourcePlatform: string | null;
+  // Only metrics Google Health actually returns are keyed here.
+  weight?: Reading;
+  bodyFat?: Reading;
+};
+
 // Backend stores everything in canonical units (kg for masses). The page
 // converts to imperial at render time. Keep storage canonical so we can
 // add a per-user unit preference later without migrating data.
 const KG_TO_LB = 2.20462;
+const SESSION_WINDOW_MS = 5 * 60 * 1000;
 
 const METRIC_LABELS: Record<Metric, { name: string; unit: string }> = {
   WEIGHT_KG: { name: "Weight", unit: "lb" },
@@ -28,23 +37,6 @@ const METRIC_LABELS: Record<Metric, { name: string; unit: string }> = {
   LEAN_MASS_KG: { name: "Lean mass", unit: "lb" },
   BMI: { name: "BMI", unit: "" },
 };
-
-const METRIC_ORDER: Metric[] = [
-  "WEIGHT_KG",
-  "BODY_FAT_PERCENT",
-  "LEAN_MASS_KG",
-  "BMI",
-];
-
-function displayValue(value: number, metric: Metric): number {
-  switch (metric) {
-    case "WEIGHT_KG":
-    case "LEAN_MASS_KG":
-      return value * KG_TO_LB;
-    default:
-      return value;
-  }
-}
 
 const GOOGLE_HEALTH_SCOPE =
   "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
@@ -56,10 +48,6 @@ export default async function BodyCompositionPage() {
 
   async function connect() {
     "use server";
-    // Auth.js v5 signIn signature: (provider, options, authorizationParams).
-    // Re-requesting openid/email/profile alongside the new health scope
-    // makes Google merge them into a single consent screen rather than
-    // showing two.
     await signIn(
       "google",
       { redirectTo: "/me/body-composition" },
@@ -106,7 +94,12 @@ export default async function BodyCompositionPage() {
   }
 
   const readings = await apiJson<Reading[]>("/api/me/body-composition");
-  const latestByMetric = pickLatestPerMetric(readings);
+  const sessions = groupIntoSessions(readings);
+
+  const latestSession = sessions[0];
+  const latestWeight = sessions.find((s) => s.weight)?.weight;
+  const latestBodyFat = sessions.find((s) => s.bodyFat)?.bodyFat;
+  const leanMassLb = computeLeanMass(sessions);
 
   return (
     <main className="min-h-screen bg-canvas p-8">
@@ -123,33 +116,33 @@ export default async function BodyCompositionPage() {
         </header>
 
         <section className="grid grid-cols-4 gap-3">
-          {METRIC_ORDER.map((metric) => {
-            const reading = latestByMetric[metric];
-            const label = METRIC_LABELS[metric];
-            return (
-              <div
-                key={metric}
-                className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-5 py-4"
-              >
-                <div className="font-mono text-[10px] uppercase tracking-[0.06em] text-tertiary">
-                  {label.name}
-                </div>
-                <div className="mt-2 font-mono text-[26px] font-medium tabular text-primary">
-                  {reading ? formatValue(displayValue(reading.value, metric), metric) : "—"}
-                  {label.unit && (
-                    <span className="ml-1 text-[14px] text-secondary">
-                      {label.unit}
-                    </span>
-                  )}
-                </div>
-                {reading && (
-                  <div className="mt-1 font-mono text-[11px] text-tertiary">
-                    {formatRelative(reading.sampleTime)}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <MetricCard
+            label="Weight"
+            value={latestWeight ? (latestWeight.value * KG_TO_LB).toFixed(1) : "—"}
+            unit="lb"
+            sampleTime={latestWeight?.sampleTime ?? null}
+          />
+          <MetricCard
+            label="Body fat"
+            value={latestBodyFat ? latestBodyFat.value.toFixed(1) : "—"}
+            unit="%"
+            sampleTime={latestBodyFat?.sampleTime ?? null}
+          />
+          <MetricCard
+            label="Lean mass"
+            value={leanMassLb !== null ? leanMassLb.toFixed(1) : "—"}
+            unit="lb"
+            // Lean mass reflects the latest paired weigh-in.
+            sampleTime={latestSession?.sampleTime ?? null}
+            footer={leanMassLb === null ? "needs paired weigh-in" : null}
+          />
+          <MetricCard
+            label="BMI"
+            value="—"
+            unit=""
+            sampleTime={null}
+            footer="needs height — coming later"
+          />
         </section>
 
         <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface">
@@ -158,7 +151,7 @@ export default async function BodyCompositionPage() {
               Recent readings
             </h2>
           </div>
-          {readings.length === 0 ? (
+          {sessions.length === 0 ? (
             <div className="px-5 py-8 text-center text-[13px] text-secondary">
               No measurements yet. Once your scale logs one, it&apos;ll
               appear here within ~30 seconds.
@@ -168,33 +161,55 @@ export default async function BodyCompositionPage() {
               <thead>
                 <tr className="text-left text-tertiary">
                   <th className="px-5 py-2 font-normal">Time</th>
-                  <th className="px-5 py-2 font-normal">Metric</th>
-                  <th className="px-5 py-2 font-normal text-right">Value</th>
+                  <th className="px-5 py-2 font-normal text-right">Weight</th>
+                  <th className="px-5 py-2 font-normal text-right">Body fat</th>
+                  <th className="px-5 py-2 font-normal text-right">Lean mass</th>
                   <th className="px-5 py-2 font-normal">Source</th>
                 </tr>
               </thead>
               <tbody>
-                {readings.slice(0, 50).map((r) => {
-                  const label = METRIC_LABELS[r.metric];
+                {sessions.slice(0, 50).map((s) => {
+                  const sessionLean = sessionLeanMassLb(s);
                   return (
                     <tr
-                      key={r.recordId}
+                      key={s.sampleTime}
                       className="border-t-[0.5px] border-border-subtle"
                     >
                       <td className="px-5 py-2 text-secondary">
-                        {formatDateTime(r.sampleTime)}
+                        {formatDateTime(s.sampleTime)}
                       </td>
-                      <td className="px-5 py-2 text-primary">{label.name}</td>
                       <td className="px-5 py-2 text-right text-primary">
-                        {formatValue(displayValue(r.value, r.metric), r.metric)}
-                        {label.unit && (
-                          <span className="ml-1 text-tertiary">
-                            {label.unit}
-                          </span>
+                        {s.weight ? (
+                          <>
+                            {(s.weight.value * KG_TO_LB).toFixed(1)}
+                            <span className="ml-1 text-tertiary">lb</span>
+                          </>
+                        ) : (
+                          <span className="text-tertiary">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-2 text-right text-primary">
+                        {s.bodyFat ? (
+                          <>
+                            {s.bodyFat.value.toFixed(1)}
+                            <span className="ml-1 text-tertiary">%</span>
+                          </>
+                        ) : (
+                          <span className="text-tertiary">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-2 text-right text-primary">
+                        {sessionLean !== null ? (
+                          <>
+                            {sessionLean.toFixed(1)}
+                            <span className="ml-1 text-tertiary">lb</span>
+                          </>
+                        ) : (
+                          <span className="text-tertiary">—</span>
                         )}
                       </td>
                       <td className="px-5 py-2 text-tertiary">
-                        {r.sourcePlatform ?? "—"}
+                        {s.sourcePlatform ?? "—"}
                       </td>
                     </tr>
                   );
@@ -217,24 +232,91 @@ export default async function BodyCompositionPage() {
   );
 }
 
-function pickLatestPerMetric(
-  readings: Reading[],
-): Partial<Record<Metric, Reading>> {
-  const latest: Partial<Record<Metric, Reading>> = {};
-  for (const r of readings) {
-    const existing = latest[r.metric];
-    if (!existing || existing.sampleTime < r.sampleTime) {
-      latest[r.metric] = r;
-    }
-  }
-  return latest;
+function MetricCard({
+  label,
+  value,
+  unit,
+  sampleTime,
+  footer,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  sampleTime: string | null;
+  footer?: string | null;
+}) {
+  return (
+    <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-5 py-4">
+      <div className="font-mono text-[10px] uppercase tracking-[0.06em] text-tertiary">
+        {label}
+      </div>
+      <div className="mt-2 font-mono text-[26px] font-medium tabular text-primary">
+        {value}
+        {unit && (
+          <span className="ml-1 text-[14px] text-secondary">{unit}</span>
+        )}
+      </div>
+      {sampleTime ? (
+        <div className="mt-1 font-mono text-[11px] text-tertiary">
+          {formatRelative(sampleTime)}
+        </div>
+      ) : footer ? (
+        <div className="mt-1 font-mono text-[11px] text-tertiary">{footer}</div>
+      ) : null}
+    </div>
+  );
 }
 
-function formatValue(value: number, metric: Metric): string {
-  // Whole numbers get a trailing .0 so the column stays visually aligned.
-  return metric === "BMI" || metric === "BODY_FAT_PERCENT"
-    ? value.toFixed(1)
-    : value.toFixed(1);
+// Cluster readings into per-weigh-in sessions. Smart scales emit weight
+// and body-fat seconds apart, so any readings within SESSION_WINDOW_MS of
+// each other are treated as the same session. Returns sessions sorted by
+// time, most-recent first.
+function groupIntoSessions(readings: Reading[]): Session[] {
+  if (readings.length === 0) return [];
+  const sorted = [...readings].sort((a, b) =>
+    b.sampleTime.localeCompare(a.sampleTime),
+  );
+  const sessions: Session[] = [];
+  for (const r of sorted) {
+    const rMs = new Date(r.sampleTime).getTime();
+    const last = sessions[sessions.length - 1];
+    const lastMs = last ? new Date(last.sampleTime).getTime() : null;
+    if (last && lastMs !== null && Math.abs(lastMs - rMs) <= SESSION_WINDOW_MS) {
+      mergeIntoSession(last, r);
+    } else {
+      const session: Session = {
+        sampleTime: r.sampleTime,
+        sourcePlatform: r.sourcePlatform,
+      };
+      mergeIntoSession(session, r);
+      sessions.push(session);
+    }
+  }
+  return sessions;
+}
+
+function mergeIntoSession(session: Session, r: Reading) {
+  if (r.metric === "WEIGHT_KG" && !session.weight) session.weight = r;
+  if (r.metric === "BODY_FAT_PERCENT" && !session.bodyFat) session.bodyFat = r;
+  // Keep the earliest sample time within a session (sessions are sorted
+  // newest-first; later iterations within the same session push earlier).
+  if (r.sampleTime < session.sampleTime) {
+    session.sampleTime = r.sampleTime;
+  }
+}
+
+function sessionLeanMassLb(session: Session): number | null {
+  if (!session.weight || !session.bodyFat) return null;
+  const weightLb = session.weight.value * KG_TO_LB;
+  return weightLb * (1 - session.bodyFat.value / 100);
+}
+
+function computeLeanMass(sessions: Session[]): number | null {
+  for (const s of sessions) {
+    const v = sessionLeanMassLb(s);
+    if (v !== null) return v;
+  }
+  return null;
 }
 
 function formatRelative(iso: string): string {

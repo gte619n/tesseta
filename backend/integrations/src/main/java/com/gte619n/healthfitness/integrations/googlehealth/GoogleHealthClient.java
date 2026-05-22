@@ -10,7 +10,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +24,9 @@ import org.springframework.stereotype.Component;
 // Pagination: the API returns a `nextPageToken`; we loop until it's empty.
 @Component
 public class GoogleHealthClient {
+
+    private static final Logger log = LoggerFactory.getLogger(GoogleHealthClient.class);
+    private static final int MAX_PAGES = 200;
 
     private final HttpClient http;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -39,17 +46,49 @@ public class GoogleHealthClient {
         Instant to
     ) {
         List<GoogleHealthDataPoint> all = new ArrayList<>();
+        // Dedupe by recordId across pages — observed in practice that
+        // certain data types (notably `weight`) can return the same set
+        // of records on every page with a non-empty nextPageToken,
+        // turning the loop into a duplicate factory. The seenIds set
+        // makes the loop output stable. We also cap MAX_PAGES so a
+        // misbehaving API can't drive the backfill to infinity.
+        Set<String> seenIds = new HashSet<>();
         String pageToken = null;
+        String prevPageToken = null;
+        int pageCount = 0;
         do {
             JsonNode body = fetchOnePage(accessToken, dataType, from, to, pageToken);
             JsonNode dataPoints = body.path("dataPoints");
+            int newOnThisPage = 0;
             if (dataPoints.isArray()) {
                 for (JsonNode dp : dataPoints) {
-                    all.add(BodyCompositionMapper.fromJson(dp, dataType));
+                    GoogleHealthDataPoint point = BodyCompositionMapper.fromJson(dp, dataType);
+                    if (seenIds.add(point.recordId())) {
+                        all.add(point);
+                        newOnThisPage++;
+                    }
                 }
             }
             String next = body.path("nextPageToken").asText("");
-            pageToken = next.isEmpty() ? null : next;
+            String nextNorm = next.isEmpty() ? null : next;
+            // If Google hands us a non-empty page token but it's identical
+            // to the previous one, OR the page produced zero new records,
+            // pagination has stalled — bail out.
+            if (nextNorm != null && nextNorm.equals(prevPageToken)) {
+                log.warn("Pagination token did not advance for type={} (stopping)", dataType);
+                break;
+            }
+            if (nextNorm != null && newOnThisPage == 0) {
+                log.warn("Page returned no new recordIds for type={} (stopping)", dataType);
+                break;
+            }
+            prevPageToken = pageToken;
+            pageToken = nextNorm;
+            pageCount++;
+            if (pageCount >= MAX_PAGES) {
+                log.warn("Hit MAX_PAGES={} for type={} (stopping)", MAX_PAGES, dataType);
+                break;
+            }
         } while (pageToken != null);
         return all;
     }
