@@ -62,12 +62,17 @@ BODY="$(jq -n \
    }')"
 
 echo "==> Checking whether subscriber already exists"
-GET_STATUS=$(curl -s -o /tmp/subscriber-resp.json -w "%{http_code}" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
+# The Health API's GET on a subscriber resource path returns 404 even for
+# subscribers that LIST clearly shows exist, so we can't rely on GET as
+# an existence check. LIST + jq filter is the only reliable approach.
+LIST_RESP="$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "X-Goog-User-Project: $PROJECT_ID" \
-  "https://health.googleapis.com/v4/projects/${PROJECT_NUMBER}/subscribers/${SUBSCRIBER_ID}")
+  "https://health.googleapis.com/v4/projects/${PROJECT_NUMBER}/subscribers")"
+EXPECTED_NAME="projects/${PROJECT_NUMBER}/subscribers/${SUBSCRIBER_ID}"
+EXISTS="$(printf '%s' "$LIST_RESP" \
+  | jq --arg n "$EXPECTED_NAME" '[.subscribers[]?.name] | index($n) != null')"
 
-if [[ "$GET_STATUS" == "200" ]]; then
+if [[ "$EXISTS" == "true" ]]; then
   echo "    exists — PATCH"
   STATUS=$(curl -s -o /tmp/subscriber-resp.json -w "%{http_code}" \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
@@ -76,7 +81,7 @@ if [[ "$GET_STATUS" == "200" ]]; then
     -X PATCH \
     "https://health.googleapis.com/v4/projects/${PROJECT_NUMBER}/subscribers/${SUBSCRIBER_ID}?updateMask=endpointUri,endpointAuthorization,subscriberConfigs" \
     -d "$BODY")
-elif [[ "$GET_STATUS" == "404" ]]; then
+elif [[ "$EXISTS" == "false" ]]; then
   echo "    new — POST"
   STATUS=$(curl -s -o /tmp/subscriber-resp.json -w "%{http_code}" \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
@@ -86,8 +91,8 @@ elif [[ "$GET_STATUS" == "404" ]]; then
     "https://health.googleapis.com/v4/projects/${PROJECT_NUMBER}/subscribers?subscriberId=${SUBSCRIBER_ID}" \
     -d "$BODY")
 else
-  echo "    unexpected GET status: $GET_STATUS" >&2
-  cat /tmp/subscriber-resp.json >&2
+  echo "    LIST returned unexpected shape:" >&2
+  printf '%s\n' "$LIST_RESP" >&2
   exit 1
 fi
 
@@ -99,6 +104,10 @@ fi
 echo "    OK ($STATUS)"
 
 echo "==> Verifying"
+# GET-by-name returns 404 even for existing subscribers (see existence
+# check above), so we re-LIST and pick our entry out.
 curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "X-Goog-User-Project: $PROJECT_ID" \
-  "https://health.googleapis.com/v4/projects/${PROJECT_NUMBER}/subscribers/${SUBSCRIBER_ID}" | jq .
+  "https://health.googleapis.com/v4/projects/${PROJECT_NUMBER}/subscribers" \
+  | jq --arg n "projects/${PROJECT_NUMBER}/subscribers/${SUBSCRIBER_ID}" \
+       '.subscribers[] | select(.name == $n)'
