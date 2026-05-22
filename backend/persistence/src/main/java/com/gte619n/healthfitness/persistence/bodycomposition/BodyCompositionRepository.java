@@ -48,9 +48,12 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
 
     @Override
     public Optional<BodyCompositionMeasurement> findById(String userId, String recordId) {
-        DocumentSnapshot snapshot = await(collection(userId).document(recordId).get());
-        if (!snapshot.exists()) return Optional.empty();
-        return Optional.of(toMeasurement(userId, snapshot));
+        // recordId on its own is ambiguous (Google reuses the same id for
+        // weight and body-fat at the same weigh-in), so this can't return
+        // a single doc reliably. Callers that need a specific metric
+        // should use findByUserAndRange. Kept for interface completeness.
+        throw new UnsupportedOperationException(
+            "findById is ambiguous without a metric; use findByUserAndRange");
     }
 
     @Override
@@ -80,7 +83,7 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
 
     @Override
     public void save(BodyCompositionMeasurement measurement) {
-        DocumentReference docRef = collection(measurement.userId()).document(measurement.recordId());
+        DocumentReference docRef = collection(measurement.userId()).document(docId(measurement));
         DocumentSnapshot existing = await(docRef.get());
         Map<String, Object> body = toBody(measurement, !existing.exists());
         await(docRef.set(body, SetOptions.merge()));
@@ -100,7 +103,7 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
                 // Firestore's serverTimestamp is monotone enough that a
                 // second touch within the same backfill won't surprise us.
                 batch.set(
-                    collection(m.userId()).document(m.recordId()),
+                    collection(m.userId()).document(docId(m)),
                     toBody(m, false),
                     SetOptions.merge());
             }
@@ -110,7 +113,17 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
 
     @Override
     public void delete(String userId, String recordId) {
-        await(collection(userId).document(recordId).delete());
+        // recordId alone isn't unique across metrics — see findById.
+        throw new UnsupportedOperationException(
+            "single-record delete needs metric; use deleteByUserMetricAndRange");
+    }
+
+    // Composite doc ID. Google Health emits the same recordId for weight
+    // and body-fat at the same weigh-in, so keying on recordId alone made
+    // body-fat saves overwrite the matching weight. Prefixing with the
+    // metric keeps them in separate Firestore documents.
+    private static String docId(BodyCompositionMeasurement m) {
+        return m.metric().name() + "__" + m.recordId();
     }
 
     @Override
@@ -139,6 +152,10 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
 
     private static Map<String, Object> toBody(BodyCompositionMeasurement m, boolean isNew) {
         Map<String, Object> body = new HashMap<>();
+        // The doc ID is composite (metric + recordId); store the real
+        // Google Health recordId as its own field so callers can read it
+        // back without parsing the doc id.
+        body.put("recordId", m.recordId());
         body.put("metric", m.metric().name());
         body.put("value", m.value());
         body.put("sampleTime", Timestamp.of(java.util.Date.from(m.sampleTime())));
@@ -152,9 +169,18 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
     }
 
     private static BodyCompositionMeasurement toMeasurement(String userId, DocumentSnapshot snapshot) {
+        // Prefer the explicit recordId field; fall back to parsing it out
+        // of the composite doc id for documents written before the field
+        // was added.
+        String recordId = snapshot.getString("recordId");
+        if (recordId == null) {
+            String id = snapshot.getId();
+            int sep = id.indexOf("__");
+            recordId = sep >= 0 ? id.substring(sep + 2) : id;
+        }
         return new BodyCompositionMeasurement(
             userId,
-            snapshot.getId(),
+            recordId,
             BodyCompositionMetric.valueOf(snapshot.getString("metric")),
             snapshot.getDouble("value"),
             toInstant(snapshot.get("sampleTime")),

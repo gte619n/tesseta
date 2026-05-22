@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { signIn } from "@/auth";
 import { apiFetch, apiJson } from "@/lib/api";
 
@@ -67,6 +68,10 @@ export default async function BodyCompositionPage() {
     if (!res.ok) {
       throw new Error(`Disconnect failed: ${res.status}`);
     }
+    // Force the server component to re-fetch so the page flips back to
+    // the Connect CTA. Without this, Next.js holds the cached connected
+    // state and the user sees the same screen.
+    revalidatePath("/me/body-composition");
   }
 
   if (!status.connected) {
