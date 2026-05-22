@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Session } from "next-auth";
 import { auth } from "@/auth";
-import { BloodPanel } from "@/components/dashboard/BloodPanel";
+import { BloodPanel, type BloodPanelData, type BloodPanelMarker } from "@/components/dashboard/BloodPanel";
 import { RecentFeed } from "@/components/dashboard/RecentFeed";
 import { SectionTitle } from "@/components/dashboard/SectionTitle";
 import { Sidebar, type SidebarUser } from "@/components/dashboard/Sidebar";
@@ -47,7 +47,10 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const session = await auth();
   const sidebarUser = toSidebarUser(session);
-  const view = await loadBodyComposition();
+  const [view, bloodPanel] = await Promise.all([
+    loadBodyComposition(),
+    loadBloodPanel(),
+  ]);
 
   return (
     <div className="flex min-h-screen items-start justify-center p-8">
@@ -65,7 +68,7 @@ export default async function DashboardPage() {
           <BodyCompositionCard view={view} />
 
           <section className="mb-3 grid grid-cols-2 gap-2.5">
-            <BloodPanel compact />
+            <BloodPanel data={bloodPanel} compact />
             <TodayCard compact />
           </section>
 
@@ -400,6 +403,110 @@ function BodyCompositionCard({ view }: { view: BodyCompositionView | null }) {
       </div>
     </div>
   );
+}
+
+type BloodReadingApi = {
+  readingId: string;
+  marker: string;
+  value: number;
+  unit: string;
+  sampleDate: string;
+  reference: {
+    unit: string;
+    orientation: "LOWER_IS_BETTER" | "HIGHER_IS_BETTER";
+    goodThreshold: number;
+    displayMin: number;
+    displayMax: number;
+  };
+};
+
+// Markers we show on the dashboard compact panel, in display order.
+// Mirrors the original fixture: the four most-watched metabolic markers.
+const DASHBOARD_BLOOD_MARKERS = ["LDL", "APO_B", "HBA1C", "HS_CRP"] as const;
+const DASHBOARD_BLOOD_LABELS: Record<string, string> = {
+  LDL: "LDL",
+  APO_B: "ApoB",
+  HBA1C: "HbA1c",
+  HS_CRP: "hs-CRP",
+};
+
+async function loadBloodPanel(): Promise<BloodPanelData | null> {
+  let readings: BloodReadingApi[];
+  try {
+    readings = await apiJson<BloodReadingApi[]>("/api/me/blood");
+  } catch {
+    return null;
+  }
+  if (readings.length === 0) return null;
+
+  const latestByMarker = new Map<string, BloodReadingApi>();
+  for (const r of readings) {
+    const existing = latestByMarker.get(r.marker);
+    if (!existing || existing.sampleDate < r.sampleDate) {
+      latestByMarker.set(r.marker, r);
+    }
+  }
+
+  const markers: BloodPanelMarker[] = [];
+  let latestDate: string | null = null;
+  for (const m of DASHBOARD_BLOOD_MARKERS) {
+    const r = latestByMarker.get(m);
+    if (!r) continue;
+    if (!latestDate || latestDate < r.sampleDate) latestDate = r.sampleDate;
+    const ref = r.reference;
+    const span = ref.displayMax - ref.displayMin;
+    const tickPct = Math.max(
+      0,
+      Math.min(100, ((r.value - ref.displayMin) / span) * 100),
+    );
+    // Good fill renders the part of the bar that's "in the good zone".
+    const goodLeftPct =
+      ref.orientation === "LOWER_IS_BETTER"
+        ? 0
+        : ((ref.goodThreshold - ref.displayMin) / span) * 100;
+    const goodWidthPct =
+      ref.orientation === "LOWER_IS_BETTER"
+        ? ((ref.goodThreshold - ref.displayMin) / span) * 100
+        : 100 - ((ref.goodThreshold - ref.displayMin) / span) * 100;
+    const onGoodSide =
+      ref.orientation === "LOWER_IS_BETTER"
+        ? r.value <= ref.goodThreshold
+        : r.value >= ref.goodThreshold;
+    const dist = Math.abs(r.value - ref.goodThreshold) / ref.goodThreshold;
+    const tone: "good" | "warn" | "alert" = onGoodSide
+      ? "good"
+      : dist < 0.15
+        ? "warn"
+        : "alert";
+
+    markers.push({
+      name: DASHBOARD_BLOOD_LABELS[m] ?? m,
+      value: r.value.toFixed(2),
+      unit: r.unit,
+      tone,
+      goodFillPct: goodWidthPct,
+      goodLeftPct,
+      tickPct,
+      labels: {
+        min: String(ref.displayMin),
+        threshold: String(ref.goodThreshold),
+        max: String(ref.displayMax),
+      },
+    });
+  }
+
+  return {
+    date: latestDate ? formatShortDate(latestDate) : null,
+    markers,
+  };
+}
+
+function formatShortDate(iso: string): string {
+  // "2026-05-22" → "MAY 22 · 2026"
+  const d = new Date(iso + "T00:00:00Z");
+  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase();
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${month} ${day} · ${d.getUTCFullYear()}`;
 }
 
 // Links the body-composition section title to /me/body-composition.

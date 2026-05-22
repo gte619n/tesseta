@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.testsupport;
 
+import com.gte619n.healthfitness.core.blood.BloodReadingRepository;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -19,5 +20,10 @@ public class TestPersistenceConfig {
     @Bean
     BodyCompositionRepository bodyCompositionRepository() {
         return new InMemoryBodyCompositionRepository();
+    }
+
+    @Bean
+    BloodReadingRepository bloodReadingRepository() {
+        return new InMemoryBloodReadingRepository();
     }
 }

@@ -1,8 +1,55 @@
-import { bloodPanel } from "@/lib/fixtures/dashboard";
+import Link from "next/link";
 import { SectionTitle } from "./SectionTitle";
 
-export function BloodPanel({ compact = false }: { compact?: boolean }) {
+export type BloodPanelMarker = {
+  name: string;
+  value: string;
+  unit: string;
+  tone: "good" | "warn" | "alert";
+  goodFillPct: number;
+  goodLeftPct: number;
+  tickPct: number;
+  labels: { min: string; threshold: string; max: string };
+};
+
+export type BloodPanelData = {
+  date: string | null;
+  markers: BloodPanelMarker[];
+};
+
+export function BloodPanel({
+  data,
+  compact = false,
+}: {
+  data: BloodPanelData | null;
+  compact?: boolean;
+}) {
   const showRangeLabels = !compact;
+
+  if (!data || data.markers.length === 0) {
+    return (
+      <div
+        className={`rounded-[10px] border-[0.5px] border-border-default bg-surface ${
+          compact ? "px-[15px] py-[13px]" : "px-[18px] py-4"
+        }`}
+      >
+        <div className={`mb-${compact ? "[11px]" : "[14px]"} flex items-center justify-between`}>
+          <SectionTitle compact={compact}>Blood panel</SectionTitle>
+        </div>
+        <p className="text-[12px] text-secondary">
+          No readings yet.{" "}
+          <Link
+            href="/me/blood"
+            className="font-medium text-accent-dim underline-offset-2 hover:underline"
+          >
+            Add one
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`rounded-[10px] border-[0.5px] border-border-default bg-surface ${
@@ -10,16 +57,35 @@ export function BloodPanel({ compact = false }: { compact?: boolean }) {
       }`}
     >
       <div className={`mb-${compact ? "[11px]" : "[14px]"} flex items-center justify-between`}>
-        <SectionTitle compact={compact}>Blood panel</SectionTitle>
-        <span className="font-mono text-[9px] tracking-[0.06em] text-tertiary tabular">
-          {bloodPanel.date}
-        </span>
+        <Link
+          href="/me/blood"
+          className="group inline-flex items-center gap-2.5 hover:text-accent-dim"
+        >
+          <span
+            aria-hidden
+            className={`inline-block w-[3px] rounded-[2px] bg-accent ${
+              compact ? "h-[11px]" : "h-3.5"
+            }`}
+          />
+          <span
+            className={`font-medium tracking-[-0.01em] text-primary group-hover:text-accent-dim ${
+              compact ? "text-[12px]" : "text-[14px]"
+            }`}
+          >
+            Blood panel
+          </span>
+        </Link>
+        {data.date && (
+          <span className="font-mono text-[9px] tracking-[0.06em] text-tertiary tabular">
+            {data.date}
+          </span>
+        )}
       </div>
       <div className="space-y-3">
-        {bloodPanel.markers.map((m, i) => (
+        {data.markers.map((m, i) => (
           <div
             key={m.name}
-            className={i === bloodPanel.markers.length - 1 ? "mb-0" : ""}
+            className={i === data.markers.length - 1 ? "mb-0" : ""}
           >
             <div className="mb-[5px] flex items-baseline justify-between">
               <span
@@ -48,8 +114,8 @@ export function BloodPanel({ compact = false }: { compact?: boolean }) {
               className={`relative bg-canvas ${compact ? "h-[3px]" : "h-1"}`}
             >
               <div
-                className="absolute left-0 h-full bg-accent-bg"
-                style={{ width: `${m.goodFillPct}%` }}
+                className="absolute h-full bg-accent-bg"
+                style={{ left: `${m.goodLeftPct}%`, width: `${m.goodFillPct}%` }}
               />
               <div
                 className={`absolute w-0.5 bg-primary ${compact ? "h-[3px]" : "h-1"}`}
