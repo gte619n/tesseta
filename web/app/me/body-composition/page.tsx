@@ -1,7 +1,9 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { signIn } from "@/auth";
 import { apiFetch, apiJson } from "@/lib/api";
+import { DexaUploadButton } from "@/components/dexa/DexaUploadButton";
 
 type WhoAmI = {
   userId: string;
@@ -34,18 +36,34 @@ type Session = {
   bodyFat?: Reading;
 };
 
-// Backend stores everything in canonical units (kg for masses). The page
-// converts to imperial at render time. Keep storage canonical so we can
-// add a per-user unit preference later without migrating data.
+type DexaScan = {
+  scanId: string;
+  measuredOn: string | null;
+  sourceFacility: string | null;
+  totalMassLb: number | null;
+  leanTissueLb: number | null;
+  fatTissueLb: number | null;
+  totalBodyFatPercent: number | null;
+};
+
+type Row = {
+  key: string;
+  sortIso: string;
+  // Display label for the Time column.
+  displayTime: string;
+  weightLb: number | null;
+  bodyFatPercent: number | null;
+  leanMassLb: number | null;
+  source: string;
+  // DEXA rows link to detail; Google Health rows don't.
+  detailHref: string | null;
+  isDexa: boolean;
+};
+
+// Backend stores masses in kg for Google Health readings, in lbs for DEXA.
+// The page converts everything to imperial at render time.
 const KG_TO_LB = 2.20462;
 const SESSION_WINDOW_MS = 5 * 60 * 1000;
-
-const METRIC_LABELS: Record<Metric, { name: string; unit: string }> = {
-  WEIGHT_KG: { name: "Weight", unit: "lb" },
-  BODY_FAT_PERCENT: { name: "Body fat", unit: "%" },
-  LEAN_MASS_KG: { name: "Lean mass", unit: "lb" },
-  BMI: { name: "BMI", unit: "" },
-};
 
 const GOOGLE_HEALTH_SCOPE =
   "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
@@ -79,9 +97,6 @@ export default async function BodyCompositionPage() {
     if (!res.ok) {
       throw new Error(`Disconnect failed: ${res.status}`);
     }
-    // Force the server component to re-fetch so the page flips back to
-    // the Connect CTA. Without this, Next.js holds the cached connected
-    // state and the user sees the same screen.
     revalidatePath("/me/body-composition");
   }
 
@@ -109,15 +124,17 @@ export default async function BodyCompositionPage() {
     );
   }
 
-  const readings = await apiJson<Reading[]>("/api/me/body-composition");
+  const [readings, dexaScans] = await Promise.all([
+    apiJson<Reading[]>("/api/me/body-composition"),
+    apiJson<DexaScan[]>("/api/me/dexa/scans"),
+  ]);
   const sessions = groupIntoSessions(readings);
+  const rows = mergeRows(sessions, dexaScans);
 
   const latestSession = sessions[0];
   const latestWeight = sessions.find((s) => s.weight)?.weight;
   const latestBodyFat = sessions.find((s) => s.bodyFat)?.bodyFat;
   const leanMassLb = computeLeanMass(sessions);
-  // BMI = weight_kg / (height_m)². We have the latest weight from
-  // Firestore and the user's height (set once, lives on the user doc).
   const bmi =
     latestWeight && me.heightCm
       ? latestWeight.value / Math.pow(me.heightCm / 100, 2)
@@ -160,7 +177,6 @@ export default async function BodyCompositionPage() {
             label="Lean mass"
             value={leanMassLb !== null ? leanMassLb.toFixed(1) : "—"}
             unit="lb"
-            // Lean mass reflects the latest paired weigh-in.
             sampleTime={latestSession?.sampleTime ?? null}
             footer={leanMassLb === null ? "needs paired weigh-in" : null}
           />
@@ -168,9 +184,6 @@ export default async function BodyCompositionPage() {
             label="BMI"
             value={bmi !== null ? bmi.toFixed(1) : "—"}
             unit=""
-            // BMI uses the latest weight + the user's stored height; show
-            // the weight's timestamp so it's clear when it was last
-            // computed.
             sampleTime={bmi !== null ? latestWeight?.sampleTime ?? null : null}
             footer={
               bmi === null
@@ -183,42 +196,51 @@ export default async function BodyCompositionPage() {
         </section>
 
         <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface">
-          <div className="border-b-[0.5px] border-border-subtle px-5 py-3">
+          <div className="flex items-center justify-between border-b-[0.5px] border-border-subtle px-5 py-3">
             <h2 className="m-0 text-[14px] font-medium text-primary">
               Recent readings
             </h2>
+            <DexaUploadButton />
           </div>
-          {sessions.length === 0 ? (
+          {rows.length === 0 ? (
             <div className="px-5 py-8 text-center text-[13px] text-secondary">
-              No measurements yet. Once your scale logs one, it&apos;ll
-              appear here within ~30 seconds.
+              No measurements yet. Once your scale logs one — or you upload
+              a DEXA report — it&apos;ll appear here.
             </div>
           ) : (
-            <table className="w-full font-mono text-[12px] tabular">
-              <thead>
-                <tr className="text-left text-tertiary">
-                  <th className="px-5 py-2 font-normal">Time</th>
-                  <th className="px-5 py-2 font-normal text-right">Weight</th>
-                  <th className="px-5 py-2 font-normal text-right">Body fat</th>
-                  <th className="px-5 py-2 font-normal text-right">Lean mass</th>
-                  <th className="px-5 py-2 font-normal">Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.slice(0, 50).map((s) => {
-                  const sessionLean = sessionLeanMassLb(s);
-                  return (
+            <div className="max-h-[380px] overflow-y-auto">
+              <table className="w-full font-mono text-[12px] tabular">
+                <thead className="sticky top-0 bg-surface">
+                  <tr className="text-left text-tertiary">
+                    <th className="px-5 py-2 font-normal">Time</th>
+                    <th className="px-5 py-2 font-normal text-right">Weight</th>
+                    <th className="px-5 py-2 font-normal text-right">Body fat</th>
+                    <th className="px-5 py-2 font-normal text-right">Lean mass</th>
+                    <th className="px-5 py-2 font-normal">Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 100).map((r) => (
                     <tr
-                      key={s.sampleTime}
+                      key={r.key}
                       className="border-t-[0.5px] border-border-subtle"
                     >
                       <td className="px-5 py-2 text-secondary">
-                        {formatDateTime(s.sampleTime)}
+                        {r.detailHref ? (
+                          <Link
+                            href={r.detailHref as Route}
+                            className="hover:text-primary"
+                          >
+                            {r.displayTime}
+                          </Link>
+                        ) : (
+                          r.displayTime
+                        )}
                       </td>
                       <td className="px-5 py-2 text-right text-primary">
-                        {s.weight ? (
+                        {r.weightLb !== null ? (
                           <>
-                            {(s.weight.value * KG_TO_LB).toFixed(1)}
+                            {r.weightLb.toFixed(1)}
                             <span className="ml-1 text-tertiary">lb</span>
                           </>
                         ) : (
@@ -226,9 +248,9 @@ export default async function BodyCompositionPage() {
                         )}
                       </td>
                       <td className="px-5 py-2 text-right text-primary">
-                        {s.bodyFat ? (
+                        {r.bodyFatPercent !== null ? (
                           <>
-                            {s.bodyFat.value.toFixed(1)}
+                            {r.bodyFatPercent.toFixed(1)}
                             <span className="ml-1 text-tertiary">%</span>
                           </>
                         ) : (
@@ -236,23 +258,29 @@ export default async function BodyCompositionPage() {
                         )}
                       </td>
                       <td className="px-5 py-2 text-right text-primary">
-                        {sessionLean !== null ? (
+                        {r.leanMassLb !== null ? (
                           <>
-                            {sessionLean.toFixed(1)}
+                            {r.leanMassLb.toFixed(1)}
                             <span className="ml-1 text-tertiary">lb</span>
                           </>
                         ) : (
                           <span className="text-tertiary">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-2 text-tertiary">
-                        {s.sourcePlatform ?? "—"}
+                      <td className="px-5 py-2">
+                        {r.isDexa ? (
+                          <span className="rounded-[4px] bg-accent px-1.5 py-px text-[10px] font-medium uppercase tracking-[0.06em] text-inverse">
+                            DEXA
+                          </span>
+                        ) : (
+                          <span className="text-tertiary">{r.source}</span>
+                        )}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
@@ -304,10 +332,6 @@ function MetricCard({
   );
 }
 
-// Cluster readings into per-weigh-in sessions. Smart scales emit weight
-// and body-fat seconds apart, so any readings within SESSION_WINDOW_MS of
-// each other are treated as the same session. Returns sessions sorted by
-// time, most-recent first.
 function groupIntoSessions(readings: Reading[]): Session[] {
   if (readings.length === 0) return [];
   const sorted = [...readings].sort((a, b) =>
@@ -335,8 +359,6 @@ function groupIntoSessions(readings: Reading[]): Session[] {
 function mergeIntoSession(session: Session, r: Reading) {
   if (r.metric === "WEIGHT_KG" && !session.weight) session.weight = r;
   if (r.metric === "BODY_FAT_PERCENT" && !session.bodyFat) session.bodyFat = r;
-  // Keep the earliest sample time within a session (sessions are sorted
-  // newest-first; later iterations within the same session push earlier).
   if (r.sampleTime < session.sampleTime) {
     session.sampleTime = r.sampleTime;
   }
@@ -354,6 +376,37 @@ function computeLeanMass(sessions: Session[]): number | null {
     if (v !== null) return v;
   }
   return null;
+}
+
+// Merge Google Health sessions and DEXA scans into a single sorted list.
+// DEXA scans use the date-only measuredOn; we sort them as end-of-day so
+// they appear after any Google Health session from the same day.
+function mergeRows(sessions: Session[], scans: DexaScan[]): Row[] {
+  const sessionRows: Row[] = sessions.map((s) => ({
+    key: `session:${s.sampleTime}`,
+    sortIso: s.sampleTime,
+    displayTime: formatDateTime(s.sampleTime),
+    weightLb: s.weight ? s.weight.value * KG_TO_LB : null,
+    bodyFatPercent: s.bodyFat ? s.bodyFat.value : null,
+    leanMassLb: sessionLeanMassLb(s),
+    source: s.sourcePlatform ?? "—",
+    detailHref: null,
+    isDexa: false,
+  }));
+  const dexaRows: Row[] = scans.map((d) => ({
+    key: `dexa:${d.scanId}`,
+    sortIso: d.measuredOn ? `${d.measuredOn}T23:59:59Z` : "",
+    displayTime: d.measuredOn ?? "—",
+    weightLb: d.totalMassLb,
+    bodyFatPercent: d.totalBodyFatPercent,
+    leanMassLb: d.leanTissueLb,
+    source: d.sourceFacility ?? "DEXA",
+    detailHref: `/me/body-composition/dexa/${d.scanId}`,
+    isDexa: true,
+  }));
+  return [...sessionRows, ...dexaRows].sort((a, b) =>
+    b.sortIso.localeCompare(a.sortIso),
+  );
 }
 
 function formatRelative(iso: string): string {

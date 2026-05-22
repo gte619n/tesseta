@@ -32,6 +32,7 @@ AUTH_GOOGLE_ID="$OAUTH_WEB_CLIENT_ID"
 AUTH_GOOGLE_SECRET="$OAUTH_WEB_CLIENT_SECRET"
 AUTH_SECRET="$(secret authjs-secret)"
 GOOGLE_HEALTH_WEBHOOK_SECRET="$(secret google-health-webhook-secret)"
+GEMINI_API_KEY="$(secret gemini_api_key)"
 
 # --- Backend env ---
 # IMPL-02 audience checks + CORS allow-list for the local web origin.
@@ -49,6 +50,8 @@ export GCP_PROJECT_ID="$PROJECT_ID"
 export OAUTH_WEB_CLIENT_ID
 export OAUTH_WEB_CLIENT_SECRET
 export GOOGLE_HEALTH_WEBHOOK_SECRET
+# DEXA: PDFs go to GCS; Gemini API extracts the structured data.
+export GEMINI_API_KEY
 
 # --- Web env (.env.local) ---
 WEB_ENV="${REPO_ROOT}/web/.env.local"

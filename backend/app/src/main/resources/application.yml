@@ -50,3 +50,9 @@ app:
     kms-key-name: ${GOOGLE_HEALTH_KMS_KEY:projects/health-fitness-160/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens}
     web-oauth-client-id: ${OAUTH_WEB_CLIENT_ID:}
     web-oauth-client-secret: ${OAUTH_WEB_CLIENT_SECRET:}
+  dexa:
+    bucket: ${DEXA_BUCKET:health-fitness-160-dexa-scans}
+    # Direct Gemini API (not Vertex). API key in Secret Manager → env at
+    # deploy time. Local dev reads it from the same env var.
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}

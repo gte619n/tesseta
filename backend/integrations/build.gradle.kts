@@ -10,6 +10,8 @@ dependencies {
     // (JDK built-in). KMS is the only external GCP client we pull in
     // through this module.
     implementation(libs.google.cloud.kms)
+    implementation(libs.google.cloud.storage)
+    implementation(libs.google.genai)
     implementation(libs.google.auth.library)
 
     testImplementation(libs.spring.boot.starter.test)

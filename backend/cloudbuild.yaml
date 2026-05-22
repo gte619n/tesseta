@@ -40,7 +40,7 @@ steps:
       # refresh-token exchange. GOOGLE_HEALTH_WEBHOOK_SECRET is the
       # shared secret Google sends in the Authorization header on push
       # notifications.
-      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest
+      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest
 
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA

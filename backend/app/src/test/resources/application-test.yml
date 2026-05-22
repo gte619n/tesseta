@@ -12,6 +12,11 @@ app:
     project-id: health-fitness-test
   persistence:
     firestore-enabled: false
+  dexa:
+    # Tests don't exercise the DEXA pipeline. Turning it off skips the
+    # GCS + Gemini beans that would otherwise try to authenticate during
+    # context load.
+    enabled: false
   googlehealth:
     # Tests that need Google Health behavior install a stub via
     # @TestConfiguration; the values below just keep @Value injection
