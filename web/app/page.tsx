@@ -420,59 +420,206 @@ type BloodReadingApi = {
   };
 };
 
+type ExtractedMarker = {
+  name: string;
+  value: number | null;
+  unit: string | null;
+  refRangeLow: number | null;
+  refRangeHigh: number | null;
+  flag: "H" | "L" | null;
+};
+
+type BloodTestReport = {
+  reportId: string;
+  sampleDate: string | null;
+  labSource: string;
+  markers: ExtractedMarker[];
+};
+
 // Markers we show on the dashboard compact panel, in display order.
-// Mirrors the original fixture: the four most-watched metabolic markers.
-const DASHBOARD_BLOOD_MARKERS = ["LDL", "APO_B", "HBA1C", "HS_CRP"] as const;
+// Four high-value markers: Testosterone, LDL, ApoB, HbA1c
+const DASHBOARD_BLOOD_MARKERS = ["TESTOSTERONE", "LDL", "APO_B", "HBA1C"] as const;
+type DashboardMarker = (typeof DASHBOARD_BLOOD_MARKERS)[number];
+
 const DASHBOARD_BLOOD_LABELS: Record<string, string> = {
+  TESTOSTERONE: "Testosterone",
   LDL: "LDL",
   APO_B: "ApoB",
   HBA1C: "HbA1c",
-  HS_CRP: "hs-CRP",
 };
 
+// Default reference ranges for markers extracted from lab reports
+const DEFAULT_REFS: Record<DashboardMarker, { min: number; threshold: number; max: number; orientation: "LOWER_IS_BETTER" | "HIGHER_IS_BETTER" }> = {
+  TESTOSTERONE: { min: 200, threshold: 300, max: 1200, orientation: "HIGHER_IS_BETTER" },
+  LDL: { min: 0, threshold: 100, max: 200, orientation: "LOWER_IS_BETTER" },
+  APO_B: { min: 0, threshold: 90, max: 150, orientation: "LOWER_IS_BETTER" },
+  HBA1C: { min: 4, threshold: 5.7, max: 8, orientation: "LOWER_IS_BETTER" },
+};
+
+// Patterns to match marker names from lab reports
+const BLOOD_MARKER_PATTERNS: { pattern: RegExp; marker: DashboardMarker }[] = [
+  { pattern: /\btestosterone\b/i, marker: "TESTOSTERONE" },
+  { pattern: /\bapob\b|\bapo[\s-]?b\b|\bapolipoprotein[\s-]?b\b/i, marker: "APO_B" },
+  { pattern: /\bldl\b/i, marker: "LDL" },
+  { pattern: /\bhba1c\b|\bhgba1c\b|\bhemoglobin\s*a1c\b|\bglycated\s*hemoglobin\b/i, marker: "HBA1C" },
+  { pattern: /^a1c$/i, marker: "HBA1C" },
+];
+
+function normalizeBloodMarkerName(name: string): DashboardMarker | null {
+  const trimmed = name.trim();
+  for (const { pattern, marker } of BLOOD_MARKER_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return marker;
+    }
+  }
+  return null;
+}
+
+type LatestBloodValue = {
+  value: number;
+  unit: string;
+  sampleDate: string;
+  refLow: number | null;
+  refHigh: number | null;
+  flag: "H" | "L" | null;
+  source: "reading" | "report";
+};
+
+type HistoryPoint = { date: string; value: number };
+
 async function loadBloodPanel(): Promise<BloodPanelData | null> {
-  let readings: BloodReadingApi[];
+  let readings: BloodReadingApi[] = [];
+  let reports: BloodTestReport[] = [];
+
   try {
-    readings = await apiJson<BloodReadingApi[]>("/api/me/blood");
+    [readings, reports] = await Promise.all([
+      apiJson<BloodReadingApi[]>("/api/me/blood"),
+      apiJson<BloodTestReport[]>("/api/me/blood/reports"),
+    ]);
   } catch {
     return null;
   }
-  if (readings.length === 0) return null;
 
-  const latestByMarker = new Map<string, BloodReadingApi>();
+  if (readings.length === 0 && reports.length === 0) return null;
+
+  // Filter to last year
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  const cutoffDate = oneYearAgo.toISOString().split("T")[0]!;
+
+  // Build latest values and history from both readings and reports
+  const latestByMarker = new Map<DashboardMarker, LatestBloodValue>();
+  const historyByMarker = new Map<DashboardMarker, HistoryPoint[]>();
+
+  // Initialize history arrays
+  for (const m of DASHBOARD_BLOOD_MARKERS) {
+    historyByMarker.set(m, []);
+  }
+
+  // Process manual readings
   for (const r of readings) {
-    const existing = latestByMarker.get(r.marker);
+    if (!DASHBOARD_BLOOD_MARKERS.includes(r.marker as DashboardMarker)) continue;
+    const key = r.marker as DashboardMarker;
+
+    // Add to history if within last year
+    if (r.sampleDate >= cutoffDate) {
+      historyByMarker.get(key)!.push({ date: r.sampleDate, value: r.value });
+    }
+
+    const existing = latestByMarker.get(key);
     if (!existing || existing.sampleDate < r.sampleDate) {
-      latestByMarker.set(r.marker, r);
+      latestByMarker.set(key, {
+        value: r.value,
+        unit: r.unit,
+        sampleDate: r.sampleDate,
+        refLow: r.reference.displayMin,
+        refHigh: r.reference.goodThreshold,
+        flag: null,
+        source: "reading",
+      });
     }
   }
 
+  // Process extracted markers from reports
+  for (const report of reports) {
+    if (!report.sampleDate) continue;
+    for (const m of report.markers) {
+      if (m.value === null) continue;
+      const canonicalName = normalizeBloodMarkerName(m.name);
+      if (!canonicalName) continue;
+
+      // Add to history if within last year
+      if (report.sampleDate >= cutoffDate) {
+        historyByMarker.get(canonicalName)!.push({ date: report.sampleDate, value: m.value });
+      }
+
+      const existing = latestByMarker.get(canonicalName);
+      if (!existing || existing.sampleDate < report.sampleDate) {
+        latestByMarker.set(canonicalName, {
+          value: m.value,
+          unit: m.unit ?? "",
+          sampleDate: report.sampleDate,
+          refLow: m.refRangeLow,
+          refHigh: m.refRangeHigh,
+          flag: m.flag,
+          source: "report",
+        });
+      }
+    }
+  }
+
+  // Sort and dedupe history
+  for (const m of DASHBOARD_BLOOD_MARKERS) {
+    const points = historyByMarker.get(m)!;
+    points.sort((a, b) => a.date.localeCompare(b.date));
+    // Dedupe: keep last value per date
+    const deduped: HistoryPoint[] = [];
+    for (const p of points) {
+      if (deduped.length > 0 && deduped[deduped.length - 1]!.date === p.date) {
+        deduped[deduped.length - 1] = p;
+      } else {
+        deduped.push(p);
+      }
+    }
+    historyByMarker.set(m, deduped);
+  }
+
+  if (latestByMarker.size === 0) return null;
+
   const markers: BloodPanelMarker[] = [];
   let latestDate: string | null = null;
+
   for (const m of DASHBOARD_BLOOD_MARKERS) {
     const r = latestByMarker.get(m);
     if (!r) continue;
     if (!latestDate || latestDate < r.sampleDate) latestDate = r.sampleDate;
-    const ref = r.reference;
-    const span = ref.displayMax - ref.displayMin;
+
+    // Use default refs if not available from the data
+    const defaultRef = DEFAULT_REFS[m];
+    const displayMin = r.refLow ?? defaultRef.min;
+    const goodThreshold = r.refHigh ?? defaultRef.threshold;
+    const displayMax = defaultRef.max;
+    const orientation = defaultRef.orientation;
+
+    const span = displayMax - displayMin;
     const tickPct = Math.max(
       0,
-      Math.min(100, ((r.value - ref.displayMin) / span) * 100),
+      Math.min(100, ((r.value - displayMin) / span) * 100),
     );
     // Good fill renders the part of the bar that's "in the good zone".
     const goodLeftPct =
-      ref.orientation === "LOWER_IS_BETTER"
+      orientation === "LOWER_IS_BETTER"
         ? 0
-        : ((ref.goodThreshold - ref.displayMin) / span) * 100;
+        : ((goodThreshold - displayMin) / span) * 100;
     const goodWidthPct =
-      ref.orientation === "LOWER_IS_BETTER"
-        ? ((ref.goodThreshold - ref.displayMin) / span) * 100
-        : 100 - ((ref.goodThreshold - ref.displayMin) / span) * 100;
+      orientation === "LOWER_IS_BETTER"
+        ? ((goodThreshold - displayMin) / span) * 100
+        : 100 - ((goodThreshold - displayMin) / span) * 100;
     const onGoodSide =
-      ref.orientation === "LOWER_IS_BETTER"
-        ? r.value <= ref.goodThreshold
-        : r.value >= ref.goodThreshold;
-    const dist = Math.abs(r.value - ref.goodThreshold) / ref.goodThreshold;
+      orientation === "LOWER_IS_BETTER"
+        ? r.value <= goodThreshold
+        : r.value >= goodThreshold;
+    const dist = Math.abs(r.value - goodThreshold) / goodThreshold;
     const tone: "good" | "warn" | "alert" = onGoodSide
       ? "good"
       : dist < 0.15
@@ -488,10 +635,13 @@ async function loadBloodPanel(): Promise<BloodPanelData | null> {
       goodLeftPct,
       tickPct,
       labels: {
-        min: String(ref.displayMin),
-        threshold: String(ref.goodThreshold),
-        max: String(ref.displayMax),
+        min: String(displayMin),
+        threshold: String(goodThreshold),
+        max: String(displayMax),
       },
+      sparkline: historyByMarker.get(m),
+      refLow: displayMin,
+      refHigh: goodThreshold,
     });
   }
 

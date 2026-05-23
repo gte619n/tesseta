@@ -27,6 +27,14 @@
   `local.properties`.
 - Edit files in `.github/workflows/` without calling it out in the PR description.
 
+## Local Development
+Run `bash infra/scripts/dev.sh` to start both backend and web servers locally.
+This script:
+- Fetches all required secrets from GCP Secret Manager
+- Creates `web/.env.local` with `BACKEND_URL`, auth secrets, etc.
+- Starts backend on http://localhost:8080 and web on http://localhost:3000
+- Ctrl-C stops both servers
+
 ## Tools
 - GCP project: `health-fitness-160`
 - Region: `us-central1`
