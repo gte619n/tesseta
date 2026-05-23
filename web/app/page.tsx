@@ -1,15 +1,16 @@
 import Link from "next/link";
 import type { Session } from "next-auth";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { BloodPanel, type BloodPanelData, type BloodPanelMarker } from "@/components/dashboard/BloodPanel";
 import { RecentFeed } from "@/components/dashboard/RecentFeed";
-import { SectionTitle } from "@/components/dashboard/SectionTitle";
 import { Sidebar, type SidebarUser } from "@/components/dashboard/Sidebar";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { TodayCard } from "@/components/dashboard/TodayCard";
+import { TodaysDosesCard } from "@/components/dashboard/TodaysDosesCard";
 import { WeightChart } from "@/components/dashboard/WeightChart";
-import { apiJson } from "@/lib/api";
+import { apiFetch, apiJson } from "@/lib/api";
 import { recent, todayHeader, vitals } from "@/lib/fixtures/dashboard";
+import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 
 // IMPL-04 wires the Sidebar identity and the BodyCompositionCard to real
 // data. The other cards (StatCard row, BloodPanel, TodayCard, RecentFeed)
@@ -47,10 +48,24 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const session = await auth();
   const sidebarUser = toSidebarUser(session);
-  const [view, bloodPanel] = await Promise.all([
+  const [view, bloodPanel, todaysDoses] = await Promise.all([
     loadBodyComposition(),
     loadBloodPanel(),
+    loadTodaysDoses(),
   ]);
+
+  async function logDose(medicationId: string, window: TimeWindow) {
+    "use server";
+    const res = await apiFetch(`/api/me/medications/${medicationId}/adherence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ window }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to log dose: ${res.status}`);
+    }
+    revalidatePath("/");
+  }
 
   return (
     <div className="flex min-h-screen items-start justify-center p-8">
@@ -69,7 +84,7 @@ export default async function DashboardPage() {
 
           <section className="mb-3 grid grid-cols-2 gap-2.5">
             <BloodPanel data={bloodPanel} compact />
-            <TodayCard compact />
+            <TodaysDosesCard doses={todaysDoses} logDose={logDose} compact />
           </section>
 
           <RecentFeed entries={recent} variant="desktop" />
@@ -682,4 +697,13 @@ function BodyCompositionTitle() {
       </span>
     </Link>
   );
+}
+
+// Load today's scheduled medication doses
+async function loadTodaysDoses(): Promise<TodaysDose[]> {
+  try {
+    return await apiJson<TodaysDose[]>("/api/me/medications/today");
+  } catch {
+    return [];
+  }
 }

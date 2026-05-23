@@ -234,6 +234,7 @@ export default async function BloodPage() {
   // Build latest values from both readings and reports
   const latestByMarker = buildLatestMarkers(readings, reports);
   const historyByMarker = buildMarkerHistory(readings, reports);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const hasData = readings.length > 0 || reports.length > 0;
 
   return (
