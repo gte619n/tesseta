@@ -18,7 +18,10 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "tesseta",
+  title: {
+    default: "tesseta",
+    template: "tesseta: %s",
+  },
   description: "A health record made of small tiles.",
 };
 
@@ -36,6 +39,10 @@ export default function RootLayout({
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0"
         />
       </head>
       <body className="font-sans antialiased bg-canvas text-primary">

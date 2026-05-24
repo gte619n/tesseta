@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Blood",
+};
 import { revalidatePath } from "next/cache";
 import { apiFetch, apiJson } from "@/lib/api";
 import { AddReadingButton } from "@/components/bloodtest/AddReadingButton";
@@ -234,6 +239,7 @@ export default async function BloodPage() {
   // Build latest values from both readings and reports
   const latestByMarker = buildLatestMarkers(readings, reports);
   const historyByMarker = buildMarkerHistory(readings, reports);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const hasData = readings.length > 0 || reports.length > 0;
 
   return (
@@ -503,13 +509,13 @@ function buildMarkerHistory(
   const history: Partial<Record<Marker, HistoryPoint[]>> = {};
   const oneYearAgo = new Date();
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-  const cutoffDate = oneYearAgo.toISOString().split("T")[0];
+  const cutoffDate = oneYearAgo.toISOString().split("T")[0] ?? "";
 
   // Collect from readings
   for (const r of readings) {
     if (r.sampleDate < cutoffDate) continue;
     if (!history[r.marker]) history[r.marker] = [];
-    history[r.marker].push({ date: r.sampleDate, value: r.value });
+    history[r.marker]!.push({ date: r.sampleDate, value: r.value });
   }
 
   // Collect from reports
@@ -521,7 +527,7 @@ function buildMarkerHistory(
       if (!canonicalName) continue;
       const key = canonicalName as Marker;
       if (!history[key]) history[key] = [];
-      history[key].push({ date: report.sampleDate, value: m.value });
+      history[key]!.push({ date: report.sampleDate, value: m.value });
     }
   }
 

@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "DEXA Scan",
+};
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { apiFetch, apiJson, BackendError } from "@/lib/api";

@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import { signOut } from "@/auth";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+};
 import { apiJson } from "@/lib/api";
 
 type WhoAmI = {

@@ -75,6 +75,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/equipment/**").authenticated()
                 // Admin endpoints require authentication (aspect handles admin check)
                 .requestMatchers("/api/admin/**").authenticated()
+                .requestMatchers("/api/drugs", "/api/drugs/**").authenticated()
+                .anyRequest().denyAll()
                 .anyRequest().denyAll()
             )
             // Webhook endpoints arrive with `Authorization: Bearer <secret>`

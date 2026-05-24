@@ -1,0 +1,24 @@
+package com.gte619n.healthfitness.core.medication;
+
+import java.time.Instant;
+import java.util.List;
+
+/**
+ * Shared drug catalog entry (system-owned).
+ * Stored in: drugs/{drugId}
+ */
+public record Drug(
+    String drugId,
+    String name,                    // "Testosterone Cypionate"
+    List<String> aliases,           // ["Test Cyp", "Depo-Testosterone"]
+    DrugCategory category,
+    DrugForm form,
+    String defaultUnit,             // "mg", "mcg", "IU", "ml"
+    List<String> commonDoses,       // ["100mg", "200mg"]
+    String imageUrl,                // GCS CDN URL (null if generating)
+    String imageFallback,           // Generic form image URL
+    List<String> suggestedMarkers,  // ["TESTOSTERONE", "FREE_TESTOSTERONE"]
+    String description,             // Brief description of the drug
+    Instant createdAt,
+    Instant updatedAt
+) {}
