@@ -9,11 +9,16 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-// Generates AI images for equipment using Gemini 3.5 Imagen.
+// Generates AI images for equipment using Gemini 3.1 Flash (Nano quality).
 //
 // The service builds a photography prompt from the equipment metadata
 // following the style guide in docs/photography-prompts.md, calls the
-// Vertex AI Imagen API, uploads the result to GCS, and returns the public URL.
+// Gemini 3.1 Flash image generation API with nano quality tier for fast,
+// cost-effective generation, uploads the result to GCS, and returns the
+// public URL.
+//
+// Model: gemini-3.1-flash-image-preview
+// Quality: nano (fastest, most cost-effective)
 //
 // Image generation is async; the caller receives a CompletableFuture that
 // resolves to the GCS URL or null if generation fails.
@@ -23,7 +28,8 @@ public class EquipmentImageService {
     private static final Logger log = LoggerFactory.getLogger(EquipmentImageService.class);
 
     private final EquipmentImageStorage storage;
-    // TODO: Inject Vertex AI ImageGenerationModel client when SDK is available
+    // TODO: Inject Gemini 3.1 Flash client (gemini-3.1-flash-image-preview)
+    // with nano quality tier for cost-effective image generation
 
     public EquipmentImageService(EquipmentImageStorage storage) {
         this.storage = storage;
@@ -43,9 +49,11 @@ public class EquipmentImageService {
                 log.info("Generating image for equipment {} with prompt: {}",
                     equipment.equipmentId(), prompt);
 
-                // TODO: Call Vertex AI Imagen API when SDK is available
+                // TODO: Call Gemini 3.1 Flash API (nano quality) when SDK is integrated
+                // Model: gemini-3.1-flash-image-preview
+                // Quality: nano
                 // For now, this is stubbed to return null
-                // byte[] imageBytes = callImagenAPI(prompt, negativePrompt);
+                // byte[] imageBytes = callGeminiFlashAPI(prompt, negativePrompt, "nano");
                 // if (imageBytes != null) {
                 //     return storage.upload(equipment.equipmentId(), imageBytes);
                 // }
