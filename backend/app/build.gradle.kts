@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":integrations"))
 
     implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.security)
     // IMPL-02: backend is a JWT resource server validating Google ID tokens.

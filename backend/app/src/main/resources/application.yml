@@ -70,3 +70,10 @@ app:
     # deploy time. Local dev reads it from the same env var.
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
+  equipment:
+    bucket: ${EQUIPMENT_BUCKET:health-fitness-160-equipment}
+    # Vertex AI Imagen for equipment image generation
+    vertex-ai-location: ${VERTEX_AI_LOCATION:us-central1}
+    imagen-model: ${IMAGEN_MODEL:imagegeneration@006}
+  gym:
+    bucket: ${GYM_BUCKET:health-fitness-160}

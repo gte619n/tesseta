@@ -17,6 +17,13 @@ app:
     # GCS + Gemini beans that would otherwise try to authenticate during
     # context load.
     enabled: false
+  bloodtest:
+    # Tests don't exercise the blood test pipeline. Turning it off skips the
+    # GCS + Gemini beans that would otherwise try to authenticate during
+    # context load.
+    enabled: false
+  gym:
+    bucket: test-gym-bucket
   googlehealth:
     # Tests that need Google Health behavior install a stub via
     # @TestConfiguration; the values below just keep @Value injection

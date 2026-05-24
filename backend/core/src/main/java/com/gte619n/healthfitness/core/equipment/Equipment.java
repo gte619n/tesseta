@@ -5,11 +5,17 @@ import java.util.Map;
 
 public record Equipment(
     String equipmentId,
-    String ownerId,
     String name,
     String category,
+    String subcategory,
+    SpecSchema specSchema,
     Map<String, Object> specs,
-    String notes,
+    String imageUrl,
+    ImageStatus imageStatus,
+    String ownerId,
+    EquipmentStatus status,
+    String contributorId,
+    Integer exerciseCount,
     Instant createdAt,
     Instant updatedAt
 ) {}

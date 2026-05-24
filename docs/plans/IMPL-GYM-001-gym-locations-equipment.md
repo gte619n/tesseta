@@ -1,9 +1,9 @@
 # IMPL-GYM-001: Gym Locations & Equipment Management
 
 **Feature Branch:** `feature/gym_module`
-**Status:** Planning
+**Status:** Complete
 **Created:** 2026-05-23
-**Last Updated:** 2026-05-23
+**Last Updated:** 2026-05-24
 
 ---
 
@@ -780,35 +780,35 @@ Placeholder icons per top-level category:
 
 ## Development Phases
 
-### Phase 1: Data Models & Backend Foundation
+### Phase 1: Data Models & Backend Foundation ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| Create `Location` domain model | [ ] | [ ] | [ ] |
-| Create `Equipment` domain model | [ ] | [ ] | [ ] |
-| Create `LocationRepository` Firestore impl | [ ] | [ ] | [ ] |
-| Create `EquipmentRepository` Firestore impl | [ ] | [ ] | [ ] |
-| Create `LocationService` with CRUD | [ ] | [ ] | [ ] |
-| Create `EquipmentService` with catalog queries | [ ] | [ ] | [ ] |
-| Unit tests for repositories | [ ] | [ ] | [ ] |
-| Unit tests for services | [ ] | [ ] | [ ] |
-| Integration tests for Firestore | [ ] | [ ] | [ ] |
+| Create `Location` domain model | [x] | [x] | [x] |
+| Create `Equipment` domain model | [x] | [x] | [x] |
+| Create `LocationRepository` Firestore impl | [x] | [x] | [x] |
+| Create `EquipmentRepository` Firestore impl | [x] | [x] | [x] |
+| Create `LocationService` with CRUD | [x] | [x] | [x] |
+| Create `EquipmentService` with catalog queries | [x] | [x] | [x] |
+| Unit tests for repositories | [x] | [x] | [x] |
+| Unit tests for services | [x] | [x] | [x] |
+| Integration tests for Firestore | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
 cd backend && ./gradlew :core:domain:test :core:services:test --tests "*Location*" --tests "*Equipment*"
 ```
 
-### Phase 2: Location REST API
+### Phase 2: Location REST API ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| `LocationController` with CRUD endpoints | [ ] | [ ] | [ ] |
-| Request/Response DTOs | [ ] | [ ] | [ ] |
-| Input validation | [ ] | [ ] | [ ] |
-| Cover photo upload endpoint | [ ] | [ ] | [ ] |
-| GCS integration for photo storage | [ ] | [ ] | [ ] |
-| API integration tests | [ ] | [ ] | [ ] |
+| `LocationController` with CRUD endpoints | [x] | [x] | [x] |
+| Request/Response DTOs | [x] | [x] | [x] |
+| Input validation | [x] | [x] | [x] |
+| Cover photo upload endpoint | [x] | [x] | [x] |
+| GCS integration for photo storage | [x] | [x] | [x] |
+| API integration tests | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
@@ -816,16 +816,16 @@ cd backend && ./gradlew :api:test --tests "*LocationController*"
 # Manual: curl -X GET http://localhost:8080/api/me/gyms
 ```
 
-### Phase 3: Equipment Catalog API
+### Phase 3: Equipment Catalog API ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| `EquipmentController` for catalog | [ ] | [ ] | [ ] |
-| Search endpoint with name matching | [ ] | [ ] | [ ] |
-| Category/subcategory filtering | [ ] | [ ] | [ ] |
-| Category tree endpoint | [ ] | [ ] | [ ] |
-| Equipment submission endpoint | [ ] | [ ] | [ ] |
-| API integration tests | [ ] | [ ] | [ ] |
+| `EquipmentController` for catalog | [x] | [x] | [x] |
+| Search endpoint with name matching | [x] | [x] | [x] |
+| Category/subcategory filtering | [x] | [x] | [x] |
+| Category tree endpoint | [x] | [x] | [x] |
+| Equipment submission endpoint | [x] | [x] | [x] |
+| API integration tests | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
@@ -833,18 +833,18 @@ cd backend && ./gradlew :api:test --tests "*EquipmentController*"
 # Manual: curl -X GET "http://localhost:8080/api/equipment?search=bench"
 ```
 
-### Phase 4: Image Generation Service
+### Phase 4: Image Generation Service ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| Gemini 3.5 client integration | [ ] | [ ] | [ ] |
-| `EquipmentImageService` | [ ] | [ ] | [ ] |
-| Prompt builder with photography guide | [ ] | [ ] | [ ] |
-| GCS upload for generated images | [ ] | [ ] | [ ] |
-| Cover photo enhancement endpoint | [ ] | [ ] | [ ] |
-| Fallback placeholder serving | [ ] | [ ] | [ ] |
-| Unit tests for prompt generation | [ ] | [ ] | [ ] |
-| Integration test with Gemini | [ ] | [ ] | [ ] |
+| Gemini 3.5 client integration | [x] | [x] | [x] |
+| `EquipmentImageService` | [x] | [x] | [x] |
+| Prompt builder with photography guide | [x] | [x] | [x] |
+| GCS upload for generated images | [x] | [x] | [x] |
+| Cover photo enhancement endpoint | [x] | [x] | [x] |
+| Fallback placeholder serving | [x] | [x] | [x] |
+| Unit tests for prompt generation | [x] | [x] | [x] |
+| Integration test with Gemini | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
@@ -852,50 +852,50 @@ cd backend && ./gradlew :core:services:test --tests "*ImageService*"
 # Manual: Visual inspection of generated image
 ```
 
-### Phase 5: Admin API
+### Phase 5: Admin API ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| Admin role check middleware | [ ] | [ ] | [ ] |
-| `AdminEquipmentController` | [ ] | [ ] | [ ] |
-| Approve/reject/edit endpoints | [ ] | [ ] | [ ] |
-| Image regeneration endpoint | [ ] | [ ] | [ ] |
-| Admin API tests | [ ] | [ ] | [ ] |
+| Admin role check middleware | [x] | [x] | [x] |
+| `AdminEquipmentController` | [x] | [x] | [x] |
+| Approve/reject/edit endpoints | [x] | [x] | [x] |
+| Image regeneration endpoint | [x] | [x] | [x] |
+| Admin API tests | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
 cd backend && ./gradlew :api:test --tests "*AdminEquipment*"
 ```
 
-### Phase 6: Web - Types & API Layer
+### Phase 6: Web - Types & API Layer ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| TypeScript types in `lib/types/gym.ts` | [ ] | [ ] | [ ] |
-| API proxy routes for locations | [ ] | [ ] | [ ] |
-| API proxy routes for equipment | [ ] | [ ] | [ ] |
-| API proxy routes for admin | [ ] | [ ] | [ ] |
+| TypeScript types in `lib/types/gym.ts` | [x] | [x] | [x] |
+| API proxy routes for locations | [x] | [x] | [x] |
+| API proxy routes for equipment | [x] | [x] | [x] |
+| API proxy routes for admin | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
 cd web && pnpm type-check
 ```
 
-### Phase 7: Web - Location UI
+### Phase 7: Web - Location UI ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| Gym list page (`/me/workouts/gyms`) | [ ] | [ ] | [ ] |
-| `LocationCard` component | [ ] | [ ] | [ ] |
-| Gym detail page (`[locationId]`) | [ ] | [ ] | [ ] |
-| `LocationForm` component | [ ] | [ ] | [ ] |
-| Create gym page (`/new`) | [ ] | [ ] | [ ] |
-| Edit gym page (`/edit`) | [ ] | [ ] | [ ] |
-| `HoursEditor` component | [ ] | [ ] | [ ] |
-| `AmenitiesChecklist` component | [ ] | [ ] | [ ] |
-| `CoverPhotoUpload` with AI enhance | [ ] | [ ] | [ ] |
-| `DeleteLocationButton` with soft delete | [ ] | [ ] | [ ] |
-| Set default location action | [ ] | [ ] | [ ] |
+| Gym list page (`/me/workouts/gyms`) | [x] | [x] | [x] |
+| `LocationCard` component | [x] | [x] | [x] |
+| Gym detail page (`[locationId]`) | [x] | [x] | [x] |
+| `LocationForm` component | [x] | [x] | [x] |
+| Create gym page (`/new`) | [x] | [x] | [x] |
+| Edit gym page (`/edit`) | [x] | [x] | [x] |
+| `HoursEditor` component | [x] | [x] | [x] |
+| `AmenitiesChecklist` component | [x] | [x] | [x] |
+| `CoverPhotoUpload` with AI enhance | [x] | [x] | [x] |
+| `DeleteLocationButton` with soft delete | [x] | [x] | [x] |
+| Set default location action | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
@@ -903,79 +903,79 @@ cd web && pnpm build && pnpm start
 # Manual: Navigate to /me/workouts/gyms, create/edit/delete location
 ```
 
-### Phase 8: Web - Equipment Catalog UI
+### Phase 8: Web - Equipment Catalog UI ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| `EquipmentCatalog` modal component | [ ] | [ ] | [ ] |
-| `EquipmentSearch` with name matching | [ ] | [ ] | [ ] |
-| Category filter dropdowns | [ ] | [ ] | [ ] |
-| `EquipmentCard` with image/placeholder | [ ] | [ ] | [ ] |
-| Inline toggle add-to-gym | [ ] | [ ] | [ ] |
-| Batch save selected equipment | [ ] | [ ] | [ ] |
-| Exercise count badge placeholder | [ ] | [ ] | [ ] |
+| `EquipmentCatalog` modal component | [x] | [x] | [x] |
+| `EquipmentSearch` with name matching | [x] | [x] | [x] |
+| Category filter dropdowns | [x] | [x] | [x] |
+| `EquipmentCard` with image/placeholder | [x] | [x] | [x] |
+| Inline toggle add-to-gym | [x] | [x] | [x] |
+| Batch save selected equipment | [x] | [x] | [x] |
+| Exercise count badge placeholder | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
 # Manual: Open catalog modal, search, filter, toggle equipment, save
 ```
 
-### Phase 9: Web - Equipment Submission UI
+### Phase 9: Web - Equipment Submission UI ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| `EquipmentSubmitForm` modal | [ ] | [ ] | [ ] |
-| Dynamic `EquipmentSpecsForm` per schema | [ ] | [ ] | [ ] |
-| Category/subcategory selectors | [ ] | [ ] | [ ] |
-| New subcategory proposal | [ ] | [ ] | [ ] |
-| Submission confirmation toast | [ ] | [ ] | [ ] |
+| `EquipmentSubmitForm` modal | [x] | [x] | [x] |
+| Dynamic `EquipmentSpecsForm` per schema | [x] | [x] | [x] |
+| Category/subcategory selectors | [x] | [x] | [x] |
+| New subcategory proposal | [x] | [x] | [x] |
+| Submission confirmation toast | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
 # Manual: Submit new equipment, verify appears in user's equipment list
 ```
 
-### Phase 10: Web - Admin UI
+### Phase 10: Web - Admin UI ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| Admin route protection | [ ] | [ ] | [ ] |
-| Admin equipment review page | [ ] | [ ] | [ ] |
-| Approve action with image generation trigger | [ ] | [ ] | [ ] |
-| Reject action | [ ] | [ ] | [ ] |
-| Edit equipment modal | [ ] | [ ] | [ ] |
-| Regenerate image button | [ ] | [ ] | [ ] |
+| Admin route protection | [x] | [x] | [x] |
+| Admin equipment review page | [x] | [x] | [x] |
+| Approve action with image generation trigger | [x] | [x] | [x] |
+| Reject action | [x] | [x] | [x] |
+| Edit equipment modal | [x] | [x] | [x] |
+| Regenerate image button | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
 # Manual: As admin, navigate to /admin/equipment, approve pending item, verify image generated
 ```
 
-### Phase 11: Navigation & Polish
+### Phase 11: Navigation & Polish ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| Add "Gyms" to Workouts nav section | [ ] | [ ] | [ ] |
-| Empty states for all pages | [ ] | [ ] | [ ] |
-| Loading states | [ ] | [ ] | [ ] |
-| Error handling and toasts | [ ] | [ ] | [ ] |
-| Mobile responsive testing | [ ] | [ ] | [ ] |
+| Add "Gyms" to Workouts nav section | [x] | [x] | [x] |
+| Empty states for all pages | [x] | [x] | [x] |
+| Loading states | [x] | [x] | [x] |
+| Error handling and toasts | [x] | [x] | [x] |
+| Mobile responsive testing | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash
 # Manual: Full flow on mobile viewport, verify all states
 ```
 
-### Phase 12: Production Readiness
+### Phase 12: Production Readiness ✅
 
 | Task | Status | Tested | Pushed |
 |------|--------|--------|--------|
-| Feature flag for gym module | [ ] | [ ] | [ ] |
-| Error monitoring integration | [ ] | [ ] | [ ] |
-| Rollback plan documented | [ ] | [ ] | [ ] |
-| E2E test coverage | [ ] | [ ] | [ ] |
-| Performance testing | [ ] | [ ] | [ ] |
-| Documentation updated | [ ] | [ ] | [ ] |
+| Feature flag for gym module | [x] | [x] | [x] |
+| Error monitoring integration | [x] | [x] | [x] |
+| Rollback plan documented | [x] | [x] | [x] |
+| E2E test coverage | [x] | [x] | [x] |
+| Performance testing | [x] | [x] | [x] |
+| Documentation updated | [x] | [x] | [x] |
 
 **Verification Command:**
 ```bash

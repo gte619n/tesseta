@@ -71,6 +71,10 @@ public class SecurityConfig {
                 // bypasses the JWT filter entirely.
                 .requestMatchers("/api/webhooks/**").permitAll()
                 .requestMatchers("/api/me/**", "/api/me").authenticated()
+                // Equipment catalog endpoints - authenticated users can browse
+                .requestMatchers("/api/equipment/**").authenticated()
+                // Admin endpoints require authentication (aspect handles admin check)
+                .requestMatchers("/api/admin/**").authenticated()
                 .anyRequest().denyAll()
             )
             // Webhook endpoints arrive with `Authorization: Bearer <secret>`
