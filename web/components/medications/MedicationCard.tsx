@@ -1,6 +1,7 @@
 "use client";
 
-import type { Medication } from "@/lib/types/medication";
+import { useState, useEffect } from "react";
+import type { Medication, Drug } from "@/lib/types/medication";
 import { formatFrequency, TIME_WINDOW_LABELS, CATEGORY_LABELS } from "@/lib/types/medication";
 import { DrugImage } from "./DrugImage";
 import { AdherenceSparkline } from "./AdherenceSparkline";
@@ -12,9 +13,53 @@ interface MedicationCardProps {
 
 export function MedicationCard({ medication, onClick }: MedicationCardProps) {
   const { drug, dose, unit, frequency, timeSlots, adherence, status } = medication;
-  const name = medication.customName ?? drug?.name ?? "Unknown";
+  // Priority: customName > drug.name > "Drug removed" (orphaned) > "Unknown"
+  const name = medication.customName ?? drug?.name ?? (medication.drugId ? "Drug removed" : "Unknown");
   const category = drug?.category;
   const form = drug?.form ?? "TABLET";
+
+  // Track imageUrl separately so we can poll for updates
+  const [imageUrl, setImageUrl] = useState<string | null>(drug?.imageUrl ?? null);
+
+  // Poll for image if drug exists but imageUrl is missing
+  useEffect(() => {
+    if (!drug?.drugId || imageUrl) return;
+
+    let cancelled = false;
+    const pollInterval = 3000; // 3 seconds
+    const maxAttempts = 20; // Stop after ~1 minute
+    let attempts = 0;
+
+    const poll = async () => {
+      if (cancelled || attempts >= maxAttempts) return;
+      attempts++;
+
+      try {
+        const res = await fetch(`/api/drugs/${drug.drugId}`);
+        if (res.ok) {
+          const updatedDrug = await res.json() as Drug;
+          if (updatedDrug.imageUrl) {
+            setImageUrl(updatedDrug.imageUrl);
+            return; // Stop polling
+          }
+        }
+      } catch {
+        // Ignore errors, keep polling
+      }
+
+      if (!cancelled && attempts < maxAttempts) {
+        setTimeout(poll, pollInterval);
+      }
+    };
+
+    // Start polling after a short delay
+    const timeout = setTimeout(poll, pollInterval);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [drug?.drugId, imageUrl]);
 
   // Format dose display
   const doseDisplay = timeSlots.length > 1
@@ -35,7 +80,7 @@ export function MedicationCard({ medication, onClick }: MedicationCardProps) {
       {/* Drug image */}
       <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-lg bg-canvas-sunken">
         <DrugImage
-          imageUrl={drug?.imageUrl ?? null}
+          imageUrl={imageUrl}
           fallbackUrl={drug?.imageFallback ?? null}
           form={form}
           name={name}

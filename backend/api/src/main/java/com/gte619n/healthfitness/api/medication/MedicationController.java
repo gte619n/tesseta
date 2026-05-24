@@ -114,6 +114,9 @@ public class MedicationController {
 
     /**
      * Create a new medication.
+     * Supports two modes:
+     * 1. With drugId - links to a drug in the catalog
+     * 2. With customName (no drugId) - creates a custom medication entry
      */
     @PostMapping
     public ResponseEntity<MedicationResponse> create(@RequestBody CreateMedicationRequest body) {
@@ -122,18 +125,38 @@ public class MedicationController {
         String userId = currentUser.get().userId();
         String medicationId = UUID.randomUUID().toString();
 
-        // Verify drug exists
-        Drug drug = drugs.findById(body.drugId())
-            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + body.drugId()));
+        Drug drug = null;
+        final String drugIdFromRequest = body.drugId();
+        final String customName = body.customName();
+        String drugId;
+        String unit = body.unit();
+        List<String> correlatedMarkers = body.correlatedMarkers();
+
+        if (drugIdFromRequest != null && !drugIdFromRequest.isBlank()) {
+            // Mode 1: Link to existing drug in catalog
+            drugId = drugIdFromRequest;
+            drug = drugs.findById(drugId)
+                .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugIdFromRequest));
+            if (unit == null) unit = drug.defaultUnit();
+            if (correlatedMarkers == null) correlatedMarkers = drug.suggestedMarkers();
+        } else if (customName != null && !customName.isBlank()) {
+            // Mode 2: Custom medication entry
+            // No drugId needed - store customName directly
+            drugId = null;
+            if (unit == null) unit = "mg";
+            if (correlatedMarkers == null) correlatedMarkers = List.of();
+        } else {
+            throw new IllegalArgumentException("Either drugId or customName is required");
+        }
 
         Medication medication = new Medication(
             userId,
             medicationId,
-            body.drugId(),
-            body.customName(),
+            drugId,
+            customName,
             MedicationStatus.ACTIVE,
             body.dose(),
-            body.unit() != null ? body.unit() : drug.defaultUnit(),
+            unit,
             body.frequency(),
             body.timeSlots() != null ? body.timeSlots() : List.of(),
             body.protocolId(),
@@ -143,7 +166,7 @@ public class MedicationController {
             null,   // endDate
             null,   // discontinueReason
             null,   // discontinueNotes
-            body.correlatedMarkers() != null ? body.correlatedMarkers() : drug.suggestedMarkers(),
+            correlatedMarkers,
             Instant.now(),
             Instant.now()
         );
@@ -262,8 +285,11 @@ public class MedicationController {
     }
 
     private void validateCreateRequest(CreateMedicationRequest body) {
-        if (body.drugId() == null || body.drugId().isBlank()) {
-            throw new IllegalArgumentException("drugId is required");
+        boolean hasDrugId = body.drugId() != null && !body.drugId().isBlank();
+        boolean hasCustomName = body.customName() != null && !body.customName().isBlank();
+
+        if (!hasDrugId && !hasCustomName) {
+            throw new IllegalArgumentException("Either drugId or customName is required");
         }
         if (body.dose() == null || body.dose() <= 0) {
             throw new IllegalArgumentException("dose is required and must be positive");

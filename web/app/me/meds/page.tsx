@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Meds",
+};
 import { revalidatePath } from "next/cache";
 import { apiFetch, apiJson } from "@/lib/api";
 import type { Medication, Drug, FrequencyConfig, TimeSlot } from "@/lib/types/medication";
@@ -17,10 +22,29 @@ export default async function MedsPage() {
   const activeMeds = medications.filter(m => m.status === "ACTIVE");
   const discontinuedMeds = medications.filter(m => m.status === "DISCONTINUED");
 
-  // Server actions
+  // Server action: AI-powered drug lookup
+  async function lookupDrug(query: string): Promise<Drug | null> {
+    "use server";
+    const res = await apiFetch("/api/drugs/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Lookup failed: ${text}`);
+    }
+
+    const result = await res.json() as { found: boolean; drug: Drug | null; message: string | null };
+    return result.found ? result.drug : null;
+  }
+
+  // Server action: Add medication
   async function addMedication(formData: FormData) {
     "use server";
-    const drugId = formData.get("drugId") as string;
+    const drugId = formData.get("drugId") as string | null;
+    const customName = formData.get("customName") as string | null;
     const dose = Number(formData.get("dose"));
     const unit = formData.get("unit") as string;
     const frequencyType = formData.get("frequencyType") as string;
@@ -41,19 +65,30 @@ export default async function MedsPage() {
       timesPerPeriod,
     };
 
+    // Build request body - support both catalog drugs and custom entries
+    const body: Record<string, unknown> = {
+      dose,
+      unit,
+      frequency,
+      timeSlots,
+      correlatedMarkers,
+      notes: notes || null,
+      prescribedBy: prescribedBy || null,
+    };
+
+    if (drugId) {
+      body.drugId = drugId;
+    } else if (customName) {
+      // Custom medication entry
+      body.customName = customName;
+      body.customCategory = formData.get("customCategory") as string;
+      body.customForm = formData.get("customForm") as string;
+    }
+
     const res = await apiFetch("/api/me/medications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        drugId,
-        dose,
-        unit,
-        frequency,
-        timeSlots,
-        correlatedMarkers,
-        notes: notes || null,
-        prescribedBy: prescribedBy || null,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -140,6 +175,7 @@ export default async function MedsPage() {
           </div>
           <AddMedicationButton
             addMedication={addMedication}
+            lookupDrug={lookupDrug}
             drugs={drugs}
           />
         </header>

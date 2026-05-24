@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Blood",
+};
 import { revalidatePath } from "next/cache";
 import { apiFetch, apiJson } from "@/lib/api";
 import { AddReadingButton } from "@/components/bloodtest/AddReadingButton";

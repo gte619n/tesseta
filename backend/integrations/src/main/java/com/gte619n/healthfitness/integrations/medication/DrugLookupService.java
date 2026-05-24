@@ -115,13 +115,13 @@ public class DrugLookupService {
         );
 
         // Enable Google Search grounding
+        // Note: Cannot use responseMimeType with Google Search tool
         Tool googleSearchTool = Tool.builder()
             .googleSearch(GoogleSearch.builder().build())
             .build();
 
         GenerateContentConfig config = GenerateContentConfig.builder()
             .tools(List.of(googleSearchTool))
-            .responseMimeType("application/json")
             .build();
 
         GenerateContentResponse response = client.models.generateContent(model, content, config);
@@ -129,6 +129,23 @@ public class DrugLookupService {
         if (text == null || text.isBlank() || "null".equals(text.trim())) {
             return null;
         }
+
+        // Clean up response - remove markdown code fences if present
+        text = text.trim();
+        if (text.startsWith("```json")) {
+            text = text.substring(7);
+        } else if (text.startsWith("```")) {
+            text = text.substring(3);
+        }
+        if (text.endsWith("```")) {
+            text = text.substring(0, text.length() - 3);
+        }
+        text = text.trim();
+
+        if (text.isEmpty() || "null".equals(text)) {
+            return null;
+        }
+
         try {
             return json.readValue(text, DrugLookupResult.class);
         } catch (Exception e) {

@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Body Composition",
+};
 import type { Route } from "next";
 import { signIn } from "@/auth";
 import { apiJson } from "@/lib/api";

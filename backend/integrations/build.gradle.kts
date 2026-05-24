@@ -2,6 +2,11 @@ plugins {
     `java-library`
 }
 
+tasks.test {
+    // Pass through GEMINI_API_KEY for integration tests
+    environment("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY") ?: "")
+}
+
 dependencies {
     api(project(":core"))
     implementation(libs.spring.boot.starter.web)

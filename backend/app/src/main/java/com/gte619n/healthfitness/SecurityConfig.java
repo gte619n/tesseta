@@ -71,6 +71,7 @@ public class SecurityConfig {
                 // bypasses the JWT filter entirely.
                 .requestMatchers("/api/webhooks/**").permitAll()
                 .requestMatchers("/api/me/**", "/api/me").authenticated()
+                .requestMatchers("/api/drugs", "/api/drugs/**").authenticated()
                 .anyRequest().denyAll()
             )
             // Webhook endpoints arrive with `Authorization: Bearer <secret>`

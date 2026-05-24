@@ -76,4 +76,4 @@ app:
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${GEMINI_MODEL:gemini-2.5-flash}
     # Imagen for medication image generation
-    imagen-model: ${IMAGEN_MODEL:imagen-3.0-generate-002}
+    imagen-model: ${IMAGEN_MODEL:gemini-3.1-flash-image-preview}

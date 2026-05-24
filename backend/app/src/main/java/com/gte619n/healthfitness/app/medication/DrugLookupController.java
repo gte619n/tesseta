@@ -1,12 +1,21 @@
 package com.gte619n.healthfitness.app.medication;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gte619n.healthfitness.api.medication.DrugResponse;
 import com.gte619n.healthfitness.core.medication.Drug;
+import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * REST controller for drug lookup operations.
@@ -17,6 +26,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/drugs")
 @ConditionalOnProperty(name = "app.medications.enabled", havingValue = "true", matchIfMissing = true)
 public class DrugLookupController {
+
+    private static final long SSE_TIMEOUT_MS = 120_000L;
+    private static final ObjectMapper JSON = JsonMapper.builder()
+        .addModule(new JavaTimeModule())
+        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+        .build();
 
     private final DrugCatalogService catalogService;
 
@@ -56,6 +71,49 @@ public class DrugLookupController {
     }
 
     /**
+     * Look up a drug with SSE streaming for progress updates.
+     * Streams phases: searching -> found/not_found -> generating_image -> complete
+     */
+    @PostMapping(value = "/lookup/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter lookupStream(@RequestBody LookupRequest body) {
+        if (body.query() == null || body.query().isBlank()) {
+            throw new IllegalArgumentException("query is required");
+        }
+
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
+        Thread.startVirtualThread(() -> {
+            try {
+                sendPhase(emitter, "searching", "Looking up drug information...");
+
+                Optional<Drug> result = catalogService.lookupOrCreateWithCallback(
+                    body.query(),
+                    (phase, message) -> sendPhase(emitter, phase, message)
+                );
+
+                if (result.isEmpty()) {
+                    Map<String, Object> notFound = new LinkedHashMap<>();
+                    notFound.put("phase", "not_found");
+                    notFound.put("message", "No drug found matching: " + body.query());
+                    sendData(emitter, notFound);
+                    emitter.complete();
+                    return;
+                }
+
+                Map<String, Object> done = new LinkedHashMap<>();
+                done.put("phase", "complete");
+                done.put("drug", DrugResponse.from(result.get()));
+                sendData(emitter, done);
+                emitter.complete();
+
+            } catch (Exception e) {
+                sendFailure(emitter, e.getMessage() == null ? "Lookup failed" : e.getMessage());
+                emitter.complete();
+            }
+        });
+        return emitter;
+    }
+
+    /**
      * Search the drug catalog by name/alias.
      * This is a fast local search - does not use AI.
      */
@@ -67,12 +125,53 @@ public class DrugLookupController {
     }
 
     /**
-     * Trigger image regeneration for a drug.
+     * Trigger image regeneration for a drug with SSE progress.
      */
-    @PostMapping("/{drugId}/regenerate-image")
-    public ResponseEntity<Void> regenerateImage(@PathVariable String drugId) {
-        catalogService.regenerateImage(drugId);
-        return ResponseEntity.accepted().build();
+    @PostMapping(value = "/{drugId}/regenerate-image", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter regenerateImage(@PathVariable String drugId) {
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
+        Thread.startVirtualThread(() -> {
+            try {
+                sendPhase(emitter, "generating", "Generating image...");
+
+                String imageUrl = catalogService.regenerateImageSync(drugId);
+
+                Map<String, Object> done = new LinkedHashMap<>();
+                done.put("phase", "complete");
+                done.put("imageUrl", imageUrl);
+                sendData(emitter, done);
+                emitter.complete();
+
+            } catch (Exception e) {
+                sendFailure(emitter, e.getMessage() == null ? "Image generation failed" : e.getMessage());
+                emitter.complete();
+            }
+        });
+        return emitter;
+    }
+
+    // SSE helper methods
+
+    private static void sendPhase(SseEmitter emitter, String phase, String message) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("phase", phase);
+        body.put("message", message);
+        sendData(emitter, body);
+    }
+
+    private static void sendFailure(SseEmitter emitter, String error) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("phase", "failed");
+        body.put("error", error);
+        sendData(emitter, body);
+    }
+
+    private static void sendData(SseEmitter emitter, Map<String, Object> body) {
+        try {
+            emitter.send(SseEmitter.event().data(JSON.writeValueAsString(body), MediaType.APPLICATION_JSON));
+        } catch (IOException e) {
+            emitter.completeWithError(e);
+        }
     }
 
     // Request/Response DTOs

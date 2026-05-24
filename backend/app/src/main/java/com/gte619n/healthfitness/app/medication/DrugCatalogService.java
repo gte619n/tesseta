@@ -8,19 +8,25 @@ import com.gte619n.healthfitness.integrations.medication.DrugImageGenerator;
 import com.gte619n.healthfitness.integrations.medication.DrugImageStorage;
 import com.gte619n.healthfitness.integrations.medication.DrugLookupService;
 import com.gte619n.healthfitness.integrations.medication.DrugLookupService.DrugLookupResult;
+import com.gte619n.healthfitness.integrations.medication.DrugVisualLookupService;
+import com.gte619n.healthfitness.integrations.medication.DrugVisualLookupService.DrugVisualInfo;
+import com.gte619n.healthfitness.integrations.medication.RxNormLookupService;
+import com.gte619n.healthfitness.integrations.medication.RxNormLookupService.RxNormDrugResult;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
  * Orchestrates drug catalog operations including:
- * - AI-powered drug lookup with Google Search grounding
- * - Automatic image generation using Imagen
+ * - RxNorm-first drug lookup with AI fallback
+ * - Visual data enrichment from RxImageAccess, OpenFDA, and DailyMed
+ * - AI image generation informed by actual drug characteristics
  * - Catalog deduplication
  */
 @Service
@@ -28,20 +34,26 @@ import org.springframework.stereotype.Service;
 public class DrugCatalogService {
 
     private final DrugRepository drugs;
-    private final DrugLookupService lookupService;
+    private final RxNormLookupService rxNormService;
+    private final DrugLookupService aiLookupService;
+    private final DrugVisualLookupService visualLookupService;
     private final DrugImageGenerator imageGenerator;
     private final DrugImageStorage imageStorage;
     private final String bucket;
 
     public DrugCatalogService(
         DrugRepository drugs,
-        DrugLookupService lookupService,
+        RxNormLookupService rxNormService,
+        DrugLookupService aiLookupService,
+        DrugVisualLookupService visualLookupService,
         DrugImageGenerator imageGenerator,
         DrugImageStorage imageStorage,
         @Value("${app.medications.bucket}") String bucket
     ) {
         this.drugs = drugs;
-        this.lookupService = lookupService;
+        this.rxNormService = rxNormService;
+        this.aiLookupService = aiLookupService;
+        this.visualLookupService = visualLookupService;
         this.imageGenerator = imageGenerator;
         this.imageStorage = imageStorage;
         this.bucket = bucket;
@@ -58,9 +70,9 @@ public class DrugCatalogService {
     }
 
     /**
-     * Look up a drug using AI with Google Search grounding.
+     * Look up a drug using RxNorm (NIH/NLM) first, with AI fallback.
      * If the drug exists in the catalog, returns the existing entry.
-     * If not, creates a new entry with AI-generated metadata.
+     * If not, creates a new entry with RxNorm or AI-generated metadata.
      *
      * @param query User's search query
      * @return The drug (existing or newly created), or empty if not found
@@ -73,19 +85,169 @@ public class DrugCatalogService {
             return Optional.of(existing.get(0));
         }
 
-        // No match found - use AI to look up the drug
-        DrugLookupResult result = lookupService.lookup(query);
-        if (result == null) {
-            return Optional.empty();
+        // Try RxNorm first (free, fast, no API key needed)
+        Optional<RxNormDrugResult> rxResult = rxNormService.lookup(query);
+        if (rxResult.isPresent()) {
+            RxNormDrugResult rx = rxResult.get();
+
+            // Check again by canonical name (in case user searched by alias)
+            existing = drugs.search(rx.name());
+            if (!existing.isEmpty()) {
+                return Optional.of(existing.get(0));
+            }
+
+            // RxNorm doesn't provide suggestedMarkers or description
+            // Try to enrich with AI if needed
+            List<String> suggestedMarkers = rx.suggestedMarkers();
+            String description = rx.description();
+
+            if ((suggestedMarkers == null || suggestedMarkers.isEmpty()) || description == null) {
+                try {
+                    DrugLookupResult aiResult = aiLookupService.lookup(query);
+                    if (aiResult != null) {
+                        if (suggestedMarkers == null || suggestedMarkers.isEmpty()) {
+                            suggestedMarkers = aiResult.suggestedMarkers();
+                        }
+                        if (description == null) {
+                            description = aiResult.description();
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("AI enrichment failed (non-fatal): " + e.getMessage());
+                }
+            }
+
+            return Optional.of(createDrugFromRxNorm(rx, suggestedMarkers, description));
         }
 
-        // Check again by canonical name (in case user searched by alias)
-        existing = drugs.search(result.name());
+        // RxNorm failed - fall back to AI lookup (Gemini with Google Search)
+        try {
+            DrugLookupResult result = aiLookupService.lookup(query);
+            if (result == null) {
+                return Optional.empty();
+            }
+
+            // Check again by canonical name (in case user searched by alias)
+            existing = drugs.search(result.name());
+            if (!existing.isEmpty()) {
+                return Optional.of(existing.get(0));
+            }
+
+            return Optional.of(createDrugFromAiResult(result));
+        } catch (Exception e) {
+            System.err.println("AI lookup failed: " + e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Look up a drug with progress callbacks for SSE streaming.
+     * Same as lookupOrCreate but emits progress events.
+     *
+     * @param query User's search query
+     * @param progress Callback for progress updates (phase, message)
+     * @return The drug (existing or newly created), or empty if not found
+     */
+    public Optional<Drug> lookupOrCreateWithCallback(String query, BiConsumer<String, String> progress) {
+        // First, check if we have an exact or close match in the catalog
+        List<Drug> existing = drugs.search(query);
         if (!existing.isEmpty()) {
+            progress.accept("found", "Found in catalog");
             return Optional.of(existing.get(0));
         }
 
-        // Create new drug entry
+        progress.accept("searching_rxnorm", "Searching RxNorm database...");
+
+        // Try RxNorm first (free, fast, no API key needed)
+        Optional<RxNormDrugResult> rxResult = rxNormService.lookup(query);
+        if (rxResult.isPresent()) {
+            RxNormDrugResult rx = rxResult.get();
+            progress.accept("found", "Found: " + rx.name());
+
+            // Check again by canonical name (in case user searched by alias)
+            existing = drugs.search(rx.name());
+            if (!existing.isEmpty()) {
+                return Optional.of(existing.get(0));
+            }
+
+            // RxNorm doesn't provide suggestedMarkers or description
+            // Try to enrich with AI if needed
+            List<String> suggestedMarkers = rx.suggestedMarkers();
+            String description = rx.description();
+
+            if ((suggestedMarkers == null || suggestedMarkers.isEmpty()) || description == null) {
+                progress.accept("enriching", "Getting additional details...");
+                try {
+                    DrugLookupResult aiResult = aiLookupService.lookup(query);
+                    if (aiResult != null) {
+                        if (suggestedMarkers == null || suggestedMarkers.isEmpty()) {
+                            suggestedMarkers = aiResult.suggestedMarkers();
+                        }
+                        if (description == null) {
+                            description = aiResult.description();
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("AI enrichment failed (non-fatal): " + e.getMessage());
+                }
+            }
+
+            // Create drug immediately without waiting for image
+            // Image will be generated async in background
+            return Optional.of(createDrugFromRxNorm(rx, suggestedMarkers, description));
+        }
+
+        // RxNorm failed - fall back to AI lookup (Gemini with Google Search)
+        progress.accept("searching_ai", "Searching with AI...");
+        try {
+            DrugLookupResult result = aiLookupService.lookup(query);
+            if (result == null) {
+                return Optional.empty();
+            }
+
+            progress.accept("found", "Found: " + result.name());
+
+            // Check again by canonical name (in case user searched by alias)
+            existing = drugs.search(result.name());
+            if (!existing.isEmpty()) {
+                return Optional.of(existing.get(0));
+            }
+
+            // Create drug immediately without waiting for image
+            // Image will be generated async in background
+            return Optional.of(createDrugFromAiResult(result));
+        } catch (Exception e) {
+            System.err.println("AI lookup failed: " + e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private Drug createDrugFromRxNorm(RxNormDrugResult rx, List<String> suggestedMarkers, String description) {
+        String drugId = UUID.randomUUID().toString();
+        String fallbackUrl = DrugImageGenerator.getFallbackUrl(rx.form(), bucket);
+
+        Drug drug = new Drug(
+            drugId,
+            rx.name(),
+            rx.aliases() != null ? rx.aliases() : List.of(),
+            parseCategory(rx.category()),
+            parseForm(rx.form()),
+            rx.defaultUnit() != null ? rx.defaultUnit() : "mg",
+            rx.commonDoses() != null ? rx.commonDoses() : List.of(),
+            null,  // imageUrl - will be set async
+            fallbackUrl,
+            suggestedMarkers != null ? suggestedMarkers : List.of(),
+            description,
+            Instant.now(),
+            Instant.now()
+        );
+
+        drugs.save(drug);
+        generateImageAsync(drugId, rx.rxcui(), rx.name(), rx.form());
+        return drug;
+    }
+
+    private Drug createDrugFromAiResult(DrugLookupResult result) {
         String drugId = UUID.randomUUID().toString();
         String fallbackUrl = DrugImageGenerator.getFallbackUrl(result.form(), bucket);
 
@@ -106,11 +268,9 @@ public class DrugCatalogService {
         );
 
         drugs.save(drug);
-
-        // Generate image asynchronously
-        generateImageAsync(drugId, result.name(), result.form());
-
-        return Optional.of(drug);
+        // AI results don't have rxcui, so pass null
+        generateImageAsync(drugId, null, result.name(), result.form());
+        return drug;
     }
 
     /**
@@ -128,21 +288,95 @@ public class DrugCatalogService {
     }
 
     /**
-     * Manually trigger image generation for a drug.
+     * Manually trigger image generation for a drug (async).
      */
     public void regenerateImage(String drugId) {
         Drug drug = drugs.findById(drugId)
             .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
-        generateImageAsync(drugId, drug.name(), drug.form().name());
+        generateImageAsync(drugId, null, drug.name(), drug.form().name());
+    }
+
+    /**
+     * Manually trigger image generation for a drug (sync, for SSE).
+     * @return The new image URL, or null if generation failed
+     */
+    public String regenerateImageSync(String drugId) {
+        Drug drug = drugs.findById(drugId)
+            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
+
+        try {
+            // Fetch visual info for enhanced image generation
+            DrugVisualInfo visualInfo = visualLookupService.lookup(null, drug.name());
+
+            Optional<byte[]> imageBytes;
+            if (visualInfo.hasVisualCharacteristics()) {
+                imageBytes = imageGenerator.generate(visualInfo);
+            } else {
+                imageBytes = imageGenerator.generate(drug.name(), drug.form().name());
+            }
+
+            if (imageBytes.isPresent()) {
+                String imageUrl = imageStorage.upload(drugId, imageBytes.get());
+
+                // Update drug with image URL
+                Drug updated = new Drug(
+                    drug.drugId(),
+                    drug.name(),
+                    drug.aliases(),
+                    drug.category(),
+                    drug.form(),
+                    drug.defaultUnit(),
+                    drug.commonDoses(),
+                    imageUrl,
+                    drug.imageFallback(),
+                    drug.suggestedMarkers(),
+                    drug.description(),
+                    drug.createdAt(),
+                    Instant.now()
+                );
+                drugs.save(updated);
+                return imageUrl;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to generate image for drug " + drugId + ": " + e.getMessage());
+        }
+        return null;
     }
 
     /**
      * Generate and upload drug image asynchronously.
+     * Fetches visual characteristics from RxImageAccess, OpenFDA, and DailyMed
+     * to inform accurate image generation.
+     *
+     * @param drugId The drug ID for storage
+     * @param rxcui The RxNorm CUI (may be null for AI-created drugs)
+     * @param drugName The drug name
+     * @param form The drug form (TABLET, CAPSULE, etc.)
      */
-    private void generateImageAsync(String drugId, String drugName, String form) {
+    private void generateImageAsync(String drugId, String rxcui, String drugName, String form) {
         CompletableFuture.runAsync(() -> {
             try {
-                Optional<byte[]> imageBytes = imageGenerator.generate(drugName, form);
+                // First, try to get a real image from RxImageAccess
+                // Also fetch visual characteristics from all sources
+                DrugVisualInfo visualInfo = visualLookupService.lookup(rxcui, drugName);
+
+                // If we have a real image URL from NIH, we could download and use it
+                // For now, we generate images but informed by real characteristics
+                // Future enhancement: fetch real image if visualInfo.realImageUrl() exists
+
+                Optional<byte[]> imageBytes;
+
+                if (visualInfo.hasVisualCharacteristics()) {
+                    // Enhanced generation with actual drug appearance data
+                    System.out.println("Generating image for " + drugName + " with visual data: " +
+                                       visualInfo.toPromptDescription());
+                    imageBytes = imageGenerator.generate(visualInfo);
+                } else {
+                    // Fallback to form-based generic generation
+                    System.out.println("Generating generic image for " + drugName + " (no visual data available)");
+                    imageBytes = imageGenerator.generate(drugName, form);
+                }
+
                 if (imageBytes.isPresent()) {
                     String imageUrl = imageStorage.upload(drugId, imageBytes.get());
 
@@ -164,6 +398,7 @@ public class DrugCatalogService {
                             Instant.now()
                         );
                         drugs.save(updated);
+                        System.out.println("Image generated and saved for " + drugName);
                     });
                 }
             } catch (Exception e) {
