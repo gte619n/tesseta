@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
 import com.gte619n.healthfitness.integrations.location.LocationPhotoStorage;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -83,6 +84,51 @@ public class LocationService {
             hours != null ? hours : existing.hours(),
             amenities != null ? amenities : existing.amenities(),
             equipmentIds != null ? equipmentIds : existing.equipmentIds(),
+            existing.isDefault(),
+            existing.isActive(),
+            existing.createdAt(),
+            Instant.now()
+        );
+
+        repository.save(updated);
+        return updated;
+    }
+
+    /**
+     * Append a single equipment ID to a location's equipment list (dedupes if
+     * already present, preserving original order). Used by the bulk-import
+     * confirm endpoint so each successfully created/matched piece of
+     * equipment is wired into the location it was imported for.
+     */
+    public Location addEquipmentToLocation(
+        String userId,
+        String locationId,
+        String equipmentId
+    ) {
+        Location existing = repository.findById(userId, locationId)
+            .orElseThrow(() -> new IllegalArgumentException("Location not found"));
+
+        List<String> currentIds = existing.equipmentIds() != null
+            ? existing.equipmentIds()
+            : List.of();
+        if (currentIds.contains(equipmentId)) {
+            // Already linked — no-op.
+            return existing;
+        }
+
+        List<String> updatedIds = new ArrayList<>(currentIds);
+        updatedIds.add(equipmentId);
+
+        Location updated = new Location(
+            existing.userId(),
+            existing.locationId(),
+            existing.name(),
+            existing.address(),
+            existing.coverPhotoUrl(),
+            existing.is24Hours(),
+            existing.hours(),
+            existing.amenities(),
+            updatedIds,
             existing.isDefault(),
             existing.isActive(),
             existing.createdAt(),

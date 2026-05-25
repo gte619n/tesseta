@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getLocation, updateLocation } from "@/lib/gym-api";
+import {
+  getLocation,
+  updateLocation,
+  uploadCoverPhoto,
+  deleteCoverPhoto,
+} from "@/lib/gym-api";
 import { LocationForm } from "@/components/gym/LocationForm";
+import { LocationCoverPhotoUpload } from "@/components/gym/LocationCoverPhotoUpload";
 import type { UpdateLocationRequest } from "@/lib/types/gym";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +53,25 @@ export default async function EditGymPage({ params }: Props) {
     return updated;
   }
 
+  async function uploadCoverPhotoAction(formData: FormData): Promise<string> {
+    "use server";
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
+      throw new Error("file is required");
+    }
+    const url = await uploadCoverPhoto(locationId, file);
+    revalidatePath("/me/workouts/gyms");
+    revalidatePath(`/me/workouts/gyms/${locationId}`);
+    return url;
+  }
+
+  async function deleteCoverPhotoAction(): Promise<void> {
+    "use server";
+    await deleteCoverPhoto(locationId);
+    revalidatePath("/me/workouts/gyms");
+    revalidatePath(`/me/workouts/gyms/${locationId}`);
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[640px] space-y-6">
@@ -67,6 +92,17 @@ export default async function EditGymPage({ params }: Props) {
         </header>
 
         <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface p-6">
+          <section className="mb-6">
+            <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.06em] text-tertiary">
+              Cover photo
+            </h2>
+            <LocationCoverPhotoUpload
+              currentPhotoUrl={location.coverPhotoUrl}
+              uploadPhoto={uploadCoverPhotoAction}
+              deletePhoto={deleteCoverPhotoAction}
+            />
+          </section>
+
           <LocationForm
             initialData={location}
             onSubmit={updateLocationAction}

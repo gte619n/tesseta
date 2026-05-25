@@ -5,10 +5,9 @@ import { EquipmentSearch } from "./EquipmentSearch";
 import { EquipmentCategoryFilter } from "./EquipmentCategoryFilter";
 import { EquipmentCard } from "./EquipmentCard";
 import { EquipmentSubmitForm } from "./EquipmentSubmitForm";
-import { getEquipmentCatalog, addEquipmentToLocation, removeEquipmentFromLocation } from "@/lib/gym-api";
 import { EQUIPMENT_CATEGORIES } from "@/lib/types/gym";
 import { useToast } from "@/components/ui/Toast";
-import type { Equipment } from "@/lib/types/gym";
+import type { Equipment, CreateEquipmentRequest } from "@/lib/types/gym";
 
 interface EquipmentCatalogProps {
   locationId: string;
@@ -17,6 +16,14 @@ interface EquipmentCatalogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (equipmentIds: string[]) => Promise<void>;
+  addEquipmentToLocation: (equipmentId: string) => Promise<void>;
+  removeEquipmentFromLocation: (equipmentId: string) => Promise<void>;
+  searchCatalog: (
+    search: string,
+    category: string | null,
+    subcategory: string | null,
+  ) => Promise<Equipment[]>;
+  submitEquipment: (data: CreateEquipmentRequest) => Promise<Equipment>;
 }
 
 export function EquipmentCatalog({
@@ -26,6 +33,10 @@ export function EquipmentCatalog({
   isOpen,
   onClose,
   onSave,
+  addEquipmentToLocation,
+  removeEquipmentFromLocation,
+  searchCatalog,
+  submitEquipment,
 }: EquipmentCatalogProps) {
   const toast = useToast();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
@@ -40,12 +51,7 @@ export function EquipmentCatalog({
   const fetchEquipment = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {
-        search: search || undefined,
-        category: selectedCategory || undefined,
-        subcategory: selectedSubcategory || undefined,
-      };
-      const data = await getEquipmentCatalog(params);
+      const data = await searchCatalog(search, selectedCategory, selectedSubcategory);
       setEquipment(data);
     } catch (error) {
       toast.error("Failed to load equipment", {
@@ -54,7 +60,7 @@ export function EquipmentCatalog({
     } finally {
       setLoading(false);
     }
-  }, [search, selectedCategory, selectedSubcategory, toast]);
+  }, [search, selectedCategory, selectedSubcategory, toast, searchCatalog]);
 
   useEffect(() => {
     if (isOpen) {
@@ -89,8 +95,8 @@ export function EquipmentCatalog({
 
       // Call API for each change
       await Promise.all([
-        ...toAdd.map((id) => addEquipmentToLocation(locationId, id)),
-        ...toRemove.map((id) => removeEquipmentFromLocation(locationId, id)),
+        ...toAdd.map((id) => addEquipmentToLocation(id)),
+        ...toRemove.map((id) => removeEquipmentFromLocation(id)),
       ]);
 
       toast.success("Equipment updated");
@@ -126,6 +132,7 @@ export function EquipmentCatalog({
         onClose={() => setSubmitFormOpen(false)}
         onSubmit={handleSubmitEquipment}
         locationId={locationId}
+        submitEquipment={submitEquipment}
       />
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas/75 backdrop-blur-sm">
         <div className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col overflow-hidden rounded-[14px] border border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]">

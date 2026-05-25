@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getEquipment } from "@/lib/gym-api";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import { useToast } from "@/components/ui/Toast";
 import type { Equipment } from "@/lib/types/gym";
 
 interface EquipmentGridProps {
+  equipment: Equipment[];
   equipmentIds: string[];
   onRemove: (equipmentId: string) => void;
   onOpenCatalog: () => void;
+  onOpenBulkImport?: () => void;
 }
 
 function getCategoryIcon(category: string) {
@@ -207,42 +206,11 @@ function EquipmentGridCard({ equipment, onRemove }: { equipment: Equipment; onRe
   );
 }
 
-export function EquipmentGrid({ equipmentIds, onRemove, onOpenCatalog }: EquipmentGridProps) {
-  const toast = useToast();
-  const [equipment, setEquipment] = useState<Equipment[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    async function fetchEquipment() {
-      if (equipmentIds.length === 0) {
-        setEquipment([]);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const promises = equipmentIds.map((id) => getEquipment(id));
-        const results = await Promise.all(promises);
-        setEquipment(results);
-      } catch (error) {
-        toast.error("Failed to load equipment details", {
-          description: error instanceof Error ? error.message : "Please try again",
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchEquipment();
-  }, [equipmentIds, toast]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12 text-[13px] text-tertiary">
-        Loading equipment...
-      </div>
-    );
-  }
+export function EquipmentGrid({ equipment, equipmentIds, onRemove, onOpenCatalog, onOpenBulkImport }: EquipmentGridProps) {
+  // Filter the prefetched equipment list against the current (possibly optimistic)
+  // equipmentIds so that local removals reflect immediately without a refetch.
+  const idSet = new Set(equipmentIds);
+  const visibleEquipment = equipment.filter((e) => idSet.has(e.equipmentId));
 
   if (equipmentIds.length === 0) {
     return (
@@ -267,13 +235,24 @@ export function EquipmentGrid({ equipmentIds, onRemove, onOpenCatalog }: Equipme
             Add equipment from the catalog to track what&apos;s available at this location
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onOpenCatalog}
-          className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-white hover:bg-accent/90"
-        >
-          Add from Catalog
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onOpenCatalog}
+            className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-white hover:bg-accent/90"
+          >
+            Add from Catalog
+          </button>
+          {onOpenBulkImport && (
+            <button
+              type="button"
+              onClick={onOpenBulkImport}
+              className="cursor-pointer rounded-md border border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary hover:bg-surface"
+            >
+              Import List
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -282,18 +261,29 @@ export function EquipmentGrid({ equipmentIds, onRemove, onOpenCatalog }: Equipme
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-[14px] font-medium text-primary">
-          Equipment ({equipment.length})
+          Equipment ({visibleEquipment.length})
         </h3>
-        <button
-          type="button"
-          onClick={onOpenCatalog}
-          className="cursor-pointer rounded-md border border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary hover:bg-surface"
-        >
-          + Add from Catalog
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onOpenCatalog}
+            className="cursor-pointer rounded-md border border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary hover:bg-surface"
+          >
+            + Add from Catalog
+          </button>
+          {onOpenBulkImport && (
+            <button
+              type="button"
+              onClick={onOpenBulkImport}
+              className="cursor-pointer rounded-md border border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-secondary hover:bg-surface"
+            >
+              Import List
+            </button>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-        {equipment.map((item) => (
+        {visibleEquipment.map((item) => (
           <EquipmentGridCard
             key={item.equipmentId}
             equipment={item}

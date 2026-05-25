@@ -1,72 +1,188 @@
 package com.gte619n.healthfitness.integrations.equipment;
 
+import com.google.genai.Client;
+import com.google.genai.types.Candidate;
+import com.google.genai.types.Content;
+import com.google.genai.types.GenerateContentConfig;
+import com.google.genai.types.GenerateContentResponse;
+import com.google.genai.types.Part;
 import com.gte619n.healthfitness.core.equipment.Equipment;
-import com.gte619n.healthfitness.core.equipment.SpecSchema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
+import com.gte619n.healthfitness.core.equipment.EquipmentImageGenerator;
+import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
+import com.gte619n.healthfitness.core.equipment.ImageStatus;
 
-import java.util.Map;
+import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-// Generates AI images for equipment using Gemini 3.1 Flash (Nano quality).
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+// Generates AI images for equipment using Gemini 3.1 Flash image generation.
 //
 // The service builds a photography prompt from the equipment metadata
 // following the style guide in docs/photography-prompts.md, calls the
-// Gemini 3.1 Flash image generation API with nano quality tier for fast,
-// cost-effective generation, uploads the result to GCS, and returns the
-// public URL.
+// Gemini image-generation API, uploads the resulting bytes to GCS, and
+// updates the Equipment's imageUrl + imageStatus via the repository.
 //
-// Model: gemini-3.1-flash-image-preview
-// Quality: nano (fastest, most cost-effective)
+// Model: gemini-3.1-flash-image-preview (configured via app.equipment.gemini-model)
 //
-// Image generation is async; the caller receives a CompletableFuture that
-// resolves to the GCS URL or null if generation fails.
-@Service
-public class EquipmentImageService {
+// Async fire-and-forget: generateImageAsync returns immediately; the work
+// happens on a background thread via CompletableFuture.runAsync.
+@Component
+public class EquipmentImageService implements EquipmentImageGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(EquipmentImageService.class);
 
     private final EquipmentImageStorage storage;
-    // TODO: Inject Gemini 3.1 Flash client (gemini-3.1-flash-image-preview)
-    // with nano quality tier for cost-effective image generation
+    private final EquipmentRepository equipmentRepository;
+    private final Client client;
+    private final String model;
 
-    public EquipmentImageService(EquipmentImageStorage storage) {
+    public EquipmentImageService(
+        EquipmentImageStorage storage,
+        EquipmentRepository equipmentRepository,
+        @Value("${app.equipment.gemini-api-key:${GEMINI_API_KEY:}}") String apiKey,
+        @Value("${app.equipment.gemini-model:gemini-3.1-flash-image-preview}") String model
+    ) {
         this.storage = storage;
+        this.equipmentRepository = equipmentRepository;
+        this.model = model;
+        if (apiKey == null || apiKey.isBlank()) {
+            // Allow startup without a key so non-image-gen flows still work;
+            // an actual generation attempt will fail loudly and mark the
+            // equipment FAILED. This matches how other Gemini-backed beans
+            // behave when the key is absent in local dev.
+            log.warn("GEMINI_API_KEY not set — equipment image generation will fail until configured");
+            this.client = null;
+        } else {
+            this.client = Client.builder().apiKey(apiKey).build();
+        }
     }
 
     /**
-     * Generate an AI image for the equipment and upload to GCS.
-     * Returns a CompletableFuture that resolves to the public GCS URL,
-     * or null if generation fails.
+     * Kick off async image generation. Returns immediately with a future
+     * that completes (always normally — exceptions are swallowed and the
+     * equipment is marked FAILED) when the underlying job finishes. On
+     * completion, the equipment's imageUrl + imageStatus are updated in
+     * the repository.
      */
-    public CompletableFuture<String> generateImage(Equipment equipment) {
-        return CompletableFuture.supplyAsync(() -> {
+    @Override
+    public CompletableFuture<Void> generateImageAsync(Equipment equipment) {
+        return CompletableFuture.runAsync(() -> {
             try {
+                if (client == null) {
+                    log.warn("Skipping image generation for {} — no API key configured",
+                        equipment.equipmentId());
+                    persistImageResult(equipment, null, ImageStatus.FAILED);
+                    return;
+                }
+
                 String prompt = buildPrompt(equipment);
-                String negativePrompt = getNegativePrompt();
+                log.info("Generating image for equipment {} ({}): model={}",
+                    equipment.equipmentId(), equipment.name(), model);
 
-                log.info("Generating image for equipment {} with prompt: {}",
-                    equipment.equipmentId(), prompt);
+                byte[] bytes = callGemini(prompt, equipment.equipmentId());
 
-                // TODO: Call Gemini 3.1 Flash API (nano quality) when SDK is integrated
-                // Model: gemini-3.1-flash-image-preview
-                // Quality: nano
-                // For now, this is stubbed to return null
-                // byte[] imageBytes = callGeminiFlashAPI(prompt, negativePrompt, "nano");
-                // if (imageBytes != null) {
-                //     return storage.upload(equipment.equipmentId(), imageBytes);
-                // }
-
-                log.warn("Image generation not yet implemented, returning null");
-                return null;
-
+                if (bytes != null && bytes.length > 0) {
+                    String url = storage.upload(equipment.equipmentId(), bytes);
+                    persistImageResult(equipment, url, ImageStatus.GENERATED);
+                    log.info("Generated image for equipment {}: {}",
+                        equipment.equipmentId(), url);
+                } else {
+                    persistImageResult(equipment, null, ImageStatus.FAILED);
+                    log.warn("Image generation returned empty bytes for equipment {}",
+                        equipment.equipmentId());
+                }
             } catch (Exception e) {
                 log.error("Failed to generate image for equipment {}: {}",
                     equipment.equipmentId(), e.getMessage(), e);
-                return null;
+                try {
+                    persistImageResult(equipment, null, ImageStatus.FAILED);
+                } catch (Exception ignore) {
+                    // Don't let a follow-up persist failure mask the original error.
+                }
             }
         });
+    }
+
+    /**
+     * Re-read the equipment fresh from the repository before writing — the
+     * Equipment record we were handed may be stale (e.g. ownerId cleared
+     * by an approve call between submit and image completion).
+     */
+    private void persistImageResult(Equipment original, String imageUrl, ImageStatus status) {
+        Equipment current = equipmentRepository.findById(original.equipmentId())
+            .orElse(original);
+
+        Equipment updated = new Equipment(
+            current.equipmentId(),
+            current.name(),
+            current.category(),
+            current.subcategory(),
+            current.specSchema(),
+            current.specs(),
+            imageUrl,
+            status,
+            current.ownerId(),
+            current.status(),
+            current.contributorId(),
+            current.exerciseCount(),
+            current.createdAt(),
+            Instant.now()
+        );
+        equipmentRepository.save(updated);
+    }
+
+    /**
+     * Call Gemini image generation and extract the first image bytes from
+     * the response. Mirrors {@code DrugImageGenerator.executeGeneration}.
+     */
+    byte[] callGemini(String prompt, String equipmentId) {
+        try {
+            Content content = Content.fromParts(Part.fromText(prompt));
+
+            GenerateContentConfig config = GenerateContentConfig.builder()
+                .responseModalities(List.of("IMAGE", "TEXT"))
+                .build();
+
+            GenerateContentResponse response = client.models.generateContent(model, content, config);
+
+            return extractImageBytes(response, equipmentId);
+        } catch (Exception e) {
+            log.error("Gemini image generation call failed for equipment {}: {}",
+                equipmentId, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    private byte[] extractImageBytes(GenerateContentResponse response, String equipmentId) {
+        List<Candidate> candidates = response.candidates().orElse(List.of());
+        if (candidates.isEmpty()) {
+            log.warn("No candidates in image generation response for equipment {}", equipmentId);
+            return null;
+        }
+
+        Content responseContent = candidates.get(0).content().orElse(null);
+        if (responseContent == null) {
+            log.warn("No content in candidate for equipment {}", equipmentId);
+            return null;
+        }
+
+        List<Part> parts = responseContent.parts().orElse(List.of());
+        for (Part part : parts) {
+            var inlineDataOpt = part.inlineData();
+            if (inlineDataOpt.isPresent()) {
+                var dataOpt = inlineDataOpt.get().data();
+                if (dataOpt.isPresent() && dataOpt.get().length > 0) {
+                    return dataOpt.get();
+                }
+            }
+        }
+        log.warn("No image data found in Gemini response for equipment {}", equipmentId);
+        return null;
     }
 
     /**
@@ -93,9 +209,21 @@ public class EquipmentImageService {
             """;
 
         String materialsClause = """
-            Realistic materials with honest light wear, not showroom-pristine —
-            brushed steel, knurled iron, matte rubber, worn leather, warm wood
-            where present.
+            Override the shared treatment for this category: render as professional
+            product photography of real, modern commercial gym equipment — the kind
+            of catalog and website imagery used by premium brands like Rogue Fitness,
+            Eleiko, Matrix Fitness, Life Fitness, Cybex, Hammer Strength, Precor, and
+            Technogym. Photorealistic, DSLR-grade sharpness, accurate true-to-life
+            colors (not muted or desaturated), natural specular highlights on steel
+            and chrome, realistic surface reflections on plastic and upholstery,
+            glossy where the real material is glossy. Pristine showroom condition,
+            brand-new and unused — factory-fresh finishes, perfectly clean, no
+            scratches, scuffs, rust, patina, or signs of use. Industrial design
+            language of high-end commercial fitness equipment. Materials present
+            where appropriate: polished or brushed steel, knurled iron, anodized
+            aluminum, high-density rubber grips and flooring, fresh leather or vinyl
+            upholstery with crisp stitching, ABS plastic shrouds, color-coded
+            weight plates.
             """;
 
         String equipmentDescription = buildEquipmentDescription(equipment);
@@ -154,6 +282,22 @@ public class EquipmentImageService {
                         desc.append(", height-adjustable");
                     }
                 }
+                case WEIGHT_SET -> {
+                    Object minWeight = equipment.specs().get("minWeight");
+                    Object maxWeight = equipment.specs().get("maxWeight");
+                    Object increment = equipment.specs().get("increment");
+                    Object weights = equipment.specs().get("weights");
+                    if (minWeight instanceof Number min && maxWeight instanceof Number max) {
+                        desc.append(", weight set ranging from ")
+                            .append(min.intValue()).append("lb to ")
+                            .append(max.intValue()).append("lb");
+                        if (increment instanceof Number inc) {
+                            desc.append(" in ").append(inc.intValue()).append("lb increments");
+                        }
+                    } else if (weights instanceof java.util.List<?> list && !list.isEmpty()) {
+                        desc.append(", weight set including ").append(list.size()).append(" pieces");
+                    }
+                }
             }
         }
 
@@ -171,26 +315,5 @@ public class EquipmentImageService {
         desc.append(materialHint);
 
         return desc.toString();
-    }
-
-    /**
-     * Get the negative prompt to exclude unwanted elements from generated images.
-     */
-    private String getNegativePrompt() {
-        return """
-            text, watermark, logo, label text, brand name, neon colors, vivid
-            saturation, hard flash, studio glamour, lens flare, busy background,
-            gym environment clutter, multiple competing objects, cartoon,
-            illustration, 3d render, plastic look
-            """;
-    }
-
-    /**
-     * Upload a generated image to GCS and return the public URL.
-     * This is a helper method for when the Imagen API is implemented.
-     */
-    @SuppressWarnings("unused")
-    private String uploadImage(byte[] imageData, String equipmentId) {
-        return storage.upload(equipmentId, imageData);
     }
 }

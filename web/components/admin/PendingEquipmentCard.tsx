@@ -201,6 +201,7 @@ function formatSchemaName(schema: SpecSchema): string {
     bodyweight: 'Bodyweight',
     cable: 'Cable',
     cardio: 'Cardio',
+    weight_set: 'Weight Set',
   };
   return names[schema];
 }
@@ -208,6 +209,7 @@ function formatSchemaName(schema: SpecSchema): string {
 function formatSpecs(specSchema: SpecSchema, specs: Record<string, unknown>): string {
   switch (specSchema) {
     case 'selectorized':
+    case 'weight_set':
       return `Weight: ${specs.minWeight}-${specs.maxWeight}lb (${specs.increment}lb increments)`;
     case 'plate_loaded': {
       const plates = (specs.availablePlates as number[])?.join(', ') || 'None';

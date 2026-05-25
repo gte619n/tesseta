@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Generates medication images using Gemini's native image generation.
- * Uses gemini-2.0-flash-preview-image-generation model.
+ * Uses gemini-3.1-flash-image-preview (configured via app.medications.imagen-model).
  *
  * Image generation is informed by real drug data from:
  * - RxImageAccess (NIH): Real pill photographs used as subject reference

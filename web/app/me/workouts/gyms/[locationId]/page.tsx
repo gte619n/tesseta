@@ -1,9 +1,27 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getLocation, deleteLocation, setDefaultLocation } from "@/lib/gym-api";
+import {
+  getLocation,
+  deleteLocation,
+  setDefaultLocation,
+  getEquipment,
+  getEquipmentCatalog,
+  submitEquipment,
+  addEquipmentToLocation,
+  removeEquipmentFromLocation,
+  bulkImportPreview,
+  bulkImportConfirm,
+} from "@/lib/gym-api";
 import { AMENITIES } from "@/lib/types/gym";
-import type { DayOfWeek } from "@/lib/types/gym";
+import type {
+  DayOfWeek,
+  Equipment,
+  CreateEquipmentRequest,
+  ImportPreviewResponse,
+  ImportConfirmRequest,
+  ImportConfirmResponse,
+} from "@/lib/types/gym";
 import { DeleteLocationButton } from "@/components/gym/DeleteLocationButton";
 import { SetDefaultButton } from "@/components/gym/SetDefaultButton";
 import { LocationEquipmentSection } from "@/components/gym/LocationEquipmentSection";
@@ -46,6 +64,63 @@ export default async function GymDetailPage({ params }: Props) {
     revalidatePath("/me/workouts/gyms");
     revalidatePath(`/me/workouts/gyms/${locationId}`);
   }
+
+  async function addEquipmentToLocationAction(equipmentId: string) {
+    "use server";
+    await addEquipmentToLocation(locationId, equipmentId);
+    revalidatePath(`/me/workouts/gyms/${locationId}`);
+  }
+
+  async function removeEquipmentFromLocationAction(equipmentId: string) {
+    "use server";
+    await removeEquipmentFromLocation(locationId, equipmentId);
+    revalidatePath(`/me/workouts/gyms/${locationId}`);
+  }
+
+  async function searchCatalogAction(
+    search: string,
+    category: string | null,
+    subcategory: string | null,
+  ): Promise<Equipment[]> {
+    "use server";
+    return getEquipmentCatalog({
+      search: search || undefined,
+      category: category || undefined,
+      subcategory: subcategory || undefined,
+    });
+  }
+
+  async function submitEquipmentAction(
+    data: CreateEquipmentRequest,
+  ): Promise<Equipment> {
+    "use server";
+    return submitEquipment(data);
+  }
+
+  async function bulkImportPreviewAction(
+    rawText: string,
+  ): Promise<ImportPreviewResponse> {
+    "use server";
+    return bulkImportPreview(locationId, rawText);
+  }
+
+  async function bulkImportConfirmAction(
+    body: ImportConfirmRequest,
+  ): Promise<ImportConfirmResponse> {
+    "use server";
+    return bulkImportConfirm(locationId, body);
+  }
+
+  // Pre-fetch equipment objects for the location's equipmentIds.
+  // Tolerate per-item failures (a stale/deleted equipment ID shouldn't 500 the page).
+  const equipmentResults = await Promise.all(
+    location.equipmentIds.map((id) =>
+      getEquipment(id).catch(() => null),
+    ),
+  );
+  const equipment: Equipment[] = equipmentResults.filter(
+    (e): e is Equipment => e !== null,
+  );
 
   // Group hours by ranges with same times
   const hoursDisplay = formatHours(location);
@@ -167,6 +242,13 @@ export default async function GymDetailPage({ params }: Props) {
           locationId={locationId}
           locationName={location.name}
           equipmentIds={location.equipmentIds}
+          equipment={equipment}
+          addEquipmentToLocation={addEquipmentToLocationAction}
+          removeEquipmentFromLocation={removeEquipmentFromLocationAction}
+          searchCatalog={searchCatalogAction}
+          submitEquipment={submitEquipmentAction}
+          bulkImportPreview={bulkImportPreviewAction}
+          bulkImportConfirm={bulkImportConfirmAction}
         />
       </div>
     </main>

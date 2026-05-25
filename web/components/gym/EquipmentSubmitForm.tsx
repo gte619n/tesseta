@@ -3,15 +3,15 @@
 import { useState } from "react";
 import { CategorySelector } from "./CategorySelector";
 import { EquipmentSpecsForm } from "./EquipmentSpecsForm";
-import { submitEquipment } from "@/lib/gym-api";
 import { useToast } from "@/components/ui/Toast";
-import type { Equipment, SpecSchema, EquipmentSpecs } from "@/lib/types/gym";
+import type { CreateEquipmentRequest, Equipment, SpecSchema, EquipmentSpecs } from "@/lib/types/gym";
 
 interface EquipmentSubmitFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (equipment: Equipment) => void;
   locationId?: string;
+  submitEquipment: (data: CreateEquipmentRequest) => Promise<Equipment>;
 }
 
 interface FormState {
@@ -52,6 +52,7 @@ export function EquipmentSubmitForm({
   isOpen,
   onClose,
   onSubmit,
+  submitEquipment,
 }: EquipmentSubmitFormProps) {
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
