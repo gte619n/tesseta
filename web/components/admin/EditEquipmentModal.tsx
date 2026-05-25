@@ -195,6 +195,7 @@ function SpecsEditor({
 }) {
   switch (schema) {
     case 'selectorized':
+    case 'weight_set':
       return (
         <div className="space-y-3">
           <div>
@@ -345,5 +346,7 @@ function getDefaultSpecs(schema: SpecSchema): Record<string, unknown> {
       return { weightStack: 0, numStations: 1 };
     case 'cardio':
       return { resistanceLevels: 0, hasIncline: false };
+    case 'weight_set':
+      return { minWeight: 0, maxWeight: 0, increment: 0 };
   }
 }

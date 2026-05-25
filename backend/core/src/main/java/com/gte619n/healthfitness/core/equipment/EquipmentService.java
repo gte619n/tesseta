@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 public class EquipmentService {
 
     private final EquipmentRepository equipmentRepository;
+    private final Optional<EquipmentImageGenerator> imageGenerator;
 
     // Hardcoded category taxonomy from spec
     private static final Map<String, List<String>> CATEGORY_TREE = Map.of(
@@ -20,8 +21,12 @@ public class EquipmentService {
         "Accessories", List.of("Supports", "Attachments", "Mobility")
     );
 
-    public EquipmentService(EquipmentRepository equipmentRepository) {
+    public EquipmentService(
+        EquipmentRepository equipmentRepository,
+        Optional<EquipmentImageGenerator> imageGenerator
+    ) {
         this.equipmentRepository = equipmentRepository;
+        this.imageGenerator = imageGenerator;
     }
 
     /**
@@ -80,6 +85,7 @@ public class EquipmentService {
         );
 
         equipmentRepository.save(equipment);
+        imageGenerator.ifPresent(g -> g.generateImageAsync(equipment));
         return equipment;
     }
 

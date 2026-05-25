@@ -22,10 +22,18 @@
 - Trunk-based dev on `main`. Feature branches named `feat/IMPL-XX-slug`.
 - One commit per logical change. Don't squash unrelated work.
 
+## AI Models
+- **General AI work** (text generation, parsing, extraction, lookup):
+  `gemini-3.5-flash`
+- **Image generation**: `gemini-3.1-flash-image-preview`
+- Do not use any other Gemini model. Do not introduce other providers
+  (OpenAI, Anthropic, etc.) for these jobs without an ADR.
+
 ## Never
 - Commit secrets, service account JSON keys, OAuth client secrets, or
   `local.properties`.
 - Edit files in `.github/workflows/` without calling it out in the PR description.
+- Use a Gemini model other than the two listed under "AI Models".
 
 ## Local Development
 Run `bash infra/scripts/dev.sh` to start both backend and web servers locally.

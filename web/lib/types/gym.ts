@@ -3,7 +3,8 @@ export type SpecSchema =
   | 'plate_loaded'
   | 'bodyweight'
   | 'cable'
-  | 'cardio';
+  | 'cardio'
+  | 'weight_set';
 
 export type SelectorizedSpecs = {
   minWeight: number;
@@ -121,4 +122,76 @@ export type CreateEquipmentRequest = {
   subcategory: string;
   specSchema: SpecSchema;
   specs: EquipmentSpecs;
+};
+
+// Bulk equipment import (IMPL-GYM-002) — backend serializes SpecSchema as
+// UPPERCASE enum names on the wire (e.g. "SELECTORIZED"); the rest of the
+// frontend uses lowercase string literals. To avoid coercion churn for a
+// flow that never switches on the value, type the parsed schema as a raw
+// string.
+export type ParsedEquipment = {
+  name: string;
+  brand: string | null;
+  category: string;
+  subcategory: string;
+  specSchema: string;
+  specs: Record<string, unknown>;
+  confidence: 'CERTAIN' | 'LIKELY' | 'UNCERTAIN';
+  rawText: string;
+};
+
+export type ImportMatch = {
+  equipmentId: string;
+  name: string;
+  score: number;
+  reason: string;
+};
+
+export type ImportAction = 'MATCH_AUTO' | 'MATCH_SUGGESTED' | 'CREATE_NEW';
+
+export type ImportPreviewItem = {
+  index: number;
+  parsed: ParsedEquipment;
+  match: ImportMatch | null;
+  action: ImportAction;
+};
+
+export type ImportPreviewSummary = {
+  total: number;
+  matched: number;
+  suggestedMatches: number;
+  newSubmissions: number;
+};
+
+export type ImportPreviewResponse = {
+  items: ImportPreviewItem[];
+  summary: ImportPreviewSummary;
+};
+
+export type ConfirmItemAction = 'USE_MATCH' | 'CREATE_NEW' | 'SKIP';
+
+export type ImportConfirmItem = {
+  index: number;
+  action: ConfirmItemAction;
+  matchedEquipmentId?: string;
+  parsed?: ParsedEquipment;
+  overrides?: { name?: string };
+};
+
+export type ImportConfirmRequest = {
+  items: ImportConfirmItem[];
+};
+
+export type FailedImportItem = {
+  index: number;
+  name: string;
+  reason: string;
+};
+
+export type ImportConfirmResponse = {
+  created: { equipmentId: string; name: string; status: string }[];
+  matched: { equipmentId: string; name: string }[];
+  addedToLocation: number;
+  skipped: number;
+  failed: FailedImportItem[];
 };

@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.integrations.equipment;
 
 import com.gte619n.healthfitness.core.equipment.Equipment;
+import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.equipment.EquipmentStatus;
 import com.gte619n.healthfitness.core.equipment.ImageStatus;
 import com.gte619n.healthfitness.core.equipment.SpecSchema;
@@ -21,11 +22,16 @@ class EquipmentImageServiceTest {
     @Mock
     private EquipmentImageStorage storage;
 
+    @Mock
+    private EquipmentRepository equipmentRepository;
+
     private EquipmentImageService service;
 
     @BeforeEach
     void setUp() {
-        service = new EquipmentImageService(storage);
+        // Empty API key — fine for buildPrompt tests; we never invoke
+        // generateImageAsync here so the missing client never matters.
+        service = new EquipmentImageService(storage, equipmentRepository, "", "gemini-3.1-flash-image-preview");
     }
 
     @Test

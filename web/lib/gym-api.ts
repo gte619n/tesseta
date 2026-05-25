@@ -1,5 +1,14 @@
 import { apiFetch, apiJson } from './api';
-import type { Location, Equipment, CreateLocationRequest, UpdateLocationRequest, CreateEquipmentRequest } from './types/gym';
+import type {
+  Location,
+  Equipment,
+  CreateLocationRequest,
+  UpdateLocationRequest,
+  CreateEquipmentRequest,
+  ImportPreviewResponse,
+  ImportConfirmRequest,
+  ImportConfirmResponse,
+} from './types/gym';
 
 // Location APIs
 export async function getLocations(includeInactive = false): Promise<Location[]> {
@@ -140,4 +149,31 @@ export async function addEquipmentToLocation(locationId: string, equipmentId: st
 export async function removeEquipmentFromLocation(locationId: string, equipmentId: string): Promise<void> {
   const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/${equipmentId}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Remove equipment failed: ${res.status}`);
+}
+
+// Bulk Equipment Import APIs (IMPL-GYM-002)
+export async function bulkImportPreview(
+  locationId: string,
+  rawText: string,
+): Promise<ImportPreviewResponse> {
+  const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/import/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rawText }),
+  });
+  if (!res.ok) throw new Error(`Bulk import preview failed: ${res.status}`);
+  return res.json();
+}
+
+export async function bulkImportConfirm(
+  locationId: string,
+  body: ImportConfirmRequest,
+): Promise<ImportConfirmResponse> {
+  const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/import/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Bulk import confirm failed: ${res.status}`);
+  return res.json();
 }

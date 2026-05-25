@@ -77,7 +77,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").authenticated()
                 .requestMatchers("/api/drugs", "/api/drugs/**").authenticated()
                 .anyRequest().denyAll()
-                .anyRequest().denyAll()
             )
             // Webhook endpoints arrive with `Authorization: Bearer <secret>`
             // where <secret> is our shared webhook secret, NOT a Google ID

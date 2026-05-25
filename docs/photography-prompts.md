@@ -39,7 +39,9 @@ Paste this at the front of every prompt, all three categories:
 > text, watermark, logo, label text, brand name, neon colors, vivid
 > saturation, hard flash, studio glamour, lens flare, busy background,
 > gym environment clutter, multiple competing objects, cartoon,
-> illustration, 3d render, plastic look
+> illustration, 3d render, plastic look, rust, scratches, scuffs,
+> weathered, vintage, distressed, aged, patina, painterly, stylized,
+> hand-drawn, sketch, low-poly, plastic-toy
 
 ### Global parameters
 
@@ -142,9 +144,21 @@ The most forgiving category. Rigid objects, generators handle them well.
 > object so it does not float.
 
 **Materials clause:**
-> Realistic materials with honest light wear, not showroom-pristine —
-> brushed steel, knurled iron, matte rubber, worn leather, warm wood
-> where present.
+> Override the shared treatment for this category: render as professional
+> product photography of real, modern commercial gym equipment — the kind
+> of catalog and website imagery used by premium brands like Rogue Fitness,
+> Eleiko, Matrix Fitness, Life Fitness, Cybex, Hammer Strength, Precor, and
+> Technogym. Photorealistic, DSLR-grade sharpness, accurate true-to-life
+> colors (not muted or desaturated), natural specular highlights on steel
+> and chrome, realistic surface reflections on plastic and upholstery,
+> glossy where the real material is glossy. Pristine showroom condition,
+> brand-new and unused — factory-fresh finishes, perfectly clean, no
+> scratches, scuffs, rust, patina, or signs of use. Industrial design
+> language of high-end commercial fitness equipment. Materials present
+> where appropriate: polished or brushed steel, knurled iron, anodized
+> aluminum, high-density rubber grips and flooring, fresh leather or vinyl
+> upholstery with crisp stitching, ABS plastic shrouds, color-coded
+> weight plates.
 
 ### Prompt template
 
@@ -163,7 +177,7 @@ equipment set so a grid of them reads as a system.
 
 1. `...The object is: a single adjustable dumbbell resting on the floor, iron plates and knurled steel handle.`
 2. `...The object is: an Olympic barbell lying on the floor, knurled steel, no plates loaded.`
-3. `...The object is: a flat weight bench upholstered in worn black leather with a steel frame. Straight-on side profile.`
+3. `...The object is: a flat weight bench upholstered in fresh black leather with a steel frame. Straight-on side profile.`
 4. `...The object is: a wall-mounted dual cable pulley station, steel frame and cable, matte finish.`
 5. `...The object is: an empty sauna interior in warm cedar wood, simple bench, soft daylight from one side.` (spa item — lean warmer and quieter)
 
