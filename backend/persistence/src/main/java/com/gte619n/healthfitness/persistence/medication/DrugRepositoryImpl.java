@@ -52,7 +52,10 @@ public class DrugRepositoryImpl implements DrugRepository {
             .orderBy("name", Query.Direction.ASCENDING)
             .limit(1000)
             .get()).getDocuments();
-        return docs.stream().map(this::toDrug).toList();
+        return docs.stream()
+            .map(this::toDrug)
+            .filter(d -> d.aliasOfDrugId() == null)
+            .toList();
     }
 
     @Override
@@ -65,7 +68,10 @@ public class DrugRepositoryImpl implements DrugRepository {
             .whereLessThanOrEqualTo("name", upperBound)
             .limit(50)
             .get()).getDocuments();
-        return docs.stream().map(this::toDrug).toList();
+        return docs.stream()
+            .map(this::toDrug)
+            .filter(d -> d.aliasOfDrugId() == null)
+            .toList();
     }
 
     @Override
@@ -112,7 +118,8 @@ public class DrugRepositoryImpl implements DrugRepository {
             (List<String>) snapshot.get("suggestedMarkers"),
             snapshot.getString("description"),
             toInstant(snapshot.get("createdAt")),
-            toInstant(snapshot.get("updatedAt"))
+            toInstant(snapshot.get("updatedAt")),
+            snapshot.getString("aliasOfDrugId")
         );
     }
 
@@ -129,6 +136,7 @@ public class DrugRepositoryImpl implements DrugRepository {
         body.put("imageFallback", drug.imageFallback());
         body.put("suggestedMarkers", drug.suggestedMarkers());
         body.put("description", drug.description());
+        body.put("aliasOfDrugId", drug.aliasOfDrugId());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

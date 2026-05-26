@@ -86,6 +86,22 @@ public class MedicationRepositoryImpl implements MedicationRepository {
         await(collection(userId).document(medicationId).delete());
     }
 
+    @Override
+    public List<Medication> findAllReferencingDrug(String drugId) {
+        if (drugId == null || drugId.isBlank()) return List.of();
+        List<QueryDocumentSnapshot> docs = await(
+            firestore.collectionGroup(SUBCOLLECTION)
+                .whereEqualTo("drugId", drugId)
+                .get()
+        ).getDocuments();
+        return docs.stream()
+            .map(d -> {
+                String userId = d.getReference().getParent().getParent().getId();
+                return toMedication(userId, d);
+            })
+            .toList();
+    }
+
     private CollectionReference collection(String userId) {
         return firestore.collection("users").document(userId).collection(SUBCOLLECTION);
     }

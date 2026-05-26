@@ -4,6 +4,8 @@ import com.gte619n.healthfitness.core.medication.Drug;
 import com.gte619n.healthfitness.core.medication.DrugCategory;
 import com.gte619n.healthfitness.core.medication.DrugForm;
 import com.gte619n.healthfitness.core.medication.DrugRepository;
+import com.gte619n.healthfitness.core.medication.Medication;
+import com.gte619n.healthfitness.core.medication.MedicationRepository;
 import com.gte619n.healthfitness.integrations.medication.DrugImageGenerator;
 import com.gte619n.healthfitness.integrations.medication.DrugImageStorage;
 import com.gte619n.healthfitness.integrations.medication.DrugLookupService;
@@ -34,6 +36,7 @@ import org.springframework.stereotype.Service;
 public class DrugCatalogService {
 
     private final DrugRepository drugs;
+    private final MedicationRepository medications;
     private final RxNormLookupService rxNormService;
     private final DrugLookupService aiLookupService;
     private final DrugVisualLookupService visualLookupService;
@@ -43,6 +46,7 @@ public class DrugCatalogService {
 
     public DrugCatalogService(
         DrugRepository drugs,
+        MedicationRepository medications,
         RxNormLookupService rxNormService,
         DrugLookupService aiLookupService,
         DrugVisualLookupService visualLookupService,
@@ -51,6 +55,7 @@ public class DrugCatalogService {
         @Value("${app.medications.bucket}") String bucket
     ) {
         this.drugs = drugs;
+        this.medications = medications;
         this.rxNormService = rxNormService;
         this.aiLookupService = aiLookupService;
         this.visualLookupService = visualLookupService;
@@ -239,7 +244,8 @@ public class DrugCatalogService {
             suggestedMarkers != null ? suggestedMarkers : List.of(),
             description,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null   // aliasOfDrugId
         );
 
         drugs.save(drug);
@@ -264,7 +270,8 @@ public class DrugCatalogService {
             result.suggestedMarkers() != null ? result.suggestedMarkers() : List.of(),
             result.description(),
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null   // aliasOfDrugId
         );
 
         drugs.save(drug);
@@ -332,7 +339,8 @@ public class DrugCatalogService {
                     drug.suggestedMarkers(),
                     drug.description(),
                     drug.createdAt(),
-                    Instant.now()
+                    Instant.now(),
+                    drug.aliasOfDrugId()
                 );
                 drugs.save(updated);
                 return imageUrl;
@@ -395,7 +403,8 @@ public class DrugCatalogService {
                             drug.suggestedMarkers(),
                             drug.description(),
                             drug.createdAt(),
-                            Instant.now()
+                            Instant.now(),
+                            drug.aliasOfDrugId()
                         );
                         drugs.save(updated);
                         System.out.println("Image generated and saved for " + drugName);
@@ -405,6 +414,172 @@ public class DrugCatalogService {
                 System.err.println("Failed to generate image for drug " + drugId + ": " + e.getMessage());
             }
         });
+    }
+
+    /**
+     * Admin patch — updates only the editable fields. Pass {@code null} to
+     * keep the existing value for any field.
+     */
+    public Drug updateDrug(
+        String drugId,
+        String name,
+        List<String> aliases,
+        DrugCategory category,
+        DrugForm form,
+        String defaultUnit
+    ) {
+        Drug existing = drugs.findById(drugId)
+            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
+
+        Drug updated = new Drug(
+            existing.drugId(),
+            name != null ? name : existing.name(),
+            aliases != null ? aliases : existing.aliases(),
+            category != null ? category : existing.category(),
+            form != null ? form : existing.form(),
+            defaultUnit != null ? defaultUnit : existing.defaultUnit(),
+            existing.commonDoses(),
+            existing.imageUrl(),
+            existing.imageFallback(),
+            existing.suggestedMarkers(),
+            existing.description(),
+            existing.createdAt(),
+            Instant.now(),
+            existing.aliasOfDrugId()
+        );
+        drugs.save(updated);
+        return updated;
+    }
+
+    /**
+     * Admin delete — outright removes a drug from the catalog. Should be
+     * blocked by the controller when any user medication still references
+     * it; merge is the safer path for duplicate cleanup.
+     */
+    public void delete(String drugId) {
+        drugs.delete(drugId);
+    }
+
+    /**
+     * Number of user-medication records that still point at this drug.
+     * Used by the admin delete check.
+     */
+    public int referencingMedicationCount(String drugId) {
+        return medications.findAllReferencingDrug(drugId).size();
+    }
+
+    /**
+     * Merge {@code sourceId} into {@code targetId} — admin only.
+     *
+     * <p>Marks the source as an alias of the target and rewrites every
+     * Medication.drugId reference from source to target across all users.
+     */
+    public Drug mergeInto(String sourceId, String targetId) {
+        if (sourceId == null || targetId == null) {
+            throw new IllegalArgumentException("source and target drug ids are required");
+        }
+        if (sourceId.equals(targetId)) {
+            throw new IllegalArgumentException("source and target must differ");
+        }
+        Drug source = drugs.findById(sourceId)
+            .orElseThrow(() -> new IllegalArgumentException("Source drug not found: " + sourceId));
+        Drug target = drugs.findById(targetId)
+            .orElseThrow(() -> new IllegalArgumentException("Target drug not found: " + targetId));
+        if (target.aliasOfDrugId() != null) {
+            throw new IllegalArgumentException("Target is itself an alias — cannot merge into an alias");
+        }
+        if (source.aliasOfDrugId() != null) {
+            throw new IllegalArgumentException("Source is already an alias");
+        }
+
+        List<Medication> referencing = medications.findAllReferencingDrug(sourceId);
+        for (Medication m : referencing) {
+            Medication rewritten = new Medication(
+                m.userId(),
+                m.medicationId(),
+                targetId,
+                m.customName(),
+                m.status(),
+                m.dose(),
+                m.unit(),
+                m.frequency(),
+                m.timeSlots(),
+                m.protocolId(),
+                m.notes(),
+                m.prescribedBy(),
+                m.startDate(),
+                m.endDate(),
+                m.discontinueReason(),
+                m.discontinueNotes(),
+                m.correlatedMarkers(),
+                m.createdAt(),
+                Instant.now()
+            );
+            medications.save(rewritten);
+        }
+
+        Drug merged = new Drug(
+            source.drugId(),
+            source.name(),
+            source.aliases(),
+            source.category(),
+            source.form(),
+            source.defaultUnit(),
+            source.commonDoses(),
+            source.imageUrl(),
+            source.imageFallback(),
+            source.suggestedMarkers(),
+            source.description(),
+            source.createdAt(),
+            Instant.now(),
+            targetId
+        );
+        drugs.save(merged);
+
+        return drugs.findById(targetId).orElse(target);
+    }
+
+    /**
+     * Default prompt the image generator would use for this drug. Used by
+     * the admin UI to seed an editable prompt field.
+     */
+    public String defaultImagePrompt(String drugId) {
+        Drug drug = drugs.findById(drugId)
+            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
+        return imageGenerator.defaultPromptFor(drug);
+    }
+
+    /**
+     * Regenerate using an admin-supplied prompt. Pass an empty/null prompt
+     * to fall back to {@link #defaultImagePrompt(String)} behavior.
+     */
+    public String regenerateImageWithPrompt(String drugId, String promptOverride) {
+        Drug drug = drugs.findById(drugId)
+            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
+        String prompt = (promptOverride != null && !promptOverride.isBlank())
+            ? promptOverride
+            : imageGenerator.defaultPromptFor(drug);
+        Optional<byte[]> bytes = imageGenerator.generateWithPrompt(prompt, drug.name());
+        if (bytes.isEmpty()) return null;
+        String imageUrl = imageStorage.upload(drugId, bytes.get());
+        Drug updated = new Drug(
+            drug.drugId(),
+            drug.name(),
+            drug.aliases(),
+            drug.category(),
+            drug.form(),
+            drug.defaultUnit(),
+            drug.commonDoses(),
+            imageUrl,
+            drug.imageFallback(),
+            drug.suggestedMarkers(),
+            drug.description(),
+            drug.createdAt(),
+            Instant.now(),
+            drug.aliasOfDrugId()
+        );
+        drugs.save(updated);
+        return imageUrl;
     }
 
     private DrugCategory parseCategory(String category) {

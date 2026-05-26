@@ -13,4 +13,7 @@ public interface MedicationRepository {
     List<Medication> findByProtocol(String userId, String protocolId);
     void save(Medication medication);
     void delete(String userId, String medicationId);
+    // Cross-user scan returning every medication (across all users) whose
+    // drugId matches. Used by admin merge to rewrite alias references.
+    List<Medication> findAllReferencingDrug(String drugId);
 }

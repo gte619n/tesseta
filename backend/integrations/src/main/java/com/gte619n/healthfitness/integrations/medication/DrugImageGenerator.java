@@ -179,6 +179,25 @@ public class DrugImageGenerator {
     }
 
     /**
+     * Build the default prompt that would be used for this drug. Used by the
+     * admin UI to prefill an editable prompt before regeneration. Mirrors
+     * the fallback (text-only) path; the visual-data path requires a live
+     * lookup which would happen at generation time anyway.
+     */
+    public String defaultPromptFor(com.gte619n.healthfitness.core.medication.Drug drug) {
+        String subject = getGenericSubject(drug.form().name(), drug.name());
+        return String.format(FALLBACK_PROMPT_TEMPLATE, subject);
+    }
+
+    /**
+     * Run image generation using an explicit prompt — used by admin regen
+     * after an editable-prompt review. Returns image bytes (PNG) or empty.
+     */
+    public Optional<byte[]> generateWithPrompt(String prompt, String drugName) {
+        return executeGeneration(prompt, drugName);
+    }
+
+    /**
      * Fetch a reference image from RxImageAccess URL.
      */
     private Optional<byte[]> fetchReferenceImage(String imageUrl) {

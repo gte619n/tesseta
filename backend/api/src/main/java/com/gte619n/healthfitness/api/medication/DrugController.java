@@ -71,7 +71,8 @@ public class DrugController {
             body.suggestedMarkers() != null ? body.suggestedMarkers() : List.of(),
             body.description(),
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null   // aliasOfDrugId
         );
 
         drugs.save(drug);
@@ -102,7 +103,8 @@ public class DrugController {
             body.suggestedMarkers() != null ? body.suggestedMarkers() : existing.suggestedMarkers(),
             body.description() != null ? body.description() : existing.description(),
             existing.createdAt(),
-            Instant.now()
+            Instant.now(),
+            existing.aliasOfDrugId()
         );
 
         drugs.save(updated);

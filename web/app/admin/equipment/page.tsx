@@ -1,5 +1,4 @@
 import { revalidatePath } from 'next/cache';
-import { requireAdmin } from '@/lib/admin';
 import {
   getPendingEquipment,
   getAdminCatalog,
@@ -16,8 +15,7 @@ import type { EquipmentSpecs, SpecSchema } from '@/lib/types/gym';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminEquipmentPage() {
-  await requireAdmin();
-
+  // Admin gating handled by app/admin/layout.tsx
   const [pending, catalog] = await Promise.all([
     getPendingEquipment(),
     getAdminCatalog(),

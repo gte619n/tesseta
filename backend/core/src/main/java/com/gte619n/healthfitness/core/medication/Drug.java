@@ -20,5 +20,8 @@ public record Drug(
     List<String> suggestedMarkers,  // ["TESTOSTERONE", "FREE_TESTOSTERONE"]
     String description,             // Brief description of the drug
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    // When non-null, this row is an alias of the drugId it points to.
+    // Aliases are hidden from search/findAll; admin merge sets this.
+    String aliasOfDrugId
 ) {}

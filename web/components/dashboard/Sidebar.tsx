@@ -45,7 +45,7 @@ export function Sidebar({ user, isAdmin = false }: { user: SidebarUser; isAdmin?
       <div className="mt-auto border-t-[0.5px] border-border-strong pt-3.5">
         {isAdmin ? (
           <Link
-            href={"/admin/equipment" as Route}
+            href={"/admin" as Route}
             className="mb-0.5 flex w-full items-center gap-[11px] rounded-md bg-transparent px-[11px] py-[9px] text-left hover:bg-canvas-muted"
           >
             <i className="ti ti-shield-lock text-[16px] text-tertiary" aria-hidden />
