@@ -41,4 +41,13 @@ subprojects {
             mavenBom("org.springframework.boot:spring-boot-dependencies:$springBootVersion")
         }
     }
+
+    // Gradle 8.x ships with its own junit-platform-launcher (1.10.x) which
+    // doesn't expose OutputDirectoryProvider — required by junit-platform
+    // 1.11+ engines pulled in via Spring Boot's BOM. Declaring launcher as
+    // testRuntimeOnly lets the Spring Boot BOM align it with the engine,
+    // fixing "OutputDirectoryProvider not available" during test discovery.
+    dependencies {
+        add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
+    }
 }
