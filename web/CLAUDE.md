@@ -67,3 +67,28 @@
   client tree.
 - Destructive actions (delete, disconnect, anything irreversible) should
   use `tone: "danger"` on the confirm and a success toast on completion.
+
+## Modals
+
+### Modal backdrop close: avoid the text-selection bug
+Plain `onClick={onClose}` on a modal backdrop has a subtle bug: a mouse
+gesture that starts inside the dialog (e.g. selecting text in an input)
+and ends OUTSIDE the dialog fires a click on the backdrop and closes the
+modal. The user loses their selection or their in-progress input.
+
+Pattern: track whether the mousedown happened on the backdrop, and only
+close when both mousedown AND mouseup landed there. Reference
+implementations: `components/admin/EditDrugModal.tsx`,
+`components/admin/RegenerateImageModal.tsx`,
+`components/admin/ImageLightbox.tsx`.
+
+When adding a new modal, copy the `downOnBackdropRef` +
+`handleBackdropMouseDown` + `handleBackdropClick` trio. Mirror the
+`onMouseDown={(e) => e.stopPropagation()}` on the inner content div
+alongside the existing `onClick` stopPropagation. If this pattern starts
+showing up in 6+ places we'll extract a `<ModalBackdrop>` primitive —
+until then, keep the trio inline.
+
+Don't replace this with `onMouseUp` alone, and don't rely solely on
+inner-content `e.stopPropagation()` — neither covers the
+selection-drag-to-backdrop case.

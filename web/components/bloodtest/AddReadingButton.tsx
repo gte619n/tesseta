@@ -15,6 +15,22 @@ export function AddReadingButton({ addReading, markers, markerLabels }: Props) {
   const [isPending, startTransition] = useTransition();
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLSelectElement>(null);
+  // Track whether the mousedown landed on the backdrop so we only close on a
+  // true backdrop click. Without this, a text-selection drag that starts
+  // inside the dialog and releases over the backdrop would close the modal.
+  const downOnBackdropRef = useRef(false);
+
+  function handleBackdropMouseDown(e: React.MouseEvent) {
+    downOnBackdropRef.current = e.target === e.currentTarget;
+  }
+
+  function handleBackdropClick(e: React.MouseEvent) {
+    const downOnBackdrop = downOnBackdropRef.current;
+    downOnBackdropRef.current = false;
+    if (downOnBackdrop && e.target === e.currentTarget) {
+      setOpen(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -46,7 +62,8 @@ export function AddReadingButton({ addReading, markers, markerLabels }: Props) {
       {open && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
+          onMouseDown={handleBackdropMouseDown}
+          onClick={handleBackdropClick}
         >
           <div
             ref={dialogRef}
@@ -54,6 +71,7 @@ export function AddReadingButton({ addReading, markers, markerLabels }: Props) {
             aria-modal
             aria-labelledby="add-reading-title"
             className="w-[480px] rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
             <h2

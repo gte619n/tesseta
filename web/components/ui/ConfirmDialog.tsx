@@ -45,6 +45,10 @@ export function useConfirm(): ConfirmFn {
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  // Track whether the mousedown landed on the backdrop so we only dismiss on
+  // a true backdrop click. Without this, a text-selection drag that starts
+  // inside the dialog and releases over the backdrop would close it.
+  const downOnBackdropRef = useRef(false);
 
   const confirm = useCallback<ConfirmFn>((opts) => {
     return new Promise((resolve) => setPending({ ...opts, resolve }));
@@ -54,6 +58,18 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     if (!pending) return;
     pending.resolve(ok);
     setPending(null);
+  }
+
+  function handleBackdropMouseDown(e: React.MouseEvent) {
+    downOnBackdropRef.current = e.target === e.currentTarget;
+  }
+
+  function handleBackdropClick(e: React.MouseEvent) {
+    const downOnBackdrop = downOnBackdropRef.current;
+    downOnBackdropRef.current = false;
+    if (downOnBackdrop && e.target === e.currentTarget) {
+      answer(false);
+    }
   }
 
   useEffect(() => {
@@ -72,13 +88,15 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const dialog = pending ? (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onClick={() => answer(false)}
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
     >
       <div
         role="alertdialog"
         aria-modal
         aria-labelledby="confirm-title"
         className="w-[420px] rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
+        onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
         <h2

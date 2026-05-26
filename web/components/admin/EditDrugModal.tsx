@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Drug, DrugCategory, DrugForm } from '@/lib/types/medication';
 import { CATEGORY_LABELS, FORM_LABELS } from '@/lib/types/medication';
 import { useToast } from '@/components/ui/Toast';
@@ -42,6 +42,22 @@ export function EditDrugModal({ drug, isOpen, onClose, onSave, update }: Props) 
   const [form, setForm] = useState<DrugForm>(drug.form);
   const [defaultUnit, setDefaultUnit] = useState(drug.defaultUnit);
   const [isSaving, setIsSaving] = useState(false);
+  // Track whether the mousedown landed on the backdrop so we only close on a
+  // true backdrop click. Without this, a text-selection drag that starts
+  // inside the dialog and releases over the backdrop would close the modal.
+  const downOnBackdropRef = useRef(false);
+
+  function handleBackdropMouseDown(e: React.MouseEvent) {
+    downOnBackdropRef.current = e.target === e.currentTarget;
+  }
+
+  function handleBackdropClick(e: React.MouseEvent) {
+    const downOnBackdrop = downOnBackdropRef.current;
+    downOnBackdropRef.current = false;
+    if (downOnBackdrop && e.target === e.currentTarget) {
+      onClose();
+    }
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -87,10 +103,12 @@ export function EditDrugModal({ drug, isOpen, onClose, onSave, update }: Props) 
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onClick={onClose}
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
     >
       <div
         className="w-[560px] max-w-[92vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
+        onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-xl font-semibold text-primary">Edit drug</h2>
