@@ -16,7 +16,8 @@ public class AdminCheckAspect {
 
     // List of admin email addresses - TODO: move to configuration
     private static final Set<String> ADMIN_EMAILS = Set.of(
-        "admin@example.com"  // Replace with actual admin emails
+        "admin@example.com",
+        "evan.ruff@gmail.com"
     );
 
     public AdminCheckAspect(CurrentUserProvider currentUserProvider) {

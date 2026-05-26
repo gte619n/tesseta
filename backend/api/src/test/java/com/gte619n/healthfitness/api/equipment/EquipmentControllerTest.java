@@ -420,7 +420,8 @@ class EquipmentControllerTest {
             approved.contributorId(),
             approved.exerciseCount(),
             approved.createdAt(),
-            approved.updatedAt()
+            approved.updatedAt(),
+            null
         );
         equipmentRepository.save(withOwner);
 
@@ -469,7 +470,8 @@ class EquipmentControllerTest {
             "system", // contributorId
             0,
             now,
-            now
+            now,
+            null
         );
     }
 
@@ -495,7 +497,8 @@ class EquipmentControllerTest {
             userId, // contributorId
             0,
             now,
-            now
+            now,
+            null
         );
     }
 }

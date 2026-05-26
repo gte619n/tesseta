@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 // environment variables or a database.
 const ADMIN_EMAILS = [
   'admin@example.com',
+  'evan.ruff@gmail.com',
   // Add more admin emails as needed
 ];
 

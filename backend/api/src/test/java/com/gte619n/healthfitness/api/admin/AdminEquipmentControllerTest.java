@@ -58,7 +58,8 @@ class AdminEquipmentControllerTest {
             "user123",
             0,
             now,
-            now
+            now,
+            null
         );
         equipmentRepository.save(pendingEquipment);
     }

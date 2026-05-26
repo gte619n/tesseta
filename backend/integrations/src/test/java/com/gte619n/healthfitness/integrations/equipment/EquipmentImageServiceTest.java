@@ -50,7 +50,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);
@@ -74,7 +75,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);
@@ -102,7 +104,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);
@@ -127,7 +130,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);
@@ -152,7 +156,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);
@@ -177,7 +182,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);
@@ -202,7 +208,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);
@@ -226,7 +233,8 @@ class EquipmentImageServiceTest {
             "admin",
             0,
             Instant.now(),
-            Instant.now()
+            Instant.now(),
+            null
         );
 
         String prompt = service.buildPrompt(equipment);

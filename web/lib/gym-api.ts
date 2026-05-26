@@ -2,6 +2,7 @@ import { apiFetch, apiJson } from './api';
 import type {
   Location,
   Equipment,
+  AdminEquipment,
   CreateLocationRequest,
   UpdateLocationRequest,
   CreateEquipmentRequest,
@@ -110,8 +111,12 @@ export async function deleteMyEquipment(equipmentId: string): Promise<void> {
 }
 
 // Admin APIs
-export async function getPendingEquipment(): Promise<Equipment[]> {
-  return apiJson<Equipment[]>('/api/admin/equipment/pending');
+export async function getPendingEquipment(): Promise<AdminEquipment[]> {
+  return apiJson<AdminEquipment[]>('/api/admin/equipment/pending');
+}
+
+export async function getAdminCatalog(): Promise<AdminEquipment[]> {
+  return apiJson<AdminEquipment[]>('/api/admin/equipment/catalog');
 }
 
 export async function approveEquipment(equipmentId: string): Promise<Equipment> {
@@ -120,8 +125,12 @@ export async function approveEquipment(equipmentId: string): Promise<Equipment> 
   return res.json();
 }
 
-export async function rejectEquipment(equipmentId: string): Promise<void> {
-  const res = await apiFetch(`/api/admin/equipment/${equipmentId}/reject`, { method: 'POST' });
+export async function rejectEquipment(equipmentId: string, reason?: string): Promise<void> {
+  const res = await apiFetch(`/api/admin/equipment/${equipmentId}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason: reason ?? '' }),
+  });
   if (!res.ok) throw new Error(`Reject failed: ${res.status}`);
 }
 
@@ -135,9 +144,43 @@ export async function updateEquipment(equipmentId: string, data: Partial<CreateE
   return res.json();
 }
 
-export async function regenerateEquipmentImage(equipmentId: string): Promise<void> {
-  const res = await apiFetch(`/api/admin/equipment/${equipmentId}/regenerate-image`, { method: 'POST' });
+export async function getEquipmentImagePrompt(equipmentId: string): Promise<string> {
+  const data = await apiJson<{ prompt: string }>(`/api/admin/equipment/${equipmentId}/image-prompt`);
+  return data.prompt ?? '';
+}
+
+export async function regenerateEquipmentImage(
+  equipmentId: string,
+  promptOverride?: string,
+): Promise<void> {
+  const res = await apiFetch(`/api/admin/equipment/${equipmentId}/regenerate-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ promptOverride: promptOverride ?? null }),
+  });
   if (!res.ok) throw new Error(`Regenerate image failed: ${res.status}`);
+}
+
+export async function mergeEquipment(sourceId: string, targetId: string): Promise<Equipment> {
+  const res = await apiFetch(`/api/admin/equipment/${sourceId}/merge-into/${targetId}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`Merge failed: ${res.status}`);
+  return res.json();
+}
+
+export async function updateLocationEquipmentSpecs(
+  locationId: string,
+  equipmentId: string,
+  specs: Record<string, unknown>,
+): Promise<Location> {
+  const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/${equipmentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ specs }),
+  });
+  if (!res.ok) throw new Error(`Update location specs failed: ${res.status}`);
+  return res.json();
 }
 
 // Location Equipment Management APIs

@@ -50,6 +50,7 @@ public class LocationService {
             hours,
             amenities,
             equipmentIds,
+            Map.of(), // equipmentSpecs starts empty; falls back to catalog defaults
             false, // isDefault - set separately
             true,  // isActive - new locations are active by default
             now,
@@ -84,6 +85,7 @@ public class LocationService {
             hours != null ? hours : existing.hours(),
             amenities != null ? amenities : existing.amenities(),
             equipmentIds != null ? equipmentIds : existing.equipmentIds(),
+            existing.equipmentSpecs(),
             existing.isDefault(),
             existing.isActive(),
             existing.createdAt(),
@@ -129,6 +131,58 @@ public class LocationService {
             existing.hours(),
             existing.amenities(),
             updatedIds,
+            existing.equipmentSpecs(),
+            existing.isDefault(),
+            existing.isActive(),
+            existing.createdAt(),
+            Instant.now()
+        );
+
+        repository.save(updated);
+        return updated;
+    }
+
+    /**
+     * Set the per-location spec overrides for a single equipment at this
+     * location. Pass an empty/null map to clear overrides (catalog defaults
+     * will be used). The equipment must already be on the location's
+     * equipmentIds list.
+     */
+    public Location updateEquipmentSpecs(
+        String userId,
+        String locationId,
+        String equipmentId,
+        Map<String, Object> specs
+    ) {
+        Location existing = repository.findById(userId, locationId)
+            .orElseThrow(() -> new IllegalArgumentException("Location not found"));
+
+        List<String> currentIds = existing.equipmentIds() == null ? List.of() : existing.equipmentIds();
+        if (!currentIds.contains(equipmentId)) {
+            throw new IllegalArgumentException("Equipment not assigned to this location");
+        }
+
+        Map<String, Map<String, Object>> currentSpecs = existing.equipmentSpecs() == null
+            ? new java.util.HashMap<>()
+            : new java.util.HashMap<>(existing.equipmentSpecs());
+
+        if (specs == null || specs.isEmpty()) {
+            currentSpecs.remove(equipmentId);
+        } else {
+            currentSpecs.put(equipmentId, specs);
+        }
+
+        Location updated = new Location(
+            existing.userId(),
+            existing.locationId(),
+            existing.name(),
+            existing.address(),
+            existing.coverPhotoUrl(),
+            existing.is24Hours(),
+            existing.hours(),
+            existing.amenities(),
+            existing.equipmentIds(),
+            currentSpecs,
             existing.isDefault(),
             existing.isActive(),
             existing.createdAt(),
@@ -169,6 +223,7 @@ public class LocationService {
             existing.hours(),
             existing.amenities(),
             existing.equipmentIds(),
+            existing.equipmentSpecs(),
             existing.isDefault(),
             existing.isActive(),
             existing.createdAt(),
@@ -198,6 +253,7 @@ public class LocationService {
             existing.hours(),
             existing.amenities(),
             existing.equipmentIds(),
+            existing.equipmentSpecs(),
             existing.isDefault(),
             existing.isActive(),
             existing.createdAt(),

@@ -99,6 +99,22 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
         await(batch.commit());
     }
 
+    @Override
+    public List<Location> findAllReferencing(String equipmentId) {
+        if (equipmentId == null || equipmentId.isBlank()) return List.of();
+        List<QueryDocumentSnapshot> docs = await(
+            firestore.collectionGroup(SUBCOLLECTION)
+                .whereArrayContains("equipmentIds", equipmentId)
+                .get()
+        ).getDocuments();
+        return docs.stream()
+            .map(d -> {
+                String userId = d.getReference().getParent().getParent().getId();
+                return toLocation(userId, d);
+            })
+            .toList();
+    }
+
     private CollectionReference collection(String userId) {
         return firestore.collection("users").document(userId).collection(SUBCOLLECTION);
     }
@@ -112,6 +128,7 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
         body.put("hours", hoursToMap(loc.hours()));
         body.put("amenities", loc.amenities() == null ? List.of() : loc.amenities());
         body.put("equipmentIds", loc.equipmentIds() == null ? List.of() : loc.equipmentIds());
+        body.put("equipmentSpecs", loc.equipmentSpecs() == null ? Map.of() : loc.equipmentSpecs());
         body.put("isDefault", loc.isDefault());
         body.put("isActive", loc.isActive());
         body.put("updatedAt", serverTimestamp());
@@ -178,11 +195,30 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
             hoursFromMap(snapshot.get("hours")),
             toStringList(snapshot.get("amenities")),
             toStringList(snapshot.get("equipmentIds")),
+            equipmentSpecsFromMap(snapshot.get("equipmentSpecs")),
             isDefault != null && isDefault,
             isActive == null || isActive, // Default to active if not set
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt"))
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Map<String, Object>> equipmentSpecsFromMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> m)) return Map.of();
+        Map<String, Map<String, Object>> result = new HashMap<>();
+        for (Map.Entry<?, ?> entry : m.entrySet()) {
+            if (entry.getKey() != null && entry.getValue() instanceof Map<?, ?> specMap) {
+                Map<String, Object> typed = new HashMap<>();
+                for (Map.Entry<?, ?> sp : specMap.entrySet()) {
+                    if (sp.getKey() != null) {
+                        typed.put(sp.getKey().toString(), sp.getValue());
+                    }
+                }
+                result.put(entry.getKey().toString(), typed);
+            }
+        }
+        return result;
     }
 
     private static <T> T await(ApiFuture<T> future) {

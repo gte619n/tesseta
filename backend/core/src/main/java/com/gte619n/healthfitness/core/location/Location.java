@@ -14,6 +14,10 @@ public record Location(
     Map<DayOfWeek, HoursSlot> hours,
     List<String> amenities,
     List<String> equipmentIds,
+    // Per-location spec overrides: keyed by equipmentId, value is the same
+    // shape as Equipment.specs. Catalog's specs serve as defaults; this
+    // map carries the gym-specific values (e.g. stack weight at this gym).
+    Map<String, Map<String, Object>> equipmentSpecs,
     boolean isDefault,
     boolean isActive,
     Instant createdAt,

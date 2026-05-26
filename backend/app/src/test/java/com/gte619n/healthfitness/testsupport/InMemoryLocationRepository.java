@@ -45,6 +45,7 @@ public class InMemoryLocationRepository implements LocationRepository {
                 existing.hours(),
                 existing.amenities(),
                 existing.equipmentIds(),
+                existing.equipmentSpecs(),
                 existing.isDefault(),
                 false, // isActive = false
                 existing.createdAt(),
@@ -72,6 +73,7 @@ public class InMemoryLocationRepository implements LocationRepository {
                     loc.hours(),
                     loc.amenities(),
                     loc.equipmentIds(),
+                    loc.equipmentSpecs(),
                     false, // isDefault = false
                     loc.isActive(),
                     loc.createdAt(),
@@ -96,6 +98,7 @@ public class InMemoryLocationRepository implements LocationRepository {
                 target.hours(),
                 target.amenities(),
                 target.equipmentIds(),
+                target.equipmentSpecs(),
                 true, // isDefault = true
                 target.isActive(),
                 target.createdAt(),
@@ -103,6 +106,21 @@ public class InMemoryLocationRepository implements LocationRepository {
             );
             userLocations.put(locationId, newDefault);
         }
+    }
+
+    @Override
+    public List<Location> findAllReferencing(String equipmentId) {
+        if (equipmentId == null) return List.of();
+        List<Location> matches = new ArrayList<>();
+        for (Map<String, Location> userLocs : storage.values()) {
+            for (Location loc : userLocs.values()) {
+                List<String> ids = loc.equipmentIds();
+                if (ids != null && ids.contains(equipmentId)) {
+                    matches.add(loc);
+                }
+            }
+        }
+        return matches;
     }
 
     private Map<String, Location> userMap(String userId) {

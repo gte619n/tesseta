@@ -304,6 +304,7 @@ class LocationControllerTest {
             null, // hours
             List.of(), // amenities
             List.of(), // equipmentIds
+            java.util.Map.of(), // equipmentSpecs
             false, // isDefault
             isActive,
             now,

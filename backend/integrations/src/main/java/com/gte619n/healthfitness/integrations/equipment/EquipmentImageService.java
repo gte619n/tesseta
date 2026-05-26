@@ -71,6 +71,16 @@ public class EquipmentImageService implements EquipmentImageGenerator {
      */
     @Override
     public CompletableFuture<Void> generateImageAsync(Equipment equipment) {
+        return generateImageAsync(equipment, null);
+    }
+
+    @Override
+    public String defaultPrompt(Equipment equipment) {
+        return buildPrompt(equipment);
+    }
+
+    @Override
+    public CompletableFuture<Void> generateImageAsync(Equipment equipment, String promptOverride) {
         return CompletableFuture.runAsync(() -> {
             try {
                 if (client == null) {
@@ -80,9 +90,12 @@ public class EquipmentImageService implements EquipmentImageGenerator {
                     return;
                 }
 
-                String prompt = buildPrompt(equipment);
-                log.info("Generating image for equipment {} ({}): model={}",
-                    equipment.equipmentId(), equipment.name(), model);
+                String prompt = (promptOverride != null && !promptOverride.isBlank())
+                    ? promptOverride
+                    : buildPrompt(equipment);
+                log.info("Generating image for equipment {} ({}): model={}{}",
+                    equipment.equipmentId(), equipment.name(), model,
+                    promptOverride != null ? " (prompt overridden)" : "");
 
                 byte[] bytes = callGemini(prompt, equipment.equipmentId());
 
@@ -131,7 +144,8 @@ public class EquipmentImageService implements EquipmentImageGenerator {
             current.contributorId(),
             current.exerciseCount(),
             current.createdAt(),
-            Instant.now()
+            Instant.now(),
+            current.aliasOfEquipmentId()
         );
         equipmentRepository.save(updated);
     }

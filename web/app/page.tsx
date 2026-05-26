@@ -8,6 +8,7 @@ import { Sidebar, type SidebarUser } from "@/components/dashboard/Sidebar";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { TodaysDosesCard } from "@/components/dashboard/TodaysDosesCard";
 import { WeightChart } from "@/components/dashboard/WeightChart";
+import { isAdmin } from "@/lib/admin";
 import { apiFetch, apiJson } from "@/lib/api";
 import { recent, todayHeader, vitals } from "@/lib/fixtures/dashboard";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
@@ -48,7 +49,8 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const session = await auth();
   const sidebarUser = toSidebarUser(session);
-  const [view, bloodPanel, todaysDoses] = await Promise.all([
+  const [admin, view, bloodPanel, todaysDoses] = await Promise.all([
+    isAdmin(),
     loadBodyComposition(),
     loadBloodPanel(),
     loadTodaysDoses(),
@@ -70,7 +72,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex min-h-screen items-start justify-center p-8">
       <div className="grid w-[1200px] max-w-full grid-cols-[220px_1fr] overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-canvas shadow-[0_24px_64px_rgba(0,0,0,0.08)]">
-        <Sidebar user={sidebarUser} />
+        <Sidebar user={sidebarUser} isAdmin={admin} />
         <main className="overflow-hidden px-7 pb-7 pt-[22px]">
           <TopBar />
 

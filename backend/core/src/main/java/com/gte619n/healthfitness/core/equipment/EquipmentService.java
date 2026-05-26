@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.core.equipment;
 
+import com.gte619n.healthfitness.core.location.Location;
+import com.gte619n.healthfitness.core.location.LocationRepository;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.stereotype.Service;
@@ -8,6 +10,7 @@ import org.springframework.stereotype.Service;
 public class EquipmentService {
 
     private final EquipmentRepository equipmentRepository;
+    private final LocationRepository locationRepository;
     private final Optional<EquipmentImageGenerator> imageGenerator;
 
     // Hardcoded category taxonomy from spec
@@ -23,9 +26,11 @@ public class EquipmentService {
 
     public EquipmentService(
         EquipmentRepository equipmentRepository,
+        LocationRepository locationRepository,
         Optional<EquipmentImageGenerator> imageGenerator
     ) {
         this.equipmentRepository = equipmentRepository;
+        this.locationRepository = locationRepository;
         this.imageGenerator = imageGenerator;
     }
 
@@ -81,7 +86,8 @@ public class EquipmentService {
             userId, // contributorId
             0, // exerciseCount starts at 0
             now,
-            now
+            now,
+            null // aliasOfEquipmentId
         );
 
         equipmentRepository.save(equipment);
@@ -146,7 +152,8 @@ public class EquipmentService {
             equipment.contributorId(),
             equipment.exerciseCount(),
             equipment.createdAt(),
-            Instant.now()
+            Instant.now(),
+            equipment.aliasOfEquipmentId()
         );
 
         equipmentRepository.save(approved);
@@ -174,7 +181,8 @@ public class EquipmentService {
             equipment.contributorId(),
             equipment.exerciseCount(),
             equipment.createdAt(),
-            Instant.now()
+            Instant.now(),
+            equipment.aliasOfEquipmentId()
         );
 
         equipmentRepository.save(rejected);
@@ -217,7 +225,8 @@ public class EquipmentService {
             equipment.contributorId(),
             equipment.exerciseCount(),
             equipment.createdAt(),
-            Instant.now()
+            Instant.now(),
+            equipment.aliasOfEquipmentId()
         );
 
         equipmentRepository.save(updated);
@@ -245,10 +254,101 @@ public class EquipmentService {
             equipment.contributorId(),
             equipment.exerciseCount(),
             equipment.createdAt(),
-            Instant.now()
+            Instant.now(),
+            equipment.aliasOfEquipmentId()
         );
 
         equipmentRepository.save(updated);
+    }
+
+    /**
+     * Merge {@code sourceId} into {@code targetId} — admin only.
+     *
+     * <p>Marks the source as an alias of the target and rewrites every
+     * Location.equipmentIds reference from source to target. Per-location
+     * specs keyed by source are migrated to be keyed by target (target
+     * wins on collisions). The source is also marked REJECTED so it is
+     * filtered out of pending lists.
+     *
+     * @throws IllegalArgumentException if either id is missing, source ==
+     *   target, the target is itself an alias, or either equipment doesn't
+     *   exist.
+     */
+    public Equipment mergeInto(String sourceId, String targetId) {
+        if (sourceId == null || targetId == null) {
+            throw new IllegalArgumentException("source and target equipment ids are required");
+        }
+        if (sourceId.equals(targetId)) {
+            throw new IllegalArgumentException("source and target must differ");
+        }
+        Equipment source = equipmentRepository.findById(sourceId)
+            .orElseThrow(() -> new IllegalArgumentException("Source equipment not found: " + sourceId));
+        Equipment target = equipmentRepository.findById(targetId)
+            .orElseThrow(() -> new IllegalArgumentException("Target equipment not found: " + targetId));
+        if (target.aliasOfEquipmentId() != null) {
+            throw new IllegalArgumentException("Target is itself an alias — cannot merge into an alias");
+        }
+        if (source.aliasOfEquipmentId() != null) {
+            throw new IllegalArgumentException("Source is already an alias");
+        }
+
+        // Rewrite every Location.equipmentIds reference from source -> target,
+        // migrating per-location specs from the source key to the target key.
+        List<Location> referencing = locationRepository.findAllReferencing(sourceId);
+        for (Location loc : referencing) {
+            List<String> ids = new ArrayList<>(loc.equipmentIds() == null ? List.of() : loc.equipmentIds());
+            ids.remove(sourceId);
+            if (!ids.contains(targetId)) {
+                ids.add(targetId);
+            }
+
+            Map<String, Map<String, Object>> specs = new HashMap<>(
+                loc.equipmentSpecs() == null ? Map.of() : loc.equipmentSpecs()
+            );
+            Map<String, Object> sourceSpecs = specs.remove(sourceId);
+            if (sourceSpecs != null && !specs.containsKey(targetId)) {
+                specs.put(targetId, sourceSpecs);
+            }
+
+            Location rewritten = new Location(
+                loc.userId(),
+                loc.locationId(),
+                loc.name(),
+                loc.address(),
+                loc.coverPhotoUrl(),
+                loc.is24Hours(),
+                loc.hours(),
+                loc.amenities(),
+                ids,
+                specs,
+                loc.isDefault(),
+                loc.isActive(),
+                loc.createdAt(),
+                Instant.now()
+            );
+            locationRepository.save(rewritten);
+        }
+
+        Equipment merged = new Equipment(
+            source.equipmentId(),
+            source.name(),
+            source.category(),
+            source.subcategory(),
+            source.specSchema(),
+            source.specs(),
+            source.imageUrl(),
+            source.imageStatus(),
+            source.ownerId(),
+            EquipmentStatus.REJECTED,
+            source.contributorId(),
+            source.exerciseCount(),
+            source.createdAt(),
+            Instant.now(),
+            targetId
+        );
+        equipmentRepository.save(merged);
+
+        return equipmentRepository.findById(targetId).orElse(target);
     }
 
     /**

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { TessetaMark } from "@/components/brand/TessetaMark";
 import { devices, navItems } from "@/lib/fixtures/dashboard";
 import { SidebarNavItem } from "@/components/dashboard/SidebarNavItem";
@@ -9,7 +10,7 @@ export type SidebarUser = {
   initials: string;
 };
 
-export function Sidebar({ user }: { user: SidebarUser }) {
+export function Sidebar({ user, isAdmin = false }: { user: SidebarUser; isAdmin?: boolean }) {
   return (
     <aside className="flex min-h-[880px] flex-col border-r-[0.5px] border-border-strong bg-canvas-muted px-3.5 py-[22px]">
       <div className="mb-2.5 flex items-center gap-[11px] border-b-[0.5px] border-border-strong px-1.5 pb-[18px]">
@@ -42,6 +43,15 @@ export function Sidebar({ user }: { user: SidebarUser }) {
       ))}
 
       <div className="mt-auto border-t-[0.5px] border-border-strong pt-3.5">
+        {isAdmin ? (
+          <Link
+            href={"/admin/equipment" as Route}
+            className="mb-0.5 flex w-full items-center gap-[11px] rounded-md bg-transparent px-[11px] py-[9px] text-left hover:bg-canvas-muted"
+          >
+            <i className="ti ti-shield-lock text-[16px] text-tertiary" aria-hidden />
+            <span className="text-[13px] font-normal text-secondary">Administration</span>
+          </Link>
+        ) : null}
         <Link
           href="/me/profile"
           className="mb-0.5 flex w-full items-center gap-[11px] rounded-md bg-transparent px-[11px] py-[9px] text-left hover:bg-canvas-muted"

@@ -1,19 +1,22 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import type { Equipment, SpecSchema, EquipmentCategory, EquipmentSpecs } from '@/lib/types/gym';
+import type { AdminEquipment, SpecSchema, EquipmentCategory, EquipmentSpecs } from '@/lib/types/gym';
 import { EQUIPMENT_CATEGORIES as CATEGORIES } from '@/lib/types/gym';
-import { updateEquipment } from '@/lib/gym-api';
 import { useToast } from '@/components/ui/Toast';
 
 interface EditEquipmentModalProps {
-  equipment: Equipment;
+  equipment: AdminEquipment;
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
+  update: (
+    equipmentId: string,
+    data: { name: string; category: string; subcategory: string; specSchema: SpecSchema; specs: EquipmentSpecs },
+  ) => Promise<void>;
 }
 
-export function EditEquipmentModal({ equipment, isOpen, onClose, onSave }: EditEquipmentModalProps) {
+export function EditEquipmentModal({ equipment, isOpen, onClose, onSave, update }: EditEquipmentModalProps) {
   const toast = useToast();
   const [isSaving, setIsSaving] = useState(false);
 
@@ -47,7 +50,7 @@ export function EditEquipmentModal({ equipment, isOpen, onClose, onSave }: EditE
 
     setIsSaving(true);
     try {
-      await updateEquipment(equipment.equipmentId, {
+      await update(equipment.equipmentId, {
         name: name.trim(),
         category,
         subcategory,

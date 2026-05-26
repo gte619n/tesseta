@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.location;
 
 import com.gte619n.healthfitness.api.location.CreateLocationRequest;
 import com.gte619n.healthfitness.api.location.LocationResponse;
+import com.gte619n.healthfitness.api.location.UpdateEquipmentSpecsRequest;
 import com.gte619n.healthfitness.api.location.UpdateLocationRequest;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.location.Location;
@@ -156,6 +157,20 @@ public class LocationController {
 
         // Service handles GCS upload and location update
         Location updated = service.setCoverPhoto(userId, locationId, bytes);
+        return LocationResponse.from(updated);
+    }
+
+    @PatchMapping("/{locationId}/equipment/{equipmentId}")
+    public LocationResponse updateEquipmentSpecs(
+        @PathVariable String locationId,
+        @PathVariable String equipmentId,
+        @RequestBody UpdateEquipmentSpecsRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        if (repository.findById(userId, locationId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        Location updated = service.updateEquipmentSpecs(userId, locationId, equipmentId, body.specs());
         return LocationResponse.from(updated);
     }
 

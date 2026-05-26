@@ -26,4 +26,18 @@ public interface EquipmentImageGenerator {
      * {@code imageStatus} have been updated in storage.
      */
     CompletableFuture<Void> generateImageAsync(Equipment equipment);
+
+    /**
+     * Same as above but uses {@code promptOverride} verbatim instead of
+     * building one from the equipment metadata. Pass {@code null} to fall
+     * back to the default prompt.
+     */
+    CompletableFuture<Void> generateImageAsync(Equipment equipment, String promptOverride);
+
+    /**
+     * Returns the default prompt this generator would produce for the
+     * given equipment. Used by admins to seed an editable prompt field
+     * before requesting a regeneration with overrides.
+     */
+    String defaultPrompt(Equipment equipment);
 }

@@ -86,7 +86,10 @@ public class EquipmentRepository implements com.gte619n.healthfitness.core.equip
             .limit(200)
             .get()).getDocuments();
 
-        List<Equipment> results = docs.stream().map(this::toEquipment).toList();
+        List<Equipment> results = docs.stream()
+            .map(this::toEquipment)
+            .filter(e -> e.aliasOfEquipmentId() == null)
+            .toList();
 
         // If search is provided, filter client-side (Firestore doesn't support full-text search)
         if (search != null && !search.isBlank()) {
@@ -115,7 +118,10 @@ public class EquipmentRepository implements com.gte619n.healthfitness.core.equip
             .orderBy("createdAt", Query.Direction.ASCENDING)
             .limit(100)
             .get()).getDocuments();
-        return docs.stream().map(this::toEquipment).toList();
+        return docs.stream()
+            .map(this::toEquipment)
+            .filter(e -> e.aliasOfEquipmentId() == null)
+            .toList();
     }
 
     @Override
@@ -149,6 +155,7 @@ public class EquipmentRepository implements com.gte619n.healthfitness.core.equip
         body.put("status", eq.status() == null ? EquipmentStatus.ACTIVE.name() : eq.status().name());
         body.put("contributorId", eq.contributorId());
         body.put("exerciseCount", eq.exerciseCount());
+        body.put("aliasOfEquipmentId", eq.aliasOfEquipmentId());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -177,7 +184,8 @@ public class EquipmentRepository implements com.gte619n.healthfitness.core.equip
             snapshot.getString("contributorId"),
             exerciseCountLong == null ? null : exerciseCountLong.intValue(),
             toInstant(snapshot.get("createdAt")),
-            toInstant(snapshot.get("updatedAt"))
+            toInstant(snapshot.get("updatedAt")),
+            snapshot.getString("aliasOfEquipmentId")
         );
     }
 

@@ -17,5 +17,9 @@ public record Equipment(
     String contributorId,
     Integer exerciseCount,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    // When non-null, this row is an alias of the equipmentId it points to.
+    // Aliases are hidden from catalog/pending listings; callers that
+    // navigate via id should resolve through this pointer.
+    String aliasOfEquipmentId
 ) {}

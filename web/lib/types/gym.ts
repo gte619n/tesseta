@@ -51,6 +51,23 @@ export type Equipment = {
   updatedAt: string;
 };
 
+// Admin-only view of equipment with contributor details + image status as
+// uppercase enum names from the backend wire format.
+export type AdminEquipment = {
+  equipmentId: string;
+  name: string;
+  category: string;
+  subcategory: string;
+  specSchema: SpecSchema;
+  specs: EquipmentSpecs;
+  imageUrl: string | null;
+  imageStatus: 'PENDING' | 'GENERATED' | 'FAILED' | null;
+  contributorId: string | null;
+  contributorEmail: string | null;
+  contributorDisplayName: string | null;
+  submittedAt: string;
+};
+
 export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
 export type HoursSlot = {
@@ -67,6 +84,9 @@ export type Location = {
   hours: Partial<Record<DayOfWeek, HoursSlot>> | null;
   amenities: string[];
   equipmentIds: string[];
+  // Per-location spec overrides, keyed by equipmentId. Empty record when
+  // a location uses catalog defaults for everything.
+  equipmentSpecs: Record<string, Record<string, unknown>>;
   isDefault: boolean;
   isActive: boolean;
   createdAt: string;

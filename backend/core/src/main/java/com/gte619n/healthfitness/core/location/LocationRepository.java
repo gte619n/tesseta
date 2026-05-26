@@ -9,4 +9,8 @@ public interface LocationRepository {
     void save(Location location);
     void delete(String userId, String locationId);
     void setDefault(String userId, String locationId);
+    // Cross-user scan returning every location (across all users) whose
+    // equipmentIds list contains the given equipmentId. Used by admin
+    // merge to rewrite alias references. Expected to be infrequent.
+    List<Location> findAllReferencing(String equipmentId);
 }

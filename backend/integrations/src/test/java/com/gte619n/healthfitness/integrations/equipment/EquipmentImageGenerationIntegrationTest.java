@@ -173,7 +173,8 @@ class EquipmentImageGenerationIntegrationTest {
             EquipmentStatus.ACTIVE,
             null,                       // contributorId
             0,                          // exerciseCount
-            now, now
+            now, now,
+            null                        // aliasOfEquipmentId
         );
     }
 }

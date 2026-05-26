@@ -11,7 +11,10 @@ public record PendingEquipmentResponse(
     String subcategory,
     SpecSchema specSchema,
     Map<String, Object> specs,
+    String imageUrl,
+    String imageStatus,
     String contributorId,
-    String contributorEmail,  // Lookup from user service or display as contributorId for now
+    String contributorEmail,
+    String contributorDisplayName,
     Instant submittedAt
 ) {}
