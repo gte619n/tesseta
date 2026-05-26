@@ -16,7 +16,7 @@ export function AdminSubNav() {
     <nav className="flex gap-1 -mb-px">
       {SECTIONS.map((s) => {
         const active =
-          s.href === '/admin' ? pathname === '/admin' : pathname?.startsWith(s.href as string);
+          (s.href as string) === '/admin' ? pathname === '/admin' : pathname?.startsWith(s.href as string);
         return (
           <Link
             key={s.href}
