@@ -40,6 +40,18 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Release signing is driven by env vars injected by Cloud Build via GCP Secret Manager.
+        // All four vars must be present for the config to be active; local builds that lack them
+        // produce an unsigned APK (same behaviour as before this block existed).
+        create("release") {
+            val keystorePath = System.getenv("ANDROID_RELEASE_KEYSTORE")
+            if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
+            }
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "upload"
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -52,6 +64,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            val releaseKeystorePath = System.getenv("ANDROID_RELEASE_KEYSTORE")
+            if (!releaseKeystorePath.isNullOrBlank() && file(releaseKeystorePath).exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

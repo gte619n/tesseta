@@ -1,0 +1,11 @@
+name: release-android-on-main
+description: Build signed Android release APK and distribute via Firebase App Distribution on merge to main.
+serviceAccount: projects/health-fitness-160/serviceAccounts/146599669983-compute@developer.gserviceaccount.com
+github:
+  owner: gte619n
+  name: health-fitness-160
+  push:
+    branch: ^main$
+filename: android/cloudbuild.yaml
+includedFiles:
+  - android/**

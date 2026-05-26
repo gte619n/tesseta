@@ -1,0 +1,68 @@
+steps:
+  # Pull release signing material + the WEB OAuth client ID (compiled into
+  # the APK via BuildConfig per android/app/build.gradle.kts).
+  - id: fetch-secrets
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        gcloud secrets versions access latest \
+          --secret=android-release-keystore --project=$PROJECT_ID \
+          > /workspace/release.keystore
+        gcloud secrets versions access latest \
+          --secret=android-release-keystore-password --project=$PROJECT_ID \
+          > /workspace/keystore.password
+        gcloud secrets versions access latest \
+          --secret=android-release-key-password --project=$PROJECT_ID \
+          > /workspace/key.password
+        gcloud secrets versions access latest \
+          --secret=oauth-web-client-id --project=$PROJECT_ID \
+          > /workspace/web-oauth-client-id
+
+  # TODO(infra): replace mobiledevops/android-sdk-image with a custom builder
+  # image baked once and pushed to this project's Artifact Registry. Pinning
+  # to a private mirror removes the Docker Hub supply-chain dependency.
+  - id: build-release-apk
+    name: mobiledevops/android-sdk-image:35-jdk-21.0.5
+    dir: android
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        export ANDROID_RELEASE_KEYSTORE=/workspace/release.keystore
+        export ANDROID_KEYSTORE_PASSWORD="$(cat /workspace/keystore.password)"
+        export ANDROID_KEY_ALIAS=upload
+        export ANDROID_KEY_PASSWORD="$(cat /workspace/key.password)"
+        export WEB_OAUTH_CLIENT_ID="$(cat /workspace/web-oauth-client-id)"
+        ./gradlew :app:assembleRelease --no-daemon
+
+  - id: distribute-firebase
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        FIREBASE_APP_ID="$(gcloud secrets versions access latest \
+          --secret=firebase-android-app-id --project=$PROJECT_ID)"
+        curl -sL https://firebase.tools | bash
+        firebase appdistribution:distribute \
+          android/app/build/outputs/apk/release/app-release.apk \
+          --app "$$FIREBASE_APP_ID" \
+          --groups "internal-testers" \
+          --release-notes "main @ $SHORT_SHA"
+
+artifacts:
+  objects:
+    location: gs://health-fitness-160-android-releases/$SHORT_SHA
+    paths:
+      - android/app/build/outputs/apk/release/app-release.apk
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1800s
