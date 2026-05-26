@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import type { Location, DayOfWeek, HoursSlot } from "@/lib/types/gym";
 import { HoursEditor } from "./HoursEditor";
 import { AmenitiesChecklist } from "./AmenitiesChecklist";
@@ -111,7 +112,7 @@ export function LocationForm({ initialData, onSubmit, cancelHref }: Props) {
       <div className="flex justify-end gap-2 pt-3">
         <button
           type="button"
-          onClick={() => router.push(cancelHref)}
+          onClick={() => router.push(cancelHref as Route)}
           className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
         >
           Cancel

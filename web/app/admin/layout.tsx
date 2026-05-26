@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Route } from 'next';
 import { requireAdmin } from '@/lib/admin';
 import { AdminSubNav } from '@/components/admin/AdminSubNav';
 
@@ -9,10 +10,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-screen bg-canvas">
       <header className="border-b border-border-default bg-surface">
         <div className="container mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <Link href="/admin" className="text-sm font-semibold text-primary">
+          <Link href={"/admin" as Route} className="text-sm font-semibold text-primary">
             Administration
           </Link>
-          <Link href="/" className="text-xs text-tertiary hover:text-secondary">
+          <Link href={"/" as Route} className="text-xs text-tertiary hover:text-secondary">
             ← Back to app
           </Link>
         </div>
