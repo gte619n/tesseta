@@ -86,9 +86,12 @@ data class Vital(
  *
  * Removed in IMPL-AND-01 (now live): `weightSeries`, `xAxisLabels`,
  * `bloodMarkers`, `bloodPanelDate`, `BloodMarker` data class. The weight
- * vital is now derived per-request from `WeightSummary` (see
- * `VitalFromWeight.weightVital`). The Weight `StatCard` on phone reads
- * that derived vital instead of `vitals[0]`.
+ * vital is now derived per-request from `BodyCompositionSnapshot` via
+ * `WeightHeroDisplay` (see `VitalFromWeight.weightVitalOrFallback`). The
+ * Weight `StatCard` on phone reads that derived vital instead of
+ * `vitals[0]`. Round 2 Stage C retired the dashboard-local
+ * `WeightSummary` shape; the canonical snapshot lives in
+ * `domain.bodycomposition`.
  */
 object DashboardFallbacks {
     // Header chrome — replaced by a real clock / locale aware formatter
@@ -104,9 +107,10 @@ object DashboardFallbacks {
 
     /**
      * Vitals row. The Weight card (index 0) is overridden at render time
-     * with a real value derived from `WeightSummary`. HRV / Resting HR /
-     * Readiness (indices 1-3) stay on fixtures until a Health Connect
-     * source ships — gated by [DashboardFlags.showVitalsFixtures].
+     * with a real value derived from `BodyCompositionSnapshot` via
+     * `WeightHeroDisplay`. HRV / Resting HR / Readiness (indices 1-3)
+     * stay on fixtures until a Health Connect source ships — gated by
+     * [DashboardFlags.showVitalsFixtures].
      */
     val vitals = listOf(
         Vital(

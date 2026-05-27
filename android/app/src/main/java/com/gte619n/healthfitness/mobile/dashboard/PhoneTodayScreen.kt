@@ -122,7 +122,7 @@ private fun PhoneHeader() {
 
 @Composable
 private fun PhoneVitalsGrid(
-    weightCardState: CardState<com.gte619n.healthfitness.domain.dashboard.WeightSummary?>,
+    weightCardState: CardState<com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot>,
 ) {
     // Weight card folds the body-composition card state into the existing
     // StatCard surface. Loading / Error render as the fallback Vital

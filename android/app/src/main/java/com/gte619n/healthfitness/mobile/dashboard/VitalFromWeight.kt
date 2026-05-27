@@ -1,22 +1,27 @@
 package com.gte619n.healthfitness.mobile.dashboard
 
-import com.gte619n.healthfitness.domain.dashboard.WeightSummary
+import com.gte619n.healthfitness.data.bodycomposition.WeightHeroDisplay
+import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Derives a phone-row weight [Vital] from a [WeightSummary]. Kept here
- * so PhoneTodayScreen doesn't carry conversion logic of its own — both
- * screens reach for the same derived value.
+ * Derives a phone-row weight [Vital] from a [BodyCompositionSnapshot].
+ * Kept here so PhoneTodayScreen doesn't carry conversion logic of its
+ * own — both Phone and Foldable vitals rows reach for the same derived
+ * value.
  *
- * Mirrors web's `weightVital` computation in `loadBodyComposition`.
+ * Mirrors web's `weightVital` computation in `loadBodyComposition`. The
+ * lb conversion, downsampling, and padded y-bounds come from
+ * [WeightHeroDisplay] so the hero card and the vitals row stay in lockstep.
  */
 internal object VitalFromWeight {
 
-    fun weightVitalOrFallback(summary: WeightSummary?): Vital {
-        if (summary == null) return DashboardFallbacks.vitals[0]
-        val sparkline = sparklineFor(summary.series)
-        val delta = summary.sevenDayDeltaLb?.let { d ->
+    fun weightVitalOrFallback(snapshot: BodyCompositionSnapshot?): Vital {
+        if (snapshot == null) return DashboardFallbacks.vitals[0]
+        val display = WeightHeroDisplay.from(snapshot) ?: return DashboardFallbacks.vitals[0]
+        val sparkline = sparklineFor(display.series)
+        val delta = display.sevenDayDeltaLb?.let { d ->
             VitalDelta(
                 direction = if (d < 0) ArrowDir.Down else ArrowDir.Up,
                 value = String.format(Locale.US, "%.1f", abs(d)),
@@ -31,7 +36,7 @@ internal object VitalFromWeight {
         return Vital(
             label = "Weight",
             icon = DashboardIcons.Scale,
-            value = String.format(Locale.US, "%.1f", summary.latestLb),
+            value = String.format(Locale.US, "%.1f", display.latestLb),
             unit = "lb",
             delta = delta,
             sparkline = sparkline,

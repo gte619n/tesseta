@@ -1,23 +1,26 @@
 package com.gte619n.healthfitness.mobile.dashboard.viewmodel
 
+import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
 import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
-import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 
 /**
  * Aggregate dashboard state — three independent per-card sub-states.
  * The Compose layer reads this and switches on each card individually.
  *
- *  - [bodyComposition] is `Loaded(null)` when the user has no body-comp
- *    data at all (server returned an empty list). The hero card shows
- *    a "Connect Google Health" CTA in that case — wired in IMPL-AND-02.
+ *  - [bodyComposition] carries the canonical [BodyCompositionSnapshot]
+ *    (Round 2 Stage C consolidation — was `WeightSummary?` before). The
+ *    hero composable builds a lb-shaped `WeightHeroDisplay` from the
+ *    snapshot at render time. A snapshot with no weight reading still
+ *    transitions to `Loaded`; the hero shows its empty state in that
+ *    case (the "Connect Google Health" CTA lands in IMPL-AND-02).
  *  - [blood] is `Loaded(emptyList())` when no dashboard markers have
  *    readings. The panel hides itself.
  *  - [todaysDoses] is `Loaded(emptyList())` when nothing is scheduled
  *    today. The today card renders "No scheduled doses today".
  */
 data class DashboardUiState(
-    val bodyComposition: CardState<WeightSummary?>,
+    val bodyComposition: CardState<BodyCompositionSnapshot>,
     val blood: CardState<List<BloodMarkerSummary>>,
     val todaysDoses: CardState<List<TodaysDoseSummary>>,
 ) {

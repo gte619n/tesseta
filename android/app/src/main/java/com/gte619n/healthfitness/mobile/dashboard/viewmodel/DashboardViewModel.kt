@@ -2,8 +2,8 @@ package com.gte619n.healthfitness.mobile.dashboard.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionRepository
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummaryRepository
-import com.gte619n.healthfitness.domain.dashboard.BodyCompositionRepository
 import com.gte619n.healthfitness.domain.dashboard.TodaysDosesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -20,10 +20,17 @@ import javax.inject.Inject
  * Per-card error handling: any throwable in a repo call transitions
  * only that card into `Error`; the others keep whatever they had.
  *
- * Refresh: `init` fires the initial parallel load. `refresh()` re-fires
- * all three independently from `Lifecycle.Event.ON_RESUME` in the
- * screens. Per-card retry callbacks live on the VM so a flaky Blood
- * fetch doesn't force the user to refresh the entire dashboard.
+ * Refresh: `init` subscribes to the body-composition snapshot Flow and
+ * fires the initial parallel load. `refresh()` re-fires all three
+ * independently from `Lifecycle.Event.ON_RESUME` in the screens.
+ * Per-card retry callbacks live on the VM so a flaky Blood fetch
+ * doesn't force the user to refresh the entire dashboard.
+ *
+ * Round 2 Stage C: body composition now consumes the canonical
+ * `domain.bodycomposition.BodyCompositionRepository` (snapshot Flow),
+ * not the retired `domain.dashboard.BodyCompositionRepository` (one-shot
+ * `loadRecent()`). The hero composable builds a `WeightHeroDisplay`
+ * from the snapshot at render time.
  */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
@@ -36,6 +43,13 @@ class DashboardViewModel @Inject constructor(
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
     init {
+        // Subscribe to the snapshot Flow once — every refresh re-emits
+        // through the same hot flow so we don't need to re-subscribe.
+        viewModelScope.launch {
+            bodyComp.observeSnapshot().collect { snapshot ->
+                _uiState.update { it.copy(bodyComposition = CardState.Loaded(snapshot)) }
+            }
+        }
         refresh()
     }
 
@@ -52,10 +66,7 @@ class DashboardViewModel @Inject constructor(
 
     private fun loadBodyComposition(): Job = viewModelScope.launch {
         _uiState.update { it.copy(bodyComposition = CardState.Loading) }
-        runCatching { bodyComp.loadRecent() }
-            .onSuccess { data ->
-                _uiState.update { it.copy(bodyComposition = CardState.Loaded(data)) }
-            }
+        runCatching { bodyComp.refresh() }
             .onFailure { cause ->
                 _uiState.update {
                     it.copy(
@@ -66,6 +77,8 @@ class DashboardViewModel @Inject constructor(
                     )
                 }
             }
+        // Success path emits via the snapshot flow → the init-time
+        // collector flips the card to Loaded.
     }
 
     private fun loadBlood(): Job = viewModelScope.launch {

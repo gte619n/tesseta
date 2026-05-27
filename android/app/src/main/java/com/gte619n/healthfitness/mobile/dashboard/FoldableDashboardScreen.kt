@@ -33,8 +33,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.data.bodycomposition.WeightHeroDisplay
+import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
-import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.mobile.dashboard.viewmodel.CardState
 import com.gte619n.healthfitness.mobile.dashboard.viewmodel.CardSwitch
 import com.gte619n.healthfitness.mobile.dashboard.viewmodel.DashboardViewModel
@@ -77,7 +78,7 @@ fun FoldableDashboardScreen(
                     state = ui.bodyComposition,
                     placeholderHeightDp = 220,
                     onRetry = viewModel::retryBodyComposition,
-                ) { summary -> BodyCompositionHero(summary = summary) }
+                ) { snapshot -> BodyCompositionHero(snapshot = snapshot) }
                 Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -270,7 +271,7 @@ private fun FoldableTopBar() {
 
 @Composable
 private fun FoldableVitalsRow(
-    weightCardState: CardState<WeightSummary?>,
+    weightCardState: CardState<BodyCompositionSnapshot>,
 ) {
     val weight = when (weightCardState) {
         is CardState.Loaded -> VitalFromWeight.weightVitalOrFallback(weightCardState.data)
@@ -294,7 +295,8 @@ private fun FoldableVitalsRow(
 }
 
 @Composable
-fun BodyCompositionHero(summary: WeightSummary?) {
+fun BodyCompositionHero(snapshot: BodyCompositionSnapshot) {
+    val display = WeightHeroDisplay.from(snapshot)
     HfCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(
@@ -305,7 +307,7 @@ fun BodyCompositionHero(summary: WeightSummary?) {
                 Column {
                     SectionTitle("Body composition")
                     Spacer(Modifier.height(10.dp))
-                    if (summary == null) {
+                    if (display == null) {
                         Text(
                             text = "No body-comp data yet",
                             style = Hf.type.bodySm.copy(fontSize = 12.sp),
@@ -317,9 +319,9 @@ fun BodyCompositionHero(summary: WeightSummary?) {
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             HeroNumeric(
-                                primary = String.format(Locale.US, "%.1f", summary.latestLb),
+                                primary = String.format(Locale.US, "%.1f", display.latestLb),
                                 unit = "lb",
-                                delta = summary.ninetyDayDeltaLb?.let { formatDelta(it, "90d") },
+                                delta = display.ninetyDayDeltaLb?.let { formatDelta(it, "90d") },
                                 primarySizeSp = 30,
                                 unitSizeSp = 12,
                             )
@@ -330,7 +332,7 @@ fun BodyCompositionHero(summary: WeightSummary?) {
                                     .background(Hf.colors.borderDefault),
                             )
                             HeroNumeric(
-                                primary = summary.latestBodyFatPct?.let {
+                                primary = display.latestBodyFatPct?.let {
                                     String.format(Locale.US, "%.1f", it)
                                 } ?: "—",
                                 unit = "% fat",
@@ -339,7 +341,7 @@ fun BodyCompositionHero(summary: WeightSummary?) {
                                 unitSizeSp = 10,
                             )
                             HeroNumeric(
-                                primary = summary.latestLeanMassLb?.let {
+                                primary = display.latestLeanMassLb?.let {
                                     String.format(Locale.US, "%.1f", it)
                                 } ?: "—",
                                 unit = "lean",
@@ -353,11 +355,11 @@ fun BodyCompositionHero(summary: WeightSummary?) {
                 Segment(active = "90d")
             }
             Spacer(Modifier.height(11.dp))
-            if (summary != null) {
+            if (display != null) {
                 WeightChart(
-                    series = summary.series.map { it.toFloat() },
-                    yMin = summary.yMin.toFloat(),
-                    yMax = summary.yMax.toFloat(),
+                    series = display.series.map { it.toFloat() },
+                    yMin = display.yMin.toFloat(),
+                    yMax = display.yMax.toFloat(),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
