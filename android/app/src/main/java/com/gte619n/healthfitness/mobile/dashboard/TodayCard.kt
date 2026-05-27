@@ -25,24 +25,24 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.gte619n.healthfitness.domain.dashboard.DoseWindow
-import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
-import java.util.Locale
 
 /**
  * Today summary card. IMPL-AND-01 keeps the calories/macros/workout
- * sections on fixtures (gated by `DashboardFlags.showTodayCardFixtures`)
- * and adds a [dosesPreview] row below the workout meta showing up to 3
- * scheduled doses for the current day. Interactivity (take / skip) is
- * deferred to IMPL-AND-03.
+ * sections on fixtures (gated by `DashboardFlags.showTodayCardFixtures`).
+ *
+ * IMPL-AND-03: the doses-preview row has been replaced with an
+ * interactive [TodaysDosesSection] backed by [TodaysDosesViewModel],
+ * which reads from the medications repository and supports optimistic
+ * dose logging with revert-on-failure via the app-wide
+ * `SnackbarController`.
  */
 @Composable
 fun TodayCard(
     modifier: Modifier = Modifier,
     showHrInMeta: Boolean = false,
-    dosesPreview: List<TodaysDoseSummary> = emptyList(),
+    onSeeAllDoses: () -> Unit = {},
 ) {
     HfCard(modifier = modifier) {
         Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
@@ -131,83 +131,9 @@ fun TodayCard(
             Spacer(Modifier.height(11.dp))
             HRule()
             Spacer(Modifier.height(11.dp))
-            DosesPreview(doses = dosesPreview)
+            TodaysDosesSection(onSeeAll = onSeeAllDoses)
         }
     }
-}
-
-@Composable
-private fun DosesPreview(doses: List<TodaysDoseSummary>) {
-    Text(
-        text = "DOSES TODAY",
-        style = Hf.type.capsSm,
-        color = Hf.colors.textTertiary,
-    )
-    Spacer(Modifier.height(7.dp))
-    if (doses.isEmpty()) {
-        Text(
-            text = "No scheduled doses today",
-            style = Hf.type.bodySm.copy(fontSize = 11.sp),
-            color = Hf.colors.textTertiary,
-        )
-    } else {
-        doses.take(3).forEachIndexed { i, dose ->
-            DoseRow(dose)
-            if (i != doses.take(3).size - 1) Spacer(Modifier.height(7.dp))
-        }
-    }
-}
-
-@Composable
-private fun DoseRow(dose: TodaysDoseSummary) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Tone dot left of the row. Filled = taken, hollow = pending.
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(
-                    if (dose.taken) Hf.colors.good else Hf.colors.borderStrong,
-                    RoundedCornerShape(50),
-                ),
-        )
-        Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = dose.drugName,
-                style = Hf.type.bodyMd.copy(fontSize = 12.sp),
-                color = Hf.colors.textPrimary,
-            )
-            Text(
-                text = formatDose(dose),
-                style = Hf.type.monoSm,
-                color = Hf.colors.textTertiary,
-            )
-        }
-        Text(
-            text = windowLabel(dose.window),
-            style = Hf.type.capsSm,
-            color = Hf.colors.textTertiary,
-        )
-    }
-}
-
-private fun formatDose(dose: TodaysDoseSummary): String {
-    val doseStr = if (dose.dose % 1.0 == 0.0) {
-        dose.dose.toInt().toString()
-    } else {
-        String.format(Locale.US, "%.2f", dose.dose).trimEnd('0').trimEnd('.')
-    }
-    return if (dose.unit != null) "$doseStr ${dose.unit}" else doseStr
-}
-
-private fun windowLabel(window: DoseWindow): String = when (window) {
-    DoseWindow.MORNING -> "AM"
-    DoseWindow.AFTERNOON -> "NOON"
-    DoseWindow.EVENING -> "PM"
-    DoseWindow.BEDTIME -> "BED"
 }
 
 @Composable

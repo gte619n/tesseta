@@ -34,7 +34,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
-import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.mobile.dashboard.viewmodel.CardState
 import com.gte619n.healthfitness.mobile.dashboard.viewmodel.CardSwitch
@@ -47,7 +46,10 @@ import java.util.Locale
 import kotlin.math.abs
 
 @Composable
-fun FoldableDashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun FoldableDashboardScreen(
+    onSeeAllDoses: () -> Unit = {},
+    viewModel: DashboardViewModel = hiltViewModel(),
+) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
@@ -93,12 +95,10 @@ fun FoldableDashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    val doses: List<TodaysDoseSummary> =
-                        (ui.todaysDoses as? CardState.Loaded)?.data ?: emptyList()
                     TodayCard(
                         modifier = Modifier.weight(1f),
                         showHrInMeta = false,
-                        dosesPreview = doses,
+                        onSeeAllDoses = onSeeAllDoses,
                     )
                 }
                 if (DashboardFlags.showRecentFeedFixtures) {

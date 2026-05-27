@@ -5,6 +5,10 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.gte619n.healthfitness.feature.medical.add.AddMedicationScreen
+import com.gte619n.healthfitness.feature.medical.detail.MedicationDetailScreen
+import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
+import com.gte619n.healthfitness.feature.medical.nav.MedicationDetailRoute
 import com.gte619n.healthfitness.feature.settings.SettingsScreen
 import com.gte619n.healthfitness.feature.settings.profile.ProfileScreen
 import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
@@ -33,12 +37,32 @@ fun AppNavHost(
         modifier = modifier,
     ) {
         composable<Route.Today> {
-            PhoneTodayScreen()
+            PhoneTodayScreen(
+                onSeeAllDoses = { navController.navigate(Route.Medications) },
+            )
         }
         composable<Route.Body> { PlaceholderScreen("Body", nextImpl = "IMPL-AND-05") }
         composable<Route.Blood> { PlaceholderScreen("Blood", nextImpl = "IMPL-AND-04") }
         composable<Route.Workouts> { PlaceholderScreen("Workouts", nextImpl = "IMPL-AND-06") }
-        composable<Route.Medications> { PlaceholderScreen("Medications", nextImpl = "IMPL-AND-03") }
+
+        // IMPL-AND-03: feature-medical replaces the placeholder.
+        composable<Route.Medications> {
+            MedicationsListScreen(
+                onAdd = { navController.navigate(Route.AddMedication) },
+                onMedicationClick = { id ->
+                    navController.navigate(MedicationDetailRoute(id))
+                },
+            )
+        }
+        composable<Route.AddMedication> {
+            AddMedicationScreen(
+                onDone = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<MedicationDetailRoute> {
+            MedicationDetailScreen(onBack = { navController.popBackStack() })
+        }
 
         composable<Route.Settings> {
             SettingsScreen(
@@ -53,7 +77,6 @@ fun AppNavHost(
 
         composable<Route.DexaDetail> { PlaceholderScreen("DEXA detail", nextImpl = "IMPL-AND-05") }
         composable<Route.BloodReportDetail> { PlaceholderScreen("Blood report", nextImpl = "IMPL-AND-04") }
-        composable<Route.MedicationDetail> { PlaceholderScreen("Medication", nextImpl = "IMPL-AND-03") }
         composable<Route.GymDetail> { PlaceholderScreen("Gym", nextImpl = "IMPL-AND-06") }
     }
 }

@@ -31,6 +31,9 @@ sealed interface Route {
     data object Medications : Route
 
     @Serializable
+    data object AddMedication : Route
+
+    @Serializable
     data object Settings : Route
 
     // IMPL-AND-02: profile is a sub-screen of Settings (back stack:
@@ -49,8 +52,10 @@ sealed interface Route {
     @Serializable
     data class BloodReportDetail(val reportId: String) : Route
 
-    @Serializable
-    data class MedicationDetail(val medicationId: String) : Route
+    // IMPL-AND-03: MedicationDetail moved to the feature module —
+    // see `com.gte619n.healthfitness.feature.medical.nav.MedicationDetailRoute`.
+    // Registered into the same NavHost; the SavedStateHandle round-trip
+    // happens against the feature-owned route class.
 
     @Serializable
     data class GymDetail(val gymId: String) : Route

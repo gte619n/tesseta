@@ -34,13 +34,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.mobile.dashboard.viewmodel.CardState
-import com.gte619n.healthfitness.mobile.dashboard.viewmodel.CardSwitch
 import com.gte619n.healthfitness.mobile.dashboard.viewmodel.DashboardViewModel
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
-fun PhoneTodayScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun PhoneTodayScreen(
+    onSeeAllDoses: () -> Unit = {},
+    viewModel: DashboardViewModel = hiltViewModel(),
+) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     // Resume-only refresh per spec — pull-to-refresh deferred.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
@@ -70,7 +72,7 @@ fun PhoneTodayScreen(viewModel: DashboardViewModel = hiltViewModel()) {
             TodayCard(
                 modifier = Modifier.fillMaxWidth(),
                 showHrInMeta = false,
-                dosesPreview = (ui.todaysDoses as? CardState.Loaded)?.data ?: emptyList(),
+                onSeeAllDoses = onSeeAllDoses,
             )
             Spacer(Modifier.height(11.dp))
             QuickLogTiles()
