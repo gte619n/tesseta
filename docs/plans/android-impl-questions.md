@@ -505,7 +505,109 @@ in a future stage if no caller references it.
 
 ## Stage 05 — Body composition & DEXA
 
-(no questions yet)
+### Note — `WeightChart` xLabels parameter dropped during promotion
+
+**Status:** informational.
+
+The old `WeightChart` in `app/.../dashboard/` accepted an
+`xLabels: List<ChartXLabel>` argument that was never rendered (the
+foldable hero draws the date strip above the chart, not inside it).
+The spec's promotion target is `core-ui`, which doesn't depend on
+`core-domain`, so keeping the parameter would have either forced a
+new module dep or required defining a parallel `ChartXLabel` in
+`core-ui`. Both moves felt heavier than warranted given the value
+was unused — so the IMPL drops the parameter, and the dashboard
+caller no longer threads `summary.xLabels` through. The
+`BodyCompositionMapper.buildXLabels` helper still runs and the
+result is still in `WeightSummary.xLabels` for any future caller
+that wants to render labels above/below the chart.
+
+### Note — body-composition domain types live alongside (not replacing) the dashboard's
+
+**Status:** open — please advise.
+
+The spec calls for the dashboard hero to consume the new
+`BodyCompositionRepository.observeSnapshot()` directly, with
+`WeightSummary` retired in favour of `BodyCompositionSnapshot`. The
+IMPL added the new canonical types under
+`com.gte619n.healthfitness.domain.bodycomposition.*` and the
+feature module is wired against them, but the dashboard's IMPL-AND-01
+plumbing (`WeightSummary` + `BodyMetric` + `BodyCompositionPoint` in
+`domain.dashboard`, plus its own `BodyCompositionMapper` +
+`BodyCompositionRepositoryImpl` in `core-data/dashboard/`) is
+**still in place** and the hero still reads from it. Reasons:
+
+  - The dashboard mapper has a tested downsampler + xLabel builder +
+    derived-lean-mass path that would need re-implementing on the
+    new snapshot shape.
+  - Switching the hero ViewModel mid-stage felt like high churn for
+    no observable behaviour change — both code paths produce the
+    same numbers from the same backend response.
+
+If you want a single source of truth here, point me at the preferred
+direction:
+
+  - Keep new types as the canonical home (replace dashboard's), or
+  - Drop the new `BodyCompositionSnapshot` shape and route the
+    feature module through the existing `WeightSummary` instead.
+
+The two-implementations state can stay through IMPL-AND-06 without
+hurting anything else.
+
+### Note — FileProvider `cache-path` for DEXA PDFs added
+
+**Status:** informational.
+
+`res/xml/file_paths.xml` previously only declared the `blood/` cache
+path. IMPL-AND-05 adds a parallel `dexa_cache → dexa/` entry so the
+DEXA detail's "View PDF" action can hand a granted-readable URI to
+the system PDF viewer over the same `${applicationId}.fileprovider`
+authority. No manifest change needed.
+
+### Note — `EditableNumberCell` is a thin wrapper for now
+
+**Status:** informational.
+
+The spec calls for `EditableNumberCell` to "wrap `core-ui`'s
+`EditableNumber` with PATCH + revert + snackbar wiring". The
+PATCH/revert/snackbar logic actually lives one layer up in
+`DexaScanDetailViewModel.patchField` (optimistic update,
+`runCatching { repo.patchField(...) }`, revert + transient message
+on failure), which the screen surfaces through
+`LocalSnackbarController`. The cell composable itself stays a thin
+pass-through to `EditableNumber` so the same wiring works for any
+future numeric cell — bone density, RMR, etc. Spinner / inline
+error state can land on the wrapper later without touching the
+ViewModel API.
+
+### Note — Dashboard body-composition hero unchanged
+
+**Status:** informational.
+
+The hero card on the foldable dashboard still uses the IMPL-AND-01
+`WeightSummary` path. It was already wired to a real repository
+(not fixtures) so there's no behaviour gap. The `WeightChart`
+composable itself moved to `core-ui` and the hero imports the new
+location, but the data feed didn't switch over. See the
+"body-composition domain types live alongside" note above for the
+consolidation decision needed.
+
+### Note — no Paparazzi / Compose UI snapshot tests landed
+
+**Status:** open — please advise.
+
+The spec lists `DexaRegionGridTest` and `EditableNumberCellTest`
+as desired tests. Both need either Paparazzi (snapshot bitmaps) or
+a full Compose UI test harness, neither of which IMPL-AND-00 wired.
+Skipped for this stage — the behavioural surface is covered by:
+
+  - `BodyCompositionSnapshotTest` (snapshot math)
+  - `UploadDexaViewModelTest` (phase ladder + size-limit + terminals)
+  - `WithFieldPatchedTest` (optimistic-fold path strings)
+
+Point at the framework you want (Paparazzi / Roborazzi / plain
+Compose UI test bitmaps) and the visual tests can land in
+IMPL-AND-08 alongside any other deferred snapshot coverage.
 
 ---
 
