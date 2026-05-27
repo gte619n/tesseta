@@ -5,6 +5,10 @@ import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.equipment.EquipmentStatus;
 import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
+import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
+import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
+import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregate;
+import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregateRepository;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -69,6 +73,24 @@ public class TestPersistenceConfig {
             }
             return matches;
         }
+    }
+
+    @Bean
+    NutritionDailyLogRepository nutritionDailyLogRepository() {
+        return new NutritionDailyLogRepository() {
+            @Override public Optional<NutritionDailyLog> findByDate(String userId, java.time.LocalDate date) { return Optional.empty(); }
+            @Override public List<NutritionDailyLog> findByDateRange(String userId, java.time.LocalDate from, java.time.LocalDate to) { return List.of(); }
+            @Override public void save(NutritionDailyLog log) {}
+        };
+    }
+
+    @Bean
+    WeeklyWorkoutAggregateRepository weeklyWorkoutAggregateRepository() {
+        return new WeeklyWorkoutAggregateRepository() {
+            @Override public Optional<WeeklyWorkoutAggregate> findByWeekStart(String userId, java.time.LocalDate weekStart) { return Optional.empty(); }
+            @Override public List<WeeklyWorkoutAggregate> findByDateRange(String userId, java.time.LocalDate from, java.time.LocalDate to) { return List.of(); }
+            @Override public void save(WeeklyWorkoutAggregate aggregate) {}
+        };
     }
 
     static class InMemoryEquipmentRepository implements EquipmentRepository {

@@ -9,6 +9,8 @@ public record DailyMetric(
     Integer steps,
     Integer restingHeartRate,
     Integer sleepMinutes,
+    Integer hrvMs,
+    Integer sleepScore,
     Instant createdAt,
     Instant updatedAt
 ) {}

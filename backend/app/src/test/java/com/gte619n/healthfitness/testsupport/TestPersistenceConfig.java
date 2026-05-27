@@ -12,6 +12,10 @@ import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
 import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.StepRepository;
+import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
+import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregateRepository;
+import com.gte619n.healthfitness.testsupport.nutrition.InMemoryNutritionDailyLogRepository;
+import com.gte619n.healthfitness.testsupport.workoutaggregate.InMemoryWeeklyWorkoutAggregateRepository;
 import com.gte619n.healthfitness.core.location.LocationRepository;
 import com.gte619n.healthfitness.core.medication.AdherenceLog;
 import com.gte619n.healthfitness.core.medication.AdherenceRepository;
@@ -77,6 +81,16 @@ public class TestPersistenceConfig {
     @Bean
     StepRepository stepRepository() {
         return new InMemoryStepRepository();
+    }
+
+    @Bean
+    NutritionDailyLogRepository nutritionDailyLogRepository() {
+        return new InMemoryNutritionDailyLogRepository();
+    }
+
+    @Bean
+    WeeklyWorkoutAggregateRepository weeklyWorkoutAggregateRepository() {
+        return new InMemoryWeeklyWorkoutAggregateRepository();
     }
 
     // ---- empty no-op stubs to satisfy app context wiring ----
