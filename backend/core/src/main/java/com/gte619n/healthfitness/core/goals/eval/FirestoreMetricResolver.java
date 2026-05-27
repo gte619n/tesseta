@@ -16,7 +16,6 @@ import com.gte619n.healthfitness.core.metric.DailyMetric;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
-import com.gte619n.healthfitness.core.workout.Workout;
 import com.gte619n.healthfitness.core.workout.WorkoutRepository;
 import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregate;
 import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregateRepository;
