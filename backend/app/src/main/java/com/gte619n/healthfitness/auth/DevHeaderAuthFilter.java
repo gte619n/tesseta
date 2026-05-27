@@ -26,7 +26,11 @@ public class DevHeaderAuthFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String userId = request.getHeader(HEADER);
         if (userId != null && !userId.isBlank()) {
-            CurrentUser cu = new CurrentUser(userId, null, null);
+            // Mirror the userId into the email slot so admin checks (which key
+            // on email, since prod Google JWTs always carry one) work in
+            // dev/test mode — callers can pass an admin email as X-Dev-User
+            // and have it satisfy AdminCheckAspect's allow-list.
+            CurrentUser cu = new CurrentUser(userId, userId, null);
             PreAuthenticatedAuthenticationToken token = new PreAuthenticatedAuthenticationToken(
                 cu, "n/a", List.of(new SimpleGrantedAuthority("ROLE_USER"))
             );
