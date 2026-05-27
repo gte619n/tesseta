@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -40,6 +42,32 @@ android {
         }
     }
 
+    // IMPL-AND-00: same flavor scaffolding as phone. Wear doesn't make
+    // network calls yet (no core-network dependency), but BACKEND_BASE_URL
+    // is wired into BuildConfig so the wear-side network module can drop in
+    // later (IMPL-AND-08) without a Gradle re-shuffle.
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            buildConfigField("String", "BACKEND_BASE_URL", "\"http://10.0.2.2:8080/\"")
+        }
+        create("staging") {
+            dimension = "env"
+            applicationIdSuffix = ".staging"
+            val url = (project.findProperty("BACKEND_URL_STAGING") as String?)
+                ?: "https://hf-backend-staging-XXXX.us-central1.run.app/"
+            buildConfigField("String", "BACKEND_BASE_URL", "\"$url\"")
+        }
+        create("prod") {
+            dimension = "env"
+            val url = (project.findProperty("BACKEND_URL_PROD") as String?)
+                ?: "https://hf-backend-XXXX.us-central1.run.app/"
+            buildConfigField("String", "BACKEND_BASE_URL", "\"$url\"")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -49,6 +77,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -66,6 +95,11 @@ dependencies {
     // Tiles + complications wired through but inert; surfaces added in IMPL-XX.
     implementation(libs.wear.tiles)
     implementation(libs.wear.complications)
+
+    // IMPL-AND-00: wear-side Hilt graph. Separate from phone's — no shared
+    // singletons. Tokens cross the gap via the Wearable Data Layer.
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     // IMPL-02: phone-to-wear token relay over the Wearable Data Layer plus a
     // DataStore-backed cache mirroring the phone-side IdTokenCache.

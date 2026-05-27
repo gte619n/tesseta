@@ -13,46 +13,40 @@ import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import com.gte619n.healthfitness.data.auth.AuthState
-import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
-import com.gte619n.healthfitness.data.auth.IdTokenCache
-import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
+import com.gte619n.healthfitness.mobile.auth.AuthUiState
+import com.gte619n.healthfitness.mobile.auth.AuthViewModel
 import com.gte619n.healthfitness.mobile.auth.SignInScreen
-import com.gte619n.healthfitness.mobile.dashboard.FoldableDashboardScreen
-import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
-import com.gte619n.healthfitness.mobile.wear.PhoneTokenPublisher
+import com.gte619n.healthfitness.mobile.auth.toLegacyAuthState
+import com.gte619n.healthfitness.mobile.navigation.SignedInScaffold
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
+import com.gte619n.healthfitness.ui.snackbar.ProvideSnackbarController
 import com.gte619n.healthfitness.ui.theme.Hf
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
+/**
+ * Phone entry point. Hilt now owns the auth + token-publish bindings, so
+ * the activity body shrinks to: fold-state observation, theme +
+ * window-size-class, and the root composable. Routing decisions live in
+ * [SignedInScaffold] + [AppNavHost] rather than an `if (state is
+ * SignedIn)` block here.
+ */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    private lateinit var authCoordinator: AuthCoordinator
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         observeFoldState()
-
-        val cache = IdTokenCache(applicationContext)
-        val publisher = PhoneTokenPublisher(applicationContext)
-        val repo = GoogleAuthRepository(
-            context = this,
-            cache = cache,
-            webOauthClientId = BuildConfig.WEB_OAUTH_CLIENT_ID,
-            onTokenIssued = { token, _ -> publisher.publish(token) },
-        )
-        authCoordinator = AuthCoordinator(repo, cache)
-
-        lifecycleScope.launch { authCoordinator.bootstrap() }
 
         setContent {
             HealthFitnessTheme {
@@ -61,10 +55,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Hf.colors.canvas,
                 ) {
-                    AppRoot(
-                        coordinator = authCoordinator,
-                        widthClass = windowSize.widthSizeClass,
-                    )
+                    ProvideSnackbarController {
+                        AppRoot(widthClass = windowSize.widthSizeClass)
+                    }
                 }
             }
         }
@@ -99,29 +92,15 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppRoot(
-    coordinator: AuthCoordinator,
-    widthClass: WindowWidthSizeClass,
-) {
-    val state by coordinator.state.collectAsState()
-    val scope = rememberCoroutineScope()
-
+private fun AppRoot(widthClass: WindowWidthSizeClass) {
+    val authViewModel: AuthViewModel = hiltViewModel()
+    val state by authViewModel.uiState.collectAsState()
     when (state) {
-        is AuthState.SignedIn -> DashboardRoot(widthClass)
-        AuthState.Loading -> SignInScreen(state = state, onSignIn = {})
+        is AuthUiState.SignedIn -> SignedInScaffold(widthClass = widthClass)
+        AuthUiState.Loading -> SignInScreen(state = AuthState.Loading, onSignIn = {})
         else -> SignInScreen(
-            state = state,
-            onSignIn = { scope.launch { coordinator.interactiveSignIn() } },
+            state = state.toLegacyAuthState(),
+            onSignIn = { authViewModel.interactiveSignIn() },
         )
-    }
-}
-
-@Composable
-fun DashboardRoot(widthClass: WindowWidthSizeClass) {
-    // Compact (< 600 dp) → phone Today screen.
-    // Medium / Expanded (≥ 600 dp) → foldable/tablet dashboard with icon-only sidebar.
-    when (widthClass) {
-        WindowWidthSizeClass.Compact -> PhoneTodayScreen()
-        else -> FoldableDashboardScreen()
     }
 }

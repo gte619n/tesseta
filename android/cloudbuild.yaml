@@ -43,7 +43,10 @@ steps:
         export ANDROID_KEY_ALIAS=upload
         export ANDROID_KEY_PASSWORD="$(cat /workspace/key.password)"
         export WEB_OAUTH_CLIENT_ID="$(cat /workspace/web-oauth-client-id)"
-        ./gradlew :app:assembleRelease --no-daemon
+        # IMPL-AND-00 introduced dev/staging/prod flavors. Production
+        # release builds now live at app/build/outputs/apk/prod/release/
+        # and the umbrella task is :app:assembleProdRelease.
+        ./gradlew :app:assembleProdRelease --no-daemon
 
   - id: distribute-firebase
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -56,7 +59,7 @@ steps:
           --secret=firebase-android-app-id --project=$PROJECT_ID)"
         curl -sL https://firebase.tools | bash
         firebase appdistribution:distribute \
-          android/app/build/outputs/apk/release/app-release.apk \
+          android/app/build/outputs/apk/prod/release/app-prod-release.apk \
           --app "$$FIREBASE_APP_ID" \
           --groups "internal-testers" \
           --release-notes "main @ $SHORT_SHA"
@@ -65,7 +68,7 @@ artifacts:
   objects:
     location: gs://health-fitness-160-android-releases/$SHORT_SHA
     paths:
-      - android/app/build/outputs/apk/release/app-release.apk
+      - android/app/build/outputs/apk/prod/release/app-prod-release.apk
 
 options:
   logging: CLOUD_LOGGING_ONLY

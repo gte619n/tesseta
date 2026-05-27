@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -71,6 +72,40 @@ android {
         }
     }
 
+    // IMPL-AND-00: BACKEND_BASE_URL is a compile-time constant per flavor.
+    // - dev   → http://10.0.2.2:8080/ (Android emulator → host loopback).
+    // - staging → Cloud Run staging deployment.
+    // - prod    → Cloud Run prod deployment.
+    // Switching environments is a "change build variant in Android Studio"
+    // action, not a runtime toggle. Real-device dev sessions use `staging`.
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            buildConfigField("String", "BACKEND_BASE_URL", "\"http://10.0.2.2:8080/\"")
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+            manifestPlaceholders["networkSecurityConfig"] = "@xml/network_security_config_dev"
+        }
+        create("staging") {
+            dimension = "env"
+            applicationIdSuffix = ".staging"
+            val url = (project.findProperty("BACKEND_URL_STAGING") as String?)
+                ?: "https://hf-backend-staging-XXXX.us-central1.run.app/"
+            buildConfigField("String", "BACKEND_BASE_URL", "\"$url\"")
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+            manifestPlaceholders["networkSecurityConfig"] = "@xml/network_security_config_release"
+        }
+        create("prod") {
+            dimension = "env"
+            val url = (project.findProperty("BACKEND_URL_PROD") as String?)
+                ?: "https://hf-backend-XXXX.us-central1.run.app/"
+            buildConfigField("String", "BACKEND_BASE_URL", "\"$url\"")
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+            manifestPlaceholders["networkSecurityConfig"] = "@xml/network_security_config_release"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -87,6 +122,7 @@ android {
 dependencies {
     implementation(project(":core-domain"))
     implementation(project(":core-data"))
+    implementation(project(":core-network"))
     implementation(project(":core-ui"))
     implementation(project(":core-health"))
     implementation(project(":feature-workouts"))
@@ -107,6 +143,7 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.navigation.compose)
+    implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

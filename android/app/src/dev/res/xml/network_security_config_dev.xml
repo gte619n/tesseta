@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  IMPL-AND-00: the dev flavor talks to the local backend over the
+  emulator-to-host loopback (10.0.2.2:8080), which is plain HTTP. We
+  permit cleartext only to that exact host so a misconfigured production
+  endpoint can't accidentally downgrade. Real devices in dev mode use the
+  `staging` flavor.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

@@ -15,11 +15,23 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.gte619n.healthfitness.wear.auth.SignInRequiredScreen
 import com.gte619n.healthfitness.wear.auth.WearIdTokenCache
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+/**
+ * Wear MainActivity. Annotated `@AndroidEntryPoint` so future wear surfaces
+ * (IMPL-AND-08) can inject their `@HiltViewModel`s without re-touching
+ * this scaffolding. The body still drives "signed in vs signed out" off
+ * the wear-side token cache — wear doesn't get a `NavHost` in this IMPL.
+ */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var cache: WearIdTokenCache
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val cache = WearIdTokenCache(applicationContext)
         setContent {
             MaterialTheme {
                 val token by cache.idTokenFlow.collectAsState(initial = null)
