@@ -307,7 +307,105 @@ covered end-to-end by `GoogleHealthViewModelTest`, which uses a fake
 
 ## Stage 03 — Medications
 
-(no questions yet)
+### Note — bottom nav promoted Meds out of the "More" tab
+
+**Status:** informational, please review.
+
+Stage 02 set the phone bottom nav to `Today / Body / Blood / Workouts /
+More`, with `More` going straight to Settings. IMPL-AND-03's spec calls
+for Meds in the bottom nav; the simplest fit was to replace `Workouts`
+with `Meds` and keep `More → Settings` until Workouts (IMPL-AND-06)
+ships. If you'd rather keep Workouts visible and drop Body or Blood,
+the change is a one-line tweak in
+`android/app/src/main/java/com/gte619n/healthfitness/mobile/navigation/NavDestinations.kt`'s
+`BottomNavDestinations` list. The foldable sidebar keeps all six
+primary destinations including Workouts (no space pressure there).
+
+### Note — Route.MedicationDetail moved to the feature module
+
+**Status:** informational.
+
+The IMPL-AND-00 `Route` sealed hierarchy declared
+`Route.MedicationDetail(id)` as a placeholder. To let
+`MedicationDetailViewModel` (in `feature-medical`) call
+`savedState.toRoute<MedicationDetailRoute>()` without `:feature-medical`
+depending on `:app`, the canonical detail route is now
+`com.gte619n.healthfitness.feature.medical.nav.MedicationDetailRoute`.
+The `AppNavHost` registers a `composable<MedicationDetailRoute>` against
+the same NavHost and the dashboard's "View all" link routes to
+`Route.Medications`. `Route.MedicationDetail` is removed; a comment
+points the next reader at the new location.
+
+### Note — dashboard `TodaysDosesRepository` kept alongside the new medications path
+
+**Status:** informational.
+
+IMPL-AND-01 added a stand-alone `TodaysDosesRepository` (mapping the
+backend's `/api/me/medications/today` shape into a dashboard-local
+`TodaysDoseSummary`). IMPL-AND-03 adds a parallel
+`MedicationRepository.todaysDoses()` returning the medications-domain
+`TodaysDose`. The new interactive `TodaysDosesSection` composable on the
+dashboard reads from the medications repository through its own
+`TodaysDosesViewModel`. The old dashboard repo + its CardState in
+`DashboardViewModel` are still wired (so `DashboardViewModelTest` keeps
+passing) but no UI surface consumes the result anymore. Safe to delete
+in IMPL-AND-04 if no other surface picks it up; left in place for now
+to keep this stage's diff additive.
+
+### Note — `DrugLookupStreamClient` is `internal open class` for test stubbing
+
+**Status:** informational.
+
+`DefaultDrugRepository` takes `DrugLookupStreamClient` as a concrete
+type (Hilt injection target). The catalog-only test
+`MedicationsApiHttpTest` doesn't exercise the SSE path but still has to
+construct a `DefaultDrugRepository`. To avoid pulling MockWebServer +
+SseConsumer + Moshi factories into every catalog test, the production
+class is `internal open` and `NoOpLookupStreamClient` subclasses it with
+an `emptyFlow()` override. The parent constructor's eager
+`moshi.adapter<LookupPhaseDto>()` call is satisfied with a
+`KotlinJsonAdapterFactory()`-bearing throwaway Moshi.
+
+### Note — CYCLE frequency type modeled but not editable
+
+**Status:** informational.
+
+The spec calls out that `FrequencyType.CYCLE` must round-trip so an
+existing web-created med doesn't break the Android client, but the Add
+/ Edit UI doesn't expose a cycle editor. `FrequencySelector` lists
+only `DAILY / WEEKLY / MONTHLY / PRN`; switching from CYCLE to one of
+these via edit will drop the `cycle` config (the backend `UPDATE`
+handler accepts the new `frequency` wholesale). That matches web's
+current behavior. A dedicated cycle editor lands later — track it
+alongside the protocol-grouping UI which has the same "model exists, UI
+doesn't" status.
+
+### Note — `feature-medical` had to opt into `kotlin-serialization` plugin
+
+**Status:** informational.
+
+`feature-medical/nav/MedicationsNav.kt` declares the three
+`@Serializable` nav-route objects required by Navigation-Compose 2.8's
+type-safe routes. That needs the `kotlin-serialization` Gradle plugin,
+which IMPL-AND-00 only applied to `:app` (the only module that owned a
+`@Serializable` route before). Added
+`alias(libs.plugins.kotlin.serialization)` to
+`feature-medical/build.gradle.kts`. Stage 04+ feature modules that add
+their own routes will need the same.
+
+### Note — `dose=0.0` accepted in `LogDoseRequest`; Android always sends null
+
+**Status:** informational.
+
+The backend's `AdherenceController.LogDoseRequest` accepts an optional
+`dose: Double` and falls back to the medication's current dose when
+absent. Android's `DefaultAdherenceRepository.logDose` always sends
+`dose=null`, which serializes as an omitted field (reflective Moshi
+default behavior; see Stage 02 note on `serializeNulls`). This is the
+correct behavior — Android never needs to override the dose when
+logging because the optimistic UI doesn't surface a "log at half dose"
+affordance. If a future PRN-with-dose-override flow lands, the field
+is already on the DTO and the request DTO needs no change.
 
 ---
 
