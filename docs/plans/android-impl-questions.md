@@ -930,3 +930,103 @@ carry both glyphs and threading `active` into the iconography; left
 as a follow-up so this stage stays scoped to the structural
 restructure. The accent-underline + tint is still distinctive
 enough that selection state reads at a glance.
+
+---
+
+## Round 2 — Stage C
+
+### Note — `WeightHeroDisplay` lives in `core-data/bodycomposition`, not on the domain snapshot
+
+**Status:** informational.
+
+The Stage C brief offered two options for where to host the
+downsampler + xLabels math: (A) on the snapshot type as pure
+helpers, or (B) inside the repo impl. The IMPL takes a third
+shape that aligns with both — `WeightHeroDisplay` is a new
+`data class` in `core-data/bodycomposition/` with a
+`from(snapshot, now)` factory that derives the lb-converted,
+downsampled, padded chart inputs. The snapshot stays canonical kg
+(no unit conversion, no display-only fields) while the display is
+the lb-shaped view the hero card actually renders. Math lives in
+pure companion functions so it test-isolates exactly like the
+retired mapper did — `BodyCompositionHeroDisplayTest` mirrors
+every assertion from the deleted `BodyCompositionMapperTest`.
+
+Tradeoff: callers (only the dashboard hero today) need to import
+`data.bodycomposition.WeightHeroDisplay` rather than calling a
+method on the snapshot. Net win is the snapshot interface stays
+unit-agnostic and the display can absorb future presentation-only
+fields (e.g. delta-rendering tone, mini-sparkline shape) without
+polluting the domain type.
+
+### Note — 90-day delta sources from snapshot, 7-day delta re-derived locally
+
+**Status:** informational.
+
+`BodyCompositionSnapshot` already carries `sevenDayDeltaKg` and
+`ninetyDayDeltaKg`. `WeightHeroDisplay.from(...)` consumes the
+snapshot's 90-day delta as-is (kg → lb conversion only), but
+**re-derives** the 7-day delta from `snapshot.series90d` using
+the legacy mapper's "latest minus reading at-or-before now − 7d"
+rule. Reason: the snapshot's 7d delta uses a slightly different
+anchor convention (`maxByOrNull { sampleTime <= now - 7d }`) that
+matches the legacy mapper exactly for the dense-data case but
+diverges on sparse histories — re-deriving in the display keeps
+the visual numbers byte-for-byte identical pre/post consolidation.
+The `BodyCompositionHeroDisplayTest` pins both deltas.
+
+If you'd rather collapse to a single delta source of truth, point
+me at which convention to keep (snapshot's vs legacy mapper's) and
+I'll align the snapshot mapper to match — the display can then
+just convert through.
+
+### Note — `DashboardViewModel` keeps both `init`-time collector and explicit `refresh()`
+
+**Status:** informational.
+
+The new repo exposes a hot replay-1 snapshot Flow + a separate
+`refresh()` suspend. `DashboardViewModel.init` subscribes to the
+flow once (the Loaded transition happens when emissions arrive);
+`loadBodyComposition()` flips to Loading then calls `refresh()`.
+Success path lets the in-flight collector flip back to Loaded —
+the load function doesn't await the emission itself. That keeps
+the retry semantics symmetric across the three cards
+(blood/doses are still suspend-call-and-update) without forcing
+the body card to await a second flow emission inside its
+launch block. Trade-off: if `refresh()` succeeds but the
+upstream flow never re-emits (a bug we don't have today), the
+card would stay Loading. The integration test for that path lives
+behind the repository impl, not the VM.
+
+### Note — `DashboardApi.bodyComposition()` endpoint shim removed entirely
+
+**Status:** informational.
+
+The old `DashboardApi.bodyComposition()` Retrofit call and its
+`BodyCompositionDto` were only consumed by the retired
+`BodyCompositionMapper`. Both were dropped along with the mapper
+(rather than left as dead code) — the canonical
+`BodyCompositionApi.list()` in `data.bodycomposition/` now owns
+the wire shape for that surface. `DashboardApiHttpTest` lost its
+two body-composition cases for the same reason; the math layer
+is covered by `BodyCompositionHeroDisplayTest` and the wire
+layer is exercised by `BodyCompositionRepositoryImpl` in the
+feature-body-composition integration paths.
+
+### Note — Dashboard hero now shows an empty state for "no weight readings"
+
+**Status:** informational.
+
+Before consolidation, the `WeightSummary?` shape made
+"backend returned no weights" indistinguishable from "card is
+loading" at the type level — the card would stay in Loading
+until the empty-list response came back. After consolidation,
+the snapshot Flow always emits a `BodyCompositionSnapshot`
+(possibly with `latestWeightKg = null`), so the card transitions
+to `Loaded` even when the user has no readings yet. The hero
+composable handles the empty case by checking
+`WeightHeroDisplay.from(snapshot) == null` and rendering the
+"No body-comp data yet" placeholder. Same behaviour for the
+phone vitals row via `VitalFromWeight.weightVitalOrFallback`.
+The Connect-Google-Health CTA proper still lands with
+IMPL-AND-02.
