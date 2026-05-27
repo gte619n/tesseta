@@ -20,4 +20,8 @@ android {
 
 dependencies {
     implementation(libs.kotlinx.coroutines.android)
+
+    // IMPL-AND-03: pure-Kotlin unit tests for medications domain
+    // helpers (DoseFormatter, FrequencyFormatter, FrequencyConfigSchedule).
+    testImplementation(libs.junit)
 }

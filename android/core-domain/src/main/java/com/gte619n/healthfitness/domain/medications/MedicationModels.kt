@@ -1,0 +1,123 @@
+package com.gte619n.healthfitness.domain.medications
+
+import java.time.Instant
+import java.time.LocalDate
+
+/**
+ * Domain models for the medications feature. Pure Kotlin — no Android, no
+ * Retrofit, no Moshi. Field names mirror the backend's `MedicationResponse`
+ * / `DrugResponse` / `AdherenceSummary` so the wire-DTO mappers in
+ * `core-data` stay trivial.
+ *
+ * Enum spelling matches the backend's `core.medication` records exactly.
+ * The reflective Moshi adapter relies on identical names; if backend names
+ * ever drift the mapper falls back to a safe default (see
+ * `MedicationMapper`).
+ */
+
+enum class DrugCategory { PRESCRIPTION, SUPPLEMENT, OTC, PEPTIDE, TOPICAL }
+
+enum class DrugForm {
+    INJECTABLE_VIAL, TABLET, CAPSULE, SOFTGEL,
+    CREAM, PATCH, LIQUID, POWDER
+}
+
+enum class MedicationStatus { ACTIVE, DISCONTINUED }
+
+enum class FrequencyType { DAILY, WEEKLY, MONTHLY, PRN, CYCLE }
+
+enum class TimeWindow { MORNING, AFTERNOON, EVENING, BEDTIME }
+
+enum class DayOfWeek { MON, TUE, WED, THU, FRI, SAT, SUN }
+
+enum class DiscontinueReason { COMPLETED, SIDE_EFFECTS, SWITCHED, COST, OTHER }
+
+enum class ChangeType { DOSE_CHANGE, FREQUENCY_CHANGE, SCHEDULE_CHANGE }
+
+data class Drug(
+    val drugId: String,
+    val name: String,
+    val aliases: List<String> = emptyList(),
+    val category: DrugCategory,
+    val form: DrugForm,
+    val defaultUnit: String,
+    val commonDoses: List<String> = emptyList(),
+    val imageUrl: String?,
+    val imageFallback: String?,
+    val suggestedMarkers: List<String> = emptyList(),
+    val description: String? = null,
+)
+
+data class FrequencyConfig(
+    val type: FrequencyType,
+    val timesPerPeriod: Int? = null,
+    val specificDays: List<DayOfWeek>? = null,
+    val cycle: CycleConfig? = null,
+) {
+    data class CycleConfig(
+        val onWeeks: Int,
+        val offWeeks: Int,
+        val startDate: LocalDate,
+    )
+}
+
+data class TimeSlot(
+    val window: TimeWindow,
+    val dose: Double,
+)
+
+data class AdherenceSummary(
+    val last30Days: List<DayAdherence>,
+    val percentage: Double,
+) {
+    data class DayAdherence(val date: LocalDate, val taken: Boolean)
+}
+
+data class Medication(
+    val medicationId: String,
+    val drugId: String?,
+    val drug: Drug?,
+    val customName: String?,
+    val status: MedicationStatus,
+    val dose: Double,
+    val unit: String,
+    val frequency: FrequencyConfig,
+    val timeSlots: List<TimeSlot>,
+    val protocolId: String?,
+    val notes: String?,
+    val prescribedBy: String?,
+    val startDate: LocalDate,
+    val endDate: LocalDate?,
+    val discontinueReason: DiscontinueReason?,
+    val discontinueNotes: String?,
+    val correlatedMarkers: List<String>,
+    val adherence: AdherenceSummary?,
+) {
+    val displayName: String
+        get() = customName ?: drug?.name ?: "Unknown"
+}
+
+data class MedicationHistoryEntry(
+    val historyId: String,
+    val changeType: ChangeType,
+    val previousValue: String,
+    val newValue: String,
+    val changedAt: Instant,
+    val notes: String?,
+)
+
+data class MedicationDetail(
+    val medication: Medication,
+    val history: List<MedicationHistoryEntry>,
+)
+
+data class TodaysDose(
+    val medicationId: String,
+    val drugName: String,
+    val imageUrl: String?,
+    val window: TimeWindow,
+    val dose: Double,
+    val unit: String?,
+    val taken: Boolean,
+    val takenAt: Instant?,
+)
