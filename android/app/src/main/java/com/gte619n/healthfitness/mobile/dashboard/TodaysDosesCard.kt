@@ -58,6 +58,24 @@ fun TodaysDosesSection(
         viewModel.clearError()
     }
 
+    TodaysDosesSectionContent(
+        state = state,
+        onSeeAll = onSeeAll,
+        onToggle = viewModel::toggle,
+    )
+}
+
+/**
+ * Pure UI half of [TodaysDosesSection] — takes the [TodaysDosesUiState]
+ * directly so Paparazzi snapshot tests (and previews) can render
+ * specific states without the Hilt graph or the snackbar controller.
+ */
+@Composable
+fun TodaysDosesSectionContent(
+    state: TodaysDosesUiState,
+    onSeeAll: () -> Unit,
+    onToggle: (TodaysDose) -> Unit = {},
+) {
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -77,31 +95,31 @@ fun TodaysDosesSection(
             )
         }
         Spacer(Modifier.height(7.dp))
-        when (val s = state) {
+        when (state) {
             TodaysDosesUiState.Loading -> Text(
                 "Loading...",
                 style = Hf.type.bodySm.copy(fontSize = 11.sp),
                 color = Hf.colors.textTertiary,
             )
             is TodaysDosesUiState.Error -> Text(
-                s.message,
+                state.message,
                 style = Hf.type.bodySm.copy(fontSize = 11.sp),
                 color = Hf.colors.alert,
             )
             is TodaysDosesUiState.Ready -> {
-                if (s.doses.isEmpty()) {
+                if (state.doses.isEmpty()) {
                     Text(
                         text = "No scheduled doses for today.",
                         style = Hf.type.bodySm.copy(fontSize = 11.sp),
                         color = Hf.colors.textTertiary,
                     )
                 } else {
-                    s.doses.forEachIndexed { i, dose ->
+                    state.doses.forEachIndexed { i, dose ->
                         InteractiveDoseRow(
                             dose = dose,
-                            onToggle = { viewModel.toggle(dose) },
+                            onToggle = { onToggle(dose) },
                         )
-                        if (i != s.doses.lastIndex) Spacer(Modifier.height(7.dp))
+                        if (i != state.doses.lastIndex) Spacer(Modifier.height(7.dp))
                     }
                 }
             }

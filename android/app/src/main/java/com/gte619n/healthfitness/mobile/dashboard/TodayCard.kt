@@ -43,6 +43,7 @@ fun TodayCard(
     modifier: Modifier = Modifier,
     showHrInMeta: Boolean = false,
     onSeeAllDoses: () -> Unit = {},
+    dosesContent: @Composable () -> Unit = { TodaysDosesSection(onSeeAll = onSeeAllDoses) },
 ) {
     HfCard(modifier = modifier) {
         Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
@@ -131,7 +132,7 @@ fun TodayCard(
             Spacer(Modifier.height(11.dp))
             HRule()
             Spacer(Modifier.height(11.dp))
-            TodaysDosesSection(onSeeAll = onSeeAllDoses)
+            dosesContent()
         }
     }
 }

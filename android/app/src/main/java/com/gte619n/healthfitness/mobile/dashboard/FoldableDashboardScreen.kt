@@ -54,7 +54,29 @@ fun FoldableDashboardScreen(
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+    FoldableDashboardContent(
+        ui = ui,
+        onSeeAllDoses = onSeeAllDoses,
+        onRetryBodyComposition = viewModel::retryBodyComposition,
+        onRetryBlood = viewModel::retryBlood,
+    )
+}
 
+/**
+ * Pure UI half of [FoldableDashboardScreen] — takes the
+ * [DashboardUiState] + retry callbacks so Paparazzi snapshot tests can
+ * render specific card states without the Hilt graph. Production
+ * callers go through [FoldableDashboardScreen]; this function is the
+ * same Box + Row + Column the production screen renders.
+ */
+@Composable
+fun FoldableDashboardContent(
+    ui: com.gte619n.healthfitness.mobile.dashboard.viewmodel.DashboardUiState,
+    onSeeAllDoses: () -> Unit = {},
+    onRetryBodyComposition: () -> Unit = {},
+    onRetryBlood: () -> Unit = {},
+    dosesContent: @Composable () -> Unit = { TodaysDosesSection(onSeeAll = onSeeAllDoses) },
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -77,7 +99,7 @@ fun FoldableDashboardScreen(
                 CardSwitch(
                     state = ui.bodyComposition,
                     placeholderHeightDp = 220,
-                    onRetry = viewModel::retryBodyComposition,
+                    onRetry = onRetryBodyComposition,
                 ) { snapshot -> BodyCompositionHero(snapshot = snapshot) }
                 Spacer(Modifier.height(10.dp))
                 Row(
@@ -87,7 +109,7 @@ fun FoldableDashboardScreen(
                     CardSwitch(
                         state = ui.blood,
                         placeholderHeightDp = 220,
-                        onRetry = viewModel::retryBlood,
+                        onRetry = onRetryBlood,
                         modifier = Modifier.weight(1f),
                     ) { markers ->
                         BloodPanel(
@@ -101,6 +123,7 @@ fun FoldableDashboardScreen(
                         modifier = Modifier.weight(1f),
                         showHrInMeta = false,
                         onSeeAllDoses = onSeeAllDoses,
+                        dosesContent = dosesContent,
                     )
                 }
                 if (DashboardFlags.showRecentFeedFixtures) {

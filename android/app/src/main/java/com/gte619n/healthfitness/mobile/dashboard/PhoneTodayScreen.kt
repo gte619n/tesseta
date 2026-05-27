@@ -46,7 +46,22 @@ fun PhoneTodayScreen(
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     // Resume-only refresh per spec — pull-to-refresh deferred.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+    PhoneTodayContent(ui = ui, onSeeAllDoses = onSeeAllDoses)
+}
 
+/**
+ * Pure UI half of [PhoneTodayScreen] — takes the [DashboardUiState]
+ * directly so Paparazzi snapshot tests can render specific card states
+ * without the Hilt graph. Production callers go through
+ * [PhoneTodayScreen]; this function is the same Column the production
+ * screen renders.
+ */
+@Composable
+fun PhoneTodayContent(
+    ui: com.gte619n.healthfitness.mobile.dashboard.viewmodel.DashboardUiState,
+    onSeeAllDoses: () -> Unit = {},
+    dosesContent: @Composable () -> Unit = { TodaysDosesSection(onSeeAll = onSeeAllDoses) },
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -73,6 +88,7 @@ fun PhoneTodayScreen(
                 modifier = Modifier.fillMaxWidth(),
                 showHrInMeta = false,
                 onSeeAllDoses = onSeeAllDoses,
+                dosesContent = dosesContent,
             )
             Spacer(Modifier.height(11.dp))
             QuickLogTiles()
