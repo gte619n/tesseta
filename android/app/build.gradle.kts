@@ -128,6 +128,7 @@ dependencies {
     implementation(project(":feature-workouts"))
     implementation(project(":feature-medical"))
     implementation(project(":feature-blood"))
+    implementation(project(":feature-body-composition"))
     implementation(project(":feature-chat"))
     implementation(project(":feature-settings"))
 

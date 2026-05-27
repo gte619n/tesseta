@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    IMPL-AND-04: paths exposed through the app's FileProvider authority.
-    Blood-test PDFs are cached under cacheDir/blood/ before being handed
-    to the system PDF viewer via Intent.ACTION_VIEW.
+    Paths exposed through the app's FileProvider authority. PDFs land in
+    the cache dir before being handed to the system PDF viewer via
+    Intent.ACTION_VIEW.
+      - blood/ (IMPL-AND-04) — blood-test reports
+      - dexa/  (IMPL-AND-05) — DEXA scan reports
 -->
 <paths>
     <cache-path name="blood_cache" path="blood/" />
+    <cache-path name="dexa_cache" path="dexa/" />
 </paths>
