@@ -46,3 +46,37 @@ keytool -list -v -keystore android/debug.keystore \
 
 If the keystore is ever regenerated, register the new SHA-1 in the
 Google Cloud OAuth consent screen before merging.
+
+## Snapshot tests (Paparazzi)
+
+UI snapshot coverage runs through
+[`app.cash.paparazzi`](https://github.com/cashapp/paparazzi). The
+plugin is applied to `:app`, `:core-ui`, and the five feature
+modules (`:feature-medical`, `:feature-blood`,
+`:feature-body-composition`, `:feature-workouts`,
+`:feature-settings`). Snapshots live next to the tests under
+`<module>/src/test/snapshots/images/` and are committed alongside
+the test source.
+
+Workflow:
+
+```bash
+# Generate / refresh baselines after a UI change (run from android/).
+./gradlew recordPaparazzi
+
+# Verify the current code matches the committed baselines
+# (CI runs this; failures emit a diff under build/reports/paparazzi).
+./gradlew verifyPaparazzi
+```
+
+Scope a record / verify to a single module to iterate faster:
+
+```bash
+./gradlew :core-ui:recordPaparazzi
+./gradlew :feature-blood:verifyPaparazzi
+```
+
+When a snapshot intentionally changes, re-record, review the PNG
+diff, and commit the updated baseline in the same change that
+modified the UI. Drive-by re-recordings should not happen without
+inspecting the diff.

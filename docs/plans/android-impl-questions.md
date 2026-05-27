@@ -750,3 +750,72 @@ the visual tests added.
 ## Cross-cutting
 
 (no items yet)
+
+---
+
+## Round 2 — Stage A
+
+### Note — debug keystore tracked via negation rule
+
+**Status:** informational.
+
+`android/.gitignore` now reads `*.keystore` followed by
+`!debug.keystore`, so the shared `android/debug.keystore` is tracked
+while any other `*.keystore` file (release keystores, ad-hoc test
+keystores) stays ignored. The root `.gitignore` already had an
+explicit `*-release.keystore` rule plus a comment noting the debug
+keystore is "intentionally tracked", so no root-level change was
+needed. SHA-1 + alias + passwords now live under the new "Debug
+keystore" section of `android/README.md`.
+
+### Note — Paparazzi 1.3.5 (latest stable) chosen over 2.0.0-alpha
+
+**Status:** informational.
+
+Maven Central currently advertises `app.cash.paparazzi 2.0.0-alpha05`
+as `latest`, but the alpha branch tracks newer AGP / Compose
+versions and our project is on AGP 8.7.3 + Kotlin 2.0.21. The
+1.3.5 release also tracks Kotlin 2.0.21 via its BOM, so the version
+pairs match without forcing a stack bump. When the project moves to
+AGP 8.8+, revisit jumping to the 2.0 line.
+
+### Note — Paparazzi smoke test scoped to read-mode states
+
+**Status:** informational.
+
+`EditableNumberPaparazziTest` covers the two read-mode flavours the
+production UI actually paints today (formatted value with suffix,
+placeholder em-dash for null). The composable's edit-mode branch
+needs a real tap to flip `isEditing`, which Paparazzi can't
+dispatch. Stage D's `EditableNumberCell` snapshot will cover the
+editing state via the cell wrapper's `initiallyEditing` flag (per
+the IMPL-AND-05 spec sketch).
+
+### Note — TESTOSTERONE enum value appended (not alphabetized) to preserve serialized storage order
+
+**Status:** informational.
+
+`BloodMarker` uses `Enum.name()` as the storage key for Firestore
+readings, so reordering existing enum values is safe but **inserting**
+between them would silently shift the source-order of unrelated
+markers in any code that iterates `BloodMarker.values()` or relies
+on `ordinal()`. To minimise risk, TESTOSTERONE was appended after
+HS_CRP rather than alphabetized. Reference range is the adult-male
+Endocrine Society / LabCorp 264–916 ng/dL, modelled as
+HIGHER_IS_BETTER with the lower bound as the "good" threshold.
+Female and age-stratified ranges land alongside per-user reference
+range overrides in a later iteration.
+
+### Note — new `BloodReferenceRangesTest` added (no prior coverage)
+
+**Status:** informational.
+
+There was no existing test for the marker / reference-range
+pairing. Added `BloodReferenceRangesTest` covering: every enum
+value has a registered range (so future enum additions can't
+silently lose reference-range coverage) and the TESTOSTERONE range
+fields (canonical unit, orientation, thresholds). Pre-existing
+`backend/:app:test` failures (LocationControllerTest +
+DrugRepository wiring + Gemini-key-gated image generation tests
+flagged in Stage 02 notes) are unchanged by this slice — they
+predate the change and reproduce on `HEAD~3`.
