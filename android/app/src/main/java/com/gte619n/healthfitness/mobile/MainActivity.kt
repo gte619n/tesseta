@@ -96,7 +96,15 @@ private fun AppRoot(widthClass: WindowWidthSizeClass) {
     val authViewModel: AuthViewModel = hiltViewModel()
     val state by authViewModel.uiState.collectAsState()
     when (state) {
-        is AuthUiState.SignedIn -> SignedInScaffold(widthClass = widthClass)
+        is AuthUiState.SignedIn -> SignedInScaffold(
+            widthClass = widthClass,
+            // IMPL-AND-02: SettingsScreen's "Sign out" calls into the
+            // GoogleAuthRepository through its own ViewModel; the
+            // AppRoot-scoped AuthViewModel needs to flip its UI state
+            // so this composable re-evaluates and switches back to
+            // SignInScreen on the next recomposition.
+            onSignedOut = { authViewModel.signOut() },
+        )
         AuthUiState.Loading -> SignInScreen(state = AuthState.Loading, onSignIn = {})
         else -> SignInScreen(
             state = state.toLegacyAuthState(),

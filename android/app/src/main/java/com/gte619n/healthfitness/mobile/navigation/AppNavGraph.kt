@@ -5,6 +5,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.gte619n.healthfitness.feature.settings.SettingsScreen
+import com.gte619n.healthfitness.feature.settings.profile.ProfileScreen
 import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
 
 /**
@@ -14,10 +16,15 @@ import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
  *
  * `Route.Today` is the start destination — matches the existing behavior
  * where the dashboard is what the user sees the moment sign-in succeeds.
+ *
+ * `onSignedOut` is supplied by [SignedInScaffold] and bridges the
+ * Settings sign-out action back to the app-root [AuthViewModel] so the
+ * top-level `AppRoot` re-evaluates and switches to `SignInScreen`.
  */
 @Composable
 fun AppNavHost(
     navController: NavHostController,
+    onSignedOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -26,15 +33,23 @@ fun AppNavHost(
         modifier = modifier,
     ) {
         composable<Route.Today> {
-            // Existing dashboard, untouched in this IMPL. AND-01 will swap
-            // its fixtures-backed body for live data + a HiltViewModel.
             PhoneTodayScreen()
         }
         composable<Route.Body> { PlaceholderScreen("Body", nextImpl = "IMPL-AND-05") }
         composable<Route.Blood> { PlaceholderScreen("Blood", nextImpl = "IMPL-AND-04") }
         composable<Route.Workouts> { PlaceholderScreen("Workouts", nextImpl = "IMPL-AND-06") }
         composable<Route.Medications> { PlaceholderScreen("Medications", nextImpl = "IMPL-AND-03") }
-        composable<Route.Settings> { PlaceholderScreen("Settings", nextImpl = "IMPL-AND-02") }
+
+        composable<Route.Settings> {
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToProfile = { navController.navigate(Route.Profile) },
+                onSignedOut = onSignedOut,
+            )
+        }
+        composable<Route.Profile> {
+            ProfileScreen(onNavigateBack = { navController.popBackStack() })
+        }
 
         composable<Route.DexaDetail> { PlaceholderScreen("DEXA detail", nextImpl = "IMPL-AND-05") }
         composable<Route.BloodReportDetail> { PlaceholderScreen("Blood report", nextImpl = "IMPL-AND-04") }

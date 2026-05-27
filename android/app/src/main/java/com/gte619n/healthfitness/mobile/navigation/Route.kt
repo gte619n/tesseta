@@ -33,6 +33,13 @@ sealed interface Route {
     @Serializable
     data object Settings : Route
 
+    // IMPL-AND-02: profile is a sub-screen of Settings (back stack:
+    // SignIn → SignedInScaffold → Settings → Profile). Kept as a
+    // top-level route in the sealed hierarchy so the type-safe NavGraph
+    // can register it alongside the rest.
+    @Serializable
+    data object Profile : Route
+
     // Detail leaves wired by later IMPLs but declared here so the graph is
     // the single source of truth for the route surface.
 

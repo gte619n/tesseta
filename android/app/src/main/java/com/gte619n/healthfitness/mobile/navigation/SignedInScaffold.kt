@@ -21,7 +21,10 @@ import com.gte619n.healthfitness.ui.theme.Hf
  * exclusively inside the `NavHost`.
  */
 @Composable
-fun SignedInScaffold(widthClass: WindowWidthSizeClass) {
+fun SignedInScaffold(
+    widthClass: WindowWidthSizeClass,
+    onSignedOut: () -> Unit,
+) {
     val navController = rememberNavController()
     Scaffold(
         snackbarHost = { SnackbarHost(LocalSnackbarController.current.hostState) },
@@ -43,6 +46,7 @@ fun SignedInScaffold(widthClass: WindowWidthSizeClass) {
             }
             AppNavHost(
                 navController = navController,
+                onSignedOut = onSignedOut,
                 modifier = Modifier.weight(1f),
             )
         }
