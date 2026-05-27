@@ -17,6 +17,7 @@ import com.gte619n.healthfitness.core.goals.Phase;
 import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.Step;
 import com.gte619n.healthfitness.core.goals.StepRepository;
+import com.gte619n.healthfitness.core.goals.eval.StepEvaluationService;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,19 +46,22 @@ public class GoalController {
     private final PhaseRepository phases;
     private final StepRepository steps;
     private final GoalService service;
+    private final StepEvaluationService evaluator;
 
     public GoalController(
         CurrentUserProvider currentUser,
         GoalRepository goals,
         PhaseRepository phases,
         StepRepository steps,
-        GoalService service
+        GoalService service,
+        StepEvaluationService evaluator
     ) {
         this.currentUser = currentUser;
         this.goals = goals;
         this.phases = phases;
         this.steps = steps;
         this.service = service;
+        this.evaluator = evaluator;
     }
 
     @GetMapping
@@ -102,11 +106,16 @@ public class GoalController {
     @GetMapping("/{goalId}")
     public GoalDeepResponse getDeep(@PathVariable String goalId) {
         String userId = currentUser.get().userId();
-        Goal goal = goals.findById(userId, goalId)
+        Goal initial = goals.findById(userId, goalId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
-        // TODO(IMPL-12 Phase 3): call StepEvaluationService.evaluateGoal here so
-        // GET reflects current metric truth before responding.
+        // Run a fresh evaluation BEFORE loading phases/steps so the
+        // response reflects the same current metric truth the UI will
+        // render. evaluateGoal may flip Step.done and (via GoalService)
+        // cascade phase/goal completion — re-read the Goal afterwards
+        // so we pick up any sticky status changes.
+        evaluator.evaluateGoal(userId, goalId);
+        Goal goal = goals.findById(userId, goalId).orElse(initial);
 
         List<Phase> phaseList = phases.findByGoal(userId, goalId);
         Map<String, Phase> phasesById = new HashMap<>();
@@ -143,15 +152,32 @@ public class GoalController {
         for (String sid : stepOrder) {
             Step s = byId.get(sid);
             if (s == null) continue;
-            ordered.add(StepResponse.from(s));
+            ordered.add(toStepResponse(userId, s));
             seen.add(sid);
         }
         for (Step s : phaseSteps) {
             if (!seen.contains(s.stepId())) {
-                ordered.add(StepResponse.from(s));
+                ordered.add(toStepResponse(userId, s));
             }
         }
         return PhaseResponse.from(phase, ordered);
+    }
+
+    /**
+     * Wrap a Step in its response DTO. For metric-bound done Steps that
+     * aren't manually overridden, ask the evaluator whether the metric
+     * has regressed and surface the flag. For everything else
+     * (manualOverride, MANUAL kind, undone), the flag is null so the
+     * UI can omit the "metric regressed" badge entirely.
+     */
+    private StepResponse toStepResponse(String userId, Step s) {
+        boolean qualifies =
+            s.done()
+            && s.kind() != com.gte619n.healthfitness.core.goals.StepKind.MANUAL
+            && !s.manualOverride()
+            && s.metric() != null;
+        Boolean regressed = qualifies ? evaluator.computeRegressionFlag(userId, s) : null;
+        return StepResponse.from(s, regressed);
     }
 
     @PatchMapping("/{goalId}")
@@ -208,7 +234,7 @@ public class GoalController {
         if (goals.findById(userId, goalId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        // TODO(IMPL-12 Phase 3): wire to StepEvaluationService.evaluateGoal(userId, goalId).
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        evaluator.evaluateGoal(userId, goalId);
+        return ResponseEntity.noContent().build();
     }
 }

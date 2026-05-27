@@ -15,11 +15,23 @@ public record StepResponse(
     Instant doneAt,
     boolean manualOverride,
     StepMetricBindingDto metric,
-    // Transient flag: when an auto-done Step's metric has regressed across the target.
-    // Computed by StepEvaluationService on read (Phase 3); always false in Phase 1.
-    boolean metricRegressed
+    // Transient flag: true when an auto-done Step's metric has
+    // regressed across the target. Null for Steps where the flag is
+    // meaningless: MANUAL Steps, manualOverride Steps, and undone
+    // Steps. Computed on read by StepEvaluationService.
+    Boolean metricRegressed
 ) {
+    /** Build a response with metricRegressed unset (null). */
     public static StepResponse from(Step s) {
+        return from(s, null);
+    }
+
+    /**
+     * Build a response with an explicit regression flag. The
+     * controller computes the flag for done, non-MANUAL, non-override
+     * Steps and passes null otherwise.
+     */
+    public static StepResponse from(Step s, Boolean metricRegressed) {
         return new StepResponse(
             s.stepId(),
             s.phaseId(),
@@ -31,7 +43,7 @@ public record StepResponse(
             s.doneAt(),
             s.manualOverride(),
             StepMetricBindingDto.from(s.metric()),
-            false
+            metricRegressed
         );
     }
 }

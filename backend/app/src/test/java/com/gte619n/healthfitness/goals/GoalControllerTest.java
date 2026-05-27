@@ -169,11 +169,14 @@ class GoalControllerTest {
     }
 
     @Test
-    void reevaluateReturns501UntilPhase3() throws Exception {
+    void reevaluateReturns204() throws Exception {
+        // Phase 3: reevaluate is wired to StepEvaluationService.evaluateGoal
+        // and returns 204 No Content. A Goal with no metric-bound Steps
+        // still re-evaluates cleanly (the for-loop is just a no-op).
         String goalId = createGoal();
         mvc.perform(post("/api/me/goals/" + goalId + "/reevaluate")
                 .header("X-Dev-User", USER))
-            .andExpect(status().isNotImplemented());
+            .andExpect(status().isNoContent());
     }
 
     private String createGoal() throws Exception {
