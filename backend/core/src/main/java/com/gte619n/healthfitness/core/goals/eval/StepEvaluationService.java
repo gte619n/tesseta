@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.core.goals.StepKind;
 import com.gte619n.healthfitness.core.goals.StepMetricBinding;
 import com.gte619n.healthfitness.core.goals.StepRepository;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedEvent;
+import com.gte619n.healthfitness.core.user.UserRepository;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.util.List;
@@ -47,17 +48,20 @@ public class StepEvaluationService {
     private final PhaseRepository phases;
     private final MetricResolver resolver;
     private final GoalService goalService;
+    private final UserRepository users;
 
     public StepEvaluationService(
         StepRepository steps,
         PhaseRepository phases,
         MetricResolver resolver,
-        GoalService goalService
+        GoalService goalService,
+        UserRepository users
     ) {
         this.steps = steps;
         this.phases = phases;
         this.resolver = resolver;
         this.goalService = goalService;
+        this.users = users;
     }
 
     /**
@@ -109,16 +113,35 @@ public class StepEvaluationService {
     /**
      * Re-evaluate every SUSTAINED Step across all users.
      *
-     * Phase 3 stub — there is no {@code UserRepository.findAllIds()}
-     * yet, so we can't iterate. The daily Cloud Run Job (Phase 5)
-     * wires this up properly.
-     *
-     * TODO(IMPL-12 Phase 5): add user iteration. For now this method
-     * exists so Phase 4 and Phase 5 have a stable call site.
+     * Driven by the daily Cloud Run Job ({@code ReevaluateSustainedJob}
+     * under {@code @Profile("job-sustained")}, IMPL-12 Phase 5). Iterates
+     * every user, then every SUSTAINED Step for that user, and applies
+     * the standard {@link #evaluateAndApply} flow. Each user's loop is
+     * wrapped in try/catch so one corrupt user can't kill the whole run.
      */
     public void reevaluateAllSustained() {
+        List<String> userIds = users.findAllUserIds();
         log.log(Level.INFO,
-            "reevaluateAllSustained: Phase 3 stub — Phase 5 wires user iteration");
+            "reevaluateAllSustained: starting for " + userIds.size() + " users");
+        int evaluated = 0;
+        int userErrors = 0;
+        for (String userId : userIds) {
+            try {
+                List<Step> sustained = steps.findAllSustained(userId);
+                for (Step s : sustained) {
+                    evaluateAndApply(userId, s);
+                    evaluated++;
+                }
+            } catch (RuntimeException ex) {
+                userErrors++;
+                log.log(Level.WARNING,
+                    "reevaluateAllSustained: user " + userId + " failed — skipping",
+                    ex);
+            }
+        }
+        log.log(Level.INFO,
+            "reevaluateAllSustained: done — " + evaluated + " steps evaluated, "
+                + userErrors + " user errors");
     }
 
     /**

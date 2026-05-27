@@ -7,10 +7,12 @@ import com.gte619n.healthfitness.core.user.GoogleHealthConnection;
 import com.gte619n.healthfitness.core.user.User;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.Blob;
+import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +100,19 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         body.put("googleHealth", com.google.cloud.firestore.FieldValue.delete());
         body.put("updatedAt", serverTimestamp());
         await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    public List<String> findAllUserIds() {
+        // listDocuments() walks the entire users/ collection and returns
+        // every top-level document reference — including ones that exist
+        // only as parents of subcollections. Used by the daily SUSTAINED
+        // re-evaluation Cloud Run Job (IMPL-12 Phase 5).
+        List<String> ids = new ArrayList<>();
+        for (DocumentReference ref : firestore.collection(COLLECTION).listDocuments()) {
+            ids.add(ref.getId());
+        }
+        return ids;
     }
 
     private static User toUser(String userId, DocumentSnapshot snapshot) {

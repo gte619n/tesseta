@@ -36,6 +36,7 @@ class StepEvaluationServiceTest {
     private InMemoryGoalRepository goals;
     private InMemoryPhaseRepository phases;
     private InMemoryStepRepository steps;
+    private InMemoryUserRepository userRepo;
     private GoalService goalService;
     private FakeMetricResolver resolver;
     private StepEvaluationService evaluator;
@@ -45,9 +46,10 @@ class StepEvaluationServiceTest {
         goals = new InMemoryGoalRepository();
         phases = new InMemoryPhaseRepository();
         steps = new InMemoryStepRepository();
+        userRepo = new InMemoryUserRepository();
         goalService = new GoalService(goals, phases, steps);
         resolver = new FakeMetricResolver();
-        evaluator = new StepEvaluationService(steps, phases, resolver, goalService);
+        evaluator = new StepEvaluationService(steps, phases, resolver, goalService, userRepo);
     }
 
     @Test
@@ -326,8 +328,9 @@ class StepEvaluationServiceTest {
     }
 
     @Test
-    void reevaluateAllSustained_isStubInPhase3() {
-        // Just exercise the method — Phase 3 is a no-op stub. Should not throw.
+    void reevaluateAllSustained_withNoUsers_isANoOp() {
+        // Phase 5: iterates UserRepository.findAllUserIds(); with the
+        // user store empty there's no work to do, and no throw.
         evaluator.reevaluateAllSustained();
     }
 

@@ -1,4 +1,4 @@
-package com.gte619n.healthfitness.testsupport;
+package com.gte619n.healthfitness.core.goals.eval;
 
 import com.gte619n.healthfitness.core.user.GoogleHealthConnection;
 import com.gte619n.healthfitness.core.user.User;
@@ -10,10 +10,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-// Test fake. Replaces the Firestore-backed UserRepository in unit-test
-// Spring contexts so SecurityConfigTest / DevHeaderAuthTest /
-// WhoAmIControllerTest can run without an emulator.
-public class InMemoryUserRepository implements UserRepository {
+/**
+ * Minimal in-memory {@link UserRepository} for core tests — a local copy
+ * mirroring the {@code app}-module test fake. Only the methods exercised
+ * by Goals evaluation tests are implemented with real semantics; the
+ * Google-Health connection bookkeeping is preserved for completeness
+ * since {@code save(User)} and {@code findAllUserIds()} are the primary
+ * call sites here.
+ */
+final class InMemoryUserRepository implements UserRepository {
 
     private final Map<String, User> store = new ConcurrentHashMap<>();
 
