@@ -24,6 +24,8 @@ import com.gte619n.healthfitness.feature.medical.detail.MedicationDetailScreen
 import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
 import com.gte619n.healthfitness.feature.medical.nav.MedicationDetailRoute
 import com.gte619n.healthfitness.feature.settings.SettingsScreen
+import com.gte619n.healthfitness.feature.settings.more.MoreRoute
+import com.gte619n.healthfitness.feature.settings.more.MoreScreen
 import com.gte619n.healthfitness.feature.settings.profile.ProfileScreen
 import com.gte619n.healthfitness.feature.workouts.addequipment.AddEquipmentSheet
 import com.gte619n.healthfitness.feature.workouts.create.NewGymScreen
@@ -221,6 +223,20 @@ fun AppNavHost(
         }
         composable<Route.Profile> {
             ProfileScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // Round 2 Stage B: the phone bottom nav's "More" tab lands
+        // here. Each row dispatches to a top-level destination already
+        // registered above; sign-out runs through the same callback
+        // chain that the Settings screen uses so the auth coordinator
+        // gets a consistent signal regardless of entry point.
+        composable<MoreRoute> {
+            MoreScreen(
+                onNavigateToBlood = { navController.navigate(Route.Blood) },
+                onNavigateToWorkouts = { navController.navigate(Route.Workouts) },
+                onNavigateToSettings = { navController.navigate(Route.Settings) },
+                onSignedOut = onSignedOut,
+            )
         }
 
         // IMPL-AND-05: Route.DexaDetail kept as a thin redirect to the
