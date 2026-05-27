@@ -14,6 +14,11 @@ import com.gte619n.healthfitness.feature.blood.nav.UploadReportRoute
 import com.gte619n.healthfitness.feature.blood.overview.BloodOverviewScreen
 import com.gte619n.healthfitness.feature.blood.report.ReportDetailScreen
 import com.gte619n.healthfitness.feature.blood.upload.UploadLabReportScreen
+import com.gte619n.healthfitness.feature.bodycomposition.detail.DexaScanDetailScreen
+import com.gte619n.healthfitness.feature.bodycomposition.nav.DexaScanDetailRoute
+import com.gte619n.healthfitness.feature.bodycomposition.nav.UploadDexaRoute
+import com.gte619n.healthfitness.feature.bodycomposition.overview.BodyCompositionScreen
+import com.gte619n.healthfitness.feature.bodycomposition.upload.UploadDexaScreen
 import com.gte619n.healthfitness.feature.medical.add.AddMedicationScreen
 import com.gte619n.healthfitness.feature.medical.detail.MedicationDetailScreen
 import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
@@ -52,7 +57,29 @@ fun AppNavHost(
                 onSeeAllDoses = { navController.navigate(Route.Medications) },
             )
         }
-        composable<Route.Body> { PlaceholderScreen("Body", nextImpl = "IMPL-AND-05") }
+        // IMPL-AND-05: feature-body-composition replaces the placeholder.
+        // Overview + DexaScanDetailRoute + UploadDexaRoute (dialog) are
+        // registered directly here so deep-links to a scan from elsewhere
+        // (notifications, dashboard hero tap) land on the right screen.
+        composable<Route.Body> {
+            BodyCompositionScreen(
+                onBack = { navController.popBackStack() },
+                onScanClick = { id -> navController.navigate(DexaScanDetailRoute(id)) },
+                onUploadClick = { navController.navigate(UploadDexaRoute) },
+            )
+        }
+        composable<DexaScanDetailRoute> {
+            DexaScanDetailScreen(onBack = { navController.popBackStack() })
+        }
+        dialog<UploadDexaRoute> {
+            UploadDexaScreen(
+                onComplete = { scanId ->
+                    navController.popBackStack()
+                    navController.navigate(DexaScanDetailRoute(scanId))
+                },
+                onDismiss = { navController.popBackStack() },
+            )
+        }
 
         // IMPL-AND-04: feature-blood replaces the placeholder. The bloodGraph
         // helper would register routes the dialog-shape (AddReading, Upload)
@@ -121,7 +148,17 @@ fun AppNavHost(
             ProfileScreen(onNavigateBack = { navController.popBackStack() })
         }
 
-        composable<Route.DexaDetail> { PlaceholderScreen("DEXA detail", nextImpl = "IMPL-AND-05") }
+        // IMPL-AND-05: Route.DexaDetail kept as a thin redirect to the
+        // feature-owned DexaScanDetailRoute so any pre-existing deep links
+        // land on the new screen. The feature's route shape is the source
+        // of truth going forward.
+        composable<Route.DexaDetail> { entry ->
+            val args = entry.toRoute<Route.DexaDetail>()
+            androidx.compose.runtime.LaunchedEffect(args.scanId) {
+                navController.popBackStack()
+                navController.navigate(DexaScanDetailRoute(args.scanId))
+            }
+        }
         // IMPL-AND-04: Route.BloodReportDetail kept as a thin redirect to
         // the feature-owned ReportDetailRoute so any pre-existing deep
         // links land on the new screen. The feature's route shape is the
