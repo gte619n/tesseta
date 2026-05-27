@@ -1030,3 +1030,105 @@ composable handles the empty case by checking
 phone vitals row via `VitalFromWeight.weightVitalOrFallback`.
 The Connect-Google-Health CTA proper still lands with
 IMPL-AND-02.
+
+---
+
+## Round 2 — Stage D
+
+### Note — `*Content` composables extracted so Paparazzi can render UiState directly
+
+**Status:** informational.
+
+`PhoneTodayScreen`, `FoldableDashboardScreen`, and
+`TodaysDosesSection` previously combined "collect from VM" +
+"render UI" in one composable. To Paparazzi-snapshot the
+dashboard at specific `DashboardUiState` shapes without spinning
+up Hilt, this stage extracts:
+
+- `PhoneTodayContent(ui, onSeeAllDoses, dosesContent)`
+- `FoldableDashboardContent(ui, onSeeAllDoses, onRetry*,
+  dosesContent)`
+- `TodaysDosesSectionContent(state, onSeeAll, onToggle)`
+
+And `TodayCard` gains a `dosesContent: @Composable () -> Unit`
+slot defaulting to `TodaysDosesSection` so the production wiring
+is unchanged but tests can inject a stub doses card.
+
+No production behaviour change. The existing `*Screen` /
+`*Section` composables are the public surface; the `*Content`
+variants are testing affordances mirroring the Stage B
+`MoreScreenContent` precedent.
+
+### BLOCKER (deferred) — LocationCard "with cover photo" snapshot
+
+**Status:** deferred to a follow-up.
+
+The Stage D brief asks for three LocationCard snapshots
+including "with cover photo". `LocationCard` renders cover
+photos through `HfAsyncImage` → Coil's `AsyncImage`, which
+spawns a coroutine on `Dispatchers.Main` to decode the request.
+Paparazzi's LayoutLib host has no Android main looper, so any
+non-null `coverPhotoUrl` blows up with `IllegalStateException:
+The main looper is not available` before producing an image.
+
+This stage ships three production-reachable variants (no photo,
+default badge, amenities row) and leaves the "with cover photo"
+snapshot for a follow-up that adds `io.coil-kt:coil-test` and
+installs a `FakeImageLoaderEngine` with a deterministic
+`Bitmap`. Same path applies to MedicationCard's `DrugImage`
+(SubcomposeAsyncImage); the smoke snapshot here uses
+`imageUrl = null` + `imageFallback = null` to short-circuit
+straight to the placeholder icon for the same reason.
+
+If you'd rather wire `coil-test` up front, point me at it and
+I'll fold in the FakeImageLoaderEngine snapshots — single-shot
+addition once it's on the test classpath.
+
+### Note — EditableNumberCell edit/saving snapshots done via wrapper, not focus events
+
+**Status:** informational.
+
+`EditableNumber`'s edit-mode transition is gated on a tap event
+(`detectTapGestures` → `isEditing = true`), which Paparazzi
+can't fire from a snapshot test. The Stage D coverage for
+EditableNumberCell ships three read-mode variants — value,
+empty placeholder, and `enabled = false` (the visual the parent
+grid uses while a PATCH is in flight, standing in for "saving
+mode"). The actual `BasicTextField` render and the "parse
+failure reverts" behaviour stay covered by the underlying
+EditableNumber's interaction tests when those land.
+
+### Note — Foldable snapshot uses a wide LANDSCAPE device, not a real foldable config
+
+**Status:** informational.
+
+`DashboardScreenPaparazziTest.foldable_loaded` snapshots
+`FoldableDashboardContent` at a 1840×1080 landscape device.
+That's wide enough to push WindowSizeClass into Medium and the
+foldable layout's two-column body, but it's not a "true"
+foldable device config (Paparazzi 1.3.5 doesn't ship a
+PIXEL_FOLD preset, and the LayoutLib presets that approximate
+foldables — UNFOLDED variants — vary across releases). If you
+want a more precise foldable shape, pass me the target screen
+inches / px and I'll pin the snapshot device-config to it. The
+current snapshot does its job — it exercises the same two-column
+hero + side-by-side BloodPanel/TodayCard layout the production
+foldable shows.
+
+### Note — Paparazzi snapshots committed as PNGs, not text fixtures
+
+**Status:** informational.
+
+Total of 21 PNGs committed across the five wired feature modules
++ :app:
+- :app — 4 (Dashboard phone × 3 + foldable × 1)
+- :feature-blood — 3 (MarkerReferenceBar)
+- :feature-body-composition — 4 (DexaRegionGrid × 1,
+  EditableNumberCell × 3)
+- :feature-medical — 1 (MedicationCard)
+- :feature-workouts — 9 (LocationCard × 3, EquipmentSpecForm × 6)
+
+Each PNG is ~3–80 KB. CI runs `verifyPaparazzi` and diffs
+byte-for-byte; any rendering regression caused by a Compose
+recomposition / token change shows up as a failed verify with
+the actual vs golden diff in the Paparazzi HTML report.
