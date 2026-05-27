@@ -25,9 +25,25 @@ import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
 import com.gte619n.healthfitness.feature.medical.nav.MedicationDetailRoute
 import com.gte619n.healthfitness.feature.settings.SettingsScreen
 import com.gte619n.healthfitness.feature.settings.profile.ProfileScreen
+import com.gte619n.healthfitness.feature.workouts.addequipment.AddEquipmentSheet
+import com.gte619n.healthfitness.feature.workouts.create.NewGymScreen
+import com.gte619n.healthfitness.feature.workouts.detail.GymDetailScreen
+import com.gte619n.healthfitness.feature.workouts.edit.EditGymScreen
+import com.gte619n.healthfitness.feature.workouts.list.GymsListScreen
+import com.gte619n.healthfitness.feature.workouts.nav.EditGymRoute
+import com.gte619n.healthfitness.feature.workouts.nav.GymDetailRoute
+import com.gte619n.healthfitness.feature.workouts.nav.GymsListRoute
+import com.gte619n.healthfitness.feature.workouts.nav.NewGymRoute
+import com.gte619n.healthfitness.feature.workouts.override.EquipmentOverrideSheet
 import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
 import androidx.navigation.compose.dialog
 import androidx.navigation.toRoute
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.serialization.Serializable
 
 /**
  * The single `NavHost` for the phone app. Feature modules expose
@@ -116,7 +132,66 @@ fun AppNavHost(
             )
         }
 
-        composable<Route.Workouts> { PlaceholderScreen("Workouts", nextImpl = "IMPL-AND-06") }
+        // IMPL-AND-06: feature-workouts replaces the placeholder. The
+        // GymsList -> NewGym / GymDetail -> EditGym chain plus the
+        // bottom-sheet sub-routes for adding equipment and editing a
+        // per-location spec override are all registered here so deep
+        // links land on the right screen.
+        composable<Route.Workouts> {
+            GymsListScreen(
+                onAddGym = { navController.navigate(NewGymRoute) },
+                onOpenGym = { id -> navController.navigate(GymDetailRoute(id)) },
+            )
+        }
+        composable<GymsListRoute> {
+            GymsListScreen(
+                onAddGym = { navController.navigate(NewGymRoute) },
+                onOpenGym = { id -> navController.navigate(GymDetailRoute(id)) },
+            )
+        }
+        composable<NewGymRoute> {
+            NewGymScreen(
+                onDone = { locationId ->
+                    navController.popBackStack()
+                    navController.navigate(GymDetailRoute(locationId))
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<GymDetailRoute> { entry ->
+            val args = entry.toRoute<GymDetailRoute>()
+            // Sheet state is held at the NavHost level so the bottom-
+            // sheets re-compose into the same back-stack entry rather
+            // than producing their own destinations.
+            var addEquipmentOpen by remember { mutableStateOf(false) }
+            var overrideEquipmentId by remember { mutableStateOf<String?>(null) }
+            GymDetailScreen(
+                onBack = { navController.popBackStack() },
+                onEdit = { navController.navigate(EditGymRoute(args.locationId)) },
+                onAddEquipment = { addEquipmentOpen = true },
+                onOpenOverride = { eqId -> overrideEquipmentId = eqId },
+                onDeleted = { navController.popBackStack() },
+            )
+            if (addEquipmentOpen) {
+                AddEquipmentSheet(
+                    locationId = args.locationId,
+                    onDismiss = { addEquipmentOpen = false },
+                )
+            }
+            overrideEquipmentId?.let { eqId ->
+                EquipmentOverrideSheet(
+                    locationId = args.locationId,
+                    equipmentId = eqId,
+                    onDismiss = { overrideEquipmentId = null },
+                )
+            }
+        }
+        composable<EditGymRoute> {
+            EditGymScreen(
+                onDone = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
+            )
+        }
 
         // IMPL-AND-03: feature-medical replaces the placeholder.
         composable<Route.Medications> {
@@ -170,6 +245,16 @@ fun AppNavHost(
                 navController.navigate(ReportDetailRoute(args.reportId))
             }
         }
-        composable<Route.GymDetail> { PlaceholderScreen("Gym", nextImpl = "IMPL-AND-06") }
+        // Route.GymDetail kept as a thin redirect to the feature-owned
+        // GymDetailRoute so any pre-existing deep links land on the
+        // new screen. The feature's route shape is now the source of
+        // truth.
+        composable<Route.GymDetail> { entry ->
+            val args = entry.toRoute<Route.GymDetail>()
+            LaunchedEffect(args.gymId) {
+                navController.popBackStack()
+                navController.navigate(GymDetailRoute(args.gymId))
+            }
+        }
     }
 }

@@ -30,18 +30,17 @@ val PrimaryDestinations: List<TopLevelDestination> = listOf(
 )
 
 /**
- * The phone bottom nav is space-constrained — show five primary
- * destinations. IMPL-AND-03 promotes Meds out of the More menu since
- * the medications screen now ships with full CRUD + the dashboard
- * Today's Doses card deep-links into it. Settings remains under a
- * "More" entry that opens the Settings screen directly; the spec
- * leaves room for a future "More" sheet when there are more secondary
- * surfaces.
+ * The phone bottom nav is space-constrained — four primary
+ * destinations + a "More" tail. IMPL-AND-06 promotes Workouts into
+ * the bottom nav now that the gym/equipment surface is live. Blood
+ * drops out of the bottom nav (still in the foldable sidebar and
+ * accessible from the dashboard panel) so the bar stays at five
+ * tappable slots.
  */
 val BottomNavDestinations: List<TopLevelDestination> = listOf(
     PrimaryDestinations[0], // Today
     PrimaryDestinations[1], // Body
-    PrimaryDestinations[2], // Blood
+    PrimaryDestinations[3], // Workouts (IMPL-AND-06)
     PrimaryDestinations[4], // Meds (IMPL-AND-03)
     TopLevelDestination(Route.Settings, "More", Icons.Outlined.Settings),
 )
