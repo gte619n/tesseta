@@ -48,5 +48,18 @@
             android:foregroundServiceType="health"
             android:exported="false" />
         -->
+
+        <!-- IMPL-AND-04: serves cached blood-test PDFs to the system PDF
+             viewer (Intent.ACTION_VIEW). Authority matches the one used
+             by ReportDetailViewModel: "${applicationId}.fileprovider". -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

@@ -437,22 +437,22 @@ DTO declares the field as `String?` and the mapper falls back to an
 empty string when null. The UI then renders "Lab report" when blank,
 matching the web client's behaviour.
 
-### Note — system-intent PDF viewer requires existing FileProvider authority
+### Note — FileProvider authority added in app manifest
 
-**Status:** open — please confirm authority is wired.
+**Status:** informational, no action needed.
 
 `ReportDetailViewModel.openPdf()` calls
 `FileProvider.getUriForFile(context, "${packageName}.fileprovider", file)`.
-This assumes the existing `androidx.core.content.FileProvider` is
-already declared in the phone app's `AndroidManifest.xml` with
-authority `com.gte619n.healthfitness.fileprovider` and a paths XML
-exposing `cacheDir` (or `external-cache-path`). The spec's Decisions
-table lists this as a "uses the existing authority" assumption.
+The IMPL-AND-04 work adds the missing manifest entries:
+  - `android/app/src/main/AndroidManifest.xml` declares the
+    `androidx.core.content.FileProvider` provider with authority
+    `${applicationId}.fileprovider`.
+  - `android/app/src/main/res/xml/file_paths.xml` exposes
+    `cacheDir/blood/` as `<cache-path name="blood_cache" path="blood/" />`.
 
-If the manifest entry doesn't exist yet, the View PDF button will
-throw `IllegalArgumentException: Failed to find configured root that
-contains <file>`. Add it as part of acceptance-test pass 5; the
-backend / Cloud Build path doesn't change.
+The spec's Decisions table called this an "existing authority"
+assumption — the authority did not previously exist, so this IMPL
+adds it. No backend / Cloud Build change.
 
 ### Note — `BloodMarkerSummaryMapper` retired but file retained
 
