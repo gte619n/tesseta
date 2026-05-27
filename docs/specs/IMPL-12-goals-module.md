@@ -25,7 +25,7 @@ Nutrition, Meds) and their Firestore collections already exist.
 | Active Goals expected | 4–8 — landing page is a list, not a gallery |
 | Web chat library | assistant-ui (`@assistant-ui/react`) |
 | Android chat | Thin custom Compose chat, no third-party chat SDK |
-| Chat architecture | One shared chat engine; Goals and Insights are separate threads |
+| Chat architecture | One shared chat engine; goals chat is the only thread scope in v1 |
 
 ---
 
@@ -60,14 +60,19 @@ can still manually override.
 
 ### Firestore collections
 
-Single-user app, so collections are flat and unscoped by user.
+Collections are multi-tenant, scoped under each user — same shape as
+every other module (`users/{userId}/bloodReadings/{...}`, etc.). The
+app is effectively single-user today, but the auth model
+([ADR-0002](decisions/ADR-0002-google-id-tokens-as-auth.md)) is
+per-Google-account and `CurrentUserProvider` is threaded through every
+controller, so Goals follows suit.
 
 ```
-goals/{goalId}
-goals/{goalId}/phases/{phaseId}
-goals/{goalId}/phases/{phaseId}/steps/{stepId}
-goalChatThreads/{threadId}
-goalChatThreads/{threadId}/messages/{messageId}
+users/{userId}/goals/{goalId}
+users/{userId}/goals/{goalId}/phases/{phaseId}
+users/{userId}/goals/{goalId}/phases/{phaseId}/steps/{stepId}
+users/{userId}/goalChatThreads/{threadId}
+users/{userId}/goalChatThreads/{threadId}/messages/{messageId}
 ```
 
 Phases and Steps are subcollections so a Goal can be loaded shallow
@@ -163,6 +168,67 @@ Adding a metric is a one-line registry addition plus a resolver branch.
 Gemini is given this list so it can only propose Steps that bind to real
 metrics.
 
+### Metric data sources
+
+Each key resolves through a record + repository in `core`, following the
+existing `DailyMetric` / `DailyMetricRepository` shape (Java records, no
+Lombok, repository interface in `core`, Firestore impl in `persistence`).
+
+| Metric key             | Backing source                                            | Status   |
+|---|---|---|
+| body.weight            | `core/bodycomposition` latest record                      | existing |
+| body.bodyFatPct        | `core/bodycomposition` latest record                      | existing |
+| body.leanMass          | `core/bodycomposition` latest record                      | existing |
+| blood.ldl              | `core/blood` most recent panel                            | existing |
+| blood.apoB             | `core/blood` most recent panel                            | existing |
+| blood.hba1c            | `core/blood` most recent panel                            | existing |
+| blood.hsCRP            | `core/blood` most recent panel                            | existing |
+| vitals.restingHr       | `DailyMetric.restingHeartRate` (latest)                   | existing |
+| vitals.hrv             | `DailyMetric.hrvMs` — new field on the existing record    | stub     |
+| vitals.sleepScore      | `DailyMetric.sleepScore` — new field on the existing record | stub   |
+| workouts.count         | count of `core/workout` records since timestamp           | existing |
+| workouts.weeklyVolume  | new `WeeklyWorkoutAggregate` record + repo                | stub     |
+| nutrition.proteinAvg7d | new `NutritionDailyLog` record + repo, 7-day average      | stub     |
+| meds.adherence30d      | `core/medication` `AdherenceRepository` 30-day window     | existing |
+
+Stub records this spec introduces, mirroring `DailyMetric`:
+
+```java
+public record NutritionDailyLog(
+    String userId, LocalDate date,
+    Double proteinGrams, Double carbsGrams, Double fatGrams,
+    Instant createdAt, Instant updatedAt
+) {}
+
+public interface NutritionDailyLogRepository {
+    Optional<NutritionDailyLog> findByDate(String userId, LocalDate date);
+    List<NutritionDailyLog> findByDateRange(String userId, LocalDate from, LocalDate to);
+    void save(NutritionDailyLog log);
+}
+
+public record WeeklyWorkoutAggregate(
+    String userId, LocalDate weekStart,
+    Double totalTonnage, Integer sessionCount,
+    Instant createdAt, Instant updatedAt
+) {}
+
+public interface WeeklyWorkoutAggregateRepository {
+    Optional<WeeklyWorkoutAggregate> findByWeekStart(String userId, LocalDate weekStart);
+    List<WeeklyWorkoutAggregate> findByDateRange(String userId, LocalDate from, LocalDate to);
+    void save(WeeklyWorkoutAggregate agg);
+}
+```
+
+`DailyMetric` gains two nullable fields (`hrvMs`, `sleepScore`) — a
+non-breaking Firestore add; older documents simply omit them.
+
+Stubs ship with the record, the repository interface, and a Firestore
+implementation, but no producer in IMPL-12. Until the ingestion spec
+for each lands, Steps bound to stub-backed metrics never auto-check
+and behave like `MANUAL` (user can still hand-check). The resolver
+treats a missing reading as "metric unavailable" and leaves `done`
+unchanged.
+
 ---
 
 ## Backend — Spring
@@ -211,15 +277,54 @@ that was the last Phase it completes the Goal.
 
 ### When evaluation runs
 
-1. On write to any source module — the existing module webhooks/
-   services publish a lightweight `MetricChanged` event; Goals listens
-   and re-evaluates only Steps bound to that metric key.
-2. A daily Cloud Run Job re-evaluates all `SUSTAINED` Steps (their
-   truth depends on elapsed time, not just on writes).
-3. On demand when the Goals UI loads, for immediate freshness.
+1. **On write to a source module.** Each writer publishes a
+   `MetricChangedEvent` via Spring `ApplicationEventPublisher` after a
+   successful write. `StepEvaluationService` listens with `@EventListener`
+   and re-evaluates only the Steps bound to that metric key. In-process
+   only — no Pub/Sub topic, no infra. Events lost on restart are fine
+   because the on-load and daily-job paths catch up.
 
-Idempotent — re-evaluating a done Step is a no-op unless the metric has
-regressed and the Step was not manually overridden.
+   ```java
+   public record MetricChangedEvent(String metricKey, Instant occurredAt) {}
+   ```
+
+   Services that need to publish (one publish per relevant write):
+   - `BloodTestService` → `blood.ldl`, `blood.apoB`, `blood.hba1c`, `blood.hsCRP`
+   - `BodyCompositionService` → `body.weight`, `body.bodyFatPct`, `body.leanMass`
+   - `DailyMetricService` / Google Health webhook handler → `vitals.restingHr`, `vitals.hrv`, `vitals.sleepScore`
+   - `WorkoutService` → `workouts.count`, `workouts.weeklyVolume`
+   - `AdherenceService` → `meds.adherence30d`
+   - `NutritionService` (new, alongside the stub) → `nutrition.proteinAvg7d`
+
+2. **Daily Cloud Run Job.** A separate Cloud Run Job, fired by Cloud
+   Scheduler at 03:00 America/New_York, calls
+   `StepEvaluationService.reevaluateAllSustained()`. SUSTAINED truth
+   depends on elapsed time, not writes, so it needs a time-driven
+   trigger. Deployed from the same image as the main service with a
+   different entrypoint.
+
+3. **On demand.** `GET /api/goals/{id}` runs a fresh evaluation for the
+   Goal's Steps before returning, so the UI always sees current truth
+   on load.
+
+### Regression — auto-eval never un-checks
+
+Auto-evaluation is a one-way ratchet: it can flip a Step from undone to
+done, never the reverse. If a metric later regresses across a done
+Step's threshold, the Step stays done and the resolver surfaces a
+transient `metricRegressed = true` on the Step's metric readout. The UI
+renders a small "metric regressed" badge next to the auto tag so the
+user can see truth diverging without the Step silently unwinding.
+
+The user can manually un-check a Step at any time. Any manual
+interaction — checking early or un-checking after auto — sets
+`manualOverride = true`, freezing `done` against further auto-eval.
+The Step row exposes a "Reset to auto" affordance that clears the
+override and re-runs evaluation.
+
+Phase and Goal completion are sticky: once `completedAt` is set, they
+stay completed. Phase progression (LOCKED → ACTIVE → COMPLETED) is
+one-way.
 
 ### REST endpoints
 
@@ -336,7 +441,7 @@ via the REST endpoints.
 
 ### Navigation
 
-New primary destination in the left nav, between Meds and Insights:
+New primary destination in the left nav, placed after Meds:
 
 ```
 Goals    icon: ti-route   or ti-target
@@ -409,9 +514,9 @@ React component.
   plan to get my ApoB into optimal range", "Plan a 12-week strength
   base", "I want to improve my sleep score — design a roadmap".
 - Backend connection: assistant-ui talks to `/api/goals/chat` over SSE.
-- Threads: assistant-ui's `ThreadList`. Goal chat threads are separate
-  from Insights threads — same component, same engine, different thread
-  scope (decision 5c).
+- Threads: assistant-ui's `ThreadList`, scoped to goal chat threads.
+  The thread scope is a parameter on the engine so later modules can
+  reuse the same plumbing; in v1 there is only one scope.
 
 ### Manual editor
 
@@ -475,28 +580,30 @@ This is one screen, two message composables, an SSE client, and one
 editable card composable. Genuinely modest; a chat SDK would be more
 integration surface than it saves.
 
-### Shared chat engine
+### Shared chat module
 
-"One shared engine, separate threads" (decision 5c) means: the same
-backend `/api/goals/chat` and `/api/insights/chat` are distinct thread
-scopes over one chat service. On Android the chat composables are
-written once in a `core-chat` module and used by both Goals and
-Insights, parameterized by thread scope and the tool set available.
+Chat composables live in a `core-chat` Android module, parameterized by
+thread scope and the tool set available, so later modules can reuse
+them without rewriting the surface. For IMPL-12 there is one scope:
+goal chat.
 
 ---
 
 ## Build sequence
 
 1. Data model + Firestore collections + Goal/Phase/Step CRUD endpoints.
-2. Metric key registry + `FirestoreMetricResolver` + `StepEvaluationService`.
-3. `MetricChanged` event hookup from the existing modules + the daily
-   re-evaluation Job.
-4. Web: Goals landing + roadmap detail, manual editor, REST wired.
-5. Web: Gemini tool calling + assistant-ui chat + `<GoalProposalCard>`.
-6. Android: `core-chat` module, Goals list + roadmap detail.
-7. Android: custom Compose chat + `GoalProposalCard` composable.
-8. End-to-end: propose via chat, edit, commit, watch a Step auto-check
-   when its metric crosses target.
+2. Metric data layer: new stub records/repos (`NutritionDailyLog`,
+   `WeeklyWorkoutAggregate`) and `DailyMetric` field additions
+   (`hrvMs`, `sleepScore`).
+3. Metric key registry + `FirestoreMetricResolver` + `StepEvaluationService`.
+4. Publish `MetricChangedEvent` from each writer service listed above.
+5. Daily Cloud Run Job for SUSTAINED re-evaluation + Cloud Scheduler trigger.
+6. Web: Goals landing + roadmap detail, manual editor, REST wired.
+7. Web: Gemini tool calling + assistant-ui chat + `<GoalProposalCard>`.
+8. Android: `core-chat` module, Goals list + roadmap detail.
+9. Android: custom Compose chat + `GoalProposalCard` composable.
+10. End-to-end: propose via chat, edit, commit, watch a Step auto-check
+    when its metric crosses target.
 
 ## Out of scope for IMPL-12
 
@@ -523,5 +630,11 @@ Insights, parameterized by thread scope and the tool set available.
   activates the next; completing the last Phase completes the Goal.
 - A Goal past its target date with incomplete Phases shows the
   "behind schedule" treatment on both platforms.
-- Goals chat threads and Insights chat threads are separate and do not
-  intermix.
+- A done THRESHOLD Step whose metric later regresses across the target
+  stays done and shows a "metric regressed" badge; nothing un-completes
+  automatically.
+- Manually un-checking an auto-completed Step is durable: subsequent
+  metric writes do not re-flip it until the user taps "Reset to auto".
+- An invalid Gemini proposal (unknown metric key, illegal comparator,
+  overlapping Phase dates) renders with the offending fields flagged
+  inline on the `<GoalProposalCard>`, not silently dropped.
