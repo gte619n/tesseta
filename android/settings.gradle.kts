@@ -19,6 +19,7 @@ include(
     ":wear",
     ":core-data",
     ":core-domain",
+    ":core-network",
     ":core-ui",
     ":core-health",
     ":feature-workouts",
