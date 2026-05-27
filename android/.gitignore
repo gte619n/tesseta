@@ -10,4 +10,7 @@ captures/
 *.apk
 *.aab
 *.keystore
+# Shared debug keystore is intentionally tracked so all devs + CI get the
+# same SHA-1 (required for Google OAuth / Credential Manager).
+!debug.keystore
 google-services.json
