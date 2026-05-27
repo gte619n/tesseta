@@ -22,6 +22,15 @@ app:
     # GCS + Gemini beans that would otherwise try to authenticate during
     # context load.
     enabled: false
+  medications:
+    # Same rationale as bloodtest: DrugLookupService requires GEMINI_API_KEY
+    # at construction time. Tests that need medication behavior install a
+    # stub via @TestConfiguration; everything else skips the bean.
+    enabled: false
+  equipment:
+    # EquipmentParserService requires GEMINI_API_KEY at construction time.
+    # Tests that need it install a stub; everything else skips the bean.
+    parser-enabled: false
   gym:
     bucket: test-gym-bucket
   googlehealth:
