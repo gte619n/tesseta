@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/me/medications/{medicationId}/adherence")
+@ConditionalOnProperty(name = "app.medications.enabled", havingValue = "true", matchIfMissing = true)
 public class AdherenceController {
 
     private final CurrentUserProvider currentUser;

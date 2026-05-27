@@ -10,4 +10,7 @@ captures/
 *.apk
 *.aab
 *.keystore
+# Shared debug keystore is public-by-design (per IMPL-02) so the SHA-1 is stable across
+# developers and CI; release keystores still match the rule above.
+!debug.keystore
 google-services.json

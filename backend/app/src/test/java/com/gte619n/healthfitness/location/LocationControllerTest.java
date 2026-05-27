@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.core.location.DayOfWeek;
 import com.gte619n.healthfitness.core.location.HoursSlot;
 import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
+import com.gte619n.healthfitness.testsupport.InMemoryLocationRepository;
 import com.gte619n.healthfitness.testsupport.TestPersistenceConfig;
 import java.time.Instant;
 import java.util.List;
@@ -38,8 +39,10 @@ class LocationControllerTest {
 
     @BeforeEach
     void setUp() {
-        // Clean up any existing test locations
-        // Note: In a real setup, you might want to use a test database that gets reset
+        // Spring caches the @SpringBootTest context across the run, so the
+        // in-memory store survives between tests; wipe it before each one to
+        // keep tests that assert exact list sizes isolated.
+        ((InMemoryLocationRepository) locationRepository).clear();
     }
 
     @Test

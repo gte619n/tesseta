@@ -5,8 +5,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Global exception handler that converts internal errors to proper HTTP responses.
@@ -18,6 +20,38 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     public record ErrorResponse(String error, String message, Instant timestamp) {}
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex) {
+        // ResponseStatusException is the canonical way controllers signal a
+        // specific HTTP status (e.g. throw new ResponseStatusException(NOT_FOUND)).
+        // It extends RuntimeException, so the catch-all below would otherwise
+        // collapse 404/400/etc. into 500. Honour the carried status code.
+        log.warn("Status exception {}: {}", ex.getStatusCode(), ex.getReason());
+        return ResponseEntity
+            .status(ex.getStatusCode())
+            .body(new ErrorResponse(
+                ex.getStatusCode().toString(),
+                ex.getReason(),
+                Instant.now()
+            ));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        // AccessDeniedException extends RuntimeException, so without this
+        // specific handler the catch-all below would turn admin denials into
+        // 500s. Map it to 403 to match Spring Security's default behaviour
+        // when the exception originates in the security filter chain.
+        log.warn("Access denied: {}", ex.getMessage());
+        return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(new ErrorResponse(
+                "forbidden",
+                ex.getMessage(),
+                Instant.now()
+            ));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {

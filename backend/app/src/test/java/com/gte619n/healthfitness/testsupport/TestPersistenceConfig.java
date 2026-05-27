@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.testsupport;
 
 import com.gte619n.healthfitness.core.blood.BloodReadingRepository;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
+import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.location.LocationRepository;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -31,5 +32,10 @@ public class TestPersistenceConfig {
     @Bean
     LocationRepository locationRepository() {
         return new InMemoryLocationRepository();
+    }
+
+    @Bean
+    EquipmentRepository equipmentRepository() {
+        return new InMemoryEquipmentRepository();
     }
 }

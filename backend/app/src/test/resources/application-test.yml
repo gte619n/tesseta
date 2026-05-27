@@ -22,6 +22,18 @@ app:
     # GCS + Gemini beans that would otherwise try to authenticate during
     # context load.
     enabled: false
+  medications:
+    # Same story as dexa/bloodtest — the drug pipeline pulls in a Firestore-
+    # backed DrugRepository (disabled via firestore-enabled above) and
+    # GCS/Gemini wiring, so flip the feature off for tests instead of
+    # stubbing every dependency.
+    enabled: false
+  equipment:
+    # EquipmentParserService.<init> throws if the parser API key is missing,
+    # and the unconditional BulkImportService needs an EquipmentParser bean
+    # to wire. Tests don't exercise bulk import, so pass a placeholder key —
+    # the Gemini client is lazy and never reaches the wire here.
+    parser-api-key: test-parser-key
   gym:
     bucket: test-gym-bucket
   googlehealth:

@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.medication.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/drugs")
+@ConditionalOnProperty(name = "app.medications.enabled", havingValue = "true", matchIfMissing = true)
 public class DrugController {
 
     private final DrugRepository drugs;
