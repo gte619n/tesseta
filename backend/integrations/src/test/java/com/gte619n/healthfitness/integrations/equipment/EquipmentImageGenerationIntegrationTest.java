@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -31,6 +32,7 @@ import org.mockito.Mockito;
  * Generated images are saved to /tmp/equipment-images/ — file:// URLs are
  * printed to the test log for click-to-open.
  */
+@Disabled("Requires GEMINI_API_KEY - run manually")
 class EquipmentImageGenerationIntegrationTest {
 
     private static final Path OUTPUT_DIR = Paths.get("/tmp/equipment-images");
