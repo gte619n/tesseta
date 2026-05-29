@@ -92,7 +92,7 @@ export function CategorySelector({
                   onSubcategoryChange("");
                 }
               }}
-              className="h-4 w-4 cursor-pointer rounded border-border-default text-accent focus:ring-2 focus:ring-accent"
+              className="h-4 w-4 cursor-pointer rounded border-border-default accent-accent focus:ring-2 focus:ring-accent"
             />
             <span className="text-[13px] text-secondary">Propose new subcategory</span>
           </label>

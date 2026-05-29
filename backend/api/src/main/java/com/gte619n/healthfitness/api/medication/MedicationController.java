@@ -151,6 +151,7 @@ public class MedicationController {
             throw new IllegalArgumentException("Either drugId or customName is required");
         }
 
+        LocalDate startDate = body.startDate() != null ? body.startDate() : LocalDate.now();
         Medication medication = new Medication(
             userId,
             medicationId,
@@ -164,11 +165,12 @@ public class MedicationController {
             body.protocolId(),
             body.notes(),
             body.prescribedBy(),
-            body.startDate() != null ? body.startDate() : LocalDate.now(),
+            startDate,
             null,   // endDate
             null,   // discontinueReason
             null,   // discontinueNotes
             correlatedMarkers,
+            List.of(DosagePeriod.initial(body.dose(), unit, startDate)),
             Instant.now(),
             Instant.now()
         );
@@ -223,28 +225,119 @@ public class MedicationController {
             history.save(change);
         }
 
+        double newDose = body.dose() != null ? body.dose() : existing.dose();
+        String newUnit = body.unit() != null ? body.unit() : existing.unit();
+
+        // Resolve dosage periods. An explicit array is a full-replacement correction
+        // of the dose history; otherwise keep the active period's dose/unit in sync
+        // with the denormalized fields so they never diverge.
+        List<DosagePeriod> dosagePeriods;
+        if (body.dosagePeriods() != null) {
+            DosagePeriod.validate(body.dosagePeriods());
+            dosagePeriods = body.dosagePeriods();
+            DosagePeriod active = DosagePeriod.active(dosagePeriods);
+            newDose = active.dose();
+            newUnit = active.unit();
+        } else if (body.dose() != null || body.unit() != null) {
+            dosagePeriods = DosagePeriod.replaceActive(existing.dosagePeriods(), newDose, newUnit);
+        } else {
+            dosagePeriods = existing.dosagePeriods();
+        }
+
+        // When the start date changes (and the caller didn't supply an explicit
+        // period array), shift the earliest dosage period's start to match so the
+        // dose history stays consistent with the medication's start.
+        LocalDate newStartDate = body.startDate() != null ? body.startDate() : existing.startDate();
+        if (body.startDate() != null && body.dosagePeriods() == null && !dosagePeriods.isEmpty()) {
+            dosagePeriods = DosagePeriod.shiftEarliestStart(dosagePeriods, newStartDate);
+        }
+
         Medication updated = new Medication(
             userId,
             medicationId,
             existing.drugId(),
             body.customName() != null ? body.customName() : existing.customName(),
             existing.status(),
-            body.dose() != null ? body.dose() : existing.dose(),
-            body.unit() != null ? body.unit() : existing.unit(),
+            newDose,
+            newUnit,
             body.frequency() != null ? body.frequency() : existing.frequency(),
             body.timeSlots() != null ? body.timeSlots() : existing.timeSlots(),
             body.protocolId() != null ? body.protocolId() : existing.protocolId(),
             body.notes() != null ? body.notes() : existing.notes(),
             body.prescribedBy() != null ? body.prescribedBy() : existing.prescribedBy(),
-            existing.startDate(),
+            newStartDate,
             existing.endDate(),
             existing.discontinueReason(),
             existing.discontinueNotes(),
             body.correlatedMarkers() != null ? body.correlatedMarkers() : existing.correlatedMarkers(),
+            dosagePeriods,
             existing.createdAt(),
             Instant.now()
         );
 
+        medications.save(updated);
+        Drug drug = drugs.findById(existing.drugId()).orElse(null);
+        return ResponseEntity.ok(MedicationResponse.from(updated, drug));
+    }
+
+    /**
+     * Change the dose effective on a given date. Closes the current open dosage
+     * period at the effective date and opens a new one, preserving the dose history.
+     * Also records a DOSE_CHANGE history entry.
+     */
+    @PostMapping("/{medicationId}/dosage")
+    public ResponseEntity<MedicationResponse> changeDose(
+        @PathVariable String medicationId,
+        @RequestBody ChangeDoseRequest body
+    ) {
+        if (body.dose() == null || body.dose() <= 0) {
+            throw new IllegalArgumentException("dose is required and must be positive");
+        }
+        String userId = currentUser.get().userId();
+        Medication existing = medications.findById(userId, medicationId)
+            .orElseThrow(() -> new IllegalArgumentException("Medication not found"));
+
+        LocalDate effective = body.startDate() != null ? body.startDate() : LocalDate.now();
+        String unit = body.unit() != null ? body.unit() : existing.unit();
+
+        List<DosagePeriod> dosagePeriods =
+            DosagePeriod.changeDose(existing.dosagePeriods(), body.dose(), unit, effective);
+        DosagePeriod.validate(dosagePeriods);
+
+        String historyId = UUID.randomUUID().toString();
+        history.save(new MedicationHistory(
+            historyId,
+            userId,
+            medicationId,
+            ChangeType.DOSE_CHANGE,
+            existing.dose() + " " + existing.unit(),
+            body.dose() + " " + unit,
+            Instant.now(),
+            body.changeNotes()
+        ));
+
+        Medication updated = new Medication(
+            userId,
+            medicationId,
+            existing.drugId(),
+            existing.customName(),
+            existing.status(),
+            body.dose(),
+            unit,
+            existing.frequency(),
+            existing.timeSlots(),
+            existing.protocolId(),
+            existing.notes(),
+            existing.prescribedBy(),
+            existing.startDate(),
+            existing.endDate(),
+            existing.discontinueReason(),
+            existing.discontinueNotes(),
+            existing.correlatedMarkers(),
+            dosagePeriods,
+            existing.createdAt(),
+            Instant.now()
+        );
         medications.save(updated);
         Drug drug = drugs.findById(existing.drugId()).orElse(null);
         return ResponseEntity.ok(MedicationResponse.from(updated, drug));
@@ -269,11 +362,47 @@ public class MedicationController {
 
         LocalDate endDate = body.endDate() != null ? body.endDate() : LocalDate.now();
 
-        Medication discontinued = existing.discontinue(endDate, body.reason(), body.notes());
+        // Close the open dosage period at the end date so the dose history shows it ending.
+        List<DosagePeriod> closedPeriods = DosagePeriod.closeActive(existing.dosagePeriods(), endDate);
+        Medication discontinued =
+            existing.discontinue(endDate, body.reason(), body.notes()).withDosagePeriods(closedPeriods);
         medications.save(discontinued);
 
         Drug drug = drugs.findById(existing.drugId()).orElse(null);
         return ResponseEntity.ok(MedicationResponse.from(discontinued, drug));
+    }
+
+    /**
+     * Reactivate a discontinued medication. Reopens dosing from the resume date
+     * (defaults to today) with the medication's current dose/unit, recording a
+     * gap in the dose history for the pause.
+     */
+    @PostMapping("/{medicationId}/reactivate")
+    public ResponseEntity<MedicationResponse> reactivate(
+        @PathVariable String medicationId,
+        @RequestBody(required = false) ReactivateRequest body
+    ) {
+        String userId = currentUser.get().userId();
+
+        Medication existing = medications.findById(userId, medicationId)
+            .orElseThrow(() -> new IllegalArgumentException("Medication not found"));
+
+        if (existing.status() == MedicationStatus.ACTIVE) {
+            throw new IllegalStateException("Medication is already active");
+        }
+
+        LocalDate resumeDate = body != null && body.resumeDate() != null
+            ? body.resumeDate() : LocalDate.now();
+
+        List<DosagePeriod> reopened =
+            DosagePeriod.reopen(existing.dosagePeriods(), existing.dose(), existing.unit(), resumeDate);
+        DosagePeriod.validate(reopened);
+
+        Medication reactivated = existing.reactivate(resumeDate, reopened);
+        medications.save(reactivated);
+
+        Drug drug = drugs.findById(existing.drugId()).orElse(null);
+        return ResponseEntity.ok(MedicationResponse.from(reactivated, drug));
     }
 
     /**
@@ -327,12 +456,25 @@ public class MedicationController {
         String notes,
         String prescribedBy,
         List<String> correlatedMarkers,
+        LocalDate startDate,          // Edit the medication's start date (nullable)
+        List<DosagePeriod> dosagePeriods, // Full replacement for correcting dose history (nullable)
         String changeNotes           // Notes for the history entry
+    ) {}
+
+    public record ChangeDoseRequest(
+        Double dose,
+        String unit,                 // Defaults to the medication's current unit if null
+        LocalDate startDate,         // Effective date; defaults to today if null
+        String changeNotes
     ) {}
 
     public record DiscontinueRequest(
         DiscontinueReason reason,
         String notes,
         LocalDate endDate
+    ) {}
+
+    public record ReactivateRequest(
+        LocalDate resumeDate         // Defaults to today if null
     ) {}
 }

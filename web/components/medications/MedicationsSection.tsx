@@ -14,16 +14,26 @@ interface MedicationsSectionProps {
     timeSlots?: TimeSlot[];
     notes?: string | null;
     prescribedBy?: string | null;
+    startDate?: string;
     changeNotes?: string;
   }) => Promise<void>;
-  discontinueMedication: (medicationId: string, reason: string, notes: string | null) => Promise<void>;
+  changeDose: (medicationId: string, data: {
+    dose: number;
+    unit?: string;
+    startDate?: string;
+    changeNotes?: string;
+  }) => Promise<void>;
+  discontinueMedication: (medicationId: string, reason: string, notes: string | null, endDate?: string) => Promise<void>;
+  reactivateMedication: (medicationId: string, resumeDate?: string) => Promise<void>;
   deleteMedication: (medicationId: string) => Promise<void>;
 }
 
 export function MedicationsSection({
   medications,
   updateMedication,
+  changeDose,
   discontinueMedication,
+  reactivateMedication,
   deleteMedication,
 }: MedicationsSectionProps) {
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null);
@@ -41,7 +51,9 @@ export function MedicationsSection({
           open={!!selectedMedication}
           onClose={() => setSelectedMedication(null)}
           updateMedication={updateMedication}
+          changeDose={changeDose}
           discontinueMedication={discontinueMedication}
+          reactivateMedication={reactivateMedication}
           deleteMedication={deleteMedication}
         />
       )}

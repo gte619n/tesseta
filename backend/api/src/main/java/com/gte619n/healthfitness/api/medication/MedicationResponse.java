@@ -25,6 +25,7 @@ public record MedicationResponse(
     DiscontinueReason discontinueReason,
     String discontinueNotes,
     List<String> correlatedMarkers,
+    List<DosagePeriod> dosagePeriods,   // Dated dose history (newest period is open)
     AdherenceSummary adherence          // 30-day adherence stats
 ) {
     public static MedicationResponse from(Medication m, Drug drug, AdherenceSummary adherence) {
@@ -46,6 +47,7 @@ public record MedicationResponse(
             m.discontinueReason(),
             m.discontinueNotes(),
             m.correlatedMarkers(),
+            m.dosagePeriods(),
             adherence
         );
     }

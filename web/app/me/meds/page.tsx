@@ -106,6 +106,7 @@ export default async function MedsPage() {
     timeSlots?: TimeSlot[];
     notes?: string | null;
     prescribedBy?: string | null;
+    startDate?: string;
     changeNotes?: string;
   }) {
     "use server";
@@ -123,16 +124,58 @@ export default async function MedsPage() {
     revalidatePath("/me/meds");
   }
 
-  async function discontinueMedication(medicationId: string, reason: string, notes: string | null) {
+  async function changeDose(medicationId: string, data: {
+    dose: number;
+    unit?: string;
+    startDate?: string;
+    changeNotes?: string;
+  }) {
+    "use server";
+    const res = await apiFetch(`/api/me/medications/${medicationId}/dosage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to change dose: ${text}`);
+    }
+
+    revalidatePath("/me/meds");
+  }
+
+  async function discontinueMedication(
+    medicationId: string,
+    reason: string,
+    notes: string | null,
+    endDate?: string,
+  ) {
     "use server";
     const res = await apiFetch(`/api/me/medications/${medicationId}/discontinue`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason, notes }),
+      body: JSON.stringify({ reason, notes, endDate: endDate ?? null }),
     });
 
     if (!res.ok) {
       throw new Error(`Failed to discontinue: ${res.status}`);
+    }
+
+    revalidatePath("/me/meds");
+  }
+
+  async function reactivateMedication(medicationId: string, resumeDate?: string) {
+    "use server";
+    const res = await apiFetch(`/api/me/medications/${medicationId}/reactivate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resumeDate: resumeDate ?? null }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to reactivate: ${text}`);
     }
 
     revalidatePath("/me/meds");
@@ -192,7 +235,9 @@ export default async function MedsPage() {
               <MedicationsSection
                 medications={activeMeds}
                 updateMedication={updateMedication}
+                changeDose={changeDose}
                 discontinueMedication={discontinueMedication}
+                reactivateMedication={reactivateMedication}
                 deleteMedication={deleteMedication}
               />
             ) : (
@@ -216,7 +261,9 @@ export default async function MedsPage() {
               <MedicationsSection
                 medications={discontinuedMeds}
                 updateMedication={updateMedication}
+                changeDose={changeDose}
                 discontinueMedication={discontinueMedication}
+                reactivateMedication={reactivateMedication}
                 deleteMedication={deleteMedication}
               />
             </div>
