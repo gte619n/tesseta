@@ -18,6 +18,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class DevHeaderAuthFilter extends OncePerRequestFilter {
     static final String HEADER = "X-Dev-User";
 
+    // SSE endpoints (e.g. the Goals chat stream) dispatch a second time on
+    // the ASYNC dispatcher when the SseEmitter completes. OncePerRequestFilter
+    // skips async dispatches by default, which would drop the pre-auth and
+    // make Spring Security deny the re-dispatch. Re-run so the dev user stays
+    // authenticated across the async boundary, mirroring how the real JWT
+    // SecurityContext is persisted in production.
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return false;
+    }
+
     @Override
     protected void doFilterInternal(
         HttpServletRequest request,

@@ -12,6 +12,8 @@ import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
 import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.StepRepository;
+import com.gte619n.healthfitness.core.goals.chat.GoalChatRepository;
+import com.gte619n.healthfitness.integrations.goals.GoalChatClient;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
 import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregateRepository;
 import com.gte619n.healthfitness.testsupport.nutrition.InMemoryNutritionDailyLogRepository;
@@ -81,6 +83,27 @@ public class TestPersistenceConfig {
     @Bean
     StepRepository stepRepository() {
         return new InMemoryStepRepository();
+    }
+
+    @Bean
+    GoalChatRepository goalChatRepository() {
+        return new InMemoryGoalChatRepository();
+    }
+
+    // The live GeminiGoalChatClient is gated off in tests (app.goals.enabled
+    // = false) because it requires a real API key. Provide a deterministic
+    // fake so the GoalChatController can wire and so chat tests can assert on
+    // streamed tokens + proposals. The default fake echoes a short reply and
+    // emits no proposal; GoalChatControllerTest installs its own richer fake.
+    @Bean
+    GoalChatClient goalChatClient() {
+        return (history, userMessage, onToken) -> {
+            String reply = "Thanks, let me think about that.";
+            for (String word : reply.split(" ")) {
+                onToken.accept(word + " ");
+            }
+            return new GoalChatClient.StreamResult(reply, null);
+        };
     }
 
     @Bean

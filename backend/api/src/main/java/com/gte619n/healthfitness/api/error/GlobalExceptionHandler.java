@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Global exception handler that converts internal errors to proper HTTP responses.
@@ -27,6 +28,21 @@ public class GlobalExceptionHandler {
             .body(new ErrorResponse(
                 "bad_request",
                 ex.getMessage(),
+                Instant.now()
+            ));
+    }
+
+    // Controllers throw ResponseStatusException for explicit HTTP statuses
+    // (e.g. 404 NOT_FOUND). Because it is a RuntimeException it would
+    // otherwise be swallowed by handleRuntimeException below and reported as
+    // 500 — so handle it first and preserve the intended status.
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex) {
+        return ResponseEntity
+            .status(ex.getStatusCode())
+            .body(new ErrorResponse(
+                "error",
+                ex.getReason(),
                 Instant.now()
             ));
     }

@@ -70,6 +70,14 @@ app:
     # deploy time. Local dev reads it from the same env var.
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
+  goals:
+    # IMPL-12: Goals chat uses Gemini tool calling (propose_goal_structure)
+    # to design Goal/Phase/Step roadmaps. Direct Gemini API, same key as the
+    # other modules. `enabled` gates the live client so unit tests can run
+    # without an API key by providing a fake GoalChatClient bean.
+    enabled: ${GOALS_CHAT_ENABLED:true}
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
   equipment:
     bucket: ${EQUIPMENT_BUCKET:health-fitness-160-equipment}
     # Gemini 3.1 Flash for equipment image generation (nano quality tier)
