@@ -226,6 +226,7 @@ export const devices = [
 // only declarative state here is label / icon / href / optional badge.
 export const navItems = [
   { label: "Dashboard", icon: "layout-dashboard", href: "/" },
+  { label: "Goals", icon: "route", href: "/me/goals" },
   { label: "Body", icon: "body-scan", href: "/me/body-composition" },
   { label: "Blood", icon: "droplet", href: "/me/blood" },
   { label: "Workouts", icon: "barbell", href: "/me/workouts" },
