@@ -321,7 +321,7 @@ private fun StepRow(
                         style = Hf.type.monoSm,
                         color = Hf.colors.textSecondary,
                     )
-                    if (step.done && !step.manualOverride) {
+                    if (step.kind != StepKind.MANUAL && step.done && !step.manualOverride) {
                         Pill("Auto", HfTone.Good)
                     }
                     if (step.metricRegressed == true) {

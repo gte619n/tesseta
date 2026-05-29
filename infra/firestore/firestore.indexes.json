@@ -1,5 +1,5 @@
 {
-  "_comment": "Composite indexes deployed via `gcloud firestore indexes composite create` or `gcloud firestore deploy --indexes-file`. IMPL-04 adds the metric+sampleTime index for body composition range queries. The single-field index on users.googleHealth.healthUserId is created automatically by Firestore — no entry needed here.",
+  "_comment": "Composite indexes deployed via `gcloud firestore indexes composite create` or `gcloud firestore deploy --indexes-file`. IMPL-04 adds the metric+sampleTime index for body composition range queries. IMPL-12 adds the goals composite index and steps collection-group field overrides. The single-field index on users.googleHealth.healthUserId is created automatically by Firestore — no entry needed here.",
   "indexes": [
     {
       "collectionGroup": "bodyComposition",
@@ -8,7 +8,88 @@
         { "fieldPath": "metric", "order": "ASCENDING" },
         { "fieldPath": "sampleTime", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "subcategory", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "locations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "goals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "locations",
+      "fieldPath": "equipmentIds",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "steps",
+      "fieldPath": "metric.metricKey",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "steps",
+      "fieldPath": "kind",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    }
+  ]
 }

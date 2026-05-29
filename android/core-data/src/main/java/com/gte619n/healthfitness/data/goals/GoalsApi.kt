@@ -2,7 +2,7 @@ package com.gte619n.healthfitness.data.goals
 
 import com.gte619n.healthfitness.domain.goals.Goal
 import com.gte619n.healthfitness.domain.goals.GoalDeep
-import com.gte619n.healthfitness.domain.goals.Phase
+import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepPatchRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -21,14 +21,16 @@ interface GoalsApi {
     @GET("api/me/goals/{id}")
     suspend fun getGoalDeep(@Path("id") goalId: String): GoalDeep
 
+    // Backend PATCH .../steps/{sid} returns a single StepResponse (not Phase).
     @PATCH("api/me/goals/{id}/phases/{pid}/steps/{sid}")
     suspend fun patchStep(
         @Path("id") goalId: String,
         @Path("pid") phaseId: String,
         @Path("sid") stepId: String,
         @Body body: StepPatchRequest,
-    ): Phase
+    ): Step
 
+    // Backend POST .../reevaluate returns 204 No Content.
     @POST("api/me/goals/{id}/reevaluate")
-    suspend fun reevaluate(@Path("id") goalId: String): GoalDeep
+    suspend fun reevaluate(@Path("id") goalId: String): Unit
 }

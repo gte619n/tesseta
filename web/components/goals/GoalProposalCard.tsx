@@ -117,11 +117,13 @@ function blankStep(): StepDraft {
   return { key: nextKey("step"), title: "", kind: "MANUAL", metric: null };
 }
 
-function defaultMetric(): MetricBindingDraft {
+// COUNT steps only allow GTE/GT/EQ comparators (backend validator rejects LT/LTE).
+// Other kinds default to LT.
+function defaultMetric(kind?: StepKind): MetricBindingDraft {
   const first = METRIC_REGISTRY[0]!;
   return {
     metricKey: first.key,
-    comparator: "LT",
+    comparator: kind === "COUNT" ? "GTE" : "LT",
     targetValue: "",
     windowDays: null,
     countFrom: null,
@@ -217,9 +219,20 @@ export function GoalProposalCard({
   function onStepKindChange(pIdx: number, sIdx: number, kind: StepKind) {
     const needsMetric = kind !== "MANUAL";
     const existing = draft.phases[pIdx]?.steps[sIdx]?.metric;
+    // When switching to COUNT, ensure the comparator is legal (GTE/GT/EQ).
+    // When switching away from COUNT to a threshold/sustained kind, reset to LT.
+    const COUNT_LEGAL: Set<Comparator> = new Set(["GTE", "GT", "EQ"]);
+    const existingWithFixedComparator: MetricBindingDraft | null | undefined =
+      existing
+        ? kind === "COUNT" && !COUNT_LEGAL.has(existing.comparator)
+          ? { ...existing, comparator: "GTE" }
+          : kind !== "COUNT" && COUNT_LEGAL.has(existing.comparator) && existing.comparator !== "EQ"
+          ? { ...existing, comparator: "LT" }
+          : existing
+        : null;
     patchStep(pIdx, sIdx, {
       kind,
-      metric: needsMetric ? existing ?? defaultMetric() : null,
+      metric: needsMetric ? existingWithFixedComparator ?? defaultMetric(kind) : null,
     });
   }
 

@@ -44,6 +44,8 @@ class GoalsRepository @Inject constructor(
         return api.getGoalDeep(goalId)
     }
 
-    suspend fun reevaluate(goalId: String): GoalDeep =
+    suspend fun reevaluate(goalId: String): GoalDeep {
         api.reevaluate(goalId)
+        return api.getGoalDeep(goalId)
+    }
 }

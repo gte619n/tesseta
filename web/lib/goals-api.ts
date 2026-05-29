@@ -120,8 +120,9 @@ export function archiveGoal(goalId: string): Promise<void> {
   return send<void>(`/api/me/goals/${goalId}`, "DELETE");
 }
 
-export function reevaluateGoal(goalId: string): Promise<GoalDeepResponse> {
-  return send<GoalDeepResponse>(`/api/me/goals/${goalId}/reevaluate`, "POST");
+// Backend POST .../reevaluate returns 204 No Content — nothing to parse.
+export function reevaluateGoal(goalId: string): Promise<void> {
+  return send<void>(`/api/me/goals/${goalId}/reevaluate`, "POST");
 }
 
 // ── Phase mutations ──────────────────────────────────────────────────
