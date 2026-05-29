@@ -42,4 +42,15 @@ class ChatRepository @Inject constructor(
     }
 
     suspend fun listThreads(): List<ChatThreadResponse> = api.listThreads()
+
+    /**
+     * Delete a thread. Throws [IllegalStateException] on HTTP errors other
+     * than 404 (which is silently ignored — already gone is success enough).
+     */
+    suspend fun deleteThread(threadId: String) {
+        val response = api.deleteThread(threadId)
+        if (!response.isSuccessful && response.code() != 404) {
+            throw IllegalStateException("Delete thread failed: HTTP ${response.code()}")
+        }
+    }
 }

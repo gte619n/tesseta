@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.core.chat.ChatScope
 import com.gte619n.healthfitness.core.chat.ChatSseClient
 import com.gte619n.healthfitness.core.chat.ChatStreamEvent
 import com.gte619n.healthfitness.data.goals.ChatRepository
+import com.gte619n.healthfitness.data.goals.ChatThreadResponse
 import com.gte619n.healthfitness.data.goals.CommitResult
 import com.gte619n.healthfitness.domain.goals.GoalProposal
 import com.squareup.moshi.Moshi
@@ -41,6 +42,10 @@ data class GoalsChatUiState(
     val savingMessageIds: Set<String> = emptySet(),
     /** message id -> created goalId, once committed (collapses the card). */
     val committedGoalIds: Map<String, String> = emptyMap(),
+    /** All threads for this user, loaded on init and refreshed after delete. */
+    val threads: List<ChatThreadResponse> = emptyList(),
+    /** Thread ids currently being deleted (shows progress / disables trash). */
+    val deletingThreadIds: Set<String> = emptySet(),
 )
 
 @HiltViewModel
@@ -54,6 +59,10 @@ class GoalsChatViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(GoalsChatUiState())
     val state: StateFlow<GoalsChatUiState> = _state.asStateFlow()
+
+    init {
+        refreshThreads()
+    }
 
     fun send(message: String) {
         if (_state.value.streaming) return
@@ -169,6 +178,58 @@ class GoalsChatViewModel @Inject constructor(
                     }
                 },
             )
+        }
+    }
+
+    /** Fetch/refresh the thread list. Called on init and after a successful delete. */
+    private fun refreshThreads() {
+        viewModelScope.launch {
+            try {
+                val threads = chatRepository.listThreads()
+                _state.update { it.copy(threads = threads) }
+            } catch (e: Exception) {
+                // Non-fatal: thread list is decorative on the chat screen.
+                // Error already surfaced on first load via the main error channel
+                // if needed; swallow here to avoid overwriting chat errors.
+            }
+        }
+    }
+
+    /**
+     * Delete a thread by id. While the call is in-flight the thread id is added
+     * to [GoalsChatUiState.deletingThreadIds] so the UI can disable the action.
+     * If the deleted thread is the active one, the screen resets to a fresh
+     * (empty) conversation.
+     */
+    fun deleteThread(threadId: String) {
+        if (threadId in _state.value.deletingThreadIds) return
+        _state.update { it.copy(deletingThreadIds = it.deletingThreadIds + threadId, error = null) }
+        viewModelScope.launch {
+            try {
+                chatRepository.deleteThread(threadId)
+                // If the deleted thread was active, reset to a new conversation.
+                val wasActive = _state.value.threadId == threadId
+                _state.update { s ->
+                    s.copy(
+                        deletingThreadIds = s.deletingThreadIds - threadId,
+                        threads = s.threads.filterNot { it.threadId == threadId },
+                        threadId = if (wasActive) null else s.threadId,
+                        messages = if (wasActive) emptyList() else s.messages,
+                        editors = if (wasActive) emptyMap() else s.editors,
+                        savingMessageIds = if (wasActive) emptySet() else s.savingMessageIds,
+                        committedGoalIds = if (wasActive) emptyMap() else s.committedGoalIds,
+                    )
+                }
+                // Re-fetch authoritative list from the server.
+                refreshThreads()
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        deletingThreadIds = it.deletingThreadIds - threadId,
+                        error = e.message ?: "Delete failed",
+                    )
+                }
+            }
         }
     }
 }
