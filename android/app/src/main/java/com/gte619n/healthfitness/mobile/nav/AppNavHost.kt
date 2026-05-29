@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gte619n.healthfitness.feature.goals.GOAL_ID_ARG
 import com.gte619n.healthfitness.feature.goals.GoalRoadmapRoute
+import com.gte619n.healthfitness.feature.goals.GoalsChatRoute
 import com.gte619n.healthfitness.feature.goals.GoalsListRoute
 import com.gte619n.healthfitness.mobile.DashboardRoot
 
@@ -17,6 +18,7 @@ import com.gte619n.healthfitness.mobile.DashboardRoot
 object Routes {
     const val DASHBOARD = "dashboard"
     const val GOALS_LIST = "goals"
+    const val GOALS_CHAT = "goals/chat"
     const val GOAL_DETAIL = "goals/{$GOAL_ID_ARG}"
     fun goalDetail(goalId: String) = "goals/$goalId"
 }
@@ -34,8 +36,21 @@ fun AppNavHost(widthClass: WindowWidthSizeClass) {
         composable(Routes.GOALS_LIST) {
             GoalsListRoute(
                 onOpenGoal = { goalId -> navController.navigate(Routes.goalDetail(goalId)) },
-                onNewGoal = { /* TODO(IMPL-12 chat task): open Goals chat */ },
+                onNewGoal = { navController.navigate(Routes.GOALS_CHAT) },
                 onBack = { navController.popBackStack() },
+            )
+        }
+        // Registered BEFORE the parameterized goals/{goalId} route so the
+        // static "goals/chat" path matches the chat screen, not the detail.
+        composable(Routes.GOALS_CHAT) {
+            GoalsChatRoute(
+                onBack = { navController.popBackStack() },
+                onOpenGoal = { goalId ->
+                    // Replace the chat in the back stack with the new roadmap.
+                    navController.navigate(Routes.goalDetail(goalId)) {
+                        popUpTo(Routes.GOALS_CHAT) { inclusive = true }
+                    }
+                },
             )
         }
         composable(

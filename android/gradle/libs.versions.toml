@@ -22,6 +22,7 @@ healthConnect = "1.1.0-alpha07"
 window = "1.3.0"
 material3WindowSizeClass = "1.3.1"
 googleFonts = "1.7.5"
+markdownRenderer = "0.27.0"
 
 # Wear OS
 wearComposeMaterial3 = "1.0.0-alpha28"
@@ -59,6 +60,7 @@ navigation-compose = { module = "androidx.navigation:navigation-compose", versio
 
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
@@ -78,6 +80,12 @@ moshi = { module = "com.squareup.moshi:moshi", version.ref = "moshi" }
 moshi-kotlin = { module = "com.squareup.moshi:moshi-kotlin", version.ref = "moshi" }
 
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
+
+# IMPL-12 (Android Goals chat): Compose markdown renderer for assistant
+# messages. Material 3 flavour so it picks up the consumer's M3 theme.
+# 0.27.0 pins Kotlin 2.0.21 (matches the project) and uses multiplatform
+# Compose (adapts to the host Compose BOM), so no AGP/BOM bump is needed.
+markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 
 health-connect = { module = "androidx.health.connect:connect-client", version.ref = "healthConnect" }
 

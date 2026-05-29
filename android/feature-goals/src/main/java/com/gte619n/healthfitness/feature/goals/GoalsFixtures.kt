@@ -8,6 +8,10 @@ import com.gte619n.healthfitness.domain.goals.GoalSource
 import com.gte619n.healthfitness.domain.goals.GoalStatus
 import com.gte619n.healthfitness.domain.goals.Phase
 import com.gte619n.healthfitness.domain.goals.PhaseStatus
+import com.gte619n.healthfitness.domain.goals.GoalProposal
+import com.gte619n.healthfitness.domain.goals.ProposalMetric
+import com.gte619n.healthfitness.domain.goals.ProposalPhase
+import com.gte619n.healthfitness.domain.goals.ProposalStep
 import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepKind
 import com.gte619n.healthfitness.domain.goals.StepMetricBinding
@@ -61,6 +65,47 @@ object GoalsFixtures {
     )
 
     val listGoals = listOf(cardioGoal, behindGoal, sleepGoal)
+
+    // An AI proposal as it would arrive on the SSE `proposal` event. One step
+    // carries a metric validationError to exercise inline flagging on the card.
+    val proposal = GoalProposal(
+        title = "Get LDL under 100",
+        description = "A two-phase plan to bring LDL into the optimal range.",
+        domain = GoalDomain.CARDIOVASCULAR,
+        targetDate = "2026-12-01",
+        phases = listOf(
+            ProposalPhase(
+                title = "Establish a Zone 2 cardio base",
+                description = "Build aerobic base over 8 weeks.",
+                targetStartDate = "2026-06-01",
+                targetEndDate = "2026-08-01",
+                steps = listOf(
+                    ProposalStep(
+                        title = "Log 24 Zone 2 workouts",
+                        kind = StepKind.COUNT,
+                        metric = ProposalMetric("workouts.count", Comparator.GTE, 24.0),
+                    ),
+                    ProposalStep(title = "Schedule a follow-up panel", kind = StepKind.MANUAL),
+                ),
+            ),
+            ProposalPhase(
+                title = "Confirm LDL in range",
+                description = "Re-test and verify.",
+                targetStartDate = "2026-08-01",
+                targetEndDate = "2026-12-01",
+                steps = listOf(
+                    ProposalStep(
+                        title = "LDL under 100",
+                        kind = StepKind.THRESHOLD,
+                        metric = ProposalMetric(
+                            "blood.ldl", Comparator.LT, 100.0,
+                            validationError = "Example inline error: confirm the target.",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
 
     val deepGoal = GoalDeep(
         goalId = "g1",

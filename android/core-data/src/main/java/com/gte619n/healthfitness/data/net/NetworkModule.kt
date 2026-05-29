@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.data.net
 
 import com.gte619n.healthfitness.data.auth.IdTokenCache
+import com.gte619n.healthfitness.data.goals.ChatApi
 import com.gte619n.healthfitness.data.goals.GoalsApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -85,6 +86,11 @@ object NetworkModule {
     @Singleton
     fun provideGoalsApi(retrofit: Retrofit): GoalsApi =
         retrofit.create(GoalsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideChatApi(retrofit: Retrofit): ChatApi =
+        retrofit.create(ChatApi::class.java)
 
     private fun String.ensureTrailingSlash(): String =
         if (endsWith("/")) this else "$this/"
