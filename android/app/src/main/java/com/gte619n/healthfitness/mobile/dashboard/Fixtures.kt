@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.MonitorWeight
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.RamenDining
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SignalCellular4Bar
@@ -60,6 +61,7 @@ object DashboardIcons {
     val MoreHoriz: ImageVector = Icons.Outlined.MoreHoriz
     val ArrowRight: ImageVector = Icons.AutoMirrored.Outlined.ArrowForward
     val Home: ImageVector = Icons.Outlined.Home
+    val Route: ImageVector = Icons.Outlined.Route
 }
 
 data class VitalDelta(val direction: ArrowDir, val value: String, val window: String, val tone: Tone)
@@ -238,6 +240,9 @@ object DashboardFixtures {
         NavDest("Workouts", DashboardIcons.Barbell),
         NavDest("Nutrition", DashboardIcons.Bowl),
         NavDest("Meds", DashboardIcons.Pill),
+        // IMPL-12: Goals is a top-level rail destination on foldable, placed
+        // after Meds to mirror the web nav.
+        NavDest("Goals", DashboardIcons.Route),
         NavDest("Insights", DashboardIcons.Sparkles),
     )
 

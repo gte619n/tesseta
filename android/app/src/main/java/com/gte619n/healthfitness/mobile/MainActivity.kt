@@ -27,11 +27,14 @@ import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
 import com.gte619n.healthfitness.mobile.auth.SignInScreen
 import com.gte619n.healthfitness.mobile.dashboard.FoldableDashboardScreen
 import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
+import com.gte619n.healthfitness.mobile.nav.AppNavHost
 import com.gte619n.healthfitness.mobile.wear.PhoneTokenPublisher
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.theme.Hf
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private lateinit var authCoordinator: AuthCoordinator
@@ -107,7 +110,7 @@ private fun AppRoot(
     val scope = rememberCoroutineScope()
 
     when (state) {
-        is AuthState.SignedIn -> DashboardRoot(widthClass)
+        is AuthState.SignedIn -> AppNavHost(widthClass)
         AuthState.Loading -> SignInScreen(state = state, onSignIn = {})
         else -> SignInScreen(
             state = state,
@@ -117,11 +120,14 @@ private fun AppRoot(
 }
 
 @Composable
-fun DashboardRoot(widthClass: WindowWidthSizeClass) {
+fun DashboardRoot(
+    widthClass: WindowWidthSizeClass,
+    onOpenGoals: () -> Unit = {},
+) {
     // Compact (< 600 dp) → phone Today screen.
     // Medium / Expanded (≥ 600 dp) → foldable/tablet dashboard with icon-only sidebar.
     when (widthClass) {
-        WindowWidthSizeClass.Compact -> PhoneTodayScreen()
-        else -> FoldableDashboardScreen()
+        WindowWidthSizeClass.Compact -> PhoneTodayScreen(onOpenGoals = onOpenGoals)
+        else -> FoldableDashboardScreen(onOpenGoals = onOpenGoals)
     }
 }

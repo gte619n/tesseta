@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.mobile.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,14 +35,14 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
-fun FoldableDashboardScreen() {
+fun FoldableDashboardScreen(onOpenGoals: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Hf.colors.canvas),
     ) {
         Row(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-            FoldableSidebar()
+            FoldableSidebar(onOpenGoals = onOpenGoals)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -79,7 +80,7 @@ fun FoldableDashboardScreen() {
 }
 
 @Composable
-private fun FoldableSidebar() {
+private fun FoldableSidebar(onOpenGoals: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxHeight()
@@ -100,6 +101,7 @@ private fun FoldableSidebar() {
                 active = dest.active,
                 alert = dest.alert,
                 contentDescription = dest.label,
+                onClick = if (dest.label == "Goals") onOpenGoals else ({}),
             )
         }
         Spacer(Modifier.weight(1f))
@@ -126,11 +128,13 @@ private fun FoldableNavIcon(
     active: Boolean,
     alert: Boolean,
     contentDescription: String,
+    onClick: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
             .width(42.dp)
             .height(38.dp)
+            .clickable { onClick() }
             .background(
                 if (active) Hf.colors.accentBg else androidx.compose.ui.graphics.Color.Transparent,
                 RoundedCornerShape(8.dp),

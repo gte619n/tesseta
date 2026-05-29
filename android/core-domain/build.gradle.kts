@@ -20,4 +20,8 @@ android {
 
 dependencies {
     implementation(libs.kotlinx.coroutines.android)
+
+    // Goals (IMPL-12): domain models carry Moshi annotations so they double as
+    // the JSON wire contract with the backend.
+    api(libs.moshi)
 }

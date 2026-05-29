@@ -27,6 +27,17 @@ android {
                 ?: System.getenv("WEB_OAUTH_CLIENT_ID")
                 ?: ""
         buildConfigField("String", "WEB_OAUTH_CLIENT_ID", "\"$webOauthClientId\"")
+
+        // IMPL-12: backend base URL for the Retrofit client. Defaults to the
+        // deployed Cloud Run service so debug builds work on real devices and
+        // emulators without a local backend. Override for local dev with
+        // -PbackendBaseUrl=http://10.0.2.2:8080 (emulator → host localhost) or
+        // the BACKEND_BASE_URL env var.
+        val backendBaseUrl =
+            (project.findProperty("backendBaseUrl") as String?)
+                ?: System.getenv("BACKEND_BASE_URL")
+                ?: "https://health-fitness-backend-mbysudfbja-uc.a.run.app"
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
     }
 
     // IMPL-02: pin debug signing to the checked-in keystore at android/debug.keystore
@@ -92,10 +103,12 @@ dependencies {
     implementation(project(":feature-workouts"))
     implementation(project(":feature-medical"))
     implementation(project(":feature-chat"))
+    implementation(project(":feature-goals"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.window.manager)
 
     implementation(platform(libs.compose.bom))

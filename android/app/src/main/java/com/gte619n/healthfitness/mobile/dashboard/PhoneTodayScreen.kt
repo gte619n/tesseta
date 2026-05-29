@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.mobile.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +33,7 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
-fun PhoneTodayScreen() {
+fun PhoneTodayScreen(onOpenGoals: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -56,7 +57,7 @@ fun PhoneTodayScreen() {
             Spacer(Modifier.height(13.dp))
             RecentFeed(entries = DashboardFixtures.recentPhone, showViewAll = true, modifier = Modifier.fillMaxWidth())
         }
-        BottomNav()
+        BottomNav(onOpenGoals = onOpenGoals)
     }
 }
 
@@ -143,7 +144,7 @@ private fun QuickTile(icon: ImageVector, label: String, modifier: Modifier) {
 }
 
 @Composable
-private fun BottomNav() {
+private fun BottomNav(onOpenGoals: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -163,7 +164,15 @@ private fun BottomNav() {
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 DashboardFixtures.phoneBottomNav.forEach { dest ->
-                    BottomNavItem(icon = dest.icon, label = dest.label, active = dest.active)
+                    // IMPL-12: phone reaches Goals via the "More" tab (Goals
+                    // lives under More per the spec's phone nav guidance).
+                    val onClick = if (dest.label == "More") onOpenGoals else ({})
+                    BottomNavItem(
+                        icon = dest.icon,
+                        label = dest.label,
+                        active = dest.active,
+                        onClick = onClick,
+                    )
                 }
             }
         }
@@ -171,8 +180,11 @@ private fun BottomNav() {
 }
 
 @Composable
-private fun BottomNavItem(icon: ImageVector, label: String, active: Boolean) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun BottomNavItem(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit = {}) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() },
+    ) {
         if (active) {
             Box(
                 modifier = Modifier

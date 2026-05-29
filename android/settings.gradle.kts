@@ -24,4 +24,5 @@ include(
     ":feature-workouts",
     ":feature-medical",
     ":feature-chat",
+    ":feature-goals",
 )
