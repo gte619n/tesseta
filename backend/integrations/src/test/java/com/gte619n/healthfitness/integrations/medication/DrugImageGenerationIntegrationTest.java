@@ -96,21 +96,25 @@ class DrugImageGenerationIntegrationTest {
     // ==================== IMAGE GENERATION TESTS (REQUIRES API KEY) ====================
 
     @Test
+    @Disabled("Requires GEMINI_API_KEY - run manually")
     void testFinasterideImageGeneration() throws IOException {
         testDrugImageGeneration("finasteride", "315246");
     }
 
     @Test
+    @Disabled("Requires GEMINI_API_KEY - run manually")
     void testOmeprazoleImageGeneration() throws IOException {
         testDrugImageGeneration("omeprazole", "7646");
     }
 
     @Test
+    @Disabled("Requires GEMINI_API_KEY - run manually")
     void testSertralineImageGeneration() throws IOException {
         testDrugImageGeneration("sertraline", "36437");
     }
 
     @Test
+    @Disabled("Requires GEMINI_API_KEY - run manually")
     void testTirzepatideImageGeneration() throws IOException {
         testDrugImageGeneration("tirzepatide", "2601712");
     }

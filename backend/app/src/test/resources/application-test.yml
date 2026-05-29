@@ -23,9 +23,10 @@ app:
     # context load.
     enabled: false
   medications:
-    # Same rationale as bloodtest: DrugLookupService requires GEMINI_API_KEY
-    # at construction time. Tests that need medication behavior install a
-    # stub via @TestConfiguration; everything else skips the bean.
+    # Same story as dexa/bloodtest — the drug pipeline pulls in a Firestore-
+    # backed DrugRepository (disabled via firestore-enabled above) and
+    # GCS/Gemini wiring, so flip the feature off for tests instead of
+    # stubbing every dependency.
     enabled: false
   goals:
     # Same rationale as bloodtest: GeminiGoalChatClient requires GEMINI_API_KEY
@@ -33,9 +34,11 @@ app:
     # via @TestConfiguration; everything else skips the live bean.
     enabled: false
   equipment:
-    # EquipmentParserService requires GEMINI_API_KEY at construction time.
-    # Tests that need it install a stub; everything else skips the bean.
-    parser-enabled: false
+    # EquipmentParserService.<init> throws if the parser API key is missing,
+    # and the unconditional BulkImportService needs an EquipmentParser bean
+    # to wire. Tests don't exercise bulk import, so pass a placeholder key —
+    # the Gemini client is lazy and never reaches the wire here.
+    parser-api-key: test-parser-key
   gym:
     bucket: test-gym-bucket
   googlehealth:

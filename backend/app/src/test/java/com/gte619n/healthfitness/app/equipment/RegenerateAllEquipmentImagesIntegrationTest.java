@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,10 @@ import org.springframework.boot.test.context.SpringBootTest;
  * {@link Assumptions#assumeTrue}, so a bare {@code ./gradlew test} skips them
  * safely.
  */
+// Gate class-level too — Assumptions.assumeTrue runs after Spring context
+// load, so without this guard CI would try to build the full live-Firestore
+// + Gemini context and fail before reaching @BeforeEach.
+@EnabledIfEnvironmentVariable(named = "RUN_BATCH_REGEN", matches = "1")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 class RegenerateAllEquipmentImagesIntegrationTest {
 

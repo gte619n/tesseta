@@ -6,8 +6,6 @@ import com.gte619n.healthfitness.core.bloodtest.BloodTestReportRepository;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
 import com.gte619n.healthfitness.core.dexa.DexaScan;
 import com.gte619n.healthfitness.core.dexa.DexaScanRepository;
-import com.gte619n.healthfitness.core.equipment.Equipment;
-import com.gte619n.healthfitness.core.equipment.EquipmentParser;
 import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
 import com.gte619n.healthfitness.core.goals.PhaseRepository;
@@ -32,7 +30,6 @@ import com.gte619n.healthfitness.core.medication.Protocol;
 import com.gte619n.healthfitness.core.medication.ProtocolRepository;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -68,6 +65,11 @@ public class TestPersistenceConfig {
     @Bean
     LocationRepository locationRepository() {
         return new InMemoryLocationRepository();
+    }
+
+    @Bean
+    EquipmentRepository equipmentRepository() {
+        return new InMemoryEquipmentRepository();
     }
 
     @Bean
@@ -192,23 +194,5 @@ public class TestPersistenceConfig {
             @Override public Optional<DexaScan> findByContentHash(String userId, String contentHash) { return Optional.empty(); }
             @Override public void delete(String userId, String scanId) {}
         };
-    }
-
-    @Bean
-    EquipmentRepository equipmentRepository() {
-        return new EquipmentRepository() {
-            @Override public Optional<Equipment> findById(String equipmentId) { return Optional.empty(); }
-            @Override public List<Equipment> findByIds(Collection<String> equipmentIds) { return List.of(); }
-            @Override public List<Equipment> findCatalog(String search, String category, String subcategory) { return List.of(); }
-            @Override public List<Equipment> findByOwner(String ownerId) { return List.of(); }
-            @Override public List<Equipment> findPendingReview() { return List.of(); }
-            @Override public void save(Equipment equipment) {}
-            @Override public void delete(String equipmentId) {}
-        };
-    }
-
-    @Bean
-    EquipmentParser equipmentParser() {
-        return rawText -> List.of();
     }
 }

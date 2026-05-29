@@ -22,6 +22,13 @@
 - Trunk-based dev on `main`. Feature branches named `feat/IMPL-XX-slug`.
 - One commit per logical change. Don't squash unrelated work.
 
+## Worktrees
+- Worktrees live in `.worktrees/` at the repo root (not `.claude/worktrees/`).
+- Directory name = short slug (e.g. `build_fixes`); branch name = full
+  `feature/<slug>` (e.g. `feature/build_fixes`).
+- Branch from `origin/main`:
+  `git worktree add -b feature/<slug> .worktrees/<slug> origin/main`
+
 ## AI Models
 - **General AI work** (text generation, parsing, extraction, lookup):
   `gemini-3.5-flash`

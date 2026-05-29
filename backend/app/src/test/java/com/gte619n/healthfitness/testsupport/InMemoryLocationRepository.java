@@ -126,4 +126,8 @@ public class InMemoryLocationRepository implements LocationRepository {
     private Map<String, Location> userMap(String userId) {
         return storage.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
     }
+
+    public void clear() {
+        storage.clear();
+    }
 }

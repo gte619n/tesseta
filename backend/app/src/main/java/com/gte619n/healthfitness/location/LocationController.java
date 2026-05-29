@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.api.location.UpdateLocationRequest;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
+import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -64,7 +65,7 @@ public class LocationController {
     }
 
     @PostMapping
-    public ResponseEntity<LocationResponse> create(@RequestBody CreateLocationRequest body) {
+    public ResponseEntity<LocationResponse> create(@Valid @RequestBody CreateLocationRequest body) {
         String userId = currentUser.get().userId();
         Location location = service.create(
             userId,
