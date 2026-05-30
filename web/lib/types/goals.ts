@@ -142,6 +142,9 @@ export const METRIC_REGISTRY: MetricKeyMeta[] = [
   { key: "workouts.count", label: "Workouts logged", unit: "", lowerIsBetter: false },
   { key: "workouts.weeklyVolume", label: "Weekly volume", unit: "lb", lowerIsBetter: false },
   { key: "nutrition.proteinAvg7d", label: "Protein (7d avg)", unit: "g", lowerIsBetter: false },
+  { key: "nutrition.carbsAvg7d", label: "Carbs (7-day avg)", unit: "g", lowerIsBetter: false },
+  { key: "nutrition.fatAvg7d", label: "Fat (7-day avg)", unit: "g", lowerIsBetter: false },
+  { key: "nutrition.caloriesAvg7d", label: "Calories (7-day avg)", unit: "kcal", lowerIsBetter: false },
   { key: "meds.adherence30d", label: "Med adherence (30d)", unit: "%", lowerIsBetter: false },
 ];
 

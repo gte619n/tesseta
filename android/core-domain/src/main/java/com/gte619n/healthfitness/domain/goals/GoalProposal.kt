@@ -67,6 +67,9 @@ object MetricRegistry {
         "workouts.count",
         "workouts.weeklyVolume",
         "nutrition.proteinAvg7d",
+        "nutrition.carbsAvg7d",
+        "nutrition.fatAvg7d",
+        "nutrition.caloriesAvg7d",
         "meds.adherence30d",
     )
 }
