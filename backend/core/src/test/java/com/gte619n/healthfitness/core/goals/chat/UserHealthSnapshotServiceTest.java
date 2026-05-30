@@ -45,13 +45,13 @@ class UserHealthSnapshotServiceTest {
             USER, "m1", "drug-1", null, MedicationStatus.ACTIVE,
             200, "mg", FrequencyConfig.daily(2), null, null, null, null,
             LocalDate.of(2026, 1, 1), null, null, null, null,
-            Instant.now(), Instant.now()));
+            List.of(), Instant.now(), Instant.now()));
         // A discontinued med must NOT appear (filter is status=ACTIVE).
         meds.add(new Medication(
             USER, "m2", "drug-2", null, MedicationStatus.DISCONTINUED,
             10, "mg", FrequencyConfig.daily(1), null, null, null, null,
             LocalDate.of(2025, 1, 1), LocalDate.of(2025, 6, 1), null, null, null,
-            Instant.now(), Instant.now()));
+            List.of(), Instant.now(), Instant.now()));
 
         FakeDrugs drugs = new FakeDrugs();
         drugs.add(new Drug("drug-1", "Metformin", List.of(), null, null,
