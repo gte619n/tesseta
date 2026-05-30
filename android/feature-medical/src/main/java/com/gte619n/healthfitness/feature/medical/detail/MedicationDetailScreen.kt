@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.domain.medications.DosagePeriod
 import com.gte619n.healthfitness.domain.medications.DoseFormatter
 import com.gte619n.healthfitness.domain.medications.FrequencyFormatter
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
@@ -239,6 +240,11 @@ private fun Body(
             Text(notes, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
         }
 
+        if (med.dosagePeriods.size > 1) {
+            SectionLabel("DOSING HISTORY")
+            med.dosagePeriods.sortedByDescending { it.startDate }.forEach { DosagePeriodRow(it) }
+        }
+
         if (detail.history.isNotEmpty()) {
             SectionLabel("HISTORY")
             detail.history.forEach { HistoryRow(it) }
@@ -272,6 +278,31 @@ private fun Body(
 @Composable
 private fun SectionLabel(label: String) {
     Text(label, style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+}
+
+@Composable
+private fun DosagePeriodRow(period: DosagePeriod) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Hf.colors.surface)
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = DoseFormatter.format(period.dose, period.unit),
+            style = Hf.type.monoMd,
+            color = Hf.colors.textPrimary,
+        )
+        val range = if (period.endDate != null) {
+            "${period.startDate} - ${period.endDate}"
+        } else {
+            "${period.startDate} - Present"
+        }
+        Text(range, style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+    }
 }
 
 @Composable

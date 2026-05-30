@@ -34,6 +34,12 @@ internal interface MedicationsApi {
         @Body body: UpdateMedicationDto,
     ): MedicationDto
 
+    @POST("api/me/medications/{id}/dosage")
+    suspend fun changeDose(
+        @Path("id") medicationId: String,
+        @Body body: ChangeDoseDto,
+    ): MedicationDto
+
     @POST("api/me/medications/{id}/discontinue")
     suspend fun discontinue(
         @Path("id") medicationId: String,

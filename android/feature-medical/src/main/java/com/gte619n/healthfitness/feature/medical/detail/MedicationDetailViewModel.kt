@@ -6,8 +6,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
+import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.MedicationRepository
-import com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest
 import com.gte619n.healthfitness.feature.medical.nav.MedicationDetailRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,12 +84,12 @@ class MedicationDetailViewModel @Inject constructor(
         _state.update { current.copy(actionInFlight = true) }
         viewModelScope.launch {
             runCatching {
-                medications.update(
+                medications.changeDose(
                     medicationId,
-                    UpdateMedicationRequest(dose = newDose, changeNotes = changeNotes),
+                    ChangeDoseRequest(dose = newDose, changeNotes = changeNotes),
                 )
             }
-                .onSuccess { load() } // re-fetch so the new history entry appears
+                .onSuccess { load() } // re-fetch so the new dosage period + history appear
                 .onFailure { e ->
                     _state.update { current.copy(actionInFlight = false, error = e.message) }
                 }

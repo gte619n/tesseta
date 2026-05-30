@@ -66,6 +66,19 @@ data class TimeSlot(
     val dose: Double,
 )
 
+/**
+ * A dated dosage period. The active/current period has [endDate] == null.
+ * End dates are exclusive: a closed period's end equals the next period's start.
+ */
+data class DosagePeriod(
+    val dose: Double,
+    val unit: String,
+    val startDate: LocalDate,
+    val endDate: LocalDate? = null,
+) {
+    val isActive: Boolean get() = endDate == null
+}
+
 data class AdherenceSummary(
     val last30Days: List<DayAdherence>,
     val percentage: Double,
@@ -91,6 +104,7 @@ data class Medication(
     val discontinueReason: DiscontinueReason?,
     val discontinueNotes: String?,
     val correlatedMarkers: List<String>,
+    val dosagePeriods: List<DosagePeriod> = emptyList(),
     val adherence: AdherenceSummary?,
 ) {
     val displayName: String

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -50,11 +51,17 @@ fun HoursMatrix(
     readOnly: Boolean = false,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        DayOfWeek.entries.forEach { day ->
+        DayOfWeek.entries.forEachIndexed { index, day ->
+            val previousDay = if (index > 0) DayOfWeek.entries[index - 1] else null
             HoursRow(
                 day = day,
                 slot = hours[day],
                 readOnly = readOnly,
+                canCopyFromPrevious = previousDay != null && hours[previousDay] != null,
+                onCopyFromPrevious = {
+                    val prev = previousDay?.let { hours[it] } ?: return@HoursRow
+                    onChange(hours.toMutableMap().apply { this[day] = prev })
+                },
                 onChange = { newSlot ->
                     val next = hours.toMutableMap().apply { this[day] = newSlot }
                     onChange(next)
@@ -72,6 +79,8 @@ private fun HoursRow(
     day: DayOfWeek,
     slot: HoursSlot?,
     readOnly: Boolean,
+    canCopyFromPrevious: Boolean = false,
+    onCopyFromPrevious: () -> Unit = {},
     onChange: (HoursSlot?) -> Unit,
 ) {
     var openText by remember(slot?.open) { mutableStateOf(slot?.open.orEmpty()) }
@@ -103,6 +112,17 @@ private fun HoursRow(
                 )
             }
         } else {
+            if (canCopyFromPrevious) {
+                TextButton(
+                    onClick = onCopyFromPrevious,
+                    modifier = Modifier.width(36.dp),
+                ) {
+                    Text("↑", style = Hf.type.bodyMd, color = Hf.colors.accent)
+                }
+            } else {
+                Spacer(Modifier.width(36.dp))
+            }
+            Spacer(Modifier.width(4.dp))
             CompactTimeField(
                 value = if (closed) "" else openText,
                 enabled = !closed,

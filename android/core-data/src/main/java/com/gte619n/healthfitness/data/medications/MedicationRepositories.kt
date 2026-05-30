@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.data.medications
 
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.domain.medications.AdherenceRepository
+import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
 import com.gte619n.healthfitness.domain.medications.Drug
@@ -46,6 +47,13 @@ internal class DefaultMedicationRepository @Inject constructor(
         request: UpdateMedicationRequest,
     ): Medication = withContext(io) {
         MedicationMapper.toDomain(api.update(medicationId, MedicationMapper.toDto(request)))
+    }
+
+    override suspend fun changeDose(
+        medicationId: String,
+        request: ChangeDoseRequest,
+    ): Medication = withContext(io) {
+        MedicationMapper.toDomain(api.changeDose(medicationId, MedicationMapper.toDto(request)))
     }
 
     override suspend fun discontinue(

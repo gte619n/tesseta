@@ -18,6 +18,7 @@ interface MedicationRepository {
     suspend fun get(medicationId: String): MedicationDetail
     suspend fun create(request: CreateMedicationRequest): Medication
     suspend fun update(medicationId: String, request: UpdateMedicationRequest): Medication
+    suspend fun changeDose(medicationId: String, request: ChangeDoseRequest): Medication
     suspend fun discontinue(
         medicationId: String,
         reason: DiscontinueReason,
@@ -103,5 +104,17 @@ data class UpdateMedicationRequest(
     val notes: String? = null,
     val prescribedBy: String? = null,
     val correlatedMarkers: List<String>? = null,
+    val changeNotes: String? = null,
+)
+
+/**
+ * Change the dose effective on [startDate] (defaults to today server-side).
+ * The backend closes the current open dosage period and opens a new one,
+ * preserving the dose history.
+ */
+data class ChangeDoseRequest(
+    val dose: Double,
+    val unit: String? = null,
+    val startDate: LocalDate? = null,
     val changeNotes: String? = null,
 )

@@ -68,6 +68,13 @@ internal data class TimeSlotDto(
     val dose: Double,
 )
 
+internal data class DosagePeriodDto(
+    val dose: Double,
+    val unit: String,
+    val startDate: LocalDate,
+    val endDate: LocalDate? = null,
+)
+
 internal data class DayAdherenceDto(
     val date: LocalDate,
     val taken: Boolean,
@@ -96,6 +103,7 @@ internal data class MedicationDto(
     val discontinueReason: String? = null,
     val discontinueNotes: String? = null,
     val correlatedMarkers: List<String> = emptyList(),
+    val dosagePeriods: List<DosagePeriodDto> = emptyList(),
     val adherence: AdherenceSummaryDto? = null,
 )
 
@@ -126,6 +134,7 @@ internal data class MedicationDetailDto(
     val discontinueReason: String? = null,
     val discontinueNotes: String? = null,
     val correlatedMarkers: List<String> = emptyList(),
+    val dosagePeriods: List<DosagePeriodDto> = emptyList(),
     val history: List<HistoryEntryDto> = emptyList(),
 )
 
@@ -166,6 +175,13 @@ internal data class UpdateMedicationDto(
     val notes: String? = null,
     val prescribedBy: String? = null,
     val correlatedMarkers: List<String>? = null,
+    val changeNotes: String? = null,
+)
+
+internal data class ChangeDoseDto(
+    val dose: Double,
+    val unit: String? = null,
+    val startDate: LocalDate? = null,
     val changeNotes: String? = null,
 )
 

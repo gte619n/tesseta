@@ -92,7 +92,7 @@ export function LocationForm({ initialData, onSubmit, cancelHref }: Props) {
             type="checkbox"
             checked={is24Hours}
             onChange={(e) => setIs24Hours(e.target.checked)}
-            className="h-4 w-4 cursor-pointer rounded border-border-default text-accent focus:ring-accent focus:ring-offset-0"
+            className="h-4 w-4 cursor-pointer rounded border-border-default accent-accent focus:ring-accent focus:ring-offset-0"
           />
           <span className="text-[13px] text-primary">Open 24/7</span>
         </label>

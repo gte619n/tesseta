@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.domain.medications.MedicationDetail
 import com.gte619n.healthfitness.domain.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import com.gte619n.healthfitness.domain.medications.TodaysDose
+import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -95,6 +96,7 @@ internal class FakeMedicationRepository(
 ) : MedicationRepository {
     var lastCreated: CreateMedicationRequest? = null
     var lastUpdated: Pair<String, UpdateMedicationRequest>? = null
+    var lastDoseChanged: Pair<String, ChangeDoseRequest>? = null
     var lastDiscontinued: Triple<String, DiscontinueReason, String?>? = null
     var lastDeleted: String? = null
 
@@ -115,6 +117,11 @@ internal class FakeMedicationRepository(
 
     override suspend fun update(medicationId: String, request: UpdateMedicationRequest): Medication {
         lastUpdated = medicationId to request
+        return list.first { it.medicationId == medicationId }
+    }
+
+    override suspend fun changeDose(medicationId: String, request: ChangeDoseRequest): Medication {
+        lastDoseChanged = medicationId to request
         return list.first { it.medicationId == medicationId }
     }
 

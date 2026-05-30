@@ -26,6 +26,7 @@ public record Medication(
     DiscontinueReason discontinueReason, // (nullable)
     String discontinueNotes,            // (nullable)
     List<String> correlatedMarkers,     // Blood markers to show on charts
+    List<DosagePeriod> dosagePeriods,   // Dated dose history; active period has endDate==null
     Instant createdAt,
     Instant updatedAt
 ) {
@@ -61,6 +62,7 @@ public record Medication(
             null,                   // discontinueReason
             null,                   // discontinueNotes
             correlatedMarkers,
+            List.of(DosagePeriod.initial(dose, unit, startDate)),
             Instant.now(),
             Instant.now()
         );
@@ -88,6 +90,45 @@ public record Medication(
             reason,
             notes,
             correlatedMarkers,
+            dosagePeriods,
+            createdAt,
+            Instant.now()
+        );
+    }
+
+    /** Return a copy with a different dosage-period list. */
+    public Medication withDosagePeriods(List<DosagePeriod> newPeriods) {
+        return new Medication(
+            userId, medicationId, drugId, customName, status, dose, unit, frequency, timeSlots,
+            protocolId, notes, prescribedBy, startDate, endDate, discontinueReason, discontinueNotes,
+            correlatedMarkers, newPeriods, createdAt, Instant.now()
+        );
+    }
+
+    /**
+     * Reactivate a discontinued medication. Clears the end date and discontinue
+     * reason/notes and reopens the most recent dosage period from {@code resumeDate}.
+     */
+    public Medication reactivate(LocalDate resumeDate, List<DosagePeriod> reopenedPeriods) {
+        return new Medication(
+            userId,
+            medicationId,
+            drugId,
+            customName,
+            MedicationStatus.ACTIVE,
+            dose,
+            unit,
+            frequency,
+            timeSlots,
+            protocolId,
+            notes,
+            prescribedBy,
+            startDate,
+            null,                   // endDate
+            null,                   // discontinueReason
+            null,                   // discontinueNotes
+            correlatedMarkers,
+            reopenedPeriods,
             createdAt,
             Instant.now()
         );

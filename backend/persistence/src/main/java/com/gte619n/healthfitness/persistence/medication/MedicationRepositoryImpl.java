@@ -121,6 +121,18 @@ public class MedicationRepositoryImpl implements MedicationRepository {
         String endDateStr = snapshot.getString("endDate");
         String discontinueReasonStr = snapshot.getString("discontinueReason");
 
+        // Dosage periods: reconstruct from stored array, or migrate legacy docs
+        // (no dosagePeriods field) by synthesizing a single open-ended period from
+        // the denormalized dose/unit/startDate.
+        Double dose = snapshot.getDouble("dose");
+        String unit = snapshot.getString("unit");
+        LocalDate startDate = LocalDate.parse(snapshot.getString("startDate"));
+        List<Map<String, Object>> periodsRaw =
+            (List<Map<String, Object>>) snapshot.get("dosagePeriods");
+        List<DosagePeriod> dosagePeriods = periodsRaw != null && !periodsRaw.isEmpty()
+            ? periodsRaw.stream().map(this::parseDosagePeriod).toList()
+            : List.of(DosagePeriod.initial(dose != null ? dose : 0.0, unit, startDate));
+
         return new Medication(
             userId,
             snapshot.getId(),
@@ -139,8 +151,19 @@ public class MedicationRepositoryImpl implements MedicationRepository {
             discontinueReasonStr != null ? DiscontinueReason.valueOf(discontinueReasonStr) : null,
             snapshot.getString("discontinueNotes"),
             (List<String>) snapshot.get("correlatedMarkers"),
+            dosagePeriods,
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt"))
+        );
+    }
+
+    private DosagePeriod parseDosagePeriod(Map<String, Object> map) {
+        Object endDate = map.get("endDate");
+        return new DosagePeriod(
+            ((Number) map.get("dose")).doubleValue(),
+            (String) map.get("unit"),
+            LocalDate.parse((String) map.get("startDate")),
+            endDate != null ? LocalDate.parse((String) endDate) : null
         );
     }
 
@@ -195,6 +218,7 @@ public class MedicationRepositoryImpl implements MedicationRepository {
         body.put("discontinueReason", m.discontinueReason() != null ? m.discontinueReason().name() : null);
         body.put("discontinueNotes", m.discontinueNotes());
         body.put("correlatedMarkers", m.correlatedMarkers());
+        body.put("dosagePeriods", toDosagePeriodsMap(m.dosagePeriods()));
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -226,6 +250,20 @@ public class MedicationRepositoryImpl implements MedicationRepository {
             Map<String, Object> map = new HashMap<>();
             map.put("window", slot.window().name());
             map.put("dose", slot.dose());
+            result.add(map);
+        }
+        return result;
+    }
+
+    private static List<Map<String, Object>> toDosagePeriodsMap(List<DosagePeriod> periods) {
+        if (periods == null) return List.of();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (DosagePeriod p : periods) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("dose", p.dose());
+            map.put("unit", p.unit());
+            map.put("startDate", p.startDate().toString());
+            map.put("endDate", p.endDate() != null ? p.endDate().toString() : null);
             result.add(map);
         }
         return result;

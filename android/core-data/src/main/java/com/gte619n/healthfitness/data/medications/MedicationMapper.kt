@@ -1,8 +1,10 @@
 package com.gte619n.healthfitness.data.medications
 
 import com.gte619n.healthfitness.domain.medications.AdherenceSummary
+import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.ChangeType
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
+import com.gte619n.healthfitness.domain.medications.DosagePeriod
 import com.gte619n.healthfitness.domain.medications.DayOfWeek
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
 import com.gte619n.healthfitness.domain.medications.Drug
@@ -45,6 +47,7 @@ internal object MedicationMapper {
         discontinueReason = dto.discontinueReason?.let(::parseDiscontinueReason),
         discontinueNotes = dto.discontinueNotes,
         correlatedMarkers = dto.correlatedMarkers,
+        dosagePeriods = dto.dosagePeriods.map(::toDomain),
         adherence = dto.adherence?.let(::toDomain),
     )
 
@@ -67,6 +70,7 @@ internal object MedicationMapper {
             discontinueReason = dto.discontinueReason?.let(::parseDiscontinueReason),
             discontinueNotes = dto.discontinueNotes,
             correlatedMarkers = dto.correlatedMarkers,
+            dosagePeriods = dto.dosagePeriods.map(::toDomain),
             adherence = null,
         )
         return MedicationDetail(
@@ -118,6 +122,13 @@ internal object MedicationMapper {
         dose = dto.dose,
     )
 
+    fun toDomain(dto: DosagePeriodDto): DosagePeriod = DosagePeriod(
+        dose = dto.dose,
+        unit = dto.unit,
+        startDate = dto.startDate,
+        endDate = dto.endDate,
+    )
+
     fun toDomain(dto: AdherenceSummaryDto): AdherenceSummary = AdherenceSummary(
         last30Days = dto.last30Days.map { AdherenceSummary.DayAdherence(it.date, it.taken) },
         percentage = dto.percentage,
@@ -156,6 +167,13 @@ internal object MedicationMapper {
         notes = req.notes,
         prescribedBy = req.prescribedBy,
         correlatedMarkers = req.correlatedMarkers,
+        changeNotes = req.changeNotes,
+    )
+
+    fun toDto(req: ChangeDoseRequest): ChangeDoseDto = ChangeDoseDto(
+        dose = req.dose,
+        unit = req.unit,
+        startDate = req.startDate,
         changeNotes = req.changeNotes,
     )
 
