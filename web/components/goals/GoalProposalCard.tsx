@@ -300,7 +300,7 @@ export function GoalProposalCard({
               value={draft.title}
               onChange={(e) => patch({ title: e.target.value })}
               placeholder="Lower cardiovascular risk markers into optimal range"
-              className={inputCls}
+              className={`${inputCls} w-full`}
             />
           </Field>
           <Field label="Description">
@@ -308,7 +308,7 @@ export function GoalProposalCard({
               value={draft.description}
               onChange={(e) => patch({ description: e.target.value })}
               rows={2}
-              className={inputCls}
+              className={`${inputCls} w-full`}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -316,7 +316,7 @@ export function GoalProposalCard({
               <select
                 value={draft.domain}
                 onChange={(e) => patch({ domain: e.target.value as GoalDomain })}
-                className={inputCls}
+                className={`${inputCls} w-full`}
               >
                 {DOMAINS.map((d) => (
                   <option key={d} value={d}>
@@ -330,7 +330,7 @@ export function GoalProposalCard({
                 type="date"
                 value={draft.targetDate}
                 onChange={(e) => patch({ targetDate: e.target.value })}
-                className={inputCls}
+                className={`${inputCls} w-full`}
               />
             </Field>
           </div>
@@ -445,13 +445,13 @@ function PhaseEditor({
           value={phase.title}
           onChange={(e) => onChange({ title: e.target.value })}
           placeholder="Phase title"
-          className={inputCls}
+          className={`${inputCls} w-full`}
         />
         <input
           value={phase.description}
           onChange={(e) => onChange({ description: e.target.value })}
           placeholder="Description (optional)"
-          className={inputCls}
+          className={`${inputCls} w-full`}
         />
         <div className="grid grid-cols-2 gap-2">
           <Field label="Start">
@@ -459,7 +459,7 @@ function PhaseEditor({
               type="date"
               value={phase.targetStartDate}
               onChange={(e) => onChange({ targetStartDate: e.target.value })}
-              className={inputCls}
+              className={`${inputCls} w-full`}
             />
           </Field>
           <Field label="End">
@@ -467,7 +467,7 @@ function PhaseEditor({
               type="date"
               value={phase.targetEndDate}
               onChange={(e) => onChange({ targetEndDate: e.target.value })}
-              className={inputCls}
+              className={`${inputCls} w-full`}
             />
           </Field>
         </div>
@@ -518,17 +518,28 @@ function StepEditor({
   const metric = step.metric;
   return (
     <div className="rounded-[8px] border-[0.5px] border-border-subtle bg-surface px-3 py-2">
+      {/* Column labels */}
+      <div className="mb-1 flex items-end gap-2">
+        <span className="caps-mono flex-1 min-w-0 text-[9px] tracking-[0.06em] text-tertiary">
+          Step name
+        </span>
+        <span className="caps-mono w-28 shrink-0 text-[9px] tracking-[0.06em] text-tertiary">
+          Type
+        </span>
+        {/* spacer for reorder+remove buttons */}
+        <span className="w-8 shrink-0" />
+      </div>
       <div className="flex items-center gap-2">
         <input
           value={step.title}
           onChange={(e) => onChange({ title: e.target.value })}
-          placeholder={`Step ${index + 1}`}
-          className={`${inputCls} flex-1`}
+          placeholder="e.g. Bring LDL under 100"
+          className={`${inputCls} flex-1 min-w-0`}
         />
         <select
           value={step.kind}
           onChange={(e) => onKind(e.target.value as StepKind)}
-          className={`${inputCls} w-28`}
+          className={`${inputCls} w-28 shrink-0`}
         >
           {STEP_KINDS.map((k) => (
             <option key={k} value={k}>
@@ -688,5 +699,8 @@ function InlineError({ children }: { children: React.ReactNode }) {
   );
 }
 
+// w-full is intentionally omitted here — callers add their own width
+// (w-full, flex-1, w-28, w-40, etc.) so flex/grid containers resolve
+// correctly without conflicting utility classes.
 const inputCls =
-  "w-full rounded-md border-[0.5px] border-border-default bg-surface px-2.5 py-1.5 text-[13px] text-primary outline-none focus:border-accent";
+  "rounded-md border-[0.5px] border-border-default bg-surface px-2.5 py-1.5 text-[13px] text-primary outline-none focus:border-accent";
