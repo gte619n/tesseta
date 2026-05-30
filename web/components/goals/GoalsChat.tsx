@@ -417,6 +417,11 @@ export function GoalsChat({
           onChange={setInput}
           onSend={() => void send(input)}
           streaming={streaming}
+          placeholder={
+            isEmpty
+              ? "Describe a goal you want to plan…"
+              : "Continue chatting about the goal…"
+          }
         />
       </section>
     </div>
@@ -537,11 +542,13 @@ function Composer({
   onChange,
   onSend,
   streaming,
+  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
   streaming: boolean;
+  placeholder: string;
 }) {
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -557,7 +564,7 @@ function Composer({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           rows={2}
-          placeholder="Describe a goal you want to plan…"
+          placeholder={placeholder}
           className="min-h-[44px] flex-1 resize-none rounded-md border-[0.5px] border-border-default bg-surface px-3 py-2 text-[13px] text-primary outline-none focus:border-accent"
         />
         <button
