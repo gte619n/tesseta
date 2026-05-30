@@ -219,11 +219,11 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(2),
-            100.0, null, null, null, Instant.now(), Instant.now()));
+            100.0, null, null, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            120.0, null, null, null, Instant.now(), Instant.now()));
+            120.0, null, null, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            140.0, null, null, null, Instant.now(), Instant.now()));
+            140.0, null, null, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolver(
             new EmptyBodyComposition(), new EmptyBloodReadings(), new EmptyBloodTestReports(),
@@ -246,9 +246,9 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            null, 200.0, null, null, Instant.now(), Instant.now()));
+            null, 200.0, null, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            null, 300.0, null, null, Instant.now(), Instant.now()));
+            null, 300.0, null, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_CARBS_AVG_7D);
@@ -261,9 +261,9 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            null, null, 60.0, null, Instant.now(), Instant.now()));
+            null, null, 60.0, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            null, null, 80.0, null, Instant.now(), Instant.now()));
+            null, null, 80.0, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_FAT_AVG_7D);
@@ -276,9 +276,9 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            100.0, 200.0, 50.0, 2000.0, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, 2000.0, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            100.0, 200.0, 50.0, 2400.0, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, 2400.0, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_CALORIES_AVG_7D);
@@ -293,9 +293,9 @@ class FirestoreMetricResolverTest {
         LocalDate today = LocalDate.now();
         // 4*100 + 4*200 + 9*50 = 400 + 800 + 450 = 1650 kcal each day.
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            100.0, 200.0, 50.0, null, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            100.0, 200.0, 50.0, null, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_CALORIES_AVG_7D);

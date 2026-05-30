@@ -3,8 +3,9 @@ package com.gte619n.healthfitness.persistence.nutrition;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
-import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
-import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
+import com.gte619n.healthfitness.core.nutrition.MacroTarget;
+import com.gte619n.healthfitness.core.nutrition.MacroTargetRepository;
+import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -22,58 +23,62 @@ import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
-// Firestore-backed nutrition daily log repository.
-// Documents live at users/{userId}/nutritionDailyLogs/{yyyy-MM-dd}.
+// Firestore-backed macro target repository.
+// Documents live at users/{userId}/nutritionTargets/{targetId}.
 @Repository
 @ConditionalOnProperty(name = "app.persistence.firestore-enabled", havingValue = "true", matchIfMissing = true)
-public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRepository {
+public class FirestoreMacroTargetRepository implements MacroTargetRepository {
 
-    private static final String SUBCOLLECTION = "nutritionDailyLogs";
+    private static final String SUBCOLLECTION = "nutritionTargets";
 
     private final Firestore firestore;
 
-    public FirestoreNutritionDailyLogRepository(Firestore firestore) {
+    public FirestoreMacroTargetRepository(Firestore firestore) {
         this.firestore = firestore;
     }
 
     @Override
-    public Optional<NutritionDailyLog> findByDate(String userId, LocalDate date) {
-        DocumentSnapshot snapshot = await(collection(userId).document(date.toString()).get());
-        if (!snapshot.exists()) return Optional.empty();
-        return Optional.of(toLog(userId, snapshot));
-    }
-
-    @Override
-    public List<NutritionDailyLog> findByDateRange(String userId, LocalDate from, LocalDate to) {
+    public Optional<MacroTarget> findActive(String userId) {
+        String today = LocalDate.now().toString();
         List<QueryDocumentSnapshot> docs = await(collection(userId)
-            .orderBy("date", Query.Direction.ASCENDING)
-            .whereGreaterThanOrEqualTo("date", from.toString())
-            .whereLessThanOrEqualTo("date", to.toString())
+            .orderBy("effectiveFrom", Query.Direction.DESCENDING)
+            .whereLessThanOrEqualTo("effectiveFrom", today)
+            .limit(1)
             .get()).getDocuments();
-        return docs.stream().map(d -> toLog(userId, d)).toList();
+        if (docs.isEmpty()) return Optional.empty();
+        return Optional.of(toTarget(userId, docs.get(0)));
     }
 
     @Override
-    public void save(NutritionDailyLog log) {
-        DocumentReference docRef = collection(log.userId()).document(log.date().toString());
+    public void save(MacroTarget target) {
+        DocumentReference docRef = collection(target.userId()).document(target.targetId());
         DocumentSnapshot existing = await(docRef.get());
-        Map<String, Object> body = toBody(log, !existing.exists());
+        Map<String, Object> body = toBody(target, !existing.exists());
         await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    public List<MacroTarget> findAll(String userId) {
+        List<QueryDocumentSnapshot> docs = await(collection(userId)
+            .orderBy("effectiveFrom", Query.Direction.DESCENDING)
+            .get()).getDocuments();
+        return docs.stream().map(d -> toTarget(userId, d)).toList();
     }
 
     private CollectionReference collection(String userId) {
         return firestore.collection("users").document(userId).collection(SUBCOLLECTION);
     }
 
-    private static Map<String, Object> toBody(NutritionDailyLog log, boolean isNew) {
+    private static Map<String, Object> toBody(MacroTarget t, boolean isNew) {
+        Macros m = t.macros() != null ? t.macros() : Macros.zero();
         Map<String, Object> body = new HashMap<>();
-        body.put("date", log.date().toString());
-        body.put("proteinGrams", log.proteinGrams());
-        body.put("carbsGrams", log.carbsGrams());
-        body.put("fatGrams", log.fatGrams());
-        body.put("fiberGrams", log.fiberGrams());
-        body.put("sugarGrams", log.sugarGrams());
-        body.put("caloriesKcal", log.caloriesKcal());
+        body.put("caloriesKcal", m.caloriesKcal());
+        body.put("proteinGrams", m.proteinGrams());
+        body.put("carbsGrams", m.carbsGrams());
+        body.put("fatGrams", m.fatGrams());
+        body.put("fiberGrams", m.fiberGrams());
+        body.put("sugarGrams", m.sugarGrams());
+        body.put("effectiveFrom", t.effectiveFrom() != null ? t.effectiveFrom().toString() : null);
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -81,16 +86,21 @@ public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRe
         return body;
     }
 
-    private static NutritionDailyLog toLog(String userId, DocumentSnapshot snapshot) {
-        return new NutritionDailyLog(
-            userId,
-            LocalDate.parse(snapshot.getString("date")),
+    private static MacroTarget toTarget(String userId, DocumentSnapshot snapshot) {
+        Macros macros = new Macros(
+            snapshot.getDouble("caloriesKcal"),
             snapshot.getDouble("proteinGrams"),
             snapshot.getDouble("carbsGrams"),
             snapshot.getDouble("fatGrams"),
             snapshot.getDouble("fiberGrams"),
-            snapshot.getDouble("sugarGrams"),
-            snapshot.getDouble("caloriesKcal"),
+            snapshot.getDouble("sugarGrams")
+        );
+        String effectiveFrom = snapshot.getString("effectiveFrom");
+        return new MacroTarget(
+            userId,
+            snapshot.getId(),
+            macros,
+            effectiveFrom != null ? LocalDate.parse(effectiveFrom) : null,
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt"))
         );

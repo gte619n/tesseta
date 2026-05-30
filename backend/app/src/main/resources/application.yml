@@ -70,6 +70,23 @@ app:
     # deploy time. Local dev reads it from the same env var.
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
+  nutrition:
+    # IMPL-13: distinct-user confirmations promote a catalog food from
+    # UNVERIFIED -> VERIFIED. Threshold is 1 today (confirming at log time
+    # verifies); raise it later to turn on true multi-user validation.
+    verify-threshold: ${NUTRITION_VERIFY_THRESHOLD:1}
+    # IMPL-13 Milestone 2 / ADR-0006: runtime barcode lookup falls back to the
+    # Open Food Facts read API on a local catalog miss, then caches the result
+    # back. Base URL is configurable so tests can point at a local stub.
+    openfoodfacts:
+      base-url: ${OFF_BASE_URL:https://world.openfoodfacts.org}
+    # Open-data seeding Cloud Run Job (SPRING_PROFILES_ACTIVE=job-seed-foods).
+    # Each path is a local file or http(s) URL, optionally gzip (.gz). Unset
+    # paths are skipped. USDA = CC0 generics (VERIFIED); OFF = ODbL packaged
+    # (UNVERIFIED). See infra/scripts/deploy-seed-foods-job.sh.
+    seed:
+      usda-path: ${NUTRITION_SEED_USDA_PATH:}
+      off-path: ${NUTRITION_SEED_OFF_PATH:}
   goals:
     # IMPL-12: Goals chat uses Gemini tool calling (propose_goal_structure)
     # to design Goal/Phase/Step roadmaps. Direct Gemini API, same key as the
