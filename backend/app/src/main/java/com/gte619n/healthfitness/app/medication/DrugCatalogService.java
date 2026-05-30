@@ -536,6 +536,7 @@ public class DrugCatalogService {
                 m.discontinueReason(),
                 m.discontinueNotes(),
                 m.correlatedMarkers(),
+                m.dosagePeriods(),
                 m.createdAt(),
                 Instant.now()
             );

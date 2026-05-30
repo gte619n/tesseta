@@ -26,6 +26,7 @@ public record MedicationDetailResponse(
     DiscontinueReason discontinueReason,
     String discontinueNotes,
     List<String> correlatedMarkers,
+    List<DosagePeriod> dosagePeriods,   // Dated dose history (newest period is open)
     List<HistoryEntry> history
 ) {
     public static MedicationDetailResponse from(Medication m, Drug drug, List<MedicationHistory> history) {
@@ -47,6 +48,7 @@ public record MedicationDetailResponse(
             m.discontinueReason(),
             m.discontinueNotes(),
             m.correlatedMarkers(),
+            m.dosagePeriods(),
             history != null ? history.stream().map(HistoryEntry::from).toList() : List.of()
         );
     }

@@ -28,6 +28,13 @@ export interface TimeSlot {
   dose: number;
 }
 
+export interface DosagePeriod {
+  dose: number;
+  unit: string;
+  startDate: string;      // ISO date (YYYY-MM-DD)
+  endDate: string | null; // null = current/active period; end is exclusive
+}
+
 export interface CycleConfig {
   onWeeks: number;
   offWeeks: number;
@@ -69,6 +76,7 @@ export interface Medication {
   discontinueReason: DiscontinueReason | null;
   discontinueNotes: string | null;
   correlatedMarkers: string[];
+  dosagePeriods: DosagePeriod[];
   adherence?: AdherenceSummary;
 }
 

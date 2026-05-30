@@ -29,7 +29,7 @@ export function AmenitiesChecklist({ value, onChange }: Props) {
               type="checkbox"
               checked={checked}
               onChange={() => toggle(amenity.id)}
-              className="h-4 w-4 cursor-pointer rounded border-border-default text-accent focus:ring-accent focus:ring-offset-0"
+              className="h-4 w-4 cursor-pointer rounded border-border-default accent-accent focus:ring-accent focus:ring-offset-0"
             />
             <i className={`ti ti-${amenity.icon} text-[16px] text-secondary`} />
             <span className="flex-1 text-[13px] text-primary">
