@@ -25,6 +25,8 @@ data class BodyCompositionSnapshot(
     val ninetyDayDeltaKg: Double?,
     /** metric=WEIGHT_KG, oldest-first */
     val series90d: List<BodyCompositionPoint>,
+    /** metric=BODY_FAT_PERCENT, oldest-first */
+    val series90dBodyFat: List<BodyCompositionPoint> = emptyList(),
 )
 
 enum class DexaRegionKey {

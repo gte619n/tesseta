@@ -3,13 +3,23 @@ package com.gte619n.healthfitness.feature.bodycomposition.upload
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes
-import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -61,23 +71,39 @@ fun UploadDexaScreen(navController: NavHostController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .background(Hf.colors.canvas),
     ) {
-        SectionTitle("Upload DEXA scan")
+        HfScreenHeader(
+            title = "Upload DEXA scan",
+            subtitle = "Import a DEXA report PDF",
+            onBack = { navController.popBackStack() },
+        )
 
-        when (val s = state) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            when (val s = state) {
             is UploadDexaViewModel.UiState.Idle -> {
                 Text(
                     text = "Pick a DEXA report PDF (max 25 MB).",
                     style = Hf.type.bodyMd,
                 )
-                Button(
-                    onClick = { picker.launch("application/pdf") },
-                    modifier = Modifier.fillMaxWidth(),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Hf.colors.accent, RoundedCornerShape(10.dp))
+                        .clickable { picker.launch("application/pdf") }
+                        .padding(vertical = 13.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Choose PDF")
+                    Icon(Icons.Outlined.Add, contentDescription = null, tint = Hf.colors.textInverse, modifier = Modifier.size(16.dp))
+                    Text("  CHOOSE PDF", style = Hf.type.capsSm, color = Hf.colors.textInverse)
                 }
             }
 
@@ -97,16 +123,23 @@ fun UploadDexaScreen(navController: NavHostController) {
                     style = Hf.type.bodyMd,
                     color = Hf.colors.alert,
                 )
-                Button(
-                    onClick = {
-                        vm.reset()
-                        picker.launch("application/pdf")
-                    },
-                    modifier = Modifier.fillMaxWidth(),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Hf.colors.accent, RoundedCornerShape(10.dp))
+                        .clickable {
+                            vm.reset()
+                            picker.launch("application/pdf")
+                        }
+                        .padding(vertical = 13.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Try again")
+                    Icon(Icons.Outlined.Add, contentDescription = null, tint = Hf.colors.textInverse, modifier = Modifier.size(16.dp))
+                    Text("  TRY AGAIN", style = Hf.type.capsSm, color = Hf.colors.textInverse)
                 }
             }
+        }
         }
     }
 }

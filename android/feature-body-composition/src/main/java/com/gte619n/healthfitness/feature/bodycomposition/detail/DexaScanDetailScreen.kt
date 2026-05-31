@@ -1,11 +1,15 @@
 package com.gte619n.healthfitness.feature.bodycomposition.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -25,6 +29,7 @@ import androidx.navigation.NavHostController
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -39,25 +44,35 @@ fun DexaScanDetailScreen(navController: NavHostController) {
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    when {
-        state.loading && state.scan == null ->
-            LoadingState(modifier = Modifier.fillMaxSize())
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .background(Hf.colors.canvas),
+    ) {
+        HfScreenHeader(
+            title = "DEXA scan",
+            subtitle = "Body composition breakdown",
+            onBack = { navController.popBackStack() },
+        )
 
-        state.error != null && state.scan == null ->
-            ErrorState(message = state.error!!, onRetry = { vm.load() })
+        when {
+            state.loading && state.scan == null ->
+                LoadingState(modifier = Modifier.fillMaxSize())
 
-        else -> {
-            val scan = state.scan ?: return
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                SectionTitle("DEXA scan")
+            state.error != null && state.scan == null ->
+                ErrorState(message = state.error!!, onRetry = { vm.load() })
 
-                HfCard(modifier = Modifier.fillMaxWidth()) {
+            else -> {
+                val scan = state.scan ?: return
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    HfCard(modifier = Modifier.fillMaxWidth()) {
                   Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                     TotalsRow("Total mass", scan.totalMassLb, weightUnit = weightUnit) {
                         vm.patchField("totalMassLb", it)
@@ -125,6 +140,7 @@ fun DexaScanDetailScreen(navController: NavHostController) {
                     },
                     onDismiss = { showDeleteConfirm = false },
                 )
+            }
             }
         }
     }

@@ -66,6 +66,18 @@ class BodyCompositionRepositoryImpl @Inject constructor(
             weightSeries.filter { !it.sampleTime.isBefore(cutoff) }
         } ?: weightSeries
 
+        val bodyFatSeries = points
+            .filter { it.metric == BodyCompositionMetric.BODY_FAT_PERCENT }
+            .sortedBy { it.sampleTime }
+
+        // Anchor the 90-day window on the latest weight time, falling back to the
+        // latest body-fat time when there's no weight, so both series line up.
+        val bodyFatAnchor = latestWeightTime ?: latestBodyFat?.sampleTime
+        val series90dBodyFat = bodyFatAnchor?.let { now ->
+            val cutoff = now.minus(Duration.ofDays(90))
+            bodyFatSeries.filter { !it.sampleTime.isBefore(cutoff) }
+        } ?: bodyFatSeries
+
         val latestSampleTime = listOfNotNull(
             latestWeight?.sampleTime,
             latestBodyFat?.sampleTime,
@@ -82,6 +94,7 @@ class BodyCompositionRepositoryImpl @Inject constructor(
             sevenDayDeltaKg = sevenDayDelta,
             ninetyDayDeltaKg = ninetyDayDelta,
             series90d = series90d,
+            series90dBodyFat = series90dBodyFat,
         )
     }
 
