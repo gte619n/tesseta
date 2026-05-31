@@ -31,6 +31,7 @@ object WorkoutsRoutes {
 fun NavGraphBuilder.workoutsGraph(navController: NavHostController) {
     composable(WorkoutsRoutes.GYMS) {
         GymsListScreen(
+            onBack = { navController.popBackStack() },
             onAddGym = { navController.navigate(WorkoutsRoutes.NEW_GYM) },
             onOpenGym = { id -> navController.navigate(WorkoutsRoutes.gymDetail(id)) },
         )

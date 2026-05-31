@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.bodycomposition.overview
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,10 +17,15 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -27,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes
+import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.EmptyState
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -45,6 +52,18 @@ fun BodyCompositionScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) {
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Back",
+                )
+            }
+            SectionTitle(text = "Body composition")
+        }
         when {
             s.loading && s.snapshot == null -> LoadingState()
             s.error != null && s.snapshot == null -> ErrorState(

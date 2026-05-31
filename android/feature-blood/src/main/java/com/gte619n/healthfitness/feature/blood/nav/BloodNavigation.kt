@@ -30,6 +30,7 @@ object BloodRoutes {
 fun NavGraphBuilder.bloodGraph(navController: NavHostController) {
     composable(BloodRoutes.OVERVIEW) {
         BloodOverviewScreen(
+            onBack = { navController.popBackStack() },
             onMarkerClick = { navController.navigate(BloodRoutes.markerDetail(it)) },
             onReportClick = { navController.navigate(BloodRoutes.reportDetail(it)) },
             onAddReading = { navController.navigate(BloodRoutes.ADD_READING) },

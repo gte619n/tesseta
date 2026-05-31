@@ -16,10 +16,15 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,6 +44,7 @@ private val reportDateFmt = DateTimeFormatter.ofPattern("MMM d, yyyy")
 
 @Composable
 fun BloodOverviewScreen(
+    onBack: () -> Unit,
     onMarkerClick: (BloodMarker) -> Unit,
     onReportClick: (String) -> Unit,
     onAddReading: () -> Unit,
@@ -51,6 +57,7 @@ fun BloodOverviewScreen(
         is BloodOverviewViewModel.UiState.Error -> ErrorState(message = s.message, onRetry = viewModel::retry)
         is BloodOverviewViewModel.UiState.Ready -> BloodOverviewContent(
             state = s,
+            onBack = onBack,
             onMarkerClick = onMarkerClick,
             onReportClick = onReportClick,
             onAddReading = onAddReading,
@@ -62,42 +69,59 @@ fun BloodOverviewScreen(
 @Composable
 private fun BloodOverviewContent(
     state: BloodOverviewViewModel.UiState.Ready,
+    onBack: () -> Unit,
     onMarkerClick: (BloodMarker) -> Unit,
     onReportClick: (String) -> Unit,
     onAddReading: () -> Unit,
     onUploadPdf: () -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    Column(
+        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(onClick = onAddReading, modifier = Modifier.weight(1f)) { Text("Add reading") }
-                OutlinedButton(onClick = onUploadPdf, modifier = Modifier.weight(1f)) { Text("Upload lab PDF") }
-            }
-        }
-
-        item { SectionTitle("Tracked markers") }
-        items(state.trackedMarkers, key = { it.marker.name }) { latest ->
-            MarkerCard(latest = latest, onClick = { onMarkerClick(latest.marker) })
-        }
-
-        item {
-            Spacer(Modifier.height(4.dp))
-            SectionTitle("Recent reports")
-        }
-        if (state.recentReports.isEmpty()) {
-            item {
-                Text(
-                    text = "No lab reports yet. Upload a lab PDF to get started.",
-                    style = Hf.type.bodyMd,
-                    color = Hf.colors.textTertiary,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "Back",
                 )
             }
-        } else {
-            items(state.recentReports, key = { it.reportId }) { report ->
-                ReportRow(report = report, onClick = { onReportClick(report.reportId) })
+            SectionTitle(text = "Blood")
+        }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = onAddReading, modifier = Modifier.weight(1f)) { Text("Add reading") }
+                    OutlinedButton(onClick = onUploadPdf, modifier = Modifier.weight(1f)) { Text("Upload lab PDF") }
+                }
+            }
+
+            item { SectionTitle("Tracked markers") }
+            items(state.trackedMarkers, key = { it.marker.name }) { latest ->
+                MarkerCard(latest = latest, onClick = { onMarkerClick(latest.marker) })
+            }
+
+            item {
+                Spacer(Modifier.height(4.dp))
+                SectionTitle("Recent reports")
+            }
+            if (state.recentReports.isEmpty()) {
+                item {
+                    Text(
+                        text = "No lab reports yet. Upload a lab PDF to get started.",
+                        style = Hf.type.bodyMd,
+                        color = Hf.colors.textTertiary,
+                    )
+                }
+            } else {
+                items(state.recentReports, key = { it.reportId }) { report ->
+                    ReportRow(report = report, onClick = { onReportClick(report.reportId) })
+                }
             }
         }
     }

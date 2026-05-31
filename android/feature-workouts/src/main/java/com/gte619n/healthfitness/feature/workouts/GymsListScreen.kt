@@ -8,10 +8,12 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -29,6 +31,7 @@ import com.gte619n.healthfitness.ui.state.LoadingState
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GymsListScreen(
+    onBack: () -> Unit,
     onAddGym: () -> Unit,
     onOpenGym: (String) -> Unit,
     vm: GymsListViewModel = hiltViewModel(),
@@ -36,7 +39,16 @@ fun GymsListScreen(
     val state by vm.state.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Workouts") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Workouts") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddGym) {
                 Icon(Icons.Filled.Add, contentDescription = "Add gym")
