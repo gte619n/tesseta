@@ -29,7 +29,10 @@ class DashboardBloodViewModel @Inject constructor(
             LatestMarkers.derive(r, rep).take(4)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    init {
+    init { refresh() }
+
+    /** Re-pull readings and reports from the backend; safe to call on resume. */
+    fun refresh() {
         viewModelScope.launch {
             runCatching {
                 readings.refresh()
