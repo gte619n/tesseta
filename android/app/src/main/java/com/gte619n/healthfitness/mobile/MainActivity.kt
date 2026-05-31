@@ -134,6 +134,10 @@ fun DashboardRoot(
             onStartWorkout = onStartWorkout,
             onViewWorkoutSummary = onViewWorkoutSummary,
         )
-        else -> FoldableDashboardScreen(onOpenGoals = onOpenGoals)
+        else -> FoldableDashboardScreen(
+            onOpenGoals = onOpenGoals,
+            onStartWorkout = onStartWorkout,
+            onViewWorkoutSummary = onViewWorkoutSummary,
+        )
     }
 }

@@ -25,6 +25,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -35,7 +38,13 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
-fun FoldableDashboardScreen(onOpenGoals: () -> Unit = {}) {
+fun FoldableDashboardScreen(
+    onOpenGoals: () -> Unit = {},
+    onStartWorkout: (String) -> Unit = {},
+    onViewWorkoutSummary: (String) -> Unit = {},
+    todayWorkoutViewModel: TodayWorkoutViewModel = hiltViewModel(),
+) {
+    val workoutState by todayWorkoutViewModel.state.collectAsStateWithLifecycle()
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -56,6 +65,13 @@ fun FoldableDashboardScreen(onOpenGoals: () -> Unit = {}) {
                 FoldableVitalsRow()
                 Spacer(Modifier.height(11.dp))
                 BodyCompositionHero()
+                Spacer(Modifier.height(10.dp))
+                TodaysWorkoutCard(
+                    state = workoutState,
+                    onStart = onStartWorkout,
+                    onViewSummary = onViewWorkoutSummary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),

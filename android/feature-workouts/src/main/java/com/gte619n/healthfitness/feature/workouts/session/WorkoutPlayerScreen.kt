@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -114,31 +115,39 @@ fun WorkoutPlayerScreen(
                 ),
         )
 
-        Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-            TopBar(state = state, onExit = onExit, onPauseToggle = onPauseToggle)
-            Spacer(Modifier.weight(1f))
+        // On phones the content fills the width; on a wide/unfolded display we
+        // cap it to a readable column and center it so controls don't stretch.
+        Box(modifier = Modifier.fillMaxSize().systemBarsPadding(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = 560.dp),
+            ) {
+                TopBar(state = state, onExit = onExit, onPauseToggle = onPauseToggle)
+                Spacer(Modifier.weight(1f))
 
-            when {
-                state.loading || state.phase == PlayerPhase.Loading ->
-                    CenterSpinner()
-                state.phase == PlayerPhase.Finishing ->
-                    CenterSpinner(label = "Saving your workout…")
-                state.currentStep is PlayerStep.Rest ->
-                    RestPanel(
-                        step = state.currentStep as PlayerStep.Rest,
-                        secondsRemaining = state.secondsRemaining ?: 0,
-                        onSkip = onSkipRest,
-                        onAdd = onAddRest,
-                    )
-                state.currentStep is PlayerStep.PerformSet ->
-                    PerformPanel(
-                        step = state.currentStep as PlayerStep.PerformSet,
-                        exercise = state.currentExercise,
-                        paused = state.phase == PlayerPhase.Paused,
-                        secondsRemaining = state.secondsRemaining,
-                        onLogSet = onLogSet,
-                        onPauseToggle = onPauseToggle,
-                    )
+                when {
+                    state.loading || state.phase == PlayerPhase.Loading ->
+                        CenterSpinner()
+                    state.phase == PlayerPhase.Finishing ->
+                        CenterSpinner(label = "Saving your workout…")
+                    state.currentStep is PlayerStep.Rest ->
+                        RestPanel(
+                            step = state.currentStep as PlayerStep.Rest,
+                            secondsRemaining = state.secondsRemaining ?: 0,
+                            onSkip = onSkipRest,
+                            onAdd = onAddRest,
+                        )
+                    state.currentStep is PlayerStep.PerformSet ->
+                        PerformPanel(
+                            step = state.currentStep as PlayerStep.PerformSet,
+                            exercise = state.currentExercise,
+                            paused = state.phase == PlayerPhase.Paused,
+                            secondsRemaining = state.secondsRemaining,
+                            onLogSet = onLogSet,
+                            onPauseToggle = onPauseToggle,
+                        )
+                }
             }
         }
     }
