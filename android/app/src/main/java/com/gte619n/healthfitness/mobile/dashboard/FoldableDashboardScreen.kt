@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.domain.prefs.UnitFormat
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
+import com.gte619n.healthfitness.feature.blood.dashboard.DashboardBloodViewModel
 import com.gte619n.healthfitness.feature.medical.nav.MedicationRoutes
 import com.gte619n.healthfitness.feature.medical.today.TodaysDosesCard
 import com.gte619n.healthfitness.ui.TessetaMark
@@ -50,9 +51,14 @@ fun FoldableDashboardScreen(
     onNavigate: (route: String) -> Unit = {},
 ) {
     val vm: DashboardViewModel = hiltViewModel()
+    val bloodVm: DashboardBloodViewModel = hiltViewModel()
     val ui by vm.uiState.collectAsStateWithLifecycle()
+    val bloodMarkers by bloodVm.markers.collectAsStateWithLifecycle()
     val weightUnit by vm.weightUnit.collectAsStateWithLifecycle()
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        vm.refresh()
+        bloodVm.refresh()
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -85,18 +91,11 @@ fun FoldableDashboardScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        CardSwitch(
-                            state = ui.blood,
-                            placeholderHeightDp = 180,
-                            onRetry = vm::retryBlood,
-                        ) { markers ->
-                            BloodPanel(
-                                markers = markers,
-                                sampleDate = null,
-                                showRangeLabels = false,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
+                        BloodPanel(
+                            markers = bloodMarkers,
+                            showRangeLabels = false,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                     TodayCard(modifier = Modifier.weight(1f), showHrInMeta = false)
                 }
