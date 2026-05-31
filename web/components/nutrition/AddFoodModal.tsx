@@ -5,6 +5,8 @@ import type { Meal, Macros } from "@/lib/types/nutrition";
 import { MEAL_LABELS, QUANTITY_STEPS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 
+type ImageStatus = "NONE" | "PENDING" | "READY" | "FAILED";
+
 type FoodResult = {
   foodId: string;
   name: string;
@@ -13,6 +15,8 @@ type FoodResult = {
   servingSizes: { label: string; grams: number }[];
   defaultServingIndex: number;
   source: string;
+  imageUrl?: string | null;
+  imageStatus?: ImageStatus;
 };
 
 type Props = {
@@ -162,6 +166,47 @@ function TabButton({
   );
 }
 
+// ── Food image thumbnail ──────────────────────────────────────────────
+
+function FoodImage({
+  imageUrl,
+  imageStatus,
+  size = 40,
+}: {
+  imageUrl?: string | null;
+  imageStatus?: ImageStatus;
+  size?: 40 | 48;
+}) {
+  const sizeClass = size === 48 ? "h-12 w-12" : "h-10 w-10";
+  if (imageStatus === "READY" && imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt=""
+        loading="lazy"
+        className={`${sizeClass} shrink-0 rounded-[6px] object-cover`}
+      />
+    );
+  }
+  if (imageStatus === "PENDING") {
+    return (
+      <div
+        className={`${sizeClass} shrink-0 animate-pulse rounded-[6px] bg-canvas-sunken`}
+        aria-hidden
+      />
+    );
+  }
+  // NONE / FAILED / undefined — neutral utensil icon block
+  return (
+    <div
+      className={`${sizeClass} shrink-0 rounded-[6px] bg-canvas-sunken flex items-center justify-center`}
+      aria-hidden
+    >
+      <i className="ti ti-tools-kitchen-2 text-[14px] text-tertiary" />
+    </div>
+  );
+}
+
 // ── Catalog tab ───────────────────────────────────────────────────────
 
 function CatalogTab({
@@ -271,17 +316,20 @@ function CatalogTab({
           Back to results
         </button>
 
-        {/* Food name */}
-        <div>
-          <div className="text-[15px] font-medium text-primary">{selected.name}</div>
-          {selected.brand && (
-            <div className="mt-0.5 text-[12px] text-secondary">{selected.brand}</div>
-          )}
-          {selected.source === "OPEN_FOOD_FACTS" && (
-            <div className="mt-1 text-[11px] text-tertiary">
-              Nutrition data from Open Food Facts (ODbL)
-            </div>
-          )}
+        {/* Food name + image */}
+        <div className="flex items-start gap-3">
+          <FoodImage imageUrl={selected.imageUrl} imageStatus={selected.imageStatus} size={48} />
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-medium text-primary">{selected.name}</div>
+            {selected.brand && (
+              <div className="mt-0.5 text-[12px] text-secondary">{selected.brand}</div>
+            )}
+            {selected.source === "OPEN_FOOD_FACTS" && (
+              <div className="mt-1 text-[11px] text-tertiary">
+                Nutrition data from Open Food Facts (ODbL)
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Serving size picker */}
@@ -415,8 +463,9 @@ function CatalogTab({
               key={food.foodId}
               type="button"
               onClick={() => selectFood(food)}
-              className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-canvas-sunken first:rounded-t-[10px] last:rounded-b-[10px]"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-canvas-sunken first:rounded-t-[10px] last:rounded-b-[10px]"
             >
+              <FoodImage imageUrl={food.imageUrl} imageStatus={food.imageStatus} size={40} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-medium text-primary">
                   {food.name}

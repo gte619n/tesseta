@@ -46,6 +46,9 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
+    // IMPL-13 — food studio image display.
+    implementation(libs.coil.compose)
+
     // IMPL-13 — camera capture + on-device barcode scanning.
     implementation(libs.camera.core)
     implementation(libs.camera.camera2)

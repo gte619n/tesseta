@@ -12,11 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -28,10 +32,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
@@ -143,21 +154,74 @@ private fun SearchPane(
     }
 }
 
+/** Thumbnail for a food's studio image with READY/PENDING/fallback states. */
+@Composable
+private fun FoodThumbnail(food: Food, size: Dp = 44.dp) {
+    val shape = RoundedCornerShape(6.dp)
+    when {
+        food.imageStatus == "READY" && food.imageUrl != null -> {
+            SubcomposeAsyncImage(
+                model = food.imageUrl,
+                contentDescription = null,
+                modifier = Modifier.size(size).clip(shape),
+                contentScale = ContentScale.Crop,
+            ) {
+                when (painter.state) {
+                    is AsyncImagePainter.State.Loading -> Box(
+                        Modifier.size(size).clip(shape).background(Hf.colors.canvasSunken),
+                    )
+                    is AsyncImagePainter.State.Error -> FoodThumbnailFallback(size)
+                    else -> SubcomposeAsyncImageContent()
+                }
+            }
+        }
+        food.imageStatus == "PENDING" -> Box(
+            Modifier.size(size).clip(shape).background(Hf.colors.canvasSunken),
+        )
+        else -> FoodThumbnailFallback(size)
+    }
+}
+
+@Composable
+private fun FoodThumbnailFallback(size: Dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(6.dp))
+            .background(Hf.colors.canvasSunken),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Outlined.Restaurant,
+            contentDescription = null,
+            tint = Hf.colors.textTertiary,
+            modifier = Modifier.size(size * 0.45f),
+        )
+    }
+}
+
 @Composable
 private fun FoodRow(food: Food, onClick: () -> Unit) {
     HfCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        Column(modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp)) {
-            Text(food.name, style = Hf.type.headingSm, color = Hf.colors.textPrimary)
-            if (food.brand != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(food.brand!!, style = Hf.type.bodySm, color = Hf.colors.textTertiary)
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FoodThumbnail(food = food, size = 44.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(food.name, style = Hf.type.headingSm, color = Hf.colors.textPrimary)
+                if (food.brand != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(food.brand!!, style = Hf.type.bodySm, color = Hf.colors.textTertiary)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${formatKcal(food.macrosPer100g.caloriesKcal)} per 100 g",
+                    style = Hf.type.monoSm,
+                    color = Hf.colors.textSecondary,
+                )
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "${formatKcal(food.macrosPer100g.caloriesKcal)} per 100 g",
-                style = Hf.type.monoSm,
-                color = Hf.colors.textSecondary,
-            )
         }
     }
 }
@@ -174,7 +238,19 @@ private fun FoodDetail(
     var quantity by remember(food.foodId) { mutableStateOf(1.0) }
 
     Column {
-        Text(food.name, style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            FoodThumbnail(food = food, size = 52.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(food.name, style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+                if (food.brand != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(food.brand!!, style = Hf.type.bodySm, color = Hf.colors.textTertiary)
+                }
+            }
+        }
         Spacer(Modifier.height(12.dp))
         ServingAndQuantity(
             servingSizes = food.servingSizes,
