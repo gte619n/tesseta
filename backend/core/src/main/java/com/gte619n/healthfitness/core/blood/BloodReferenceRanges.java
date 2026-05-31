@@ -41,7 +41,11 @@ public final class BloodReferenceRanges {
         BloodMarker.FASTING_GLUCOSE,
         new Range("mg/dL", Orientation.LOWER_IS_BETTER, 100, 60, 140),
         BloodMarker.HS_CRP,
-        new Range("mg/L", Orientation.LOWER_IS_BETTER, 1.0, 0, 3)
+        new Range("mg/L", Orientation.LOWER_IS_BETTER, 1.0, 0, 3),
+        BloodMarker.TESTOSTERONE,
+        new Range("ng/dL", Orientation.HIGHER_IS_BETTER, 300, 200, 1200)
+        // NOTE: 9 entries — Map.of caps at 10 key/value pairs. A 10th+ marker
+        // must switch this literal to Map.ofEntries(Map.entry(...), ...).
     );
 
     public static Range rangeFor(BloodMarker marker) {

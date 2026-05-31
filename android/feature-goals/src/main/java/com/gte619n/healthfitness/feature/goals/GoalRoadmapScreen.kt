@@ -9,18 +9,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
@@ -45,6 +47,7 @@ import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepKind
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.HfTone
 import com.gte619n.healthfitness.ui.components.Pill
 import com.gte619n.healthfitness.ui.components.ProgressTrack
@@ -75,9 +78,14 @@ fun GoalRoadmapScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Hf.colors.canvas),
+            .background(Hf.colors.canvas)
+            .windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        RoadmapTopBar(title = state.goal?.title ?: "Goal", onBack = onBack)
+        HfScreenHeader(
+            title = state.goal?.title ?: "Goal",
+            subtitle = "Your phased plan and progress",
+            onBack = onBack,
+        )
 
         when {
             state.loading -> Centered { CircularProgressIndicator(color = Hf.colors.accent) }
@@ -129,9 +137,10 @@ private fun GoalHeader(goal: GoalDeep, summary: String, fraction: Float) {
         Pill(goal.domain.label, HfTone.Neutral)
         Spacer(Modifier.height(8.dp))
         Text(goal.title, style = Hf.type.headingLg.copy(fontSize = 19.sp), color = Hf.colors.textPrimary)
-        if (goal.description.isNotBlank()) {
+        val description = goal.description
+        if (!description.isNullOrBlank()) {
             Spacer(Modifier.height(6.dp))
-            Text(goal.description, style = Hf.type.bodyMd, color = Hf.colors.textSecondary)
+            Text(description, style = Hf.type.bodyMd, color = Hf.colors.textSecondary)
         }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -369,40 +378,6 @@ private fun Checkbox(checked: Boolean, enabled: Boolean, onCheckedChange: () -> 
                 modifier = Modifier.size(12.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun RoadmapTopBar(title: String, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Hf.colors.canvas)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
-                .background(Hf.colors.surface, RoundedCornerShape(8.dp))
-                .clickable { onBack() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Back",
-                tint = Hf.colors.textSecondary,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            title,
-            style = Hf.type.headingMd.copy(fontSize = 15.sp),
-            color = Hf.colors.textPrimary,
-            maxLines = 1,
-        )
     }
 }
 

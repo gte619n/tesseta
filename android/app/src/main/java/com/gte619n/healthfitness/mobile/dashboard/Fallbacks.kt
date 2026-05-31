@@ -81,7 +81,19 @@ data class Vital(
     val sparkline: List<Float>,
 )
 
-object DashboardFixtures {
+// IMPL-AND-01: feature flags gating the dashboard regions still backed by
+// fixtures while their live data sources are wired up. Flip a flag off once a
+// region is fully live.
+object DashboardFlags {
+    const val showVitalsFixtures = true       // HRV / RHR / Readiness
+    const val showRecentFeedFixtures = true
+    const val showTodayCardFixtures = true    // calories / macros / workout line
+}
+
+// IMPL-AND-01: remaining static content the dashboard falls back to for the
+// regions that are not yet wired to live data. Weight/blood/doses now come
+// from DashboardViewModel; everything below is fixture-backed placeholder.
+object DashboardFallbacks {
     const val GREETING = "Good morning, Evan"
     const val DATE_WEEKDAY = "TUE"
     const val DATE_MONTH_DAY = "MAY 20"
@@ -127,72 +139,6 @@ object DashboardFixtures {
     )
 
     val vitalsShortLabels = listOf("Weight", "HRV", "RHR", "Ready")
-
-    val weightSeries = listOf(
-        192.8f, 192.6f, 193.1f, 192.9f, 192.4f, 192.7f, 192.3f, 192.0f, 192.5f,
-        191.8f, 191.6f, 192.1f, 191.4f, 191.7f, 191.2f, 190.9f, 191.4f, 190.8f,
-        190.5f, 191.0f, 190.6f, 190.3f, 190.8f, 190.4f, 190.1f, 190.5f, 190.7f,
-        190.2f, 190.0f, 190.4f, 189.8f, 190.1f, 189.6f, 189.9f, 189.4f, 189.7f,
-        190.0f, 189.5f, 189.3f, 189.6f, 189.9f, 189.4f, 189.2f, 189.5f, 189.1f,
-        189.4f, 189.8f, 189.3f, 189.0f, 189.4f, 189.7f, 189.2f,
-    )
-
-    val xAxisLabels = listOf(
-        32 to "FEB 20",
-        180 to "MAR 22",
-        335 to "APR 20",
-        500 to "MAY 20",
-    )
-
-    data class BloodMarker(
-        val name: String,
-        val value: String,
-        val unit: String,
-        val tone: Tone,
-        val goodFillPct: Float,
-        val tickPct: Float,
-        val labels: Triple<String, String, String>,
-    )
-
-    val bloodPanelDate = "OCT 14 · 2025"
-    val bloodMarkers = listOf(
-        BloodMarker(
-            name = "LDL",
-            value = "112",
-            unit = "mg/dL",
-            tone = Tone.Warn,
-            goodFillPct = 0.55f,
-            tickPct = 0.62f,
-            labels = Triple("0", "100", "200"),
-        ),
-        BloodMarker(
-            name = "ApoB",
-            value = "92",
-            unit = "mg/dL",
-            tone = Tone.Warn,
-            goodFillPct = 0.45f,
-            tickPct = 0.51f,
-            labels = Triple("0", "90", "180"),
-        ),
-        BloodMarker(
-            name = "HbA1c",
-            value = "5.2",
-            unit = "%",
-            tone = Tone.Good,
-            goodFillPct = 0.57f,
-            tickPct = 0.33f,
-            labels = Triple("4", "5.7", "7"),
-        ),
-        BloodMarker(
-            name = "hs-CRP",
-            value = "0.4",
-            unit = "mg/L",
-            tone = Tone.Good,
-            goodFillPct = 0.33f,
-            tickPct = 0.13f,
-            labels = Triple("0", "1", "3"),
-        ),
-    )
 
     data class Macro(val label: String, val value: String, val unit: String, val pct: Float)
 

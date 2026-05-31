@@ -3,6 +3,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- IMPL-13: nutrition Capture screen (barcode scan + meal/label photos). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <!-- Health Connect permission placeholders. Each capability becomes a separate
          android.permission.health.READ_*/WRITE_* line when wired in (IMPL-XX).
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
@@ -14,6 +18,7 @@
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:enableOnBackInvokedCallback="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.HealthFitness">
 
@@ -39,6 +44,18 @@
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/auth/" />
             </intent-filter>
         </service>
+
+        <!-- IMPL-AND-04 / IMPL-AND-05: share downloaded lab/DEXA PDFs with the
+             system viewer via ACTION_VIEW over a content:// URI. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- Foreground service for active workout sessions. Wired up in IMPL-XX.
         <service

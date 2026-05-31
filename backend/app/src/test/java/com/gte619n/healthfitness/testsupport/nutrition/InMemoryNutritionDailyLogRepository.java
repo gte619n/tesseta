@@ -42,6 +42,8 @@ public class InMemoryNutritionDailyLogRepository implements NutritionDailyLogRep
             log.proteinGrams(),
             log.carbsGrams(),
             log.fatGrams(),
+            log.fiberGrams(),
+            log.sugarGrams(),
             log.caloriesKcal(),
             createdAt,
             now

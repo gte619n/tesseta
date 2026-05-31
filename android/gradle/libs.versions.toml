@@ -24,6 +24,11 @@ material3WindowSizeClass = "1.3.1"
 googleFonts = "1.7.5"
 markdownRenderer = "0.27.0"
 
+# IMPL-13 (Android Nutrition capture): CameraX preview/capture + ML Kit
+# on-device barcode scanning.
+camerax = "1.4.1"
+mlkitBarcode = "17.3.0"
+
 # Wear OS
 wearComposeMaterial3 = "1.0.0-alpha28"
 wearComposeFoundation = "1.4.0"
@@ -36,6 +41,11 @@ playServicesWearable = "18.2.0"
 # Auth
 credentials = "1.3.0"
 googleid = "1.1.1"
+playServicesAuth = "21.2.0"
+
+# Test
+turbine = "1.1.0"
+mockk = "1.13.13"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -81,6 +91,13 @@ moshi-kotlin = { module = "com.squareup.moshi:moshi-kotlin", version.ref = "mosh
 
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 
+# IMPL-13 — CameraX (preview + still capture) and ML Kit barcode scanning.
+camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcode" }
+
 # IMPL-12 (Android Goals chat): Compose markdown renderer for assistant
 # messages. Material 3 flavour so it picks up the consumer's M3 theme.
 # 0.27.0 pins Kotlin 2.0.21 (matches the project) and uses multiplatform
@@ -107,6 +124,15 @@ google-id = { module = "com.google.android.libraries.identity.googleid:googleid"
 play-services-wearable = { module = "com.google.android.gms:play-services-wearable", version.ref = "playServicesWearable" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
+
+# Settings (IMPL-AND-02): Google Identity Services AuthorizationClient for the
+# incremental Google Health OAuth scope upgrade (server auth code flow).
+play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
+
+# Test helpers shared across feature modules.
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
+turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

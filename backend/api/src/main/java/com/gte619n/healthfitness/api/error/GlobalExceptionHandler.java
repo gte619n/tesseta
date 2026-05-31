@@ -53,6 +53,21 @@ public class GlobalExceptionHandler {
             ));
     }
 
+    @ExceptionHandler(java.util.NoSuchElementException.class)
+    public ResponseEntity<ErrorResponse> handleNoSuchElement(java.util.NoSuchElementException ex) {
+        // Core services (which must stay spring-web-free) raise
+        // NoSuchElementException for a missing resource; surface it as 404
+        // rather than letting the catch-all collapse it into a 500.
+        log.warn("Not found: {}", ex.getMessage());
+        return ResponseEntity
+            .status(HttpStatus.NOT_FOUND)
+            .body(new ErrorResponse(
+                "not_found",
+                ex.getMessage(),
+                Instant.now()
+            ));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
         log.warn("Bad request: {}", ex.getMessage());
