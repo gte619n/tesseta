@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMeasurement;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMetric;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
+import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
 import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.core.user.UserRepository;
@@ -29,6 +30,7 @@ class WebhookHandlerServiceTest {
 
     private UserRepository users;
     private BodyCompositionRepository measurements;
+    private DeviceSyncRepository deviceSyncs;
     private AccessTokenService tokens;
     private GoogleHealthClient googleHealth;
     private MetricChangedPublisher metricChangedPublisher;
@@ -41,10 +43,11 @@ class WebhookHandlerServiceTest {
     void setUp() {
         users = Mockito.mock(UserRepository.class);
         measurements = Mockito.mock(BodyCompositionRepository.class);
+        deviceSyncs = Mockito.mock(DeviceSyncRepository.class);
         tokens = Mockito.mock(AccessTokenService.class);
         googleHealth = Mockito.mock(GoogleHealthClient.class);
         metricChangedPublisher = Mockito.mock(MetricChangedPublisher.class);
-        handler = new WebhookHandlerService(users, measurements, tokens, googleHealth, metricChangedPublisher);
+        handler = new WebhookHandlerService(users, measurements, deviceSyncs, tokens, googleHealth, metricChangedPublisher);
 
         when(users.findByHealthUserId("h-1")).thenReturn(Optional.of(
             new User("u-1", "u@example.com", "U", null, null, Instant.EPOCH, Instant.EPOCH)));
@@ -69,6 +72,10 @@ class WebhookHandlerServiceTest {
         assertThat(captor.getValue())
             .extracting(BodyCompositionMeasurement::metric)
             .containsExactly(BodyCompositionMetric.WEIGHT_KG);
+
+        // The ingested data point's source platform is recorded as a device sync
+        // so the clients can show device freshness.
+        verify(deviceSyncs).recordSync(eq("u-1"), eq("FITBIT"), any());
     }
 
     @Test
