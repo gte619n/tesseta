@@ -219,7 +219,7 @@ export function EditEquipmentModal({ equipment, isOpen, onClose, onSave, update,
   );
 }
 
-function SpecsEditor({
+export function SpecsEditor({
   schema,
   specs,
   onChange,
@@ -369,7 +369,7 @@ function SpecsEditor({
   }
 }
 
-function getDefaultSpecs(schema: SpecSchema): Record<string, unknown> {
+export function getDefaultSpecs(schema: SpecSchema): Record<string, unknown> {
   switch (schema) {
     case 'selectorized':
       return { minWeight: 0, maxWeight: 0, increment: 0 };

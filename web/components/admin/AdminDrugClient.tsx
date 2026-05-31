@@ -50,9 +50,20 @@ import type { Drug, DrugCategory, DrugForm } from '@/lib/types/medication';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { DrugAdminCard } from './DrugAdminCard';
+import { AddDrugModal } from './AddDrugModal';
 
 interface Props {
   drugs: Drug[];
+  create: (data: {
+    name: string;
+    aliases: string[];
+    category: DrugCategory;
+    form: DrugForm;
+    defaultUnit: string;
+    commonDoses: string[];
+    suggestedMarkers: string[];
+    description: string | null;
+  }) => Promise<void>;
   update: (
     drugId: string,
     data: { name: string; aliases: string[]; category: DrugCategory; form: DrugForm; defaultUnit: string },
@@ -68,6 +79,7 @@ interface Props {
 
 export function AdminDrugClient({
   drugs,
+  create,
   update,
   regenerate,
   uploadImage,
@@ -84,6 +96,7 @@ export function AdminDrugClient({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -154,13 +167,20 @@ export function AdminDrugClient({
         setOverId(null);
       }}
     >
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-3">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or alias…"
           className="w-full max-w-md rounded-md border border-border-default bg-canvas px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent"
         />
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="ml-auto shrink-0 cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-inverse hover:bg-accent/90"
+        >
+          Add drug
+        </button>
       </div>
 
       <div className="space-y-4">
@@ -215,6 +235,16 @@ export function AdminDrugClient({
           </DragOverlay>,
           document.body,
         )}
+
+      <AddDrugModal
+        isOpen={showAdd}
+        onClose={() => setShowAdd(false)}
+        onSave={() => {
+          setShowAdd(false);
+          router.refresh();
+        }}
+        create={create}
+      />
     </DndContext>
   );
 }

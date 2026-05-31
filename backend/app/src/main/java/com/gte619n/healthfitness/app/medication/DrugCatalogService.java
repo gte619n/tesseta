@@ -422,6 +422,60 @@ public class DrugCatalogService {
     }
 
     /**
+     * Admin create — adds a brand-new drug to the catalog and kicks off async
+     * image generation (same pipeline as lookup-created drugs). Rejects a name
+     * that already exists (case-insensitive); merge is the path for duplicates.
+     */
+    public Drug createDrug(
+        String name,
+        List<String> aliases,
+        DrugCategory category,
+        DrugForm form,
+        String defaultUnit,
+        List<String> commonDoses,
+        List<String> suggestedMarkers,
+        String description
+    ) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (category == null) {
+            throw new IllegalArgumentException("category is required");
+        }
+        if (form == null) {
+            throw new IllegalArgumentException("form is required");
+        }
+        if (drugs.findByNameIgnoreCase(name).isPresent()) {
+            throw new IllegalArgumentException("Drug already exists: " + name);
+        }
+
+        String drugId = UUID.randomUUID().toString();
+        String fallbackUrl = DrugImageGenerator.getFallbackUrl(form.name(), bucket);
+
+        Drug drug = new Drug(
+            drugId,
+            name,
+            aliases != null ? aliases : List.of(),
+            category,
+            form,
+            defaultUnit != null && !defaultUnit.isBlank() ? defaultUnit : "mg",
+            commonDoses != null ? commonDoses : List.of(),
+            null,  // imageUrl - will be set async
+            List.of(),  // imageCandidates - populated as images are generated
+            fallbackUrl,
+            suggestedMarkers != null ? suggestedMarkers : List.of(),
+            description,
+            Instant.now(),
+            Instant.now(),
+            null   // aliasOfDrugId
+        );
+
+        drugs.save(drug);
+        generateImageAsync(drugId, null, name, form.name());
+        return drug;
+    }
+
+    /**
      * Admin patch — updates only the editable fields. Pass {@code null} to
      * keep the existing value for any field.
      */
