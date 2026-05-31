@@ -30,7 +30,13 @@ Idempotent — safe to re-run.
   Secret Manager, IAM/credentials, Google Health, Logging, Monitoring.
 - Artifact Registry repository `health-fitness` (Docker, `us-central1`).
 - Runtime service account `health-fitness-runtime` with `datastore.user`,
-  `secretmanager.secretAccessor`, `logging.logWriter`, `monitoring.metricWriter`.
+  `secretmanager.secretAccessor`, `storage.objectAdmin`, `logging.logWriter`,
+  `monitoring.metricWriter`. (`storage.objectAdmin` lets the Cloud Run service
+  upload generated images / user documents to GCS — without it, image
+  generation fails with `storage.objects.create` 403s.)
+- Public-read image bucket `${PROJECT_ID}-nutrition-photos` (food/studio
+  images, served as public URLs). Other image buckets (`-medication-images`,
+  `-equipment`, `-gym-photos`) follow the same allUsers:objectViewer pattern.
 - Cloud Build SA bindings to deploy to Cloud Run and write to Artifact Registry.
 - Firestore default database (native mode, `us-central1`).
 
