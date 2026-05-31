@@ -102,7 +102,7 @@ export default async function DashboardPage() {
 function toSidebarUser(session: Session | null): SidebarUser {
   const name = session?.user?.name ?? session?.user?.email ?? "—";
   const email = session?.user?.email ?? null;
-  return { name, email, initials: initialsFor(name) };
+  return { name, email, initials: initialsFor(name), image: session?.user?.image ?? null };
 }
 
 function initialsFor(name: string): string {

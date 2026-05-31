@@ -65,7 +65,7 @@ fun PhoneTodayScreen(
                 .padding(horizontal = 18.dp)
                 .padding(top = 6.dp, bottom = 16.dp),
         ) {
-            PhoneHeader()
+            PhoneHeader(user = ui.user)
             Spacer(Modifier.height(16.dp))
             PhoneVitalsGrid(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
             Spacer(Modifier.height(11.dp))
@@ -85,7 +85,7 @@ fun PhoneTodayScreen(
 }
 
 @Composable
-private fun PhoneHeader() {
+private fun PhoneHeader(user: DashboardUser?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -110,7 +110,10 @@ private fun PhoneHeader() {
                 contentDescription = "Notifications",
                 showDot = true,
             )
-            AvatarSquare(initials = DashboardFallbacks.USER_INITIALS)
+            AvatarSquare(
+                initials = user?.initials ?: DashboardFallbacks.USER_INITIALS,
+                photoUrl = user?.photoUrl,
+            )
         }
     }
 }

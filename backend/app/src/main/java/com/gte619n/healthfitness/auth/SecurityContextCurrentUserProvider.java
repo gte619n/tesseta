@@ -39,7 +39,8 @@ public class SecurityContextCurrentUserProvider implements CurrentUserProvider {
         return new CurrentUser(
             jwt.getSubject(),
             jwt.getClaimAsString("email"),
-            jwt.getClaimAsString("name")
+            jwt.getClaimAsString("name"),
+            jwt.getClaimAsString("picture")
         );
     }
 }

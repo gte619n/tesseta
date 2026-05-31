@@ -59,7 +59,7 @@ fun FoldableDashboardScreen(
             .background(Hf.colors.canvas),
     ) {
         Row(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-            FoldableSidebar(onOpenGoals = onOpenGoals, onNavigate = onNavigate)
+            FoldableSidebar(user = ui.user, onOpenGoals = onOpenGoals, onNavigate = onNavigate)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -122,6 +122,7 @@ fun FoldableDashboardScreen(
 
 @Composable
 private fun FoldableSidebar(
+    user: DashboardUser? = null,
     onOpenGoals: () -> Unit = {},
     onNavigate: (route: String) -> Unit = {},
 ) {
@@ -172,7 +173,11 @@ private fun FoldableSidebar(
             contentDescription = "Settings",
             onClick = { onNavigate(com.gte619n.healthfitness.feature.settings.nav.SettingsRoutes.SETTINGS) },
         )
-        AvatarSquare(initials = DashboardFallbacks.USER_INITIALS, size = 38)
+        AvatarSquare(
+            initials = user?.initials ?: DashboardFallbacks.USER_INITIALS,
+            photoUrl = user?.photoUrl,
+            size = 38,
+        )
     }
 }
 

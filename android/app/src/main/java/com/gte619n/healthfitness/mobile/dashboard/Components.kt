@@ -19,12 +19,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gte619n.healthfitness.ui.image.HfAsyncImage
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -166,18 +168,27 @@ fun IconButtonChip(
 }
 
 @Composable
-fun AvatarSquare(initials: String, size: Int = 34) {
+fun AvatarSquare(initials: String, size: Int = 34, photoUrl: String? = null) {
     Box(
         modifier = Modifier
             .size(size.dp)
-            .background(Hf.colors.textPrimary, RoundedCornerShape(8.dp)),
+            .clip(RoundedCornerShape(8.dp))
+            .background(Hf.colors.textPrimary),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = initials,
-            style = Hf.type.monoSm.copy(fontSize = 12.sp),
-            color = Hf.colors.textInverse,
-        )
+        if (photoUrl != null) {
+            HfAsyncImage(
+                model = photoUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = initials,
+                style = Hf.type.monoSm.copy(fontSize = 12.sp),
+                color = Hf.colors.textInverse,
+            )
+        }
     }
 }
 

@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
+import com.gte619n.healthfitness.domain.profile.ProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,10 +30,17 @@ sealed interface CardState<out T> {
     data class Error(val message: String, val cause: Throwable? = null) : CardState<Nothing>
 }
 
+// Identity shown in the dashboard header avatar. `initials` are derived from
+// the live display name (falling back to fixtures); `photoUrl` is the Google
+// picture when available. Null until the profile loads — the header falls back
+// to fixtures in the meantime.
+data class DashboardUser(val initials: String, val photoUrl: String?)
+
 data class DashboardUiState(
     val bodyComposition: CardState<WeightSummary?>,
     val blood: CardState<List<BloodMarkerSummary>>,
     val todaysDoses: CardState<List<TodaysDoseSummary>>,
+    val user: DashboardUser? = null,
 ) {
     companion object {
         val initial = DashboardUiState(CardState.Loading, CardState.Loading, CardState.Loading)
@@ -44,6 +52,7 @@ class DashboardViewModel @Inject constructor(
     private val bodyComp: DashboardBodyCompositionRepository,
     private val blood: DashboardBloodMarkerRepository,
     private val doses: DashboardTodaysDosesRepository,
+    private val profile: ProfileRepository,
     unitPrefs: UnitPreferencesRepository,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(DashboardUiState.initial)
@@ -60,6 +69,7 @@ class DashboardViewModel @Inject constructor(
         loadBodyComposition()
         loadBlood()
         loadDoses()
+        loadUser()
     }
 
     fun retryBodyComposition() = loadBodyComposition()
@@ -85,5 +95,15 @@ class DashboardViewModel @Inject constructor(
         runCatching { doses.loadToday() }
             .onSuccess { d -> _ui.update { it.copy(todaysDoses = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(todaysDoses = CardState.Error("Couldn't load doses", t)) } }
+    }
+
+    // The avatar isn't a card — on failure we just leave the previous value
+    // (or null), and the header falls back to the fixture initials.
+    private fun loadUser() = viewModelScope.launch {
+        profile.get().onSuccess { p ->
+            val name = p.displayName?.trim().orEmpty()
+            val initials = if (name.isNotEmpty()) initialsFor(name) else DashboardFallbacks.USER_INITIALS
+            _ui.update { it.copy(user = DashboardUser(initials = initials, photoUrl = p.photoUrl)) }
+        }
     }
 }

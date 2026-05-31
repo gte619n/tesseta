@@ -64,6 +64,20 @@ object DashboardIcons {
     val Route: ImageVector = Icons.Outlined.Route
 }
 
+/**
+ * First/last initials for an avatar placeholder, matching the web `initialsFor`:
+ * first letter of the first and last name parts, uppercased. Falls back to the
+ * first two letters for a single-word name, or "—" when there is no name.
+ */
+fun initialsFor(name: String): String {
+    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+    return when (parts.size) {
+        0 -> "—"
+        1 -> parts[0].take(2).uppercase()
+        else -> "${parts.first().first()}${parts.last().first()}".uppercase()
+    }
+}
+
 data class VitalDelta(val direction: ArrowDir, val value: String, val window: String, val tone: Tone)
 
 enum class ArrowDir { Up, Down }
@@ -99,9 +113,11 @@ object DashboardFallbacks {
     const val DATE_MONTH_DAY = "MAY 20"
     const val TIME = "07:42"
     const val TZ = "ATL"
-    const val USER_INITIALS = "EG"
     const val USER_NAME = "Evan Glazier"
     const val USER_ROLE = "CEO"
+
+    /** Avatar initials derived from [USER_NAME], mirroring the web `initialsFor`. */
+    val USER_INITIALS: String get() = initialsFor(USER_NAME)
 
     val vitals = listOf(
         Vital(

@@ -5,4 +5,6 @@ data class Profile(
     val email: String?,
     val displayName: String?,
     val heightCm: Int?,
+    /** Google `picture` URL, served fresh from the backend; null when absent. */
+    val photoUrl: String? = null,
 )

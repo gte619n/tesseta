@@ -9,6 +9,7 @@ export type SidebarUser = {
   name: string;
   email: string | null;
   initials: string;
+  image: string | null;
 };
 
 // Traffic-light dot colors. GREEN = synced in the last day, YELLOW =
@@ -101,9 +102,20 @@ export function Sidebar({
           <span className="text-[13px] font-normal text-secondary">Settings</span>
         </Link>
         <div className="flex w-full items-center gap-2.5 rounded-lg border-[0.5px] border-border-strong bg-surface px-[11px] py-[7px]">
-          <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-medium text-inverse">
-            {user.initials}
-          </div>
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Google avatar
+            // URLs are arbitrary remote hosts; a plain <img> avoids configuring
+            // next/image remotePatterns (matches the rest of the codebase).
+            <img
+              src={user.image}
+              alt=""
+              className="h-[26px] w-[26px] shrink-0 rounded-md object-cover"
+            />
+          ) : (
+            <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-medium text-inverse">
+              {user.initials}
+            </div>
+          )}
           <div className="min-w-0 flex-1 text-left">
             <div className="truncate text-[12px] font-medium leading-[1.1] text-primary">
               {user.name}

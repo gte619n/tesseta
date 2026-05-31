@@ -41,7 +41,7 @@ public class DevHeaderAuthFilter extends OncePerRequestFilter {
             // on email, since prod Google JWTs always carry one) work in
             // dev/test mode — callers can pass an admin email as X-Dev-User
             // and have it satisfy AdminCheckAspect's allow-list.
-            CurrentUser cu = new CurrentUser(userId, userId, null);
+            CurrentUser cu = new CurrentUser(userId, userId, null, null);
             PreAuthenticatedAuthenticationToken token = new PreAuthenticatedAuthenticationToken(
                 cu, "n/a", List.of(new SimpleGrantedAuthority("ROLE_USER"))
             );
