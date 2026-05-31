@@ -19,13 +19,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // IMPL-02: Google sign-in via Credential Manager uses the WEB OAuth
-        // client ID as the audience, even on Android. Override at build time
-        // via -PwebOauthClientId=... or the WEB_OAUTH_CLIENT_ID env var; falls
-        // back to empty so debug builds compile before secrets are wired.
-        val webOauthClientId =
-            (project.findProperty("webOauthClientId") as String?)
-                ?: System.getenv("WEB_OAUTH_CLIENT_ID")
-                ?: ""
+        // client ID as the audience, even on Android. Every build MUST embed a
+        // real client ID — sign-in (and therefore the whole app) is useless
+        // without one, so resolution that comes up empty FAILS the build rather
+        // than shipping a broken APK. See resolveWebOauthClientId() below for the
+        // lookup order (property -> env var -> GCP Secret Manager).
+        val webOauthClientId = resolveWebOauthClientId(providers)
         buildConfigField("String", "WEB_OAUTH_CLIENT_ID", "\"$webOauthClientId\"")
 
         // IMPL-12: backend base URL for the Retrofit client. Defaults to the
@@ -137,4 +136,79 @@ dependencies {
     implementation(libs.kotlinx.coroutines.play.services)
 
     testImplementation(libs.junit)
+}
+
+/**
+ * Resolves the WEB OAuth client ID baked into BuildConfig.WEB_OAUTH_CLIENT_ID.
+ *
+ * Google sign-in via Credential Manager passes this as the server client ID
+ * (audience). Without a real value the app cannot authenticate, so this build
+ * REFUSES to produce an APK without one. Resolution order:
+ *   1. -PwebOauthClientId=<id>            explicit Gradle property override
+ *   2. WEB_OAUTH_CLIENT_ID env var        used by Cloud Build (android/cloudbuild.yaml)
+ *   3. gcloud Secret Manager              oauth-web-client-id in the GCP project
+ *                                         (override project with -PgcpProjectId=...)
+ *
+ * If none yields a value that looks like a real client ID the build fails with
+ * actionable instructions. With Gradle's configuration cache enabled the gcloud
+ * lookup only runs when the cache is (re)computed, not on every build.
+ */
+fun resolveWebOauthClientId(providers: ProviderFactory): String {
+    val gcpProject =
+        providers.gradleProperty("gcpProjectId").orNull?.takeIf { it.isNotBlank() }
+            ?: "health-fitness-160"
+    val secretName = "oauth-web-client-id"
+
+    fun looksLikeClientId(value: String?): Boolean =
+        !value.isNullOrBlank() && value.trim().endsWith(".apps.googleusercontent.com")
+
+    // 1. Explicit Gradle property.
+    providers.gradleProperty("webOauthClientId").orNull?.trim()?.let {
+        if (looksLikeClientId(it)) return it
+    }
+
+    // 2. Environment variable (Cloud Build injects this from Secret Manager).
+    providers.environmentVariable("WEB_OAUTH_CLIENT_ID").orNull?.trim()?.let {
+        if (looksLikeClientId(it)) return it
+    }
+
+    // 3. Fetch straight from Secret Manager via gcloud (local dev convenience).
+    val fromSecretManager: String? =
+        try {
+            val output =
+                providers.exec {
+                    isIgnoreExitValue = true
+                    commandLine(
+                        "gcloud", "secrets", "versions", "access", "latest",
+                        "--secret=$secretName", "--project=$gcpProject",
+                    )
+                }
+            if (output.result.orNull?.exitValue == 0) {
+                output.standardOutput.asText.orNull?.trim()
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            // gcloud missing / not on PATH — treated as "unresolved" below.
+            null
+        }
+    if (looksLikeClientId(fromSecretManager)) return fromSecretManager!!
+
+    throw GradleException(
+        """
+        |Could not resolve a real WEB OAuth client ID — refusing to build a broken APK.
+        |Google sign-in (and therefore the entire app) requires BuildConfig.WEB_OAUTH_CLIENT_ID.
+        |
+        |Fix ONE of the following:
+        |  • Pass it explicitly:
+        |      ./gradlew :app:assembleDebug -PwebOauthClientId=<id>.apps.googleusercontent.com
+        |  • Export it in the environment:
+        |      export WEB_OAUTH_CLIENT_ID=<id>.apps.googleusercontent.com
+        |  • Let Gradle fetch it from Secret Manager (default) — authenticate gcloud first:
+        |      gcloud auth login
+        |      gcloud config set project $gcpProject
+        |
+        |Attempted secret '$secretName' in GCP project '$gcpProject' but got no usable value.
+        """.trimMargin(),
+    )
 }
