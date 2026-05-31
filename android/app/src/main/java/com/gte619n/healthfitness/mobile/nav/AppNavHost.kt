@@ -11,6 +11,9 @@ import com.gte619n.healthfitness.feature.goals.GOAL_ID_ARG
 import com.gte619n.healthfitness.feature.goals.GoalRoadmapRoute
 import com.gte619n.healthfitness.feature.goals.GoalsChatRoute
 import com.gte619n.healthfitness.feature.goals.GoalsListRoute
+import com.gte619n.healthfitness.feature.nutrition.NutritionCaptureRoute
+import com.gte619n.healthfitness.feature.nutrition.NutritionTargetRoute
+import com.gte619n.healthfitness.feature.nutrition.NutritionTodayRoute
 import com.gte619n.healthfitness.mobile.DashboardRoot
 
 // Minimal app NavHost (IMPL-12 assumption 15). The existing dashboard screens
@@ -21,6 +24,10 @@ object Routes {
     const val GOALS_CHAT = "goals/chat"
     const val GOAL_DETAIL = "goals/{$GOAL_ID_ARG}"
     fun goalDetail(goalId: String) = "goals/$goalId"
+
+    const val NUTRITION = "nutrition"
+    const val NUTRITION_TARGET = "nutrition/target"
+    const val NUTRITION_CAPTURE = "nutrition/capture"
 }
 
 @Composable
@@ -31,6 +38,7 @@ fun AppNavHost(widthClass: WindowWidthSizeClass) {
             DashboardRoot(
                 widthClass = widthClass,
                 onOpenGoals = { navController.navigate(Routes.GOALS_LIST) },
+                onOpenNutrition = { navController.navigate(Routes.NUTRITION) },
             )
         }
         composable(Routes.GOALS_LIST) {
@@ -58,6 +66,22 @@ fun AppNavHost(widthClass: WindowWidthSizeClass) {
             arguments = listOf(navArgument(GOAL_ID_ARG) { type = NavType.StringType }),
         ) {
             GoalRoadmapRoute(onBack = { navController.popBackStack() })
+        }
+
+        // IMPL-13 nutrition. Static "nutrition/target" + "nutrition/capture"
+        // routes; nutrition has no parameterized path so ordering is moot.
+        composable(Routes.NUTRITION) {
+            NutritionTodayRoute(
+                onOpenTarget = { navController.navigate(Routes.NUTRITION_TARGET) },
+                onOpenCapture = { navController.navigate(Routes.NUTRITION_CAPTURE) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.NUTRITION_TARGET) {
+            NutritionTargetRoute(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.NUTRITION_CAPTURE) {
+            NutritionCaptureRoute(onBack = { navController.popBackStack() })
         }
     }
 }

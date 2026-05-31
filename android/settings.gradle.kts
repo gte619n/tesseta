@@ -26,4 +26,5 @@ include(
     ":feature-medical",
     ":feature-chat",
     ":feature-goals",
+    ":feature-nutrition",
 )

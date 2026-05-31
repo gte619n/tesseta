@@ -33,7 +33,7 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
-fun PhoneTodayScreen(onOpenGoals: () -> Unit = {}) {
+fun PhoneTodayScreen(onOpenGoals: () -> Unit = {}, onOpenNutrition: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -53,7 +53,7 @@ fun PhoneTodayScreen(onOpenGoals: () -> Unit = {}) {
             Spacer(Modifier.height(11.dp))
             TodayCard(modifier = Modifier.fillMaxWidth(), showHrInMeta = false)
             Spacer(Modifier.height(11.dp))
-            QuickLogTiles()
+            QuickLogTiles(onOpenNutrition = onOpenNutrition)
             Spacer(Modifier.height(13.dp))
             RecentFeed(entries = DashboardFixtures.recentPhone, showViewAll = true, modifier = Modifier.fillMaxWidth())
         }
@@ -107,24 +107,26 @@ private fun PhoneVitalsGrid() {
 }
 
 @Composable
-private fun QuickLogTiles() {
+private fun QuickLogTiles(onOpenNutrition: () -> Unit = {}) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         QuickTile(DashboardIcons.Barbell, "Workout", Modifier.weight(1f))
-        QuickTile(DashboardIcons.Bowl, "Food", Modifier.weight(1f))
+        // IMPL-13: the "Food" tile opens the nutrition Today screen.
+        QuickTile(DashboardIcons.Bowl, "Food", Modifier.weight(1f), onClick = onOpenNutrition)
         QuickTile(DashboardIcons.Scale, "Weight", Modifier.weight(1f))
         QuickTile(DashboardIcons.Pill, "Med", Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun QuickTile(icon: ImageVector, label: String, modifier: Modifier) {
+private fun QuickTile(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit = {}) {
     Column(
         modifier = modifier
             .background(Hf.colors.surface, RoundedCornerShape(10.dp))
             .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
             .padding(vertical = 13.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),

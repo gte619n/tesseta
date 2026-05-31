@@ -35,14 +35,14 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
-fun FoldableDashboardScreen(onOpenGoals: () -> Unit = {}) {
+fun FoldableDashboardScreen(onOpenGoals: () -> Unit = {}, onOpenNutrition: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Hf.colors.canvas),
     ) {
         Row(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-            FoldableSidebar(onOpenGoals = onOpenGoals)
+            FoldableSidebar(onOpenGoals = onOpenGoals, onOpenNutrition = onOpenNutrition)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -80,7 +80,7 @@ fun FoldableDashboardScreen(onOpenGoals: () -> Unit = {}) {
 }
 
 @Composable
-private fun FoldableSidebar(onOpenGoals: () -> Unit = {}) {
+private fun FoldableSidebar(onOpenGoals: () -> Unit = {}, onOpenNutrition: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxHeight()
@@ -101,7 +101,11 @@ private fun FoldableSidebar(onOpenGoals: () -> Unit = {}) {
                 active = dest.active,
                 alert = dest.alert,
                 contentDescription = dest.label,
-                onClick = if (dest.label == "Goals") onOpenGoals else ({}),
+                onClick = when (dest.label) {
+                    "Goals" -> onOpenGoals
+                    "Nutrition" -> onOpenNutrition
+                    else -> ({})
+                },
             )
         }
         Spacer(Modifier.weight(1f))

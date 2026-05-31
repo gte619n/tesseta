@@ -3,6 +3,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- IMPL-13: nutrition Capture screen (barcode scan + meal/label photos). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <!-- Health Connect permission placeholders. Each capability becomes a separate
          android.permission.health.READ_*/WRITE_* line when wired in (IMPL-XX).
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
