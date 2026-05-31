@@ -25,6 +25,7 @@ import com.gte619n.healthfitness.feature.settings.nav.settingsGraph
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import com.gte619n.healthfitness.feature.workouts.nav.workoutsGraph
 import com.gte619n.healthfitness.mobile.DashboardRoot
+import com.gte619n.healthfitness.mobile.MoreScreen
 
 // App NavHost. The dashboard is the start destination; every parity feature
 // (IMPL-AND-02..06, -12) registers its own nested graph here. Destinations are
@@ -43,6 +44,8 @@ object Routes {
     const val BODY = BodyCompositionRoutes.BODY
     const val WORKOUTS = WorkoutsRoutes.GYMS
     const val SETTINGS = SettingsRoutes.SETTINGS
+
+    const val MORE = "more"
 
     const val NUTRITION = "nutrition"
     const val NUTRITION_TARGET = "nutrition/target"
@@ -108,6 +111,15 @@ fun AppNavHost(widthClass: WindowWidthSizeClass) {
         }
         composable(Routes.NUTRITION_CAPTURE) {
             NutritionCaptureRoute(onBack = { navController.popBackStack() })
+        }
+
+        // "More" hub: a phone-only feature directory reachable from the bottom
+        // nav, surfacing the parity features that don't have a dedicated tab.
+        composable(Routes.MORE) {
+            MoreScreen(
+                onNavigate = { route -> navController.navigate(route) },
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }
