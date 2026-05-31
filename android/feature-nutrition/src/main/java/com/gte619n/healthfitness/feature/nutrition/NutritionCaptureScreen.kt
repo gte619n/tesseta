@@ -24,7 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,16 +39,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.LabelCaptureFood
 import com.gte619n.healthfitness.domain.nutrition.MealCaptureItem
-import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -64,7 +62,6 @@ fun NutritionCaptureRoute(
         onBack = onBack,
         onSetMode = viewModel::setMode,
         onSetPhotoKind = viewModel::setPhotoKind,
-        onSetMeal = viewModel::setMeal,
         onBarcodeDetected = viewModel::onBarcodeDetected,
         onAnalyzeMeal = viewModel::analyzeMeal,
         onAnalyzeLabel = { jpeg -> viewModel.analyzeLabel(jpeg) },
@@ -82,7 +79,6 @@ fun NutritionCaptureScreen(
     onBack: () -> Unit,
     onSetMode: (CaptureMode) -> Unit,
     onSetPhotoKind: (PhotoKind) -> Unit,
-    onSetMeal: (Meal) -> Unit,
     onBarcodeDetected: (String) -> Unit,
     onAnalyzeMeal: (ByteArray) -> Unit,
     onAnalyzeLabel: (ByteArray) -> Unit,
@@ -115,12 +111,12 @@ fun NutritionCaptureScreen(
             .windowInsetsPadding(WindowInsets.systemBars)
             .background(Hf.colors.canvas),
     ) {
-        CaptureTopBar(onBack = onBack)
+        HfScreenHeader(
+            title = "Capture",
+            subtitle = "Scan a barcode or photograph food",
+            onBack = onBack,
+        )
         ModeToggle(mode = state.mode, onSetMode = onSetMode)
-        Spacer(Modifier.height(8.dp))
-        Box(modifier = Modifier.padding(horizontal = 18.dp)) {
-            MealPicker(selected = state.meal, onSelect = onSetMeal)
-        }
         Spacer(Modifier.height(10.dp))
 
         if (!hasPermission) {
@@ -161,23 +157,6 @@ fun NutritionCaptureScreen(
                 modifier = Modifier.padding(18.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun CaptureTopBar(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(
-            Icons.Outlined.ArrowBack,
-            contentDescription = "Back",
-            tint = Hf.colors.textSecondary,
-            modifier = Modifier.size(22.dp).clickable(onClick = onBack),
-        )
-        Text("Capture", style = Hf.type.headingLg.copy(fontSize = 20.sp), color = Hf.colors.textPrimary)
     }
 }
 

@@ -160,6 +160,21 @@ enum class Meal(val wire: String, val label: String) {
     LUNCH("LUNCH", "Lunch"),
     DINNER("DINNER", "Dinner"),
     SNACK("SNACK", "Snack"),
+    ;
+
+    companion object {
+        /**
+         * Infer the meal from the local hour of day, so capture flows don't have
+         * to prompt the user. Windows: breakfast 04:00–10:59, lunch 11:00–15:59,
+         * dinner 16:00–21:59, snack otherwise (late night / early morning).
+         */
+        fun forHour(hour: Int): Meal = when (hour) {
+            in 4..10 -> BREAKFAST
+            in 11..15 -> LUNCH
+            in 16..21 -> DINNER
+            else -> SNACK
+        }
+    }
 }
 
 /**

@@ -96,8 +96,33 @@ data class MedicationHistoryEntryDto(
     val notes: String? = null,
 )
 
+/**
+ * Detail response for a single medication. The backend `MedicationDetailResponse`
+ * is **flat** — the medication's fields sit at the top level alongside `history`
+ * (it mirrors `MedicationResponse` and appends `history`), exactly like web's
+ * `MedicationDetail extends Medication`. It is NOT `{ medication: {...}, history }`.
+ * Mapping the wrong (nested) shape made Moshi fail on the required `medication`
+ * field, so opening a medication's detail/history never loaded.
+ */
 data class MedicationDetailDto(
-    val medication: MedicationDto,
+    val medicationId: String,
+    val drugId: String? = null,
+    val drug: DrugDto? = null,
+    val customName: String? = null,
+    val status: String,
+    val dose: Double,
+    val unit: String,
+    val frequency: FrequencyConfigDto,
+    val timeSlots: List<TimeSlotDto>? = null,
+    val protocolId: String? = null,
+    val notes: String? = null,
+    val prescribedBy: String? = null,
+    val startDate: LocalDate,
+    val endDate: LocalDate? = null,
+    val discontinueReason: String? = null,
+    val discontinueNotes: String? = null,
+    val correlatedMarkers: List<String>? = null,
+    val dosagePeriods: List<DosagePeriodDto>? = null,
     val history: List<MedicationHistoryEntryDto>? = null,
 )
 

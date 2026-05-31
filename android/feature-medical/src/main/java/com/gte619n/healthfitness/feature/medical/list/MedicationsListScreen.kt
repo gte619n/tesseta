@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -32,9 +31,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.medications.Medication
 import com.gte619n.healthfitness.feature.medical.components.MedicationGrid
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.state.EmptyState
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -51,11 +52,22 @@ fun MedicationsListScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tab by viewModel.tab.collectAsStateWithLifecycle()
 
+    // Reload whenever the list returns to the foreground (e.g. after popping back
+    // from Add or Detail) so newly added / changed medications appear.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
+
     val widthSizeClass = currentWidthSizeClass()
 
     Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).background(Hf.colors.canvas)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopBar(onBack = onBack)
+            HfScreenHeader(
+                title = "Medications",
+                subtitle = "Your current and past medications",
+                onBack = onBack,
+            )
             TabRow(active = tab, onTabChange = viewModel::setTab)
             Spacer(Modifier.height(4.dp))
 
@@ -98,35 +110,6 @@ fun MedicationsListScreen(
                 contentDescription = "Add medication",
                 tint = Hf.colors.textInverse,
                 modifier = Modifier.size(24.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun TopBar(onBack: (() -> Unit)?) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Hf.colors.canvas)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (onBack != null) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Back",
-                tint = Hf.colors.textSecondary,
-                modifier = Modifier.size(20.dp).clickable { onBack() },
-            )
-        }
-        Column {
-            Text("Medications", style = Hf.type.headingLg.copy(fontSize = 20.sp), color = Hf.colors.textPrimary)
-            Text(
-                "Your current and past medications",
-                style = Hf.type.bodySm,
-                color = Hf.colors.textTertiary,
             )
         }
     }

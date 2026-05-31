@@ -37,10 +37,6 @@ class MedicationsViewModel @Inject constructor(
     private val _tab = MutableStateFlow(MedicationsTab.CURRENT)
     val tab: StateFlow<MedicationsTab> = _tab.asStateFlow()
 
-    init {
-        refresh()
-    }
-
     fun setTab(tab: MedicationsTab) {
         _tab.value = tab
     }

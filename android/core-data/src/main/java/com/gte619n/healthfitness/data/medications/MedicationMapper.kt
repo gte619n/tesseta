@@ -119,7 +119,31 @@ internal object MedicationMapper {
     )
 
     fun toDomain(dto: MedicationDetailDto): MedicationDetail = MedicationDetail(
-        medication = toDomain(dto.medication),
+        // The detail payload is flat (medication fields at the top level), so
+        // build the Medication from those fields directly. The detail endpoint
+        // doesn't carry the 30-day adherence summary — the detail screen loads
+        // adherence separately — so `adherence` is null here.
+        medication = Medication(
+            medicationId = dto.medicationId,
+            drugId = dto.drugId,
+            drug = dto.drug?.let { toDomain(it) },
+            customName = dto.customName,
+            status = decode(dto.status, MedicationStatus.ACTIVE),
+            dose = dto.dose,
+            unit = dto.unit,
+            frequency = toDomain(dto.frequency),
+            timeSlots = dto.timeSlots.orEmpty().map { toDomain(it) },
+            protocolId = dto.protocolId,
+            notes = dto.notes,
+            prescribedBy = dto.prescribedBy,
+            startDate = dto.startDate,
+            endDate = dto.endDate,
+            discontinueReason = decodeOrNull<DiscontinueReason>(dto.discontinueReason),
+            discontinueNotes = dto.discontinueNotes,
+            correlatedMarkers = dto.correlatedMarkers.orEmpty(),
+            dosagePeriods = dto.dosagePeriods.orEmpty().map { toDomain(it) },
+            adherence = null,
+        ),
         history = dto.history.orEmpty().map { toDomain(it) },
     )
 

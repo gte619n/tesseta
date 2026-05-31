@@ -55,7 +55,6 @@ sealed interface CaptureStage {
 data class NutritionCaptureUiState(
     val mode: CaptureMode = CaptureMode.BARCODE,
     val photoKind: PhotoKind = PhotoKind.MEAL,
-    val meal: Meal = Meal.LUNCH,
     val stage: CaptureStage = CaptureStage.Scanning,
     val error: String? = null,
 )
@@ -72,12 +71,14 @@ class NutritionCaptureViewModel @Inject constructor(
 
     private val today: String get() = LocalDate.now().format(ISO_DATE)
 
+    // The meal is inferred from the time of day at log time — the capture flow
+    // never asks the user which meal it is (the web client doesn't either).
+    private fun currentMeal(): Meal = Meal.forHour(java.time.LocalTime.now().hour)
+
     fun setMode(mode: CaptureMode) =
         _state.update { it.copy(mode = mode, stage = CaptureStage.Scanning, error = null) }
 
     fun setPhotoKind(kind: PhotoKind) = _state.update { it.copy(photoKind = kind) }
-
-    fun setMeal(meal: Meal) = _state.update { it.copy(meal = meal) }
 
     fun reset() = _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
 
@@ -118,7 +119,7 @@ class NutritionCaptureViewModel @Inject constructor(
         val macros = food.macrosPer100g.forPortion(serving.grams, quantity)
         logEntry(
             EntryRequest(
-                meal = _state.value.meal.wire,
+                meal = currentMeal().wire,
                 foodId = food.foodId,
                 foodName = food.name,
                 servingLabel = serving.label,
@@ -171,7 +172,7 @@ class NutritionCaptureViewModel @Inject constructor(
                     nutrition.addEntry(
                         today,
                         EntryRequest(
-                            meal = _state.value.meal.wire,
+                            meal = currentMeal().wire,
                             foodId = foodId,
                             foodName = item.name,
                             servingLabel = item.suggestedServingLabel,
@@ -228,7 +229,7 @@ class NutritionCaptureViewModel @Inject constructor(
                 nutrition.addEntry(
                     today,
                     EntryRequest(
-                        meal = _state.value.meal.wire,
+                        meal = currentMeal().wire,
                         foodId = created.foodId,
                         foodName = created.name,
                         servingLabel = label,

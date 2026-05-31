@@ -15,6 +15,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSource
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,9 +31,21 @@ data class SseEvent(val event: String?, val data: String)
  */
 @Singleton
 class SseClient @Inject constructor(
-    private val client: OkHttpClient,
+    client: OkHttpClient,
     @BackendBaseUrl private val baseUrl: String,
 ) {
+    // SSE responses are long-lived: the backend holds the connection open while
+    // it works (drug AI lookup + image generation runs up to ~120s server-side)
+    // and trickles `data:` frames as phases complete. The shared OkHttpClient
+    // caps reads at 30s, which aborts the stream mid-lookup and surfaces to the
+    // UI as a "timed out" add. Derive a streaming client that disables the read
+    // and overall-call timeouts (0 == no timeout) while keeping the connect
+    // timeout, auth interceptor, and authenticator from the shared client.
+    private val client: OkHttpClient = client.newBuilder()
+        .readTimeout(0, TimeUnit.SECONDS)
+        .callTimeout(0, TimeUnit.SECONDS)
+        .build()
+
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
     /** POST [path] (relative to the backend base URL) with [jsonBody]. */
@@ -67,8 +80,16 @@ class SseClient @Inject constructor(
  */
 @Singleton
 class MultipartSseClient @Inject constructor(
-    private val client: OkHttpClient,
+    client: OkHttpClient,
 ) {
+    // Same rationale as [SseClient]: blood/DEXA uploads stream progress frames
+    // for the duration of server-side OCR + parsing, which exceeds the shared
+    // client's 30s read timeout. Disable read/call timeouts for the stream.
+    private val client: OkHttpClient = client.newBuilder()
+        .readTimeout(0, TimeUnit.SECONDS)
+        .callTimeout(0, TimeUnit.SECONDS)
+        .build()
+
     data class Part(
         val name: String,
         val fileName: String,
