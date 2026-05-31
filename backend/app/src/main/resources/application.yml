@@ -75,6 +75,17 @@ app:
     # UNVERIFIED -> VERIFIED. Threshold is 1 today (confirming at log time
     # verifies); raise it later to turn on true multi-user validation.
     verify-threshold: ${NUTRITION_VERIFY_THRESHOLD:1}
+    # IMPL-13 Milestone 3: AI capture (meal-photo itemization + label OCR) and
+    # raw-photo storage. `capture.enabled` gates the GCS + Gemini beans
+    # (MealPhotoStorage, MealPhotoExtractor, NutritionLabelExtractor) so unit
+    # tests load the context without an API key — same pattern as dexa/bloodtest.
+    bucket: ${NUTRITION_BUCKET:health-fitness-160-nutrition-photos}
+    capture:
+      enabled: ${NUTRITION_CAPTURE_ENABLED:true}
+    # Extraction runs on the SHARED gemini-3.5-flash model (NOT the Goals Pro
+    # model). Direct Gemini API, same key/model env vars as dexa/bloodtest.
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
     # IMPL-13 Milestone 2 / ADR-0006: runtime barcode lookup falls back to the
     # Open Food Facts read API on a local catalog miss, then caches the result
     # back. Base URL is configurable so tests can point at a local stub.
