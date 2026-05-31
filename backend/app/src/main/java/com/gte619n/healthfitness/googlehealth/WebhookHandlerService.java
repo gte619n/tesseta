@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.googlehealth;
 
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMeasurement;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
+import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
 import com.gte619n.healthfitness.core.goals.eval.MetricKey;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
 import com.gte619n.healthfitness.core.user.User;
@@ -29,6 +30,7 @@ public class WebhookHandlerService {
 
     private final UserRepository users;
     private final BodyCompositionRepository measurements;
+    private final DeviceSyncRepository deviceSyncs;
     private final AccessTokenService tokens;
     private final GoogleHealthClient googleHealth;
     private final MetricChangedPublisher metricChangedPublisher;
@@ -36,12 +38,14 @@ public class WebhookHandlerService {
     public WebhookHandlerService(
         UserRepository users,
         BodyCompositionRepository measurements,
+        DeviceSyncRepository deviceSyncs,
         AccessTokenService tokens,
         GoogleHealthClient googleHealth,
         MetricChangedPublisher metricChangedPublisher
     ) {
         this.users = users;
         this.measurements = measurements;
+        this.deviceSyncs = deviceSyncs;
         this.tokens = tokens;
         this.googleHealth = googleHealth;
         this.metricChangedPublisher = metricChangedPublisher;
@@ -74,6 +78,18 @@ public class WebhookHandlerService {
         measurements.saveAll(measurementsList);
         log.info("Webhook UPSERT user={} type={} stored={}",
             userId, n.dataType, measurementsList.size());
+        // Record a device sync for each distinct source platform we just
+        // ingested data from, so the clients can show device freshness.
+        Set<String> platforms = new LinkedHashSet<>();
+        for (BodyCompositionMeasurement m : measurementsList) {
+            if (m.sourcePlatform() != null && !m.sourcePlatform().isBlank()) {
+                platforms.add(m.sourcePlatform());
+            }
+        }
+        Instant now = Instant.now();
+        for (String platform : platforms) {
+            deviceSyncs.recordSync(userId, platform, now);
+        }
         // Publish after save; collect distinct metric keys from the saved measurements.
         Set<MetricKey> keys = new LinkedHashSet<>();
         for (BodyCompositionMeasurement m : measurementsList) {

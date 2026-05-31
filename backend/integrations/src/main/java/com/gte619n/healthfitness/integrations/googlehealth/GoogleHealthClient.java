@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,8 @@ import org.springframework.stereotype.Component;
 // Synchronous-on-virtual-threads; matches the rest of the backend.
 //
 // Pagination: the API returns a `nextPageToken`; we loop until it's empty.
+// The page loop and stall-detection are shared by every data-type family
+// (body composition, daily activity metrics) via the generic listPaged().
 @Component
 public class GoogleHealthClient {
 
@@ -45,25 +48,62 @@ public class GoogleHealthClient {
         Instant from,
         Instant to
     ) {
-        List<GoogleHealthDataPoint> all = new ArrayList<>();
-        // Dedupe by recordId across pages — observed in practice that
-        // certain data types (notably `weight`) can return the same set
-        // of records on every page with a non-empty nextPageToken,
-        // turning the loop into a duplicate factory. The seenIds set
-        // makes the loop output stable. We also cap MAX_PAGES so a
-        // misbehaving API can't drive the backfill to infinity.
+        return listPaged(
+            accessToken,
+            dataType.urlSegment(),
+            dataType.filterFieldName(),
+            from,
+            to,
+            dp -> BodyCompositionMapper.fromJson(dp, dataType),
+            GoogleHealthDataPoint::recordId);
+    }
+
+    // Day-grained activity / vitals metrics (steps, resting HR, HRV, sleep).
+    // Same HTTP shape as body composition; only the mapper differs.
+    public List<DailyMetricDataPoint> listDailyMetricPoints(
+        String accessToken,
+        DailyMetricDataType dataType,
+        Instant from,
+        Instant to
+    ) {
+        return listPaged(
+            accessToken,
+            dataType.urlSegment(),
+            dataType.filterFieldName(),
+            from,
+            to,
+            dp -> DailyMetricMapper.fromJson(dp, dataType),
+            DailyMetricDataPoint::recordId);
+    }
+
+    // Generic paginated fetch over one data type. Dedupes by recordId across
+    // pages — observed in practice that certain data types (notably `weight`)
+    // can return the same set of records on every page with a non-empty
+    // nextPageToken, turning the loop into a duplicate factory. The seenIds
+    // set makes the loop output stable. We also cap MAX_PAGES so a
+    // misbehaving API can't drive the backfill to infinity.
+    private <T> List<T> listPaged(
+        String accessToken,
+        String urlSegment,
+        String filterFieldName,
+        Instant from,
+        Instant to,
+        Function<JsonNode, T> mapper,
+        Function<T, String> idFn
+    ) {
+        List<T> all = new ArrayList<>();
         Set<String> seenIds = new HashSet<>();
         String pageToken = null;
         String prevPageToken = null;
         int pageCount = 0;
         do {
-            JsonNode body = fetchOnePage(accessToken, dataType, from, to, pageToken);
+            JsonNode body = fetchOnePage(accessToken, urlSegment, filterFieldName, from, to, pageToken);
             JsonNode dataPoints = body.path("dataPoints");
             int newOnThisPage = 0;
             if (dataPoints.isArray()) {
                 for (JsonNode dp : dataPoints) {
-                    GoogleHealthDataPoint point = BodyCompositionMapper.fromJson(dp, dataType);
-                    if (seenIds.add(point.recordId())) {
+                    T point = mapper.apply(dp);
+                    if (seenIds.add(idFn.apply(point))) {
                         all.add(point);
                         newOnThisPage++;
                     }
@@ -75,18 +115,18 @@ public class GoogleHealthClient {
             // to the previous one, OR the page produced zero new records,
             // pagination has stalled — bail out.
             if (nextNorm != null && nextNorm.equals(prevPageToken)) {
-                log.warn("Pagination token did not advance for type={} (stopping)", dataType);
+                log.warn("Pagination token did not advance for type={} (stopping)", urlSegment);
                 break;
             }
             if (nextNorm != null && newOnThisPage == 0) {
-                log.warn("Page returned no new recordIds for type={} (stopping)", dataType);
+                log.warn("Page returned no new recordIds for type={} (stopping)", urlSegment);
                 break;
             }
             prevPageToken = pageToken;
             pageToken = nextNorm;
             pageCount++;
             if (pageCount >= MAX_PAGES) {
-                log.warn("Hit MAX_PAGES={} for type={} (stopping)", MAX_PAGES, dataType);
+                log.warn("Hit MAX_PAGES={} for type={} (stopping)", MAX_PAGES, urlSegment);
                 break;
             }
         } while (pageToken != null);
@@ -95,7 +135,8 @@ public class GoogleHealthClient {
 
     private JsonNode fetchOnePage(
         String accessToken,
-        GoogleHealthDataType dataType,
+        String urlSegment,
+        String filterFieldName,
         Instant from,
         Instant to,
         String pageToken
@@ -106,11 +147,11 @@ public class GoogleHealthClient {
         // bound should pass `to.plusSeconds(1)` or similar.
         String filter = String.format(
             "%s.sample_time.physical_time >= \"%s\" AND %s.sample_time.physical_time < \"%s\"",
-            dataType.filterFieldName(), from,
-            dataType.filterFieldName(), to);
+            filterFieldName, from,
+            filterFieldName, to);
         StringBuilder url = new StringBuilder(apiBaseUrl)
             .append("/users/me/dataTypes/")
-            .append(dataType.urlSegment())
+            .append(urlSegment)
             .append("/dataPoints")
             .append("?filter=")
             .append(URLEncoder.encode(filter, StandardCharsets.UTF_8))
@@ -128,7 +169,7 @@ public class GoogleHealthClient {
             HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() / 100 != 2) {
                 throw new RuntimeException(
-                    "Google Health API " + dataType.urlSegment() + " list failed ("
+                    "Google Health API " + urlSegment + " list failed ("
                         + response.statusCode() + "): " + response.body());
             }
             return mapper.readTree(response.body());
