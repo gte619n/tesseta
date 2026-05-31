@@ -2,25 +2,22 @@ package com.gte619n.healthfitness.feature.blood
 
 import androidx.compose.runtime.getValue
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -30,6 +27,7 @@ import com.gte619n.healthfitness.domain.blood.MarkerCatalog
 import com.gte619n.healthfitness.feature.blood.components.MarkerHistoryChart
 import com.gte619n.healthfitness.feature.blood.components.MarkerReferenceBar
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -39,30 +37,28 @@ import java.time.format.DateTimeFormatter
 
 private val rowDateFmt = DateTimeFormatter.ofPattern("MMM d, yyyy")
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarkerDetailScreen(
     onBack: () -> Unit,
     viewModel: MarkerDetailViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.state.collectAsStateWithLifecycle()
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(MarkerCatalog.displayName(viewModel.marker)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .background(Hf.colors.canvas),
+    ) {
+        HfScreenHeader(
+            title = MarkerCatalog.displayName(viewModel.marker),
+            subtitle = "Blood marker history",
+            onBack = onBack,
+        )
         when (val s = ui) {
             MarkerDetailViewModel.UiState.Loading -> LoadingState()
             is MarkerDetailViewModel.UiState.Error -> ErrorState(message = s.message, onRetry = onBack)
             is MarkerDetailViewModel.UiState.Ready -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                modifier = Modifier.fillMaxSize().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item {

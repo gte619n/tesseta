@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.nutrition.Entry
@@ -45,6 +44,7 @@ import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -97,6 +97,7 @@ fun NutritionTodayScreen(
             onNextDay = onNextDay,
             onOpenTarget = onOpenTarget,
             onOpenCapture = onOpenCapture,
+            onBack = onBack,
         )
         when {
             state.loading -> CenteredMessage { CircularProgressIndicator(color = Hf.colors.accent) }
@@ -128,21 +129,27 @@ private fun TodayTopBar(
     onNextDay: () -> Unit,
     onOpenTarget: () -> Unit,
     onOpenCapture: () -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
+    // Canonical header row (shared component): back arrow + title/subtitle.
+    HfScreenHeader(
+        title = "Nutrition",
+        subtitle = dateLabel,
+        onBack = onBack,
+    )
+
+    // Secondary row beneath the canonical header: day navigation plus the
+    // Target / Capture actions (relocated out of the title row).
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Hf.colors.canvas)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp)
+            .padding(bottom = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             IconChip(Icons.Outlined.ChevronLeft, "Previous day", onPrevDay)
-            Column {
-                Text("Nutrition", style = Hf.type.headingLg.copy(fontSize = 20.sp), color = Hf.colors.textPrimary)
-                Text(dateLabel, style = Hf.type.bodySm, color = Hf.colors.textTertiary)
-            }
             IconChip(Icons.Outlined.ChevronRight, "Next day", onNextDay)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

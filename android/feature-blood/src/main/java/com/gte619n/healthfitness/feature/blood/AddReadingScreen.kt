@@ -2,7 +2,6 @@ package com.gte619n.healthfitness.feature.blood
 
 import androidx.compose.runtime.getValue
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -29,7 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.blood.MarkerCatalog
 import com.gte619n.healthfitness.ui.components.HfCard
-import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -37,6 +36,7 @@ import com.gte619n.healthfitness.ui.theme.type
 @Composable
 fun AddReadingScreen(
     onDone: () -> Unit,
+    onBack: (() -> Unit)? = null,
     viewModel: AddReadingViewModel = hiltViewModel(),
 ) {
     val form by viewModel.form.collectAsStateWithLifecycle()
@@ -48,7 +48,11 @@ fun AddReadingScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
-            SectionTitle("Add reading")
+        HfScreenHeader(
+            title = "Add reading",
+            subtitle = "Log a single blood marker",
+            onBack = onBack,
+        )
         Spacer(Modifier.height(12.dp))
 
         Text("Marker", style = Hf.type.capsSm, color = Hf.colors.textTertiary)

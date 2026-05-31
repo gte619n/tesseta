@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.feature.settings.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,13 +13,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Height
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,7 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.prefs.HeightUnit
 import com.gte619n.healthfitness.domain.profile.HeightMetric
 import com.gte619n.healthfitness.domain.profile.Profile
-import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -55,34 +54,32 @@ fun ProfileScreen(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.systemBars)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .background(Hf.colors.canvas),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onNavigateBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                )
-            }
-            SectionTitle(text = "Profile")
-        }
+        HfScreenHeader(title = "Profile", subtitle = "Your personal details", onBack = onNavigateBack)
 
-        when (val s = state) {
-            is ProfileViewModel.UiState.Loading -> LoadingState()
-            is ProfileViewModel.UiState.Error -> ErrorState(
-                message = s.message,
-                onRetry = viewModel::refresh,
-            )
-            is ProfileViewModel.UiState.Loaded -> {
-                val heightUnit by viewModel.heightUnit.collectAsStateWithLifecycle()
-                ProfileLoaded(
-                    profile = s.profile,
-                    saving = s.saving,
-                    heightUnit = heightUnit,
-                    onSaveFtIn = viewModel::saveHeight,
-                    onSaveCm = viewModel::saveHeightCm,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            when (val s = state) {
+                is ProfileViewModel.UiState.Loading -> LoadingState()
+                is ProfileViewModel.UiState.Error -> ErrorState(
+                    message = s.message,
+                    onRetry = viewModel::refresh,
                 )
+                is ProfileViewModel.UiState.Loaded -> {
+                    val heightUnit by viewModel.heightUnit.collectAsStateWithLifecycle()
+                    ProfileLoaded(
+                        profile = s.profile,
+                        saving = s.saving,
+                        heightUnit = heightUnit,
+                        onSaveFtIn = viewModel::saveHeight,
+                        onSaveCm = viewModel::saveHeightCm,
+                    )
+                }
             }
         }
     }

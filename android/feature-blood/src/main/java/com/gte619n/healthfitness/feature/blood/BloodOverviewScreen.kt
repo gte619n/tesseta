@@ -16,15 +16,11 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.foundation.background
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,6 +29,7 @@ import com.gte619n.healthfitness.domain.blood.BloodMarker
 import com.gte619n.healthfitness.domain.blood.BloodTestReport
 import com.gte619n.healthfitness.feature.blood.components.MarkerCard
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -76,20 +73,16 @@ private fun BloodOverviewContent(
     onUploadPdf: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars),
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .background(Hf.colors.canvas),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                )
-            }
-            SectionTitle(text = "Blood")
-        }
+        HfScreenHeader(
+            title = "Blood",
+            subtitle = "Your lab markers and reports",
+            onBack = onBack,
+        )
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

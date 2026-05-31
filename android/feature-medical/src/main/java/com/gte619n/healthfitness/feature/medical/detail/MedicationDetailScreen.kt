@@ -20,10 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,6 +53,7 @@ import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfTone
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.Pill
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.ErrorState
@@ -83,7 +81,7 @@ fun MedicationDetailScreen(
             .windowInsetsPadding(WindowInsets.systemBars)
             .background(Hf.colors.canvas),
     ) {
-        DetailTopBar(onBack = onBack)
+        HfScreenHeader(title = "Medication", onBack = onBack)
         when (val s = state) {
             is MedicationDetailUiState.Loading -> LoadingState(label = "Loading…")
             is MedicationDetailUiState.Error -> ErrorState(message = s.message, onRetry = viewModel::refresh)
@@ -97,25 +95,6 @@ fun MedicationDetailScreen(
                 onDelete = viewModel::delete,
             )
         }
-    }
-}
-
-@Composable
-private fun DetailTopBar(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-            contentDescription = "Back",
-            tint = Hf.colors.textSecondary,
-            modifier = Modifier.size(20.dp).clickable { onBack() },
-        )
-        Text("Medication", style = Hf.type.headingLg.copy(fontSize = 18.sp), color = Hf.colors.textPrimary)
     }
 }
 

@@ -50,7 +50,10 @@ fun NavGraphBuilder.bloodGraph(navController: NavHostController) {
         ReportDetailScreen(onBack = { navController.popBackStack() })
     }
     dialog(BloodRoutes.ADD_READING) {
-        AddReadingScreen(onDone = { navController.popBackStack() })
+        AddReadingScreen(
+            onDone = { navController.popBackStack() },
+            onBack = { navController.popBackStack() },
+        )
     }
     dialog(BloodRoutes.UPLOAD_REPORT) {
         UploadLabReportScreen(
@@ -59,6 +62,7 @@ fun NavGraphBuilder.bloodGraph(navController: NavHostController) {
                 navController.navigate(BloodRoutes.reportDetail(reportId))
             },
             onDismiss = { navController.popBackStack() },
+            onBack = { navController.popBackStack() },
         )
     }
 }

@@ -1,23 +1,21 @@
 package com.gte619n.healthfitness.feature.workouts
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.feature.workouts.ui.LocationForm
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.theme.Hf
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewGymScreen(
     onBack: () -> Unit,
@@ -26,24 +24,20 @@ fun NewGymScreen(
 ) {
     val form by vm.form.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("New gym") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+    Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).background(Hf.colors.canvas)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            HfScreenHeader(
+                title = "New gym",
+                subtitle = "Add a gym to track equipment and hours",
+                onBack = onBack,
             )
-        },
-    ) { padding ->
-        LocationForm(
-            state = form,
-            onChange = vm::update,
-            onSubmit = { vm.submit(onCreated) },
-            submitLabel = "Create gym",
-            modifier = Modifier.fillMaxSize().padding(padding),
-        )
+            LocationForm(
+                state = form,
+                onChange = vm::update,
+                onSubmit = { vm.submit(onCreated) },
+                submitLabel = "Create gym",
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }

@@ -26,7 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.feature.blood.components.UploadPhaseStepper
 import com.gte619n.healthfitness.ui.components.HfCard
-import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -34,6 +34,7 @@ import com.gte619n.healthfitness.ui.theme.type
 fun UploadLabReportScreen(
     onComplete: (reportId: String) -> Unit,
     onDismiss: () -> Unit,
+    onBack: (() -> Unit)? = null,
     viewModel: UploadLabReportViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -61,17 +62,22 @@ fun UploadLabReportScreen(
         (ui as? UploadLabReportViewModel.UiState.Complete)?.let { onComplete(it.report.reportId) }
     }
 
-    UploadLabReportSheet(state = ui, onDismiss = { viewModel.cancel(); onDismiss() })
+    UploadLabReportSheet(state = ui, onBack = onBack, onDismiss = { viewModel.cancel(); onDismiss() })
 }
 
 @Composable
 private fun UploadLabReportSheet(
     state: UploadLabReportViewModel.UiState,
+    onBack: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     HfCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
       Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        SectionTitle("Upload lab PDF")
+        HfScreenHeader(
+            title = "Upload lab PDF",
+            subtitle = "Extract markers from a report",
+            onBack = onBack,
+        )
         Spacer(Modifier.height(12.dp))
 
         when (state) {

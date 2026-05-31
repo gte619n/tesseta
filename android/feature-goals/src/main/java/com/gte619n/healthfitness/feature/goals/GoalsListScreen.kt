@@ -41,6 +41,7 @@ import com.gte619n.healthfitness.domain.goals.GoalStatus
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.HfTone
 import com.gte619n.healthfitness.ui.components.Pill
 import com.gte619n.healthfitness.ui.theme.Hf
@@ -78,7 +79,30 @@ fun GoalsListScreen(
             .background(Hf.colors.canvas)
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        GoalsTopBar(onNewGoal = onNewGoal, onBack = onBack)
+        HfScreenHeader(
+            title = "Goals",
+            subtitle = "Your roadmap of health objectives",
+            onBack = onBack,
+            trailing = {
+                // "New goal" — opens the goal-planning chat.
+                Row(
+                    modifier = Modifier
+                        .background(Hf.colors.accent, RoundedCornerShape(8.dp))
+                        .clickable { onNewGoal() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = "New goal",
+                        tint = Hf.colors.textInverse,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Text("NEW GOAL", style = Hf.type.capsSm, color = Hf.colors.textInverse)
+                }
+            },
+        )
         FilterRow(active = state.filter, onFilterChange = onFilterChange)
         Spacer(Modifier.height(4.dp))
 
@@ -103,44 +127,6 @@ fun GoalsListScreen(
                     GoalCard(goal = goal, onClick = { onOpenGoal(goal.goalId) })
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun GoalsTopBar(onNewGoal: () -> Unit, onBack: (() -> Unit)?) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Hf.colors.canvas)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column {
-            Text("Goals", style = Hf.type.headingLg.copy(fontSize = 20.sp), color = Hf.colors.textPrimary)
-            Text(
-                "Your roadmap of health objectives",
-                style = Hf.type.bodySm,
-                color = Hf.colors.textTertiary,
-            )
-        }
-        // "New goal" — opens the chat in a later task. No-op TODO for now.
-        Row(
-            modifier = Modifier
-                .background(Hf.colors.accent, RoundedCornerShape(8.dp))
-                .clickable { onNewGoal() }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Add,
-                contentDescription = "New goal",
-                tint = Hf.colors.textInverse,
-                modifier = Modifier.size(15.dp),
-            )
-            Text("NEW GOAL", style = Hf.type.capsSm, color = Hf.colors.textInverse)
         }
     }
 }

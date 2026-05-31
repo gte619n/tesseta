@@ -2,15 +2,23 @@ package com.gte619n.healthfitness.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -46,6 +54,63 @@ fun HfCard(
             ),
     ) {
         content()
+    }
+}
+
+/**
+ * Canonical screen header used by every pushed (non-dashboard) screen: a back
+ * affordance, a title, and an optional subtitle, sitting on the canvas. Extracted
+ * from the per-feature copies so the chrome stays consistent app-wide.
+ *
+ * - [onBack]: when non-null, renders the leading back arrow wired to it. Omit it
+ *   for screens that genuinely can't be backed out of (none currently).
+ * - [trailing]: optional actions rendered at the end of the header row (e.g. an
+ *   Edit icon, a "New goal" action). When present, the title/subtitle column
+ *   takes the remaining width so the actions sit flush right.
+ *
+ * Functional sub-headers (date navigation, tabs, etc.) belong in a SEPARATE row
+ * below this header — keep them out of the title/back row so it reads identically
+ * across screens. See android/CLAUDE.md for the back-affordance convention.
+ */
+@Composable
+fun HfScreenHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    onBack: (() -> Unit)? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Hf.colors.canvas)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (onBack != null) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "Back",
+                tint = Hf.colors.textSecondary,
+                modifier = Modifier.size(20.dp).clickable { onBack() },
+            )
+        }
+        Column(modifier = if (trailing != null) Modifier.weight(1f) else Modifier) {
+            Text(
+                text = title,
+                style = Hf.type.headingLg.copy(fontSize = 20.sp),
+                color = Hf.colors.textPrimary,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textTertiary,
+                )
+            }
+        }
+        if (trailing != null) trailing()
     }
 }
 
