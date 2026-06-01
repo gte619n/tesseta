@@ -1,9 +1,11 @@
 package com.gte619n.healthfitness.mobile
 
 import android.content.pm.ActivityInfo
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -44,6 +46,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         observeFoldState()
+        requestNotificationPermissionIfNeeded()
 
         val cache = IdTokenCache(applicationContext)
         val publisher = PhoneTokenPublisher(applicationContext)
@@ -97,6 +100,19 @@ class MainActivity : ComponentActivity() {
                         }
                     }
             }
+        }
+    }
+
+    // Ask once for POST_NOTIFICATIONS (API 33+) so the active-workout ongoing
+    // notification and the rest-over alert can be shown. Best-effort: the
+    // workout still runs if the user declines.
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+                .launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }
