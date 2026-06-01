@@ -15,6 +15,8 @@ import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import com.gte619n.healthfitness.domain.profile.ProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -89,49 +91,63 @@ class DashboardViewModel @Inject constructor(
     fun refresh(force: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
         if (!force && lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
-        loadBodyComposition()
-        loadDailyMetrics()
-        loadBlood()
-        loadDoses()
+        // Stamp the TTL against the whole batch of primary cards, not a single
+        // card: launch them as joinable jobs, await all, then stamp once. Each
+        // job returns whether its load succeeded so we can avoid stamping when
+        // the entire batch failed (e.g. offline) — that lets the next resume
+        // retry instead of being TTL-blocked.
+        viewModelScope.launch {
+            val results = listOf(
+                loadBodyComposition(),
+                loadDailyMetrics(),
+                loadBlood(),
+                loadDoses(),
+            ).awaitAll()
+            // Stamp when at least one primary card loaded; if everything failed,
+            // leave lastRefreshAt untouched so the next resume retries.
+            if (results.any { it }) lastRefreshAt = SystemClock.elapsedRealtime()
+        }
         loadUser()
     }
 
-    fun retryBodyComposition() = loadBodyComposition()
-    fun retryDailyMetrics() = loadDailyMetrics()
-    fun retryBlood() = loadBlood()
-    fun retryDoses() = loadDoses()
+    fun retryBodyComposition() { loadBodyComposition() }
+    fun retryDailyMetrics() { loadDailyMetrics() }
+    fun retryBlood() { loadBlood() }
+    fun retryDoses() { loadDoses() }
 
-    private fun loadBodyComposition() = viewModelScope.launch {
+    // Each loader returns a Deferred<Boolean> — true on success — so refresh()
+    // can settle the whole batch before deciding whether to stamp the TTL.
+    // Retry methods ignore the result; they are never TTL-gated.
+    private fun loadBodyComposition() = viewModelScope.async {
         _ui.update { it.copy(bodyComposition = CardState.Loading) }
         runCatching { bodyComp.loadRecent() }
             .onSuccess { d -> _ui.update { it.copy(bodyComposition = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(bodyComposition = CardState.Error("Couldn't load weight", t)) } }
+            .isSuccess
     }
 
-    private fun loadDailyMetrics() = viewModelScope.launch {
+    private fun loadDailyMetrics() = viewModelScope.async {
         _ui.update { it.copy(dailyMetrics = CardState.Loading) }
         runCatching { dailyMetrics.loadRecent() }
-            .onSuccess { d ->
-                // Stamp the TTL only on a successful primary load so a failed
-                // refresh isn't blocked from retrying on the next resume.
-                lastRefreshAt = SystemClock.elapsedRealtime()
-                _ui.update { it.copy(dailyMetrics = CardState.Loaded(d)) }
-            }
+            .onSuccess { d -> _ui.update { it.copy(dailyMetrics = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(dailyMetrics = CardState.Error("Couldn't load metrics", t)) } }
+            .isSuccess
     }
 
-    private fun loadBlood() = viewModelScope.launch {
+    private fun loadBlood() = viewModelScope.async {
         _ui.update { it.copy(blood = CardState.Loading) }
         runCatching { blood.loadDashboardMarkers() }
             .onSuccess { d -> _ui.update { it.copy(blood = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(blood = CardState.Error("Couldn't load blood", t)) } }
+            .isSuccess
     }
 
-    private fun loadDoses() = viewModelScope.launch {
+    private fun loadDoses() = viewModelScope.async {
         _ui.update { it.copy(todaysDoses = CardState.Loading) }
         runCatching { doses.loadToday() }
             .onSuccess { d -> _ui.update { it.copy(todaysDoses = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(todaysDoses = CardState.Error("Couldn't load doses", t)) } }
+            .isSuccess
     }
 
     // The avatar isn't a card — on failure we just leave the previous value
