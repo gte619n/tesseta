@@ -90,8 +90,12 @@ fun TodaysDosesCardContent(
                             color = Hf.colors.textTertiary,
                         )
                     } else {
+                        // Render every dose for today; the dashboard hosting
+                        // this card is itself vertically scrollable, so a long
+                        // list stays reachable by scrolling (no inner scroll —
+                        // that would conflict with the parent's vertical scroll).
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            state.doses.take(3).forEach { dose ->
+                            state.doses.forEach { dose ->
                                 DoseRow(dose = dose, onToggle = { onToggle(dose) })
                             }
                         }

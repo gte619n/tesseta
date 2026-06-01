@@ -108,14 +108,6 @@ fun FoldableDashboardScreen(
                 RecentFeed(entries = DashboardFallbacks.recentFoldable, showViewAll = false, modifier = Modifier.fillMaxWidth())
             }
         }
-        // Decorative hinge crease running down the middle.
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(Hf.colors.textPrimary.copy(alpha = 0.07f))
-                .align(Alignment.Center),
-        )
     }
 }
 
