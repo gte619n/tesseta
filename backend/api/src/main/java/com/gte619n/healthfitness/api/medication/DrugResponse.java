@@ -17,6 +17,7 @@ public record DrugResponse(
     String defaultUnit,
     List<String> commonDoses,
     String imageUrl,
+    List<String> imageCandidates,
     String imageFallback,
     List<String> suggestedMarkers,
     String description
@@ -31,6 +32,7 @@ public record DrugResponse(
             d.defaultUnit(),
             d.commonDoses(),
             d.imageUrl(),
+            d.imageCandidates(),
             d.imageFallback(),
             d.suggestedMarkers(),
             d.description()

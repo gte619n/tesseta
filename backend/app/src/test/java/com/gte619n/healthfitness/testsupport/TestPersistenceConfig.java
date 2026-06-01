@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.blood.BloodReadingRepository;
 import com.gte619n.healthfitness.core.bloodtest.BloodTestReport;
 import com.gte619n.healthfitness.core.bloodtest.BloodTestReportRepository;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
+import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
 import com.gte619n.healthfitness.core.dexa.DexaScan;
 import com.gte619n.healthfitness.core.dexa.DexaScanRepository;
 import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
@@ -12,6 +13,12 @@ import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.StepRepository;
 import com.gte619n.healthfitness.core.goals.chat.GoalChatRepository;
 import com.gte619n.healthfitness.integrations.goals.GoalChatClient;
+import com.gte619n.healthfitness.core.nutrition.CatalogFood;
+import com.gte619n.healthfitness.core.nutrition.FoodCatalogRepository;
+import com.gte619n.healthfitness.core.nutrition.FoodEntry;
+import com.gte619n.healthfitness.core.nutrition.FoodEntryRepository;
+import com.gte619n.healthfitness.core.nutrition.MacroTarget;
+import com.gte619n.healthfitness.core.nutrition.MacroTargetRepository;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
 import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregateRepository;
 import com.gte619n.healthfitness.testsupport.nutrition.InMemoryNutritionDailyLogRepository;
@@ -28,6 +35,7 @@ import com.gte619n.healthfitness.core.medication.MedicationRepository;
 import com.gte619n.healthfitness.core.medication.MedicationStatus;
 import com.gte619n.healthfitness.core.medication.Protocol;
 import com.gte619n.healthfitness.core.medication.ProtocolRepository;
+import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import java.time.LocalDate;
 import java.util.List;
@@ -55,6 +63,16 @@ public class TestPersistenceConfig {
     @Bean
     BodyCompositionRepository bodyCompositionRepository() {
         return new InMemoryBodyCompositionRepository();
+    }
+
+    @Bean
+    DailyMetricRepository dailyMetricRepository() {
+        return new InMemoryDailyMetricRepository();
+    }
+
+    @Bean
+    DeviceSyncRepository deviceSyncRepository() {
+        return new InMemoryDeviceSyncRepository();
     }
 
     @Bean
@@ -119,6 +137,42 @@ public class TestPersistenceConfig {
     }
 
     // ---- empty no-op stubs to satisfy app context wiring ----
+
+    // IMPL-13 nutrition repos: the FoodCatalogService / FoodController and the
+    // entry/target services are component-scanned into the app context, so the
+    // context needs these beans to wire even in tests that don't exercise them.
+    @Bean
+    FoodCatalogRepository foodCatalogRepository() {
+        return new FoodCatalogRepository() {
+            @Override public Optional<CatalogFood> findById(String foodId) { return Optional.empty(); }
+            @Override public List<CatalogFood> searchByNamePrefix(String prefixLower, int limit) { return List.of(); }
+            @Override public Optional<CatalogFood> findByBarcode(String code) { return Optional.empty(); }
+            @Override public List<CatalogFood> findByImageStatus(
+                com.gte619n.healthfitness.core.nutrition.FoodImageStatus status, int limit) { return List.of(); }
+            @Override public void save(CatalogFood food) {}
+            @Override public void saveConfirmation(String foodId, String userId) {}
+            @Override public int countConfirmations(String foodId) { return 0; }
+        };
+    }
+
+    @Bean
+    FoodEntryRepository foodEntryRepository() {
+        return new FoodEntryRepository() {
+            @Override public List<FoodEntry> findByDate(String userId, LocalDate date) { return List.of(); }
+            @Override public Optional<FoodEntry> findById(String userId, LocalDate date, String entryId) { return Optional.empty(); }
+            @Override public void save(FoodEntry entry) {}
+            @Override public void delete(String userId, LocalDate date, String entryId) {}
+        };
+    }
+
+    @Bean
+    MacroTargetRepository macroTargetRepository() {
+        return new MacroTargetRepository() {
+            @Override public Optional<MacroTarget> findActive(String userId) { return Optional.empty(); }
+            @Override public void save(MacroTarget target) {}
+            @Override public List<MacroTarget> findAll(String userId) { return List.of(); }
+        };
+    }
 
     @Bean
     DrugRepository drugRepository() {

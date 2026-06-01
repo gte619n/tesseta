@@ -33,6 +33,7 @@ echo "==> Grant runtime SA roles"
 for role in \
     roles/datastore.user \
     roles/secretmanager.secretAccessor \
+    roles/storage.objectAdmin \
     roles/logging.logWriter \
     roles/monitoring.metricWriter; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -55,6 +56,28 @@ gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA_EMAIL" \
   --member="serviceAccount:${CLOUDBUILD_SA}" \
   --role="roles/iam.serviceAccountUser" \
   --project="$PROJECT_ID" --quiet >/dev/null
+
+echo "==> Application GCS buckets"
+# Generated images (food/studio, drug, equipment, gym) are uploaded by the
+# runtime SA (needs roles/storage.objectAdmin, granted above) and served as
+# public URLs (https://storage.googleapis.com/<bucket>/<object>) — so the
+# image buckets get allUsers:objectViewer. The nutrition bucket was the one
+# missing in prod that broke food-image generation; create-if-absent here so
+# a fresh re-bootstrap provisions it. Private user-document buckets (DEXA PDFs,
+# blood-test PDFs) are intentionally NOT made public and are created by their
+# own IMPL flows.
+NUTRITION_BUCKET="gs://${PROJECT_ID}-nutrition-photos"
+if ! gcloud storage buckets describe "$NUTRITION_BUCKET" \
+    --project="$PROJECT_ID" &>/dev/null; then
+  gcloud storage buckets create "$NUTRITION_BUCKET" \
+    --location="$REGION" --uniform-bucket-level-access --project="$PROJECT_ID"
+else
+  echo "    ${NUTRITION_BUCKET} exists, skipping create"
+fi
+gcloud storage buckets add-iam-policy-binding "$NUTRITION_BUCKET" \
+  --member="allUsers" --role="roles/storage.objectViewer" \
+  --project="$PROJECT_ID" --quiet >/dev/null
+echo "    ${NUTRITION_BUCKET} public-read"
 
 echo "==> Firestore default database"
 if ! gcloud firestore databases describe --database='(default)' \

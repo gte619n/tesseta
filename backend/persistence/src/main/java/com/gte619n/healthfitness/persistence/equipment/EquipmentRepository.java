@@ -150,6 +150,7 @@ public class EquipmentRepository implements com.gte619n.healthfitness.core.equip
         body.put("specSchema", eq.specSchema() == null ? null : eq.specSchema().name());
         body.put("specs", eq.specs() == null ? new HashMap<>() : eq.specs());
         body.put("imageUrl", eq.imageUrl());
+        body.put("imageCandidates", eq.imageCandidates() == null ? List.of() : eq.imageCandidates());
         body.put("imageStatus", eq.imageStatus() == null ? null : eq.imageStatus().name());
         body.put("ownerId", eq.ownerId());
         body.put("status", eq.status() == null ? EquipmentStatus.ACTIVE.name() : eq.status().name());
@@ -170,6 +171,16 @@ public class EquipmentRepository implements com.gte619n.healthfitness.core.equip
         String statusStr = snapshot.getString("status");
         Long exerciseCountLong = snapshot.getLong("exerciseCount");
 
+        String imageUrl = snapshot.getString("imageUrl");
+        List<String> imageCandidates = (List<String>) snapshot.get("imageCandidates");
+        // Back-compat: legacy rows predate the gallery and have no (or an
+        // empty) candidates field. Seed the candidate list from the active
+        // imageUrl so that single image stays selectable; null imageUrl ->
+        // empty gallery.
+        if (imageCandidates == null || imageCandidates.isEmpty()) {
+            imageCandidates = imageUrl == null ? List.of() : List.of(imageUrl);
+        }
+
         return new Equipment(
             snapshot.getId(),
             snapshot.getString("name"),
@@ -177,7 +188,8 @@ public class EquipmentRepository implements com.gte619n.healthfitness.core.equip
             snapshot.getString("subcategory"),
             specSchemaStr == null ? null : SpecSchema.valueOf(specSchemaStr),
             (Map<String, Object>) snapshot.get("specs"),
-            snapshot.getString("imageUrl"),
+            imageUrl,
+            imageCandidates,
             imageStatusStr == null ? null : ImageStatus.valueOf(imageStatusStr),
             snapshot.getString("ownerId"),
             statusStr == null ? EquipmentStatus.ACTIVE : EquipmentStatus.valueOf(statusStr),

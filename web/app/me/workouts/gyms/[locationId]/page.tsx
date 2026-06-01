@@ -25,6 +25,12 @@ import type {
 import { DeleteLocationButton } from "@/components/gym/DeleteLocationButton";
 import { SetDefaultButton } from "@/components/gym/SetDefaultButton";
 import { LocationEquipmentSection } from "@/components/gym/LocationEquipmentSection";
+import { entityMetadata } from "@/lib/page-metadata";
+
+export const generateMetadata = entityMetadata(
+  ({ locationId }: { locationId: string }) => getLocation(locationId),
+  (location) => location.name,
+);
 
 export const dynamic = "force-dynamic";
 

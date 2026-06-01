@@ -42,6 +42,9 @@ export type Equipment = {
   specSchema: SpecSchema;
   specs: EquipmentSpecs;
   imageUrl: string | null;
+  // All generated/uploaded image URLs; imageUrl is the active one and is
+  // always a member (or null when there are none).
+  imageCandidates: string[];
   imageStatus: 'pending' | 'generated' | 'failed';
   ownerId: string | null;
   status: 'active' | 'pending_review' | 'rejected';
@@ -61,6 +64,9 @@ export type AdminEquipment = {
   specSchema: SpecSchema;
   specs: EquipmentSpecs;
   imageUrl: string | null;
+  // All generated/uploaded image URLs; imageUrl is the active one and is
+  // always a member (or null when there are none).
+  imageCandidates: string[];
   imageStatus: 'PENDING' | 'GENERATED' | 'FAILED' | null;
   contributorId: string | null;
   contributorEmail: string | null;

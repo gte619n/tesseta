@@ -67,6 +67,14 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "medications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -87,6 +95,13 @@
     {
       "collectionGroup": "steps",
       "fieldPath": "kind",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "medications",
+      "fieldPath": "drugId",
       "indexes": [
         { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
       ]

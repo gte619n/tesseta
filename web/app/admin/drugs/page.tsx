@@ -1,20 +1,42 @@
 import { revalidatePath } from 'next/cache';
 import {
   listAdminDrugs,
+  createAdminDrug,
   updateAdminDrug,
   deleteAdminDrug,
   getDrugImagePrompt,
   regenerateDrugImage,
+  uploadDrugImage,
+  selectDrugImage,
+  deleteDrugImageCandidate,
   mergeAdminDrugs,
 } from '@/lib/drug-admin-api';
 import { AdminDrugClient } from '@/components/admin/AdminDrugClient';
 import type { DrugCategory, DrugForm } from '@/lib/types/medication';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata('Drug Admin');
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminDrugsPage() {
   // Admin gating handled by app/admin/layout.tsx
   const drugs = await listAdminDrugs();
+
+  async function createAction(data: {
+    name: string;
+    aliases: string[];
+    category: DrugCategory;
+    form: DrugForm;
+    defaultUnit: string;
+    commonDoses: string[];
+    suggestedMarkers: string[];
+    description: string | null;
+  }) {
+    'use server';
+    await createAdminDrug(data);
+    revalidatePath('/admin/drugs');
+  }
 
   async function updateAction(
     drugId: string,
@@ -34,6 +56,24 @@ export default async function AdminDrugsPage() {
   async function regenerateAction(drugId: string, prompt: string) {
     'use server';
     await regenerateDrugImage(drugId, prompt);
+    revalidatePath('/admin/drugs');
+  }
+
+  async function uploadImageAction(drugId: string, file: File) {
+    'use server';
+    await uploadDrugImage(drugId, file);
+    revalidatePath('/admin/drugs');
+  }
+
+  async function selectImageAction(drugId: string, imageUrl: string) {
+    'use server';
+    await selectDrugImage(drugId, imageUrl);
+    revalidatePath('/admin/drugs');
+  }
+
+  async function deleteImageAction(drugId: string, imageUrl: string) {
+    'use server';
+    await deleteDrugImageCandidate(drugId, imageUrl);
     revalidatePath('/admin/drugs');
   }
 
@@ -63,8 +103,12 @@ export default async function AdminDrugsPage() {
 
       <AdminDrugClient
         drugs={drugs}
+        create={createAction}
         update={updateAction}
         regenerate={regenerateAction}
+        uploadImage={uploadImageAction}
+        selectImage={selectImageAction}
+        deleteImage={deleteImageAction}
         getImagePrompt={getImagePromptAction}
         merge={mergeAction}
         remove={deleteAction}

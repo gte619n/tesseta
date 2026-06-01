@@ -16,6 +16,8 @@ public record Drug(
     String defaultUnit,             // "mg", "mcg", "IU", "ml"
     List<String> commonDoses,       // ["100mg", "200mg"]
     String imageUrl,                // GCS CDN URL (null if generating)
+    // All generated/uploaded image URLs; imageUrl is the active one and is always a member (or null).
+    List<String> imageCandidates,
     String imageFallback,           // Generic form image URL
     List<String> suggestedMarkers,  // ["TESTOSTERONE", "FREE_TESTOSTERONE"]
     String description,             // Brief description of the drug

@@ -69,6 +69,7 @@ public class DrugController {
             body.defaultUnit() != null ? body.defaultUnit() : "mg",
             body.commonDoses() != null ? body.commonDoses() : List.of(),
             null,   // imageUrl - will be set by image generation
+            List.of(),  // imageCandidates
             fallbackImage,
             body.suggestedMarkers() != null ? body.suggestedMarkers() : List.of(),
             body.description(),
@@ -101,6 +102,7 @@ public class DrugController {
             body.defaultUnit() != null ? body.defaultUnit() : existing.defaultUnit(),
             body.commonDoses() != null ? body.commonDoses() : existing.commonDoses(),
             body.imageUrl() != null ? body.imageUrl() : existing.imageUrl(),
+            existing.imageCandidates(),
             existing.imageFallback(),
             body.suggestedMarkers() != null ? body.suggestedMarkers() : existing.suggestedMarkers(),
             body.description() != null ? body.description() : existing.description(),

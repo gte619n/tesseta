@@ -105,6 +105,13 @@ public class DrugRepositoryImpl implements DrugRepository {
 
     @SuppressWarnings("unchecked")
     private Drug toDrug(DocumentSnapshot snapshot) {
+        String imageUrl = snapshot.getString("imageUrl");
+        List<String> imageCandidates = (List<String>) snapshot.get("imageCandidates");
+        // Back-compat: legacy drugs have no imageCandidates field. Seed the
+        // gallery with the current active image so it shows as selectable.
+        if (imageCandidates == null || imageCandidates.isEmpty()) {
+            imageCandidates = imageUrl != null ? List.of(imageUrl) : List.of();
+        }
         return new Drug(
             snapshot.getId(),
             snapshot.getString("name"),
@@ -113,7 +120,8 @@ public class DrugRepositoryImpl implements DrugRepository {
             DrugForm.valueOf(snapshot.getString("form")),
             snapshot.getString("defaultUnit"),
             (List<String>) snapshot.get("commonDoses"),
-            snapshot.getString("imageUrl"),
+            imageUrl,
+            imageCandidates,
             snapshot.getString("imageFallback"),
             (List<String>) snapshot.get("suggestedMarkers"),
             snapshot.getString("description"),
@@ -133,6 +141,7 @@ public class DrugRepositoryImpl implements DrugRepository {
         body.put("defaultUnit", drug.defaultUnit());
         body.put("commonDoses", drug.commonDoses());
         body.put("imageUrl", drug.imageUrl());
+        body.put("imageCandidates", drug.imageCandidates());
         body.put("imageFallback", drug.imageFallback());
         body.put("suggestedMarkers", drug.suggestedMarkers());
         body.put("description", drug.description());

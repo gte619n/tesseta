@@ -9,6 +9,9 @@ import {
 import type { CreateStepInput, MetricBindingInput } from "@/lib/goals-api";
 import { ManualGoalEditor } from "@/components/goals/ManualGoalEditor";
 import type { GoalProposalDraft } from "@/components/goals/GoalProposalCard";
+import { pageMetadata } from "@/lib/page-metadata";
+
+export const metadata = pageMetadata("New Goal");
 
 export const dynamic = "force-dynamic";
 

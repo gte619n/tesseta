@@ -8,10 +8,13 @@ import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
 import com.gte619n.healthfitness.core.equipment.Equipment;
 import com.gte619n.healthfitness.core.equipment.EquipmentImageGenerator;
+import com.gte619n.healthfitness.core.equipment.EquipmentImageUploader;
 import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.equipment.ImageStatus;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -32,7 +35,7 @@ import org.springframework.stereotype.Component;
 // Async fire-and-forget: generateImageAsync returns immediately; the work
 // happens on a background thread via CompletableFuture.runAsync.
 @Component
-public class EquipmentImageService implements EquipmentImageGenerator {
+public class EquipmentImageService implements EquipmentImageGenerator, EquipmentImageUploader {
 
     private static final Logger log = LoggerFactory.getLogger(EquipmentImageService.class);
 
@@ -79,6 +82,29 @@ public class EquipmentImageService implements EquipmentImageGenerator {
         return buildPrompt(equipment);
     }
 
+    /**
+     * Store an admin-supplied image for the equipment. Synchronous: the
+     * bytes are already in hand, so we upload, append the new url to the
+     * candidate gallery, mark the record GENERATED with the new active
+     * imageUrl, and return the updated equipment. Prior images are kept as
+     * candidates. Mirrors the success path of {@link #generateImageAsync}
+     * sans Gemini.
+     */
+    @Override
+    public Equipment uploadImage(String equipmentId, byte[] bytes, String contentType) {
+        Equipment equipment = equipmentRepository.findById(equipmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Equipment not found: " + equipmentId));
+
+        String url = storage.upload(equipmentId, bytes, contentType);
+        // Keep prior images as candidates — the new url is appended and
+        // becomes the active one; nothing is deleted from storage here.
+        persistImageResult(equipment, url, ImageStatus.GENERATED);
+        log.info("Uploaded admin image for equipment {}: {}", equipmentId, url);
+
+        return equipmentRepository.findById(equipmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Equipment not found: " + equipmentId));
+    }
+
     @Override
     public CompletableFuture<Void> generateImageAsync(Equipment equipment, String promptOverride) {
         return CompletableFuture.runAsync(() -> {
@@ -100,26 +126,13 @@ public class EquipmentImageService implements EquipmentImageGenerator {
                 byte[] bytes = callGemini(prompt, equipment.equipmentId());
 
                 if (bytes != null && bytes.length > 0) {
-                    // Capture the previous image URL before we overwrite the
-                    // equipment record — we'll best-effort delete that GCS
-                    // object AFTER the new URL is durably persisted.
-                    String oldUrl = equipment.imageUrl();
                     String url = storage.upload(equipment.equipmentId(), bytes);
+                    // Keep prior images as candidates — the new url is
+                    // appended and becomes the active one; nothing is
+                    // deleted from storage here.
                     persistImageResult(equipment, url, ImageStatus.GENERATED);
                     log.info("Generated image for equipment {}: {}",
                         equipment.equipmentId(), url);
-                    // Fire-and-forget cleanup of the old object. Ordering
-                    // matters: persist new URL first, then delete old —
-                    // a crash mid-flow leaves the new image live and at
-                    // worst orphans a stale object.
-                    if (oldUrl != null && !oldUrl.equals(url)) {
-                        try {
-                            storage.deleteByUrl(oldUrl);
-                        } catch (Exception cleanupErr) {
-                            log.warn("Stale equipment image cleanup failed for {}: {}",
-                                equipment.equipmentId(), cleanupErr.getMessage());
-                        }
-                    }
                 } else {
                     persistImageResult(equipment, null, ImageStatus.FAILED);
                     log.warn("Image generation returned empty bytes for equipment {}",
@@ -141,10 +154,19 @@ public class EquipmentImageService implements EquipmentImageGenerator {
      * Re-read the equipment fresh from the repository before writing — the
      * Equipment record we were handed may be stale (e.g. ownerId cleared
      * by an approve call between submit and image completion).
+     *
+     * <p>When {@code imageUrl} is non-null it is APPENDED to the candidate
+     * gallery (de-duplicated) and becomes the active image; prior images are
+     * kept as candidates. A null url (e.g. a FAILED result) leaves the
+     * existing candidates untouched.
      */
     private void persistImageResult(Equipment original, String imageUrl, ImageStatus status) {
         Equipment current = equipmentRepository.findById(original.equipmentId())
             .orElse(original);
+
+        List<String> candidates = imageUrl == null
+            ? current.imageCandidates()
+            : appended(current.imageCandidates(), imageUrl);
 
         Equipment updated = new Equipment(
             current.equipmentId(),
@@ -154,6 +176,7 @@ public class EquipmentImageService implements EquipmentImageGenerator {
             current.specSchema(),
             current.specs(),
             imageUrl,
+            candidates,
             status,
             current.ownerId(),
             current.status(),
@@ -164,6 +187,67 @@ public class EquipmentImageService implements EquipmentImageGenerator {
             current.aliasOfEquipmentId()
         );
         equipmentRepository.save(updated);
+    }
+
+    /**
+     * Return {@code existing} with {@code url} appended, de-duplicated and
+     * preserving insertion order. Tolerates a null existing list.
+     */
+    private List<String> appended(List<String> existing, String url) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(
+            existing == null ? List.of() : existing);
+        merged.add(url);
+        return new ArrayList<>(merged);
+    }
+
+    @Override
+    public Equipment deleteImage(String equipmentId, String imageUrl) {
+        Equipment equipment = equipmentRepository.findById(equipmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Equipment not found: " + equipmentId));
+
+        List<String> candidates = equipment.imageCandidates();
+        if (candidates == null || !candidates.contains(imageUrl)) {
+            throw new IllegalArgumentException("Image is not a candidate for this equipment");
+        }
+
+        List<String> remaining = new ArrayList<>(candidates);
+        remaining.remove(imageUrl);
+
+        // Best-effort GCS cleanup — never let a storage hiccup block the
+        // metadata update.
+        try {
+            storage.deleteByUrl(imageUrl);
+        } catch (Exception cleanupErr) {
+            log.warn("Failed to delete equipment image blob for {}: {}",
+                equipmentId, cleanupErr.getMessage());
+        }
+
+        // If we just removed the active image, fall back to the first
+        // remaining candidate (or null when the gallery is now empty).
+        String activeUrl = imageUrl.equals(equipment.imageUrl())
+            ? (remaining.isEmpty() ? null : remaining.get(0))
+            : equipment.imageUrl();
+
+        Equipment updated = new Equipment(
+            equipment.equipmentId(),
+            equipment.name(),
+            equipment.category(),
+            equipment.subcategory(),
+            equipment.specSchema(),
+            equipment.specs(),
+            activeUrl,
+            remaining,
+            equipment.imageStatus(),
+            equipment.ownerId(),
+            equipment.status(),
+            equipment.contributorId(),
+            equipment.exerciseCount(),
+            equipment.createdAt(),
+            Instant.now(),
+            equipment.aliasOfEquipmentId()
+        );
+        equipmentRepository.save(updated);
+        return updated;
     }
 
     /**

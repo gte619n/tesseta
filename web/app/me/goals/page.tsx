@@ -3,6 +3,9 @@ import type { Route } from "next";
 import { listGoals } from "@/lib/goals-api";
 import { GoalCard } from "@/components/goals/GoalCard";
 import type { GoalStatus } from "@/lib/types/goals";
+import { pageMetadata } from "@/lib/page-metadata";
+
+export const metadata = pageMetadata("Goals");
 
 export const dynamic = "force-dynamic";
 

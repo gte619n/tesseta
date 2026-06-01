@@ -170,6 +170,7 @@ class EquipmentImageGenerationIntegrationTest {
         return new Equipment(
             id, name, category, subcategory, schema, specs,
             null,                       // imageUrl
+            java.util.List.of(),        // imageCandidates
             ImageStatus.PENDING,
             null,                       // ownerId (catalog item)
             EquipmentStatus.ACTIVE,

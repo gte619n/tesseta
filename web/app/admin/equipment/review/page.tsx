@@ -6,12 +6,18 @@ import {
   rejectEquipment,
   updateEquipment,
   regenerateEquipmentImage,
+  uploadEquipmentImage,
   getEquipmentImagePrompt,
   mergeEquipment,
   getEquipment,
+  selectEquipmentImage,
+  deleteEquipmentImageCandidate,
 } from '@/lib/gym-api';
 import { AdminEquipmentClient } from '@/components/admin/AdminEquipmentClient';
 import type { EquipmentSpecs, SpecSchema } from '@/lib/types/gym';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata('Equipment Review');
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +55,12 @@ export default async function AdminEquipmentReviewPage() {
     revalidatePath('/admin/equipment/review');
   }
 
+  async function uploadImageAction(equipmentId: string, file: File) {
+    'use server';
+    await uploadEquipmentImage(equipmentId, file);
+    revalidatePath('/admin/equipment/review');
+  }
+
   async function getImageStatusAction(equipmentId: string): Promise<string | null> {
     'use server';
     const eq = await getEquipment(equipmentId);
@@ -69,6 +81,18 @@ export default async function AdminEquipmentReviewPage() {
     revalidatePath('/admin/equipment/review');
   }
 
+  async function selectImageAction(equipmentId: string, imageUrl: string) {
+    'use server';
+    await selectEquipmentImage(equipmentId, imageUrl);
+    revalidatePath('/admin/equipment/review');
+  }
+
+  async function deleteImageAction(equipmentId: string, imageUrl: string) {
+    'use server';
+    await deleteEquipmentImageCandidate(equipmentId, imageUrl);
+    revalidatePath('/admin/equipment/review');
+  }
+
   return (
     <div className="container mx-auto max-w-7xl py-8 px-4">
       <div className="mb-6 flex items-center justify-between">
@@ -85,9 +109,12 @@ export default async function AdminEquipmentReviewPage() {
         reject={rejectAction}
         update={updateAction}
         regenerate={regenerateAction}
+        uploadImage={uploadImageAction}
         getImageStatus={getImageStatusAction}
         getImagePrompt={getImagePromptAction}
         merge={mergeAction}
+        selectImage={selectImageAction}
+        deleteImage={deleteImageAction}
       />
     </div>
   );

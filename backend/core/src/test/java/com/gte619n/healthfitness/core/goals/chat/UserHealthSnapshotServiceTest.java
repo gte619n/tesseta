@@ -55,7 +55,7 @@ class UserHealthSnapshotServiceTest {
 
         FakeDrugs drugs = new FakeDrugs();
         drugs.add(new Drug("drug-1", "Metformin", List.of(), null, null,
-            "mg", List.of(), null, null, List.of(), null,
+            "mg", List.of(), null, List.of(), null, List.of(), null,
             Instant.now(), Instant.now(), null));
 
         FakeDexa dexa = new FakeDexa();

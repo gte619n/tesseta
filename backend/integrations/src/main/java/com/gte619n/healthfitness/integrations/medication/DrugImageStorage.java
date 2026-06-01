@@ -38,17 +38,33 @@ public class DrugImageStorage {
     }
 
     /**
-     * Upload a drug image to GCS at a fresh, versioned path.
+     * Upload a drug image to GCS at a fresh, versioned path. Assumes PNG —
+     * used by the AI image generator, which always emits PNG.
      *
      * @param drugId The drug ID (used as folder name)
      * @param imageBytes The image data (PNG format)
      * @return The public URL of the uploaded image
      */
     public String upload(String drugId, byte[] imageBytes) {
-        String objectPath = versionedObjectPath(drugId);
+        return upload(drugId, imageBytes, "image/png");
+    }
+
+    /**
+     * Upload a drug image to GCS at a fresh, versioned path, choosing the
+     * object extension from the supplied content type. Used by the admin
+     * custom-upload path, where the file may be PNG, JPEG, WebP, or GIF.
+     *
+     * @param drugId The drug ID (used as folder name)
+     * @param imageBytes The image data
+     * @param contentType The MIME type of the image (e.g. {@code image/jpeg})
+     * @return The public URL of the uploaded image
+     */
+    public String upload(String drugId, byte[] imageBytes, String contentType) {
+        String ext = extensionFor(contentType);
+        String objectPath = versionedObjectPath(drugId, ext);
         BlobId blobId = BlobId.of(bucket, objectPath);
         BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
-            .setContentType("image/png")
+            .setContentType(contentType)
             .setCacheControl("public, max-age=31536000, immutable")
             .build();
 
@@ -136,7 +152,24 @@ public class DrugImageStorage {
         return getPublicUrl("drugs/" + drugId + "/image.png");
     }
 
-    private static String versionedObjectPath(String drugId) {
-        return "drugs/" + drugId + "/" + System.currentTimeMillis() + ".png";
+    private static String versionedObjectPath(String drugId, String ext) {
+        return "drugs/" + drugId + "/" + System.currentTimeMillis() + "." + ext;
+    }
+
+    /**
+     * Map an image content type to the GCS object extension. Defaults to
+     * {@code png} for null/unknown types.
+     */
+    private static String extensionFor(String contentType) {
+        if (contentType == null) {
+            return "png";
+        }
+        return switch (contentType) {
+            case "image/png" -> "png";
+            case "image/jpeg" -> "jpg";
+            case "image/webp" -> "webp";
+            case "image/gif" -> "gif";
+            default -> "png";
+        };
     }
 }

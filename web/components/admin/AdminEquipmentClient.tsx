@@ -62,9 +62,12 @@ interface Props {
     data: { name: string; category: string; subcategory: string; specSchema: SpecSchema; specs: EquipmentSpecs },
   ) => Promise<void>;
   regenerate: (equipmentId: string, prompt: string) => Promise<void>;
+  uploadImage: (equipmentId: string, file: File) => Promise<void>;
   getImageStatus: (equipmentId: string) => Promise<string | null>;
   getImagePrompt: (equipmentId: string) => Promise<string>;
   merge: (sourceId: string, targetId: string) => Promise<void>;
+  selectImage: (equipmentId: string, imageUrl: string) => Promise<void>;
+  deleteImage: (equipmentId: string, imageUrl: string) => Promise<void>;
 }
 
 export function AdminEquipmentClient({
@@ -74,9 +77,12 @@ export function AdminEquipmentClient({
   reject,
   update,
   regenerate,
+  uploadImage,
   getImageStatus,
   getImagePrompt,
   merge,
+  selectImage,
+  deleteImage,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -191,7 +197,10 @@ export function AdminEquipmentClient({
                     router.refresh();
                   })();
                 }}
+                uploadImage={async (id, file) => { await uploadImage(id, file); router.refresh(); }}
                 getImagePrompt={getImagePrompt}
+                selectImage={async (id, url) => { await selectImage(id, url); router.refresh(); }}
+                deleteImage={async (id, url) => { await deleteImage(id, url); router.refresh(); }}
                 isDragOver={overId === `drop-${eq.equipmentId}` && activeId !== eq.equipmentId}
               />
             ))

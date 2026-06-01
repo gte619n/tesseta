@@ -218,7 +218,8 @@ class EquipmentControllerTest {
         Equipment approved = catalog("eq_approved001", "Approved Bench", "Benches & Racks", "Benches", SpecSchema.BODYWEIGHT, Map.of());
         Equipment withOwner = new Equipment(
             approved.equipmentId(), approved.name(), approved.category(), approved.subcategory(),
-            approved.specSchema(), approved.specs(), approved.imageUrl(), approved.imageStatus(),
+            approved.specSchema(), approved.specs(), approved.imageUrl(), approved.imageCandidates(),
+            approved.imageStatus(),
             USER, EquipmentStatus.ACTIVE, approved.contributorId(), approved.exerciseCount(),
             approved.createdAt(), approved.updatedAt(), null);
         equipmentRepository.save(withOwner);
@@ -241,14 +242,14 @@ class EquipmentControllerTest {
                               SpecSchema schema, Map<String, Object> specs) {
         Instant now = Instant.now();
         return new Equipment(id, name, category, subcategory, schema, specs,
-            null, ImageStatus.PENDING, null, EquipmentStatus.ACTIVE, "system",
+            null, java.util.List.of(), ImageStatus.PENDING, null, EquipmentStatus.ACTIVE, "system",
             0, now, now, null);
     }
 
     private Equipment userEquipment(String id, String userId, String name, String category, String subcategory) {
         Instant now = Instant.now();
         return new Equipment(id, name, category, subcategory, SpecSchema.BODYWEIGHT, Map.of(),
-            null, ImageStatus.PENDING, userId, EquipmentStatus.PENDING_REVIEW, userId,
+            null, java.util.List.of(), ImageStatus.PENDING, userId, EquipmentStatus.PENDING_REVIEW, userId,
             0, now, now, null);
     }
 }

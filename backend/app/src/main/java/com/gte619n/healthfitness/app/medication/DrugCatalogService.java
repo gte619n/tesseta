@@ -15,6 +15,7 @@ import com.gte619n.healthfitness.integrations.medication.DrugVisualLookupService
 import com.gte619n.healthfitness.integrations.medication.RxNormLookupService;
 import com.gte619n.healthfitness.integrations.medication.RxNormLookupService.RxNormDrugResult;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -240,6 +241,7 @@ public class DrugCatalogService {
             rx.defaultUnit() != null ? rx.defaultUnit() : "mg",
             rx.commonDoses() != null ? rx.commonDoses() : List.of(),
             null,  // imageUrl - will be set async
+            List.of(),  // imageCandidates - populated as images are generated
             fallbackUrl,
             suggestedMarkers != null ? suggestedMarkers : List.of(),
             description,
@@ -266,6 +268,7 @@ public class DrugCatalogService {
             result.defaultUnit() != null ? result.defaultUnit() : "mg",
             result.commonDoses() != null ? result.commonDoses() : List.of(),
             null,  // imageUrl - will be set async
+            List.of(),  // imageCandidates - populated as images are generated
             fallbackUrl,
             result.suggestedMarkers() != null ? result.suggestedMarkers() : List.of(),
             result.description(),
@@ -323,13 +326,9 @@ public class DrugCatalogService {
             }
 
             if (imageBytes.isPresent()) {
-                // Capture the previous URL before we overwrite; we'll
-                // best-effort delete that GCS object AFTER the new URL
-                // is durably persisted to Firestore.
-                String oldUrl = drug.imageUrl();
                 String imageUrl = imageStorage.upload(drugId, imageBytes.get());
 
-                // Update drug with image URL
+                // Keep the prior image(s) as candidates; the new URL becomes active.
                 Drug updated = new Drug(
                     drug.drugId(),
                     drug.name(),
@@ -339,6 +338,7 @@ public class DrugCatalogService {
                     drug.defaultUnit(),
                     drug.commonDoses(),
                     imageUrl,
+                    appended(drug.imageCandidates(), imageUrl),
                     drug.imageFallback(),
                     drug.suggestedMarkers(),
                     drug.description(),
@@ -347,15 +347,6 @@ public class DrugCatalogService {
                     drug.aliasOfDrugId()
                 );
                 drugs.save(updated);
-                // Fire-and-forget cleanup of the prior object. Order
-                // matters: persist new URL first, then delete old.
-                if (oldUrl != null && !oldUrl.equals(imageUrl)) {
-                    try {
-                        imageStorage.deleteByUrl(oldUrl);
-                    } catch (Exception cleanupErr) {
-                        System.err.println("Stale drug image cleanup failed for " + drugId + ": " + cleanupErr.getMessage());
-                    }
-                }
                 return imageUrl;
             }
         } catch (Exception e) {
@@ -401,11 +392,8 @@ public class DrugCatalogService {
                 if (imageBytes.isPresent()) {
                     String imageUrl = imageStorage.upload(drugId, imageBytes.get());
 
-                    // Update drug with image URL
+                    // Update drug with image URL, keeping prior images as candidates.
                     drugs.findById(drugId).ifPresent(drug -> {
-                        // Capture old URL (may be null for first-time
-                        // generation) before we overwrite.
-                        String oldUrl = drug.imageUrl();
                         Drug updated = new Drug(
                             drug.drugId(),
                             drug.name(),
@@ -415,6 +403,7 @@ public class DrugCatalogService {
                             drug.defaultUnit(),
                             drug.commonDoses(),
                             imageUrl,
+                            appended(drug.imageCandidates(), imageUrl),
                             drug.imageFallback(),
                             drug.suggestedMarkers(),
                             drug.description(),
@@ -424,20 +413,66 @@ public class DrugCatalogService {
                         );
                         drugs.save(updated);
                         System.out.println("Image generated and saved for " + drugName);
-                        // Best-effort cleanup of the prior object.
-                        if (oldUrl != null && !oldUrl.equals(imageUrl)) {
-                            try {
-                                imageStorage.deleteByUrl(oldUrl);
-                            } catch (Exception cleanupErr) {
-                                System.err.println("Stale drug image cleanup failed for " + drugId + ": " + cleanupErr.getMessage());
-                            }
-                        }
                     });
                 }
             } catch (Exception e) {
                 System.err.println("Failed to generate image for drug " + drugId + ": " + e.getMessage());
             }
         });
+    }
+
+    /**
+     * Admin create — adds a brand-new drug to the catalog and kicks off async
+     * image generation (same pipeline as lookup-created drugs). Rejects a name
+     * that already exists (case-insensitive); merge is the path for duplicates.
+     */
+    public Drug createDrug(
+        String name,
+        List<String> aliases,
+        DrugCategory category,
+        DrugForm form,
+        String defaultUnit,
+        List<String> commonDoses,
+        List<String> suggestedMarkers,
+        String description
+    ) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (category == null) {
+            throw new IllegalArgumentException("category is required");
+        }
+        if (form == null) {
+            throw new IllegalArgumentException("form is required");
+        }
+        if (drugs.findByNameIgnoreCase(name).isPresent()) {
+            throw new IllegalArgumentException("Drug already exists: " + name);
+        }
+
+        String drugId = UUID.randomUUID().toString();
+        String fallbackUrl = DrugImageGenerator.getFallbackUrl(form.name(), bucket);
+
+        Drug drug = new Drug(
+            drugId,
+            name,
+            aliases != null ? aliases : List.of(),
+            category,
+            form,
+            defaultUnit != null && !defaultUnit.isBlank() ? defaultUnit : "mg",
+            commonDoses != null ? commonDoses : List.of(),
+            null,  // imageUrl - will be set async
+            List.of(),  // imageCandidates - populated as images are generated
+            fallbackUrl,
+            suggestedMarkers != null ? suggestedMarkers : List.of(),
+            description,
+            Instant.now(),
+            Instant.now(),
+            null   // aliasOfDrugId
+        );
+
+        drugs.save(drug);
+        generateImageAsync(drugId, null, name, form.name());
+        return drug;
     }
 
     /**
@@ -464,6 +499,7 @@ public class DrugCatalogService {
             defaultUnit != null ? defaultUnit : existing.defaultUnit(),
             existing.commonDoses(),
             existing.imageUrl(),
+            existing.imageCandidates(),
             existing.imageFallback(),
             existing.suggestedMarkers(),
             existing.description(),
@@ -552,6 +588,7 @@ public class DrugCatalogService {
             source.defaultUnit(),
             source.commonDoses(),
             source.imageUrl(),
+            source.imageCandidates(),
             source.imageFallback(),
             source.suggestedMarkers(),
             source.description(),
@@ -586,9 +623,8 @@ public class DrugCatalogService {
             : imageGenerator.defaultPromptFor(drug);
         Optional<byte[]> bytes = imageGenerator.generateWithPrompt(prompt, drug.name());
         if (bytes.isEmpty()) return null;
-        // Capture old URL before overwrite for best-effort cleanup after persist.
-        String oldUrl = drug.imageUrl();
         String imageUrl = imageStorage.upload(drugId, bytes.get());
+        // Keep the prior image(s) as candidates; the new URL becomes active.
         Drug updated = new Drug(
             drug.drugId(),
             drug.name(),
@@ -598,6 +634,7 @@ public class DrugCatalogService {
             drug.defaultUnit(),
             drug.commonDoses(),
             imageUrl,
+            appended(drug.imageCandidates(), imageUrl),
             drug.imageFallback(),
             drug.suggestedMarkers(),
             drug.description(),
@@ -606,14 +643,127 @@ public class DrugCatalogService {
             drug.aliasOfDrugId()
         );
         drugs.save(updated);
-        if (oldUrl != null && !oldUrl.equals(imageUrl)) {
-            try {
-                imageStorage.deleteByUrl(oldUrl);
-            } catch (Exception cleanupErr) {
-                System.err.println("Stale drug image cleanup failed for " + drugId + ": " + cleanupErr.getMessage());
-            }
-        }
         return imageUrl;
+    }
+
+    /**
+     * Upload an admin-supplied image for a drug. The new URL becomes the
+     * active image and is appended to the candidate gallery; prior images
+     * are kept. Mirrors {@link #regenerateImageWithPrompt(String, String)}
+     * but skips AI generation — the bytes come straight from the admin.
+     *
+     * @return The new image URL.
+     */
+    public String uploadImage(String drugId, byte[] bytes, String contentType) {
+        Drug drug = drugs.findById(drugId)
+            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
+        String imageUrl = imageStorage.upload(drugId, bytes, contentType);
+        // Keep the prior image(s) as candidates; the new URL becomes active.
+        Drug updated = new Drug(
+            drug.drugId(),
+            drug.name(),
+            drug.aliases(),
+            drug.category(),
+            drug.form(),
+            drug.defaultUnit(),
+            drug.commonDoses(),
+            imageUrl,
+            appended(drug.imageCandidates(), imageUrl),
+            drug.imageFallback(),
+            drug.suggestedMarkers(),
+            drug.description(),
+            drug.createdAt(),
+            Instant.now(),
+            drug.aliasOfDrugId()
+        );
+        drugs.save(updated);
+        return imageUrl;
+    }
+
+    /**
+     * Select which candidate image is the active one. The url must already
+     * be a member of the drug's candidate gallery.
+     */
+    public Drug selectImage(String drugId, String imageUrl) {
+        Drug drug = drugs.findById(drugId)
+            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
+        if (drug.imageCandidates() == null || !drug.imageCandidates().contains(imageUrl)) {
+            throw new IllegalArgumentException("Image is not a candidate for this drug");
+        }
+        Drug updated = new Drug(
+            drug.drugId(),
+            drug.name(),
+            drug.aliases(),
+            drug.category(),
+            drug.form(),
+            drug.defaultUnit(),
+            drug.commonDoses(),
+            imageUrl,
+            drug.imageCandidates(),
+            drug.imageFallback(),
+            drug.suggestedMarkers(),
+            drug.description(),
+            drug.createdAt(),
+            Instant.now(),
+            drug.aliasOfDrugId()
+        );
+        drugs.save(updated);
+        return updated;
+    }
+
+    /**
+     * Remove a candidate image from the gallery. Best-effort deletes the GCS
+     * object. If the removed url was the active image, the active image falls
+     * back to the first remaining candidate (or null if none remain).
+     */
+    public Drug deleteImage(String drugId, String imageUrl) {
+        Drug drug = drugs.findById(drugId)
+            .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugId));
+        if (drug.imageCandidates() == null || !drug.imageCandidates().contains(imageUrl)) {
+            throw new IllegalArgumentException("Image is not a candidate for this drug");
+        }
+        List<String> remaining = new ArrayList<>(drug.imageCandidates());
+        remaining.remove(imageUrl);
+        // Best-effort cleanup of the GCS object now that it's leaving the gallery.
+        try {
+            imageStorage.deleteByUrl(imageUrl);
+        } catch (Exception cleanupErr) {
+            System.err.println("Drug image cleanup failed for " + drugId + ": " + cleanupErr.getMessage());
+        }
+        String activeUrl = imageUrl.equals(drug.imageUrl())
+            ? (remaining.isEmpty() ? null : remaining.get(0))
+            : drug.imageUrl();
+        Drug updated = new Drug(
+            drug.drugId(),
+            drug.name(),
+            drug.aliases(),
+            drug.category(),
+            drug.form(),
+            drug.defaultUnit(),
+            drug.commonDoses(),
+            activeUrl,
+            List.copyOf(remaining),
+            drug.imageFallback(),
+            drug.suggestedMarkers(),
+            drug.description(),
+            drug.createdAt(),
+            Instant.now(),
+            drug.aliasOfDrugId()
+        );
+        drugs.save(updated);
+        return updated;
+    }
+
+    /**
+     * Append {@code url} to {@code existing}, de-duplicated and order-preserving.
+     * If the url is already present the list is returned unchanged (by value).
+     */
+    private static List<String> appended(List<String> existing, String url) {
+        List<String> result = existing != null ? new ArrayList<>(existing) : new ArrayList<>();
+        if (!result.contains(url)) {
+            result.add(url);
+        }
+        return List.copyOf(result);
     }
 
     private DrugCategory parseCategory(String category) {

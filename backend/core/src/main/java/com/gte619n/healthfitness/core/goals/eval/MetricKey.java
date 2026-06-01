@@ -33,6 +33,9 @@ public enum MetricKey {
     NUTRITION_CARBS_AVG_7D("nutrition.carbsAvg7d"),
     NUTRITION_FAT_AVG_7D("nutrition.fatAvg7d"),
     NUTRITION_CALORIES_AVG_7D("nutrition.caloriesAvg7d"),
+    NUTRITION_FIBER_AVG_7D("nutrition.fiberAvg7d"),
+    NUTRITION_SUGAR_AVG_7D("nutrition.sugarAvg7d"),
+    NUTRITION_TARGET_MET_DAYS("nutrition.targetMetDays"),
     MEDS_ADHERENCE_30D("meds.adherence30d");
 
     private final String key;

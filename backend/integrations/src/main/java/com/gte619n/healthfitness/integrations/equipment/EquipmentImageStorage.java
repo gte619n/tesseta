@@ -29,13 +29,39 @@ public class EquipmentImageStorage {
     }
 
     public String upload(String equipmentId, byte[] imageBytes) {
-        String objectName = versionedObjectName(equipmentId);
+        // AI-generated images are always webp.
+        return upload(equipmentId, imageBytes, "image/webp");
+    }
+
+    /**
+     * Upload image bytes with an explicit content type — used for
+     * admin-supplied photos that may arrive as png/jpeg/webp/gif. The
+     * object name extension follows the content type so the public URL
+     * is honest about what it serves; everything else (versioned name,
+     * immutable cache-control) matches the generated-image path.
+     */
+    public String upload(String equipmentId, byte[] imageBytes, String contentType) {
+        String ext = extensionFor(contentType);
+        String objectName = versionedObjectName(equipmentId, ext);
         BlobInfo info = BlobInfo.newBuilder(BlobId.of(bucket, objectName))
-            .setContentType("image/webp")
+            .setContentType(contentType)
             .setCacheControl("public, max-age=31536000, immutable")
             .build();
         storage.create(info, imageBytes);
         return publicUrl(objectName);
+    }
+
+    private static String extensionFor(String contentType) {
+        if (contentType == null) {
+            return "webp";
+        }
+        return switch (contentType) {
+            case "image/png" -> "png";
+            case "image/jpeg" -> "jpg";
+            case "image/webp" -> "webp";
+            case "image/gif" -> "gif";
+            default -> "webp";
+        };
     }
 
     public void delete(String equipmentId) {
@@ -80,8 +106,8 @@ public class EquipmentImageStorage {
         return "equipment/" + equipmentId + ".webp";
     }
 
-    private static String versionedObjectName(String equipmentId) {
-        return "equipment/" + equipmentId + "_" + System.currentTimeMillis() + ".webp";
+    private static String versionedObjectName(String equipmentId, String ext) {
+        return "equipment/" + equipmentId + "_" + System.currentTimeMillis() + "." + ext;
     }
 
     private String publicUrl(String objectName) {

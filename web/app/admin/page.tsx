@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { getPendingEquipment, getAdminCatalog } from '@/lib/gym-api';
 import { listAdminDrugs } from '@/lib/drug-admin-api';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata('Admin');
 
 export const dynamic = 'force-dynamic';
 

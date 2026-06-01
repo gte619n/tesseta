@@ -41,7 +41,22 @@ dependencies {
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.google.id)
 
+    // IMPL-AND-02: AuthorizationClient (incremental Google Health scope) +
+    // Task.await() bridge.
+    implementation(libs.play.services.auth)
+    implementation(libs.kotlinx.coroutines.play.services)
+
     // IMPL-12: Hilt — network DI module + repositories.
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
+    // IMPL-AND-* : JVM unit tests for mappers, repositories (MockWebServer), and
+    // the Google Health scope flow.
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.retrofit.moshi)
+    testImplementation(libs.moshi.kotlin)
 }

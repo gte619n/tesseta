@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.core.equipment;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 public record Equipment(
@@ -11,6 +12,9 @@ public record Equipment(
     SpecSchema specSchema,
     Map<String, Object> specs,
     String imageUrl,
+    // All generated/uploaded image URLs; imageUrl is the active one and is
+    // always a member (or null).
+    List<String> imageCandidates,
     ImageStatus imageStatus,
     String ownerId,
     EquipmentStatus status,

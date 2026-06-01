@@ -80,10 +80,59 @@ public class EquipmentService {
             specSchema,
             specs != null ? specs : Map.of(),
             null, // imageUrl - will be set when image is generated
+            List.of(), // imageCandidates - none until an image is generated/uploaded
             ImageStatus.PENDING,
             userId, // ownerId set to userId for user submissions
             EquipmentStatus.PENDING_REVIEW,
             userId, // contributorId
+            0, // exerciseCount starts at 0
+            now,
+            now,
+            null // aliasOfEquipmentId
+        );
+
+        equipmentRepository.save(equipment);
+        imageGenerator.ifPresent(g -> g.generateImageAsync(equipment));
+        return equipment;
+    }
+
+    /**
+     * Admin create — adds equipment straight into the shared catalog
+     * (ownerId=null, status=ACTIVE, no contributor) and kicks off async image
+     * generation. Unlike {@link #submitEquipment}, there is no review step:
+     * admins write directly to the catalog.
+     */
+    public Equipment createCatalogEquipment(
+        String name,
+        String category,
+        String subcategory,
+        SpecSchema specSchema,
+        Map<String, Object> specs
+    ) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (specSchema == null) {
+            throw new IllegalArgumentException("specSchema is required");
+        }
+        validateCategoryAndSubcategory(category, subcategory);
+
+        String equipmentId = "eq_" + UUID.randomUUID().toString().substring(0, 12);
+        Instant now = Instant.now();
+
+        Equipment equipment = new Equipment(
+            equipmentId,
+            name,
+            category,
+            subcategory,
+            specSchema,
+            specs != null ? specs : Map.of(),
+            null, // imageUrl - will be set when image is generated
+            List.of(), // imageCandidates - none until an image is generated/uploaded
+            ImageStatus.PENDING,
+            null, // ownerId null = catalog item, not a user submission
+            EquipmentStatus.ACTIVE,
+            null, // contributorId - created directly by an admin
             0, // exerciseCount starts at 0
             now,
             now,
@@ -146,6 +195,7 @@ public class EquipmentService {
             equipment.specSchema(),
             equipment.specs(),
             equipment.imageUrl(),
+            equipment.imageCandidates(),
             equipment.imageStatus(),
             null, // Clear ownerId to promote to catalog
             EquipmentStatus.ACTIVE,
@@ -175,6 +225,7 @@ public class EquipmentService {
             equipment.specSchema(),
             equipment.specs(),
             equipment.imageUrl(),
+            equipment.imageCandidates(),
             equipment.imageStatus(),
             equipment.ownerId(),
             EquipmentStatus.REJECTED,
@@ -219,6 +270,7 @@ public class EquipmentService {
             specSchema != null ? specSchema : equipment.specSchema(),
             specs != null ? specs : equipment.specs(),
             equipment.imageUrl(),
+            equipment.imageCandidates(),
             equipment.imageStatus(),
             equipment.ownerId(),
             equipment.status(),
@@ -248,6 +300,7 @@ public class EquipmentService {
             equipment.specSchema(),
             equipment.specs(),
             imageUrl,
+            equipment.imageCandidates(),
             imageStatus,
             equipment.ownerId(),
             equipment.status(),
@@ -259,6 +312,45 @@ public class EquipmentService {
         );
 
         equipmentRepository.save(updated);
+    }
+
+    /**
+     * Select an existing candidate image as the active one. Pure data change:
+     * the url must already be a member of {@code imageCandidates()} (it was
+     * generated or uploaded earlier); no storage work happens here.
+     *
+     * @throws IllegalArgumentException if the equipment is missing or the url
+     *   is not one of its candidates
+     */
+    public Equipment selectImage(String equipmentId, String imageUrl) {
+        Equipment equipment = equipmentRepository.findById(equipmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Equipment not found: " + equipmentId));
+
+        if (equipment.imageCandidates() == null || !equipment.imageCandidates().contains(imageUrl)) {
+            throw new IllegalArgumentException("Image is not a candidate for this equipment");
+        }
+
+        Equipment updated = new Equipment(
+            equipment.equipmentId(),
+            equipment.name(),
+            equipment.category(),
+            equipment.subcategory(),
+            equipment.specSchema(),
+            equipment.specs(),
+            imageUrl,
+            equipment.imageCandidates(),
+            ImageStatus.GENERATED,
+            equipment.ownerId(),
+            equipment.status(),
+            equipment.contributorId(),
+            equipment.exerciseCount(),
+            equipment.createdAt(),
+            Instant.now(),
+            equipment.aliasOfEquipmentId()
+        );
+
+        equipmentRepository.save(updated);
+        return updated;
     }
 
     /**
@@ -337,6 +429,7 @@ public class EquipmentService {
             source.specSchema(),
             source.specs(),
             source.imageUrl(),
+            source.imageCandidates(),
             source.imageStatus(),
             source.ownerId(),
             EquipmentStatus.REJECTED,

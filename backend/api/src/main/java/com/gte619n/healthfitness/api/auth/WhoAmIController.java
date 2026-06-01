@@ -27,7 +27,7 @@ public class WhoAmIController {
         Integer heightCm = users.findById(cu.userId())
             .map(User::heightCm)
             .orElse(null);
-        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), heightCm);
+        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), heightCm);
     }
 
     // Partial profile update. Only `heightCm` is supported today; the
@@ -38,7 +38,7 @@ public class WhoAmIController {
     public WhoAmIResponse update(@RequestBody UpdateProfileRequest body) {
         CurrentUser cu = currentUser.get();
         users.updateHeightCm(cu.userId(), body.heightCm());
-        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), body.heightCm());
+        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), body.heightCm());
     }
 
     public record UpdateProfileRequest(Integer heightCm) {}

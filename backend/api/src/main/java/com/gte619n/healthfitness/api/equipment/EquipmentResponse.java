@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.equipment.EquipmentStatus;
 import com.gte619n.healthfitness.core.equipment.ImageStatus;
 import com.gte619n.healthfitness.core.equipment.SpecSchema;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 public record EquipmentResponse(
@@ -15,6 +16,7 @@ public record EquipmentResponse(
     SpecSchema specSchema,
     Map<String, Object> specs,
     String imageUrl,
+    List<String> imageCandidates,
     ImageStatus imageStatus,
     String ownerId,
     EquipmentStatus status,
@@ -32,6 +34,7 @@ public record EquipmentResponse(
             equipment.specSchema(),
             equipment.specs(),
             equipment.imageUrl(),
+            equipment.imageCandidates(),
             equipment.imageStatus(),
             equipment.ownerId(),
             equipment.status(),

@@ -76,6 +76,10 @@ public class SecurityConfig {
                 // Admin endpoints require authentication (aspect handles admin check)
                 .requestMatchers("/api/admin/**").authenticated()
                 .requestMatchers("/api/drugs", "/api/drugs/**").authenticated()
+                // Food catalog + barcode lookup operate on the current user
+                .requestMatchers("/api/foods/**", "/api/foods").authenticated()
+                // Nutrition capture (meal/label photo) operates on the current user
+                .requestMatchers("/api/nutrition/capture/**").authenticated()
                 .anyRequest().denyAll()
             )
             // Webhook endpoints arrive with `Authorization: Bearer <secret>`

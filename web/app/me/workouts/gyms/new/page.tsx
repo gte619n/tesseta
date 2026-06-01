@@ -3,6 +3,9 @@ import { revalidatePath } from "next/cache";
 import { createLocation } from "@/lib/gym-api";
 import { LocationForm } from "@/components/gym/LocationForm";
 import type { CreateLocationRequest } from "@/lib/types/gym";
+import { pageMetadata } from "@/lib/page-metadata";
+
+export const metadata = pageMetadata("New Gym");
 
 export default function NewGymPage() {
   async function createLocationAction(formData: FormData) {

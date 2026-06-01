@@ -10,6 +10,12 @@ import {
 import { LocationForm } from "@/components/gym/LocationForm";
 import { LocationCoverPhotoUpload } from "@/components/gym/LocationCoverPhotoUpload";
 import type { UpdateLocationRequest } from "@/lib/types/gym";
+import { entityMetadata } from "@/lib/page-metadata";
+
+export const generateMetadata = entityMetadata(
+  ({ locationId }: { locationId: string }) => getLocation(locationId),
+  (location) => `Edit ${location.name}`,
+);
 
 export const dynamic = "force-dynamic";
 

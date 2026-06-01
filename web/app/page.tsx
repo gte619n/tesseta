@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { Session } from "next-auth";
 import { revalidatePath } from "next/cache";
+import { absoluteTitle } from "@/lib/page-metadata";
+
+export const metadata = absoluteTitle("tesseta");
 import { auth } from "@/auth";
 import { BloodPanel, type BloodPanelData, type BloodPanelMarker } from "@/components/dashboard/BloodPanel";
 import { RecentFeed } from "@/components/dashboard/RecentFeed";
@@ -8,9 +11,13 @@ import { Sidebar, type SidebarUser } from "@/components/dashboard/Sidebar";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { TodaysDosesCard } from "@/components/dashboard/TodaysDosesCard";
 import { WeightChart } from "@/components/dashboard/WeightChart";
+import { WeightStatCard, type WeightStat } from "@/components/dashboard/WeightStatCard";
+import { WeightValue } from "@/components/dashboard/WeightValue";
+import { BodyCompositionPrimaryDelta } from "@/components/dashboard/BodyCompositionPrimaryDelta";
 import { isAdmin } from "@/lib/admin";
 import { apiFetch, apiJson } from "@/lib/api";
-import { recent, todayHeader, vitals } from "@/lib/fixtures/dashboard";
+import { fetchDailyMetrics, type DailyMetric } from "@/lib/daily-metrics-api";
+import { recent, todayHeader, vitals, type Vital } from "@/lib/fixtures/dashboard";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 
 // IMPL-04 wires the Sidebar identity and the BodyCompositionCard to real
@@ -32,16 +39,22 @@ type Reading = {
   recordingMethod: string | null;
 };
 
-import type { Vital } from "@/lib/fixtures/dashboard";
-
 type BodyCompositionView = {
-  primary: { value: string; unit: string; delta: string | null };
-  secondary: { value: string; unit: string; delta: string | null }[];
+  // Latest weight in canonical lb; formatted client-side per unit pref.
+  primaryWeightLb: number;
+  // Signed change vs the 90d average, in lb (negative = down).
+  primaryDeltaLb: number | null;
+  // Body fat % (already unit-agnostic).
+  bodyFatPercent: number | null;
+  // Lean mass in canonical lb; formatted client-side per unit pref.
+  leanMassLb: number | null;
+  // Weight series in lb, oldest → newest.
   series: number[];
   yMin: number;
   yMax: number;
   xLabels: { x: number; label: string }[];
-  weightVital: Vital | null;
+  // Raw lb data for the top-row Weight StatCard (formatted client-side).
+  weightStat: WeightStat | null;
 };
 
 export const dynamic = "force-dynamic";
@@ -49,11 +62,12 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const session = await auth();
   const sidebarUser = toSidebarUser(session);
-  const [admin, view, bloodPanel, todaysDoses] = await Promise.all([
+  const [admin, view, bloodPanel, todaysDoses, dailyVitals] = await Promise.all([
     isAdmin(),
     loadBodyComposition(),
     loadBloodPanel(),
     loadTodaysDoses(),
+    loadDailyMetrics(),
   ]);
 
   async function logDose(medicationId: string, window: TimeWindow) {
@@ -76,10 +90,16 @@ export default async function DashboardPage() {
         <main className="overflow-hidden px-7 pb-7 pt-[22px]">
           <TopBar />
 
-          <section className="mb-3 grid grid-cols-4 gap-2.5">
-            {composeStatRow(view?.weightVital ?? null).map((v) => (
-              <StatCard key={v.label} stat={v} />
-            ))}
+          <section className="mb-3 grid grid-cols-5 gap-2.5">
+            {view?.weightStat ? (
+              <WeightStatCard stat={view.weightStat} />
+            ) : (
+              vitals[0] && <StatCard stat={vitals[0]} />
+            )}
+            <StatCard stat={dailyVitals.restingHr} />
+            <StatCard stat={dailyVitals.hrv} />
+            <StatCard stat={dailyVitals.sleep} />
+            <StatCard stat={dailyVitals.steps} />
           </section>
 
           <BodyCompositionCard view={view} />
@@ -99,7 +119,7 @@ export default async function DashboardPage() {
 function toSidebarUser(session: Session | null): SidebarUser {
   const name = session?.user?.name ?? session?.user?.email ?? "—";
   const email = session?.user?.email ?? null;
-  return { name, email, initials: initialsFor(name) };
+  return { name, email, initials: initialsFor(name), image: session?.user?.image ?? null };
 }
 
 function initialsFor(name: string): string {
@@ -137,7 +157,6 @@ async function loadBodyComposition(): Promise<BodyCompositionView | null> {
   const latestWeight = series[series.length - 1] ?? 0;
   const avg90 = series.reduce((a, b) => a + b, 0) / series.length;
   const delta = latestWeight - avg90;
-  const deltaStr = formatDelta(delta, "lb", "vs 90d avg");
 
   const latestBodyFat = readings
     .filter((r) => r.metric === "BODY_FAT_PERCENT")
@@ -162,16 +181,15 @@ async function loadBodyComposition(): Promise<BodyCompositionView | null> {
   const sevenDayDelta = reference
     ? latestWeight - reference.value * KG_TO_LB
     : null;
-  const weightVital: Vital = {
+  const weightStat: WeightStat = {
     label: "Weight",
     icon: "scale",
-    value: latestWeight.toFixed(1),
-    unit: "lb",
+    valueLb: latestWeight,
+    sparkline: weightSparkline(series),
     delta:
       sevenDayDelta !== null
         ? {
-            direction: sevenDayDelta < 0 ? "down" : "up",
-            value: Math.abs(sevenDayDelta).toFixed(1),
+            deltaLb: sevenDayDelta,
             window: "7d",
             // Weight loss is typically the goal in this app's context; if
             // the user wants weight gain (cut/bulk cycles), this can grow
@@ -179,42 +197,19 @@ async function loadBodyComposition(): Promise<BodyCompositionView | null> {
             tone: sevenDayDelta <= 0 ? "good" : "alert",
           }
         : undefined,
-    sparkline: weightSparkline(series),
   };
 
   return {
-    primary: {
-      value: latestWeight.toFixed(1),
-      unit: "lb",
-      delta: deltaStr,
-    },
-    secondary: [
-      {
-        value: latestBodyFat ? latestBodyFat.value.toFixed(1) : "—",
-        unit: "% fat",
-        delta: null,
-      },
-      {
-        value: leanMassLb !== null ? leanMassLb.toFixed(1) : "—",
-        unit: "lb lean",
-        delta: null,
-      },
-    ],
+    primaryWeightLb: latestWeight,
+    primaryDeltaLb: delta,
+    bodyFatPercent: latestBodyFat ? latestBodyFat.value : null,
+    leanMassLb,
     series,
     yMin,
     yMax,
     xLabels,
-    weightVital,
+    weightStat,
   };
-}
-
-// Builds the 4-card stat row at the top of the dashboard. The Weight
-// card is computed from real backend data; the other three remain on
-// fixtures until we have data sources for them.
-function composeStatRow(weightVital: Vital | null): Vital[] {
-  const remaining = vitals.slice(1); // HRV / Resting HR / Readiness
-  const first = weightVital ?? vitals[0];
-  return first ? [first, ...remaining] : remaining;
 }
 
 // Render the weight series as a 48×20 polyline (the dimensions of
@@ -240,10 +235,181 @@ function weightSparkline(series: number[]): string {
     .join(" ");
 }
 
-function formatDelta(delta: number, unit: string, suffix: string): string {
-  if (Math.abs(delta) < 0.05) return `unchanged ${suffix}`;
-  const arrow = delta < 0 ? "↓" : "↑";
-  return `${arrow} ${Math.abs(delta).toFixed(1)} ${unit} ${suffix}`;
+// ── Daily metrics (top-row vitals) ───────────────────────────────────────
+// Wires the Resting HR / HRV / Sleep / Steps tiles to the daily-metrics
+// endpoint. Each tile takes the series of non-null values in the window
+// (oldest → newest): the latest value is shown, the delta is latest minus
+// the mean of prior values within the preceding 7 days, and the sparkline
+// is built from up to the last 9 non-null values.
+
+type DailyVitals = {
+  restingHr: Vital;
+  hrv: Vital;
+  sleep: Vital;
+  steps: Vital;
+};
+
+const FLAT_SPARKLINE = "0,10 6,10 12,10 18,10 24,10 30,10 36,10 42,10 48,10";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+async function loadDailyMetrics(): Promise<DailyVitals> {
+  const rows = await fetchDailyMetrics();
+  // Oldest → newest so "latest" is the final element.
+  const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+
+  // HRV and Resting HR fall back to fixtures; Steps/Sleep render a "—" tile.
+  // From the fixtures array: [0]=Weight, [1]=HRV, [2]=Resting HR.
+  const hrvFixture = vitals[1]!;
+  const rhrFixture = vitals[2]!;
+
+  return {
+    restingHr: buildVital(sorted, {
+      field: "restingHeartRate",
+      label: "Resting HR",
+      icon: "heart",
+      unit: "bpm",
+      higherIsBetter: false,
+      format: (v) => String(Math.round(v)),
+      formatDelta: (d) => String(Math.round(d)),
+      emptyFixture: rhrFixture,
+    }),
+    hrv: buildVital(sorted, {
+      field: "hrvMs",
+      label: "HRV",
+      icon: "activity-heartbeat",
+      unit: "ms",
+      higherIsBetter: true,
+      format: (v) => String(Math.round(v)),
+      formatDelta: (d) => String(Math.round(d)),
+      emptyFixture: hrvFixture,
+    }),
+    sleep: buildVital(sorted, {
+      field: "sleepMinutes",
+      label: "Sleep",
+      icon: "moon",
+      unit: "h",
+      higherIsBetter: true,
+      // Stored as minutes; display hours to 1 decimal.
+      transform: (v) => v / 60,
+      format: (v) => v.toFixed(1),
+      formatDelta: (d) => d.toFixed(1),
+      emptyFixture: null,
+    }),
+    steps: buildVital(sorted, {
+      field: "steps",
+      label: "Steps",
+      icon: "walk",
+      higherIsBetter: true,
+      format: (v) => Math.round(v).toLocaleString("en-US"),
+      formatDelta: (d) => Math.round(d).toLocaleString("en-US"),
+      emptyFixture: null,
+    }),
+  };
+}
+
+type MetricSpec = {
+  field: "restingHeartRate" | "hrvMs" | "sleepMinutes" | "steps";
+  label: string;
+  icon: string;
+  unit?: string;
+  higherIsBetter: boolean;
+  // Optional unit conversion applied to every raw value (e.g. minutes → hours).
+  transform?: (raw: number) => number;
+  format: (value: number) => string;
+  formatDelta: (delta: number) => string;
+  // Fixture to fall back to when there's no data, or null to render a "—" tile.
+  emptyFixture: Vital | null;
+};
+
+function buildVital(rows: DailyMetric[], spec: MetricSpec): Vital {
+  // Series of non-null (transformed) values with their dates, oldest → newest.
+  const points: { date: string; value: number }[] = [];
+  for (const row of rows) {
+    const raw = row[spec.field];
+    if (raw === null) continue;
+    points.push({
+      date: row.date,
+      value: spec.transform ? spec.transform(raw) : raw,
+    });
+  }
+
+  if (points.length === 0) {
+    if (spec.emptyFixture) return spec.emptyFixture;
+    return {
+      label: spec.label,
+      icon: spec.icon,
+      value: "—",
+      ...(spec.unit ? { unit: spec.unit } : {}),
+      sparkline: FLAT_SPARKLINE,
+    };
+  }
+
+  const latest = points[points.length - 1]!;
+  const series = points.map((p) => p.value);
+
+  // Delta = latest minus the mean of values before latest within the prior
+  // 7 days (the 7 days preceding the latest sample's date).
+  const latestTime = new Date(latest.date + "T00:00:00Z").getTime();
+  const priorCutoff = latestTime - 7 * DAY_MS;
+  const prior = points
+    .slice(0, points.length - 1)
+    .filter((p) => {
+      const t = new Date(p.date + "T00:00:00Z").getTime();
+      return t >= priorCutoff && t < latestTime;
+    })
+    .map((p) => p.value);
+
+  let delta: VitalDeltaLocal | undefined;
+  if (prior.length > 0) {
+    const mean = prior.reduce((a, b) => a + b, 0) / prior.length;
+    const diff = latest.value - mean;
+    const direction: "up" | "down" = diff >= 0 ? "up" : "down";
+    // For higher-is-better metrics an increase is good; for lower-is-better
+    // (Resting HR) a decrease is good.
+    const tone: "good" | "alert" = spec.higherIsBetter
+      ? diff >= 0
+        ? "good"
+        : "alert"
+      : diff <= 0
+        ? "good"
+        : "alert";
+    delta = {
+      direction,
+      value: spec.formatDelta(Math.abs(diff)),
+      window: "7d",
+      tone,
+    };
+  }
+
+  return {
+    label: spec.label,
+    icon: spec.icon,
+    value: spec.format(latest.value),
+    ...(spec.unit ? { unit: spec.unit } : {}),
+    ...(delta ? { delta } : {}),
+    sparkline: metricSparkline(series),
+  };
+}
+
+type VitalDeltaLocal = NonNullable<Vital["delta"]>;
+
+// Build a 9-point 48×20 sparkline from up to the last 9 values, min–max
+// normalized. Higher value → lower y (top of the viewBox), mirroring the
+// weight sparkline helper.
+function metricSparkline(series: number[]): string {
+  const tail = series.slice(-9);
+  if (tail.length === 0) return FLAT_SPARKLINE;
+  const min = Math.min(...tail);
+  const max = Math.max(...tail);
+  const range = max - min || 1;
+  const N = tail.length;
+  return tail
+    .map((y, i) => {
+      const x = N === 1 ? 0 : (i * 48) / (N - 1);
+      const yPx = 2 + ((max - y) / range) * 16;
+      return `${x.toFixed(0)},${yPx.toFixed(0)}`;
+    })
+    .join(" ");
 }
 
 function computeLeanMass(
@@ -365,33 +531,49 @@ function BodyCompositionCard({ view }: { view: BodyCompositionView | null }) {
           <div className="mt-3 flex items-baseline gap-[18px]">
             <div>
               <div className="font-mono text-[36px] font-medium leading-none tracking-[-0.03em] text-primary tabular">
-                {view.primary.value}
-                <span className="ml-1 text-[13px] font-normal text-tertiary">
-                  {view.primary.unit}
-                </span>
+                <WeightValue
+                  lb={view.primaryWeightLb}
+                  unitClassName="ml-1 text-[13px] font-normal text-tertiary"
+                />
               </div>
-              {view.primary.delta ? (
-                <div className="caps-mono mt-[5px] text-[10px] text-good">
-                  {view.primary.delta}
-                </div>
+              {view.primaryDeltaLb !== null ? (
+                <BodyCompositionPrimaryDelta
+                  deltaLb={view.primaryDeltaLb}
+                  suffix="vs 90d avg"
+                />
               ) : null}
             </div>
             <div className="h-[42px] w-px bg-border-default" aria-hidden />
-            {view.secondary.map((s, i) => (
-              <div key={`${s.unit}-${i}`}>
-                <div className="font-mono text-[18px] font-medium leading-none tracking-[-0.01em] text-primary tabular">
-                  {s.value}
-                  <span className="ml-[3px] text-[10px] font-normal text-tertiary">
-                    {s.unit}
-                  </span>
-                </div>
-                {s.delta ? (
-                  <div className="caps-mono mt-[5px] text-[10px] text-good">
-                    {s.delta}
-                  </div>
-                ) : null}
+            <div>
+              <div className="font-mono text-[18px] font-medium leading-none tracking-[-0.01em] text-primary tabular">
+                {view.bodyFatPercent !== null
+                  ? view.bodyFatPercent.toFixed(1)
+                  : "—"}
+                <span className="ml-[3px] text-[10px] font-normal text-tertiary">
+                  % fat
+                </span>
               </div>
-            ))}
+            </div>
+            <div>
+              <div className="font-mono text-[18px] font-medium leading-none tracking-[-0.01em] text-primary tabular">
+                {view.leanMassLb !== null ? (
+                  <WeightValue
+                    lb={view.leanMassLb}
+                    unitClassName="ml-[3px] text-[10px] font-normal text-tertiary"
+                  />
+                ) : (
+                  <>
+                    —
+                    <span className="ml-[3px] text-[10px] font-normal text-tertiary">
+                      lb
+                    </span>
+                  </>
+                )}
+                <span className="ml-[3px] text-[10px] font-normal text-tertiary">
+                  lean
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -8,6 +8,10 @@ import type { Route } from "next";
 import { signIn } from "@/auth";
 import { apiJson } from "@/lib/api";
 import { DexaUploadButton } from "@/components/dexa/DexaUploadButton";
+import {
+  BodyWeightCell,
+  BodyWeightMetricValue,
+} from "@/components/dashboard/BodyWeight";
 
 type WhoAmI = {
   userId: string;
@@ -156,8 +160,11 @@ export default async function BodyCompositionPage() {
         <section className="grid grid-cols-4 gap-3">
           <MetricCard
             label="Weight"
-            value={latestWeight ? (latestWeight.value * KG_TO_LB).toFixed(1) : "—"}
-            unit="lb"
+            value={
+              <BodyWeightMetricValue
+                lb={latestWeight ? latestWeight.value * KG_TO_LB : null}
+              />
+            }
             sampleTime={latestWeight?.sampleTime ?? null}
           />
           <MetricCard
@@ -168,8 +175,7 @@ export default async function BodyCompositionPage() {
           />
           <MetricCard
             label="Lean mass"
-            value={leanMassLb !== null ? leanMassLb.toFixed(1) : "—"}
-            unit="lb"
+            value={<BodyWeightMetricValue lb={leanMassLb} />}
             sampleTime={latestSession?.sampleTime ?? null}
             footer={leanMassLb === null ? "needs paired weigh-in" : null}
           />
@@ -233,14 +239,7 @@ export default async function BodyCompositionPage() {
                         )}
                       </td>
                       <td className="px-5 py-2 text-right text-primary">
-                        {r.weightLb !== null ? (
-                          <>
-                            {r.weightLb.toFixed(1)}
-                            <span className="ml-1 text-tertiary">lb</span>
-                          </>
-                        ) : (
-                          <span className="text-tertiary">—</span>
-                        )}
+                        <BodyWeightCell lb={r.weightLb} />
                       </td>
                       <td className="px-5 py-2 text-right text-primary">
                         {r.bodyFatPercent !== null ? (
@@ -253,14 +252,7 @@ export default async function BodyCompositionPage() {
                         )}
                       </td>
                       <td className="px-5 py-2 text-right text-primary">
-                        {r.leanMassLb !== null ? (
-                          <>
-                            {r.leanMassLb.toFixed(1)}
-                            <span className="ml-1 text-tertiary">lb</span>
-                          </>
-                        ) : (
-                          <span className="text-tertiary">—</span>
-                        )}
+                        <BodyWeightCell lb={r.leanMassLb} />
                       </td>
                       <td className="px-5 py-2">
                         {r.isDexa ? (
@@ -302,8 +294,10 @@ function MetricCard({
   footer,
 }: {
   label: string;
-  value: string;
-  unit: string;
+  // A preformatted string (with unit handled separately) or a fully
+  // rendered node (used for unit-aware weight values).
+  value: React.ReactNode;
+  unit?: string;
   sampleTime: string | null;
   footer?: string | null;
 }) {

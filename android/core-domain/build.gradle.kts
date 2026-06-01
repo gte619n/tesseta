@@ -24,4 +24,8 @@ dependencies {
     // Goals (IMPL-12): domain models carry Moshi annotations so they double as
     // the JSON wire contract with the backend.
     api(libs.moshi)
+
+    // IMPL-AND-* : pure-Kotlin domain unit tests (formatters, mappers, helpers).
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

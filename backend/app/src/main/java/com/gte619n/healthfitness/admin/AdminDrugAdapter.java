@@ -28,6 +28,21 @@ public class AdminDrugAdapter implements DrugCatalogPort {
     }
 
     @Override
+    public Drug createDrug(
+        String name,
+        List<String> aliases,
+        DrugCategory category,
+        DrugForm form,
+        String defaultUnit,
+        List<String> commonDoses,
+        List<String> suggestedMarkers,
+        String description
+    ) {
+        return service.createDrug(
+            name, aliases, category, form, defaultUnit, commonDoses, suggestedMarkers, description);
+    }
+
+    @Override
     public Drug updateDrug(
         String drugId,
         String name,
@@ -62,5 +77,20 @@ public class AdminDrugAdapter implements DrugCatalogPort {
     @Override
     public String regenerateImageWithPrompt(String drugId, String promptOverride) {
         return service.regenerateImageWithPrompt(drugId, promptOverride);
+    }
+
+    @Override
+    public String uploadImage(String drugId, byte[] bytes, String contentType) {
+        return service.uploadImage(drugId, bytes, contentType);
+    }
+
+    @Override
+    public Drug selectImage(String drugId, String imageUrl) {
+        return service.selectImage(drugId, imageUrl);
+    }
+
+    @Override
+    public Drug deleteImage(String drugId, String imageUrl) {
+        return service.deleteImage(drugId, imageUrl);
     }
 }

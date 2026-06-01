@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { AdminEquipment, SpecSchema, EquipmentSpecs } from '@/lib/types/gym';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { EditEquipmentModal } from './EditEquipmentModal';
 import { ImageLightbox } from './ImageLightbox';
+import { ImageCandidateStrip } from './ImageCandidateStrip';
 import { RegenerateImageModal } from './RegenerateImageModal';
 
 interface PendingEquipmentCardProps {
@@ -18,7 +19,10 @@ interface PendingEquipmentCardProps {
     data: { name: string; category: string; subcategory: string; specSchema: SpecSchema; specs: EquipmentSpecs },
   ) => Promise<void>;
   regenerate: (equipmentId: string, prompt: string) => Promise<void>;
+  uploadImage: (equipmentId: string, file: File) => Promise<void>;
   getImagePrompt: (equipmentId: string) => Promise<string>;
+  selectImage: (equipmentId: string, imageUrl: string) => Promise<void>;
+  deleteImage: (equipmentId: string, imageUrl: string) => Promise<void>;
   isDragOver?: boolean;
 }
 
@@ -28,7 +32,10 @@ export function PendingEquipmentCard({
   reject,
   update,
   regenerate,
+  uploadImage,
   getImagePrompt,
+  selectImage,
+  deleteImage,
   isDragOver,
 }: PendingEquipmentCardProps) {
   const confirm = useConfirm();
@@ -37,6 +44,25 @@ export function PendingEquipmentCard({
   const [isRegenOpen, setIsRegenOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset the input value so re-selecting the same file fires onChange.
+    e.target.value = '';
+    if (!file) return;
+    setIsProcessing(true);
+    try {
+      await uploadImage(equipment.equipmentId, file);
+      toast.success('Image uploaded');
+    } catch (err) {
+      toast.error('Upload failed', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }
 
   const draggable = useDraggable({ id: equipment.equipmentId, data: { equipment } });
   const droppable = useDroppable({ id: `drop-${equipment.equipmentId}`, data: { equipment } });
@@ -98,12 +124,22 @@ export function PendingEquipmentCard({
           ref={draggable.setNodeRef}
           className="flex gap-5"
         >
-          <ImageThumb
-            url={equipment.imageUrl}
-            status={equipment.imageStatus}
-            onZoom={(src) => setLightboxSrc(src)}
-            alt={equipment.name}
-          />
+          <div className="flex shrink-0 flex-col gap-2">
+            <ImageThumb
+              url={equipment.imageUrl}
+              status={equipment.imageStatus}
+              onZoom={(src) => setLightboxSrc(src)}
+              alt={equipment.name}
+            />
+            <ImageCandidateStrip
+              id={equipment.equipmentId}
+              name={equipment.name}
+              activeUrl={equipment.imageUrl}
+              candidates={equipment.imageCandidates ?? []}
+              selectImage={selectImage}
+              deleteImage={deleteImage}
+            />
+          </div>
 
           <div className="flex-1 min-w-0">
             <div
@@ -157,6 +193,20 @@ export function PendingEquipmentCard({
               >
                 Regenerate image
               </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
+                className="cursor-pointer rounded-md border border-border-default bg-canvas px-3 py-1.5 text-xs font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Upload photo
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUploadFile}
+              />
               <button
                 onClick={handleReject}
                 disabled={isProcessing}

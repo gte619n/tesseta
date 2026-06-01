@@ -41,11 +41,13 @@ class SecurityConfigTest {
         mvc.perform(get("/api/me").with(jwt().jwt(b -> b
             .subject("108527834729384759201")
             .claim("email", "user@example.com")
-            .claim("name", "Test User"))))
+            .claim("name", "Test User")
+            .claim("picture", "https://example.com/avatar.jpg"))))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.userId").value("108527834729384759201"))
            .andExpect(jsonPath("$.email").value("user@example.com"))
-           .andExpect(jsonPath("$.displayName").value("Test User"));
+           .andExpect(jsonPath("$.displayName").value("Test User"))
+           .andExpect(jsonPath("$.photoUrl").value("https://example.com/avatar.jpg"));
     }
 
     @Test

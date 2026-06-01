@@ -15,9 +15,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +49,7 @@ import com.gte619n.healthfitness.core.chat.ChatMessage
 import com.gte619n.healthfitness.core.chat.ChatThread
 import com.gte619n.healthfitness.data.goals.ChatThreadResponse
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
+import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -85,16 +88,42 @@ fun GoalsChatScreen(
     var threadsOpen by remember { mutableStateOf(false) }
     var confirmDeleteId by remember { mutableStateOf<String?>(null) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .background(Hf.colors.canvas),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Hf.colors.canvas),
         ) {
-            ChatTopBar(
+            HfScreenHeader(
+                title = "New goal",
+                subtitle = "Plan a roadmap with the assistant",
                 onBack = onBack,
-                threadCount = state.threads.size,
-                onToggleThreads = { threadsOpen = !threadsOpen },
+                trailing = {
+                    // Threads icon — shows count badge when there are past threads.
+                    val threadCount = state.threads.size
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clickable(
+                                enabled = threadCount > 0,
+                                onClick = { threadsOpen = !threadsOpen },
+                            )
+                            .alpha(if (threadCount > 0) 1f else 0.35f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = "Past conversations ($threadCount)",
+                            tint = Hf.colors.textSecondary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                },
             )
             ChatThread(
                 scope = GoalChatScope,
@@ -180,52 +209,6 @@ fun GoalsChatScreen(
     }
 }
 
-@Composable
-private fun ChatTopBar(
-    onBack: () -> Unit,
-    threadCount: Int,
-    onToggleThreads: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Hf.colors.canvas)
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-            contentDescription = "Back",
-            tint = Hf.colors.textPrimary,
-            modifier = Modifier
-                .size(34.dp)
-                .clickable { onBack() }
-                .padding(7.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text("New goal", style = Hf.type.headingLg.copy(fontSize = 18.sp), color = Hf.colors.textPrimary)
-            Text("Plan a roadmap with the assistant", style = Hf.type.bodySm, color = Hf.colors.textTertiary)
-        }
-        // Threads icon — shows count badge when there are past threads.
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clickable(enabled = threadCount > 0, onClick = onToggleThreads)
-                .alpha(if (threadCount > 0) 1f else 0.35f),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ChatBubbleOutline,
-                contentDescription = "Past conversations ($threadCount)",
-                tint = Hf.colors.textSecondary,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
-}
-
 /**
  * Slide-in panel listing all threads. Each row shows the thread title plus a
  * trash icon that fires [onDeleteRequest] (caller shows the confirmation dialog).
@@ -249,7 +232,6 @@ private fun ThreadsPanel(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,

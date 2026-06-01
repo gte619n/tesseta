@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { signIn } from "@/auth";
 import { apiFetch, apiJson } from "@/lib/api";
 import { HeightForm } from "@/components/profile/HeightForm";
+import { UnitsSection } from "@/components/profile/UnitsSection";
 
 type WhoAmI = {
   userId: string;
@@ -105,6 +106,19 @@ export default async function ProfilePage() {
           </p>
           <div className="mt-4">
             <HeightForm heightCm={me.heightCm} saveAction={saveHeight} />
+          </div>
+        </section>
+
+        <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
+          <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
+            Units
+          </h2>
+          <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
+            Choose how weight, height, and temperature are displayed. Saved
+            in this browser.
+          </p>
+          <div className="mt-4">
+            <UnitsSection />
           </div>
         </section>
 

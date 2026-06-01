@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { Drug, DrugCategory, DrugForm } from '@/lib/types/medication';
 import { CATEGORY_LABELS, FORM_LABELS } from '@/lib/types/medication';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { EditDrugModal } from './EditDrugModal';
+import { ImageCandidateStrip } from './ImageCandidateStrip';
 import { ImageLightbox } from './ImageLightbox';
 import { RegenerateImageModal } from './RegenerateImageModal';
 
@@ -17,6 +18,9 @@ interface Props {
     data: { name: string; aliases: string[]; category: DrugCategory; form: DrugForm; defaultUnit: string },
   ) => Promise<void>;
   regenerate: (drugId: string, prompt: string) => Promise<void>;
+  uploadImage: (drugId: string, file: File) => Promise<void>;
+  selectImage: (drugId: string, imageUrl: string) => Promise<void>;
+  deleteImage: (drugId: string, imageUrl: string) => Promise<void>;
   getImagePrompt: (drugId: string) => Promise<string>;
   remove: (drugId: string) => Promise<void>;
   isDragOver?: boolean;
@@ -26,6 +30,9 @@ export function DrugAdminCard({
   drug,
   update,
   regenerate,
+  uploadImage,
+  selectImage,
+  deleteImage,
   getImagePrompt,
   remove,
   isDragOver,
@@ -36,6 +43,25 @@ export function DrugAdminCard({
   const [isRegenOpen, setIsRegenOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessing(true);
+    try {
+      await uploadImage(drug.drugId, file);
+      toast.success('Image uploaded');
+    } catch (err) {
+      toast.error('Failed to upload image', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setIsProcessing(false);
+      // Reset so selecting the same file again re-triggers onChange.
+      e.target.value = '';
+    }
+  }
 
   const draggable = useDraggable({ id: drug.drugId, data: { drug } });
   const droppable = useDroppable({ id: `drop-${drug.drugId}`, data: { drug } });
@@ -162,6 +188,20 @@ export function DrugAdminCard({
                 Regenerate image
               </button>
               <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
+                className="cursor-pointer rounded-md border border-border-default bg-canvas px-3 py-1.5 text-xs font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Upload photo
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleUpload}
+                className="hidden"
+              />
+              <button
                 onClick={handleDelete}
                 disabled={isProcessing}
                 className="cursor-pointer rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -169,6 +209,22 @@ export function DrugAdminCard({
                 Delete
               </button>
             </div>
+
+            {drug.imageCandidates.length > 1 ? (
+              <div className="mt-4">
+                <p className="mb-2 text-xs text-tertiary">
+                  Gallery <span className="text-quaternary">· click to set active</span>
+                </p>
+                <ImageCandidateStrip
+                  id={drug.drugId}
+                  name={drug.name}
+                  activeUrl={drug.imageUrl}
+                  candidates={drug.imageCandidates}
+                  selectImage={selectImage}
+                  deleteImage={deleteImage}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
