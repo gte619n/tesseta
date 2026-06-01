@@ -5,8 +5,8 @@
 
 ## Context
 
-[IMPL-04](../specs/IMPL-04-google-health-body-composition.md) lands the
-backend's first OAuth flow that needs **server-side, long-lived credentials**.
+The backend's [Google Health ingestion](../reference/patterns.md#google-health-ingestion)
+is its first OAuth flow that needs **server-side, long-lived credentials**.
 
 - The Google Health API requires user-delegated OAuth access tokens
   scoped to `googlehealth.health_metrics_and_measurements.readonly`.

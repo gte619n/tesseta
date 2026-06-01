@@ -13,10 +13,14 @@ import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.MealCaptureItem
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.forPortion
+import com.gte619n.healthfitness.ui.snackbar.SnackbarController
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -59,15 +63,27 @@ data class NutritionCaptureUiState(
     val error: String? = null,
 )
 
+/** One-shot side effects the capture screen reacts to (navigation). */
+sealed interface CaptureEvent {
+    /** Pop back to the nutrition page (e.g. after a one-tap barcode log). */
+    data object NavigateBack : CaptureEvent
+}
+
 @HiltViewModel
 class NutritionCaptureViewModel @Inject constructor(
     private val foods: FoodRepository,
     private val capture: NutritionCaptureRepository,
     private val nutrition: NutritionRepository,
+    private val snackbar: SnackbarController,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NutritionCaptureUiState())
     val state: StateFlow<NutritionCaptureUiState> = _state.asStateFlow()
+
+    // One-shot navigation events. A barcode hit logs immediately and asks the
+    // screen to pop back to the nutrition page (the user never confirms a serving).
+    private val _events = Channel<CaptureEvent>(Channel.BUFFERED)
+    val events: Flow<CaptureEvent> = _events.receiveAsFlow()
 
     private val today: String get() = LocalDate.now().format(ISO_DATE)
 
@@ -84,7 +100,12 @@ class NutritionCaptureViewModel @Inject constructor(
 
     // ---- Barcode --------------------------------------------------------
 
-    /** Called by the ML Kit analyzer when a GTIN is detected. */
+    /**
+     * Called by the ML Kit analyzer when a GTIN is detected. On a catalog hit we
+     * log the food immediately (default serving, qty 1) and pop back to the
+     * nutrition page — no manual serving confirmation. On a miss we offer the
+     * label-photo fallback.
+     */
     fun onBarcodeDetected(code: String) {
         val s = _state.value
         if (s.mode != CaptureMode.BARCODE || s.stage != CaptureStage.Scanning) return
@@ -92,20 +113,50 @@ class NutritionCaptureViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val food = foods.barcodeLookup(code)
-                _state.update {
-                    it.copy(
-                        stage = if (food != null) {
-                            CaptureStage.BarcodeFood(code, food)
-                        } else {
-                            CaptureStage.BarcodeMiss(code)
-                        },
-                    )
+                if (food != null) {
+                    logBarcodeFoodImmediately(food)
+                } else {
+                    _state.update { it.copy(stage = CaptureStage.BarcodeMiss(code)) }
                 }
             } catch (e: Exception) {
                 _state.update {
                     it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Lookup failed")
                 }
             }
+        }
+    }
+
+    /**
+     * Log a scanned food using its default serving (the real product serving when
+     * Open Food Facts supplies one — so a protein shake logs its ~30 g, not the
+     * per-100g ~9 g), then signal the screen to return to the nutrition page.
+     */
+    private suspend fun logBarcodeFoodImmediately(food: Food) {
+        val index = food.defaultServingIndex
+            .coerceIn(0, (food.servingSizes.size - 1).coerceAtLeast(0))
+        val serving = food.servingSizes.getOrNull(index)
+        val servingGrams = serving?.grams ?: 100.0
+        val servingLabel = serving?.label ?: "100 g"
+        val macros = food.macrosPer100g.forPortion(servingGrams, 1.0)
+        try {
+            nutrition.addEntry(
+                today,
+                EntryRequest(
+                    meal = currentMeal().wire,
+                    foodId = food.foodId,
+                    foodName = food.name,
+                    servingLabel = servingLabel,
+                    servingGrams = servingGrams,
+                    quantity = 1.0,
+                    macros = macros,
+                    source = "BARCODE",
+                ),
+            )
+            snackbar.show("${food.name} logged")
+            _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
+            _events.send(CaptureEvent.NavigateBack)
+        } catch (e: Exception) {
+            _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Save failed") }
         }
     }
 

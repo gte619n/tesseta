@@ -94,6 +94,41 @@ class LatestMarkersTest {
     }
 
     @Test
+    fun anchorsToLatestReportAndOmitsMarkersAbsentFromIt() {
+        // Older report carries LDL; the newer (latest) report carries only HDL.
+        // The current view must pull from the latest report: HDL shows its value,
+        // LDL is omitted ("—") rather than back-filled from the older report.
+        val older = BloodTestReport(
+            reportId = "old",
+            sampleDate = today.minusMonths(3),
+            labSource = "Quest",
+            markers = listOf(ExtractedMarker("LDL", 130.0, "mg/dL", null, null, null)),
+            pdfDownloadPath = "/api/me/blood/reports/old/pdf",
+            createdAt = Instant.EPOCH,
+        )
+        val newer = BloodTestReport(
+            reportId = "new",
+            sampleDate = today.minusDays(2),
+            labSource = "Labcorp",
+            markers = listOf(ExtractedMarker("HDL", 55.0, "mg/dL", null, null, null)),
+            pdfDownloadPath = "/api/me/blood/reports/new/pdf",
+            createdAt = Instant.EPOCH,
+        )
+        val result = LatestMarkers.derive(emptyList(), listOf(older, newer), today)
+
+        val hdl = result.first { it.marker == BloodMarker.HDL }
+        assertEquals(55.0, hdl.value!!, 0.0001)
+        assertEquals(LatestMarker.Source.LAB, hdl.source)
+
+        // LDL is only in the older report → omitted from the current view…
+        val ldl = result.first { it.marker == BloodMarker.LDL }
+        assertNull(ldl.value)
+        assertEquals(LatestMarker.Source.NONE, ldl.source)
+        // …but its older point still feeds the sparkline history.
+        assertEquals(1, ldl.history.size)
+    }
+
+    @Test
     fun toMarkerMapsCanonicalAndDashedNames() {
         assertEquals(BloodMarker.LDL, LatestMarkers.toMarker("LDL"))
         assertEquals(BloodMarker.HS_CRP, LatestMarkers.toMarker("hs-CRP"))

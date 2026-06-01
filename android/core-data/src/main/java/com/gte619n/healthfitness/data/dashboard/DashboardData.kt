@@ -42,7 +42,7 @@ internal interface DashboardApi {
     suspend fun bloodReadings(): List<BloodReadingDto>
 
     @GET("api/me/medications/today")
-    suspend fun todaysDoses(): List<TodaysDoseDto>
+    suspend fun todaysDoses(@Query("date") date: String? = null): List<TodaysDoseDto>
 
     @GET("api/me/daily-metrics")
     suspend fun dailyMetrics(
@@ -289,7 +289,8 @@ internal class DashboardTodaysDosesRepositoryImpl @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : DashboardTodaysDosesRepository {
     override suspend fun loadToday(): List<TodaysDoseSummary> = withContext(io) {
-        api.todaysDoses().map { it.toDomain() }
+        // Device-local date so the dashboard dose card resets on the user's day.
+        api.todaysDoses(LocalDate.now().toString()).map { it.toDomain() }
     }
 }
 

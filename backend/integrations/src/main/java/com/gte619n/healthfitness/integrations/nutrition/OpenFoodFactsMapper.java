@@ -56,6 +56,14 @@ final class OpenFoodFactsMapper {
         String brand = firstBrand(text(product, "brands"));
         String category = text(product, "categories");
 
+        // Serving sizes: OFF macros are per-100g, but most packaged products
+        // declare a real serving (e.g. a 330 ml protein shake). If we only offer
+        // "100 g" the user logs the per-100g macros (~9 g protein) instead of the
+        // per-serving value (~30 g). When OFF gives us a usable serving_quantity
+        // (grams), expose it as the *default* serving so a one-tap log records the
+        // serving, not 100 g. Keep "100 g" as a secondary option.
+        List<ServingSize> servingSizes = servingSizes(product);
+
         return Optional.of(new CatalogFood(
             "off-" + barcode,
             name,
@@ -64,7 +72,7 @@ final class OpenFoodFactsMapper {
             barcode,
             category,
             macros,
-            List.of(new ServingSize("100 g", 100.0)),
+            servingSizes,
             0,
             FoodSource.OPEN_FOOD_FACTS,
             barcode,
@@ -77,6 +85,27 @@ final class OpenFoodFactsMapper {
             null,
             null
         ));
+    }
+
+    /**
+     * Build the serving list. When OFF declares a positive {@code serving_quantity}
+     * (always grams), expose it as the default serving (index 0), labelled with
+     * the human {@code serving_size} string when present, and keep "100 g" as a
+     * fallback. Otherwise fall back to "100 g" only.
+     */
+    private static List<ServingSize> servingSizes(JsonNode product) {
+        Double servingGrams = number(product, "serving_quantity");
+        if (servingGrams == null || servingGrams <= 0) {
+            return List.of(new ServingSize("100 g", 100.0));
+        }
+        String label = text(product, "serving_size");
+        if (label == null || label.isBlank()) {
+            label = "1 serving";
+        }
+        return List.of(
+            new ServingSize(label, servingGrams),
+            new ServingSize("100 g", 100.0)
+        );
     }
 
     /** Open Food Facts "brands" is a comma-separated list; take the first. */

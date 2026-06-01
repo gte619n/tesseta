@@ -7,10 +7,17 @@ import java.time.LocalDate
  * overview grid and the dashboard BloodPanel so both surfaces render identical
  * values and ordering.
  *
- * Manual [BloodReading]s and lab [BloodTestReport] markers are merged per
- * [BloodMarker]. History is capped to one point per day (last write wins) over
- * the most recent 12 months. Markers are emitted in [MarkerCatalog.DISPLAY_ORDER];
- * markers with no data are included with a `null` value and [LatestMarker.Source.NONE].
+ * The displayed latest value for every marker is pulled from the **single most
+ * recent lab report** so the grid reflects one coherent draw: a marker absent
+ * from that report is emitted with a `null` value (rendered as "—"), never
+ * back-filled from an older report or reading. When the user has no lab reports
+ * at all, we fall back to their most recent manual [BloodReading] per marker so
+ * manual-only users still see their numbers.
+ *
+ * Sparkline [history] is independent of that anchor: it merges manual readings
+ * and all lab reports, one point per day (last write wins), over the most recent
+ * 12 months. Markers are emitted in [MarkerCatalog.DISPLAY_ORDER]; markers with
+ * no data are included with a `null` value and [LatestMarker.Source.NONE].
  */
 object LatestMarkers {
 
@@ -20,6 +27,12 @@ object LatestMarkers {
         today: LocalDate = LocalDate.now(),
     ): List<LatestMarker> {
         val cutoff = today.minusMonths(12)
+
+        // The one report the grid reads its current values from: the most recent
+        // dated report (createdAt breaks same-day ties). Null when there are none.
+        val latestReport = reports
+            .filter { it.sampleDate != null }
+            .maxWithOrNull(compareBy({ it.sampleDate }, { it.createdAt }))
 
         return MarkerCatalog.DISPLAY_ORDER.map { marker ->
             // One point per day; last value for a day wins. Track provenance so
@@ -66,25 +79,35 @@ object LatestMarkers {
                 .map { (date, acc) -> MarkerHistoryPoint(date, acc.value, acc.source) }
                 .sortedBy { it.date }
 
-            val latestEntry = byDate.entries.maxByOrNull { it.key }
-            val latest = latestEntry?.value
-
-            val source = when (latest?.source) {
-                is MarkerHistoryPoint.Source.Manual -> LatestMarker.Source.MANUAL
-                is MarkerHistoryPoint.Source.Lab -> LatestMarker.Source.LAB
-                null -> LatestMarker.Source.NONE
+            // Current value comes from the latest report only: read this marker out
+            // of it (omitted -> null -> "—"). With no reports, fall back to the most
+            // recent manual reading so manual-only users aren't blanked out.
+            if (latestReport != null) {
+                val em = latestReport.markers.firstOrNull { matches(it.name, marker) && it.value != null }
+                LatestMarker(
+                    marker = marker,
+                    value = em?.value,
+                    unit = em?.unit ?: "",
+                    sampleDate = if (em != null) latestReport.sampleDate else null,
+                    reference = null,
+                    flag = em?.flag,
+                    history = history,
+                    source = if (em != null) LatestMarker.Source.LAB else LatestMarker.Source.NONE,
+                )
+            } else {
+                val latestEntry = byDate.entries.maxByOrNull { it.key }
+                val latest = latestEntry?.value
+                LatestMarker(
+                    marker = marker,
+                    value = latest?.value,
+                    unit = latest?.unit ?: latest?.reference?.unit ?: "",
+                    sampleDate = latestEntry?.key,
+                    reference = latest?.reference,
+                    flag = latest?.flag,
+                    history = history,
+                    source = if (latest != null) LatestMarker.Source.MANUAL else LatestMarker.Source.NONE,
+                )
             }
-
-            LatestMarker(
-                marker = marker,
-                value = latest?.value,
-                unit = latest?.unit ?: latest?.reference?.unit ?: "",
-                sampleDate = latestEntry?.key,
-                reference = latest?.reference,
-                flag = latest?.flag,
-                history = history,
-                source = source,
-            )
         }
     }
 

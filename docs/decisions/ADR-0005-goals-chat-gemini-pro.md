@@ -11,7 +11,7 @@ AI work — text generation, parsing, extraction, lookup — runs on
 image generation. Introducing any other model is explicitly disallowed
 without an ADR. This record is that ADR for one carved-out feature.
 
-[IMPL-12](../specs/IMPL-12-goals.md) ships the Goals chat: the user
+The [Goals chat](../reference/patterns.md#goals-metric-event-system) lets the user
 describes a health objective and Gemini designs a complete Goal as a
 structured roadmap of sequenced Phases and metric-bound Steps, returned via
 the `propose_goal_structure` tool call for the user to review and edit.
