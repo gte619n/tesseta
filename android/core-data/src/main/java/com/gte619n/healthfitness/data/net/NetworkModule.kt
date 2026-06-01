@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.data.goals.GoalsApi
 import com.gte619n.healthfitness.data.nutrition.FoodApi
 import com.gte619n.healthfitness.data.nutrition.NutritionApi
 import com.gte619n.healthfitness.data.nutrition.NutritionCaptureApi
+import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
@@ -123,6 +124,11 @@ object NetworkModule {
     @Singleton
     fun provideNutritionCaptureApi(retrofit: Retrofit): NutritionCaptureApi =
         retrofit.create(NutritionCaptureApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideWorkoutProgramApi(retrofit: Retrofit): WorkoutProgramApi =
+        retrofit.create(WorkoutProgramApi::class.java)
 
     private fun String.ensureTrailingSlash(): String =
         if (endsWith("/")) this else "$this/"
