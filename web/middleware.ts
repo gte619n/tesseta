@@ -16,7 +16,10 @@ export default auth((req) => {
 });
 
 export const config = {
+  // Exclude all /api routes (they handle their own auth and return errors —
+  // gating them here would redirect to sign-in with an /api callbackUrl that
+  // 404s after login), plus the sign-in page and static assets.
   matcher: [
-    "/((?!api/auth|auth/signin|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|auth/signin|_next/static|_next/image|favicon.ico).*)",
   ],
 };
