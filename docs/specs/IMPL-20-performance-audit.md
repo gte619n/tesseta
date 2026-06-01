@@ -114,5 +114,45 @@ metric-change event before/after; expect a large drop. Backend tests green.
   reference data (low churn) before caching user-specific reads.
 
 ## Out of scope
-- Android client performance (separate audit if needed).
 - Infra/Cloud Run scaling config (min instances, concurrency) — note only.
+
+---
+
+## Implementation status (2026-05-31)
+Implemented on this branch (`feature/performance_audit`), which was first merged up
+to `main` so the recent dashboard/daily-metrics work was present. All three surfaces
+verified green: web `pnpm build`, backend `gradlew test` (285 tests), android
+`compileDebugKotlin`.
+
+**Phase 1 — web caching (done):** `auth()` wrapped in React `cache()` (≈7→1 JWT
+validations per render — the single biggest win, not originally called out
+standalone); blanket `no-store` replaced with per-method (reads dedupe/cache,
+mutations stay `no-store`); 6 shared admin/static pages → `revalidate = 60` (every
+per-user page kept `force-dynamic` — a route `revalidate` there would risk
+cross-user bleed and crash static prerender); MedicationCard 3s poll → tap-to-check;
+daily-metrics window 30d → 14d.
+
+**Phase 2 — backend Firestore + caching (done):** `findLatest*` indexed queries
+(`whereEqualTo + orderBy DESC .limit(1)`) replace fetch-200-then-pick-in-Java for
+body-composition / blood-reading / daily-metric (with the original 7-day staleness
+bound preserved on daily-metric); request-scoped `MetricResolver` cache removes the
+goal-view per-step re-resolves; Caffeine `@Cacheable` on the per-user health snapshot
+(60s) and drug/user reference reads (5m, with `@CacheEvict` on every mutator);
+`bloodReadings` composite index added. N+1 follow-ups: batched `findByIds`
+(documentId `whereIn`) for MedicationController (drug-per-med) and
+AdminEquipmentController (user-per-item). Nutrition 3-read and goal double-step read
+left as-is (no async primitive; the per-phase re-read intentionally reflects
+evaluation writes).
+
+**Phase 3 — polish (done):** dashboard split into per-section async Server
+Components behind `Suspense` (streams instead of blocking on the slowest endpoint);
+20 `<img>` → `next/image` (+ `remotePatterns`); icon-font CDN CSS made non-blocking
+(preconnect + async load); `bootJar { layered }`.
+
+**Android (was out of scope; now done):** 20MB OkHttp disk cache; 30s refresh-TTL
+guard so navigating back to the dashboard no longer refires ~6 network calls
+(stamped on batch settle); `remember(metrics)` for the vital-tile transforms;
+singleton Coil ImageLoader with memory+disk cache.
+
+Adversarial review found no blockers; deferred: nutrition read parallelization,
+goal-deep step-read dedup, `/me/meds` catalog trimming (acceptable under caching).
