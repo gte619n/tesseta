@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/ui/Providers";
+import { IconFonts } from "@/components/ui/IconFonts";
 
 const instrumentSans = Instrument_Sans({
   subsets: ["latin"],
@@ -36,14 +37,18 @@ export default function RootLayout({
       className={`${instrumentSans.variable} ${jetbrainsMono.variable}`}
     >
       <head>
+        {/* Preconnect to CDN origins so the TCP+TLS handshake is done before
+            the async stylesheets are fetched — eliminates ~100-300 ms of
+            connection latency from the critical path. */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css"
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
         />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0"
-        />
+        {/* Non-blocking icon/symbol font loader (async CSS pattern). */}
+        <IconFonts />
       </head>
       <body className="font-sans antialiased bg-canvas text-primary">
         <Providers>{children}</Providers>
