@@ -2,9 +2,15 @@
 
 - Modular Compose architecture. **All UI in Compose**, no XML layouts beyond
   the obligatory theme XML and manifest.
-- **DI**: Hilt (added in later impls; build classpath only for now).
-- **Persistence**: Room as source of truth, DataStore for prefs.
-- **Network**: Retrofit + OkHttp + Moshi.
+- **DI**: Hilt — fully wired (`@Module @InstallIn(SingletonComponent)` providers
+  across `app` and `core-data`, `@HiltViewModel` on ~30 screens).
+- **Source of truth is the backend.** Clients read everything over Retrofit
+  (+ a 20 MB OkHttp disk cache); there is no on-device system of record. The
+  only local persistence is **DataStore** — the ID-token cache (`IdTokenCache`)
+  and unit prefs. (Room is declared as a `core-data` dependency but is entirely
+  unused — treat it as dead and don't build on it.)
+- **Network**: Retrofit + OkHttp + Moshi; 401 → silent refresh via
+  `TokenAuthenticator`. SSE in `core-data/net/Sse.kt`.
 - All async work via Coroutines + Flow.
 - **Health Connect access goes through `core-health` only.** App and feature
   modules never import `androidx.health.connect:*` directly.

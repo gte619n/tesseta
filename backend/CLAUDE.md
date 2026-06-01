@@ -11,15 +11,21 @@
 
 ## Module layering
 ```
-app  →  api  →  core
-       persistence  →  core
-       integrations →  core
+app  →  api, core, persistence, integrations
+api  →  core, integrations
+persistence  →  core      integrations  →  core
 ```
 - `app` is the only module with the Spring Boot plugin.
-- `core` is a pure-Java library module. Don't drag Spring Web into it.
-- `api` holds controllers and DTOs.
+- `core` is a library module (plain domain records + services; it does pull in
+  `spring-context` for `@Service`/events/`@Cacheable`). Don't drag **Spring Web**
+  into it.
+- `api` holds controllers and DTOs (and may use `integrations` clients).
 - `persistence` holds Firestore repository implementations.
-- `integrations` holds Google Health API client + webhook receiver.
+- `integrations` holds the Google Health API client + webhook receiver and the
+  Gemini clients.
+
+For the full picture (data model, endpoints, the Goals metric-event engine,
+Gemini/KMS/caching patterns) see [`docs/reference/`](../docs/reference/).
 
 ## Conventions
 - DTOs are records.

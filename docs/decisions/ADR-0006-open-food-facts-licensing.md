@@ -5,8 +5,8 @@
 
 ## Context
 
-[IMPL-13](../specs/IMPL-13-nutrition-tracking.md) introduces a **shared,
-server-owned food catalog** so that a food the system has seen once never has
+Nutrition tracking uses a **shared, server-owned food catalog**
+([`foodCatalog`](../reference/data-model.md)) so that a food the system has seen once never has
 to be re-derived by Gemini. The catalog needs two kinds of data:
 
 - **Generic / whole foods** ("chicken breast", "brown rice, cooked") for

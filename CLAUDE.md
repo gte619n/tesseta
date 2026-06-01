@@ -11,9 +11,12 @@
 - **Hosting**: backend and web both deploy to Cloud Run in `us-central1`.
 
 ## Where to find things
-- Architecture overview: [`docs/architecture.md`](docs/architecture.md)
+- Architecture overview (start here): [`docs/architecture.md`](docs/architecture.md)
+- Durable reference (data model, API surface, cross-cutting patterns, feature
+  catalog): [`docs/reference/`](docs/reference/)
 - Architecture Decision Records: [`docs/decisions/`](docs/decisions/)
-- Implementation specs (IMPL-XX): [`docs/specs/`](docs/specs/)
+- Forward-looking plans (work not yet built): [`docs/plans/`](docs/plans/)
+- Open implementation specs (only those with remaining work): [`docs/specs/`](docs/specs/)
 - Per-component guidance: `backend/CLAUDE.md`, `android/CLAUDE.md`,
   `web/CLAUDE.md` override this file inside their respective directories.
 
