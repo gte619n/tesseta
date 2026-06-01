@@ -118,8 +118,14 @@ class DashboardViewModel @Inject constructor(
     // Each loader returns a Deferred<Boolean> — true on success — so refresh()
     // can settle the whole batch before deciding whether to stamp the TTL.
     // Retry methods ignore the result; they are never TTL-gated.
+    //
+    // Stale-while-revalidate: a loader only drops to CardState.Loading when it has
+    // no data yet (first load, or recovering from an error). Once a card is Loaded,
+    // a resume-driven refresh keeps the current values on screen and swaps in the
+    // new data when it arrives — no spinner flash, which is what made resuming the
+    // dashboard read as sluggish / "not refreshing".
     private fun loadBodyComposition() = viewModelScope.async {
-        _ui.update { it.copy(bodyComposition = CardState.Loading) }
+        if (_ui.value.bodyComposition !is CardState.Loaded) _ui.update { it.copy(bodyComposition = CardState.Loading) }
         runCatching { bodyComp.loadRecent() }
             .onSuccess { d -> _ui.update { it.copy(bodyComposition = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(bodyComposition = CardState.Error("Couldn't load weight", t)) } }
@@ -127,7 +133,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun loadDailyMetrics() = viewModelScope.async {
-        _ui.update { it.copy(dailyMetrics = CardState.Loading) }
+        if (_ui.value.dailyMetrics !is CardState.Loaded) _ui.update { it.copy(dailyMetrics = CardState.Loading) }
         runCatching { dailyMetrics.loadRecent() }
             .onSuccess { d -> _ui.update { it.copy(dailyMetrics = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(dailyMetrics = CardState.Error("Couldn't load metrics", t)) } }
@@ -135,7 +141,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun loadBlood() = viewModelScope.async {
-        _ui.update { it.copy(blood = CardState.Loading) }
+        if (_ui.value.blood !is CardState.Loaded) _ui.update { it.copy(blood = CardState.Loading) }
         runCatching { blood.loadDashboardMarkers() }
             .onSuccess { d -> _ui.update { it.copy(blood = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(blood = CardState.Error("Couldn't load blood", t)) } }
@@ -143,7 +149,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun loadDoses() = viewModelScope.async {
-        _ui.update { it.copy(todaysDoses = CardState.Loading) }
+        if (_ui.value.todaysDoses !is CardState.Loaded) _ui.update { it.copy(todaysDoses = CardState.Loading) }
         runCatching { doses.loadToday() }
             .onSuccess { d -> _ui.update { it.copy(todaysDoses = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(todaysDoses = CardState.Error("Couldn't load doses", t)) } }

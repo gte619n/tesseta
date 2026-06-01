@@ -70,6 +70,8 @@ internal class DefaultMedicationRepository @Inject constructor(
     }
 
     override suspend fun todaysDoses(): List<TodaysDose> = withContext(io) {
-        api.today().map { MedicationMapper.toDomain(it) }
+        // Anchor "today" to the device's local date so the checklist resets at the
+        // user's local midnight (not the server's UTC midnight).
+        api.today(LocalDate.now().toString()).map { MedicationMapper.toDomain(it) }
     }
 }

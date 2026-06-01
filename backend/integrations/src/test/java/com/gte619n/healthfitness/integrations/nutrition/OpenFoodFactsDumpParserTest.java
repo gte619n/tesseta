@@ -70,6 +70,30 @@ class OpenFoodFactsDumpParserTest {
         assertThat(collect(input)).hasSize(2);
     }
 
+    @Test
+    void exposesDeclaredServingAsDefaultWhenServingQuantityPresent() {
+        // A protein shake: 9 g protein per 100 ml, but a 330 ml serving (~30 g).
+        // serving_quantity must surface as the default serving so a one-tap log
+        // records the serving, not the per-100g value.
+        String jsonl = "{\"code\":\"1111111111111\",\"product_name\":\"Protein Shake\","
+            + "\"serving_size\":\"330 ml\",\"serving_quantity\":330,"
+            + "\"nutriments\":{\"energy-kcal_100g\":50,\"proteins_100g\":9,"
+            + "\"carbohydrates_100g\":3,\"fat_100g\":1}}\n";
+
+        CatalogFood shake = collect(jsonl).get(0);
+
+        assertThat(shake.defaultServingIndex()).isZero();
+        assertThat(shake.servingSizes()).hasSize(2);
+        assertThat(shake.servingSizes().get(0).label()).isEqualTo("330 ml");
+        assertThat(shake.servingSizes().get(0).grams()).isEqualTo(330.0);
+        assertThat(shake.servingSizes().get(1).grams()).isEqualTo(100.0);
+        // Macros stay per-100g; the per-serving protein is grams × per100g / 100.
+        assertThat(shake.macrosPer100g().proteinGrams()).isEqualTo(9.0);
+        double perServingProtein =
+            shake.servingSizes().get(0).grams() * shake.macrosPer100g().proteinGrams() / 100.0;
+        assertThat(perServingProtein).isCloseTo(29.7, within(0.01));
+    }
+
     private List<CatalogFood> collect(String jsonl) {
         List<CatalogFood> out = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new StringReader(jsonl))) {

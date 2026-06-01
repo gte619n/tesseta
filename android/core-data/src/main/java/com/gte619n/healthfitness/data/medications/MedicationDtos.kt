@@ -189,4 +189,7 @@ data class LogDoseDto(
     val window: String,
     val takenAt: Instant,
     val dose: Double? = null,
+    // Client-local date the dose is logged against, so the server records it on the
+    // user's calendar day (matches the `today` query) rather than its own.
+    val date: LocalDate? = null,
 )

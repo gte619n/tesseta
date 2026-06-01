@@ -22,7 +22,13 @@ internal class DefaultAdherenceRepository @Inject constructor(
         takenAt: Instant,
         dose: Double?,
     ) = withContext(io) {
-        api.log(medicationId, LogDoseDto(window = window.name, takenAt = takenAt, dose = dose))
+        // Record against the device-local calendar day of `takenAt` so the log
+        // lands on the same date the `today` checklist queries (timezone-safe).
+        val localDate = takenAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        api.log(
+            medicationId,
+            LogDoseDto(window = window.name, takenAt = takenAt, dose = dose, date = localDate),
+        )
     }
 
     override suspend fun undoDose(

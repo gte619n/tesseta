@@ -37,9 +37,9 @@ class NutritionTodayViewModel @Inject constructor(
     private val _state = MutableStateFlow(NutritionTodayUiState())
     val state: StateFlow<NutritionTodayUiState> = _state.asStateFlow()
 
-    init {
-        load(LocalDate.now())
-    }
+    // First load (and every return to the foreground) is driven by the screen's
+    // LifecycleResumeEffect, so there's no init load — that keeps the page from
+    // double-fetching on open and lets it refresh after a capture pops back.
 
     fun previousDay() = load(_state.value.date.minusDays(1))
 
@@ -52,7 +52,12 @@ class NutritionTodayViewModel @Inject constructor(
     fun closeAddSheet() = _state.update { it.copy(addSheetOpen = false) }
 
     private fun load(date: LocalDate) {
-        _state.update { it.copy(loading = true, date = date, error = null) }
+        // Stale-while-revalidate: only show the full-screen spinner when we have
+        // nothing to show for this date yet. A same-date reload (e.g. resuming
+        // after logging a barcode scan) keeps the current day on screen and swaps
+        // in the fresh totals when they arrive — no flicker.
+        val quiet = _state.value.day != null && _state.value.date == date
+        _state.update { it.copy(loading = !quiet, date = date, error = null) }
         viewModelScope.launch {
             try {
                 val day = repository.day(date.format(ISO_DATE))

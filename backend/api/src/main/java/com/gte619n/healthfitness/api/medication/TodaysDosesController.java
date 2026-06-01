@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -41,12 +42,18 @@ public class TodaysDosesController {
     }
 
     /**
-     * Get all scheduled doses for today with their taken status.
+     * Get all scheduled doses for "today" with their taken status.
+     *
+     * <p>"Today" is the caller's local date when supplied via {@code ?date=}, so a
+     * phone in a timezone behind/ahead of the server sees its own calendar day and
+     * the checklist resets at the user's local midnight. Doses are logged against
+     * the same client-local date (see {@code AdherenceController}), so the two stay
+     * consistent. Falls back to the server date when the param is absent.
      */
     @GetMapping
-    public List<TodaysDoseResponse> list() {
+    public List<TodaysDoseResponse> list(@RequestParam(required = false) LocalDate date) {
         String userId = currentUser.get().userId();
-        LocalDate today = LocalDate.now();
+        LocalDate today = date != null ? date : LocalDate.now();
         DayOfWeek dayOfWeek = today.getDayOfWeek();
 
         // Get all active medications

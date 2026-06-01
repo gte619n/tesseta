@@ -57,6 +57,15 @@ fun NutritionCaptureRoute(
     viewModel: NutritionCaptureViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // A barcode hit logs immediately and emits NavigateBack — pop to the nutrition
+    // page (which refreshes on resume to show the new entry).
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                CaptureEvent.NavigateBack -> onBack()
+            }
+        }
+    }
     NutritionCaptureScreen(
         state = state,
         onBack = onBack,

@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.Food
@@ -56,6 +57,12 @@ fun NutritionTodayRoute(
     viewModel: NutritionTodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Refresh whenever the page returns to the foreground — e.g. after a barcode
+    // scan logs an entry and pops back here — so the new food shows up.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
     NutritionTodayScreen(
         state = state,
         onPrevDay = viewModel::previousDay,

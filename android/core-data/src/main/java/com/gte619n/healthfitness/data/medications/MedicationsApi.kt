@@ -37,8 +37,11 @@ internal interface MedicationsApi {
     @DELETE("api/me/medications/{id}")
     suspend fun delete(@Path("id") id: String)
 
+    // `date` is the caller's local date (yyyy-MM-dd) so the checklist resets at the
+    // user's local midnight rather than the server's. Doses are logged against the
+    // same date (see LogDoseDto.date), keeping the two consistent across timezones.
     @GET("api/me/medications/today")
-    suspend fun today(): List<TodaysDoseDto>
+    suspend fun today(@Query("date") date: String? = null): List<TodaysDoseDto>
 }
 
 internal interface AdherenceApi {
