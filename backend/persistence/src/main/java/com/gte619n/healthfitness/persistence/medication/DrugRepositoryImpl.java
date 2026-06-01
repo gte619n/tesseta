@@ -21,6 +21,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -39,7 +42,10 @@ public class DrugRepositoryImpl implements DrugRepository {
         this.firestore = firestore;
     }
 
+    // Cache names must match CacheConfig.DRUG_BY_ID / DRUG_CATALOG in the app
+    // module (persistence can't depend on app, so literals are duplicated).
     @Override
+    @Cacheable(cacheNames = "drugById", key = "#drugId")
     public Optional<Drug> findById(String drugId) {
         DocumentSnapshot snapshot = await(collection().document(drugId).get());
         if (!snapshot.exists()) return Optional.empty();
@@ -47,6 +53,7 @@ public class DrugRepositoryImpl implements DrugRepository {
     }
 
     @Override
+    @Cacheable(cacheNames = "drugCatalog", key = "'all'")
     public List<Drug> findAll() {
         List<QueryDocumentSnapshot> docs = await(collection()
             .orderBy("name", Query.Direction.ASCENDING)
@@ -87,6 +94,10 @@ public class DrugRepositoryImpl implements DrugRepository {
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "drugById", key = "#drug.drugId()"),
+        @CacheEvict(cacheNames = "drugCatalog", allEntries = true)
+    })
     public void save(Drug drug) {
         DocumentReference docRef = collection().document(drug.drugId());
         DocumentSnapshot existing = await(docRef.get());
@@ -95,6 +106,10 @@ public class DrugRepositoryImpl implements DrugRepository {
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "drugById", key = "#drugId"),
+        @CacheEvict(cacheNames = "drugCatalog", allEntries = true)
+    })
     public void delete(String drugId) {
         await(collection().document(drugId).delete());
     }

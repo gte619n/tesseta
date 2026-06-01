@@ -62,6 +62,19 @@ public class DailyMetricRepository implements com.gte619n.healthfitness.core.met
     }
 
     @Override
+    public List<DailyMetric> findLatestDailyMetric(String userId, int limit) {
+        // Indexed read: orderBy(date DESC).limit(limit) on the single-field
+        // `date` index (auto-created). Returns the newest few day-docs so
+        // callers can scan for the first non-null vitals field without
+        // paging an arbitrary date range.
+        List<QueryDocumentSnapshot> docs = await(collection(userId)
+            .orderBy("date", Query.Direction.DESCENDING)
+            .limit(limit)
+            .get()).getDocuments();
+        return docs.stream().map(d -> toMetric(userId, d)).toList();
+    }
+
+    @Override
     public void save(DailyMetric metric) {
         DocumentReference docRef = collection(metric.userId()).document(metric.date().toString());
         DocumentSnapshot existing = await(docRef.get());

@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Repository;
 
 // Gated on the same property as FirestoreConfig so unit tests can run
@@ -35,7 +37,11 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         this.firestore = firestore;
     }
 
+    // Cache name must match CacheConfig.USER_BY_ID in the app module
+    // (persistence can't depend on app, so the literal is duplicated). Every
+    // mutator below evicts the user's entry so writes are never masked.
     @Override
+    @Cacheable(cacheNames = "userById", key = "#userId")
     public Optional<User> findById(String userId) {
         DocumentSnapshot snapshot = await(firestore.collection(COLLECTION).document(userId).get());
         if (!snapshot.exists()) return Optional.empty();
@@ -54,6 +60,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#user.userId()")
     public void save(User user) {
         var docRef = firestore.collection(COLLECTION).document(user.userId());
         DocumentSnapshot existing = await(docRef.get());
@@ -69,6 +76,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void recordGoogleHealthConnection(String userId, GoogleHealthConnection connection) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();
@@ -83,6 +91,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void updateHeightCm(String userId, Integer heightCm) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();
@@ -94,6 +103,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void clearGoogleHealthConnection(String userId) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();
