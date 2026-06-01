@@ -6,6 +6,11 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Base marketing version — the single source of truth for the "0.x.y" prefix.
+// CI appends the build number to this (see resolveVersionName); bump it for a
+// real release. infra/scripts compose release notes against this same string.
+val baseVersionName = "0.1.0"
+
 android {
     namespace = "com.gte619n.healthfitness.mobile"
     compileSdk = 35
@@ -14,8 +19,18 @@ android {
         applicationId = "com.gte619n.healthfitness"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+
+        // Versioning. The base marketing version lives here as the single source
+        // of truth; CI (android/cloudbuild.yaml) injects a monotonic build number
+        // so every Firebase App Distribution release shows a distinct version
+        // instead of a perpetual "(1) / 0.1.0". Resolution order for each value:
+        //   1. -PandroidVersionCode / -PandroidVersionName Gradle property
+        //   2. ANDROID_VERSION_CODE / ANDROID_VERSION_NAME env var (Cloud Build)
+        //   3. local default (versionCode 1, base versionName) — unchanged local UX
+        // See resolveVersionCode()/resolveVersionName() below.
+        val resolvedVersionCode = resolveVersionCode(providers)
+        versionCode = resolvedVersionCode
+        versionName = resolveVersionName(providers, baseVersionName, resolvedVersionCode)
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // IMPL-02: Google sign-in via Credential Manager uses the WEB OAuth
@@ -211,4 +226,45 @@ fun resolveWebOauthClientId(providers: ProviderFactory): String {
         |Attempted secret '$secretName' in GCP project '$gcpProject' but got no usable value.
         """.trimMargin(),
     )
+}
+
+/**
+ * Resolves the integer versionCode baked into the APK.
+ *
+ * Firebase App Distribution shows this as the build "version" — a constant 1
+ * makes every release look identical. CI injects a monotonically increasing
+ * value (commit count; see android/cloudbuild.yaml) so releases are
+ * distinguishable and ordered. Resolution order:
+ *   1. -PandroidVersionCode=<int>   explicit Gradle property override
+ *   2. ANDROID_VERSION_CODE env var used by Cloud Build
+ *   3. 1                            local default (unchanged local behaviour)
+ */
+fun resolveVersionCode(providers: ProviderFactory): Int {
+    providers.gradleProperty("androidVersionCode").orNull?.trim()?.toIntOrNull()?.let {
+        if (it > 0) return it
+    }
+    providers.environmentVariable("ANDROID_VERSION_CODE").orNull?.trim()?.toIntOrNull()?.let {
+        if (it > 0) return it
+    }
+    return 1
+}
+
+/**
+ * Resolves the human-readable versionName shown as the "display version" in
+ * Firebase App Distribution. A constant "0.1.0" gives no signal about which
+ * build a tester is running; CI derives "<base> (<buildNumber>)" so the text
+ * version tracks the build. Resolution order:
+ *   1. -PandroidVersionName=<str>   explicit Gradle property override
+ *   2. ANDROID_VERSION_NAME env var used by Cloud Build
+ *   3. derived: "<base> (<versionCode>)" when CI supplied a real build number,
+ *      otherwise just "<base>" for local builds.
+ */
+fun resolveVersionName(providers: ProviderFactory, base: String, versionCode: Int): String {
+    providers.gradleProperty("androidVersionName").orNull?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        return it
+    }
+    providers.environmentVariable("ANDROID_VERSION_NAME").orNull?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        return it
+    }
+    return if (versionCode > 1) "$base ($versionCode)" else base
 }
