@@ -16,6 +16,7 @@ import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.DeloadModifier;
 import com.gte619n.healthfitness.core.workoutprogram.Intensity;
 import com.gte619n.healthfitness.core.workoutprogram.IntensityKind;
+import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramPhase;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramPhaseStatus;
@@ -185,6 +186,16 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                         dm.put("intensityDelta", rx.deloadModifier().intensityDelta());
                         rm.put("deloadModifier", dm);
                     }
+                    if (rx.loggedSets() != null && !rx.loggedSets().isEmpty()) {
+                        List<Map<String, Object>> ls = new ArrayList<>();
+                        for (LoggedSet s : rx.loggedSets()) {
+                            Map<String, Object> sm = new HashMap<>();
+                            sm.put("weightLbs", s.weightLbs());
+                            sm.put("reps", s.reps());
+                            ls.add(sm);
+                        }
+                        rm.put("loggedSets", ls);
+                    }
                     rxs.add(rm);
                 }
             }
@@ -327,8 +338,22 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                 intOrNull(rm.get("restSeconds")),
                 str(rm.get("tempo")),
                 str(rm.get("notes")),
-                deload
+                deload,
+                loggedSetsFromWire(rm.get("loggedSets"))
             ));
+        }
+        return out;
+    }
+
+    private static List<LoggedSet> loggedSetsFromWire(Object raw) {
+        if (!(raw instanceof List<?> list)) return null;
+        List<LoggedSet> out = new ArrayList<>();
+        for (Object o : list) {
+            if (!(o instanceof Map<?, ?> m)) continue;
+            Object w = m.get("weightLbs");
+            out.add(new LoggedSet(
+                w instanceof Number n ? n.doubleValue() : null,
+                intOrNull(m.get("reps"))));
         }
         return out;
     }

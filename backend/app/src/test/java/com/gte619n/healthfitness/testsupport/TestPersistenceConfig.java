@@ -95,6 +95,15 @@ public class TestPersistenceConfig {
         return new InMemoryExerciseRepository();
     }
 
+    // IMPL-15: the live GeminiExerciseMetadataEnricher is gated off in tests
+    // (app.exercises.enrich-enabled = false). Provide a deterministic fake so
+    // WorkoutHistoryImporter (a core @Service) can wire and the seed-mapping
+    // test can produce meaningful preview output offline.
+    @Bean
+    com.gte619n.healthfitness.core.exercise.ExerciseMetadataEnricher exerciseMetadataEnricher() {
+        return new com.gte619n.healthfitness.testsupport.exercise.FakeExerciseMetadataEnricher();
+    }
+
     @Bean
     com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository workoutProgramRepository() {
         return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutProgramRepository();

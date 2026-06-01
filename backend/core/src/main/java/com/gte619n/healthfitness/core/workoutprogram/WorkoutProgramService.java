@@ -176,7 +176,7 @@ public class WorkoutProgramService {
             Prescription p = ps.get(i);
             out.add(new Prescription(p.exerciseId(), i, p.sets(), p.repsMin(), p.repsMax(),
                 p.durationSeconds(), p.intensity(), p.restSeconds(), p.tempo(), p.notes(),
-                p.deloadModifier()));
+                p.deloadModifier(), p.loggedSets()));
         }
         return out;
     }

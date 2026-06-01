@@ -1,0 +1,66 @@
+{
+  "model" : "gemini-3.5-flash",
+  "enrichments" : {
+    "Barbell Bench Press" : {
+      "movementPattern" : "PUSH_HORIZONTAL",
+      "primaryMuscles" : [ "pectoralis major", "triceps" ],
+      "secondaryMuscles" : [ "anterior deltoids" ],
+      "laterality" : "BILATERAL",
+      "mechanic" : "COMPOUND",
+      "description" : "A classic compound upper-body exercise where you lower a barbell to your chest and press it back up while lying flat on a bench.",
+      "formCues" : [ "Retract your shoulder blades and pin them to the bench", "Keep your feet flat on the floor", "Lower the bar to your mid-chest under control" ],
+      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "defaultRepRange" : {
+        "min" : 5,
+        "max" : 12
+      },
+      "isTimed" : false,
+      "equipmentNameGroups" : [ [ "Barbell" ], [ "Flat Bench" ] ]
+    },
+    "Dumbbell Goblet Squat" : {
+      "movementPattern" : "SQUAT",
+      "primaryMuscles" : [ "quadriceps", "glutes" ],
+      "secondaryMuscles" : [ "hamstrings", "core", "erector spinae" ],
+      "laterality" : "BILATERAL",
+      "mechanic" : "COMPOUND",
+      "description" : "A front-loaded squat variation where a single dumbbell is held vertically against the chest to encourage an upright torso.",
+      "formCues" : [ "Hold the dumbbell vertically close to your chest", "Keep your elbows tucked and chest up", "Push your knees out as you sink your hips", "Drive through your mid-foot to stand up" ],
+      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "defaultRepRange" : {
+        "min" : 8,
+        "max" : 15
+      },
+      "isTimed" : false,
+      "equipmentNameGroups" : [ [ "Dumbbell" ] ]
+    },
+    "Single-Arm Dumbbell Row" : {
+      "movementPattern" : "PULL_HORIZONTAL",
+      "primaryMuscles" : [ "lats", "rhomboids" ],
+      "secondaryMuscles" : [ "biceps", "rear deltoids", "trapezius", "core" ],
+      "laterality" : "UNILATERAL",
+      "mechanic" : "COMPOUND",
+      "description" : "An upper body pulling exercise performed by rowing a dumbbell to the hip while supporting the torso with the opposite arm.",
+      "formCues" : [ "Keep your spine neutral and flat", "Pull the dumbbell toward your hip, not your chest", "Drive your elbow toward the ceiling" ],
+      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "defaultRepRange" : {
+        "min" : 8,
+        "max" : 12
+      },
+      "isTimed" : false,
+      "equipmentNameGroups" : [ [ "Dumbbell" ] ]
+    },
+    "Recover" : {
+      "movementPattern" : "OTHER",
+      "primaryMuscles" : [ ],
+      "secondaryMuscles" : [ ],
+      "laterality" : "BILATERAL",
+      "mechanic" : "ISOLATION",
+      "description" : "A designated rest period to recover and prepare for the next work interval.",
+      "formCues" : [ "Focus on deep, slow breathing", "Keep moving lightly if needed to prevent stiffness", "Mentally prepare for the next effort" ],
+      "suitableBlockTypes" : [ "WARMUP", "CARDIO", "MAIN", "ACCESSORY", "CORE", "COOLDOWN" ],
+      "defaultRepRange" : null,
+      "isTimed" : true,
+      "equipmentNameGroups" : [ ]
+    }
+  }
+}

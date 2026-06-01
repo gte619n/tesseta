@@ -91,7 +91,7 @@ public class WorkoutProgramAssembler {
                 rxs.add(new PrescriptionResponse(
                     rx.exerciseId(), rx.orderIndex(), rx.sets(), rx.repsMin(), rx.repsMax(),
                     rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(), rx.notes(),
-                    rx.deloadModifier(), summaries.get(rx.exerciseId())));
+                    rx.deloadModifier(), rx.loggedSets(), summaries.get(rx.exerciseId())));
             }
             blocks.add(new BlockResponse(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
         }

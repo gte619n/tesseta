@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.exercise.BlockType;
 import com.gte619n.healthfitness.core.location.DayOfWeek;
 import com.gte619n.healthfitness.core.workoutprogram.DeloadModifier;
 import com.gte619n.healthfitness.core.workoutprogram.Intensity;
+import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramPhaseStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSource;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
@@ -70,6 +71,7 @@ public record WorkoutProgramDeepResponse(
         String tempo,
         String notes,
         DeloadModifier deloadModifier,
+        List<LoggedSet> loggedSets,
         ExerciseSummary exercise
     ) {}
 }

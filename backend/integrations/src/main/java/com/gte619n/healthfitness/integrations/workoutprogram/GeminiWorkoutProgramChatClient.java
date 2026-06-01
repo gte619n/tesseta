@@ -175,7 +175,7 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
             }
             out.add(new Prescription(str(m.get("exerciseId")), i++, intg(m.get("sets")),
                 intg(m.get("repsMin")), intg(m.get("repsMax")), intg(m.get("durationSeconds")),
-                intensity, intg(m.get("restSeconds")), str(m.get("tempo")), str(m.get("notes")), deload));
+                intensity, intg(m.get("restSeconds")), str(m.get("tempo")), str(m.get("notes")), deload, null));
         }
         return out;
     }
