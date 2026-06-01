@@ -51,6 +51,7 @@ fun EditEntrySheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val per100g = remember(entry.entryId) { entry.derivedPer100g() }
 
+    var name by remember(entry.entryId) { mutableStateOf(entry.foodName) }
     var meal by remember(entry.entryId) {
         mutableStateOf(Meal.entries.firstOrNull { it.wire == entry.meal } ?: Meal.BREAKFAST)
     }
@@ -96,7 +97,11 @@ fun EditEntrySheet(
                 FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 76.dp)
                 Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(entry.foodName, style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+                    Text(
+                        name.ifBlank { entry.foodName },
+                        style = Hf.type.headingMd,
+                        color = Hf.colors.textPrimary,
+                    )
                     Spacer(Modifier.height(4.dp))
                     Text(
                         buildString {
@@ -109,6 +114,15 @@ fun EditEntrySheet(
                 }
             }
             Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Title") },
+                singleLine = true,
+            )
+            Spacer(Modifier.height(14.dp))
 
             Text("Meal", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
             Spacer(Modifier.height(5.dp))
@@ -199,6 +213,7 @@ fun EditEntrySheet(
                         entry.entryId,
                         EntryPatchRequest(
                             meal = meal.wire,
+                            foodName = name.ifBlank { entry.foodName },
                             servingLabel = servingLabel.ifBlank { entry.servingLabel },
                             servingGrams = grams,
                             quantity = quantity,

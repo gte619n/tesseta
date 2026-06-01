@@ -46,10 +46,12 @@ fun IngredientsSheet(
     entry: Entry,
     saving: Boolean,
     onDismiss: () -> Unit,
+    onRename: (String) -> Unit,
     onUpdateIngredient: (index: Int, UpdateIngredientRequest) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val ingredients = entry.ingredients.orEmpty()
+    var title by remember(entry.entryId) { mutableStateOf(entry.foodName) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -63,12 +65,16 @@ fun IngredientsSheet(
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 24.dp),
         ) {
-            // ── Hero: finished-meal image + name + total calories ─────────
+            // ── Hero: finished-meal image + total calories ────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 76.dp)
                 Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(entry.foodName, style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+                    Text(
+                        title.ifBlank { entry.foodName },
+                        style = Hf.type.headingMd,
+                        color = Hf.colors.textPrimary,
+                    )
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "${(entry.macros.caloriesKcal ?: 0.0).roundToInt()} kcal · " +
@@ -76,6 +82,25 @@ fun IngredientsSheet(
                         style = Hf.type.monoSm,
                         color = Hf.colors.textSecondary,
                     )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+
+            // ── Editable meal title ───────────────────────────────────────
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Meal title") },
+                singleLine = true,
+            )
+            if (title.isNotBlank() && title != entry.foodName) {
+                Spacer(Modifier.height(8.dp))
+                PrimaryButton(
+                    if (saving) "Saving…" else "Save title",
+                    Modifier.fillMaxWidth(),
+                ) {
+                    if (!saving) onRename(title)
                 }
             }
             Spacer(Modifier.height(16.dp))

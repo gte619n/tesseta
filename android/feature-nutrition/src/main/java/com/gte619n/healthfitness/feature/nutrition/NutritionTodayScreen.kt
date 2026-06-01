@@ -73,6 +73,7 @@ fun NutritionTodayRoute(
         onCloseEditSheet = viewModel::closeEditSheet,
         onUpdateEntry = viewModel::updateEntry,
         onUpdateIngredient = viewModel::updateIngredient,
+        onRenameEntry = viewModel::renameEntry,
         onOpenAddSheet = viewModel::openAddSheet,
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
@@ -93,6 +94,7 @@ fun NutritionTodayScreen(
     onCloseEditSheet: () -> Unit,
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
     onUpdateIngredient: (String, Int, com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest) -> Unit,
+    onRenameEntry: (String, String) -> Unit,
     onOpenAddSheet: () -> Unit,
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
@@ -154,6 +156,7 @@ fun NutritionTodayScreen(
             entry = composite,
             saving = state.savingIngredient,
             onDismiss = onCloseEditSheet,
+            onRename = { newName -> onRenameEntry(composite.entryId, newName) },
             onUpdateIngredient = { index, body ->
                 onUpdateIngredient(composite.entryId, index, body)
             },
@@ -352,6 +355,7 @@ private fun NutritionTodayPreview() {
             onPrevDay = {}, onNextDay = {}, onDeleteEntry = {},
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
             onUpdateIngredient = { _, _, _ -> },
+            onRenameEntry = { _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
             onOpenTarget = {}, onOpenCapture = {},

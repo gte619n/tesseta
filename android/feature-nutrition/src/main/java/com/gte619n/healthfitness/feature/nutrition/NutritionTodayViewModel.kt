@@ -77,6 +77,29 @@ class NutritionTodayViewModel @Inject constructor(
 
     fun closeEditSheet() = _state.update { it.copy(editingEntry = null, editingComposite = null) }
 
+    /** Rename an entry (e.g. a composite meal's title); keeps the sheet open. */
+    fun renameEntry(entryId: String, name: String) {
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingIngredient = true) }
+        viewModelScope.launch {
+            try {
+                val updated = repository.patchEntry(date, entryId, EntryPatchRequest(foodName = name))
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(
+                        day = day,
+                        savingIngredient = false,
+                        editingComposite =
+                            if (it.editingComposite?.entryId == entryId) updated else it.editingComposite,
+                        error = null,
+                    )
+                }
+            } catch (e: Exception) {
+                _state.update { it.copy(savingIngredient = false, error = e.message ?: "Rename failed") }
+            }
+        }
+    }
+
     /** Re-portion one ingredient of the open composite meal, then reload. */
     fun updateIngredient(entryId: String, index: Int, body: UpdateIngredientRequest) {
         val date = _state.value.date.format(ISO_DATE)

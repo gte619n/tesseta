@@ -192,6 +192,7 @@ public class NutritionController {
             date,
             entryId,
             body != null ? body.meal() : null,
+            body != null ? body.foodName() : null,
             body != null ? body.servingLabel() : null,
             body != null ? body.servingGrams() : null,
             body != null ? body.quantity() : null,
@@ -417,6 +418,7 @@ public class NutritionController {
 
     public record UpdateEntryRequest(
         MealType meal,
+        String foodName,
         String servingLabel,
         Double servingGrams,
         Double quantity,

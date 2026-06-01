@@ -76,6 +76,7 @@ export function EditEntryModal({
   const toast = useToast();
   const per100g = useMemo(() => derivedPer100g(entry), [entry]);
 
+  const [name, setName] = useState(entry.foodName);
   const [meal, setMeal] = useState<Meal>(entry.meal);
   const [servingLabel, setServingLabel] = useState(entry.servingLabel);
   const [servingGrams, setServingGrams] = useState(String(entry.servingGrams));
@@ -154,6 +155,7 @@ export function EditEntryModal({
     }
     const body: UpdateEntryBody = {
       meal,
+      foodName: name.trim() || entry.foodName,
       servingLabel: servingLabel.trim() || entry.servingLabel,
       servingGrams: grams,
       quantity,
@@ -206,7 +208,7 @@ export function EditEntryModal({
             />
             <div className="min-w-0">
               <h2 className="m-0 truncate text-[16px] font-medium tracking-[-0.01em] text-primary">
-                {entry.foodName}
+                {name.trim() || entry.foodName}
               </h2>
               <div className="mt-1 font-mono text-[12px] tabular-nums text-secondary">
                 {amountLabel}
@@ -225,6 +227,19 @@ export function EditEntryModal({
 
         {/* Body */}
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+          {/* Title */}
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium text-secondary">
+              Title
+            </label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Entry name"
+              className="w-full rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+
           {/* Meal */}
           <div>
             <label className="mb-1.5 block text-[11px] font-medium text-secondary">

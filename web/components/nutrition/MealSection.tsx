@@ -186,6 +186,7 @@ export function MealSection({
           onClose={() => setEditingComposite(null)}
           entry={editingComposite}
           date={date}
+          updateEntry={updateEntry}
           updateIngredient={updateIngredient}
         />
       )}

@@ -115,6 +115,7 @@ export type AddEntryBody = {
 
 export type UpdateEntryBody = Partial<{
   meal: Meal;
+  foodName: string;
   servingLabel: string;
   servingGrams: number;
   quantity: number;

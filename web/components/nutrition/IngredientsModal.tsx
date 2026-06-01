@@ -5,6 +5,7 @@ import type {
   Entry,
   EntryIngredient,
   Macros,
+  UpdateEntryBody,
   UpdateIngredientBody,
 } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -15,6 +16,7 @@ type Props = {
   onClose: () => void;
   entry: Entry;
   date: string;
+  updateEntry: (date: string, entryId: string, body: UpdateEntryBody) => Promise<void>;
   updateIngredient: (
     date: string,
     entryId: string,
@@ -42,8 +44,27 @@ export function IngredientsModal({
   onClose,
   entry,
   date,
+  updateEntry,
   updateIngredient,
 }: Props) {
+  const toast = useToast();
+  const [title, setTitle] = useState(entry.foodName);
+  const [renaming, setRenaming] = useState(false);
+
+  async function handleRename() {
+    const next = title.trim();
+    if (!next || next === entry.foodName) return;
+    setRenaming(true);
+    try {
+      await updateEntry(date, entry.entryId, { foodName: next });
+      toast.success("Meal renamed");
+    } catch {
+      toast.error("Failed to rename meal");
+    } finally {
+      setRenaming(false);
+    }
+  }
+
   // Backdrop close tracking (see web/CLAUDE.md modal pattern)
   const downOnBackdropRef = useRef(false);
   function handleBackdropMouseDown(e: { target: unknown; currentTarget: unknown }) {
@@ -75,7 +96,7 @@ export function IngredientsModal({
             <FoodImage imageUrl={entry.imageUrl} imageStatus={entry.imageStatus} size={64} />
             <div className="min-w-0">
               <h2 className="m-0 truncate text-[16px] font-medium tracking-[-0.01em] text-primary">
-                {entry.foodName}
+                {title.trim() || entry.foodName}
               </h2>
               <div className="mt-1 font-mono text-[12px] tabular-nums text-secondary">
                 {Math.round(num(entry.macros.caloriesKcal))} kcal · {ingredients.length}{" "}
@@ -93,8 +114,31 @@ export function IngredientsModal({
           </button>
         </div>
 
-        {/* Ingredients */}
+        {/* Body */}
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-5">
+          {/* Editable meal title */}
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium text-secondary">
+              Meal title
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Meal name"
+                className="min-w-0 flex-1 rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+              <button
+                type="button"
+                onClick={handleRename}
+                disabled={renaming || !title.trim() || title.trim() === entry.foodName}
+                className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {renaming ? "…" : "Rename"}
+              </button>
+            </div>
+          </div>
+
           {ingredients.map((ing, index) => (
             <IngredientRow
               key={`${ing.foodId ?? ing.name}-${index}`}

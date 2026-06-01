@@ -121,6 +121,7 @@ data class EntryRequest(
 /** Body for PATCH api/me/nutrition/{date}/entries/{entryId} (all optional). */
 data class EntryPatchRequest(
     val meal: String? = null,
+    val foodName: String? = null,
     val servingLabel: String? = null,
     val servingGrams: Double? = null,
     val quantity: Double? = null,
