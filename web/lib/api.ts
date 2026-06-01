@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { auth } from "@/auth";
 
 // Server-only fetch wrapper that pulls the current ID token from the Auth.js
@@ -9,6 +10,16 @@ import { auth } from "@/auth";
 // during dev or the Cloud Run URL in production.
 
 const BACKEND_URL = process.env.BACKEND_URL;
+
+// Resolve the Auth.js session once per server render. React's cache() dedupes
+// the call across every apiFetch in a single render pass, so the JWT is
+// validated once instead of once per backend call.
+const getSession = cache(async () => auth());
+
+// HTTP methods that only read data — safe to let the fetch cache dedupe them
+// within a render. Anything else (POST/PUT/PATCH/DELETE) is a mutation and
+// must never be cached.
+const READ_METHODS = new Set(["GET", "HEAD"]);
 
 export class UnauthenticatedError extends Error {}
 export class BackendError extends Error {
@@ -24,7 +35,7 @@ export async function apiFetch(
   if (!BACKEND_URL) {
     throw new Error("BACKEND_URL is not configured");
   }
-  const session = await auth();
+  const session = await getSession();
   if (!session || !session.idToken) {
     throw new UnauthenticatedError("no valid session");
   }
@@ -36,13 +47,18 @@ export async function apiFetch(
     throw new UnauthenticatedError("session refresh failed");
   }
   const url = `${BACKEND_URL.replace(/\/$/, "")}${path}`;
+  // GET/HEAD reads stay cacheable/dedupable within a render; mutations force
+  // no-store. An explicit caller-supplied `cache` always wins.
+  const method = (init.method ?? "GET").toUpperCase();
+  const cacheMode: RequestCache =
+    init.cache ?? (READ_METHODS.has(method) ? "default" : "no-store");
   return fetch(url, {
     ...init,
     headers: {
       ...init.headers,
       Authorization: `Bearer ${session.idToken}`,
     },
-    cache: "no-store",
+    cache: cacheMode,
   });
 }
 

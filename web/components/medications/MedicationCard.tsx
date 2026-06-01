@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Medication, Drug } from "@/lib/types/medication";
 import { formatFrequency, TIME_WINDOW_LABELS, CATEGORY_LABELS } from "@/lib/types/medication";
 import { DrugImage } from "./DrugImage";
@@ -18,48 +18,34 @@ export function MedicationCard({ medication, onClick }: MedicationCardProps) {
   const category = drug?.category;
   const form = drug?.form ?? "TABLET";
 
-  // Track imageUrl separately so we can poll for updates
+  // Track imageUrl separately so a user-initiated refresh can update it once
+  // the backend has finished generating the drug image.
   const [imageUrl, setImageUrl] = useState<string | null>(drug?.imageUrl ?? null);
+  const [checkingImage, setCheckingImage] = useState(false);
 
-  // Poll for image if drug exists but imageUrl is missing
-  useEffect(() => {
-    if (!drug?.drugId || imageUrl) return;
-
-    let cancelled = false;
-    const pollInterval = 3000; // 3 seconds
-    const maxAttempts = 20; // Stop after ~1 minute
-    let attempts = 0;
-
-    const poll = async () => {
-      if (cancelled || attempts >= maxAttempts) return;
-      attempts++;
-
-      try {
-        const res = await fetch(`/api/drugs/${drug.drugId}`);
-        if (res.ok) {
-          const updatedDrug = await res.json() as Drug;
-          if (updatedDrug.imageUrl) {
-            setImageUrl(updatedDrug.imageUrl);
-            return; // Stop polling
-          }
+  // One fetch per tap — no background polling. Pulls the latest drug record and
+  // sets the image if it's now available.
+  const checkForImage = async () => {
+    if (!drug?.drugId || checkingImage) return;
+    setCheckingImage(true);
+    try {
+      const res = await fetch(`/api/drugs/${drug.drugId}`);
+      if (res.ok) {
+        const updatedDrug = (await res.json()) as Drug;
+        if (updatedDrug.imageUrl) {
+          setImageUrl(updatedDrug.imageUrl);
         }
-      } catch {
-        // Ignore errors, keep polling
       }
+    } catch {
+      // Ignore errors; the user can tap again to retry.
+    } finally {
+      setCheckingImage(false);
+    }
+  };
 
-      if (!cancelled && attempts < maxAttempts) {
-        setTimeout(poll, pollInterval);
-      }
-    };
-
-    // Start polling after a short delay
-    const timeout = setTimeout(poll, pollInterval);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [drug?.drugId, imageUrl]);
+  // Offer a manual "check image" affordance only when the drug exists but its
+  // image hasn't been generated yet.
+  const showImageCheck = Boolean(drug?.drugId) && !imageUrl;
 
   // Format dose display
   const doseDisplay = timeSlots.length > 1
@@ -86,6 +72,33 @@ export function MedicationCard({ medication, onClick }: MedicationCardProps) {
           name={name}
           className="h-full w-full"
         />
+        {showImageCheck && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="Check for drug image"
+            aria-busy={checkingImage}
+            onClick={(e) => {
+              e.stopPropagation();
+              void checkForImage();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                void checkForImage();
+              }
+            }}
+            className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-surface/90 px-2 py-0.5 text-[10px] font-medium text-secondary shadow-sm transition-colors hover:text-primary"
+          >
+            {checkingImage ? (
+              <span className="ti ti-loader-2 animate-spin" aria-hidden />
+            ) : (
+              <span className="ti ti-refresh" aria-hidden />
+            )}
+            {checkingImage ? "Checking…" : "Check image"}
+          </span>
+        )}
         {status === "DISCONTINUED" && (
           <div className="absolute inset-0 flex items-center justify-center bg-surface/80">
             <span className="rounded-full bg-canvas-sunken px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-tertiary">

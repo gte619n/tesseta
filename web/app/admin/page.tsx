@@ -5,7 +5,10 @@ import { pageMetadata } from '@/lib/page-metadata';
 
 export const metadata = pageMetadata('Admin');
 
-export const dynamic = 'force-dynamic';
+// Read-mostly: renders admin-global reference data (pending equipment, catalog,
+// drug list), not per-user state. ISR with a 60s window; the page still renders
+// per request because auth() reads request cookies.
+export const revalidate = 60;
 
 export default async function AdminOverviewPage() {
   // Admin gating handled by app/admin/layout.tsx
