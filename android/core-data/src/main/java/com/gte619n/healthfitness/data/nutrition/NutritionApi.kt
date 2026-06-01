@@ -1,11 +1,13 @@
 package com.gte619n.healthfitness.data.nutrition
 
+import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
+import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -42,6 +44,22 @@ interface NutritionApi {
         @Path("date") date: String,
         @Path("entryId") entryId: String,
     ): Unit
+
+    // Composite (photo-logged) meal: one entry with ingredients + a generated
+    // finished-meal image.
+    @POST("api/me/nutrition/{date}/composite-meal")
+    suspend fun addCompositeMeal(
+        @Path("date") date: String,
+        @Body body: CompositeMealRequest,
+    ): Entry
+
+    @PATCH("api/me/nutrition/{date}/entries/{entryId}/ingredients/{index}")
+    suspend fun updateIngredient(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+        @Path("index") index: Int,
+        @Body body: UpdateIngredientRequest,
+    ): Entry
 
     // GET target returns the Macros target, or 204 No Content when unset.
     // Response<> lets us distinguish the 204/empty body from a real payload.

@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
+import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -35,6 +36,10 @@ data class NutritionTodayUiState(
     val editingEntry: Entry? = null,
     /** true while an entry edit is being saved. */
     val savingEdit: Boolean = false,
+    /** the composite meal whose ingredients sheet is open, or null. */
+    val editingComposite: Entry? = null,
+    /** true while an ingredient portion is being saved. */
+    val savingIngredient: Boolean = false,
 )
 
 @HiltViewModel
@@ -64,9 +69,32 @@ class NutritionTodayViewModel @Inject constructor(
 
     fun closeAddSheet() = _state.update { it.copy(addSheetOpen = false) }
 
-    fun openEditSheet(entry: Entry) = _state.update { it.copy(editingEntry = entry) }
+    // A composite (photo-logged) meal opens the ingredients sheet; everything
+    // else opens the single-food edit sheet.
+    fun openEditSheet(entry: Entry) = _state.update {
+        if (entry.isComposite) it.copy(editingComposite = entry) else it.copy(editingEntry = entry)
+    }
 
-    fun closeEditSheet() = _state.update { it.copy(editingEntry = null) }
+    fun closeEditSheet() = _state.update { it.copy(editingEntry = null, editingComposite = null) }
+
+    /** Re-portion one ingredient of the open composite meal, then reload. */
+    fun updateIngredient(entryId: String, index: Int, body: UpdateIngredientRequest) {
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingIngredient = true) }
+        viewModelScope.launch {
+            try {
+                val updated = repository.updateIngredient(date, entryId, index, body)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(day = day, editingComposite = updated, savingIngredient = false, error = null)
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(savingIngredient = false, error = e.message ?: "Update failed")
+                }
+            }
+        }
+    }
 
     private fun load(date: LocalDate) {
         // Stale-while-revalidate: only show the full-screen spinner when we have

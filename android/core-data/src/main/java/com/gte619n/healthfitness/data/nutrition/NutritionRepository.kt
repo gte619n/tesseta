@@ -1,11 +1,13 @@
 package com.gte619n.healthfitness.data.nutrition
 
+import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
+import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,6 +28,16 @@ class NutritionRepository @Inject constructor(
     suspend fun deleteEntry(date: String, entryId: String) {
         api.deleteEntry(date, entryId)
     }
+
+    suspend fun addCompositeMeal(date: String, body: CompositeMealRequest): Entry =
+        api.addCompositeMeal(date, body)
+
+    suspend fun updateIngredient(
+        date: String,
+        entryId: String,
+        index: Int,
+        body: UpdateIngredientRequest,
+    ): Entry = api.updateIngredient(date, entryId, index, body)
 
     /** Returns the active macro target, or null when the server replies 204. */
     suspend fun target(): Macros? {

@@ -72,6 +72,7 @@ fun NutritionTodayRoute(
         onOpenEditSheet = viewModel::openEditSheet,
         onCloseEditSheet = viewModel::closeEditSheet,
         onUpdateEntry = viewModel::updateEntry,
+        onUpdateIngredient = viewModel::updateIngredient,
         onOpenAddSheet = viewModel::openAddSheet,
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
@@ -91,6 +92,7 @@ fun NutritionTodayScreen(
     onOpenEditSheet: (Entry) -> Unit,
     onCloseEditSheet: () -> Unit,
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
+    onUpdateIngredient: (String, Int, com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest) -> Unit,
     onOpenAddSheet: () -> Unit,
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
@@ -143,6 +145,18 @@ fun NutritionTodayScreen(
             saving = state.savingEdit,
             onDismiss = onCloseEditSheet,
             onSave = onUpdateEntry,
+        )
+    }
+
+    val composite = state.editingComposite
+    if (composite != null) {
+        IngredientsSheet(
+            entry = composite,
+            saving = state.savingIngredient,
+            onDismiss = onCloseEditSheet,
+            onUpdateIngredient = { index, body ->
+                onUpdateIngredient(composite.entryId, index, body)
+            },
         )
     }
 }
@@ -337,6 +351,7 @@ private fun NutritionTodayPreview() {
             ),
             onPrevDay = {}, onNextDay = {}, onDeleteEntry = {},
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
+            onUpdateIngredient = { _, _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
             onOpenTarget = {}, onOpenCapture = {},

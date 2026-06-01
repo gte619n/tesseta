@@ -55,6 +55,25 @@ data class Entry(
     val macros: Macros,
     val source: String,
     // Joined in from the entry's catalog food (null/"NONE" for manual entries).
+    // For a composite (photo-logged) meal this is the finished-meal image.
+    val imageUrl: String? = null,
+    val imageStatus: String = "NONE",
+    // Present for a composite meal: its components, each with a raw-ingredient
+    // image. Null/empty for a plain single-food entry.
+    val ingredients: List<EntryIngredient>? = null,
+) {
+    val isComposite: Boolean get() = !ingredients.isNullOrEmpty()
+}
+
+/** One ingredient of a composite meal, with its generated raw-ingredient image. */
+data class EntryIngredient(
+    val name: String,
+    val foodId: String? = null,
+    val servingLabel: String? = null,
+    val servingGrams: Double? = null,
+    val quantity: Double? = null,
+    val macros: Macros,
+    val macrosPer100g: Macros? = null,
     val imageUrl: String? = null,
     val imageStatus: String = "NONE",
 )
@@ -106,6 +125,30 @@ data class EntryPatchRequest(
     val servingGrams: Double? = null,
     val quantity: Double? = null,
     val macros: Macros? = null,
+)
+
+/** Body for POST api/me/nutrition/{date}/composite-meal. */
+data class CompositeMealRequest(
+    val meal: String,
+    val mealName: String,
+    val ingredients: List<CompositeIngredientRequest>,
+    val referencePhotoRef: String? = null,
+)
+
+data class CompositeIngredientRequest(
+    val name: String,
+    val servingGrams: Double? = null,
+    val servingLabel: String? = null,
+    val quantity: Double? = null,
+    val macrosPer100g: Macros? = null,
+    val macros: Macros? = null,
+)
+
+/** Body for PATCH api/me/nutrition/{date}/entries/{entryId}/ingredients/{index}. */
+data class UpdateIngredientRequest(
+    val servingGrams: Double? = null,
+    val servingLabel: String? = null,
+    val quantity: Double? = null,
 )
 
 /** Body for POST api/foods (create a catalog food). */
