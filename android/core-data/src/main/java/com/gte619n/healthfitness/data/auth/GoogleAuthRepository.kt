@@ -58,7 +58,11 @@ class GoogleAuthRepository(
                 idToken = google.idToken,
             )
         } catch (e: NoCredentialException) {
-            AuthState.SignedOut
+            // No credential available. On an interactive sign-in this means the
+            // device has no Google account to offer — surface NoAccount so the
+            // UI can guide the user to add one. On a silent refresh it just
+            // means the user hasn't signed in yet — that's the normal SignedOut.
+            if (filterByAuthorized) AuthState.SignedOut else AuthState.NoAccount
         } catch (e: GetCredentialException) {
             AuthState.Failed(e.errorMessage?.toString() ?: e.javaClass.simpleName)
         }

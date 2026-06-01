@@ -1,10 +1,14 @@
 package com.gte619n.healthfitness.mobile
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -109,12 +113,23 @@ private fun AppRoot(
     val state by coordinator.state.collectAsState()
     val scope = rememberCoroutineScope()
 
+    // Returning from the system Add-Account screen — re-probe so a freshly
+    // added account flips us from NoAccount to the normal sign-in prompt.
+    val addAccountLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { scope.launch { coordinator.bootstrap() } }
+
     when (state) {
         is AuthState.SignedIn -> AppNavHost(widthClass)
         AuthState.Loading -> SignInScreen(state = state, onSignIn = {})
         else -> SignInScreen(
             state = state,
             onSignIn = { scope.launch { coordinator.interactiveSignIn() } },
+            onAddAccount = {
+                val intent = Intent(Settings.ACTION_ADD_ACCOUNT)
+                    .putExtra(Settings.EXTRA_ACCOUNT_TYPES, arrayOf("com.google"))
+                addAccountLauncher.launch(intent)
+            },
         )
     }
 }
