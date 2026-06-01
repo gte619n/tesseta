@@ -56,9 +56,19 @@ public class MedicationController {
         LocalDate today = LocalDate.now();
         LocalDate thirtyDaysAgo = today.minusDays(30);
 
+        // Batch-resolve the distinct drug ids in one pass instead of one
+        // Firestore read per medication (custom meds have a null drugId and
+        // are simply absent from the map → null drug, same as before).
+        List<String> drugIds = meds.stream()
+            .map(Medication::drugId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        java.util.Map<String, Drug> drugsById = drugs.findByIds(drugIds);
+
         return meds.stream()
             .map(m -> {
-                Drug drug = drugs.findById(m.drugId()).orElse(null);
+                Drug drug = m.drugId() == null ? null : drugsById.get(m.drugId());
                 AdherenceSummary summary = calculateAdherenceSummary(
                     userId, m.medicationId(), thirtyDaysAgo, today
                 );
