@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Medication, DosagePeriod, FrequencyConfig, TimeSlot, TimeWindow, FrequencyType } from "@/lib/types/medication";
+import type { Medication, DosagePeriod, FrequencyConfig, TimeSlot, TimeWindow, FrequencyType, DayOfWeek } from "@/lib/types/medication";
 import {
   formatFrequency,
   TIME_WINDOW_LABELS,
   CATEGORY_LABELS,
   FORM_LABELS,
   FREQUENCY_LABELS,
+  DAY_LABELS,
   DISCONTINUE_REASON_LABELS,
   DiscontinueReason,
 } from "@/lib/types/medication";
@@ -77,6 +78,9 @@ export function MedicationDetailModal({
   const [timesPerPeriod, setTimesPerPeriod] = useState(
     String(medication.frequency.timesPerPeriod ?? 1)
   );
+  const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>(
+    medication.frequency.specificDays ?? []
+  );
   const [selectedWindows, setSelectedWindows] = useState<TimeWindow[]>(
     medication.timeSlots.map(s => s.window)
   );
@@ -117,10 +121,21 @@ export function MedicationDetailModal({
     );
   }
 
+  function toggleDay(day: DayOfWeek) {
+    setSelectedDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
+  }
+
   function handleSaveEdit() {
     const newFrequency: FrequencyConfig = {
       type: frequencyType,
       timesPerPeriod: Number(timesPerPeriod) || 1,
+      // Persist the chosen day(s) for weekly meds so the dose schedules on
+      // those days and the card shows "Weekly · Mon".
+      ...(frequencyType === "WEEKLY" && selectedDays.length > 0
+        ? { specificDays: selectedDays }
+        : {}),
     };
 
     // Dose is managed via the dedicated "Change dose" flow so it builds a dated
@@ -496,6 +511,31 @@ export function MedicationDetailModal({
                   )}
                 </div>
               </div>
+
+              {/* Day of week — weekly meds */}
+              {frequencyType === "WEEKLY" && (
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-secondary">
+                    On days
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.keys(DAY_LABELS) as DayOfWeek[]).map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => toggleDay(day)}
+                        className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                          selectedDays.includes(day)
+                            ? "bg-accent text-inverse"
+                            : "bg-canvas-sunken text-secondary hover:bg-canvas hover:text-primary"
+                        }`}
+                      >
+                        {DAY_LABELS[day]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Time windows */}
               {frequencyType !== "PRN" && (

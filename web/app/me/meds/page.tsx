@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 };
 import { revalidatePath } from "next/cache";
 import { apiFetch, apiJson } from "@/lib/api";
-import type { Medication, Drug, FrequencyConfig, TimeSlot } from "@/lib/types/medication";
+import type { Medication, Drug, FrequencyConfig, TimeSlot, DayOfWeek } from "@/lib/types/medication";
 import { MedicationsSection } from "@/components/medications/MedicationsSection";
 import { AddMedicationButton } from "@/components/medications/AddMedicationButton";
 
@@ -59,10 +59,17 @@ export default async function MedsPage() {
       : [];
     const notes = formData.get("notes") as string | null;
     const prescribedBy = formData.get("prescribedBy") as string | null;
+    // Day-of-week selection for weekly meds — without this the chosen day
+    // never reaches the backend, so the dose schedules every day and renders
+    // as a bare "Once weekly".
+    const specificDays = formData.get("specificDays")
+      ? (JSON.parse(formData.get("specificDays") as string) as DayOfWeek[])
+      : undefined;
 
     const frequency: FrequencyConfig = {
       type: frequencyType as FrequencyConfig["type"],
       timesPerPeriod,
+      ...(specificDays && specificDays.length > 0 ? { specificDays } : {}),
     };
 
     // Build request body - support both catalog drugs and custom entries

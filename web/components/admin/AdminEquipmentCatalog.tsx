@@ -5,12 +5,16 @@ import { useRouter } from 'next/navigation';
 import type { AdminEquipment, SpecSchema, EquipmentSpecs } from '@/lib/types/gym';
 import { useToast } from '@/components/ui/Toast';
 import { EditEquipmentModal } from './EditEquipmentModal';
+import { AddEquipmentModal } from './AddEquipmentModal';
 import { RegenerateImageModal } from './RegenerateImageModal';
 import { ImageLightbox } from './ImageLightbox';
 import { ImageCandidateStrip } from './ImageCandidateStrip';
 
 interface Props {
   catalog: AdminEquipment[];
+  create: (
+    data: { name: string; category: string; subcategory: string; specSchema: SpecSchema; specs: EquipmentSpecs },
+  ) => Promise<void>;
   update: (
     equipmentId: string,
     data: { name: string; category: string; subcategory: string; specSchema: SpecSchema; specs: EquipmentSpecs },
@@ -25,6 +29,7 @@ interface Props {
 
 export function AdminEquipmentCatalog({
   catalog,
+  create,
   update,
   regenerate,
   uploadImage,
@@ -61,6 +66,7 @@ export function AdminEquipmentCatalog({
     }
   }
   const [query, setQuery] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<AdminEquipment | null>(null);
   const [regeneratingEquipment, setRegeneratingEquipment] = useState<AdminEquipment | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -75,7 +81,7 @@ export function AdminEquipmentCatalog({
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-3">
         <input
           type="text"
           value={query}
@@ -83,6 +89,13 @@ export function AdminEquipmentCatalog({
           placeholder="Search equipment…"
           className="w-full max-w-md rounded-md border border-border-default bg-surface px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent"
         />
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="ml-auto shrink-0 cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-inverse hover:bg-accent/90"
+        >
+          Add equipment
+        </button>
       </div>
 
       {filtered.length === 0 ? (
@@ -175,6 +188,16 @@ export function AdminEquipmentCatalog({
           })}
         </div>
       )}
+
+      <AddEquipmentModal
+        isOpen={showAdd}
+        onClose={() => setShowAdd(false)}
+        onSave={async () => {
+          setShowAdd(false);
+          router.refresh();
+        }}
+        create={create}
+      />
 
       {editingEquipment && (
         <EditEquipmentModal

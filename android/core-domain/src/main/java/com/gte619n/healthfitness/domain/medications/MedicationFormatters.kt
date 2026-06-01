@@ -23,12 +23,27 @@ object FrequencyFormatter {
     fun format(f: FrequencyConfig): String = when (f.type) {
         FrequencyType.DAILY ->
             if ((f.timesPerPeriod ?: 1) == 1) "Once daily" else "${f.timesPerPeriod}x daily"
-        FrequencyType.WEEKLY -> "${f.timesPerPeriod ?: 1}x weekly"
+        FrequencyType.WEEKLY -> {
+            // Surface the chosen day(s) so a weekly med reads "Weekly · Mon"
+            // rather than a bare "Once weekly" (matches the web formatter).
+            val days = f.specificDays
+            if (!days.isNullOrEmpty()) {
+                "Weekly · " + days.joinToString(", ") { dayLabel(it) }
+            } else if ((f.timesPerPeriod ?: 1) == 1) {
+                "Once weekly"
+            } else {
+                "${f.timesPerPeriod}x weekly"
+            }
+        }
         FrequencyType.MONTHLY -> "Monthly"
         FrequencyType.PRN -> "As needed"
         FrequencyType.CYCLE ->
             f.cycle?.let { "${it.onWeeks}w on / ${it.offWeeks}w off" } ?: "Cycle"
     }
+
+    /** Three-letter title-case label for a day, e.g. MON -> "Mon". */
+    private fun dayLabel(day: DayOfWeek): String =
+        day.name.lowercase().replaceFirstChar { it.uppercase() }
 }
 
 object TimeWindowLabels {

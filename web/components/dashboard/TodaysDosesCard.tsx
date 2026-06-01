@@ -62,7 +62,7 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
           </p>
         ) : (
           <div className="mt-3 space-y-1.5">
-            {doses.slice(0, 4).map((dose) => {
+            {doses.map((dose) => {
               const key = `${dose.medicationId}:${dose.window}`;
               const isLoading = isPending && pendingId === key;
 
@@ -106,14 +106,6 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
                 </div>
               );
             })}
-            {doses.length > 4 && (
-              <Link
-                href="/me/meds"
-                className="block pt-1 text-[12px] text-accent-dim hover:underline"
-              >
-                +{doses.length - 4} more
-              </Link>
-            )}
           </div>
         )}
       </div>

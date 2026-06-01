@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -38,6 +39,9 @@ public class AdminDrugController {
 
     public interface DrugCatalogPort {
         List<Drug> findAll();
+        Drug createDrug(String name, List<String> aliases, DrugCategory category,
+                        DrugForm form, String defaultUnit, List<String> commonDoses,
+                        List<String> suggestedMarkers, String description);
         Drug updateDrug(String drugId, String name, List<String> aliases,
                         DrugCategory category, DrugForm form, String defaultUnit);
         Drug mergeInto(String sourceId, String targetId);
@@ -63,6 +67,22 @@ public class AdminDrugController {
     @GetMapping
     public List<DrugResponse> list() {
         return catalog.findAll().stream().map(DrugResponse::from).toList();
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public DrugResponse create(@RequestBody AdminCreateDrugRequest body) {
+        Drug created = catalog.createDrug(
+            body.name(),
+            body.aliases(),
+            body.category(),
+            body.form(),
+            body.defaultUnit(),
+            body.commonDoses(),
+            body.suggestedMarkers(),
+            body.description()
+        );
+        return DrugResponse.from(created);
     }
 
     @PatchMapping("/{drugId}")
@@ -164,6 +184,17 @@ public class AdminDrugController {
     ) {
         return DrugResponse.from(catalog.deleteImage(drugId, body.imageUrl()));
     }
+
+    public record AdminCreateDrugRequest(
+        String name,
+        List<String> aliases,
+        DrugCategory category,
+        DrugForm form,
+        String defaultUnit,
+        List<String> commonDoses,
+        List<String> suggestedMarkers,
+        String description
+    ) {}
 
     public record AdminUpdateDrugRequest(
         String name,

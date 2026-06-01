@@ -20,6 +20,7 @@ data class ProfileDto(
     val userId: String,
     val email: String?,
     val displayName: String?,
+    val photoUrl: String?,
     val heightCm: Int?,
 )
 

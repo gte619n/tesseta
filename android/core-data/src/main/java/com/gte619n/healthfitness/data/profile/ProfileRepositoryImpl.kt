@@ -20,4 +20,5 @@ private fun ProfileDto.toDomain() = Profile(
     email = email,
     displayName = displayName,
     heightCm = heightCm,
+    photoUrl = photoUrl,
 )

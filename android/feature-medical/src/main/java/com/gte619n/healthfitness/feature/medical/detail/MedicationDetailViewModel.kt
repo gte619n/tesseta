@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
+import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
 import com.gte619n.healthfitness.domain.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest
@@ -77,6 +78,14 @@ class MedicationDetailViewModel @Inject constructor(
         runAction {
             medications.update(medicationId, UpdateMedicationRequest(startDate = startDate))
             "Start date updated"
+        }
+    }
+
+    /** Edit the schedule (frequency + weekly day-of-week selection). */
+    fun updateSchedule(frequency: FrequencyConfig) {
+        runAction {
+            medications.update(medicationId, UpdateMedicationRequest(frequency = frequency))
+            "Schedule updated"
         }
     }
 

@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.blood.BloodReadingRepository;
 import com.gte619n.healthfitness.core.bloodtest.BloodTestReport;
 import com.gte619n.healthfitness.core.bloodtest.BloodTestReportRepository;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
+import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
 import com.gte619n.healthfitness.core.dexa.DexaScan;
 import com.gte619n.healthfitness.core.dexa.DexaScanRepository;
 import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
@@ -34,6 +35,7 @@ import com.gte619n.healthfitness.core.medication.MedicationRepository;
 import com.gte619n.healthfitness.core.medication.MedicationStatus;
 import com.gte619n.healthfitness.core.medication.Protocol;
 import com.gte619n.healthfitness.core.medication.ProtocolRepository;
+import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import java.time.LocalDate;
 import java.util.List;
@@ -61,6 +63,16 @@ public class TestPersistenceConfig {
     @Bean
     BodyCompositionRepository bodyCompositionRepository() {
         return new InMemoryBodyCompositionRepository();
+    }
+
+    @Bean
+    DailyMetricRepository dailyMetricRepository() {
+        return new InMemoryDailyMetricRepository();
+    }
+
+    @Bean
+    DeviceSyncRepository deviceSyncRepository() {
+        return new InMemoryDeviceSyncRepository();
     }
 
     @Bean

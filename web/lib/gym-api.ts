@@ -119,6 +119,28 @@ export async function getAdminCatalog(): Promise<AdminEquipment[]> {
   return apiJson<AdminEquipment[]>('/api/admin/equipment/catalog');
 }
 
+// Admin create — writes equipment straight into the shared catalog (ACTIVE,
+// no owner). The backend enum deserializes by its uppercase name, so the
+// lowercase UI literal is normalized here at the wire boundary.
+export async function createCatalogEquipment(data: CreateEquipmentRequest): Promise<Equipment> {
+  const res = await apiFetch('/api/admin/equipment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...data, specSchema: data.specSchema.toUpperCase() }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = body?.message ?? '';
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || `Create equipment failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function approveEquipment(equipmentId: string): Promise<Equipment> {
   const res = await apiFetch(`/api/admin/equipment/${equipmentId}/approve`, { method: 'POST' });
   if (!res.ok) throw new Error(`Approve failed: ${res.status}`);

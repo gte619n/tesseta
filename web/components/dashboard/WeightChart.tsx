@@ -1,3 +1,7 @@
+"use client";
+
+import { useUnits } from "@/components/ui/UnitsProvider";
+import { weightValue } from "@/lib/units";
 import {
   movingAverage,
   projectSeries,
@@ -9,7 +13,7 @@ type Props = {
   variant?: "desktop" | "foldable";
   // Weight series in lb, oldest → newest.
   series: number[];
-  // Y-axis visible range. Caller computes from data with a little padding.
+  // Y-axis visible range in lb. Caller computes from data with padding.
   yMin: number;
   yMax: number;
   // X-axis tick labels at fixed pixel positions in the 600-wide viewBox.
@@ -18,11 +22,18 @@ type Props = {
 
 export function WeightChart({
   variant = "desktop",
-  series,
-  yMin,
-  yMax,
+  series: seriesLb,
+  yMin: yMinLb,
+  yMax: yMaxLb,
   xLabels,
 }: Props) {
+  // Convert the canonical lb series + axis bounds to the chosen weight
+  // unit. Defaults to lb so the first client render matches the server.
+  const { prefs } = useUnits();
+  const series = seriesLb.map((v) => weightValue(v, prefs.weight));
+  const yMin = weightValue(yMinLb, prefs.weight);
+  const yMax = weightValue(yMaxLb, prefs.weight);
+
   const isFoldable = variant === "foldable";
   const geom = isFoldable
     ? { width: 600, height: 140, yMin, yMax, padX: 26, padBottom: 14 }

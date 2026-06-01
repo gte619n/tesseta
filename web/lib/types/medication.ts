@@ -167,7 +167,7 @@ export function formatFrequency(freq: FrequencyConfig): string {
       return freq.timesPerPeriod === 1 ? "Once daily" : `${freq.timesPerPeriod}x daily`;
     case "WEEKLY":
       if (freq.specificDays && freq.specificDays.length > 0) {
-        return freq.specificDays.map(d => DAY_LABELS[d]).join(", ");
+        return `Weekly · ${freq.specificDays.map(d => DAY_LABELS[d]).join(", ")}`;
       }
       return freq.timesPerPeriod === 1 ? "Once weekly" : `${freq.timesPerPeriod}x weekly`;
     case "MONTHLY":

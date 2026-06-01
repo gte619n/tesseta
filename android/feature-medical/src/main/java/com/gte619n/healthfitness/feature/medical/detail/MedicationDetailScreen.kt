@@ -46,7 +46,9 @@ import com.gte619n.healthfitness.domain.medications.MedicationHistoryEntry
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import com.gte619n.healthfitness.domain.medications.TimeWindowLabels
 import com.gte619n.healthfitness.feature.medical.components.AdherenceSparkline
+import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.feature.medical.components.DiscontinueDialog
+import com.gte619n.healthfitness.feature.medical.components.FrequencySelector
 import com.gte619n.healthfitness.feature.medical.components.DrugImage
 import com.gte619n.healthfitness.feature.medical.components.categoryLabel
 import com.gte619n.healthfitness.ui.components.CapsLabel
@@ -90,6 +92,7 @@ fun MedicationDetailScreen(
                 actionInFlight = s.actionInFlight,
                 onChangeDose = viewModel::changeDose,
                 onEditStartDate = viewModel::editStartDate,
+                onEditSchedule = viewModel::updateSchedule,
                 onDiscontinue = viewModel::discontinue,
                 onReactivate = viewModel::reactivate,
                 onDelete = viewModel::delete,
@@ -104,6 +107,7 @@ private fun DetailContent(
     actionInFlight: Boolean,
     onChangeDose: (dose: Double, unit: String?, startDate: LocalDate?, notes: String?) -> Unit,
     onEditStartDate: (LocalDate) -> Unit,
+    onEditSchedule: (FrequencyConfig) -> Unit,
     onDiscontinue: (DiscontinueReason, String?, LocalDate) -> Unit,
     onReactivate: (LocalDate?) -> Unit,
     onDelete: () -> Unit,
@@ -113,6 +117,7 @@ private fun DetailContent(
     var showDiscontinue by remember { mutableStateOf(false) }
     var showResume by remember { mutableStateOf(false) }
     var showEditStart by remember { mutableStateOf(false) }
+    var showEditSchedule by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
 
     Column(
@@ -194,6 +199,7 @@ private fun DetailContent(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (med.status == MedicationStatus.ACTIVE) {
                 ActionButton("Change dose", enabled = !actionInFlight) { showChangeDose = true }
+                ActionButton("Edit schedule", enabled = !actionInFlight) { showEditSchedule = true }
                 ActionButton("Edit start date", enabled = !actionInFlight) { showEditStart = true }
                 ActionButton("Discontinue", enabled = !actionInFlight, tone = HfTone.Alert) { showDiscontinue = true }
             } else {
@@ -225,6 +231,16 @@ private fun DetailContent(
                 onEditStartDate(date)
             },
             onDismiss = { showEditStart = false },
+        )
+    }
+    if (showEditSchedule) {
+        EditScheduleDialog(
+            initial = med.frequency,
+            onConfirm = { frequency ->
+                showEditSchedule = false
+                onEditSchedule(frequency)
+            },
+            onDismiss = { showEditSchedule = false },
         )
     }
     if (showDiscontinue) {
@@ -438,6 +454,32 @@ private fun DatePickerDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(parsed!!) }, enabled = parsed != null) {
+                Text("Save", color = Hf.colors.accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = Hf.colors.textSecondary) }
+        },
+    )
+}
+
+@Composable
+private fun EditScheduleDialog(
+    initial: FrequencyConfig,
+    onConfirm: (FrequencyConfig) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var frequency by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit schedule", style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
+        text = {
+            // Reuses the add-flow selector; for weekly meds this exposes the
+            // day-of-week chips so a dose can be pinned to e.g. Monday.
+            FrequencySelector(config = frequency, onChange = { frequency = it })
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(frequency) }) {
                 Text("Save", color = Hf.colors.accent)
             }
         },

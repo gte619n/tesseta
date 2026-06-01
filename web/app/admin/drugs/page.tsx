@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import {
   listAdminDrugs,
+  createAdminDrug,
   updateAdminDrug,
   deleteAdminDrug,
   getDrugImagePrompt,
@@ -21,6 +22,21 @@ export const dynamic = 'force-dynamic';
 export default async function AdminDrugsPage() {
   // Admin gating handled by app/admin/layout.tsx
   const drugs = await listAdminDrugs();
+
+  async function createAction(data: {
+    name: string;
+    aliases: string[];
+    category: DrugCategory;
+    form: DrugForm;
+    defaultUnit: string;
+    commonDoses: string[];
+    suggestedMarkers: string[];
+    description: string | null;
+  }) {
+    'use server';
+    await createAdminDrug(data);
+    revalidatePath('/admin/drugs');
+  }
 
   async function updateAction(
     drugId: string,
@@ -87,6 +103,7 @@ export default async function AdminDrugsPage() {
 
       <AdminDrugClient
         drugs={drugs}
+        create={createAction}
         update={updateAction}
         regenerate={regenerateAction}
         uploadImage={uploadImageAction}

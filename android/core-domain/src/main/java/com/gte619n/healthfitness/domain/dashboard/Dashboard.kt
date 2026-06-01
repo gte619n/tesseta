@@ -65,8 +65,22 @@ data class TodaysDoseSummary(
     val takenAt: Instant?,
 )
 
+data class DailyMetricPoint(
+    val date: LocalDate,
+    val steps: Int?,
+    val restingHeartRate: Int?,
+    val sleepMinutes: Int?,
+    val hrvMs: Int?,
+    val sleepScore: Int?,
+)
+
 interface DashboardBodyCompositionRepository {
     suspend fun loadRecent(): WeightSummary? // null = no data
+}
+
+interface DashboardDailyMetricsRepository {
+    /** Daily metrics for roughly the last 30 days, one entry per calendar day. */
+    suspend fun loadRecent(): List<DailyMetricPoint>
 }
 
 interface DashboardBloodMarkerRepository {
