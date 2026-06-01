@@ -111,6 +111,7 @@ fun NutritionTodayScreen(
             onNextDay = onNextDay,
             onOpenTarget = onOpenTarget,
             onOpenCapture = onOpenCapture,
+            onOpenAddSheet = onOpenAddSheet,
             onBack = onBack,
         )
         when {
@@ -123,7 +124,6 @@ fun NutritionTodayScreen(
                 pendingEntryIds = state.pendingEntryIds,
                 onDeleteEntry = onDeleteEntry,
                 onOpenEditSheet = onOpenEditSheet,
-                onOpenAddSheet = onOpenAddSheet,
             )
         }
     }
@@ -154,6 +154,7 @@ private fun TodayTopBar(
     onNextDay: () -> Unit,
     onOpenTarget: () -> Unit,
     onOpenCapture: () -> Unit,
+    onOpenAddSheet: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
     // Canonical header row (shared component): back arrow + title/subtitle.
@@ -164,7 +165,7 @@ private fun TodayTopBar(
     )
 
     // Secondary row beneath the canonical header: day navigation plus the
-    // Target / Capture actions (relocated out of the title row).
+    // Target / Capture / Add actions (relocated out of the title row).
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -180,6 +181,7 @@ private fun TodayTopBar(
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             IconChip(Icons.Outlined.Flag, "Target", onOpenTarget)
             IconChip(Icons.Outlined.CameraAlt, "Capture", onOpenCapture)
+            IconChip(Icons.Outlined.Add, "Add food", onOpenAddSheet)
         }
     }
 }
@@ -202,7 +204,6 @@ private fun DayContent(
     pendingEntryIds: Set<String>,
     onDeleteEntry: (String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
-    onOpenAddSheet: () -> Unit,
 ) {
     val mealsByName = day?.meals?.associateBy { it.meal } ?: emptyMap()
     LazyColumn(
@@ -212,9 +213,6 @@ private fun DayContent(
     ) {
         item("progress") {
             MacroProgressCard(totals = day?.totals, target = day?.target)
-        }
-        item("add") {
-            AddFoodButton(onClick = onOpenAddSheet)
         }
         Meal.entries.forEach { meal ->
             val group = mealsByName[meal.wire]
@@ -229,23 +227,6 @@ private fun DayContent(
             }
         }
         item("tail") { Spacer(Modifier.height(8.dp)) }
-    }
-}
-
-@Composable
-private fun AddFoodButton(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Hf.colors.accent, RoundedCornerShape(10.dp))
-            .clickable { onClick() }
-            .padding(vertical = 13.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Outlined.Add, contentDescription = null, tint = Hf.colors.textInverse, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.height(0.dp))
-        Text("  ADD FOOD", style = Hf.type.capsSm, color = Hf.colors.textInverse)
     }
 }
 

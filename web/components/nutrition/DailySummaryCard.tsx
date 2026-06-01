@@ -12,16 +12,17 @@ type MacroMeta = {
   barClass: string;
 };
 
-// Calories is the hero; protein / carbs / sugar are the secondary tier the
-// user tracks most closely. Fat + fibre round out the breakdown underneath.
+// Calories is the hero; protein / carbs / fat are the primary macros most
+// people track. Sugar + fibre live behind a "Sugar & fiber" expander so the
+// default view stays focused on the three.
 const PRIMARY: MacroMeta[] = [
   { key: "proteinGrams", label: "Protein", unit: "g", barClass: "bg-[var(--color-accent)]" },
   { key: "carbsGrams", label: "Carbs", unit: "g", barClass: "bg-[var(--color-good)]" },
-  { key: "sugarGrams", label: "Sugar", unit: "g", barClass: "bg-[var(--color-muted)]" },
+  { key: "fatGrams", label: "Fat", unit: "g", barClass: "bg-[var(--color-warn)]" },
 ];
 
 const SECONDARY: MacroMeta[] = [
-  { key: "fatGrams", label: "Fat", unit: "g", barClass: "bg-[var(--color-warn)]" },
+  { key: "sugarGrams", label: "Sugar", unit: "g", barClass: "bg-[var(--color-muted)]" },
   { key: "fiberGrams", label: "Fiber", unit: "g", barClass: "bg-[var(--color-tertiary)]" },
 ];
 
@@ -84,19 +85,35 @@ export function DailySummaryCard({ totals, target }: Props) {
         </div>
       )}
 
-      {/* Primary macros: protein / carbs / sugar */}
+      {/* Primary macros: protein / carbs / fat */}
       <div className="mt-5 grid grid-cols-3 gap-3">
         {PRIMARY.map((m) => (
           <MacroStat key={m.key} meta={m} totals={totals} target={target} />
         ))}
       </div>
 
-      {/* Secondary macros: fat / fibre */}
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        {SECONDARY.map((m) => (
-          <MacroStat key={m.key} meta={m} totals={totals} target={target} compact />
-        ))}
-      </div>
+      {/* Sugar + fibre, behind a native disclosure (no client JS needed) */}
+      <details className="group mt-3">
+        <summary className="caps-mono flex cursor-pointer list-none items-center gap-1 text-[9px] tracking-[0.08em] text-tertiary marker:hidden [&::-webkit-details-marker]:hidden">
+          <span className="group-open:hidden">Sugar &amp; fiber</span>
+          <span className="hidden group-open:inline">Hide sugar &amp; fiber</span>
+          <svg
+            className="h-3 w-3 transition-transform group-open:rotate-180"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            aria-hidden="true"
+          >
+            <path d="M3 4.5 6 7.5 9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </summary>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {SECONDARY.map((m) => (
+            <MacroStat key={m.key} meta={m} totals={totals} target={target} compact />
+          ))}
+        </div>
+      </details>
     </div>
   );
 }
