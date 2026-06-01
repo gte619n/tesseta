@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { cache } from "react";
 import Link from "next/link";
 import type { Session } from "next-auth";
 import { revalidatePath } from "next/cache";
@@ -60,15 +62,97 @@ type BodyCompositionView = {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  // The session is needed for the shell identity (sidebar) and is resolved
+  // once per render (React cache() in lib/api). Resolving it here lets the
+  // shell + skeletons paint immediately; each data-heavy section below is its
+  // own async Server Component behind a <Suspense> boundary, so a slow
+  // endpoint only delays its own card instead of blocking the whole page.
   const session = await auth();
   const sidebarUser = toSidebarUser(session);
-  const [admin, view, bloodPanel, todaysDoses, dailyVitals] = await Promise.all([
-    isAdmin(),
-    loadBodyComposition(),
-    loadBloodPanel(),
-    loadTodaysDoses(),
-    loadDailyMetrics(),
-  ]);
+
+  return (
+    <div className="flex min-h-screen items-start justify-center p-8">
+      <div className="grid w-[1200px] max-w-full grid-cols-[220px_1fr] overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-canvas shadow-[0_24px_64px_rgba(0,0,0,0.08)]">
+        <Suspense fallback={<Sidebar user={sidebarUser} isAdmin={false} />}>
+          <SidebarSection user={sidebarUser} />
+        </Suspense>
+        <main className="overflow-hidden px-7 pb-7 pt-[22px]">
+          <TopBar />
+
+          <section className="mb-3 grid grid-cols-5 gap-2.5">
+            <Suspense fallback={<StatCardSkeleton />}>
+              <WeightStatSection />
+            </Suspense>
+            <Suspense fallback={<DailyVitalsSkeleton />}>
+              <DailyVitalsSection />
+            </Suspense>
+          </section>
+
+          <Suspense fallback={<BodyCompositionSkeleton />}>
+            <BodyCompositionSection />
+          </Suspense>
+
+          <section className="mb-3 grid grid-cols-2 gap-2.5">
+            <Suspense fallback={<BloodPanelSkeleton />}>
+              <BloodPanelSection />
+            </Suspense>
+            <Suspense fallback={<TodaysDosesSkeleton />}>
+              <TodaysDosesSection />
+            </Suspense>
+          </section>
+
+          <RecentFeed entries={recent} variant="desktop" />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+// ── Async section components (each its own Suspense boundary) ─────────────
+
+async function SidebarSection({ user }: { user: SidebarUser }) {
+  const admin = await isAdmin();
+  return <Sidebar user={user} isAdmin={admin} />;
+}
+
+// Body composition feeds both the top-row Weight StatCard and the
+// BodyCompositionCard. Those live in separate Suspense boundaries, so the
+// loader is memoized with React cache() to coalesce them into one backend
+// request per render.
+const loadBodyCompositionCached = cache(loadBodyComposition);
+
+async function WeightStatSection() {
+  const view = await loadBodyCompositionCached();
+  if (view?.weightStat) {
+    return <WeightStatCard stat={view.weightStat} />;
+  }
+  return vitals[0] ? <StatCard stat={vitals[0]} /> : null;
+}
+
+async function DailyVitalsSection() {
+  const dailyVitals = await loadDailyMetrics();
+  return (
+    <>
+      <StatCard stat={dailyVitals.restingHr} />
+      <StatCard stat={dailyVitals.hrv} />
+      <StatCard stat={dailyVitals.sleep} />
+      <StatCard stat={dailyVitals.steps} />
+    </>
+  );
+}
+
+async function BodyCompositionSection() {
+  const view = await loadBodyCompositionCached();
+  return <BodyCompositionCard view={view} />;
+}
+
+async function BloodPanelSection() {
+  const bloodPanel = await loadBloodPanel();
+  return <BloodPanel data={bloodPanel} compact />;
+}
+
+async function TodaysDosesSection() {
+  const todaysDoses = await loadTodaysDoses();
 
   async function logDose(medicationId: string, window: TimeWindow) {
     "use server";
@@ -83,36 +167,46 @@ export default async function DashboardPage() {
     revalidatePath("/");
   }
 
+  return <TodaysDosesCard doses={todaysDoses} logDose={logDose} compact />;
+}
+
+// ── Skeleton fallbacks (sized to match each card to avoid layout shift) ───
+
+// One StatCard cell. The real StatCard renders inside the 5-col grid; the
+// skeleton mirrors its border/padding/height footprint.
+function StatCardSkeleton() {
   return (
-    <div className="flex min-h-screen items-start justify-center p-8">
-      <div className="grid w-[1200px] max-w-full grid-cols-[220px_1fr] overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-canvas shadow-[0_24px_64px_rgba(0,0,0,0.08)]">
-        <Sidebar user={sidebarUser} isAdmin={admin} />
-        <main className="overflow-hidden px-7 pb-7 pt-[22px]">
-          <TopBar />
+    <div className="h-[92px] animate-pulse rounded-[9px] border-[0.5px] border-border-default bg-surface" />
+  );
+}
 
-          <section className="mb-3 grid grid-cols-5 gap-2.5">
-            {view?.weightStat ? (
-              <WeightStatCard stat={view.weightStat} />
-            ) : (
-              vitals[0] && <StatCard stat={vitals[0]} />
-            )}
-            <StatCard stat={dailyVitals.restingHr} />
-            <StatCard stat={dailyVitals.hrv} />
-            <StatCard stat={dailyVitals.sleep} />
-            <StatCard stat={dailyVitals.steps} />
-          </section>
+// The four daily-vitals cells occupy columns 2–5 of the same 5-col grid.
+function DailyVitalsSkeleton() {
+  return (
+    <>
+      <StatCardSkeleton />
+      <StatCardSkeleton />
+      <StatCardSkeleton />
+      <StatCardSkeleton />
+    </>
+  );
+}
 
-          <BodyCompositionCard view={view} />
+function BodyCompositionSkeleton() {
+  return (
+    <div className="mb-3 h-[260px] animate-pulse rounded-[10px] border-[0.5px] border-border-default bg-surface" />
+  );
+}
 
-          <section className="mb-3 grid grid-cols-2 gap-2.5">
-            <BloodPanel data={bloodPanel} compact />
-            <TodaysDosesCard doses={todaysDoses} logDose={logDose} compact />
-          </section>
+function BloodPanelSkeleton() {
+  return (
+    <div className="h-[220px] animate-pulse rounded-[10px] border-[0.5px] border-border-default bg-surface" />
+  );
+}
 
-          <RecentFeed entries={recent} variant="desktop" />
-        </main>
-      </div>
-    </div>
+function TodaysDosesSkeleton() {
+  return (
+    <div className="h-[220px] animate-pulse rounded-[10px] border-[0.5px] border-border-default bg-surface" />
   );
 }
 

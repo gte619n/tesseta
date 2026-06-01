@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -173,11 +174,13 @@ export default async function GymDetailPage({ params }: Props) {
         </header>
 
         {location.coverPhotoUrl && (
-          <div className="aspect-[21/9] overflow-hidden rounded-[14px]">
-            <img
+          <div className="relative aspect-[21/9] overflow-hidden rounded-[14px]">
+            <Image
               src={location.coverPhotoUrl}
               alt={location.name}
-              className="h-full w-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 1200px"
+              className="object-cover"
             />
           </div>
         )}

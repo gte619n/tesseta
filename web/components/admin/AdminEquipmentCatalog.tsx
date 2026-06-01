@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AdminEquipment, SpecSchema, EquipmentSpecs } from '@/lib/types/gym';
@@ -123,23 +124,27 @@ export function AdminEquipmentCatalog({
                           setLightboxAlt(eq.name);
                         }
                       }}
-                      className="block aspect-square w-full cursor-zoom-in border-b border-border-default p-0"
+                      className="relative block aspect-square w-full cursor-zoom-in border-b border-border-default p-0"
                       aria-label={`Zoom image for ${eq.name}`}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={eq.imageUrl}
                         alt={eq.name}
-                        className="aspect-square w-full rounded-t-md object-cover"
+                        fill
+                        sizes="(max-width: 768px) 50vw, 240px"
+                        className="rounded-t-md object-cover"
                       />
                     </button>
                   ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={eq.imageUrl}
-                      alt={eq.name}
-                      className="aspect-square w-full rounded-t-md border-b border-border-default object-cover"
-                    />
+                    <div className="relative aspect-square w-full">
+                      <Image
+                        src={eq.imageUrl}
+                        alt={eq.name}
+                        fill
+                        sizes="(max-width: 768px) 50vw, 240px"
+                        className="rounded-t-md border-b border-border-default object-cover"
+                      />
+                    </div>
                   )
                 ) : (
                   <div className="flex aspect-square w-full items-center justify-center border-b border-dashed border-border-default bg-canvas">

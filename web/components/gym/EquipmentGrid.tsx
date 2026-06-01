@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type { Equipment } from "@/lib/types/gym";
 
@@ -160,10 +161,12 @@ function EquipmentGridCard({ equipment, onRemove }: { equipment: Equipment; onRe
       {/* Image or Icon */}
       <div className="relative aspect-square bg-canvas">
         {equipment.imageUrl ? (
-          <img
+          <Image
             src={equipment.imageUrl}
             alt={equipment.name}
-            className="h-full w-full object-cover"
+            fill
+            sizes="(max-width: 768px) 50vw, 200px"
+            className="object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-tertiary">

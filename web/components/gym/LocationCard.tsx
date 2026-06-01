@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { Location } from "@/lib/types/gym";
 import { AMENITIES } from "@/lib/types/gym";
@@ -15,12 +16,14 @@ export function LocationCard({ location }: Props) {
       href={`/me/workouts/gyms/${location.locationId}`}
       className="block rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-sm transition-shadow hover:shadow-md"
     >
-      <div className="aspect-[16/9] overflow-hidden rounded-t-[13px] bg-canvas">
+      <div className="relative aspect-[16/9] overflow-hidden rounded-t-[13px] bg-canvas">
         {location.coverPhotoUrl ? (
-          <img
+          <Image
             src={location.coverPhotoUrl}
             alt={location.name}
-            className="h-full w-full object-cover"
+            fill
+            sizes="(max-width: 768px) 100vw, 400px"
+            className="object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-canvas-muted to-canvas">

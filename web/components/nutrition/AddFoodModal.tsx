@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { type ReactNode, useRef, useState, useCallback } from "react";
 import type { Meal, Macros } from "@/lib/types/nutrition";
 import { MEAL_LABELS, QUANTITY_STEPS } from "@/lib/types/nutrition";
@@ -180,10 +181,11 @@ function FoodImage({
   const sizeClass = size === 48 ? "h-12 w-12" : "h-10 w-10";
   if (imageStatus === "READY" && imageUrl) {
     return (
-      <img
+      <Image
         src={imageUrl}
         alt=""
-        loading="lazy"
+        width={size}
+        height={size}
         className={`${sizeClass} shrink-0 rounded-[6px] object-cover`}
       />
     );

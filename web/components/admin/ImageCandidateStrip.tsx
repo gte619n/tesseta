@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
@@ -88,8 +89,13 @@ export function ImageCandidateStrip({
                   : 'border-border-default cursor-pointer hover:border-accent')
               }
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="h-full w-full object-cover" />
+              <Image
+                src={url}
+                alt=""
+                width={48}
+                height={48}
+                className="h-full w-full object-cover"
+              />
             </button>
             <button
               type="button"
