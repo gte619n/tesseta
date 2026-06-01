@@ -18,6 +18,7 @@ import type {
 import { MEALS } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
 import { MealSection } from "@/components/nutrition/MealSection";
+import { PendingImageRefresher } from "@/components/nutrition/PendingImageRefresher";
 
 export const metadata: Metadata = { title: "Nutrition" };
 export const dynamic = "force-dynamic";
@@ -152,9 +153,13 @@ export default async function NutritionPage(props: {
   const prevDate = addDays(date, -1);
   const nextDate = addDays(date, 1);
   const canGoForward = date < today();
+  const hasGeneratingImage = day.meals.some((m) =>
+    m.entries.some((e) => e.imageStatus === "PENDING"),
+  );
 
   return (
     <main className="min-h-screen bg-canvas p-8">
+      <PendingImageRefresher active={hasGeneratingImage} />
       <div className="mx-auto max-w-[920px] space-y-6">
         <Link
           href="/"

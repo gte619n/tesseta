@@ -32,6 +32,7 @@ import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import kotlin.math.roundToInt
 
 /**
  * Edit-entry bottom sheet. Lets the user change the meal, serving, quantity and
@@ -56,6 +57,7 @@ fun EditEntrySheet(
     var servingLabel by remember(entry.entryId) { mutableStateOf(entry.servingLabel) }
     var servingGrams by remember(entry.entryId) { mutableStateOf(trimDouble(entry.servingGrams)) }
     var quantity by remember(entry.entryId) { mutableStateOf(entry.quantity) }
+    var quantityText by remember(entry.entryId) { mutableStateOf(trimDouble(entry.quantity)) }
     var kcal by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.caloriesKcal)) }
     var protein by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.proteinGrams)) }
     var carbs by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.carbsGrams)) }
@@ -87,62 +89,102 @@ fun EditEntrySheet(
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 24.dp),
         ) {
+            // ── Hero: larger image + live amount/calorie readout ──────────
+            val effectiveGrams = (servingGrams.toDoubleOrNull() ?: 0.0) * quantity
+            val liveKcal = kcal.toDoubleOrNull()?.roundToInt()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 44.dp)
-                Spacer(Modifier.width(12.dp))
+                FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 76.dp)
+                Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(entry.foodName, style = Hf.type.headingMd, color = Hf.colors.textPrimary)
-                    Text("Edit entry", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        buildString {
+                            append("${effectiveGrams.roundToInt()} g")
+                            if (liveKcal != null) append(" · $liveKcal kcal")
+                        },
+                        style = Hf.type.monoSm,
+                        color = Hf.colors.textSecondary,
+                    )
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
 
             Text("Meal", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
             Spacer(Modifier.height(5.dp))
             MealPicker(selected = meal, onSelect = { meal = it })
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
 
+            // ── Amount: serving label + grams, quantity chips + custom entry ─
+            Text("Amount", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+            Spacer(Modifier.height(5.dp))
             OutlinedTextField(
                 value = servingLabel,
                 onValueChange = { servingLabel = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Serving label") },
+                label = { Text("Serving (e.g. 1 container, 1 slice, 100 g)") },
                 singleLine = true,
             )
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = servingGrams,
-                onValueChange = {
-                    servingGrams = it
-                    rescale(it, quantity)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Serving size (g)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(Modifier.height(14.dp))
-
-            Text("Quantity", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            Spacer(Modifier.height(5.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = servingGrams,
+                    onValueChange = {
+                        servingGrams = it
+                        rescale(it, quantity)
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Grams / serving") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                OutlinedTextField(
+                    value = quantityText,
+                    onValueChange = { text ->
+                        quantityText = text
+                        text.toDoubleOrNull()?.takeIf { it > 0 }?.let { q ->
+                            quantity = q
+                            rescale(servingGrams, q)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Quantity (×)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             ChipRow(
                 options = QUANTITY_STEPS,
                 selected = quantity,
-                label = { "${it}×" },
+                label = { "${trimDouble(it)}×" },
                 onSelect = {
                     quantity = it
+                    quantityText = trimDouble(it)
                     rescale(servingGrams, it)
                 },
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "= ${effectiveGrams.roundToInt()} g total" +
+                    (liveKcal?.let { " · $it kcal" } ?: ""),
+                style = Hf.type.bodySm,
+                color = Hf.colors.textTertiary,
+            )
+            Spacer(Modifier.height(16.dp))
 
+            // ── Macros: calories full-width, then two-up rows ─────────────
             Text("Macros", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            EditNumberField("Calories (kcal)", kcal) { kcal = it }
-            EditNumberField("Protein (g)", protein) { protein = it }
-            EditNumberField("Carbs (g)", carbs) { carbs = it }
-            EditNumberField("Fat (g)", fat) { fat = it }
-            EditNumberField("Fiber (g)", fiber) { fiber = it }
-            EditNumberField("Sugar (g)", sugar) { sugar = it }
+            EditNumberField("Calories (kcal)", kcal, Modifier.fillMaxWidth()) { kcal = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                EditNumberField("Protein (g)", protein, Modifier.weight(1f)) { protein = it }
+                EditNumberField("Carbs (g)", carbs, Modifier.weight(1f)) { carbs = it }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                EditNumberField("Fat (g)", fat, Modifier.weight(1f)) { fat = it }
+                EditNumberField("Sugar (g)", sugar, Modifier.weight(1f)) { sugar = it }
+            }
+            EditNumberField("Fiber (g)", fiber, Modifier.fillMaxWidth()) { fiber = it }
             Spacer(Modifier.height(16.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -177,11 +219,16 @@ fun EditEntrySheet(
 }
 
 @Composable
-private fun EditNumberField(label: String, value: String, onChange: (String) -> Unit) {
+private fun EditNumberField(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    onChange: (String) -> Unit,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        modifier = modifier.padding(top = 8.dp),
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

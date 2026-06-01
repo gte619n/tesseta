@@ -1,19 +1,20 @@
 import Image from "next/image";
 import type { ImageStatus } from "@/lib/types/nutrition";
 
-type Size = 36 | 40 | 48;
+type Size = 36 | 40 | 48 | 64;
 
 const SIZE_CLASS: Record<Size, string> = {
   36: "h-9 w-9",
   40: "h-10 w-10",
   48: "h-12 w-12",
+  64: "h-16 w-16",
 };
 
 /**
  * Thumbnail for a food's generated studio image.
  *
  * - READY + url → the image
- * - PENDING → a pulsing placeholder (generation in flight)
+ * - PENDING → a spinner (generation in flight)
  * - NONE / FAILED / unknown → a neutral utensil placeholder
  *
  * Shared by the add-food modal and logged-entry rows so the placeholder
@@ -43,11 +44,14 @@ export function FoodImage({
   }
 
   if (imageStatus === "PENDING") {
+    // Image is generating — show a spinner so the row reads as "working".
     return (
       <div
-        className={`${sizeClass} shrink-0 animate-pulse rounded-[6px] bg-canvas-sunken`}
-        aria-hidden
-      />
+        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-[6px] bg-canvas-sunken`}
+        aria-label="Generating image"
+      >
+        <i className="ti ti-loader-2 animate-spin text-[14px] text-accent" aria-hidden />
+      </div>
     );
   }
 

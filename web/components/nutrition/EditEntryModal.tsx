@@ -80,6 +80,7 @@ export function EditEntryModal({
   const [servingLabel, setServingLabel] = useState(entry.servingLabel);
   const [servingGrams, setServingGrams] = useState(String(entry.servingGrams));
   const [quantity, setQuantity] = useState(entry.quantity);
+  const [quantityStr, setQuantityStr] = useState(String(entry.quantity));
   const [macros, setMacros] = useState<Record<keyof Macros, string>>({
     caloriesKcal: macroToStr(entry.macros.caloriesKcal),
     proteinGrams: macroToStr(entry.macros.proteinGrams),
@@ -123,8 +124,20 @@ export function EditEntryModal({
 
   function onQuantityChange(q: number) {
     setQuantity(q);
+    setQuantityStr(String(q));
     const g = numOr(servingGrams);
     if (g !== null && g > 0) recompute(g, q);
+  }
+
+  // Free-form quantity entry (alongside the quick chips).
+  function onQuantityText(v: string) {
+    setQuantityStr(v);
+    const q = numOr(v);
+    if (q !== null && q > 0) {
+      setQuantity(q);
+      const g = numOr(servingGrams);
+      if (g !== null && g > 0) recompute(g, q);
+    }
   }
 
   function setMacroField(key: keyof Macros, v: string) {
@@ -165,6 +178,13 @@ export function EditEntryModal({
     }
   }
 
+  // Live amount readout that tracks serving grams × quantity and calories.
+  const effectiveGrams = Math.round((numOr(servingGrams) ?? 0) * quantity);
+  const liveKcal = numOr(macros.caloriesKcal);
+  const amountLabel = `${effectiveGrams} g${
+    liveKcal !== null ? ` · ${Math.round(liveKcal)} kcal` : ""
+  }`;
+
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
@@ -182,14 +202,14 @@ export function EditEntryModal({
             <FoodImage
               imageUrl={entry.imageUrl}
               imageStatus={entry.imageStatus}
-              size={40}
+              size={64}
             />
             <div className="min-w-0">
               <h2 className="m-0 truncate text-[16px] font-medium tracking-[-0.01em] text-primary">
                 {entry.foodName}
               </h2>
-              <div className="mt-0.5 caps-mono text-[9px] tracking-[0.06em] text-tertiary">
-                Edit entry
+              <div className="mt-1 font-mono text-[12px] tabular-nums text-secondary">
+                {amountLabel}
               </div>
             </div>
           </div>
@@ -237,7 +257,7 @@ export function EditEntryModal({
               <input
                 value={servingLabel}
                 onChange={(e) => setServingLabel(e.target.value)}
-                placeholder="e.g. 1 cup"
+                placeholder="e.g. 1 container, 1 slice, 100 g"
                 className="w-full rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
@@ -256,12 +276,12 @@ export function EditEntryModal({
             </div>
           </div>
 
-          {/* Quantity */}
+          {/* Quantity: quick chips + free-form entry, with a live total */}
           <div>
             <label className="mb-1.5 block text-[11px] font-medium text-secondary">
               Quantity
             </label>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {QUANTITY_STEPS.map((q) => (
                 <button
                   key={q}
@@ -276,6 +296,18 @@ export function EditEntryModal({
                   {q}×
                 </button>
               ))}
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={quantityStr}
+                onChange={(e) => onQuantityText(e.target.value)}
+                aria-label="Custom quantity"
+                className="w-20 rounded-md border-[0.5px] border-border-default bg-canvas px-2 py-1.5 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            <div className="mt-1.5 font-mono text-[11px] tabular-nums text-tertiary">
+              = {amountLabel} total
             </div>
           </div>
 

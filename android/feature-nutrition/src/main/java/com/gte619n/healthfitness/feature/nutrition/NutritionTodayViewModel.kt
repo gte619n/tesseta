@@ -12,6 +12,8 @@ import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +45,11 @@ class NutritionTodayViewModel @Inject constructor(
     private val _state = MutableStateFlow(NutritionTodayUiState())
     val state: StateFlow<NutritionTodayUiState> = _state.asStateFlow()
 
+    // Polls the day while any entry's image is still generating, so freshly
+    // logged foods swap their placeholder for the studio image without the user
+    // having to leave and return. Cancelled/replaced on each load.
+    private var imagePollJob: Job? = null
+
     // First load (and every return to the foreground) is driven by the screen's
     // LifecycleResumeEffect, so there's no init load — that keeps the page from
     // double-fetching on open and lets it refresh after a capture pops back.
@@ -72,9 +79,37 @@ class NutritionTodayViewModel @Inject constructor(
             try {
                 val day = repository.day(date.format(ISO_DATE))
                 _state.update { it.copy(loading = false, day = day, error = null) }
+                pollWhileImagesGenerate(date)
             } catch (e: Exception) {
                 _state.update {
                     it.copy(loading = false, error = e.message ?: "Failed to load nutrition")
+                }
+            }
+        }
+    }
+
+    /** True when at least one entry on the day still has a generating image. */
+    private fun NutritionDay?.hasGeneratingImage(): Boolean =
+        this?.meals?.any { group -> group.entries.any { it.imageStatus == "PENDING" } } == true
+
+    /**
+     * While any entry image is PENDING, re-fetch the day on a short interval and
+     * swap in fresh data, so generated images appear as soon as they're ready.
+     * Stops when nothing is pending (or after a cap, to avoid an endless loop on
+     * a stuck generation), and only polls the still-current date.
+     */
+    private fun pollWhileImagesGenerate(date: LocalDate) {
+        imagePollJob?.cancel()
+        if (!_state.value.day.hasGeneratingImage()) return
+        imagePollJob = viewModelScope.launch {
+            var attempts = 0
+            while (attempts < 20 && _state.value.date == date && _state.value.day.hasGeneratingImage()) {
+                attempts++
+                delay(2500)
+                if (_state.value.date != date) return@launch
+                val day = runCatching { repository.day(date.format(ISO_DATE)) }.getOrNull() ?: continue
+                if (_state.value.date == date) {
+                    _state.update { it.copy(day = day) }
                 }
             }
         }
