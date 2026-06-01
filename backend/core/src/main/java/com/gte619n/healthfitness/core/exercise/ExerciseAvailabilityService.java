@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.location.LocationRepository;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,18 +26,30 @@ public class ExerciseAvailabilityService {
 
     private final ExerciseRepository exercises;
     private final LocationRepository locations;
+    private final boolean requireApprovedMedia;
 
-    public ExerciseAvailabilityService(ExerciseRepository exercises, LocationRepository locations) {
+    public ExerciseAvailabilityService(
+        ExerciseRepository exercises,
+        LocationRepository locations,
+        @Value("${app.exercises.require-approved-media:true}") boolean requireApprovedMedia
+    ) {
         this.exercises = exercises;
         this.locations = locations;
+        this.requireApprovedMedia = requireApprovedMedia;
     }
 
     /** Published exercises executable at the given gym (of the given user). */
     public List<Exercise> executableAt(String userId, String locationId) {
         Set<String> gear = gearAt(userId, locationId);
         return exercises.findPublished(null, null, null, null).stream()
+            .filter(this::mediaOk)
             .filter(e -> satisfiedBy(e, gear))
             .toList();
+    }
+
+    /** True when the exercise's media passes the configured approval gate. */
+    public boolean mediaOk(Exercise e) {
+        return !requireApprovedMedia || e.mediaStatus() == ExerciseMediaStatus.APPROVED;
     }
 
     public boolean isExecutableAt(String exerciseId, String userId, String locationId) {
@@ -44,7 +57,7 @@ public class ExerciseAvailabilityService {
         if (exercise == null) {
             return false;
         }
-        return satisfiedBy(exercise, gearAt(userId, locationId));
+        return mediaOk(exercise) && satisfiedBy(exercise, gearAt(userId, locationId));
     }
 
     private Set<String> gearAt(String userId, String locationId) {

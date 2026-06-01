@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -18,13 +19,25 @@ import org.springframework.stereotype.Service;
 public class ExerciseService {
 
     private final ExerciseRepository exercises;
+    private final boolean requireApprovedMedia;
 
-    public ExerciseService(ExerciseRepository exercises) {
+    public ExerciseService(
+        ExerciseRepository exercises,
+        @Value("${app.exercises.require-approved-media:true}") boolean requireApprovedMedia
+    ) {
         this.exercises = exercises;
+        this.requireApprovedMedia = requireApprovedMedia;
     }
 
+    /**
+     * Published exercises for users/programming. When
+     * {@code app.exercises.require-approved-media} is true (default), only
+     * exercises whose demo media is APPROVED are returned.
+     */
     public List<Exercise> listPublished(String search, MovementPattern pattern, BlockType block, String muscle) {
-        return exercises.findPublished(search, pattern, block, muscle);
+        return exercises.findPublished(search, pattern, block, muscle).stream()
+            .filter(e -> !requireApprovedMedia || e.mediaStatus() == ExerciseMediaStatus.APPROVED)
+            .toList();
     }
 
     public List<Exercise> listCatalog() {

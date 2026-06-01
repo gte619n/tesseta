@@ -75,9 +75,11 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
 
     @Override
     public List<Exercise> findPublished(String search, MovementPattern pattern, BlockType block, String muscle) {
+        // Returns PUBLISHED exercises regardless of media status; the
+        // media-approval gate (if any) is applied above this layer based on
+        // the app.exercises.require-approved-media flag.
         List<QueryDocumentSnapshot> docs = await(collection()
             .whereEqualTo("status", ExerciseStatus.PUBLISHED.name())
-            .whereEqualTo("mediaStatus", ExerciseMediaStatus.APPROVED.name())
             .limit(1000)
             .get()).getDocuments();
         List<Exercise> all = docs.stream()

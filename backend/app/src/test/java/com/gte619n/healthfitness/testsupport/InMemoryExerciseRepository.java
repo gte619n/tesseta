@@ -32,7 +32,6 @@ public class InMemoryExerciseRepository implements ExerciseRepository {
         String s = search == null ? null : search.toLowerCase();
         return store.values().stream()
             .filter(e -> e.status() == ExerciseStatus.PUBLISHED)
-            .filter(e -> e.mediaStatus() == ExerciseMediaStatus.APPROVED)
             .filter(e -> e.aliasOfExerciseId() == null)
             .filter(e -> pattern == null || e.movementPattern() == pattern)
             .filter(e -> block == null || (e.suitableBlockTypes() != null && e.suitableBlockTypes().contains(block)))

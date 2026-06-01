@@ -11,6 +11,7 @@ import com.gte619n.healthfitness.core.exercise.DemoPhase;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaGenerator;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaStatus;
+import com.gte619n.healthfitness.core.exercise.ExerciseCatalogSeeder;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaUploader;
 import com.gte619n.healthfitness.core.exercise.ExerciseService;
 import java.io.IOException;
@@ -37,20 +38,29 @@ public class AdminExerciseController {
     private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024; // 10 MB
 
     private final ExerciseService service;
+    private final ExerciseCatalogSeeder seeder;
     private final CurrentUserProvider currentUser;
     private final Optional<ExerciseMediaGenerator> mediaGenerator;
     private final Optional<ExerciseMediaUploader> mediaUploader;
 
     public AdminExerciseController(
         ExerciseService service,
+        ExerciseCatalogSeeder seeder,
         CurrentUserProvider currentUser,
         Optional<ExerciseMediaGenerator> mediaGenerator,
         Optional<ExerciseMediaUploader> mediaUploader
     ) {
         this.service = service;
+        this.seeder = seeder;
         this.currentUser = currentUser;
         this.mediaGenerator = mediaGenerator;
         this.mediaUploader = mediaUploader;
+    }
+
+    /** Seed the catalog from the built-in starter set (idempotent). */
+    @PostMapping("/seed")
+    public ExerciseCatalogSeeder.SeedResult seed() {
+        return seeder.seed();
     }
 
     @GetMapping("/catalog")

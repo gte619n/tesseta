@@ -56,7 +56,7 @@ class ExerciseAvailabilityServiceTest {
         locations.put(location("u1", "hotel", List.of()));                 // bodyweight only
         locations.put(location("u1", "home", List.of("barbell", "power-rack", "plates")));
 
-        ExerciseAvailabilityService svc = new ExerciseAvailabilityService(exercises, locations);
+        ExerciseAvailabilityService svc = new ExerciseAvailabilityService(exercises, locations, true);
 
         assertEquals(List.of("ex_pushup"),
             svc.executableAt("u1", "hotel").stream().map(Exercise::exerciseId).toList());

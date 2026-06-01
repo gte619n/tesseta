@@ -94,6 +94,11 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.workoutprogram.chat.WorkoutProgramChatRepository workoutProgramChatRepository() {
+        return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutProgramChatRepository();
+    }
+
+    @Bean
     GoalRepository goalRepository() {
         return new InMemoryGoalRepository();
     }
