@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -285,12 +286,16 @@ private fun FoldableVitalsRow(
 ) {
     // Tile order: Weight (live), Resting HR, HRV, Sleep, Steps.
     val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
-    val tiles = listOf(
-        restingHrVital(metrics) to "RHR",
-        hrvVital(metrics) to "HRV",
-        sleepVital(metrics) to "Sleep",
-        stepsVital(metrics) to "Steps",
-    )
+    // Each vital does a sort + mapNotNull + sparkline pass; memoise on `metrics`
+    // so they only recompute when the underlying series actually changes.
+    val tiles = remember(metrics) {
+        listOf(
+            restingHrVital(metrics) to "RHR",
+            hrvVital(metrics) to "HRV",
+            sleepVital(metrics) to "Sleep",
+            stepsVital(metrics) to "Steps",
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

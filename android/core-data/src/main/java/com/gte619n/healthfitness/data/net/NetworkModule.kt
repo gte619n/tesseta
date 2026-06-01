@@ -13,6 +13,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -71,14 +72,25 @@ object NetworkModule {
     fun provideLoggingInterceptor(): HttpLoggingInterceptor =
         HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
 
+    // On-disk HTTP response cache so repeat dashboard fetches can be served from
+    // (or revalidated against) cache instead of a full round-trip. Sized at 20 MB
+    // in the app cache dir; OkHttp evicts least-recently-used entries past that.
+    @Provides
+    @Singleton
+    fun provideHttpCache(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
+    ): Cache = Cache(java.io.File(context.cacheDir, "http_cache"), 20L * 1024 * 1024)
+
     @Provides
     @Singleton
     fun provideOkHttpClient(
         auth: AuthInterceptor,
         tokenAuthenticator: TokenAuthenticator,
         @Named("logging") logging: HttpLoggingInterceptor,
+        cache: Cache,
     ): OkHttpClient =
         OkHttpClient.Builder()
+            .cache(cache)
             .addInterceptor(auth)
             .addInterceptor(logging)
             .authenticator(tokenAuthenticator)

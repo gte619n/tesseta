@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -122,10 +123,12 @@ private fun PhoneHeader(user: DashboardUser?) {
 private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetryWeight: () -> Unit) {
     // Tile order: Weight (live), Resting HR, HRV, Sleep, Steps.
     val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
-    val rhr = restingHrVital(metrics)
-    val hrv = hrvVital(metrics)
-    val sleep = sleepVital(metrics)
-    val steps = stepsVital(metrics)
+    // Each vital does a sort + mapNotNull + sparkline pass; memoise on `metrics`
+    // so they only recompute when the underlying series actually changes.
+    val rhr = remember(metrics) { restingHrVital(metrics) }
+    val hrv = remember(metrics) { hrvVital(metrics) }
+    val sleep = remember(metrics) { sleepVital(metrics) }
+    val steps = remember(metrics) { stepsVital(metrics) }
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             // First card is the live Weight vital backed by body-composition.

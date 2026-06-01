@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.mobile.dashboard
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
@@ -72,9 +73,22 @@ class DashboardViewModel @Inject constructor(
         .map { it.weight }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WeightUnit.POUNDS)
 
+    // Monotonic timestamp of the last refresh we kicked off (SystemClock so it's
+    // immune to wall-clock changes). Used to skip the ~6 network calls triggered
+    // on every ON_RESUME when the user simply navigates back to the dashboard.
+    private var lastRefreshAt: Long = 0L
+
     init { refresh() }
 
-    fun refresh() {
+    /**
+     * Reloads every dashboard card. On resume this fires on every navigation
+     * back, so non-forced calls within [REFRESH_TTL_MS] of the previous refresh
+     * are skipped. The first load (lastRefreshAt == 0) and any [force] = true
+     * caller (pull-to-refresh / explicit) always go through.
+     */
+    fun refresh(force: Boolean = false) {
+        val now = SystemClock.elapsedRealtime()
+        if (!force && lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
         loadBodyComposition()
         loadDailyMetrics()
         loadBlood()
@@ -97,7 +111,12 @@ class DashboardViewModel @Inject constructor(
     private fun loadDailyMetrics() = viewModelScope.launch {
         _ui.update { it.copy(dailyMetrics = CardState.Loading) }
         runCatching { dailyMetrics.loadRecent() }
-            .onSuccess { d -> _ui.update { it.copy(dailyMetrics = CardState.Loaded(d)) } }
+            .onSuccess { d ->
+                // Stamp the TTL only on a successful primary load so a failed
+                // refresh isn't blocked from retrying on the next resume.
+                lastRefreshAt = SystemClock.elapsedRealtime()
+                _ui.update { it.copy(dailyMetrics = CardState.Loaded(d)) }
+            }
             .onFailure { t -> _ui.update { it.copy(dailyMetrics = CardState.Error("Couldn't load metrics", t)) } }
     }
 
@@ -123,5 +142,10 @@ class DashboardViewModel @Inject constructor(
             val initials = if (name.isNotEmpty()) initialsFor(name) else DashboardFallbacks.USER_INITIALS
             _ui.update { it.copy(user = DashboardUser(initials = initials, photoUrl = p.photoUrl)) }
         }
+    }
+
+    private companion object {
+        /** Skip resume-driven refreshes that land within this window of the last. */
+        const val REFRESH_TTL_MS = 30_000L
     }
 }
