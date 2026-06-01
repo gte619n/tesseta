@@ -84,6 +84,16 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository workoutProgramRepository() {
+        return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutProgramRepository();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository scheduledWorkoutRepository() {
+        return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryScheduledWorkoutRepository();
+    }
+
+    @Bean
     GoalRepository goalRepository() {
         return new InMemoryGoalRepository();
     }
@@ -116,6 +126,22 @@ public class TestPersistenceConfig {
                 onToken.accept(word + " ");
             }
             return new GoalChatClient.StreamResult(reply, null);
+        };
+    }
+
+    // IMPL-15: the live GeminiWorkoutProgramChatClient is gated off in tests
+    // (app.workout-programs.enabled = false). Provide a deterministic fake so
+    // the WorkoutProgramChatController can wire; it echoes a reply and emits no
+    // proposal (chat tests can install a richer fake).
+    @Bean
+    com.gte619n.healthfitness.integrations.workoutprogram.WorkoutProgramChatClient workoutProgramChatClient() {
+        return (history, userMessage, context, onToken) -> {
+            String reply = "Let me design that program.";
+            for (String word : reply.split(" ")) {
+                onToken.accept(word + " ");
+            }
+            return new com.gte619n.healthfitness.integrations.workoutprogram.WorkoutProgramChatClient
+                .StreamResult(reply, null);
         };
     }
 
