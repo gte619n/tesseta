@@ -3,6 +3,8 @@ package com.gte619n.healthfitness.feature.nutrition
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
+import com.gte619n.healthfitness.domain.nutrition.Entry
+import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
@@ -27,6 +29,10 @@ data class NutritionTodayUiState(
     val pendingEntryIds: Set<String> = emptySet(),
     /** true while the add-food sheet is open. */
     val addSheetOpen: Boolean = false,
+    /** the entry being edited, or null when the edit sheet is closed. */
+    val editingEntry: Entry? = null,
+    /** true while an entry edit is being saved. */
+    val savingEdit: Boolean = false,
 )
 
 @HiltViewModel
@@ -50,6 +56,10 @@ class NutritionTodayViewModel @Inject constructor(
     fun openAddSheet() = _state.update { it.copy(addSheetOpen = true) }
 
     fun closeAddSheet() = _state.update { it.copy(addSheetOpen = false) }
+
+    fun openEditSheet(entry: Entry) = _state.update { it.copy(editingEntry = entry) }
+
+    fun closeEditSheet() = _state.update { it.copy(editingEntry = null) }
 
     private fun load(date: LocalDate) {
         // Stale-while-revalidate: only show the full-screen spinner when we have
@@ -86,6 +96,25 @@ class NutritionTodayViewModel @Inject constructor(
                         pendingEntryIds = it.pendingEntryIds - entryId,
                         error = e.message ?: "Delete failed",
                     )
+                }
+            }
+        }
+    }
+
+    /** Edit an existing entry (serving / quantity / macros / meal), then reload. */
+    fun updateEntry(entryId: String, patch: EntryPatchRequest) {
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingEdit = true) }
+        viewModelScope.launch {
+            try {
+                repository.patchEntry(date, entryId, patch)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(day = day, savingEdit = false, editingEntry = null, error = null)
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(savingEdit = false, error = e.message ?: "Update failed")
                 }
             }
         }

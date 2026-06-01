@@ -1,12 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { type ReactNode, useRef, useState, useCallback } from "react";
-import type { Meal, Macros } from "@/lib/types/nutrition";
+import type { Meal, Macros, ImageStatus } from "@/lib/types/nutrition";
 import { MEAL_LABELS, QUANTITY_STEPS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
-
-type ImageStatus = "NONE" | "PENDING" | "READY" | "FAILED";
+import { FoodImage } from "@/components/nutrition/FoodImage";
 
 type FoodResult = {
   foodId: string;
@@ -164,48 +162,6 @@ function TabButton({
     >
       {children}
     </button>
-  );
-}
-
-// ── Food image thumbnail ──────────────────────────────────────────────
-
-function FoodImage({
-  imageUrl,
-  imageStatus,
-  size = 40,
-}: {
-  imageUrl?: string | null;
-  imageStatus?: ImageStatus;
-  size?: 40 | 48;
-}) {
-  const sizeClass = size === 48 ? "h-12 w-12" : "h-10 w-10";
-  if (imageStatus === "READY" && imageUrl) {
-    return (
-      <Image
-        src={imageUrl}
-        alt=""
-        width={size}
-        height={size}
-        className={`${sizeClass} shrink-0 rounded-[6px] object-cover`}
-      />
-    );
-  }
-  if (imageStatus === "PENDING") {
-    return (
-      <div
-        className={`${sizeClass} shrink-0 animate-pulse rounded-[6px] bg-canvas-sunken`}
-        aria-hidden
-      />
-    );
-  }
-  // NONE / FAILED / undefined — neutral utensil icon block
-  return (
-    <div
-      className={`${sizeClass} shrink-0 rounded-[6px] bg-canvas-sunken flex items-center justify-center`}
-      aria-hidden
-    >
-      <i className="ti ti-tools-kitchen-2 text-[14px] text-tertiary" />
-    </div>
   );
 }
 

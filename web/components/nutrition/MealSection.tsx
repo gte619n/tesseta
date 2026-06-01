@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import type { MealGroup, Entry, Meal, Macros } from "@/lib/types/nutrition";
+import type {
+  MealGroup,
+  Entry,
+  Meal,
+  Macros,
+  UpdateEntryBody,
+} from "@/lib/types/nutrition";
 import { MEAL_LABELS, MEAL_ICONS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { AddFoodModal } from "@/components/nutrition/AddFoodModal";
+import { EditEntryModal } from "@/components/nutrition/EditEntryModal";
+import { FoodImage } from "@/components/nutrition/FoodImage";
 
 type Props = {
   group: MealGroup;
@@ -22,6 +30,11 @@ type Props = {
       macros: Macros;
       source: "MANUAL" | "CATALOG";
     },
+  ) => Promise<void>;
+  updateEntry: (
+    date: string,
+    entryId: string,
+    body: UpdateEntryBody,
   ) => Promise<void>;
   deleteEntry: (date: string, entryId: string) => Promise<void>;
   searchFoods: (q: string) => Promise<
@@ -41,10 +54,12 @@ export function MealSection({
   group,
   date,
   addEntry,
+  updateEntry,
   deleteEntry,
   searchFoods,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Entry | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -102,6 +117,7 @@ export function MealSection({
             <EntryRow
               key={entry.entryId}
               entry={entry}
+              onEdit={() => setEditing(entry)}
               onDelete={() => handleDelete(entry)}
             />
           ))}
@@ -133,34 +149,59 @@ export function MealSection({
         addEntry={addEntry}
         searchFoods={searchFoods}
       />
+
+      {editing && (
+        <EditEntryModal
+          isOpen={editing !== null}
+          onClose={() => setEditing(null)}
+          entry={editing}
+          date={date}
+          updateEntry={updateEntry}
+        />
+      )}
     </div>
   );
 }
 
 function EntryRow({
   entry,
+  onEdit,
   onDelete,
 }: {
   entry: Entry;
+  onEdit: () => void;
   onDelete: () => Promise<void>;
 }) {
   return (
-    <div className="group flex items-center justify-between gap-3 px-5 py-3 hover:bg-canvas-sunken/30">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-medium text-primary">
-            {entry.foodName}
-          </span>
-          {entry.source === "MANUAL" && (
-            <span className="caps-mono shrink-0 rounded-[3px] bg-canvas-sunken px-1 py-px text-[8px] tracking-[0.06em] text-tertiary">
-              quick add
+    <div className="group flex items-center gap-3 px-5 py-3 hover:bg-canvas-sunken/30">
+      {/* Click the food (image + name) to edit serving / macros */}
+      <button
+        type="button"
+        onClick={onEdit}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        aria-label={`Edit ${entry.foodName}`}
+      >
+        <FoodImage
+          imageUrl={entry.imageUrl}
+          imageStatus={entry.imageStatus}
+          size={40}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[13px] font-medium text-primary group-hover:text-accent-dim">
+              {entry.foodName}
             </span>
-          )}
+            {entry.source === "MANUAL" && (
+              <span className="caps-mono shrink-0 rounded-[3px] bg-canvas-sunken px-1 py-px text-[8px] tracking-[0.06em] text-tertiary">
+                quick add
+              </span>
+            )}
+          </div>
+          <div className="mt-0.5 caps-mono text-[9px] tracking-[0.04em] text-tertiary">
+            {entry.servingLabel} × {entry.quantity}
+          </div>
         </div>
-        <div className="mt-0.5 caps-mono text-[9px] tracking-[0.04em] text-tertiary">
-          {entry.servingLabel} × {entry.quantity}
-        </div>
-      </div>
+      </button>
       <div className="flex shrink-0 items-center gap-3">
         <div className="hidden items-center gap-3 sm:flex">
           <MacroChip label="P" value={entry.macros.proteinGrams} unit="g" />
@@ -173,6 +214,14 @@ function EntryRow({
             kcal
           </span>
         </span>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="cursor-pointer rounded p-1 text-tertiary opacity-0 hover:text-accent-dim group-hover:opacity-100"
+          aria-label={`Edit ${entry.foodName}`}
+        >
+          <i className="ti ti-pencil text-[13px]" aria-hidden />
+        </button>
         <button
           type="button"
           onClick={onDelete}

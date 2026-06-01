@@ -5,12 +5,18 @@ import {
   getDay,
   getTarget,
   addEntry,
+  updateEntry,
   deleteEntry,
   searchFoods,
 } from "@/lib/nutrition-api";
-import type { Meal, Macros, NutritionDay } from "@/lib/types/nutrition";
+import type {
+  Meal,
+  Macros,
+  NutritionDay,
+  UpdateEntryBody,
+} from "@/lib/types/nutrition";
 import { MEALS } from "@/lib/types/nutrition";
-import { MacroProgress } from "@/components/nutrition/MacroProgress";
+import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
 import { MealSection } from "@/components/nutrition/MealSection";
 
 export const metadata: Metadata = { title: "Nutrition" };
@@ -122,6 +128,16 @@ export default async function NutritionPage(props: {
     revalidatePath("/me/nutrition");
   }
 
+  async function updateEntryAction(
+    entryDate: string,
+    entryId: string,
+    body: UpdateEntryBody,
+  ) {
+    "use server";
+    await updateEntry(entryDate, entryId, body);
+    revalidatePath("/me/nutrition");
+  }
+
   async function deleteEntryAction(entryDate: string, entryId: string) {
     "use server";
     await deleteEntry(entryDate, entryId);
@@ -209,7 +225,7 @@ export default async function NutritionPage(props: {
           )}
         </div>
 
-        {/* Macro progress bars */}
+        {/* Daily summary: calories hero + macro progress vs goals */}
         {!target && (
           <div className="rounded-[12px] border-[0.5px] border-border-default bg-surface px-5 py-4">
             <p className="text-[13px] text-secondary">
@@ -224,7 +240,7 @@ export default async function NutritionPage(props: {
             </p>
           </div>
         )}
-        <MacroProgress totals={day.totals} target={day.target} />
+        <DailySummaryCard totals={day.totals} target={day.target} />
 
         {/* Meal sections */}
         <div className="space-y-3">
@@ -234,6 +250,7 @@ export default async function NutritionPage(props: {
               group={group}
               date={date}
               addEntry={addEntryAction}
+              updateEntry={updateEntryAction}
               deleteEntry={deleteEntryAction}
               searchFoods={searchFoodsAction}
             />

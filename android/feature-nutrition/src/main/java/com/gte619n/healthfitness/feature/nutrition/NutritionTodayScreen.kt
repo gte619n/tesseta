@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +69,9 @@ fun NutritionTodayRoute(
         onPrevDay = viewModel::previousDay,
         onNextDay = viewModel::nextDay,
         onDeleteEntry = viewModel::deleteEntry,
+        onOpenEditSheet = viewModel::openEditSheet,
+        onCloseEditSheet = viewModel::closeEditSheet,
+        onUpdateEntry = viewModel::updateEntry,
         onOpenAddSheet = viewModel::openAddSheet,
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
@@ -84,6 +88,9 @@ fun NutritionTodayScreen(
     onPrevDay: () -> Unit,
     onNextDay: () -> Unit,
     onDeleteEntry: (String) -> Unit,
+    onOpenEditSheet: (Entry) -> Unit,
+    onCloseEditSheet: () -> Unit,
+    onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
     onOpenAddSheet: () -> Unit,
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
@@ -115,6 +122,7 @@ fun NutritionTodayScreen(
                 day = state.day,
                 pendingEntryIds = state.pendingEntryIds,
                 onDeleteEntry = onDeleteEntry,
+                onOpenEditSheet = onOpenEditSheet,
                 onOpenAddSheet = onOpenAddSheet,
             )
         }
@@ -125,6 +133,16 @@ fun NutritionTodayScreen(
             onDismiss = onCloseAddSheet,
             onAddCatalog = onAddCatalog,
             onAddQuick = onAddQuick,
+        )
+    }
+
+    val editing = state.editingEntry
+    if (editing != null) {
+        EditEntrySheet(
+            entry = editing,
+            saving = state.savingEdit,
+            onDismiss = onCloseEditSheet,
+            onSave = onUpdateEntry,
         )
     }
 }
@@ -183,6 +201,7 @@ private fun DayContent(
     day: NutritionDay?,
     pendingEntryIds: Set<String>,
     onDeleteEntry: (String) -> Unit,
+    onOpenEditSheet: (Entry) -> Unit,
     onOpenAddSheet: () -> Unit,
 ) {
     val mealsByName = day?.meals?.associateBy { it.meal } ?: emptyMap()
@@ -205,6 +224,7 @@ private fun DayContent(
                     group = group,
                     pendingEntryIds = pendingEntryIds,
                     onDeleteEntry = onDeleteEntry,
+                    onOpenEditSheet = onOpenEditSheet,
                 )
             }
         }
@@ -235,6 +255,7 @@ private fun MealSection(
     group: MealGroup?,
     pendingEntryIds: Set<String>,
     onDeleteEntry: (String) -> Unit,
+    onOpenEditSheet: (Entry) -> Unit,
 ) {
     HfCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
@@ -260,6 +281,7 @@ private fun MealSection(
                     EntryRow(
                         entry = entry,
                         pending = entry.entryId in pendingEntryIds,
+                        onClick = { onOpenEditSheet(entry) },
                         onDelete = { onDeleteEntry(entry.entryId) },
                     )
                 }
@@ -269,12 +291,16 @@ private fun MealSection(
 }
 
 @Composable
-private fun EntryRow(entry: Entry, pending: Boolean, onDelete: () -> Unit) {
+private fun EntryRow(entry: Entry, pending: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !pending) { onClick() },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 40.dp)
+        Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
             Spacer(Modifier.height(2.dp))
@@ -329,6 +355,7 @@ private fun NutritionTodayPreview() {
                 ),
             ),
             onPrevDay = {}, onNextDay = {}, onDeleteEntry = {},
+            onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
             onOpenTarget = {}, onOpenCapture = {},

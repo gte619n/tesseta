@@ -24,6 +24,9 @@ export type Entry = {
   quantity: number;
   macros: Macros;
   source: EntrySource;
+  // Joined in from the entry's catalog food (null/NONE for manual entries).
+  imageUrl: string | null;
+  imageStatus: ImageStatus;
 };
 
 export type MealGroup = {

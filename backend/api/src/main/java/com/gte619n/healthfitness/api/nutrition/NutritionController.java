@@ -1,7 +1,10 @@
 package com.gte619n.healthfitness.api.nutrition;
 
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
+import com.gte619n.healthfitness.core.nutrition.CatalogFood;
+import com.gte619n.healthfitness.core.nutrition.FoodCatalogService;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
+import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
 import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetService;
 import com.gte619n.healthfitness.core.nutrition.Macros;
@@ -10,7 +13,9 @@ import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionService;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,15 +36,18 @@ public class NutritionController {
     private final CurrentUserProvider currentUser;
     private final NutritionService nutrition;
     private final MacroTargetService targets;
+    private final FoodCatalogService foodCatalog;
 
     public NutritionController(
         CurrentUserProvider currentUser,
         NutritionService nutrition,
-        MacroTargetService targets
+        MacroTargetService targets,
+        FoodCatalogService foodCatalog
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
         this.targets = targets;
+        this.foodCatalog = foodCatalog;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -121,13 +129,17 @@ public class NutritionController {
             .map(t -> MacrosDto.from(t.macros()))
             .orElse(null);
 
+        // Join in each entry's catalog food once, so we can surface the
+        // generated studio image without an N+1 lookup per meal group.
+        Map<String, CatalogFood> foods = loadFoods(entries);
+
         List<MealGroup> meals = new ArrayList<>();
         for (MealType meal : MealType.values()) {
             List<EntryResponse> mealEntries = new ArrayList<>();
             Macros subtotal = Macros.zero();
             for (FoodEntry e : entries) {
                 if (e.meal() == meal) {
-                    mealEntries.add(EntryResponse.from(e));
+                    mealEntries.add(toResponse(e, foods));
                     subtotal = subtotal.plus(e.macros());
                 }
             }
@@ -157,7 +169,7 @@ public class NutritionController {
             body.quantity(),
             body.macros() != null ? body.macros().toMacros() : null,
             body.source());
-        return ResponseEntity.status(HttpStatus.CREATED).body(EntryResponse.from(entry));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
     }
 
     @PatchMapping("/{date}/entries/{entryId}")
@@ -176,7 +188,7 @@ public class NutritionController {
             body != null ? body.servingGrams() : null,
             body != null ? body.quantity() : null,
             body != null && body.macros() != null ? body.macros().toMacros() : null);
-        return EntryResponse.from(entry);
+        return toResponse(entry);
     }
 
     @DeleteMapping("/{date}/entries/{entryId}")
@@ -187,6 +199,36 @@ public class NutritionController {
         String userId = currentUser.get().userId();
         nutrition.deleteEntry(userId, date, entryId);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Distinct catalog foods backing a day's entries, keyed by foodId. */
+    private Map<String, CatalogFood> loadFoods(List<FoodEntry> entries) {
+        Map<String, CatalogFood> foods = new HashMap<>();
+        for (FoodEntry e : entries) {
+            String foodId = e.foodId();
+            if (foodId != null && !foods.containsKey(foodId)) {
+                foodCatalog.find(foodId).ifPresent(f -> foods.put(foodId, f));
+            }
+        }
+        return foods;
+    }
+
+    /** Map an entry, pulling the image from a pre-loaded food cache. */
+    private static EntryResponse toResponse(FoodEntry e, Map<String, CatalogFood> foods) {
+        CatalogFood food = e.foodId() != null ? foods.get(e.foodId()) : null;
+        return EntryResponse.from(
+            e,
+            food != null ? food.imageUrl() : null,
+            food != null ? food.imageStatus() : FoodImageStatus.NONE);
+    }
+
+    /** Map a single entry, looking its catalog food up on demand. */
+    private EntryResponse toResponse(FoodEntry e) {
+        CatalogFood food = e.foodId() != null ? foodCatalog.find(e.foodId()).orElse(null) : null;
+        return EntryResponse.from(
+            e,
+            food != null ? food.imageUrl() : null,
+            food != null ? food.imageStatus() : FoodImageStatus.NONE);
     }
 
     private static Macros macrosOf(NutritionDailyLog log) {

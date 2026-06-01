@@ -54,6 +54,9 @@ data class Entry(
     val quantity: Double,
     val macros: Macros,
     val source: String,
+    // Joined in from the entry's catalog food (null/"NONE" for manual entries).
+    val imageUrl: String? = null,
+    val imageStatus: String = "NONE",
 )
 
 /** One meal group within a day: its entries + computed subtotal. */
