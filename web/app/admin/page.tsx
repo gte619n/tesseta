@@ -1,8 +1,14 @@
 import Link from 'next/link';
 import { getPendingEquipment, getAdminCatalog } from '@/lib/gym-api';
 import { listAdminDrugs } from '@/lib/drug-admin-api';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata('Admin');
+
+// Read-mostly: renders admin-global reference data (pending equipment, catalog,
+// drug list), not per-user state. ISR with a 60s window; the page still renders
+// per request because auth() reads request cookies.
+export const revalidate = 60;
 
 export default async function AdminOverviewPage() {
   // Admin gating handled by app/admin/layout.tsx

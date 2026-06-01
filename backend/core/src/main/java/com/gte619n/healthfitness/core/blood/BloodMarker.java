@@ -20,5 +20,8 @@ public enum BloodMarker {
     FASTING_GLUCOSE,
 
     // Inflammation
-    HS_CRP
+    HS_CRP,
+
+    // Hormones
+    TESTOSTERONE
 }

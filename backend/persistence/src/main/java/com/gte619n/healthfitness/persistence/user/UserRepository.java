@@ -9,16 +9,22 @@ import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.Blob;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Repository;
 
 // Gated on the same property as FirestoreConfig so unit tests can run
@@ -35,11 +41,46 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         this.firestore = firestore;
     }
 
+    // Cache name must match CacheConfig.USER_BY_ID in the app module
+    // (persistence can't depend on app, so the literal is duplicated). Every
+    // mutator below evicts the user's entry so writes are never masked.
     @Override
+    @Cacheable(cacheNames = "userById", key = "#userId")
     public Optional<User> findById(String userId) {
         DocumentSnapshot snapshot = await(firestore.collection(COLLECTION).document(userId).get());
         if (!snapshot.exists()) return Optional.empty();
         return Optional.of(toUser(userId, snapshot));
+    }
+
+    /**
+     * Batch-resolve users by id, returning a map keyed by userId. Uses
+     * Firestore's {@code documentId() whereIn} (chunked at 10, the whereIn
+     * limit) so the common case of a handful of submitters is a single read
+     * instead of N. Not cached — single-id callers use {@link #findById}.
+     */
+    @Override
+    public Map<String, User> findByIds(List<String> userIds) {
+        Map<String, User> result = new LinkedHashMap<>();
+        if (userIds == null || userIds.isEmpty()) return result;
+
+        // Distinct, non-null ids preserving first-seen order.
+        Set<String> distinct = new LinkedHashSet<>();
+        for (String id : userIds) {
+            if (id != null) distinct.add(id);
+        }
+        if (distinct.isEmpty()) return result;
+
+        List<String> ids = new ArrayList<>(distinct);
+        for (int i = 0; i < ids.size(); i += 10) {
+            List<String> chunk = ids.subList(i, Math.min(i + 10, ids.size()));
+            List<QueryDocumentSnapshot> docs = await(firestore.collection(COLLECTION)
+                .whereIn(FieldPath.documentId(), chunk)
+                .get()).getDocuments();
+            for (QueryDocumentSnapshot doc : docs) {
+                result.put(doc.getId(), toUser(doc.getId(), doc));
+            }
+        }
+        return result;
     }
 
     @Override
@@ -54,6 +95,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#user.userId()")
     public void save(User user) {
         var docRef = firestore.collection(COLLECTION).document(user.userId());
         DocumentSnapshot existing = await(docRef.get());
@@ -69,6 +111,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void recordGoogleHealthConnection(String userId, GoogleHealthConnection connection) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();
@@ -83,6 +126,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void updateHeightCm(String userId, Integer heightCm) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();
@@ -94,6 +138,7 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void clearGoogleHealthConnection(String userId) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();

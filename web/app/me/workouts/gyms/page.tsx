@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getLocations } from "@/lib/gym-api";
 import { LocationCard } from "@/components/gym/LocationCard";
+import { pageMetadata } from "@/lib/page-metadata";
+
+export const metadata = pageMetadata("Gyms");
 
 export const dynamic = "force-dynamic";
 

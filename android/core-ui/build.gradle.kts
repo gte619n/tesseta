@@ -32,4 +32,8 @@ dependencies {
     api(libs.compose.ui.text.google.fonts)
     api(libs.compose.material.icons.extended)
     debugImplementation(libs.compose.ui.tooling)
+
+    // IMPL-AND-00: shared image loading + coroutine-backed snackbar controller.
+    api(libs.coil.compose)
+    implementation(libs.kotlinx.coroutines.android)
 }

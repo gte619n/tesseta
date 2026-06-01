@@ -26,7 +26,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,12 +47,10 @@ import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
 fun WorkoutOverviewRoute(
-    sessionId: String,
     onStartWorkout: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: WorkoutOverviewViewModel = hiltViewModel(),
 ) {
-    LaunchedEffect(sessionId) { viewModel.load(sessionId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     WorkoutOverviewScreen(
         state = state,

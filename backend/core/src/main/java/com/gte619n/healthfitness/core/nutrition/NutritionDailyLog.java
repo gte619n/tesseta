@@ -9,6 +9,8 @@ public record NutritionDailyLog(
     Double proteinGrams,
     Double carbsGrams,
     Double fatGrams,
+    Double fiberGrams,
+    Double sugarGrams,
     Double caloriesKcal,
     Instant createdAt,
     Instant updatedAt

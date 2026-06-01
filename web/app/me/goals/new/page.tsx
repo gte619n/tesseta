@@ -9,8 +9,13 @@ import {
 import type { CreateStepInput, MetricBindingInput } from "@/lib/goals-api";
 import { ManualGoalEditor } from "@/components/goals/ManualGoalEditor";
 import type { GoalProposalDraft } from "@/components/goals/GoalProposalCard";
+import { pageMetadata } from "@/lib/page-metadata";
 
-export const dynamic = "force-dynamic";
+export const metadata = pageMetadata("New Goal");
+
+// No render-time authed fetch (the component is synchronous and only triggers
+// mutations from server actions), so ISR is safe here.
+export const revalidate = 60;
 
 export default function NewGoalPage() {
   // Persist the whole proposal structure in order: create the Goal, then

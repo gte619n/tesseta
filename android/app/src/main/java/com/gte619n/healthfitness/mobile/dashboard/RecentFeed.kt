@@ -24,7 +24,7 @@ import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
 fun RecentFeed(
-    entries: List<DashboardFixtures.LogEntry>,
+    entries: List<DashboardFallbacks.LogEntry>,
     showViewAll: Boolean,
     modifier: Modifier = Modifier,
 ) {

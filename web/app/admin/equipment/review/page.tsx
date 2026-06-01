@@ -15,8 +15,13 @@ import {
 } from '@/lib/gym-api';
 import { AdminEquipmentClient } from '@/components/admin/AdminEquipmentClient';
 import type { EquipmentSpecs, SpecSchema } from '@/lib/types/gym';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata('Equipment Review');
+
+// Read-mostly: pending + catalog equipment are admin-global reference data.
+// Mutations below call revalidatePath to refresh immediately.
+export const revalidate = 60;
 
 export default async function AdminEquipmentReviewPage() {
   // Admin gating handled by app/admin/layout.tsx

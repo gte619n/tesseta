@@ -11,16 +11,24 @@ import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -39,14 +47,49 @@ public class DrugRepositoryImpl implements DrugRepository {
         this.firestore = firestore;
     }
 
+    // Cache names must match CacheConfig.DRUG_BY_ID / DRUG_CATALOG in the app
+    // module (persistence can't depend on app, so literals are duplicated).
     @Override
+    @Cacheable(cacheNames = "drugById", key = "#drugId")
     public Optional<Drug> findById(String drugId) {
         DocumentSnapshot snapshot = await(collection().document(drugId).get());
         if (!snapshot.exists()) return Optional.empty();
         return Optional.of(toDrug(snapshot));
     }
 
+    /**
+     * Batch-resolve drugs by id, returning a map keyed by drugId. Uses
+     * Firestore's {@code documentId() whereIn} (chunked at 10, the whereIn
+     * limit) so the common case of one chunk is a single read instead of N.
+     * Not cached — callers that need single-id caching use {@link #findById}.
+     */
     @Override
+    public Map<String, Drug> findByIds(List<String> drugIds) {
+        Map<String, Drug> result = new LinkedHashMap<>();
+        if (drugIds == null || drugIds.isEmpty()) return result;
+
+        // Distinct, non-null ids preserving first-seen order.
+        Set<String> distinct = new LinkedHashSet<>();
+        for (String id : drugIds) {
+            if (id != null) distinct.add(id);
+        }
+        if (distinct.isEmpty()) return result;
+
+        List<String> ids = new ArrayList<>(distinct);
+        for (int i = 0; i < ids.size(); i += 10) {
+            List<String> chunk = ids.subList(i, Math.min(i + 10, ids.size()));
+            List<QueryDocumentSnapshot> docs = await(collection()
+                .whereIn(FieldPath.documentId(), chunk)
+                .get()).getDocuments();
+            for (QueryDocumentSnapshot doc : docs) {
+                result.put(doc.getId(), toDrug(doc));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    @Cacheable(cacheNames = "drugCatalog", key = "'all'")
     public List<Drug> findAll() {
         List<QueryDocumentSnapshot> docs = await(collection()
             .orderBy("name", Query.Direction.ASCENDING)
@@ -87,6 +130,10 @@ public class DrugRepositoryImpl implements DrugRepository {
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "drugById", key = "#drug.drugId()"),
+        @CacheEvict(cacheNames = "drugCatalog", allEntries = true)
+    })
     public void save(Drug drug) {
         DocumentReference docRef = collection().document(drug.drugId());
         DocumentSnapshot existing = await(docRef.get());
@@ -95,6 +142,10 @@ public class DrugRepositoryImpl implements DrugRepository {
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "drugById", key = "#drugId"),
+        @CacheEvict(cacheNames = "drugCatalog", allEntries = true)
+    })
     public void delete(String drugId) {
         await(collection().document(drugId).delete());
     }

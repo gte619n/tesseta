@@ -216,12 +216,6 @@ export const recent: LogEntry[] = [
   },
 ];
 
-export const devices = [
-  { name: "Fitbit Air", connected: true },
-  { name: "Aria Air", connected: true },
-  { name: "Withings BP", connected: false },
-];
-
 // `active` is computed from the current pathname at render time; the
 // only declarative state here is label / icon / href / optional badge.
 export const navItems = [
@@ -230,7 +224,7 @@ export const navItems = [
   { label: "Body", icon: "body-scan", href: "/me/body-composition" },
   { label: "Blood", icon: "droplet", href: "/me/blood" },
   { label: "Workouts", icon: "barbell", href: "/me/workouts" },
-  { label: "Nutrition", icon: "bowl", href: "/me/nutrition" },
   { label: "Meds", icon: "pill", href: "/me/meds" },
+  { label: "Nutrition", icon: "bowl", href: "/me/nutrition" },
   { label: "Insights", icon: "sparkles", href: "/me/insights" },
 ];

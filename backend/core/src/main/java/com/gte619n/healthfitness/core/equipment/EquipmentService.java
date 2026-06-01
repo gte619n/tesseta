@@ -97,6 +97,54 @@ public class EquipmentService {
     }
 
     /**
+     * Admin create — adds equipment straight into the shared catalog
+     * (ownerId=null, status=ACTIVE, no contributor) and kicks off async image
+     * generation. Unlike {@link #submitEquipment}, there is no review step:
+     * admins write directly to the catalog.
+     */
+    public Equipment createCatalogEquipment(
+        String name,
+        String category,
+        String subcategory,
+        SpecSchema specSchema,
+        Map<String, Object> specs
+    ) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (specSchema == null) {
+            throw new IllegalArgumentException("specSchema is required");
+        }
+        validateCategoryAndSubcategory(category, subcategory);
+
+        String equipmentId = "eq_" + UUID.randomUUID().toString().substring(0, 12);
+        Instant now = Instant.now();
+
+        Equipment equipment = new Equipment(
+            equipmentId,
+            name,
+            category,
+            subcategory,
+            specSchema,
+            specs != null ? specs : Map.of(),
+            null, // imageUrl - will be set when image is generated
+            List.of(), // imageCandidates - none until an image is generated/uploaded
+            ImageStatus.PENDING,
+            null, // ownerId null = catalog item, not a user submission
+            EquipmentStatus.ACTIVE,
+            null, // contributorId - created directly by an admin
+            0, // exerciseCount starts at 0
+            now,
+            now,
+            null // aliasOfEquipmentId
+        );
+
+        equipmentRepository.save(equipment);
+        imageGenerator.ifPresent(g -> g.generateImageAsync(equipment));
+        return equipment;
+    }
+
+    /**
      * List user's submitted equipment
      */
     public List<Equipment> listUserEquipment(String userId) {

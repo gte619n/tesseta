@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.api.admin;
 
+import com.gte619n.healthfitness.api.equipment.CreateEquipmentRequest;
 import com.gte619n.healthfitness.api.equipment.EquipmentResponse;
 import com.gte619n.healthfitness.api.security.AdminOnly;
 import com.gte619n.healthfitness.core.equipment.Equipment;
@@ -9,6 +10,7 @@ import com.gte619n.healthfitness.core.equipment.EquipmentService;
 import com.gte619n.healthfitness.core.equipment.ImageStatus;
 import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.core.user.UserRepository;
+import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -51,23 +54,45 @@ public class AdminEquipmentController {
 
     @GetMapping("/pending")
     public List<PendingEquipmentResponse> listPending() {
-        List<Equipment> pending = equipmentService.findPendingSubmissions();
-        return pending.stream()
-            .map(this::toPendingResponse)
-            .toList();
+        return toPendingResponses(equipmentService.findPendingSubmissions());
     }
 
     @GetMapping("/catalog")
     public List<PendingEquipmentResponse> listCatalog() {
-        return equipmentService.listCatalog(null, null, null).stream()
-            .map(this::toPendingResponse)
+        return toPendingResponses(equipmentService.listCatalog(null, null, null));
+    }
+
+    /**
+     * Map a list of equipment to responses, batch-resolving the distinct
+     * contributor ids in one pass instead of one Firestore read per item.
+     */
+    private List<PendingEquipmentResponse> toPendingResponses(List<Equipment> items) {
+        List<String> contributorIds = items.stream()
+            .map(Equipment::contributorId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        java.util.Map<String, User> usersById = userRepository.findByIds(contributorIds);
+        return items.stream()
+            .map(eq -> toPendingResponse(eq,
+                eq.contributorId() == null ? null : usersById.get(eq.contributorId())))
             .toList();
     }
 
-    private PendingEquipmentResponse toPendingResponse(Equipment eq) {
-        User user = eq.contributorId() == null
-            ? null
-            : userRepository.findById(eq.contributorId()).orElse(null);
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public EquipmentResponse create(@Valid @RequestBody CreateEquipmentRequest request) {
+        Equipment created = equipmentService.createCatalogEquipment(
+            request.name(),
+            request.category(),
+            request.subcategory(),
+            request.specSchema(),
+            request.specs()
+        );
+        return EquipmentResponse.from(created);
+    }
+
+    private PendingEquipmentResponse toPendingResponse(Equipment eq, User user) {
         return new PendingEquipmentResponse(
             eq.equipmentId(),
             eq.name(),

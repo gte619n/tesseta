@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import {
   getAdminCatalog,
+  createCatalogEquipment,
   updateEquipment,
   regenerateEquipmentImage,
   uploadEquipmentImage,
@@ -11,12 +12,25 @@ import {
 } from '@/lib/gym-api';
 import { AdminEquipmentCatalog } from '@/components/admin/AdminEquipmentCatalog';
 import type { EquipmentSpecs, SpecSchema } from '@/lib/types/gym';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata('Equipment Catalog');
+
+// Read-mostly: the equipment catalog is global reference data. Mutations below
+// call revalidatePath to refresh immediately.
+export const revalidate = 60;
 
 export default async function AdminEquipmentCatalogPage() {
   // Admin gating handled by app/admin/layout.tsx
   const catalog = await getAdminCatalog();
+
+  async function createAction(
+    data: { name: string; category: string; subcategory: string; specSchema: SpecSchema; specs: EquipmentSpecs },
+  ) {
+    'use server';
+    await createCatalogEquipment(data);
+    revalidatePath('/admin/equipment/catalog');
+  }
 
   async function updateAction(
     equipmentId: string,
@@ -76,6 +90,7 @@ export default async function AdminEquipmentCatalogPage() {
 
       <AdminEquipmentCatalog
         catalog={catalog}
+        create={createAction}
         update={updateAction}
         regenerate={regenerateAction}
         uploadImage={uploadImageAction}

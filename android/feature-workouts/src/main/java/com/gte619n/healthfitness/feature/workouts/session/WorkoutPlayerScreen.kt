@@ -65,13 +65,16 @@ private val PanelBg = Color(0xFF1C1E1A)
 
 @Composable
 fun WorkoutPlayerRoute(
-    sessionId: String,
     onFinished: (String) -> Unit,
     onExit: () -> Unit,
     viewModel: WorkoutPlayerViewModel = hiltViewModel(),
 ) {
-    LaunchedEffect(sessionId) { viewModel.load(sessionId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Promote to a foreground service while the workout is live, so the timer
+    // keeps running and the ongoing notification (log set / pause / skip rest)
+    // is available with the screen off.
+    LaunchedEffect(Unit) { viewModel.ensureForeground() }
 
     LaunchedEffect(state.finishedSessionId) {
         state.finishedSessionId?.let(onFinished)

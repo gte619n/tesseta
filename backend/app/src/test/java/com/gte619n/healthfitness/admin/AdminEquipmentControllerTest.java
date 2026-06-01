@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte619n.healthfitness.api.admin.RejectRequest;
 import com.gte619n.healthfitness.api.admin.UpdateEquipmentRequest;
+import com.gte619n.healthfitness.api.equipment.CreateEquipmentRequest;
 import com.gte619n.healthfitness.core.equipment.Equipment;
 import com.gte619n.healthfitness.core.equipment.EquipmentRepository;
 import com.gte619n.healthfitness.core.equipment.EquipmentStatus;
@@ -136,6 +137,59 @@ class AdminEquipmentControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void create_asAdmin_addsActiveCatalogEquipment() throws Exception {
+        CreateEquipmentRequest request = new CreateEquipmentRequest(
+            "Olympic Barbell",
+            "Free Weights",
+            "Barbells",
+            SpecSchema.PLATE_LOADED,
+            Map.of("barWeight", 45)
+        );
+
+        String body = mockMvc.perform(post("/api/admin/equipment")
+                .header("X-Dev-User", ADMIN_EMAIL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.name", is("Olympic Barbell")))
+            .andExpect(jsonPath("$.status", is("ACTIVE")))
+            .andExpect(jsonPath("$.ownerId").doesNotExist())
+            .andExpect(jsonPath("$.contributorId").doesNotExist())
+            .andReturn().getResponse().getContentAsString();
+
+        String createdId = objectMapper.readTree(body).get("equipmentId").asText();
+        Equipment created = equipmentRepository.findById(createdId).orElseThrow();
+        assert created.status() == EquipmentStatus.ACTIVE;
+        assert created.ownerId() == null;
+    }
+
+    @Test
+    void create_asNonAdmin_returns403() throws Exception {
+        CreateEquipmentRequest request = new CreateEquipmentRequest(
+            "Olympic Barbell", "Free Weights", "Barbells", SpecSchema.PLATE_LOADED, Map.of()
+        );
+
+        mockMvc.perform(post("/api/admin/equipment")
+                .header("X-Dev-User", USER_EMAIL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void create_withInvalidSubcategory_returns400() throws Exception {
+        CreateEquipmentRequest request = new CreateEquipmentRequest(
+            "Mystery Machine", "Free Weights", "NotARealSubcategory", SpecSchema.SELECTORIZED, Map.of()
+        );
+
+        mockMvc.perform(post("/api/admin/equipment")
+                .header("X-Dev-User", ADMIN_EMAIL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
     }
 
     @Test

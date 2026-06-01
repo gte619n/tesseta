@@ -22,6 +22,20 @@ app:
     # GCS + Gemini beans that would otherwise try to authenticate during
     # context load.
     enabled: false
+  nutrition:
+    # IMPL-13 M3: turning capture off skips the GCS (MealPhotoStorage) +
+    # Gemini (MealPhotoExtractor, NutritionLabelExtractor) beans, which would
+    # otherwise require an API key / GCS auth at context load. The core
+    # NutritionCaptureService still wires (its analyzer/storage ports are
+    # optional via ObjectProvider).
+    capture:
+      enabled: false
+    # IMPL-13 M4: turning images off skips the GCS (FoodImageStorage) + Gemini
+    # (GeminiFoodImageGenerator) beans, which would otherwise require an API key /
+    # GCS auth at context load. The core FoodImageService still wires (its
+    # generator/storage/reader ports are optional via ObjectProvider).
+    images:
+      enabled: false
   medications:
     # Same story as dexa/bloodtest — the drug pipeline pulls in a Firestore-
     # backed DrugRepository (disabled via firestore-enabled above) and

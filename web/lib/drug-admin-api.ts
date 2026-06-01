@@ -7,6 +7,36 @@ export async function listAdminDrugs(): Promise<Drug[]> {
   return apiJson<Drug[]>('/api/admin/drugs');
 }
 
+export type AdminCreateDrugRequest = {
+  name: string;
+  aliases?: string[];
+  category: DrugCategory;
+  form: DrugForm;
+  defaultUnit?: string;
+  commonDoses?: string[];
+  suggestedMarkers?: string[];
+  description?: string | null;
+};
+
+export async function createAdminDrug(data: AdminCreateDrugRequest): Promise<Drug> {
+  const res = await apiFetch('/api/admin/drugs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const body = await res.json();
+      detail = body?.message ?? '';
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || `Create drug failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export type AdminUpdateDrugRequest = {
   name?: string;
   aliases?: string[];

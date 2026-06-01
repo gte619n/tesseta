@@ -38,6 +38,7 @@ public class GoogleHealthConnectController {
     private final KmsTokenCipher cipher;
     private final GoogleHealthClient googleHealth;
     private final BackfillService backfill;
+    private final DailyMetricBackfillService dailyMetricBackfill;
     private final AccessTokenService tokens;
 
     public GoogleHealthConnectController(
@@ -46,6 +47,7 @@ public class GoogleHealthConnectController {
         KmsTokenCipher cipher,
         GoogleHealthClient googleHealth,
         BackfillService backfill,
+        DailyMetricBackfillService dailyMetricBackfill,
         AccessTokenService tokens
     ) {
         this.currentUser = currentUser;
@@ -53,6 +55,7 @@ public class GoogleHealthConnectController {
         this.cipher = cipher;
         this.googleHealth = googleHealth;
         this.backfill = backfill;
+        this.dailyMetricBackfill = dailyMetricBackfill;
         this.tokens = tokens;
     }
 
@@ -71,6 +74,7 @@ public class GoogleHealthConnectController {
         ));
         tokens.invalidate(userId);
         backfill.scheduleBackfill(userId);
+        dailyMetricBackfill.scheduleBackfill(userId);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 

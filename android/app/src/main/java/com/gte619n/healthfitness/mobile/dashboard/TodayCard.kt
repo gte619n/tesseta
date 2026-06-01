@@ -60,26 +60,26 @@ fun TodayCard(
                     Spacer(Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = DashboardFixtures.caloriesCurrent,
+                            text = DashboardFallbacks.caloriesCurrent,
                             style = Hf.type.displayMd.copy(fontSize = 22.sp, lineHeight = 22.sp),
                             color = Hf.colors.textPrimary,
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = "/ ${DashboardFixtures.caloriesTarget}",
+                            text = "/ ${DashboardFallbacks.caloriesTarget}",
                             style = Hf.type.bodySm.copy(fontSize = 11.sp),
                             color = Hf.colors.textTertiary,
                         )
                     }
                 }
-                CaloriesDonut(pct = DashboardFixtures.caloriesPct, sizeDp = 42)
+                CaloriesDonut(pct = DashboardFallbacks.caloriesPct, sizeDp = 42)
             }
             Spacer(Modifier.height(13.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                DashboardFixtures.macros.forEachIndexed { i, macro ->
+                DashboardFallbacks.macros.forEachIndexed { i, macro ->
                     MacroCell(
                         label = macro.label,
                         value = macro.value,
@@ -100,13 +100,13 @@ fun TodayCard(
             ) {
                 Column {
                     Text(
-                        text = DashboardFixtures.workoutTitle,
+                        text = DashboardFallbacks.workoutTitle,
                         style = Hf.type.bodyMd.copy(fontSize = 12.sp),
                         color = Hf.colors.textPrimary,
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = if (showHrInMeta) DashboardFixtures.workoutMetaDesktop else DashboardFixtures.workoutMetaPhone,
+                        text = if (showHrInMeta) DashboardFallbacks.workoutMetaDesktop else DashboardFallbacks.workoutMetaPhone,
                         style = Hf.type.monoSm,
                         color = Hf.colors.textTertiary,
                     )

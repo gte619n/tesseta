@@ -1,30 +1,36 @@
 package com.gte619n.healthfitness.mobile.nav
 
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
-import com.gte619n.healthfitness.mobile.workouts.WorkoutSessionService
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.gte619n.healthfitness.feature.blood.nav.BloodRoutes
+import com.gte619n.healthfitness.feature.blood.nav.bloodGraph
+import com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes
+import com.gte619n.healthfitness.feature.bodycomposition.nav.bodyCompositionGraph
 import com.gte619n.healthfitness.feature.goals.GOAL_ID_ARG
 import com.gte619n.healthfitness.feature.goals.GoalRoadmapRoute
 import com.gte619n.healthfitness.feature.goals.GoalsChatRoute
 import com.gte619n.healthfitness.feature.goals.GoalsListRoute
-import com.gte619n.healthfitness.feature.workouts.session.WorkoutOverviewRoute
-import com.gte619n.healthfitness.feature.workouts.session.WorkoutPlayerRoute
-import com.gte619n.healthfitness.feature.workouts.session.WorkoutSummaryRoute
+import com.gte619n.healthfitness.feature.medical.nav.MedicationRoutes
+import com.gte619n.healthfitness.feature.medical.nav.medicationsGraph
+import com.gte619n.healthfitness.feature.nutrition.NutritionCaptureRoute
+import com.gte619n.healthfitness.feature.nutrition.NutritionTargetRoute
+import com.gte619n.healthfitness.feature.nutrition.NutritionTodayRoute
+import com.gte619n.healthfitness.feature.settings.nav.SettingsRoutes
+import com.gte619n.healthfitness.feature.settings.nav.settingsGraph
+import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
+import com.gte619n.healthfitness.feature.workouts.nav.workoutsGraph
 import com.gte619n.healthfitness.mobile.DashboardRoot
+import com.gte619n.healthfitness.mobile.MoreScreen
 
-// Minimal app NavHost (IMPL-12 assumption 15). The existing dashboard screens
-// remain the start destination as static composables; Goals adds two routes.
+// App NavHost. The dashboard is the start destination; every parity feature
+// (IMPL-AND-02..06, -12) registers its own nested graph here. Destinations are
+// reached via the dashboard's `onNavigate(route)` callback (sidebar / bottom
+// nav) — the route constants are re-exported below for convenience.
 object Routes {
     const val DASHBOARD = "dashboard"
     const val GOALS_LIST = "goals"
@@ -32,13 +38,18 @@ object Routes {
     const val GOAL_DETAIL = "goals/{$GOAL_ID_ARG}"
     fun goalDetail(goalId: String) = "goals/$goalId"
 
-    const val SESSION_ID_ARG = "sessionId"
-    const val WORKOUT_OVERVIEW = "workout/overview/{$SESSION_ID_ARG}"
-    const val WORKOUT_PLAYER = "workout/player/{$SESSION_ID_ARG}"
-    const val WORKOUT_SUMMARY = "workout/summary/{$SESSION_ID_ARG}"
-    fun workoutOverview(sessionId: String) = "workout/overview/$sessionId"
-    fun workoutPlayer(sessionId: String) = "workout/player/$sessionId"
-    fun workoutSummary(sessionId: String) = "workout/summary/$sessionId"
+    // Feature entry routes (re-exported so dashboard nav items can target them).
+    const val MEDICATIONS = MedicationRoutes.LIST
+    const val BLOOD = BloodRoutes.OVERVIEW
+    const val BODY = BodyCompositionRoutes.BODY
+    const val WORKOUTS = WorkoutsRoutes.GYMS
+    const val SETTINGS = SettingsRoutes.SETTINGS
+
+    const val MORE = "more"
+
+    const val NUTRITION = "nutrition"
+    const val NUTRITION_TARGET = "nutrition/target"
+    const val NUTRITION_CAPTURE = "nutrition/capture"
 }
 
 @Composable
@@ -49,53 +60,7 @@ fun AppNavHost(widthClass: WindowWidthSizeClass) {
             DashboardRoot(
                 widthClass = widthClass,
                 onOpenGoals = { navController.navigate(Routes.GOALS_LIST) },
-                onStartWorkout = { sessionId -> navController.navigate(Routes.workoutOverview(sessionId)) },
-                onViewWorkoutSummary = { sessionId -> navController.navigate(Routes.workoutSummary(sessionId)) },
-            )
-        }
-        composable(
-            route = Routes.WORKOUT_OVERVIEW,
-            arguments = listOf(navArgument(Routes.SESSION_ID_ARG) { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val sessionId = backStackEntry.arguments?.getString(Routes.SESSION_ID_ARG).orEmpty()
-            WorkoutOverviewRoute(
-                sessionId = sessionId,
-                onStartWorkout = { id -> navController.navigate(Routes.workoutPlayer(id)) },
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable(
-            route = Routes.WORKOUT_PLAYER,
-            arguments = listOf(navArgument(Routes.SESSION_ID_ARG) { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val sessionId = backStackEntry.arguments?.getString(Routes.SESSION_ID_ARG).orEmpty()
-            // Promote to a foreground service while the workout is live so the
-            // timer keeps running and the ongoing notification (log set / pause
-            // / skip rest) is available with the screen off.
-            val context = LocalContext.current
-            val notifPermission = rememberNotificationPermissionLauncher()
-            LaunchedEffect(sessionId) {
-                notifPermission()
-                WorkoutSessionService.start(context)
-            }
-            WorkoutPlayerRoute(
-                sessionId = sessionId,
-                onFinished = { id ->
-                    navController.navigate(Routes.workoutSummary(id)) {
-                        popUpTo(Routes.WORKOUT_OVERVIEW) { inclusive = true }
-                    }
-                },
-                onExit = { navController.popBackStack() },
-            )
-        }
-        composable(
-            route = Routes.WORKOUT_SUMMARY,
-            arguments = listOf(navArgument(Routes.SESSION_ID_ARG) { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val sessionId = backStackEntry.arguments?.getString(Routes.SESSION_ID_ARG).orEmpty()
-            WorkoutSummaryRoute(
-                sessionId = sessionId,
-                onDone = { navController.popBackStack(Routes.DASHBOARD, inclusive = false) },
+                onNavigate = { route -> navController.navigate(route) },
             )
         }
         composable(Routes.GOALS_LIST) {
@@ -105,13 +70,10 @@ fun AppNavHost(widthClass: WindowWidthSizeClass) {
                 onBack = { navController.popBackStack() },
             )
         }
-        // Registered BEFORE the parameterized goals/{goalId} route so the
-        // static "goals/chat" path matches the chat screen, not the detail.
         composable(Routes.GOALS_CHAT) {
             GoalsChatRoute(
                 onBack = { navController.popBackStack() },
                 onOpenGoal = { goalId ->
-                    // Replace the chat in the back stack with the new roadmap.
                     navController.navigate(Routes.goalDetail(goalId)) {
                         popUpTo(Routes.GOALS_CHAT) { inclusive = true }
                     }
@@ -124,21 +86,40 @@ fun AppNavHost(widthClass: WindowWidthSizeClass) {
         ) {
             GoalRoadmapRoute(onBack = { navController.popBackStack() })
         }
-    }
-}
 
-// Returns a callback that requests POST_NOTIFICATIONS (API 33+) once, so the
-// workout's ongoing controls notification can be shown. On older OSes it's a
-// no-op (the permission is granted at install time).
-@Composable
-private fun rememberNotificationPermissionLauncher(): () -> Unit {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-        return remember { {} }
-    }
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { /* best-effort; the workout proceeds regardless of the grant */ }
-    return remember(launcher) {
-        { launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+        // Parity feature graphs (IMPL-AND-02..06).
+        medicationsGraph(navController)
+        bloodGraph(navController)
+        bodyCompositionGraph(navController)
+        workoutsGraph(navController)
+        settingsGraph(
+            navController = navController,
+            onSignedOut = { navController.popBackStack(Routes.DASHBOARD, inclusive = false) },
+        )
+
+        // IMPL-13 nutrition. Static "nutrition/target" + "nutrition/capture"
+        // routes; nutrition has no parameterized path so ordering is moot.
+        composable(Routes.NUTRITION) {
+            NutritionTodayRoute(
+                onOpenTarget = { navController.navigate(Routes.NUTRITION_TARGET) },
+                onOpenCapture = { navController.navigate(Routes.NUTRITION_CAPTURE) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.NUTRITION_TARGET) {
+            NutritionTargetRoute(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.NUTRITION_CAPTURE) {
+            NutritionCaptureRoute(onBack = { navController.popBackStack() })
+        }
+
+        // "More" hub: a phone-only feature directory reachable from the bottom
+        // nav, surfacing the parity features that don't have a dedicated tab.
+        composable(Routes.MORE) {
+            MoreScreen(
+                onNavigate = { route -> navController.navigate(route) },
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }

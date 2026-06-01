@@ -14,6 +14,9 @@ import com.gte619n.healthfitness.core.medication.AdherenceRepository;
 import com.gte619n.healthfitness.core.medication.DoseLog;
 import com.gte619n.healthfitness.core.metric.DailyMetric;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
+import com.gte619n.healthfitness.core.nutrition.MacroTarget;
+import com.gte619n.healthfitness.core.nutrition.MacroTargetRepository;
+import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
 import com.gte619n.healthfitness.core.workout.WorkoutRepository;
@@ -24,6 +27,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /**
@@ -61,6 +65,20 @@ import org.springframework.stereotype.Service;
 @Service
 public class FirestoreMetricResolver implements MetricResolver {
 
+    /**
+     * Tolerance band for {@code nutrition.targetMetDays}. A consumed macro
+     * counts as "on target" when it lands within ±10% of the target value.
+     */
+    private static final double TARGET_MET_TOLERANCE = 0.10;
+
+    /**
+     * How many recent day-docs {@link #latestDailyMetric} scans for the
+     * newest non-null value of a vitals field. Vitals fields (resting HR,
+     * HRV, sleep score) arrive on different days via merge semantics, so a
+     * small window covers the case where the newest doc lacks the field.
+     */
+    private static final int LATEST_DAILY_SCAN = 14;
+
     private final BloodReadingRepository bloodReadings;
     private final BloodTestReportRepository bloodTestReports;
     private final BodyCompositionRepository bodyComposition;
@@ -68,6 +86,7 @@ public class FirestoreMetricResolver implements MetricResolver {
     private final WorkoutRepository workouts;
     private final WeeklyWorkoutAggregateRepository weeklyAggregates;
     private final NutritionDailyLogRepository nutrition;
+    private final MacroTargetRepository macroTargets;
     private final AdherenceRepository adherence;
 
     public FirestoreMetricResolver(
@@ -78,6 +97,7 @@ public class FirestoreMetricResolver implements MetricResolver {
         WorkoutRepository workouts,
         WeeklyWorkoutAggregateRepository weeklyAggregates,
         NutritionDailyLogRepository nutrition,
+        MacroTargetRepository macroTargets,
         AdherenceRepository adherence
     ) {
         this.bloodReadings = bloodReadings;
@@ -87,6 +107,7 @@ public class FirestoreMetricResolver implements MetricResolver {
         this.workouts = workouts;
         this.weeklyAggregates = weeklyAggregates;
         this.nutrition = nutrition;
+        this.macroTargets = macroTargets;
         this.adherence = adherence;
     }
 
@@ -119,6 +140,11 @@ public class FirestoreMetricResolver implements MetricResolver {
             case NUTRITION_CARBS_AVG_7D    -> nutrition7dAverage(userId, NutritionDailyLog::carbsGrams);
             case NUTRITION_FAT_AVG_7D      -> nutrition7dAverage(userId, NutritionDailyLog::fatGrams);
             case NUTRITION_CALORIES_AVG_7D -> nutrition7dAverage(userId, FirestoreMetricResolver::caloriesForDay);
+            case NUTRITION_FIBER_AVG_7D    -> nutrition7dAverage(userId, NutritionDailyLog::fiberGrams);
+            case NUTRITION_SUGAR_AVG_7D    -> nutrition7dAverage(userId, NutritionDailyLog::sugarGrams);
+
+            // Count is window-dependent — caller goes through countSince().
+            case NUTRITION_TARGET_MET_DAYS -> MetricValue.unavailable();
 
             case MEDS_ADHERENCE_30D -> adherence30d(userId);
         };
@@ -172,6 +198,9 @@ public class FirestoreMetricResolver implements MetricResolver {
                 return 0L;
             }
         }
+        if (key == MetricKey.NUTRITION_TARGET_MET_DAYS) {
+            return targetMetDaysSince(userId, from);
+        }
         // No other metrics use count-since today.
         // TODO(IMPL-12): extend if new COUNT metrics land.
         return 0L;
@@ -192,18 +221,12 @@ public class FirestoreMetricResolver implements MetricResolver {
 
     private MetricValue latestBodyComposition(String userId, BodyCompositionMetric metric) {
         try {
-            List<BodyCompositionMeasurement> all = bodyComposition.findByUser(userId);
-            BodyCompositionMeasurement latest = null;
-            for (BodyCompositionMeasurement m : all) {
-                if (m.metric() != metric) continue;
-                if (latest == null
-                    || (m.sampleTime() != null
-                        && (latest.sampleTime() == null || m.sampleTime().isAfter(latest.sampleTime())))) {
-                    latest = m;
-                }
-            }
-            if (latest == null) return MetricValue.unavailable();
-            return MetricValue.of(latest.value(), latest.sampleTime());
+            // Indexed single-doc read (metric + sampleTime DESC) instead of
+            // paging up to 500 rows and picking the latest in Java.
+            Optional<BodyCompositionMeasurement> latest = bodyComposition.findLatest(userId, metric);
+            if (latest.isEmpty()) return MetricValue.unavailable();
+            BodyCompositionMeasurement m = latest.get();
+            return MetricValue.of(m.value(), m.sampleTime());
         } catch (UnsupportedOperationException e) {
             return MetricValue.unavailable();
         }
@@ -239,17 +262,11 @@ public class FirestoreMetricResolver implements MetricResolver {
         }
 
         try {
-            List<BloodReading> readings = bloodReadings.findByUser(userId);
-            BloodReading latest = null;
-            for (BloodReading r : readings) {
-                if (r.marker() != marker) continue;
-                if (latest == null
-                    || (r.sampleDate() != null
-                        && (latest.sampleDate() == null || r.sampleDate().isAfter(latest.sampleDate())))) {
-                    latest = r;
-                }
-            }
-            if (latest == null) return MetricValue.unavailable();
+            // Indexed single-doc read (marker + sampleDate DESC) instead of
+            // paging up to 500 rows and picking the latest in Java.
+            Optional<BloodReading> found = bloodReadings.findLatestByMarker(userId, marker);
+            if (found.isEmpty()) return MetricValue.unavailable();
+            BloodReading latest = found.get();
             Instant asOf = latest.sampleDate() != null
                 ? latest.sampleDate().atStartOfDay().toInstant(ZoneOffset.UTC)
                 : latest.createdAt();
@@ -266,26 +283,27 @@ public class FirestoreMetricResolver implements MetricResolver {
      */
     private MetricValue latestDailyMetric(String userId, FieldExtractor extract) {
         try {
-            LocalDate to = LocalDate.now();
-            LocalDate from = to.minusDays(7);
-            List<DailyMetric> rows = dailyMetrics.findByDateRange(userId, from, to);
+            // Indexed read of the most-recent few day-docs (date DESC,
+            // newest first) instead of a 7-day range scan. Vitals fields
+            // arrive on different days (merge semantics), so scan in order
+            // and take the first row that carries this field.
+            List<DailyMetric> rows = dailyMetrics.findLatestDailyMetric(userId, LATEST_DAILY_SCAN);
             if (rows == null || rows.isEmpty()) return MetricValue.unavailable();
-            DailyMetric chosen = null;
-            Double chosenValue = null;
+            // Staleness guard: only rows within the original 7-day window
+            // count. The indexed read returns the newest docs regardless of
+            // age, so a value weeks old must not resolve a field that has no
+            // recent data — that would stale-flip a SUSTAINED vitals goal.
+            // Matches the old findByDateRange(to.minusDays(7), to) cutoff
+            // (inclusive lower bound: date >= today-7).
+            LocalDate cutoff = LocalDate.now().minusDays(7);
             for (DailyMetric m : rows) {
+                if (m.date() == null || m.date().isBefore(cutoff)) continue;
                 Double v = extract.extract(m);
                 if (v == null) continue;
-                if (chosen == null || (m.date() != null
-                        && (chosen.date() == null || m.date().isAfter(chosen.date())))) {
-                    chosen = m;
-                    chosenValue = v;
-                }
+                Instant asOf = m.date().atStartOfDay().toInstant(ZoneOffset.UTC);
+                return MetricValue.of(v, asOf);
             }
-            if (chosen == null || chosenValue == null) return MetricValue.unavailable();
-            Instant asOf = chosen.date() != null
-                ? chosen.date().atStartOfDay().toInstant(ZoneOffset.UTC)
-                : chosen.updatedAt();
-            return MetricValue.of(chosenValue, asOf);
+            return MetricValue.unavailable();
         } catch (UnsupportedOperationException e) {
             return MetricValue.unavailable();
         }
@@ -365,6 +383,74 @@ public class FirestoreMetricResolver implements MetricResolver {
         if (carbs != null) kcal += 4 * carbs;
         if (fat != null) kcal += 9 * fat;
         return kcal;
+    }
+
+    /**
+     * COUNT of days in the inclusive window {@code [from, today]} whose logged
+     * daily totals met the user's active macro target.
+     *
+     * <p><strong>"Day met target" rule:</strong> the user's active
+     * {@link MacroTarget} is resolved once. For every macro the target sets to a
+     * positive value (calories, protein, carbs, fat, fiber, sugar), that day's
+     * consumed value must land within {@value #TARGET_MET_TOLERANCE} (±10%) of the
+     * target. Macros the target leaves null/zero are not constrained. A day with
+     * no logged totals at all does not count, and if there is no active target the
+     * count is 0. Calories fall back to the Atwater-derived value
+     * ({@link #caloriesForDay}) when not logged directly.
+     */
+    private long targetMetDaysSince(String userId, Instant from) {
+        try {
+            Optional<MacroTarget> active = macroTargets.findActive(userId);
+            if (active.isEmpty() || active.get().macros() == null) return 0L;
+            Macros target = active.get().macros();
+
+            LocalDate today = LocalDate.now();
+            LocalDate fromDate = from.atZone(ZoneOffset.UTC).toLocalDate();
+            if (fromDate.isAfter(today)) return 0L;
+
+            List<NutritionDailyLog> logs = nutrition.findByDateRange(userId, fromDate, today);
+            if (logs == null || logs.isEmpty()) return 0L;
+
+            long met = 0;
+            for (NutritionDailyLog log : logs) {
+                if (dayMetTarget(log, target)) met++;
+            }
+            return met;
+        } catch (UnsupportedOperationException e) {
+            return 0L;
+        }
+    }
+
+    /**
+     * True when every positively-targeted macro is within ±10% of the target for
+     * this day. A day with no logged totals (every consumed macro null) never
+     * counts.
+     */
+    private static boolean dayMetTarget(NutritionDailyLog log, Macros target) {
+        boolean anyConsumed = log.proteinGrams() != null || log.carbsGrams() != null
+            || log.fatGrams() != null || log.fiberGrams() != null
+            || log.sugarGrams() != null || log.caloriesKcal() != null;
+        if (!anyConsumed) return false;
+
+        return withinTolerance(caloriesForDay(log), target.caloriesKcal())
+            && withinTolerance(log.proteinGrams(), target.proteinGrams())
+            && withinTolerance(log.carbsGrams(), target.carbsGrams())
+            && withinTolerance(log.fatGrams(), target.fatGrams())
+            && withinTolerance(log.fiberGrams(), target.fiberGrams())
+            && withinTolerance(log.sugarGrams(), target.sugarGrams());
+    }
+
+    /**
+     * Whether {@code consumed} is within ±10% of {@code target}. A non-positive
+     * (null or {@code <= 0}) target means the macro is unconstrained and always
+     * passes; a positive target with a null consumed value fails.
+     */
+    private static boolean withinTolerance(Double consumed, Double target) {
+        if (target == null || target <= 0) return true;
+        if (consumed == null) return false;
+        double low = target * (1 - TARGET_MET_TOLERANCE);
+        double high = target * (1 + TARGET_MET_TOLERANCE);
+        return consumed >= low && consumed <= high;
     }
 
     /**

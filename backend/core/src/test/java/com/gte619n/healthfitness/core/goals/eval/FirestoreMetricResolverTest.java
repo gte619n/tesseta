@@ -19,6 +19,9 @@ import com.gte619n.healthfitness.core.medication.DoseLog;
 import com.gte619n.healthfitness.core.medication.TimeWindow;
 import com.gte619n.healthfitness.core.metric.DailyMetric;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
+import com.gte619n.healthfitness.core.nutrition.MacroTarget;
+import com.gte619n.healthfitness.core.nutrition.MacroTargetRepository;
+import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
 import com.gte619n.healthfitness.core.workout.Workout;
@@ -219,11 +222,11 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(2),
-            100.0, null, null, null, Instant.now(), Instant.now()));
+            100.0, null, null, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            120.0, null, null, null, Instant.now(), Instant.now()));
+            120.0, null, null, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            140.0, null, null, null, Instant.now(), Instant.now()));
+            140.0, null, null, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolver(
             new EmptyBodyComposition(), new EmptyBloodReadings(), new EmptyBloodTestReports(),
@@ -246,9 +249,9 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            null, 200.0, null, null, Instant.now(), Instant.now()));
+            null, 200.0, null, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            null, 300.0, null, null, Instant.now(), Instant.now()));
+            null, 300.0, null, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_CARBS_AVG_7D);
@@ -261,9 +264,9 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            null, null, 60.0, null, Instant.now(), Instant.now()));
+            null, null, 60.0, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            null, null, 80.0, null, Instant.now(), Instant.now()));
+            null, null, 80.0, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_FAT_AVG_7D);
@@ -276,9 +279,9 @@ class FirestoreMetricResolverTest {
         InMemNutrition nutrition = new InMemNutrition();
         LocalDate today = LocalDate.now();
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            100.0, 200.0, 50.0, 2000.0, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, 2000.0, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            100.0, 200.0, 50.0, 2400.0, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, 2400.0, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_CALORIES_AVG_7D);
@@ -293,9 +296,9 @@ class FirestoreMetricResolverTest {
         LocalDate today = LocalDate.now();
         // 4*100 + 4*200 + 9*50 = 400 + 800 + 450 = 1650 kcal each day.
         nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
-            100.0, 200.0, 50.0, null, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, null, Instant.now(), Instant.now()));
         nutrition.add(new NutritionDailyLog(USER, today,
-            100.0, 200.0, 50.0, null, Instant.now(), Instant.now()));
+            100.0, 200.0, 50.0, null, null, null, Instant.now(), Instant.now()));
 
         FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
         MetricValue v = r.resolve(USER, MetricKey.NUTRITION_CALORIES_AVG_7D);
@@ -319,6 +322,113 @@ class FirestoreMetricResolverTest {
     void nutritionCaloriesAvg7d_unavailable_whenNoLogs() {
         FirestoreMetricResolver r = newResolver();
         assertFalse(r.resolve(USER, MetricKey.NUTRITION_CALORIES_AVG_7D).isAvailable());
+    }
+
+    @Test
+    void nutritionFiberAvg7d_returnsAverage_overWindow() {
+        InMemNutrition nutrition = new InMemNutrition();
+        LocalDate today = LocalDate.now();
+        nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
+            null, null, null, 20.0, null, null, Instant.now(), Instant.now()));
+        nutrition.add(new NutritionDailyLog(USER, today,
+            null, null, null, 30.0, null, null, Instant.now(), Instant.now()));
+
+        FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
+        MetricValue v = r.resolve(USER, MetricKey.NUTRITION_FIBER_AVG_7D);
+        assertTrue(v.isAvailable());
+        assertEquals(25.0, v.value().orElseThrow(), 1e-9);
+    }
+
+    @Test
+    void nutritionFiberAvg7d_unavailable_whenNoLogs() {
+        FirestoreMetricResolver r = newResolver();
+        assertFalse(r.resolve(USER, MetricKey.NUTRITION_FIBER_AVG_7D).isAvailable());
+    }
+
+    @Test
+    void nutritionSugarAvg7d_returnsAverage_overWindow() {
+        InMemNutrition nutrition = new InMemNutrition();
+        LocalDate today = LocalDate.now();
+        nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
+            null, null, null, null, 40.0, null, Instant.now(), Instant.now()));
+        nutrition.add(new NutritionDailyLog(USER, today,
+            null, null, null, null, 60.0, null, Instant.now(), Instant.now()));
+
+        FirestoreMetricResolver r = newResolverWithNutrition(nutrition);
+        MetricValue v = r.resolve(USER, MetricKey.NUTRITION_SUGAR_AVG_7D);
+        assertTrue(v.isAvailable());
+        assertEquals(50.0, v.value().orElseThrow(), 1e-9);
+    }
+
+    @Test
+    void nutritionSugarAvg7d_unavailable_whenNoLogs() {
+        FirestoreMetricResolver r = newResolver();
+        assertFalse(r.resolve(USER, MetricKey.NUTRITION_SUGAR_AVG_7D).isAvailable());
+    }
+
+    @Test
+    void nutritionTargetMetDays_isAlwaysUnavailable_inResolve() {
+        FirestoreMetricResolver r = newResolver();
+        assertFalse(r.resolve(USER, MetricKey.NUTRITION_TARGET_MET_DAYS).isAvailable(),
+            "NUTRITION_TARGET_MET_DAYS is window-dependent — resolve() must surface unavailable");
+    }
+
+    @Test
+    void nutritionTargetMetDays_countsDaysWithinTolerance() {
+        InMemNutrition nutrition = new InMemNutrition();
+        LocalDate today = LocalDate.now();
+        // Target: 2000 kcal, 150 protein, 200 carbs, 60 fat, 30 fiber, 50 sugar.
+        // Day -2: every macro exactly on target -> counts.
+        nutrition.add(new NutritionDailyLog(USER, today.minusDays(2),
+            150.0, 200.0, 60.0, 30.0, 50.0, 2000.0, Instant.now(), Instant.now()));
+        // Day -1: protein within +9% (163.5 <= 165), others on target -> counts.
+        nutrition.add(new NutritionDailyLog(USER, today.minusDays(1),
+            163.5, 200.0, 60.0, 30.0, 50.0, 2000.0, Instant.now(), Instant.now()));
+        // Day 0: protein 100 (well below 135 floor) -> does NOT count.
+        nutrition.add(new NutritionDailyLog(USER, today,
+            100.0, 200.0, 60.0, 30.0, 50.0, 2000.0, Instant.now(), Instant.now()));
+
+        InMemMacroTargets targets = new InMemMacroTargets();
+        targets.add(new MacroTarget(USER, "t1",
+            new Macros(2000.0, 150.0, 200.0, 60.0, 30.0, 50.0),
+            today.minusDays(30), Instant.now(), Instant.now()));
+
+        FirestoreMetricResolver r = newResolverWithNutritionAndTarget(nutrition, targets);
+        long count = r.countSince(USER, MetricKey.NUTRITION_TARGET_MET_DAYS,
+            today.minusDays(2).atStartOfDay().toInstant(java.time.ZoneOffset.UTC));
+        assertEquals(2L, count);
+    }
+
+    @Test
+    void nutritionTargetMetDays_zero_whenNoActiveTarget() {
+        InMemNutrition nutrition = new InMemNutrition();
+        LocalDate today = LocalDate.now();
+        nutrition.add(new NutritionDailyLog(USER, today,
+            150.0, 200.0, 60.0, 30.0, 50.0, 2000.0, Instant.now(), Instant.now()));
+
+        FirestoreMetricResolver r = newResolverWithNutritionAndTarget(nutrition, new EmptyMacroTargets());
+        long count = r.countSince(USER, MetricKey.NUTRITION_TARGET_MET_DAYS,
+            today.minusDays(6).atStartOfDay().toInstant(java.time.ZoneOffset.UTC));
+        assertEquals(0L, count);
+    }
+
+    @Test
+    void nutritionTargetMetDays_doesNotCountDayWithNoLoggedTotals() {
+        InMemNutrition nutrition = new InMemNutrition();
+        LocalDate today = LocalDate.now();
+        // A day row exists but every consumed macro is null -> not counted.
+        nutrition.add(new NutritionDailyLog(USER, today,
+            null, null, null, null, null, null, Instant.now(), Instant.now()));
+
+        InMemMacroTargets targets = new InMemMacroTargets();
+        targets.add(new MacroTarget(USER, "t1",
+            new Macros(2000.0, 150.0, 200.0, 60.0, 30.0, 50.0),
+            today.minusDays(30), Instant.now(), Instant.now()));
+
+        FirestoreMetricResolver r = newResolverWithNutritionAndTarget(nutrition, targets);
+        long count = r.countSince(USER, MetricKey.NUTRITION_TARGET_MET_DAYS,
+            today.minusDays(6).atStartOfDay().toInstant(java.time.ZoneOffset.UTC));
+        assertEquals(0L, count);
     }
 
     @Test
@@ -401,7 +511,18 @@ class FirestoreMetricResolverTest {
     ) {
         return new FirestoreMetricResolver(
             bloodReadings, bloodTestReports, body, dailyMetrics, workouts,
-            weeklyAggregates, nutrition, adherence
+            weeklyAggregates, nutrition, new EmptyMacroTargets(), adherence
+        );
+    }
+
+    private FirestoreMetricResolver newResolverWithNutritionAndTarget(
+        NutritionDailyLogRepository nutrition,
+        MacroTargetRepository macroTargets
+    ) {
+        return new FirestoreMetricResolver(
+            new EmptyBloodReadings(), new EmptyBloodTestReports(), new EmptyBodyComposition(),
+            new ThrowingDailyMetrics(), new ThrowingWorkouts(),
+            new EmptyWeeklyAggregates(), nutrition, macroTargets, new EmptyAdherence()
         );
     }
 
@@ -570,6 +691,32 @@ class FirestoreMetricResolverTest {
         }
         @Override public void save(AdherenceLog log) { rows.add(log); }
         @Override public void deleteByDate(String u, String m, LocalDate d) {}
+    }
+
+    private static final class InMemMacroTargets implements MacroTargetRepository {
+        private final List<MacroTarget> rows = new ArrayList<>();
+        void add(MacroTarget t) { rows.add(t); }
+        @Override public Optional<MacroTarget> findActive(String u) {
+            // Greatest effectiveFrom <= today.
+            MacroTarget best = null;
+            LocalDate today = LocalDate.now();
+            for (MacroTarget t : rows) {
+                if (t.effectiveFrom() != null && t.effectiveFrom().isAfter(today)) continue;
+                if (best == null || (t.effectiveFrom() != null
+                        && (best.effectiveFrom() == null || t.effectiveFrom().isAfter(best.effectiveFrom())))) {
+                    best = t;
+                }
+            }
+            return Optional.ofNullable(best);
+        }
+        @Override public void save(MacroTarget t) { rows.add(t); }
+        @Override public List<MacroTarget> findAll(String u) { return Collections.unmodifiableList(rows); }
+    }
+
+    private static final class EmptyMacroTargets implements MacroTargetRepository {
+        @Override public Optional<MacroTarget> findActive(String u) { return Optional.empty(); }
+        @Override public void save(MacroTarget t) {}
+        @Override public List<MacroTarget> findAll(String u) { return List.of(); }
     }
 
     private static final class EmptyAdherence implements AdherenceRepository {

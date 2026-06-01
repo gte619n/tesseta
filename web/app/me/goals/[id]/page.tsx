@@ -12,6 +12,12 @@ import {
 import { DOMAIN_LABEL } from "@/lib/types/goals";
 import { RoadmapTimeline } from "@/components/goals/RoadmapTimeline";
 import { GoalDetailActions } from "@/components/goals/GoalDetailActions";
+import { entityMetadata } from "@/lib/page-metadata";
+
+export const generateMetadata = entityMetadata(
+  ({ id }: { id: string }) => getGoalDeep(id),
+  (goal) => goal.title,
+);
 
 export const dynamic = "force-dynamic";
 

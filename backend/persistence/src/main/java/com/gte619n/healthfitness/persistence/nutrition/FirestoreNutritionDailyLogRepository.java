@@ -71,6 +71,8 @@ public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRe
         body.put("proteinGrams", log.proteinGrams());
         body.put("carbsGrams", log.carbsGrams());
         body.put("fatGrams", log.fatGrams());
+        body.put("fiberGrams", log.fiberGrams());
+        body.put("sugarGrams", log.sugarGrams());
         body.put("caloriesKcal", log.caloriesKcal());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
@@ -86,6 +88,8 @@ public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRe
             snapshot.getDouble("proteinGrams"),
             snapshot.getDouble("carbsGrams"),
             snapshot.getDouble("fatGrams"),
+            snapshot.getDouble("fiberGrams"),
+            snapshot.getDouble("sugarGrams"),
             snapshot.getDouble("caloriesKcal"),
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt"))

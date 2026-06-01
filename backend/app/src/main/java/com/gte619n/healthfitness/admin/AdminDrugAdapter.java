@@ -28,6 +28,21 @@ public class AdminDrugAdapter implements DrugCatalogPort {
     }
 
     @Override
+    public Drug createDrug(
+        String name,
+        List<String> aliases,
+        DrugCategory category,
+        DrugForm form,
+        String defaultUnit,
+        List<String> commonDoses,
+        List<String> suggestedMarkers,
+        String description
+    ) {
+        return service.createDrug(
+            name, aliases, category, form, defaultUnit, commonDoses, suggestedMarkers, description);
+    }
+
+    @Override
     public Drug updateDrug(
         String drugId,
         String name,

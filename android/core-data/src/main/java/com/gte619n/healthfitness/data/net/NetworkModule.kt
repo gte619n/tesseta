@@ -1,8 +1,12 @@
 package com.gte619n.healthfitness.data.net
 
+import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
 import com.gte619n.healthfitness.data.goals.ChatApi
 import com.gte619n.healthfitness.data.goals.GoalsApi
+import com.gte619n.healthfitness.data.nutrition.FoodApi
+import com.gte619n.healthfitness.data.nutrition.NutritionApi
+import com.gte619n.healthfitness.data.nutrition.NutritionCaptureApi
 import com.gte619n.healthfitness.data.workout.ExerciseApi
 import com.gte619n.healthfitness.data.workout.WorkoutApi
 import com.squareup.moshi.Moshi
@@ -11,6 +15,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -38,6 +43,10 @@ object NetworkModule {
     @Singleton
     fun provideMoshi(): Moshi =
         Moshi.Builder()
+            // java.time adapters must precede the reflective Kotlin factory.
+            .add(LocalDateAdapter())
+            .add(InstantAdapter())
+            .add(DayOfWeekMoshiAdapter())
             .add(KotlinJsonAdapterFactory())
             .build()
 
@@ -54,19 +63,39 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideTokenAuthenticator(
+        repo: GoogleAuthRepository,
+        cache: IdTokenCache,
+    ): TokenAuthenticator = TokenAuthenticator(repo, cache)
+
+    @Provides
+    @Singleton
     @Named("logging")
     fun provideLoggingInterceptor(): HttpLoggingInterceptor =
         HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+
+    // On-disk HTTP response cache so repeat dashboard fetches can be served from
+    // (or revalidated against) cache instead of a full round-trip. Sized at 20 MB
+    // in the app cache dir; OkHttp evicts least-recently-used entries past that.
+    @Provides
+    @Singleton
+    fun provideHttpCache(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
+    ): Cache = Cache(java.io.File(context.cacheDir, "http_cache"), 20L * 1024 * 1024)
 
     @Provides
     @Singleton
     fun provideOkHttpClient(
         auth: AuthInterceptor,
+        tokenAuthenticator: TokenAuthenticator,
         @Named("logging") logging: HttpLoggingInterceptor,
+        cache: Cache,
     ): OkHttpClient =
         OkHttpClient.Builder()
+            .cache(cache)
             .addInterceptor(auth)
             .addInterceptor(logging)
+            .authenticator(tokenAuthenticator)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
@@ -93,6 +122,21 @@ object NetworkModule {
     @Singleton
     fun provideChatApi(retrofit: Retrofit): ChatApi =
         retrofit.create(ChatApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideNutritionApi(retrofit: Retrofit): NutritionApi =
+        retrofit.create(NutritionApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideFoodApi(retrofit: Retrofit): FoodApi =
+        retrofit.create(FoodApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideNutritionCaptureApi(retrofit: Retrofit): NutritionCaptureApi =
+        retrofit.create(NutritionCaptureApi::class.java)
 
     @Provides
     @Singleton

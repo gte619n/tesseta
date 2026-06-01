@@ -6,6 +6,9 @@ import { listChatThreads, commitChatProposal, deleteChatThread } from "@/lib/goa
 import type { ChatThread, GoalProposalDto } from "@/lib/types/goals-chat-wire";
 import { GoalsChat } from "@/components/goals/GoalsChat";
 import type { CommitProposalResult } from "@/components/goals/GoalsChat";
+import { pageMetadata } from "@/lib/page-metadata";
+
+export const metadata = pageMetadata("Goal Coach");
 
 export const dynamic = "force-dynamic";
 

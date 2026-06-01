@@ -45,14 +45,19 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
-    implementation(libs.navigation.compose)
 
+    implementation(libs.navigation.compose)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.compose.material3.window.size)
     implementation(libs.coil.compose)
 
-    // Looping exercise demonstration video in the player.
+    // Looping exercise demonstration video in the workout player.
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
 
     testImplementation(libs.junit)
+    testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
 }

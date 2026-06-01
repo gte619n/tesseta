@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -315,18 +316,20 @@ function CatalogDropRow({
             className="block h-8 w-8 shrink-0 cursor-zoom-in rounded border border-border-default p-0"
             aria-label={`Zoom image for ${equipment.name}`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={equipment.imageUrl}
               alt={equipment.name}
+              width={32}
+              height={32}
               className="h-full w-full rounded object-cover"
             />
           </button>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={equipment.imageUrl}
             alt=""
+            width={32}
+            height={32}
             className="h-8 w-8 shrink-0 rounded border border-border-default object-cover"
           />
         )
@@ -345,10 +348,11 @@ function DragPreview({ equipment }: { equipment: AdminEquipment }) {
   return (
     <div className="inline-flex max-w-xs items-center gap-2 rounded-full border border-border-default bg-surface px-3 py-1.5 shadow-md">
       {equipment.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={equipment.imageUrl}
           alt=""
+          width={24}
+          height={24}
           className="h-6 w-6 shrink-0 rounded-full border border-border-default object-cover"
         />
       ) : (

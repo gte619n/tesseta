@@ -1,12 +1,15 @@
 package com.gte619n.healthfitness.feature.workouts.session
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.data.workout.WorkoutForegroundLauncher
 import com.gte619n.healthfitness.data.workout.WorkoutPhase
 import com.gte619n.healthfitness.data.workout.WorkoutSessionController
 import com.gte619n.healthfitness.data.workout.WorkoutSessionState
 import com.gte619n.healthfitness.domain.workout.Exercise
 import com.gte619n.healthfitness.domain.workout.PlayerStep
+import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,14 +44,22 @@ data class WorkoutPlayerUiState(
 @HiltViewModel
 class WorkoutPlayerViewModel @Inject constructor(
     private val controller: WorkoutSessionController,
+    private val foreground: WorkoutForegroundLauncher,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
+
+    private val sessionId: String =
+        savedStateHandle.get<String>(WorkoutsRoutes.ARG_SESSION_ID)
+            ?: error("sessionId arg missing")
 
     val state: StateFlow<WorkoutPlayerUiState> =
         controller.state
             .map { it.toUi() }
             .stateIn(viewModelScope, SharingStarted.Eagerly, WorkoutPlayerUiState())
 
-    fun load(id: String) = controller.start(id)
+    init { controller.start(sessionId) }
+
+    fun ensureForeground() = foreground.startForegroundSession()
 
     fun logCurrentSet(reps: Int?, weight: Double?) = controller.logCurrentSet(reps, weight)
     fun advance() = controller.advance()

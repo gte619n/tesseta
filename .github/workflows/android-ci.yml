@@ -40,4 +40,10 @@ jobs:
             gradle-android-${{ runner.os }}-
 
       - name: Assemble + unit tests
+        # The app build now requires a real WEB OAuth client ID (it fails the
+        # build rather than embedding an empty audience). The web client ID is
+        # a public identifier, supplied here via the repo variable so CI builds
+        # a signable APK without gcloud/Secret Manager access.
+        env:
+          WEB_OAUTH_CLIENT_ID: ${{ vars.WEB_OAUTH_CLIENT_ID }}
         run: ./gradlew :app:assembleDebug :wear:assembleDebug :app:testDebugUnitTest --no-daemon

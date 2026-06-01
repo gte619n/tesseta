@@ -19,6 +19,7 @@ import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -70,6 +71,10 @@ public class UserHealthSnapshotService {
      * null; on a totally empty profile it still returns the header plus
      * graceful per-section fallbacks.
      */
+    // Cache name must match CacheConfig.USER_HEALTH_SNAPSHOT in the app
+    // module (core can't depend on app, so the literal is duplicated). ~60s
+    // TTL there caps staleness; a chat burst reuses one ~24-metric build.
+    @Cacheable(cacheNames = "userHealthSnapshot", key = "#userId")
     public String buildSnapshot(String userId) {
         StringBuilder sb = new StringBuilder();
         sb.append("CURRENT USER HEALTH SNAPSHOT (as of ")

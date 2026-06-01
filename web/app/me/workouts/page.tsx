@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { getLocations } from "@/lib/gym-api";
+import { pageMetadata } from "@/lib/page-metadata";
+
+export const metadata = pageMetadata("Workouts");
 
 export const dynamic = "force-dynamic";
 

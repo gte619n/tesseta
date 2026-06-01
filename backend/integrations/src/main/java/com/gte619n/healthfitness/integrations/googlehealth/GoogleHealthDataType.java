@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.integrations.googlehealth;
 
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMetric;
+import java.util.Optional;
 
 // Maps our internal metric enum to Google Health API data-type identifiers.
 // URL path: kebab-case ("body-fat").
@@ -51,11 +52,19 @@ public enum GoogleHealthDataType {
     }
 
     public static GoogleHealthDataType fromApiName(String apiName) {
+        return tryFromApiName(apiName).orElseThrow(() ->
+            new IllegalArgumentException("Unknown Google Health data type: " + apiName));
+    }
+
+    // Non-throwing lookup, used by the webhook controller to route a raw
+    // dataType string without using exceptions for control flow (a string
+    // may instead be a daily-metric type).
+    public static Optional<GoogleHealthDataType> tryFromApiName(String apiName) {
         for (GoogleHealthDataType t : values()) {
             if (t.urlSegment.equals(apiName) || t.filterFieldName.equals(apiName)) {
-                return t;
+                return Optional.of(t);
             }
         }
-        throw new IllegalArgumentException("Unknown Google Health data type: " + apiName);
+        return Optional.empty();
     }
 }

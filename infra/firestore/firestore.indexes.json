@@ -10,6 +10,15 @@
       ]
     },
     {
+      "_comment": "IMPL-20 #6: BloodReadingRepository.findLatestByMarker — whereEqualTo(marker) + orderBy(sampleDate DESC).limit(1). The bodyComposition entry above already covers BodyCompositionRepository.findLatest (metric ASC, sampleTime DESC). DailyMetricRepository.findLatestDailyMetric only needs the auto-created single-field `date` index, so no composite entry is required for it.",
+      "collectionGroup": "bloodReadings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "marker", "order": "ASCENDING" },
+        { "fieldPath": "sampleDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "equipment",
       "queryScope": "COLLECTION",
       "fields": [
@@ -67,6 +76,14 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "medications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -87,6 +104,13 @@
     {
       "collectionGroup": "steps",
       "fieldPath": "kind",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "medications",
+      "fieldPath": "drugId",
       "indexes": [
         { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
       ]

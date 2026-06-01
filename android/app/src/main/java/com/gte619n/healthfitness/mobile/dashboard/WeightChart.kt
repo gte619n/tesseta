@@ -14,22 +14,39 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.gte619n.healthfitness.domain.dashboard.ChartXLabel
 import com.gte619n.healthfitness.ui.theme.Hf
 
 /**
- * Weight trend over the last 90 days. The mockup's IIFE script computes the
- * polyline in JS at runtime; this composable does the same math in Compose
- * Canvas with the same paddings so the visual is byte-equivalent.
+ * Weight trend over the last 90 days. The polyline is computed in Compose
+ * Canvas from the passed [series] and [yMin]/[yMax] bounds (the same math the
+ * mockup's IIFE script ran in JS), with a 7-point moving-average overlay.
+ * [xLabels] are accepted for axis annotation parity but the dashboard hero
+ * draws its own labels alongside the chart, so they are not rendered here.
  */
 @Composable
-fun WeightChart(modifier: Modifier = Modifier) {
-    val series = DashboardFixtures.weightSeries
+fun WeightChart(
+    series: List<Float>,
+    yMin: Float,
+    yMax: Float,
+    xLabels: List<ChartXLabel> = emptyList(),
+    modifier: Modifier = Modifier,
+) {
+    if (series.size < 2) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(140.dp),
+        )
+        return
+    }
     val ma = movingAverage(series, 7)
     // Capture composition-local colors before entering the non-composable DrawScope.
     val borderSubtle = Hf.colors.borderSubtle
     val accent = Hf.colors.accent
     val accentArea = accent.copy(alpha = 0.06f)
     val maColor = Hf.colors.textPrimary.copy(alpha = 0.4f)
+    val span = (yMax - yMin).takeIf { it != 0f } ?: 1f
 
     Box(
         modifier = modifier
@@ -39,8 +56,6 @@ fun WeightChart(modifier: Modifier = Modifier) {
         Canvas(modifier = Modifier.fillMaxWidth().height(140.dp)) {
             val w = size.width
             val h = size.height
-            val yMin = 188f
-            val yMax = 194f
             val padX = w * (26f / 600f)
             val padBottom = h * (22f / 140f)
             val padTop = h * (14f / 140f)
@@ -48,10 +63,16 @@ fun WeightChart(modifier: Modifier = Modifier) {
             val chartH = h - padTop - padBottom
 
             fun x(i: Int) = padX + (i.toFloat() / (series.size - 1)) * chartW
-            fun y(v: Float) = padTop + ((yMax - v) / (yMax - yMin)) * chartH
+            fun y(v: Float) = padTop + ((yMax - v) / span) * chartH
 
-            val gridYValues = listOf(194f, 192f, 190f, 188f)
+            // Four evenly spaced gridlines across the value range.
             val dashEffect = PathEffect.dashPathEffect(floatArrayOf(2f, 3f), 0f)
+            val gridYValues = listOf(
+                yMax,
+                yMax - span * (1f / 3f),
+                yMax - span * (2f / 3f),
+                yMin,
+            )
             gridYValues.drop(1).forEach { v ->
                 val py = y(v)
                 drawLine(
