@@ -5,6 +5,8 @@ import type {
   ScheduledWorkoutResponse,
   CreateProgramRequest,
   UpdateProgramRequest,
+  WorkoutProgramChatThread,
+  WorkoutProgramChatMessage,
 } from "./types/workout-program";
 
 // Server-only HTTP helpers for Workout Programs (IMPL-15). Do not import from
@@ -97,24 +99,56 @@ export function activateProgram(
   );
 }
 
+// ── Chat threads + history ───────────────────────────────────────────
+//
+// The SSE send itself goes through app/api/workout-programs/chat (the browser
+// needs to read the stream). Thread listing, history, and commit are plain
+// JSON, so they live here as server-only helpers — mirroring goals-api.ts.
+
+export function listProgramChatThreads(): Promise<WorkoutProgramChatThread[]> {
+  return apiJson<WorkoutProgramChatThread[]>(
+    "/api/me/workout-programs/chat/threads",
+  );
+}
+
+export function getProgramChatMessages(
+  threadId: string,
+): Promise<WorkoutProgramChatMessage[]> {
+  return apiJson<WorkoutProgramChatMessage[]>(
+    `/api/me/workout-programs/chat/${threadId}`,
+  );
+}
+
+export function deleteProgramChatThread(threadId: string): Promise<void> {
+  return send<void>(
+    `/api/me/workout-programs/chat/threads/${threadId}`,
+    "DELETE",
+  );
+}
+
 // ── Chat commit ──────────────────────────────────────────────────────
 //
 // The backend returns 201 with the deep program on success, or 422 with
 // { issues: [] } when validation fails — we distinguish the two so the UI can
-// re-render inline issues, matching the Goals commit contract.
+// re-render inline issues, matching the Goals commit contract. The commit is
+// scoped to the thread (its fixed schedule comes from the thread).
 
 export type CommitProgramResult =
   | { ok: true; program: WorkoutProgramDeepResponse }
   | { ok: false; issues: string[] };
 
 export async function commitProgramProposal(
+  threadId: string,
   input: CreateProgramRequest,
 ): Promise<CommitProgramResult> {
-  const res = await apiFetch("/api/me/workout-programs/chat/commit", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  const res = await apiFetch(
+    `/api/me/workout-programs/chat/${threadId}/commit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
   if (res.ok) {
     const program = (await res.json()) as WorkoutProgramDeepResponse;
     return { ok: true, program };

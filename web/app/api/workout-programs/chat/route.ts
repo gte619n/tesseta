@@ -7,11 +7,26 @@ import { NextResponse } from "next/server";
 // lives in the Auth.js session, which is server-side only.
 //
 // The backend emits named SSE events: `token` (assistant text delta),
-// `proposal` ({ program, issues }), `error`, and a terminal `done`. We forward
-// the raw stream untouched; the browser-side client parses the named events.
+// `proposal` ({ program, issues }), `error`, and a terminal `done` carrying the
+// threadId. We forward the raw stream untouched; the browser-side client parses
+// the named events.
+//
+// First turn of a new thread: { message, schedule, goalId? } (no threadId) —
+// the backend stores the schedule/goal on the thread and they are fixed for the
+// conversation. Subsequent turns: { threadId, message } only.
+type ChatSchedule = {
+  trainingDays?: string[];
+  dayLocations?: Record<string, string>;
+};
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as
-    | { message?: string; history?: { role: string; content: string }[] }
+    | {
+        threadId?: string | null;
+        message?: string;
+        schedule?: ChatSchedule | null;
+        goalId?: string | null;
+      }
     | null;
 
   if (!body || typeof body.message !== "string" || !body.message.trim()) {
@@ -25,8 +40,10 @@ export async function POST(request: Request) {
       Accept: "text/event-stream",
     },
     body: JSON.stringify({
+      threadId: body.threadId ?? null,
       message: body.message,
-      history: body.history ?? [],
+      schedule: body.schedule ?? null,
+      goalId: body.goalId ?? null,
     }),
   });
 

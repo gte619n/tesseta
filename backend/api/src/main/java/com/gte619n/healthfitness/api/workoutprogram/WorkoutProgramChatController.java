@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -117,6 +118,16 @@ public class WorkoutProgramChatController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat thread not found");
         }
         return chat.listMessages(userId, threadId).stream().map(MessageResponse::from).toList();
+    }
+
+    @DeleteMapping("/threads/{threadId}")
+    public ResponseEntity<Void> deleteThread(@PathVariable String threadId) {
+        String userId = currentUser.get().userId();
+        if (chat.findThread(userId, threadId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat thread not found");
+        }
+        chat.deleteThread(userId, threadId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)

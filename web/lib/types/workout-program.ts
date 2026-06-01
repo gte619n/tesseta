@@ -192,6 +192,45 @@ export type UpdateProgramRequest = Partial<{
   status: ProgramStatus;
 }>;
 
+// ── Persistent chat threads (mirror backend ChatThreadResponse) ──────
+
+// The schedule chosen in the pre-chat setup form. Fixed for the lifetime of a
+// thread; the per-gym exercise allow-lists derive from these gyms.
+export type WorkoutProgramChatSchedule = {
+  trainingDays: WeekDay[];
+  dayLocations: Partial<Record<WeekDay, string>>;
+};
+
+// GET /api/me/workout-programs/chat/threads element.
+export type WorkoutProgramChatThread = {
+  threadId: string;
+  title: string;
+  schedule: WorkoutProgramChatSchedule | null;
+  goalId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkoutProgramChatMessageRole = "USER" | "ASSISTANT";
+
+// GET /api/me/workout-programs/chat/{threadId} element. `proposalJson` is a
+// JSON string of { program: WorkoutProgramDeepResponse, issues: string[] } on
+// assistant turns that produced a proposal; null otherwise.
+export type WorkoutProgramChatMessage = {
+  messageId: string;
+  role: WorkoutProgramChatMessageRole;
+  content: string;
+  proposalJson: string | null;
+  createdAt: string;
+};
+
+// Parsed shape of an assistant message's `proposalJson` and the SSE `proposal`
+// event payload.
+export type WorkoutProgramProposalPayload = {
+  program: WorkoutProgramDeepResponse;
+  issues: string[];
+};
+
 export const WEEK_DAYS: WeekDay[] = [
   "MON",
   "TUE",
