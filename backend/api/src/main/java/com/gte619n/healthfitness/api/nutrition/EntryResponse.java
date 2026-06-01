@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Wire representation of a {@link FoodEntry}.
@@ -28,15 +29,30 @@ public record EntryResponse(
     MacrosDto macros,
     EntrySource source,
     String imageUrl,
-    FoodImageStatus imageStatus
+    FoodImageStatus imageStatus,
+    List<IngredientResponse> ingredients
 ) {
     /** Bare mapping with no catalog image (used where the food isn't loaded). */
     public static EntryResponse from(FoodEntry e) {
-        return from(e, null, FoodImageStatus.NONE);
+        return from(e, null, FoodImageStatus.NONE, null);
     }
 
     /** Mapping enriched with the catalog food's generated image, when known. */
     public static EntryResponse from(FoodEntry e, String imageUrl, FoodImageStatus imageStatus) {
+        return from(e, imageUrl, imageStatus, null);
+    }
+
+    /**
+     * Full mapping. For a composite (photo-logged) meal the {@code imageUrl}/
+     * {@code imageStatus} are the finished-meal image and {@code ingredients}
+     * lists the components (each with its own raw-ingredient image).
+     */
+    public static EntryResponse from(
+        FoodEntry e,
+        String imageUrl,
+        FoodImageStatus imageStatus,
+        List<IngredientResponse> ingredients
+    ) {
         return new EntryResponse(
             e.entryId(),
             e.date(),
@@ -49,7 +65,21 @@ public record EntryResponse(
             MacrosDto.from(e.macros()),
             e.source(),
             imageUrl,
-            imageStatus != null ? imageStatus : FoodImageStatus.NONE
+            imageStatus != null ? imageStatus : FoodImageStatus.NONE,
+            ingredients
         );
     }
+
+    /** One ingredient of a composite meal, with its raw-ingredient image. */
+    public record IngredientResponse(
+        String name,
+        String foodId,
+        String servingLabel,
+        Double servingGrams,
+        Double quantity,
+        MacrosDto macros,
+        MacrosDto macrosPer100g,
+        String imageUrl,
+        FoodImageStatus imageStatus
+    ) {}
 }

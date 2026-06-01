@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.core.nutrition;
 import com.gte619n.healthfitness.core.goals.eval.MetricKey;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -126,7 +127,92 @@ public class NutritionService {
         String entryId = UUID.randomUUID().toString();
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
-            servingGrams, quantity, macros, null, source, null, null);
+            servingGrams, quantity, macros, null, source,
+            null, null, FoodImageStatus.NONE, null, null);
+        entries.save(entry);
+        recomputeDay(userId, date);
+        return entry;
+    }
+
+    /**
+     * Log a composite meal (a photo-logged plate) as a single entry carrying its
+     * {@code ingredients}. The entry's macros are the sum of the ingredients'
+     * portion macros; the finished-meal image is generated separately (the
+     * entry starts {@code mealImageStatus = NONE}, flipped to PENDING when the
+     * image service enqueues generation).
+     */
+    public FoodEntry addCompositeMeal(
+        String userId,
+        LocalDate date,
+        MealType meal,
+        String mealName,
+        List<CompositeIngredient> ingredients,
+        EntrySource source
+    ) {
+        requireUser(userId);
+        requireDate(date);
+        if (meal == null) {
+            throw new IllegalArgumentException("meal is required");
+        }
+        if (mealName == null || mealName.isBlank()) {
+            throw new IllegalArgumentException("mealName is required");
+        }
+        if (ingredients == null || ingredients.isEmpty()) {
+            throw new IllegalArgumentException("a composite meal needs at least one ingredient");
+        }
+        Macros total = Macros.zero();
+        double grams = 0.0;
+        for (CompositeIngredient ing : ingredients) {
+            total = total.plus(ing.macros());
+            if (ing.servingGrams() != null) {
+                grams += ing.servingGrams() * (ing.quantity() != null ? ing.quantity() : 1.0);
+            }
+        }
+        String entryId = UUID.randomUUID().toString();
+        FoodEntry entry = new FoodEntry(
+            userId, date, entryId, meal, null, mealName,
+            ingredients.size() + " ingredients", grams, 1.0, total, null, source,
+            List.copyOf(ingredients), null, FoodImageStatus.NONE, null, null);
+        entries.save(entry);
+        recomputeDay(userId, date);
+        return entry;
+    }
+
+    /**
+     * Re-portion one ingredient of a composite meal (by list index), re-scaling
+     * its macros from its per-100g baseline, then resum the entry total and the
+     * day rollup.
+     */
+    public FoodEntry updateIngredient(
+        String userId,
+        LocalDate date,
+        String entryId,
+        int index,
+        Double servingGrams,
+        String servingLabel,
+        Double quantity
+    ) {
+        requireUser(userId);
+        requireDate(date);
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        List<CompositeIngredient> current = existing.ingredients();
+        if (current == null || index < 0 || index >= current.size()) {
+            throw new IllegalArgumentException("invalid ingredient index: " + index);
+        }
+        List<CompositeIngredient> updated = new ArrayList<>(current);
+        updated.set(index, current.get(index).withPortion(servingGrams, servingLabel, quantity));
+
+        Macros total = Macros.zero();
+        for (CompositeIngredient ing : updated) {
+            total = total.plus(ing.macros());
+        }
+        FoodEntry entry = new FoodEntry(
+            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            existing.foodId(), existing.foodName(), existing.servingLabel(),
+            existing.servingGrams(), existing.quantity(), total, existing.photoRef(),
+            existing.source(), updated, existing.mealImageUrl(), existing.mealImageStatus(),
+            existing.createdAt(), null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -163,6 +249,9 @@ public class NutritionService {
             macros != null ? macros : existing.macros(),
             existing.photoRef(),
             existing.source(),
+            existing.ingredients(),
+            existing.mealImageUrl(),
+            existing.mealImageStatus(),
             existing.createdAt(),
             null
         );

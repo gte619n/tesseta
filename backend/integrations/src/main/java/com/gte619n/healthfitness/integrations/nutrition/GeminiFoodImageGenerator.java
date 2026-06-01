@@ -70,6 +70,38 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
         %s
         """;
 
+    /**
+     * Style for a single RAW ingredient (a meal component), as opposed to a
+     * finished plated dish — e.g. a raw salmon fillet, uncooked rice, fresh
+     * broccolini rather than the cooked meal.
+     */
+    private static final String RAW_INGREDIENT_STYLE = """
+        PHOTOGRAPHY SPECIFICATIONS:
+        - A single RAW, unprepared ingredient on a clean white marble surface
+        - Show the ingredient in its natural, uncooked state
+        - Soft diffused natural lighting from the upper left
+        - Gentle shadows for depth and dimension
+        - Shallow depth of field (f/2.8 aperture equivalent)
+        - 100mm macro lens perspective
+        - Centered composition with generous negative space
+        - Premium editorial food-photography aesthetic
+
+        CRITICAL REQUIREMENTS:
+        - Photorealistic rendering of the raw ingredient
+        - NOT cooked, plated, or assembled into a dish
+        - No text, labels, packaging, or branding visible
+        - No human hands or body parts
+        - No background clutter or props
+        """;
+
+    private static final String RAW_INGREDIENT_PROMPT_TEMPLATE = """
+        Generate a professional still-life photograph of a single raw ingredient.
+
+        INGREDIENT: %s
+
+        %s
+        """;
+
     /** Reference-image prompt: the user's real meal photo informs the dish. */
     private static final String REFERENCE_PROMPT_TEMPLATE = """
         The attached image is a real photo of a meal a user logged.
@@ -105,6 +137,15 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
         if (food == null) {
             return Optional.empty();
         }
+        // Ingredient foods render as the raw, uncooked item (from the name only —
+        // the meal reference photo describes the finished plate, not the
+        // ingredient), distinct from a finished plated dish.
+        if (isRawIngredient(food)) {
+            String name = (food.name() == null || food.name().isBlank())
+                ? "a raw ingredient" : food.name();
+            String prompt = String.format(RAW_INGREDIENT_PROMPT_TEMPLATE, name, RAW_INGREDIENT_STYLE);
+            return execute(prompt, food.name());
+        }
         String subject = subjectFor(food);
         if (referencePhoto != null && referencePhoto.length > 0) {
             String prompt = String.format(REFERENCE_PROMPT_TEMPLATE, subject, STYLE);
@@ -113,6 +154,11 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
         }
         String prompt = String.format(NAME_PROMPT_TEMPLATE, subject, STYLE);
         return execute(prompt, food.name());
+    }
+
+    /** Ingredient foods are tagged with the "ingredient" category at creation. */
+    private static boolean isRawIngredient(CatalogFood food) {
+        return food.category() != null && food.category().equalsIgnoreCase("ingredient");
     }
 
     /** Human-readable subject: "<name> (<category>)" when a category exists. */

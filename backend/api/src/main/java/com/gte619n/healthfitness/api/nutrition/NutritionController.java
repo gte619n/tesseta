@@ -2,15 +2,20 @@ package com.gte619n.healthfitness.api.nutrition;
 
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.nutrition.CatalogFood;
+import com.gte619n.healthfitness.core.nutrition.CompositeIngredient;
+import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodCatalogService;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
+import com.gte619n.healthfitness.core.nutrition.FoodEntryImageService;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
+import com.gte619n.healthfitness.core.nutrition.FoodSource;
 import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetService;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionService;
+import com.gte619n.healthfitness.core.nutrition.ServingSize;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,17 +42,20 @@ public class NutritionController {
     private final NutritionService nutrition;
     private final MacroTargetService targets;
     private final FoodCatalogService foodCatalog;
+    private final FoodEntryImageService foodEntryImages;
 
     public NutritionController(
         CurrentUserProvider currentUser,
         NutritionService nutrition,
         MacroTargetService targets,
-        FoodCatalogService foodCatalog
+        FoodCatalogService foodCatalog,
+        FoodEntryImageService foodEntryImages
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
         this.targets = targets;
         this.foodCatalog = foodCatalog;
+        this.foodEntryImages = foodEntryImages;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -201,20 +209,114 @@ public class NutritionController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Distinct catalog foods backing a day's entries, keyed by foodId. */
+    // ----- Composite meal (photo-logged) -------------------------------
+
+    /**
+     * Log a photographed meal as one composite entry. Each ingredient becomes a
+     * catalog food (tagged "ingredient" so its image generates as the raw item),
+     * then the entry is created with those ingredients and a finished-meal image
+     * is generated asynchronously from the meal name + the user's capture photo.
+     */
+    @PostMapping("/{date}/composite-meal")
+    public ResponseEntity<EntryResponse> addCompositeMeal(
+        @PathVariable LocalDate date,
+        @RequestBody CompositeMealRequest body
+    ) {
+        if (body == null || body.meal() == null) {
+            throw new IllegalArgumentException("meal is required");
+        }
+        if (body.mealName() == null || body.mealName().isBlank()) {
+            throw new IllegalArgumentException("mealName is required");
+        }
+        if (body.ingredients() == null || body.ingredients().isEmpty()) {
+            throw new IllegalArgumentException("at least one ingredient is required");
+        }
+        String userId = currentUser.get().userId();
+
+        List<CompositeIngredient> ingredients = new ArrayList<>();
+        for (CompositeIngredientDto dto : body.ingredients()) {
+            Macros per100g = dto.macrosPer100g() != null ? dto.macrosPer100g().toMacros() : null;
+            double grams = dto.servingGrams() != null ? dto.servingGrams() : 0.0;
+            double qty = dto.quantity() != null ? dto.quantity() : 1.0;
+            Macros portion = dto.macros() != null
+                ? dto.macros().toMacros()
+                : (per100g != null ? per100g.scale((grams * qty) / 100.0) : Macros.zero());
+            // Catalog food for the raw-ingredient image (fire-and-forget gen).
+            CatalogFood food = foodCatalog.create(
+                userId,
+                dto.name(),
+                null,
+                null,
+                "ingredient",
+                per100g,
+                List.of(new ServingSize(
+                    dto.servingLabel() != null ? dto.servingLabel() : "100 g", grams > 0 ? grams : 100.0)),
+                0,
+                FoodSource.GEMINI_PHOTO,
+                null);
+            ingredients.add(new CompositeIngredient(
+                dto.name(), food.foodId(), per100g, grams, dto.servingLabel(), qty, portion));
+        }
+
+        FoodEntry entry = nutrition.addCompositeMeal(
+            userId, date, body.meal(), body.mealName(), ingredients, EntrySource.PHOTO);
+        foodEntryImages.enqueueGeneration(
+            userId, date, entry.entryId(), body.mealName(), body.referencePhotoRef());
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
+    }
+
+    /** Re-portion one ingredient of a composite meal and recompute totals. */
+    @PatchMapping("/{date}/entries/{entryId}/ingredients/{index}")
+    public EntryResponse updateIngredient(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId,
+        @PathVariable int index,
+        @RequestBody UpdateIngredientRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry = nutrition.updateIngredient(
+            userId,
+            date,
+            entryId,
+            index,
+            body != null ? body.servingGrams() : null,
+            body != null ? body.servingLabel() : null,
+            body != null ? body.quantity() : null);
+        return toResponse(entry);
+    }
+
+    /**
+     * Distinct catalog foods backing a day's entries, keyed by foodId — both the
+     * entry's own food and every composite-meal ingredient's food, so their
+     * generated images can be joined without an N+1 lookup.
+     */
     private Map<String, CatalogFood> loadFoods(List<FoodEntry> entries) {
         Map<String, CatalogFood> foods = new HashMap<>();
         for (FoodEntry e : entries) {
-            String foodId = e.foodId();
-            if (foodId != null && !foods.containsKey(foodId)) {
-                foodCatalog.find(foodId).ifPresent(f -> foods.put(foodId, f));
+            cacheFood(foods, e.foodId());
+            if (e.ingredients() != null) {
+                for (CompositeIngredient ing : e.ingredients()) {
+                    cacheFood(foods, ing.foodId());
+                }
             }
         }
         return foods;
     }
 
-    /** Map an entry, pulling the image from a pre-loaded food cache. */
+    private void cacheFood(Map<String, CatalogFood> foods, String foodId) {
+        if (foodId != null && !foods.containsKey(foodId)) {
+            foodCatalog.find(foodId).ifPresent(f -> foods.put(foodId, f));
+        }
+    }
+
+    /** Map an entry, pulling images from a pre-loaded food cache. */
     private static EntryResponse toResponse(FoodEntry e, Map<String, CatalogFood> foods) {
+        if (e.isComposite()) {
+            // Composite meal: display image is the finished-meal image stored on
+            // the entry; each ingredient carries its own raw-ingredient image.
+            return EntryResponse.from(
+                e, e.mealImageUrl(), e.mealImageStatus(), ingredientResponses(e, foods));
+        }
         CatalogFood food = e.foodId() != null ? foods.get(e.foodId()) : null;
         return EntryResponse.from(
             e,
@@ -222,13 +324,28 @@ public class NutritionController {
             food != null ? food.imageStatus() : FoodImageStatus.NONE);
     }
 
-    /** Map a single entry, looking its catalog food up on demand. */
+    /** Map a single entry, looking its catalog foods up on demand. */
     private EntryResponse toResponse(FoodEntry e) {
-        CatalogFood food = e.foodId() != null ? foodCatalog.find(e.foodId()).orElse(null) : null;
-        return EntryResponse.from(
-            e,
-            food != null ? food.imageUrl() : null,
-            food != null ? food.imageStatus() : FoodImageStatus.NONE);
+        return toResponse(e, loadFoods(List.of(e)));
+    }
+
+    private static List<EntryResponse.IngredientResponse> ingredientResponses(
+        FoodEntry e, Map<String, CatalogFood> foods) {
+        List<EntryResponse.IngredientResponse> out = new ArrayList<>();
+        for (CompositeIngredient ing : e.ingredients()) {
+            CatalogFood food = ing.foodId() != null ? foods.get(ing.foodId()) : null;
+            out.add(new EntryResponse.IngredientResponse(
+                ing.name(),
+                ing.foodId(),
+                ing.servingLabel(),
+                ing.servingGrams(),
+                ing.quantity(),
+                MacrosDto.from(ing.macros()),
+                MacrosDto.from(ing.macrosPer100g()),
+                food != null ? food.imageUrl() : null,
+                food != null ? food.imageStatus() : FoodImageStatus.NONE));
+        }
+        return out;
     }
 
     private static Macros macrosOf(NutritionDailyLog log) {
@@ -304,5 +421,27 @@ public class NutritionController {
         Double servingGrams,
         Double quantity,
         MacrosDto macros
+    ) {}
+
+    public record CompositeMealRequest(
+        MealType meal,
+        String mealName,
+        List<CompositeIngredientDto> ingredients,
+        String referencePhotoRef
+    ) {}
+
+    public record CompositeIngredientDto(
+        String name,
+        Double servingGrams,
+        String servingLabel,
+        Double quantity,
+        MacrosDto macrosPer100g,
+        MacrosDto macros
+    ) {}
+
+    public record UpdateIngredientRequest(
+        Double servingGrams,
+        String servingLabel,
+        Double quantity
     ) {}
 }

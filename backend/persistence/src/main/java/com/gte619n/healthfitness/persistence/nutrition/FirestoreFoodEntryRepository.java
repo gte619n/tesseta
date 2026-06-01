@@ -3,9 +3,11 @@ package com.gte619n.healthfitness.persistence.nutrition;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
+import com.gte619n.healthfitness.core.nutrition.CompositeIngredient;
 import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodEntryRepository;
+import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.google.api.core.ApiFuture;
@@ -16,6 +18,7 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +86,9 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
         body.put("macros", macrosToMap(e.macros()));
         body.put("photoRef", e.photoRef());
         body.put("source", e.source() != null ? e.source().name() : null);
+        body.put("ingredients", ingredientsToList(e.ingredients()));
+        body.put("mealImageUrl", e.mealImageUrl());
+        body.put("mealImageStatus", e.mealImageStatus() != null ? e.mealImageStatus().name() : null);
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -106,9 +112,50 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
             macrosFromMap(snapshot.get("macros")),
             snapshot.getString("photoRef"),
             source != null ? EntrySource.valueOf(source) : null,
+            ingredientsFromList(snapshot.get("ingredients")),
+            snapshot.getString("mealImageUrl"),
+            imageStatusFrom(snapshot.getString("mealImageStatus")),
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt"))
         );
+    }
+
+    private static FoodImageStatus imageStatusFrom(String raw) {
+        return raw != null ? FoodImageStatus.valueOf(raw) : null;
+    }
+
+    private static List<Map<String, Object>> ingredientsToList(List<CompositeIngredient> ingredients) {
+        if (ingredients == null) return null;
+        List<Map<String, Object>> out = new ArrayList<>(ingredients.size());
+        for (CompositeIngredient ing : ingredients) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("name", ing.name());
+            m.put("foodId", ing.foodId());
+            m.put("macrosPer100g", macrosToMap(ing.macrosPer100g()));
+            m.put("servingGrams", ing.servingGrams());
+            m.put("servingLabel", ing.servingLabel());
+            m.put("quantity", ing.quantity());
+            m.put("macros", macrosToMap(ing.macros()));
+            out.add(m);
+        }
+        return out;
+    }
+
+    private static List<CompositeIngredient> ingredientsFromList(Object raw) {
+        if (!(raw instanceof List<?> list)) return null;
+        List<CompositeIngredient> out = new ArrayList<>(list.size());
+        for (Object o : list) {
+            if (!(o instanceof Map<?, ?> map)) continue;
+            out.add(new CompositeIngredient(
+                (String) map.get("name"),
+                (String) map.get("foodId"),
+                macrosFromMap(map.get("macrosPer100g")),
+                asDouble(map.get("servingGrams")),
+                (String) map.get("servingLabel"),
+                asDouble(map.get("quantity")),
+                macrosFromMap(map.get("macros"))));
+        }
+        return out;
     }
 
     static Map<String, Object> macrosToMap(Macros m) {
