@@ -79,6 +79,11 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.exercise.ExerciseRepository exerciseRepository() {
+        return new InMemoryExerciseRepository();
+    }
+
+    @Bean
     GoalRepository goalRepository() {
         return new InMemoryGoalRepository();
     }
