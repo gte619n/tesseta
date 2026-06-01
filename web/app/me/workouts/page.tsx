@@ -161,8 +161,11 @@ export default async function WorkoutsPage() {
             </div>
           </div>
 
-          {/* Programs Card - Coming Soon */}
-          <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 opacity-50">
+          {/* Programs Card */}
+          <Link
+            href="/me/workouts/programs"
+            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -175,7 +178,7 @@ export default async function WorkoutsPage() {
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-tertiary"
+                    className="text-accent"
                   >
                     <line x1="8" y1="6" x2="21" y2="6" />
                     <line x1="8" y1="12" x2="21" y2="12" />
@@ -189,16 +192,24 @@ export default async function WorkoutsPage() {
                   </h2>
                 </div>
                 <p className="mt-2 text-[13px] text-secondary">
-                  Create and follow training programs.
+                  Create and follow periodized training programs.
                 </p>
               </div>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-tertiary transition-colors group-hover:text-accent"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </div>
-            <div className="mt-4 border-t border-border-subtle pt-3">
-              <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-tertiary">
-                Coming soon
-              </span>
-            </div>
-          </div>
+          </Link>
         </section>
       </div>
     </main>
