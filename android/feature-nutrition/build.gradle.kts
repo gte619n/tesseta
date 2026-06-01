@@ -55,6 +55,8 @@ dependencies {
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
     implementation(libs.mlkit.barcode.scanning)
+    // Unified capture: on-device OCR to auto-detect nutrition labels in the feed.
+    implementation(libs.mlkit.text.recognition)
     implementation(libs.kotlinx.coroutines.play.services)
 
     testImplementation(libs.junit)

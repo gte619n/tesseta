@@ -19,15 +19,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 
 /**
- * A CameraX preview bound to the composable's lifecycle. Optionally runs an
- * ML Kit barcode analyzer (when [onBarcode] is non-null) and exposes a still
+ * A CameraX preview bound to the composable's lifecycle. When [onBarcode] or
+ * [onLabelDetected] is non-null it runs an ML Kit analyzer on the live feed —
+ * barcode scanning and/or Nutrition-Facts text detection — and exposes a still
  * capture via [controller]. Mirrors the standard CameraX + Compose AndroidView
  * pattern.
  */
@@ -35,6 +39,7 @@ import java.util.concurrent.Executors
 fun CameraPreview(
     controller: CameraCaptureController,
     onBarcode: ((String) -> Unit)? = null,
+    onLabelDetected: (() -> Unit)? = null,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     val context = LocalContext.current
@@ -50,6 +55,7 @@ fun CameraPreview(
                 lifecycleOwner = lifecycleOwner,
                 previewView = previewView,
                 onBarcode = onBarcode,
+                onLabelDetected = onLabelDetected,
             )
         },
     )
@@ -65,13 +71,17 @@ class CameraCaptureController {
     private var imageCapture: ImageCapture? = null
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private val barcodeScanner = BarcodeScanning.getClient()
+    private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private var lastEmittedBarcode: String? = null
+    // Latches so a detected label fires analysis once, not once per frame.
+    private var labelEmitted = false
 
     fun bind(
         context: Context,
         lifecycleOwner: androidx.lifecycle.LifecycleOwner,
         previewView: PreviewView,
         onBarcode: ((String) -> Unit)?,
+        onLabelDetected: (() -> Unit)? = null,
     ) {
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
@@ -87,12 +97,12 @@ class CameraCaptureController {
 
             val useCases = mutableListOf(preview, capture)
 
-            if (onBarcode != null) {
+            if (onBarcode != null || onLabelDetected != null) {
                 val analysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                 analysis.setAnalyzer(analysisExecutor) { proxy ->
-                    processBarcode(proxy, onBarcode)
+                    processFrame(proxy, onBarcode, onLabelDetected)
                 }
                 useCases += analysis
             }
@@ -110,27 +120,55 @@ class CameraCaptureController {
         }, ContextCompat.getMainExecutor(context))
     }
 
+    /**
+     * Runs barcode scanning and/or label OCR on one frame. Both ML Kit calls
+     * share the input image; the proxy is closed only once both complete so the
+     * next frame isn't fed in early.
+     */
     @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
-    private fun processBarcode(proxy: ImageProxy, onBarcode: (String) -> Unit) {
+    private fun processFrame(
+        proxy: ImageProxy,
+        onBarcode: ((String) -> Unit)?,
+        onLabelDetected: (() -> Unit)?,
+    ) {
         val media = proxy.image
         if (media == null) {
             proxy.close()
             return
         }
         val input = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
-        barcodeScanner.process(input)
-            .addOnSuccessListener { codes ->
+
+        val barcodeTask = if (onBarcode != null) {
+            barcodeScanner.process(input).addOnSuccessListener { codes ->
                 val value = codes.firstOrNull { it.rawValue != null }?.rawValue
                 if (value != null && value != lastEmittedBarcode) {
                     lastEmittedBarcode = value
                     onBarcode(value)
                 }
             }
-            .addOnCompleteListener { proxy.close() }
+        } else {
+            Tasks.forResult(null)
+        }
+
+        val textTask = if (onLabelDetected != null) {
+            textRecognizer.process(input).addOnSuccessListener { result ->
+                if (!labelEmitted && looksLikeNutritionLabel(result.text)) {
+                    labelEmitted = true
+                    onLabelDetected()
+                }
+            }
+        } else {
+            Tasks.forResult(null)
+        }
+
+        Tasks.whenAllComplete(barcodeTask, textTask).addOnCompleteListener { proxy.close() }
     }
 
-    /** Reset so the same barcode can be re-emitted after a reset. */
-    fun clearBarcodeMemo() { lastEmittedBarcode = null }
+    /** Reset detection latches so the same barcode/label can re-fire after a reset. */
+    fun clearMemo() {
+        lastEmittedBarcode = null
+        labelEmitted = false
+    }
 
     /** Take a still photo and deliver compressed JPEG bytes. */
     fun takePhoto(context: Context, onResult: (ByteArray) -> Unit, onError: (Throwable) -> Unit) {

@@ -1,11 +1,15 @@
 package com.gte619n.healthfitness.feature.nutrition
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +29,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +48,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.LabelCaptureFood
@@ -69,8 +79,6 @@ fun NutritionCaptureRoute(
     NutritionCaptureScreen(
         state = state,
         onBack = onBack,
-        onSetMode = viewModel::setMode,
-        onSetPhotoKind = viewModel::setPhotoKind,
         onBarcodeDetected = viewModel::onBarcodeDetected,
         onAnalyzeMeal = viewModel::analyzeMeal,
         onAnalyzeLabel = { jpeg -> viewModel.analyzeLabel(jpeg) },
@@ -86,8 +94,6 @@ fun NutritionCaptureRoute(
 fun NutritionCaptureScreen(
     state: NutritionCaptureUiState,
     onBack: () -> Unit,
-    onSetMode: (CaptureMode) -> Unit,
-    onSetPhotoKind: (PhotoKind) -> Unit,
     onBarcodeDetected: (String) -> Unit,
     onAnalyzeMeal: (ByteArray) -> Unit,
     onAnalyzeLabel: (ByteArray) -> Unit,
@@ -122,10 +128,9 @@ fun NutritionCaptureScreen(
     ) {
         HfScreenHeader(
             title = "Capture",
-            subtitle = "Scan a barcode or photograph food",
+            subtitle = "Point at a barcode or label, or photograph your meal",
             onBack = onBack,
         )
-        ModeToggle(mode = state.mode, onSetMode = onSetMode)
         Spacer(Modifier.height(10.dp))
 
         if (!hasPermission) {
@@ -149,9 +154,7 @@ fun NutritionCaptureScreen(
                 onCancel = onReset,
             )
             CaptureStage.Scanning -> ScanningPane(
-                state = state,
                 controller = controller,
-                onSetPhotoKind = onSetPhotoKind,
                 onBarcodeDetected = onBarcodeDetected,
                 onAnalyzeMeal = onAnalyzeMeal,
                 onAnalyzeLabel = onAnalyzeLabel,
@@ -169,57 +172,36 @@ fun NutritionCaptureScreen(
     }
 }
 
-@Composable
-private fun ModeToggle(mode: CaptureMode, onSetMode: (CaptureMode) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
-        SegItem("Barcode", mode == CaptureMode.BARCODE, Modifier.weight(1f)) { onSetMode(CaptureMode.BARCODE) }
-        SegItem("Photo", mode == CaptureMode.PHOTO, Modifier.weight(1f)) { onSetMode(CaptureMode.PHOTO) }
-    }
-}
-
-@Composable
-private fun SegItem(text: String, active: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .background(if (active) Hf.colors.accentBg else Hf.colors.surface)
-            .border(0.5.dp, if (active) Hf.colors.accent else Hf.colors.borderDefault)
-            .clickable { onClick() }
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text,
-            style = Hf.type.bodyMd,
-            color = if (active) Hf.colors.accentDim else Hf.colors.textSecondary,
-        )
-    }
-}
-
+/**
+ * Unified live-camera pane. A single feed continuously scans for barcodes and
+ * (via OCR) nutrition labels, auto-advancing as soon as either is detected.
+ * The user can also tap ANALYZE MEAL to photograph the plate, or use the
+ * floating folder button to pick an existing photo to analyze as a meal.
+ */
 @Composable
 private fun ScanningPane(
-    state: NutritionCaptureUiState,
     controller: CameraCaptureController,
-    onSetPhotoKind: (PhotoKind) -> Unit,
     onBarcodeDetected: (String) -> Unit,
     onAnalyzeMeal: (ByteArray) -> Unit,
     onAnalyzeLabel: (ByteArray) -> Unit,
 ) {
     val context = LocalContext.current
-    LaunchedEffect(state.mode, state.stage) { controller.clearBarcodeMemo() }
+    val scope = rememberCoroutineScope()
+    // Re-arm barcode/label detection whenever we return to the live feed.
+    LaunchedEffect(Unit) { controller.clearMemo() }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            // Decode + downscale off the main thread, then analyze as a meal.
+            scope.launch(Dispatchers.IO) {
+                runCatching { loadJpegFromUri(context, uri) }.getOrNull()?.let(onAnalyzeMeal)
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        if (state.mode == CaptureMode.PHOTO) {
-            Box(modifier = Modifier.padding(horizontal = 18.dp)) {
-                ChipRow(
-                    options = PhotoKind.entries,
-                    selected = state.photoKind,
-                    label = { if (it == PhotoKind.MEAL) "Meal" else "Label" },
-                    onSelect = onSetPhotoKind,
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -229,38 +211,72 @@ private fun ScanningPane(
         ) {
             CameraPreview(
                 controller = controller,
-                onBarcode = if (state.mode == CaptureMode.BARCODE) onBarcodeDetected else null,
+                onBarcode = onBarcodeDetected,
+                onLabelDetected = {
+                    controller.takePhoto(
+                        context = context,
+                        onResult = onAnalyzeLabel,
+                        onError = { /* surfaced via state.error on the next attempt */ },
+                    )
+                },
             )
-            if (state.mode == CaptureMode.BARCODE) {
-                Text(
-                    "Point at a barcode",
-                    style = Hf.type.capsSm,
-                    color = Hf.colors.textInverse,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+            Text(
+                "Point at a barcode or nutrition label",
+                style = Hf.type.capsSm,
+                color = Hf.colors.textInverse,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+            )
+            FloatingActionButton(
+                onClick = {
+                    photoPicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                containerColor = Hf.colors.surface,
+                contentColor = Hf.colors.textSecondary,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(46.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Folder,
+                    contentDescription = "Choose a photo",
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
 
-        if (state.mode == CaptureMode.PHOTO) {
-            Spacer(Modifier.height(12.dp))
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp)) {
-                PrimaryButton(
-                    text = if (state.photoKind == PhotoKind.MEAL) "ANALYZE MEAL" else "READ LABEL",
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    controller.takePhoto(
-                        context = context,
-                        onResult = { jpeg ->
-                            if (state.photoKind == PhotoKind.MEAL) onAnalyzeMeal(jpeg) else onAnalyzeLabel(jpeg)
-                        },
-                        onError = { /* surfaced via state.error on the next analyze attempt */ },
-                    )
-                }
+        Spacer(Modifier.height(12.dp))
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp)) {
+            PrimaryButton(text = "ANALYZE MEAL", modifier = Modifier.fillMaxWidth()) {
+                controller.takePhoto(
+                    context = context,
+                    onResult = onAnalyzeMeal,
+                    onError = { /* surfaced via state.error on the next attempt */ },
+                )
             }
-            Spacer(Modifier.height(16.dp))
-        } else {
-            Spacer(Modifier.height(16.dp))
         }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Reads a picked image Uri into downscaled JPEG bytes (longest side ≤ [maxDim]).
+ * Re-encoding normalizes PNG/HEIC picks to JPEG and keeps the upload small for
+ * the meal-analysis call. Run off the main thread.
+ */
+private fun loadJpegFromUri(context: Context, uri: Uri, maxDim: Int = 1568): ByteArray {
+    val resolver = context.contentResolver
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxDim) sample *= 2
+
+    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+    val bitmap = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+        ?: error("Could not read the selected image")
+    return ByteArrayOutputStream().use { out ->
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+        bitmap.recycle()
+        out.toByteArray()
     }
 }
 

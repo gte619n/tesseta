@@ -26,12 +26,6 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 
-/** Top-level capture mode: scan a barcode, or take a photo. */
-enum class CaptureMode { BARCODE, PHOTO }
-
-/** Within photo mode: a full meal, or a nutrition label. */
-enum class PhotoKind { MEAL, LABEL }
-
 /** What the screen is currently showing/confirming. */
 sealed interface CaptureStage {
     /** Live camera; nothing resolved yet. */
@@ -57,8 +51,6 @@ sealed interface CaptureStage {
 }
 
 data class NutritionCaptureUiState(
-    val mode: CaptureMode = CaptureMode.BARCODE,
-    val photoKind: PhotoKind = PhotoKind.MEAL,
     val stage: CaptureStage = CaptureStage.Scanning,
     val error: String? = null,
 )
@@ -91,11 +83,6 @@ class NutritionCaptureViewModel @Inject constructor(
     // never asks the user which meal it is (the web client doesn't either).
     private fun currentMeal(): Meal = Meal.forHour(java.time.LocalTime.now().hour)
 
-    fun setMode(mode: CaptureMode) =
-        _state.update { it.copy(mode = mode, stage = CaptureStage.Scanning, error = null) }
-
-    fun setPhotoKind(kind: PhotoKind) = _state.update { it.copy(photoKind = kind) }
-
     fun reset() = _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
 
     // ---- Barcode --------------------------------------------------------
@@ -108,7 +95,7 @@ class NutritionCaptureViewModel @Inject constructor(
      */
     fun onBarcodeDetected(code: String) {
         val s = _state.value
-        if (s.mode != CaptureMode.BARCODE || s.stage != CaptureStage.Scanning) return
+        if (s.stage != CaptureStage.Scanning) return
         _state.update { it.copy(stage = CaptureStage.Working, error = null) }
         viewModelScope.launch {
             try {
@@ -160,9 +147,12 @@ class NutritionCaptureViewModel @Inject constructor(
         }
     }
 
-    /** From a BarcodeMiss, switch to the label-photo fallback. */
+    /**
+     * From a BarcodeMiss, return to scanning. The unified analyzer auto-detects
+     * the nutrition label once the user points the camera at it.
+     */
     fun fallbackToLabel() = _state.update {
-        it.copy(mode = CaptureMode.PHOTO, photoKind = PhotoKind.LABEL, stage = CaptureStage.Scanning)
+        it.copy(stage = CaptureStage.Scanning, error = null)
     }
 
     fun confirmBarcodeFood(food: Food, servingIndex: Int, quantity: Double) {

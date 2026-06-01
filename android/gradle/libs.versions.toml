@@ -28,6 +28,7 @@ markdownRenderer = "0.27.0"
 # on-device barcode scanning.
 camerax = "1.4.1"
 mlkitBarcode = "17.3.0"
+mlkitTextRecognition = "16.0.1"
 
 # Wear OS
 wearComposeMaterial3 = "1.0.0-alpha28"
@@ -97,6 +98,7 @@ camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cam
 camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcode" }
+mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
 
 # IMPL-12 (Android Goals chat): Compose markdown renderer for assistant
 # messages. Material 3 flavour so it picks up the consumer's M3 theme.
