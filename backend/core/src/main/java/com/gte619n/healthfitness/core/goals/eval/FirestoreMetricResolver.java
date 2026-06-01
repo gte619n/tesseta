@@ -289,12 +289,18 @@ public class FirestoreMetricResolver implements MetricResolver {
             // and take the first row that carries this field.
             List<DailyMetric> rows = dailyMetrics.findLatestDailyMetric(userId, LATEST_DAILY_SCAN);
             if (rows == null || rows.isEmpty()) return MetricValue.unavailable();
+            // Staleness guard: only rows within the original 7-day window
+            // count. The indexed read returns the newest docs regardless of
+            // age, so a value weeks old must not resolve a field that has no
+            // recent data — that would stale-flip a SUSTAINED vitals goal.
+            // Matches the old findByDateRange(to.minusDays(7), to) cutoff
+            // (inclusive lower bound: date >= today-7).
+            LocalDate cutoff = LocalDate.now().minusDays(7);
             for (DailyMetric m : rows) {
+                if (m.date() == null || m.date().isBefore(cutoff)) continue;
                 Double v = extract.extract(m);
                 if (v == null) continue;
-                Instant asOf = m.date() != null
-                    ? m.date().atStartOfDay().toInstant(ZoneOffset.UTC)
-                    : m.updatedAt();
+                Instant asOf = m.date().atStartOfDay().toInstant(ZoneOffset.UTC);
                 return MetricValue.of(v, asOf);
             }
             return MetricValue.unavailable();
