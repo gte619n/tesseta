@@ -201,6 +201,33 @@ status: enum  PLANNED | COMPLETED | SKIPPED
 sessionSnapshot: { ...blocks }
 ```
 
+### Embedded exercise summary on read responses
+
+A prescription stores only `exerciseId`. To let clients render a session
+(exercise name, muscles, demo stills, form cues) **without an N+1 fetch per
+prescription**, the **deep** program response (`GET /api/me/workout-programs/{id}`)
+and the **calendar** response (`GET …/{id}/calendar`) embed a compact,
+read-only `ExerciseSummary` alongside each prescription, hydrated from the
+IMPL-14 catalog:
+
+```
+exercise: {
+  exerciseId, name,
+  primaryMuscles: string[],
+  equipmentNames: string[],          # resolved from requiredEquipment ids
+  formCues: string[],
+  demoFrames: [ { phase, imageUrl } ]   # START/MID/END thumbnails
+}
+```
+
+It is **read-only and denormalized for display** — the prescription's
+`exerciseId` remains the source of truth, and the shallow list response omits
+it. The web Exercise detail sheet and the Android viewer
+([IMPL-AND-15](IMPL-AND-15-workout-programs.md)) both consume it; the resolved
+`locationName` on each Workout Day / scheduled session is hydrated the same way.
+(If a client predates this field, a batch `GET /api/exercises?ids=` is the
+fallback.)
+
 ---
 
 ## The equipment constraint (the headline requirement)
