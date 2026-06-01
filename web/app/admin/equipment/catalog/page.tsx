@@ -16,7 +16,9 @@ import { pageMetadata } from '@/lib/page-metadata';
 
 export const metadata = pageMetadata('Equipment Catalog');
 
-export const dynamic = 'force-dynamic';
+// Read-mostly: the equipment catalog is global reference data. Mutations below
+// call revalidatePath to refresh immediately.
+export const revalidate = 60;
 
 export default async function AdminEquipmentCatalogPage() {
   // Admin gating handled by app/admin/layout.tsx

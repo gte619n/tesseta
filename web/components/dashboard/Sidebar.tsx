@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { TessetaMark } from "@/components/brand/TessetaMark";
@@ -103,12 +104,11 @@ export function Sidebar({
         </Link>
         <div className="flex w-full items-center gap-2.5 rounded-lg border-[0.5px] border-border-strong bg-surface px-[11px] py-[7px]">
           {user.image ? (
-            // eslint-disable-next-line @next/next/no-img-element -- Google avatar
-            // URLs are arbitrary remote hosts; a plain <img> avoids configuring
-            // next/image remotePatterns (matches the rest of the codebase).
-            <img
+            <Image
               src={user.image}
               alt=""
+              width={26}
+              height={26}
               className="h-[26px] w-[26px] shrink-0 rounded-md object-cover"
             />
           ) : (

@@ -82,6 +82,20 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
     }
 
     @Override
+    public Optional<BodyCompositionMeasurement> findLatest(String userId, BodyCompositionMetric metric) {
+        // Indexed single-doc read: metric ASC, sampleTime DESC composite
+        // index (declared in infra/firestore/firestore.indexes.json) lets
+        // Firestore return just the newest row instead of paging 500.
+        List<QueryDocumentSnapshot> docs = await(collection(userId)
+            .whereEqualTo("metric", metric.name())
+            .orderBy("sampleTime", Query.Direction.DESCENDING)
+            .limit(1)
+            .get()).getDocuments();
+        if (docs.isEmpty()) return Optional.empty();
+        return Optional.of(toMeasurement(userId, docs.get(0)));
+    }
+
+    @Override
     public void save(BodyCompositionMeasurement measurement) {
         DocumentReference docRef = collection(measurement.userId()).document(docId(measurement));
         DocumentSnapshot existing = await(docRef.get());

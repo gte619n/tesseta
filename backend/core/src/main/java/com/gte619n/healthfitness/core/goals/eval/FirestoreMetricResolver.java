@@ -71,6 +71,14 @@ public class FirestoreMetricResolver implements MetricResolver {
      */
     private static final double TARGET_MET_TOLERANCE = 0.10;
 
+    /**
+     * How many recent day-docs {@link #latestDailyMetric} scans for the
+     * newest non-null value of a vitals field. Vitals fields (resting HR,
+     * HRV, sleep score) arrive on different days via merge semantics, so a
+     * small window covers the case where the newest doc lacks the field.
+     */
+    private static final int LATEST_DAILY_SCAN = 14;
+
     private final BloodReadingRepository bloodReadings;
     private final BloodTestReportRepository bloodTestReports;
     private final BodyCompositionRepository bodyComposition;
@@ -213,18 +221,12 @@ public class FirestoreMetricResolver implements MetricResolver {
 
     private MetricValue latestBodyComposition(String userId, BodyCompositionMetric metric) {
         try {
-            List<BodyCompositionMeasurement> all = bodyComposition.findByUser(userId);
-            BodyCompositionMeasurement latest = null;
-            for (BodyCompositionMeasurement m : all) {
-                if (m.metric() != metric) continue;
-                if (latest == null
-                    || (m.sampleTime() != null
-                        && (latest.sampleTime() == null || m.sampleTime().isAfter(latest.sampleTime())))) {
-                    latest = m;
-                }
-            }
-            if (latest == null) return MetricValue.unavailable();
-            return MetricValue.of(latest.value(), latest.sampleTime());
+            // Indexed single-doc read (metric + sampleTime DESC) instead of
+            // paging up to 500 rows and picking the latest in Java.
+            Optional<BodyCompositionMeasurement> latest = bodyComposition.findLatest(userId, metric);
+            if (latest.isEmpty()) return MetricValue.unavailable();
+            BodyCompositionMeasurement m = latest.get();
+            return MetricValue.of(m.value(), m.sampleTime());
         } catch (UnsupportedOperationException e) {
             return MetricValue.unavailable();
         }
@@ -260,17 +262,11 @@ public class FirestoreMetricResolver implements MetricResolver {
         }
 
         try {
-            List<BloodReading> readings = bloodReadings.findByUser(userId);
-            BloodReading latest = null;
-            for (BloodReading r : readings) {
-                if (r.marker() != marker) continue;
-                if (latest == null
-                    || (r.sampleDate() != null
-                        && (latest.sampleDate() == null || r.sampleDate().isAfter(latest.sampleDate())))) {
-                    latest = r;
-                }
-            }
-            if (latest == null) return MetricValue.unavailable();
+            // Indexed single-doc read (marker + sampleDate DESC) instead of
+            // paging up to 500 rows and picking the latest in Java.
+            Optional<BloodReading> found = bloodReadings.findLatestByMarker(userId, marker);
+            if (found.isEmpty()) return MetricValue.unavailable();
+            BloodReading latest = found.get();
             Instant asOf = latest.sampleDate() != null
                 ? latest.sampleDate().atStartOfDay().toInstant(ZoneOffset.UTC)
                 : latest.createdAt();
@@ -287,26 +283,27 @@ public class FirestoreMetricResolver implements MetricResolver {
      */
     private MetricValue latestDailyMetric(String userId, FieldExtractor extract) {
         try {
-            LocalDate to = LocalDate.now();
-            LocalDate from = to.minusDays(7);
-            List<DailyMetric> rows = dailyMetrics.findByDateRange(userId, from, to);
+            // Indexed read of the most-recent few day-docs (date DESC,
+            // newest first) instead of a 7-day range scan. Vitals fields
+            // arrive on different days (merge semantics), so scan in order
+            // and take the first row that carries this field.
+            List<DailyMetric> rows = dailyMetrics.findLatestDailyMetric(userId, LATEST_DAILY_SCAN);
             if (rows == null || rows.isEmpty()) return MetricValue.unavailable();
-            DailyMetric chosen = null;
-            Double chosenValue = null;
+            // Staleness guard: only rows within the original 7-day window
+            // count. The indexed read returns the newest docs regardless of
+            // age, so a value weeks old must not resolve a field that has no
+            // recent data — that would stale-flip a SUSTAINED vitals goal.
+            // Matches the old findByDateRange(to.minusDays(7), to) cutoff
+            // (inclusive lower bound: date >= today-7).
+            LocalDate cutoff = LocalDate.now().minusDays(7);
             for (DailyMetric m : rows) {
+                if (m.date() == null || m.date().isBefore(cutoff)) continue;
                 Double v = extract.extract(m);
                 if (v == null) continue;
-                if (chosen == null || (m.date() != null
-                        && (chosen.date() == null || m.date().isAfter(chosen.date())))) {
-                    chosen = m;
-                    chosenValue = v;
-                }
+                Instant asOf = m.date().atStartOfDay().toInstant(ZoneOffset.UTC);
+                return MetricValue.of(v, asOf);
             }
-            if (chosen == null || chosenValue == null) return MetricValue.unavailable();
-            Instant asOf = chosen.date() != null
-                ? chosen.date().atStartOfDay().toInstant(ZoneOffset.UTC)
-                : chosen.updatedAt();
-            return MetricValue.of(chosenValue, asOf);
+            return MetricValue.unavailable();
         } catch (UnsupportedOperationException e) {
             return MetricValue.unavailable();
         }

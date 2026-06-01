@@ -18,12 +18,14 @@ function isoDate(d: Date): string {
   return d.toISOString().split("T")[0]!;
 }
 
-// Fetches the last 30 days of daily metrics. Returns [] on any error so the
-// dashboard server component can fall back gracefully without crashing.
+// Fetches the last 14 days of daily metrics. The dashboard only needs ~9-14
+// points to compute deltas/sparklines, so a 14-day window avoids over-fetching
+// the previously-requested 30 days. Returns [] on any error so the dashboard
+// server component can fall back gracefully without crashing.
 export async function fetchDailyMetrics(): Promise<DailyMetric[]> {
   const now = Date.now();
   const to = isoDate(new Date(now));
-  const from = isoDate(new Date(now - 30 * DAY_MS));
+  const from = isoDate(new Date(now - 14 * DAY_MS));
   try {
     return await apiJson<DailyMetric[]>(
       `/api/me/daily-metrics?from=${from}&to=${to}`,

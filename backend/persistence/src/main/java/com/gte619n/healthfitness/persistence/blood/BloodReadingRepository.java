@@ -53,6 +53,19 @@ public class BloodReadingRepository implements com.gte619n.healthfitness.core.bl
     }
 
     @Override
+    public Optional<BloodReading> findLatestByMarker(String userId, BloodMarker marker) {
+        // Indexed single-doc read: marker ASC, sampleDate DESC composite
+        // index (declared in infra/firestore/firestore.indexes.json).
+        List<QueryDocumentSnapshot> docs = await(collection(userId)
+            .whereEqualTo("marker", marker.name())
+            .orderBy("sampleDate", Query.Direction.DESCENDING)
+            .limit(1)
+            .get()).getDocuments();
+        if (docs.isEmpty()) return Optional.empty();
+        return Optional.of(toReading(userId, docs.get(0)));
+    }
+
+    @Override
     public void save(BloodReading reading) {
         DocumentReference docRef = collection(reading.userId()).document(reading.readingId());
         DocumentSnapshot existing = await(docRef.get());

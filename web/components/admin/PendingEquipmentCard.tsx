@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useRef, useState } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { AdminEquipment, SpecSchema, EquipmentSpecs } from '@/lib/types/gym';
@@ -268,20 +269,22 @@ function ImageThumb({
           className="block h-32 w-32 shrink-0 cursor-zoom-in rounded-md border border-border-default p-0"
           aria-label={`Zoom image for ${alt}`}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={url}
             alt={alt}
+            width={128}
+            height={128}
             className="h-full w-full rounded-md object-cover"
           />
         </button>
       );
     }
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={url}
         alt=""
+        width={128}
+        height={128}
         className="h-32 w-32 shrink-0 rounded-md border border-border-default object-cover"
       />
     );

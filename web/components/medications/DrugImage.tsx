@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import type { DrugForm } from "@/lib/types/medication";
 
@@ -61,13 +62,19 @@ export function DrugImage({ imageUrl, fallbackUrl, form, name, className = "" }:
     );
   }
 
-  // Show primary image
+  // Show primary image. `fill` lets it adopt the sized parent's footprint
+  // (callers pass e.g. `h-full w-full`); the wrapper is made `relative` so
+  // next/image's absolute fill positions correctly.
   return (
-    <img
-      src={imageUrl}
-      alt={name}
-      className={`object-cover ${className}`}
-      onError={() => setError(true)}
-    />
+    <div className={`relative overflow-hidden ${className}`}>
+      <Image
+        src={imageUrl}
+        alt={name}
+        fill
+        sizes="(max-width: 768px) 50vw, 200px"
+        className="object-cover"
+        onError={() => setError(true)}
+      />
+    </div>
   );
 }

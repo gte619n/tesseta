@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -254,10 +255,11 @@ function DragPreview({ drug }: { drug: Drug }) {
   return (
     <div className="inline-flex max-w-xs items-center gap-2 rounded-full border border-border-default bg-surface px-3 py-1.5 shadow-md">
       {imageSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={imageSrc}
           alt=""
+          width={24}
+          height={24}
           className="h-6 w-6 shrink-0 rounded-full border border-border-default object-cover"
         />
       ) : (

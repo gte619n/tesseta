@@ -1,7 +1,8 @@
 import { getPendingEquipment } from '@/lib/gym-api';
 import { EquipmentSubTabs } from '@/components/admin/EquipmentSubTabs';
 
-export const dynamic = 'force-dynamic';
+// Read-mostly: pending-equipment count is admin-global reference data.
+export const revalidate = 60;
 
 export default async function EquipmentLayout({ children }: { children: React.ReactNode }) {
   const pending = await getPendingEquipment().catch(() => []);

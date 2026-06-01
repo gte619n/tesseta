@@ -54,16 +54,28 @@ public class AdminEquipmentController {
 
     @GetMapping("/pending")
     public List<PendingEquipmentResponse> listPending() {
-        List<Equipment> pending = equipmentService.findPendingSubmissions();
-        return pending.stream()
-            .map(this::toPendingResponse)
-            .toList();
+        return toPendingResponses(equipmentService.findPendingSubmissions());
     }
 
     @GetMapping("/catalog")
     public List<PendingEquipmentResponse> listCatalog() {
-        return equipmentService.listCatalog(null, null, null).stream()
-            .map(this::toPendingResponse)
+        return toPendingResponses(equipmentService.listCatalog(null, null, null));
+    }
+
+    /**
+     * Map a list of equipment to responses, batch-resolving the distinct
+     * contributor ids in one pass instead of one Firestore read per item.
+     */
+    private List<PendingEquipmentResponse> toPendingResponses(List<Equipment> items) {
+        List<String> contributorIds = items.stream()
+            .map(Equipment::contributorId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        java.util.Map<String, User> usersById = userRepository.findByIds(contributorIds);
+        return items.stream()
+            .map(eq -> toPendingResponse(eq,
+                eq.contributorId() == null ? null : usersById.get(eq.contributorId())))
             .toList();
     }
 
@@ -80,10 +92,7 @@ public class AdminEquipmentController {
         return EquipmentResponse.from(created);
     }
 
-    private PendingEquipmentResponse toPendingResponse(Equipment eq) {
-        User user = eq.contributorId() == null
-            ? null
-            : userRepository.findById(eq.contributorId()).orElse(null);
+    private PendingEquipmentResponse toPendingResponse(Equipment eq, User user) {
         return new PendingEquipmentResponse(
             eq.equipmentId(),
             eq.name(),

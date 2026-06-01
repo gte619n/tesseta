@@ -17,7 +17,9 @@ import { pageMetadata } from '@/lib/page-metadata';
 
 export const metadata = pageMetadata('Drug Admin');
 
-export const dynamic = 'force-dynamic';
+// Read-mostly: the admin drug catalog is global reference data. Mutations below
+// call revalidatePath to refresh immediately.
+export const revalidate = 60;
 
 export default async function AdminDrugsPage() {
   // Admin gating handled by app/admin/layout.tsx

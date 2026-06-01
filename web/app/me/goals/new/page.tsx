@@ -13,7 +13,9 @@ import { pageMetadata } from "@/lib/page-metadata";
 
 export const metadata = pageMetadata("New Goal");
 
-export const dynamic = "force-dynamic";
+// No render-time authed fetch (the component is synchronous and only triggers
+// mutations from server actions), so ISR is safe here.
+export const revalidate = 60;
 
 export default function NewGoalPage() {
   // Persist the whole proposal structure in order: create the Goal, then
