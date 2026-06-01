@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -139,7 +141,7 @@ fun NutritionCaptureScreen(
         }
 
         when (val stage = state.stage) {
-            CaptureStage.Working -> Centered { CircularProgressIndicator(color = Hf.colors.accent) }
+            CaptureStage.Working -> AnalyzingPane()
             is CaptureStage.Done -> DonePane(message = stage.message, onAgain = onReset)
             is CaptureStage.BarcodeFood -> BarcodeFoodPane(
                 food = stage.food,
@@ -452,7 +454,42 @@ private fun CameraDenied(onRequest: () -> Unit) {
     }
 }
 
+/**
+ * Shown while a photo is being analyzed (or a meal logged): the spinner plus a
+ * rotating set of status messages so the wait reads as progress, not a hang.
+ */
 @Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+private fun AnalyzingPane() {
+    val messages = listOf(
+        "Analyzing your photo…",
+        "Identifying ingredients…",
+        "Estimating portions & macros…",
+        "Plating your meal…",
+        "Generating food images…",
+        "Almost there…",
+    )
+    var index by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1900)
+            index = (index + 1) % messages.size
+        }
+    }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator(color = Hf.colors.accent)
+        Spacer(Modifier.height(18.dp))
+        AnimatedContent(targetState = messages[index], label = "analyzing-status") { msg ->
+            Text(
+                msg,
+                style = Hf.type.bodyMd,
+                color = Hf.colors.textSecondary,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
 }
+
