@@ -3,8 +3,10 @@ package com.gte619n.healthfitness.data.dashboard
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
 import com.gte619n.healthfitness.domain.dashboard.ChartXLabel
+import com.gte619n.healthfitness.domain.dashboard.DailyMetricPoint
 import com.gte619n.healthfitness.domain.dashboard.DashboardBloodMarkerRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardBodyCompositionRepository
+import com.gte619n.healthfitness.domain.dashboard.DashboardDailyMetricsRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardTodaysDosesRepository
 import com.gte619n.healthfitness.domain.dashboard.DoseWindow
 import com.gte619n.healthfitness.domain.dashboard.HistoryPoint
@@ -20,6 +22,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
 import retrofit2.http.GET
+import retrofit2.http.Query
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -40,6 +43,12 @@ internal interface DashboardApi {
 
     @GET("api/me/medications/today")
     suspend fun todaysDoses(): List<TodaysDoseDto>
+
+    @GET("api/me/daily-metrics")
+    suspend fun dailyMetrics(
+        @Query("from") from: String,
+        @Query("to") to: String,
+    ): List<DailyMetricDto>
 }
 
 // ---- DTOs (Moshi reflection) ----
@@ -81,6 +90,15 @@ internal data class TodaysDoseDto(
     val unit: String?,
     val taken: Boolean,
     val takenAt: Instant?,
+)
+
+internal data class DailyMetricDto(
+    val date: String,
+    val steps: Int?,
+    val restingHeartRate: Int?,
+    val sleepMinutes: Int?,
+    val hrvMs: Int?,
+    val sleepScore: Int?,
 )
 
 // ---- Mappers ----
@@ -218,6 +236,21 @@ internal fun TodaysDoseDto.toDomain(): TodaysDoseSummary = TodaysDoseSummary(
     takenAt = takenAt,
 )
 
+internal object DailyMetricMapper {
+    fun toDomain(rows: List<DailyMetricDto>): List<DailyMetricPoint> =
+        rows.mapNotNull { dto ->
+            val date = runCatching { LocalDate.parse(dto.date) }.getOrNull() ?: return@mapNotNull null
+            DailyMetricPoint(
+                date = date,
+                steps = dto.steps,
+                restingHeartRate = dto.restingHeartRate,
+                sleepMinutes = dto.sleepMinutes,
+                hrvMs = dto.hrvMs,
+                sleepScore = dto.sleepScore,
+            )
+        }.sortedBy { it.date }
+}
+
 // ---- Repository impls ----
 
 internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
@@ -226,6 +259,19 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
 ) : DashboardBodyCompositionRepository {
     override suspend fun loadRecent(): WeightSummary? = withContext(io) {
         BodyCompositionMapper.toWeightSummary(api.bodyComposition())
+    }
+}
+
+internal class DashboardDailyMetricsRepositoryImpl @Inject constructor(
+    private val api: DashboardApi,
+    @IoDispatcher private val io: CoroutineDispatcher,
+) : DashboardDailyMetricsRepository {
+    private val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
+
+    override suspend fun loadRecent(): List<DailyMetricPoint> = withContext(io) {
+        val today = LocalDate.now()
+        val from = today.minusDays(30)
+        DailyMetricMapper.toDomain(api.dailyMetrics(from.format(dateFmt), today.format(dateFmt)))
     }
 }
 
@@ -254,6 +300,9 @@ internal class DashboardTodaysDosesRepositoryImpl @Inject constructor(
 internal abstract class DashboardDataModule {
     @Binds @Singleton
     abstract fun bindBodyComp(impl: DashboardBodyCompositionRepositoryImpl): DashboardBodyCompositionRepository
+
+    @Binds @Singleton
+    abstract fun bindDailyMetrics(impl: DashboardDailyMetricsRepositoryImpl): DashboardDailyMetricsRepository
 
     @Binds @Singleton
     abstract fun bindBlood(impl: DashboardBloodMarkerRepositoryImpl): DashboardBloodMarkerRepository

@@ -76,7 +76,7 @@ fun FoldableDashboardScreen(
             ) {
                 FoldableTopBar()
                 Spacer(Modifier.height(18.dp))
-                FoldableVitalsRow()
+                FoldableVitalsRow(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
                 Spacer(Modifier.height(11.dp))
                 CardSwitch(
                     state = ui.bodyComposition,
@@ -278,15 +278,42 @@ private fun FoldableTopBar() {
 }
 
 @Composable
-private fun FoldableVitalsRow() {
+private fun FoldableVitalsRow(
+    ui: DashboardUiState,
+    weightUnit: WeightUnit,
+    onRetryWeight: () -> Unit,
+) {
+    // Tile order: Weight (live), Resting HR, HRV, Sleep, Steps.
+    val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
+    val tiles = listOf(
+        restingHrVital(metrics) to "RHR",
+        hrvVital(metrics) to "HRV",
+        sleepVital(metrics) to "Sleep",
+        stepsVital(metrics) to "Steps",
+    )
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        DashboardFallbacks.vitals.forEachIndexed { i, stat ->
+        // First tile is the live Weight vital backed by body-composition.
+        Box(modifier = Modifier.weight(1f)) {
+            CardSwitch(
+                state = ui.bodyComposition,
+                placeholderHeightDp = 96,
+                onRetry = onRetryWeight,
+            ) { summary ->
+                StatCard(
+                    stat = weightVital(summary, weightUnit),
+                    overrideLabel = "Weight",
+                    valueSizeSp = 19,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        tiles.forEach { (stat, shortLabel) ->
             StatCard(
                 stat = stat,
-                overrideLabel = DashboardFallbacks.vitalsShortLabels[i],
+                overrideLabel = shortLabel,
                 valueSizeSp = 19,
                 modifier = Modifier.weight(1f),
             )

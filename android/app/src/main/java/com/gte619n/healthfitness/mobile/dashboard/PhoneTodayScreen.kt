@@ -120,6 +120,12 @@ private fun PhoneHeader(user: DashboardUser?) {
 
 @Composable
 private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetryWeight: () -> Unit) {
+    // Tile order: Weight (live), Resting HR, HRV, Sleep, Steps.
+    val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
+    val rhr = restingHrVital(metrics)
+    val hrv = hrvVital(metrics)
+    val sleep = sleepVital(metrics)
+    val steps = stepsVital(metrics)
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             // First card is the live Weight vital backed by body-composition.
@@ -132,17 +138,22 @@ private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetr
                     StatCard(stat = weightVital(summary, weightUnit), modifier = Modifier.fillMaxWidth())
                 }
             }
-            StatCard(stat = DashboardFallbacks.vitals[1], modifier = Modifier.weight(1f))
+            StatCard(stat = rhr, modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            StatCard(stat = DashboardFallbacks.vitals[2], modifier = Modifier.weight(1f))
-            StatCard(stat = DashboardFallbacks.vitals[3], modifier = Modifier.weight(1f))
+            StatCard(stat = hrv, modifier = Modifier.weight(1f))
+            StatCard(stat = sleep, modifier = Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            StatCard(stat = steps, modifier = Modifier.weight(1f))
+            // Spacer keeps the last row's tile width consistent with the grid.
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }
 
 /** Builds the Weight [Vital] card model from the live body-composition summary. */
-private fun weightVital(s: WeightSummary?, weightUnit: WeightUnit): Vital =
+fun weightVital(s: WeightSummary?, weightUnit: WeightUnit): Vital =
     Vital(
         label = "Weight",
         icon = DashboardIcons.Scale,
