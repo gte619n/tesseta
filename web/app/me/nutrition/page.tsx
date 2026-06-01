@@ -6,6 +6,7 @@ import {
   getTarget,
   addEntry,
   updateEntry,
+  updateIngredient,
   deleteEntry,
   searchFoods,
 } from "@/lib/nutrition-api";
@@ -14,6 +15,7 @@ import type {
   Macros,
   NutritionDay,
   UpdateEntryBody,
+  UpdateIngredientBody,
 } from "@/lib/types/nutrition";
 import { MEALS } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
@@ -139,6 +141,17 @@ export default async function NutritionPage(props: {
     revalidatePath("/me/nutrition");
   }
 
+  async function updateIngredientAction(
+    entryDate: string,
+    entryId: string,
+    index: number,
+    body: UpdateIngredientBody,
+  ) {
+    "use server";
+    await updateIngredient(entryDate, entryId, index, body);
+    revalidatePath("/me/nutrition");
+  }
+
   async function deleteEntryAction(entryDate: string, entryId: string) {
     "use server";
     await deleteEntry(entryDate, entryId);
@@ -256,6 +269,7 @@ export default async function NutritionPage(props: {
               date={date}
               addEntry={addEntryAction}
               updateEntry={updateEntryAction}
+              updateIngredient={updateIngredientAction}
               deleteEntry={deleteEntryAction}
               searchFoods={searchFoodsAction}
             />

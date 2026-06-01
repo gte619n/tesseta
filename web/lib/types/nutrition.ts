@@ -25,6 +25,22 @@ export type Entry = {
   macros: Macros;
   source: EntrySource;
   // Joined in from the entry's catalog food (null/NONE for manual entries).
+  // For a composite (photo-logged) meal this is the finished-meal image.
+  imageUrl: string | null;
+  imageStatus: ImageStatus;
+  // Present for a composite meal: its components, each with a raw-ingredient
+  // image. Null/absent for a plain single-food entry.
+  ingredients?: EntryIngredient[] | null;
+};
+
+export type EntryIngredient = {
+  name: string;
+  foodId: string | null;
+  servingLabel: string | null;
+  servingGrams: number | null;
+  quantity: number | null;
+  macros: Macros;
+  macrosPer100g: Macros | null;
   imageUrl: string | null;
   imageStatus: ImageStatus;
 };
@@ -103,6 +119,12 @@ export type UpdateEntryBody = Partial<{
   servingGrams: number;
   quantity: number;
   macros: Macros;
+}>;
+
+export type UpdateIngredientBody = Partial<{
+  servingGrams: number;
+  servingLabel: string;
+  quantity: number;
 }>;
 
 export type CreateFoodBody = {

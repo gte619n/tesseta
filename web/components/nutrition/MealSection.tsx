@@ -7,12 +7,14 @@ import type {
   Meal,
   Macros,
   UpdateEntryBody,
+  UpdateIngredientBody,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS, MEAL_ICONS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { AddFoodModal } from "@/components/nutrition/AddFoodModal";
 import { EditEntryModal } from "@/components/nutrition/EditEntryModal";
+import { IngredientsModal } from "@/components/nutrition/IngredientsModal";
 import { FoodImage } from "@/components/nutrition/FoodImage";
 
 type Props = {
@@ -36,6 +38,12 @@ type Props = {
     entryId: string,
     body: UpdateEntryBody,
   ) => Promise<void>;
+  updateIngredient: (
+    date: string,
+    entryId: string,
+    index: number,
+    body: UpdateIngredientBody,
+  ) => Promise<void>;
   deleteEntry: (date: string, entryId: string) => Promise<void>;
   searchFoods: (q: string) => Promise<
     {
@@ -55,13 +63,25 @@ export function MealSection({
   date,
   addEntry,
   updateEntry,
+  updateIngredient,
   deleteEntry,
   searchFoods,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entry | null>(null);
+  const [editingComposite, setEditingComposite] = useState<Entry | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
+
+  // A composite (photo-logged) meal opens the ingredients modal; everything
+  // else opens the single-food edit modal.
+  function openEntry(entry: Entry) {
+    if (entry.ingredients && entry.ingredients.length > 0) {
+      setEditingComposite(entry);
+    } else {
+      setEditing(entry);
+    }
+  }
 
   async function handleDelete(entry: Entry) {
     const ok = await confirm({
@@ -117,7 +137,7 @@ export function MealSection({
             <EntryRow
               key={entry.entryId}
               entry={entry}
-              onEdit={() => setEditing(entry)}
+              onEdit={() => openEntry(entry)}
               onDelete={() => handleDelete(entry)}
             />
           ))}
@@ -157,6 +177,16 @@ export function MealSection({
           entry={editing}
           date={date}
           updateEntry={updateEntry}
+        />
+      )}
+
+      {editingComposite && (
+        <IngredientsModal
+          isOpen={editingComposite !== null}
+          onClose={() => setEditingComposite(null)}
+          entry={editingComposite}
+          date={date}
+          updateIngredient={updateIngredient}
         />
       )}
     </div>

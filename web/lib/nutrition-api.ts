@@ -7,6 +7,7 @@ import type {
   DailyRollup,
   AddEntryBody,
   UpdateEntryBody,
+  UpdateIngredientBody,
   CreateFoodBody,
 } from "./types/nutrition";
 
@@ -104,6 +105,20 @@ export function updateEntry(
 /** Remove an entry from the day. */
 export function deleteEntry(date: string, entryId: string): Promise<void> {
   return send<void>(`/api/me/nutrition/${date}/entries/${entryId}`, "DELETE");
+}
+
+/** Re-portion one ingredient of a composite meal (by index). */
+export function updateIngredient(
+  date: string,
+  entryId: string,
+  index: number,
+  body: UpdateIngredientBody,
+): Promise<Entry> {
+  return send<Entry>(
+    `/api/me/nutrition/${date}/entries/${entryId}/ingredients/${index}`,
+    "PATCH",
+    body,
+  );
 }
 
 /** Create a new catalog food (manual / AI-confirmed). */
