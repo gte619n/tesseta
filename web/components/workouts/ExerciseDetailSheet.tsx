@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PrescriptionExercise } from "@/lib/types/workout-program";
@@ -90,12 +91,15 @@ export function ExerciseDetailSheet({ exercise, onClose }: Props) {
                   {DEMO_PHASE_LABEL[phase]}
                 </span>
                 {frame?.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={frame.imageUrl}
-                    alt={`${exercise.name} ${phase}`}
-                    className="aspect-[4/5] w-full rounded-md border-[0.5px] border-border-default object-cover"
-                  />
+                  <div className="relative aspect-[4/5] w-full overflow-hidden rounded-md border-[0.5px] border-border-default">
+                    <Image
+                      src={frame.imageUrl}
+                      alt={`${exercise.name} ${phase}`}
+                      fill
+                      sizes="(max-width: 560px) 33vw, 180px"
+                      className="object-cover"
+                    />
+                  </div>
                 ) : (
                   <div className="flex aspect-[4/5] w-full items-center justify-center rounded-md border border-dashed border-border-default bg-canvas text-tertiary">
                     <span className="text-[10px] uppercase tracking-wider">No frame</span>

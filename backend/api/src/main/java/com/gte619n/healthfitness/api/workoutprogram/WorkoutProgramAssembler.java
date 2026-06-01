@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.api.workoutprogram.WorkoutProgramDeepResponse.P
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseService;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
+import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
@@ -111,9 +112,14 @@ public class WorkoutProgramAssembler {
 
     private Map<String, String> gymNamesFor(String userId, Set<String> locationIds) {
         Map<String, String> map = new HashMap<>();
-        for (String id : locationIds) {
-            if (id == null) continue;
-            locations.findById(userId, id).ifPresent(l -> map.put(id, l.name()));
+        if (locationIds.isEmpty()) {
+            return map;
+        }
+        // One read of the user's locations rather than a findById per gym.
+        for (Location l : locations.findByUser(userId, true)) {
+            if (locationIds.contains(l.locationId())) {
+                map.put(l.locationId(), l.name());
+            }
         }
         return map;
     }

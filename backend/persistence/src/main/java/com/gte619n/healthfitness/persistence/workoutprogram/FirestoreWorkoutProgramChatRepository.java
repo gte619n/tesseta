@@ -11,6 +11,7 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
+import com.google.cloud.firestore.WriteBatch;
 import com.gte619n.healthfitness.core.goals.chat.ChatRole;
 import com.gte619n.healthfitness.core.location.DayOfWeek;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSchedule;
@@ -37,6 +38,8 @@ public class FirestoreWorkoutProgramChatRepository implements WorkoutProgramChat
 
     private static final String THREADS = "workoutProgramChatThreads";
     private static final String MESSAGES = "messages";
+    /** Firestore commits at most 500 writes per batch. */
+    private static final int MAX_BATCH = 500;
 
     private final Firestore firestore;
 
@@ -112,8 +115,15 @@ public class FirestoreWorkoutProgramChatRepository implements WorkoutProgramChat
 
     @Override
     public void deleteThread(String userId, String threadId) {
-        for (QueryDocumentSnapshot d : await(messages(userId, threadId).get()).getDocuments()) {
-            await(d.getReference().delete());
+        // Firestore doesn't cascade subcollections: delete every message in a
+        // batched commit (≤500/commit), then the thread doc itself.
+        List<QueryDocumentSnapshot> msgs = await(messages(userId, threadId).get()).getDocuments();
+        for (int start = 0; start < msgs.size(); start += MAX_BATCH) {
+            WriteBatch batch = firestore.batch();
+            for (QueryDocumentSnapshot d : msgs.subList(start, Math.min(start + MAX_BATCH, msgs.size()))) {
+                batch.delete(d.getReference());
+            }
+            await(batch.commit());
         }
         await(threads(userId).document(threadId).delete());
     }

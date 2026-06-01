@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.core.workoutprogram;
 
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +39,7 @@ public class WorkoutScheduleService {
         LocalDate clearFrom = from.isAfter(today) ? from : today;
         scheduled.deletePlannedFrom(userId, programId, clearFrom);
 
+        List<ScheduledWorkout> sessions = new ArrayList<>();
         for (ProgramPhase phase : program.phases()) {
             int weeks = Math.max(1, phase.weeks());
             LocalDate phaseStart = phase.targetStartDate() != null ? phase.targetStartDate() : from;
@@ -50,17 +52,17 @@ public class WorkoutScheduleService {
                     if (date.isBefore(clearFrom)) {
                         continue; // don't rewrite past sessions
                     }
-                    ScheduledWorkout sw = new ScheduledWorkout(
+                    sessions.add(new ScheduledWorkout(
                         userId, programId,
                         date + "_" + day.dayId(),
                         date, phase.phaseId(), day.dayId(), day.label(),
                         week, isDeload, day.locationId(),
                         ScheduledStatus.PLANNED, day
-                    );
-                    scheduled.save(sw);
+                    ));
                 }
             }
         }
+        scheduled.saveAll(sessions);
         programService.setStatus(userId, programId, ProgramStatus.ACTIVE);
         return scheduled.findByProgram(userId, programId, clearFrom, clearFrom.plusYears(1));
     }

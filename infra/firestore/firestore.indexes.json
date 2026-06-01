@@ -84,6 +84,15 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "startDate", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.deletePlannedFrom — whereEqualTo(status) + whereGreaterThanOrEqualTo(date). findByProgram (date range + orderBy date) needs only the auto-created single-field date index.",
+      "collectionGroup": "scheduled",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

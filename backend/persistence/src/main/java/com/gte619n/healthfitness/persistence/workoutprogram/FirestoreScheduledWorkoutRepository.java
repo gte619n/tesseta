@@ -7,6 +7,7 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
+import com.google.cloud.firestore.WriteBatch;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository;
@@ -27,6 +28,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 @ConditionalOnProperty(name = "app.persistence.firestore-enabled", havingValue = "true", matchIfMissing = true)
 public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepository {
+
+    /** Firestore commits at most 500 writes per batch. */
+    private static final int MAX_BATCH = 500;
 
     private final Firestore firestore;
 
@@ -52,6 +56,27 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
 
     @Override
     public void save(ScheduledWorkout sw) {
+        await(collection(sw.userId(), sw.programId()).document(sw.scheduledId())
+            .set(toBody(sw), SetOptions.merge()));
+    }
+
+    @Override
+    public void saveAll(List<ScheduledWorkout> items) {
+        if (items.isEmpty()) {
+            return;
+        }
+        // One batched commit per 500 sessions instead of a write per session.
+        for (int start = 0; start < items.size(); start += MAX_BATCH) {
+            WriteBatch batch = firestore.batch();
+            for (ScheduledWorkout sw : items.subList(start, Math.min(start + MAX_BATCH, items.size()))) {
+                batch.set(collection(sw.userId(), sw.programId()).document(sw.scheduledId()),
+                    toBody(sw), SetOptions.merge());
+            }
+            await(batch.commit());
+        }
+    }
+
+    private static Map<String, Object> toBody(ScheduledWorkout sw) {
         Map<String, Object> body = new HashMap<>();
         body.put("date", sw.date().toString());
         body.put("phaseId", sw.phaseId());
@@ -64,7 +89,7 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
         List<Map<String, Object>> sessionDays =
             FirestoreWorkoutProgramRepository.daysToWire(sw.session() == null ? List.of() : List.of(sw.session()));
         body.put("session", sessionDays.isEmpty() ? null : sessionDays.get(0));
-        await(collection(sw.userId(), sw.programId()).document(sw.scheduledId()).set(body, SetOptions.merge()));
+        return body;
     }
 
     @Override
@@ -73,8 +98,13 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
             .whereGreaterThanOrEqualTo("date", from.toString())
             .whereEqualTo("status", ScheduledStatus.PLANNED.name())
             .get()).getDocuments();
-        for (QueryDocumentSnapshot d : docs) {
-            await(d.getReference().delete());
+        // Batched deletes (≤500/commit) rather than a round-trip per doc.
+        for (int start = 0; start < docs.size(); start += MAX_BATCH) {
+            WriteBatch batch = firestore.batch();
+            for (QueryDocumentSnapshot d : docs.subList(start, Math.min(start + MAX_BATCH, docs.size()))) {
+                batch.delete(d.getReference());
+            }
+            await(batch.commit());
         }
     }
 

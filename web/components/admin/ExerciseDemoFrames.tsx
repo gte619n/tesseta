@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useRef, useState } from 'react';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
@@ -180,19 +181,27 @@ function PhaseFrame({
           <button
             type="button"
             onClick={() => onZoom(url)}
-            className="block aspect-[4/5] w-full cursor-zoom-in overflow-hidden rounded-md border border-border-default p-0"
+            className="relative block aspect-[4/5] w-full cursor-zoom-in overflow-hidden rounded-md border border-border-default p-0"
             aria-label={`Zoom ${DEMO_PHASE_LABEL[phase]} frame for ${exerciseName}`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={`${exerciseName} ${phase}`} className="h-full w-full object-cover" />
+            <Image
+              src={url}
+              alt={`${exerciseName} ${phase}`}
+              fill
+              sizes="(max-width: 768px) 33vw, 200px"
+              className="object-cover"
+            />
           </button>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={url}
-            alt=""
-            className="aspect-[4/5] w-full rounded-md border border-border-default object-cover"
-          />
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-md border border-border-default">
+            <Image
+              src={url}
+              alt=""
+              fill
+              sizes="(max-width: 768px) 33vw, 200px"
+              className="object-cover"
+            />
+          </div>
         )
       ) : (
         <div className="flex aspect-[4/5] w-full flex-col items-center justify-center rounded-md border border-dashed border-border-default bg-canvas text-tertiary">
@@ -223,8 +232,13 @@ function PhaseFrame({
                       : 'border-border-default cursor-pointer hover:border-accent')
                   }
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cand} alt="" className="h-full w-full object-cover" />
+                  <Image
+                    src={cand}
+                    alt=""
+                    width={32}
+                    height={40}
+                    className="h-full w-full object-cover"
+                  />
                 </button>
                 <button
                   type="button"

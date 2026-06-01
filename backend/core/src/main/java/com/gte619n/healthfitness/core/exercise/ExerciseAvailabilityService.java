@@ -2,8 +2,13 @@ package com.gte619n.healthfitness.core.exercise;
 
 import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -45,6 +50,36 @@ public class ExerciseAvailabilityService {
             .filter(this::mediaOk)
             .filter(e -> satisfiedBy(e, gear))
             .toList();
+    }
+
+    /**
+     * Executable exercises for several gyms at once, reading the published
+     * catalog and the user's locations a single time each (no per-gym N+1).
+     * Returns an entry for every requested id; gyms that don't resolve to a
+     * known location map to an empty list. Order follows {@code locationIds}.
+     */
+    public Map<String, List<Exercise>> executableAt(String userId, Collection<String> locationIds) {
+        Set<String> wanted = new LinkedHashSet<>(locationIds);
+        Map<String, List<Exercise>> out = new LinkedHashMap<>();
+        if (wanted.isEmpty()) {
+            return out;
+        }
+        List<Exercise> published = exercises.findPublished(null, null, null, null).stream()
+            .filter(this::mediaOk)
+            .toList();
+        Map<String, Set<String>> gearByLoc = new HashMap<>();
+        for (Location l : locations.findByUser(userId, true)) {
+            if (wanted.contains(l.locationId())) {
+                gearByLoc.put(l.locationId(),
+                    new HashSet<>(l.equipmentIds() == null ? List.of() : l.equipmentIds()));
+            }
+        }
+        for (String locId : wanted) {
+            Set<String> gear = gearByLoc.get(locId);
+            out.put(locId, gear == null ? List.of()
+                : published.stream().filter(e -> satisfiedBy(e, gear)).toList());
+        }
+        return out;
     }
 
     /** True when the exercise's media passes the configured approval gate. */

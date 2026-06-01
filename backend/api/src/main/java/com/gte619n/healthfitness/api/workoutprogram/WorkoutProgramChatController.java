@@ -254,9 +254,10 @@ public class WorkoutProgramChatController {
         sb.append("\nEXECUTABLE EXERCISES PER GYM (use ONLY these exerciseIds, and "
             + "only at the matching locationId):\n");
         Set<String> gyms = new LinkedHashSet<>(dayLocations.values());
+        Map<String, List<Exercise>> executableByGym = availability.executableAt(userId, gyms);
         for (String locId : gyms) {
             sb.append("- locationId=").append(locId).append(":\n");
-            List<Exercise> executable = availability.executableAt(userId, locId);
+            List<Exercise> executable = executableByGym.getOrDefault(locId, List.of());
             if (executable.isEmpty()) {
                 sb.append("    (no published exercises are executable here)\n");
             }
