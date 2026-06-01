@@ -35,9 +35,10 @@ function scaleKcal(per100g: Macros | null, grams: number, qty: number): number {
 }
 
 /**
- * Modal for a composite (photo-logged) meal: the finished-meal image plus each
- * ingredient with its raw-ingredient image and an editable portion. Editing a
- * portion re-scales that ingredient server-side and the meal total recomputes.
+ * Modal for a composite (photo-logged) meal: the finished-meal image, an
+ * editable meal title, and each ingredient with its raw-ingredient image and a
+ * quantity multiplier (the portion size itself is fixed). One Save commits the
+ * title and all quantity changes together.
  */
 export function IngredientsModal({
   isOpen,
@@ -48,22 +49,12 @@ export function IngredientsModal({
   updateIngredient,
 }: Props) {
   const toast = useToast();
+  const ingredients = entry.ingredients ?? [];
   const [title, setTitle] = useState(entry.foodName);
-  const [renaming, setRenaming] = useState(false);
-
-  async function handleRename() {
-    const next = title.trim();
-    if (!next || next === entry.foodName) return;
-    setRenaming(true);
-    try {
-      await updateEntry(date, entry.entryId, { foodName: next });
-      toast.success("Meal renamed");
-    } catch {
-      toast.error("Failed to rename meal");
-    } finally {
-      setRenaming(false);
-    }
-  }
+  const [qtys, setQtys] = useState<string[]>(
+    ingredients.map((i) => String(i.quantity ?? 1)),
+  );
+  const [saving, setSaving] = useState(false);
 
   // Backdrop close tracking (see web/CLAUDE.md modal pattern)
   const downOnBackdropRef = useRef(false);
@@ -76,8 +67,30 @@ export function IngredientsModal({
     if (downOnBackdrop && e.target === e.currentTarget) onClose();
   }
 
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const nextTitle = title.trim();
+      if (nextTitle && nextTitle !== entry.foodName) {
+        await updateEntry(date, entry.entryId, { foodName: nextTitle });
+      }
+      for (let i = 0; i < ingredients.length; i++) {
+        const newQ = parseFloat(qtys[i] ?? "") || 1;
+        const oldQ = ingredients[i]?.quantity ?? 1;
+        if (newQ > 0 && newQ !== oldQ) {
+          await updateIngredient(date, entry.entryId, i, { quantity: newQ });
+        }
+      }
+      toast.success("Meal updated");
+      onClose();
+    } catch {
+      toast.error("Failed to save meal");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!isOpen) return null;
-  const ingredients = entry.ingredients ?? [];
 
   return (
     <div
@@ -90,7 +103,7 @@ export function IngredientsModal({
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header: finished-meal image + name + total */}
+        {/* Header: finished-meal image + total */}
         <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-border-subtle px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <FoodImage imageUrl={entry.imageUrl} imageStatus={entry.imageStatus} size={64} />
@@ -121,40 +134,42 @@ export function IngredientsModal({
             <label className="mb-1.5 block text-[11px] font-medium text-secondary">
               Meal title
             </label>
-            <div className="flex gap-2">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Meal name"
-                className="min-w-0 flex-1 rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-              <button
-                type="button"
-                onClick={handleRename}
-                disabled={renaming || !title.trim() || title.trim() === entry.foodName}
-                className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {renaming ? "…" : "Rename"}
-              </button>
-            </div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Meal name"
+              className="w-full rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+            />
           </div>
 
           {ingredients.map((ing, index) => (
             <IngredientRow
               key={`${ing.foodId ?? ing.name}-${index}`}
               ingredient={ing}
-              onSave={(body) => updateIngredient(date, entry.entryId, index, body)}
+              quantity={qtys[index] ?? "1"}
+              onQuantityChange={(v) =>
+                setQtys((prev) => prev.map((q, i) => (i === index ? v : q)))
+              }
             />
           ))}
         </div>
 
-        <div className="flex justify-end border-t-[0.5px] border-border-subtle px-5 py-4">
+        {/* Footer: single save for the whole meal */}
+        <div className="flex justify-end gap-2 border-t-[0.5px] border-border-subtle px-5 py-4">
           <button
             type="button"
             onClick={onClose}
             className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
           >
-            Done
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -164,83 +179,38 @@ export function IngredientsModal({
 
 function IngredientRow({
   ingredient,
-  onSave,
+  quantity,
+  onQuantityChange,
 }: {
   ingredient: EntryIngredient;
-  onSave: (body: UpdateIngredientBody) => Promise<void>;
+  quantity: string;
+  onQuantityChange: (v: string) => void;
 }) {
-  const toast = useToast();
-  const [grams, setGrams] = useState(String(num(ingredient.servingGrams)));
-  const [qty, setQty] = useState(String(ingredient.quantity ?? 1));
-  const [saving, setSaving] = useState(false);
-
-  const g = parseFloat(grams) || 0;
-  const q = parseFloat(qty) || 1;
-  const kcal = scaleKcal(ingredient.macrosPer100g, g, q);
-
-  async function handleSave() {
-    if (g <= 0) {
-      toast.error("Grams must be greater than 0");
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave({
-        servingGrams: g,
-        quantity: q,
-        servingLabel: ingredient.servingLabel ?? undefined,
-      });
-      toast.success(`${ingredient.name} updated`);
-    } catch {
-      toast.error("Failed to update portion");
-    } finally {
-      setSaving(false);
-    }
-  }
+  const baseGrams = num(ingredient.servingGrams);
+  const q = parseFloat(quantity) || 1;
+  const kcal = scaleKcal(ingredient.macrosPer100g, baseGrams, q);
 
   return (
-    <div className="rounded-[10px] border-[0.5px] border-border-default bg-canvas p-3">
-      <div className="flex items-center gap-3">
-        <FoodImage imageUrl={ingredient.imageUrl} imageStatus={ingredient.imageStatus} size={40} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium text-primary">{ingredient.name}</div>
-          <div className="mt-0.5 font-mono text-[11px] tabular-nums text-tertiary">
-            {Math.round(g * q)} g · {kcal} kcal
-          </div>
+    <div className="flex items-center gap-3 rounded-[10px] border-[0.5px] border-border-default bg-canvas p-3">
+      <FoodImage imageUrl={ingredient.imageUrl} imageStatus={ingredient.imageStatus} size={40} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-medium text-primary">{ingredient.name}</div>
+        <div className="mt-0.5 font-mono text-[11px] tabular-nums text-tertiary">
+          {Math.round(baseGrams * q)} g · {kcal} kcal
         </div>
       </div>
-      <div className="mt-2.5 flex items-end gap-2">
-        <label className="flex-1">
-          <span className="mb-1 block text-[10px] text-tertiary">Grams</span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={grams}
-            onChange={(e) => setGrams(e.target.value)}
-            className="w-full rounded-md border-[0.5px] border-border-default bg-surface px-2.5 py-1.5 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-          />
-        </label>
-        <label className="flex-1">
-          <span className="mb-1 block text-[10px] text-tertiary">Quantity (×)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            className="w-full rounded-md border-[0.5px] border-border-default bg-surface px-2.5 py-1.5 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? "…" : "Update"}
-        </button>
-      </div>
+      <label className="shrink-0">
+        <span className="mb-1 block text-right text-[10px] text-tertiary">Qty ×</span>
+        <input
+          type="number"
+          min="0"
+          step="0.1"
+          value={quantity}
+          onChange={(e) => onQuantityChange(e.target.value)}
+          aria-label={`Quantity for ${ingredient.name}`}
+          className="w-20 rounded-md border-[0.5px] border-border-default bg-surface px-2.5 py-1.5 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+        />
+      </label>
     </div>
   );
 }
