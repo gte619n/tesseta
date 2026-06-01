@@ -46,10 +46,6 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         instrument-like mood — a precision-tool catalog, not a supplement ad.
         Vertical 4:5 framing for full body.""";
 
-    private static final String MODEL_CLAUSE =
-        "A single athletic person, mid-30s, neutral medium build, short hair, "
-        + "calm neutral facial expression with no exertion grimace.";
-
     private static final String WARDROBE_CLAUSE =
         "Plain fitted athletic clothing in heather gray, no logos, no patterns, "
         + "no neon, fitted tank or t-shirt and training shorts, flat training shoes.";
@@ -63,6 +59,54 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         "True side-profile view, camera straight-on at the height of the lifter's "
         + "torso, full body and full equipment visible in frame, nothing cropped. "
         + "Even soft daylight, anatomical clarity prioritized over mood.";
+
+    /**
+     * For supine/lying presses a dead-level side profile foreshortens the bar
+     * (it points end-on at the camera). An elevated three-quarter angle reads
+     * the bar path and both arms clearly. Posture-aware camera (see buildPrompt).
+     */
+    private static final String LYING_CAMERA_CLAUSE =
+        "Camera at an elevated three-quarter angle from the lifting side, raised "
+        + "above the bench and looking down at roughly 30 to 45 degrees, so the "
+        + "full body, both arms, the bar, and the full vertical bar path from chest "
+        + "to lockout are all clearly visible and not foreshortened. Whole body and "
+        + "equipment in frame, nothing cropped. Even soft daylight, anatomical "
+        + "clarity prioritized over mood.";
+
+    /**
+     * Shared equipment treatment — the single source of truth for how equipment
+     * and load look across stills and video ({@link ExerciseVideoPrompt} reuses
+     * it). Without this, the image model draws a light dumbbell with no plates
+     * even for a "Barbell …" exercise.
+     */
+    public static final String EQUIPMENT_TREATMENT =
+        "Modern, current commercial-gym equipment in clean condition, shown with "
+        + "real, visibly loaded working weight appropriate to the exercise — an "
+        + "Olympic barbell with properly secured iron or rubber bumper plates, "
+        + "appropriately sized dumbbells or kettlebell, or a loaded weight-stack "
+        + "machine, exactly as the named exercise requires. Never an empty barbell, "
+        + "a mimed lift, or prop weights; the load looks genuinely heavy and the "
+        + "equipment matches the exercise name. The plates and equipment are plain "
+        + "matte black with absolutely no text, numbers, lettering, labels, or "
+        + "branding of any kind on them. Show ONLY the single piece of equipment the "
+        + "person is actually using — exactly one barbell, or one pair of dumbbells, "
+        + "etc. Absolutely no power rack, squat stands, bench uprights, spotter arms, "
+        + "mirrors, or any second, extra, duplicated, or overlapping barbell, bar, or "
+        + "weight anywhere in the frame.";
+
+    /**
+     * Anatomy guardrails. Generative image models frequently produce extra
+     * limbs, fused hands, or reversed grips; this is the anatomical-correctness
+     * concern behind the NEEDS_REVIEW gate. Stating it explicitly cuts the
+     * artifact rate.
+     */
+    public static final String ANATOMY_CLAUSE =
+        "Anatomically correct human body: exactly one head, two arms, two legs, "
+        + "two hands with five fingers each — no extra, missing, duplicated, or "
+        + "fused limbs or digits. The hands grip the bar or handle naturally and "
+        + "symmetrically with a correct, standard grip (thumbs wrapped), the bar "
+        + "held the right way for the movement. Realistic, correct joint angles "
+        + "for the position.";
 
     private final ExerciseMediaStorage storage;
     private final ExerciseService exerciseService;
@@ -174,15 +218,26 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         String name = exercise.name() == null ? "an exercise" : exercise.name();
         String cues = exercise.formCues() == null || exercise.formCues().isEmpty()
             ? "" : String.join("; ", exercise.formCues());
-        String phaseClause = switch (phase) {
-            case START -> "starting position, the very beginning of the movement";
-            case MID -> "mid-rep, the bottom or peak-tension position of the movement";
-            case END -> "end position, the lockout or finish of the movement";
-        };
-        return SHARED_TREATMENT + "\n" + MODEL_CLAUSE + "\n" + WARDROBE_CLAUSE + "\n"
-            + ENVIRONMENT_CLAUSE + "\n" + CAMERA_CLAUSE + "\n"
-            + "The person is performing: " + name + ", " + phaseClause
-            + (cues.isBlank() ? "" : ", key form cues: " + cues) + ".";
+        boolean lying = ExerciseVideoPrompt.isLying(exercise);
+        // Movement-pattern-driven position so every exercise (not just bench) gets a
+        // concrete, maximal-range phase — the fix for shallow mid-rep stills.
+        String position = ExerciseMovementPhases.position(exercise.movementPattern(), phase);
+        // Posture-aware camera: dead-level side profile foreshortens a supine press,
+        // so lying lifts use an elevated three-quarter angle.
+        String camera = lying ? LYING_CAMERA_CLAUSE : CAMERA_CLAUSE;
+        // Lying movements (bench/floor/etc.) additionally need a posture anchor so the
+        // model doesn't stand the subject up.
+        String posture = lying
+            ? " The subject stays lying flat on their back on the bench for the entire movement and never stands up."
+            : "";
+        // Per-exercise actor so all phases (and the video) share one consistent person.
+        String actor = "The subject is " + ExerciseActor.forExercise(exercise.exerciseId()).describe()
+            + ". Calm neutral facial expression, no exertion grimace.";
+        return SHARED_TREATMENT + "\n" + actor + "\n" + WARDROBE_CLAUSE + "\n"
+            + ENVIRONMENT_CLAUSE + "\n" + camera + "\n" + EQUIPMENT_TREATMENT + "\n"
+            + ANATOMY_CLAUSE + "\n"
+            + "The person is performing " + name + ", shown " + position
+            + (cues.isBlank() ? "" : ", key form cues: " + cues) + "." + posture;
     }
 
     byte[] callGemini(String prompt, String exerciseId) {
