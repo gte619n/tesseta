@@ -166,6 +166,7 @@ private fun MacroMini(
             buildString {
                 append((consumed ?: 0.0).roundToInt())
                 if (tgt != null) append("/${tgt.roundToInt()}")
+                if (nutrient.grams) append(" g")
             },
             style = Hf.type.monoSm,
             color = Hf.colors.textPrimary,
