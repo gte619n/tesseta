@@ -1,9 +1,26 @@
 package com.gte619n.healthfitness.data.medications
 
+import com.gte619n.healthfitness.data.db.dao.MedicationDao
+import com.gte619n.healthfitness.data.db.entity.MedicationEntity
+import com.gte619n.healthfitness.data.db.entity.MirrorTables
+import com.gte619n.healthfitness.data.db.entity.OutboxOp
+import com.gte619n.healthfitness.data.sync.DrainTrigger
+import com.gte619n.healthfitness.data.sync.FakeMirrorOps
+import com.gte619n.healthfitness.data.sync.FakeOutboxDao
+import com.gte619n.healthfitness.data.sync.KillSwitchGate
+import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
+import com.gte619n.healthfitness.data.sync.MirrorRowData
+import com.gte619n.healthfitness.data.sync.OutboxRepository
+import com.gte619n.healthfitness.data.sync.fakeDeviceIdProvider
 import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
+import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
+import com.gte619n.healthfitness.domain.medications.FrequencyConfig
+import com.gte619n.healthfitness.domain.medications.FrequencyType
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -16,10 +33,23 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.time.LocalDate
 
+/**
+ * IMPL-AND-20 (Phase 5) — Room-backed medications repository contract.
+ *
+ * `list()` now fills the `medications` mirror from the network (one-shot on a cold
+ * miss, `GET /api/me/medications` with no status param) and serves/partitions the
+ * meds from Room. `create()`/`delete()` are optimistic + outbox (no network). The
+ * server-evaluated transitions (`changeDose`/`discontinue`/`reactivate`) and the
+ * flat detail `get()` still hit their endpoints.
+ */
 class MedicationRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repository: DefaultMedicationRepository
+
+    private lateinit var dao: FakeMedicationDao
+    private lateinit var outboxDao: FakeOutboxDao
+    private var drains = 0
 
     @Before
     fun setUp() {
@@ -30,7 +60,24 @@ class MedicationRepositoryTest {
             .addConverterFactory(MoshiConverterFactory.create(MedsTestMoshi.instance))
             .build()
             .create(MedicationsApi::class.java)
-        repository = DefaultMedicationRepository(api, Dispatchers.Unconfined)
+
+        dao = FakeMedicationDao()
+        outboxDao = FakeOutboxDao()
+        val outbox = OutboxRepository(
+            outboxDao = outboxDao,
+            mirror = dao.mirror,
+            replay = io.mockk.mockk(relaxed = true),
+            deviceIdProvider = fakeDeviceIdProvider("device-A"),
+            io = Dispatchers.Unconfined,
+            clock = { 1_000L },
+        )
+        val support = MirrorRepositorySupport(
+            mirror = dao.mirror,
+            outbox = outbox,
+            killSwitch = KillSwitchGate { false },
+            drainTrigger = DrainTrigger { drains++ },
+        )
+        repository = DefaultMedicationRepository(api, dao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
     }
 
     @After
@@ -45,12 +92,6 @@ class MedicationRepositoryTest {
          "timeSlots":[],"startDate":"2026-01-01","endDate":null,"correlatedMarkers":[]}
     """.trimIndent()
 
-    // A fully-populated discontinued medication exactly as the backend
-    // `MedicationResponse` serialises it: closed dosage periods (no open period),
-    // a populated `adherence` summary, weekly `specificDays`, and the
-    // `discontinueReason`/`endDate` fields that only discontinued meds carry.
-    // The minimal [activeMedJson] never exercises these through Moshi, so this
-    // guards the History tab's data path.
     private val discontinuedMedJson = """
         {"medicationId":"m2","drugId":"d1",
          "drug":{"drugId":"d1","name":"Testosterone Cypionate","aliases":["Test Cyp"],
@@ -69,18 +110,18 @@ class MedicationRepositoryTest {
     """.trimIndent()
 
     @Test
-    fun `list maps status query`() = runBlocking {
+    fun `list fills the mirror and filters by status`() = runBlocking {
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("[$activeMedJson]"))
         val meds = repository.list(MedicationStatus.ACTIVE)
         assertEquals(1, meds.size)
         assertEquals("m1", meds.first().medicationId)
-        assertTrue(server.takeRequest().path!!.contains("status=ACTIVE"))
+        // The mirror fill calls GET with no status param; filtering is client-side.
+        val request = server.takeRequest()
+        assertTrue(request.path!!.endsWith("/api/me/medications"))
     }
 
     @Test
-    fun `list with no status omits the query param and parses active and discontinued`() = runBlocking {
-        // Mirrors the production MedicationsViewModel call: no status filter, so
-        // the backend returns every medication and the client partitions them.
+    fun `list with no status parses active and discontinued from the mirror`() = runBlocking {
         server.enqueue(
             MockResponse()
                 .setHeader("Content-Type", "application/json")
@@ -90,10 +131,6 @@ class MedicationRepositoryTest {
         assertEquals(2, meds.size)
         assertEquals(1, meds.count { it.status == MedicationStatus.ACTIVE })
         assertEquals(1, meds.count { it.status == MedicationStatus.DISCONTINUED })
-
-        val request = server.takeRequest()
-        assertTrue(request.path!!.endsWith("/api/me/medications"))
-        assertTrue("status query must be omitted", !request.path!!.contains("status"))
     }
 
     @Test
@@ -112,11 +149,29 @@ class MedicationRepositoryTest {
     }
 
     @Test
+    fun `offline create shows up instantly as PENDING and enqueues a CREATE mutation`() = runBlocking {
+        val created = repository.create(
+            CreateMedicationRequest(
+                drugId = null,
+                customName = "Creatine",
+                dose = 5.0,
+                unit = "g",
+                frequency = FrequencyConfig(type = FrequencyType.DAILY, timesPerPeriod = 1),
+                timeSlots = emptyList(),
+                correlatedMarkers = emptyList(),
+            ),
+        )
+        assertEquals(0, server.requestCount)
+        val row = dao.mirror.getRow(MirrorTables.MEDICATIONS, created.medicationId)!!
+        assertTrue(row.dirty)
+        assertEquals("PENDING", row.syncState)
+        val queued = outboxDao.listByEntity(created.medicationId).single()
+        assertEquals(OutboxOp.CREATE.name, queued.op)
+        assertTrue(drains >= 1)
+    }
+
+    @Test
     fun `get parses the flat detail payload with change history`() = runBlocking {
-        // The backend MedicationDetailResponse is flat: the medication fields sit
-        // at the top level alongside `history` (it is NOT nested under a
-        // `medication` key). Parsing the wrong shape made the detail/history view
-        // fail to load.
         val detailJson = """
             {"medicationId":"m1","drugId":null,"drug":null,"customName":"X","status":"DISCONTINUED",
              "dose":250.0,"unit":"mg",
@@ -141,7 +196,6 @@ class MedicationRepositoryTest {
 
     @Test
     fun `changeDose posts to dosage endpoint with body`() = runBlocking {
-        // [PR#8]
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(activeMedJson))
         repository.changeDose(
             "m1",
@@ -157,7 +211,6 @@ class MedicationRepositoryTest {
 
     @Test
     fun `reactivate posts to reactivate endpoint with resume date`() = runBlocking {
-        // [PR#8]
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(activeMedJson))
         repository.reactivate("m1", LocalDate.of(2026, 6, 1))
         val request = server.takeRequest()
@@ -168,7 +221,6 @@ class MedicationRepositoryTest {
 
     @Test
     fun `discontinue posts reason notes and endDate`() = runBlocking {
-        // [PR#8]
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(activeMedJson))
         repository.discontinue("m1", DiscontinueReason.SWITCHED, "moved", LocalDate.of(2026, 4, 1))
         val request = server.takeRequest()
@@ -179,11 +231,64 @@ class MedicationRepositoryTest {
     }
 
     @Test
-    fun `delete issues DELETE`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(204))
+    fun `delete tombstones the row and enqueues a DELETE mutation`() = runBlocking {
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("[$activeMedJson]"))
+        repository.list() // fill the mirror with m1 (one request)
+        val before = server.requestCount
         repository.delete("m1")
-        val request = server.takeRequest()
-        assertEquals("DELETE", request.method)
-        assertTrue(request.path!!.endsWith("/api/me/medications/m1"))
+        assertEquals(before, server.requestCount) // delete itself makes no network call
+        val row = dao.mirror.getRow(MirrorTables.MEDICATIONS, "m1")!!
+        assertEquals("ARCHIVED", row.status)
+        val queued = outboxDao.listByEntity("m1").single()
+        assertEquals(OutboxOp.DELETE.name, queued.op)
     }
+}
+
+/**
+ * In-memory [MedicationDao] over a shared [FakeMirrorOps] (exposed as [mirror]) so
+ * the support's optimistic writes and this DAO's read Flow observe the SAME store.
+ */
+private class FakeMedicationDao : MedicationDao {
+    private val flow = MutableStateFlow<List<MedicationEntity>>(emptyList())
+    val mirror = TrackingMirrorOps { publish() }
+
+    private fun publish() {
+        flow.value = mirror.rows.entries
+            .filter { it.key.startsWith("${MirrorTables.MEDICATIONS}:") }
+            .map { it.value }
+            .filter { it.status != "ARCHIVED" }
+            .map { MedicationEntity(it.id, it.payloadJson, it.lastUpdate, it.status, it.dirty, it.syncState) }
+            .sortedByDescending { it.lastUpdate }
+    }
+
+    override fun observeActive(): Flow<List<MedicationEntity>> {
+        publish()
+        return flow
+    }
+
+    override suspend fun getById(id: String): MedicationEntity? =
+        mirror.getRow(MirrorTables.MEDICATIONS, id)
+            ?.let { MedicationEntity(it.id, it.payloadJson, it.lastUpdate, it.status, it.dirty, it.syncState) }
+
+    override suspend fun upsert(row: MedicationEntity) =
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData(row.id, row.payloadJson, row.lastUpdate, row.status, row.dirty, row.syncState),
+        )
+
+    override suspend fun upsertAll(rows: List<MedicationEntity>) { rows.forEach { upsert(it) } }
+    override suspend fun markArchived(id: String, lastUpdate: Long) =
+        mirror.markArchived(MirrorTables.MEDICATIONS, id, lastUpdate)
+    override suspend fun delete(id: String) = mirror.delete(MirrorTables.MEDICATIONS, id)
+}
+
+/** [FakeMirrorOps] that fires [onChange] after each mutating op. */
+private class TrackingMirrorOps(private val onChange: () -> Unit) : FakeMirrorOps() {
+    override suspend fun upsert(table: String, row: MirrorRowData) {
+        super.upsert(table, row); onChange()
+    }
+    override suspend fun markArchived(table: String, id: String, lastUpdate: Long) {
+        super.markArchived(table, id, lastUpdate); onChange()
+    }
+    override suspend fun delete(table: String, id: String) { super.delete(table, id); onChange() }
 }

@@ -27,6 +27,7 @@ class MedicationsViewModelTest {
             ),
         )
         val vm = MedicationsViewModel(repo)
+        vm.refresh()
 
         vm.state.test {
             assertEquals(MedicationsUiState.Loading, awaitItem())
@@ -42,6 +43,7 @@ class MedicationsViewModelTest {
     fun `error path surfaces message`() = runTest {
         val repo = FakeMedicationRepository(listError = RuntimeException("boom"))
         val vm = MedicationsViewModel(repo)
+        vm.refresh()
 
         vm.state.test {
             assertEquals(MedicationsUiState.Loading, awaitItem())

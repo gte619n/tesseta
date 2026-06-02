@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
 import com.gte619n.healthfitness.feature.settings.AppVersionInfo
 import com.gte619n.healthfitness.mobile.BuildConfig
+import com.gte619n.healthfitness.mobile.auth.SignOutSideEffects
 import com.gte619n.healthfitness.mobile.wear.PhoneTokenPublisher
 import dagger.Module
 import dagger.Provides
@@ -27,11 +28,15 @@ object SettingsAppModule {
     fun provideGoogleAuthRepository(
         @ApplicationContext context: Context,
         cache: IdTokenCache,
+        signOutSideEffects: SignOutSideEffects,
     ): GoogleAuthRepository = GoogleAuthRepository(
         context = context,
         cache = cache,
         webOauthClientId = BuildConfig.WEB_OAUTH_CLIENT_ID,
         onTokenIssued = { token, _ -> PhoneTokenPublisher(context).publish(token) },
+        // IMPL-AND-20 (Phase 6): the single consolidated sign-out hook (#12) —
+        // best-effort FCM token delete (D18) then the encrypted-DB wipe (D5).
+        onSignOut = { signOutSideEffects.run() },
     )
 
     @Provides

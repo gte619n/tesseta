@@ -69,6 +69,7 @@ fun NutritionCaptureRoute(
     viewModel: NutritionCaptureViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val online by viewModel.isOnline.collectAsStateWithLifecycle()
     // A barcode hit logs immediately and emits NavigateBack — pop to the nutrition
     // page (which refreshes on resume to show the new entry).
     LaunchedEffect(viewModel) {
@@ -80,6 +81,7 @@ fun NutritionCaptureRoute(
     }
     NutritionCaptureScreen(
         state = state,
+        online = online,
         onBack = onBack,
         onBarcodeDetected = viewModel::onBarcodeDetected,
         onAnalyzeMeal = viewModel::analyzeMeal,
@@ -96,6 +98,7 @@ fun NutritionCaptureRoute(
 fun NutritionCaptureScreen(
     state: NutritionCaptureUiState,
     onBack: () -> Unit,
+    online: Boolean = true,
     onBarcodeDetected: (String) -> Unit,
     onAnalyzeMeal: (ByteArray) -> Unit,
     onAnalyzeLabel: (ByteArray) -> Unit,
@@ -134,6 +137,15 @@ fun NutritionCaptureScreen(
             onBack = onBack,
         )
         Spacer(Modifier.height(10.dp))
+
+        if (!online) {
+            // D17: barcode lookup + meal/label analysis are online-only AI/network
+            // flows. Offline we disable capture entirely and queue nothing.
+            com.gte619n.healthfitness.ui.sync.OfflineNotice(
+                message = "Scanning food and analyzing meals needs an internet connection.",
+            )
+            return@Column
+        }
 
         if (!hasPermission) {
             CameraDenied(onRequest = { launcher.launch(Manifest.permission.CAMERA) })

@@ -1,35 +1,73 @@
 package com.gte619n.healthfitness.data.bodycomposition
 
 import com.gte619n.healthfitness.data.bodycomposition.api.BodyCompositionApi
+import com.gte619n.healthfitness.data.bodycomposition.dto.BodyCompositionReadingDto
 import com.gte619n.healthfitness.data.bodycomposition.dto.toDomainOrNull
+import com.gte619n.healthfitness.data.db.dao.BodyCompositionDao
+import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.di.IoDispatcher
+import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionMetric
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionPoint
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionRepository
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
+import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * IMPL-AND-20 (Phase 5) — Room-backed, offline-first body-composition repository.
+ *
+ * Body composition is **pull-only / server-derived** (Google-Health-sourced,
+ * D9): there is no write path, so this domain never touches the outbox. The read
+ * path (D8) now observes the `bodyComposition` mirror table and derives the
+ * [BodyCompositionSnapshot] from the locally-stored points, so the dashboard and
+ * body-comp screen render from Room with the network offline. [refresh] fills the
+ * mirror with the latest readings; the background SyncEngine pull keeps it fresh.
+ *
+ * The mirror `payloadJson` is the full [BodyCompositionReadingDto] (every field
+ * the snapshot math consumes), so nothing the screen needs is lost vs. the
+ * sanitized delta `doc`. When the kill-switch is latched (D13) the snapshot falls
+ * back to a one-shot live-network fetch.
+ */
 @Singleton
 class BodyCompositionRepositoryImpl @Inject constructor(
     private val api: BodyCompositionApi,
+    private val dao: BodyCompositionDao,
+    private val support: MirrorRepositorySupport,
+    private val moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : BodyCompositionRepository {
 
-    private val snapshot = MutableSharedFlow<BodyCompositionSnapshot>(replay = 1)
+    private val dtoAdapter = moshi.adapter(BodyCompositionReadingDto::class.java)
 
-    override fun observeSnapshot(): Flow<BodyCompositionSnapshot> = snapshot.asSharedFlow()
+    override fun observeSnapshot(): Flow<BodyCompositionSnapshot> =
+        support.observe(
+            rows = dao.observeActive(),
+            decode = { json -> runCatching { dtoAdapter.fromJson(json)?.toDomainOrNull() }.getOrNull() },
+            liveFallback = { api.list().mapNotNull { it.toDomainOrNull() } },
+        ).map { points -> buildSnapshot(points) }
 
     override suspend fun refresh() {
-        val points = withContext(io) { api.list().mapNotNull { it.toDomainOrNull() } }
-        snapshot.emit(buildSnapshot(points))
+        if (support.killSwitchOn()) return
+        val dtos = withContext(io) { api.list() }
+        support.refreshInto(
+            MirrorTables.BODY_COMPOSITION,
+            dtos.mapNotNull { dto ->
+                val id = dto.recordId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                MirrorRepositorySupport.RefreshRow(
+                    id = id,
+                    payloadJson = dtoAdapter.toJson(dto),
+                    lastUpdate = dto.sampleTime.toEpochMillisOrZero(),
+                )
+            },
+        )
     }
 
     override suspend fun pointsInRange(
@@ -37,6 +75,9 @@ class BodyCompositionRepositoryImpl @Inject constructor(
         from: Instant,
         to: Instant,
     ): List<BodyCompositionPoint> = withContext(io) {
+        // Range queries stay network-served: they are a derived, windowed read the
+        // mirror's flat ACTIVE list does not index, and the chart tolerates a live
+        // fetch. (Listed as a follow-up to back this with a date-ranged Room query.)
         api.list(from.toString(), to.toString(), metric.name)
             .mapNotNull { it.toDomainOrNull() }
             .filter { it.metric == metric }
@@ -117,4 +158,7 @@ class BodyCompositionRepositoryImpl @Inject constructor(
             ?: return null
         return latest.value - candidate.value
     }
+
+    private fun String?.toEpochMillisOrZero(): Long =
+        this?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: 0L
 }

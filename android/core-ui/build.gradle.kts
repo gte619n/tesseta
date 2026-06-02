@@ -36,4 +36,8 @@ dependencies {
     // IMPL-AND-00: shared image loading + coroutine-backed snackbar controller.
     api(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
+
+    // IMPL-AND-20 (Phase 6): JVM unit tests for the pure sync-UX state mappings
+    // (syncUiStateOf / badgeSpecOf) — no Compose runtime needed.
+    testImplementation(libs.junit)
 }

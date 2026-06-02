@@ -60,10 +60,13 @@ fun GoalsChatRoute(
     viewModel: GoalsChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val online by viewModel.isOnline.collectAsStateWithLifecycle()
     GoalsChatScreen(
         state = state,
+        online = online,
         onBack = onBack,
-        onSend = viewModel::send,
+        // D17: goals chat is an online-only AI flow — drop sends while offline.
+        onSend = { if (online) viewModel.send(it) },
         onSave = viewModel::commit,
         onDiscard = viewModel::discard,
         onOpenGoal = onOpenGoal,
@@ -82,6 +85,7 @@ fun GoalsChatScreen(
     onOpenGoal: (String) -> Unit,
     onDeleteThread: (threadId: String) -> Unit,
     editorFor: (String) -> ProposalEdit?,
+    online: Boolean = true,
 ) {
     // Track whether the threads side-panel is open and which thread has a
     // pending delete confirmation dialog.
@@ -125,6 +129,13 @@ fun GoalsChatScreen(
                     }
                 },
             )
+            if (!online) {
+                // D17: online-only AI flow — surface the affordance; sends are
+                // dropped at the route, nothing is queued.
+                com.gte619n.healthfitness.ui.sync.OfflineNotice(
+                    message = "Planning a goal uses AI and needs an internet connection.",
+                )
+            }
             ChatThread(
                 scope = GoalChatScope,
                 messages = state.messages,

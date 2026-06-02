@@ -49,10 +49,28 @@ class ProfileViewModelTest {
         }
     }
 
+    private class FakeUnitPreferencesRepository :
+        com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository {
+        override val preferences =
+            kotlinx.coroutines.flow.MutableStateFlow(
+                com.gte619n.healthfitness.domain.prefs.UnitPreferences(),
+            )
+        override suspend fun setHeightUnit(unit: com.gte619n.healthfitness.domain.prefs.HeightUnit) {
+            preferences.value = preferences.value.copy(height = unit)
+        }
+        override suspend fun setWeightUnit(unit: com.gte619n.healthfitness.domain.prefs.WeightUnit) = Unit
+        override suspend fun setTemperatureUnit(
+            unit: com.gte619n.healthfitness.domain.prefs.TemperatureUnit,
+        ) = Unit
+    }
+
+    private fun viewModel(repo: ProfileRepository) =
+        ProfileViewModel(repo, FakeUnitPreferencesRepository())
+
     @Test
     fun loadingThenLoaded() = runTest {
         val repo = FakeProfileRepository(getResult = Result.success(profile()))
-        val vm = ProfileViewModel(repo)
+        val vm = viewModel(repo)
 
         vm.state.test {
             // init { refresh() } drives Loading -> Loaded on the unconfined
@@ -71,7 +89,7 @@ class ProfileViewModelTest {
             getResult = Result.success(profile(heightCm = 180)),
             updateResult = { Result.success(Profile("u1", "a@b.com", "Alice", it)) },
         )
-        val vm = ProfileViewModel(repo)
+        val vm = viewModel(repo)
 
         vm.state.test {
             // drain to the initial Loaded state
@@ -96,7 +114,7 @@ class ProfileViewModelTest {
         val repo = FakeProfileRepository(
             getResult = Result.failure(RuntimeException("boom")),
         )
-        val vm = ProfileViewModel(repo)
+        val vm = viewModel(repo)
 
         vm.state.test {
             var current = awaitItem()

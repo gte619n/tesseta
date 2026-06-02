@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    // IMPL-AND-20 (Phase 6): processes app/google-services.json and wires
+    // FirebaseApp auto-init for FCM. Applied last so it sees the android block.
+    alias(libs.plugins.google.services)
 }
 
 // Base marketing version — the single source of truth for the "0.x.y" prefix.
@@ -143,6 +146,19 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
+    // IMPL-AND-20 (Phase 4): WorkManager + Hilt worker factory. :app hosts the
+    // HiltWorkerFactory and disables WorkManager's default initializer so the
+    // sync workers (defined in :core-data) get their dependencies injected.
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
+
+    // IMPL-AND-20 (Phase 6): Firebase Cloud Messaging — the silent data-message
+    // client. The BoM aligns the messaging artifact; the google-services plugin
+    // (above) auto-initializes FirebaseApp from app/google-services.json.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+
     implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)
 
@@ -151,6 +167,14 @@ dependencies {
     implementation(libs.kotlinx.coroutines.play.services)
 
     testImplementation(libs.junit)
+    // IMPL-AND-20 (Phase 6): JVM unit tests for FirstSyncGate + TokenRegistration.
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.retrofit)
+    testImplementation(libs.retrofit.moshi)
+    testImplementation(libs.moshi)
+    testImplementation(libs.moshi.kotlin)
 }
 
 /**

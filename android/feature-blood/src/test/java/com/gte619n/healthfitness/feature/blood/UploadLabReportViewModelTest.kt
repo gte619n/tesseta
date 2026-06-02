@@ -1,11 +1,15 @@
 package com.gte619n.healthfitness.feature.blood
 
 import app.cash.turbine.test
+import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.domain.blood.BloodTestReport
 import com.gte619n.healthfitness.domain.blood.UploadEvent
+import io.mockk.every
+import io.mockk.mockk
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,6 +22,12 @@ class UploadLabReportViewModelTest {
 
     @get:Rule
     val mainRule = MainDispatcherRule()
+
+    // IMPL-AND-20 (Phase 6): the VM now takes Connectivity for the D17 offline
+    // gate; default it online so the existing upload-phase assertions hold.
+    private fun onlineConnectivity(): Connectivity = mockk {
+        every { isOnline } returns MutableStateFlow(true)
+    }
 
     private val report = BloodTestReport(
         reportId = "rep1",
@@ -38,7 +48,7 @@ class UploadLabReportViewModelTest {
                 UploadEvent.Complete(report),
             ),
         )
-        val vm = UploadLabReportViewModel(reports)
+        val vm = UploadLabReportViewModel(reports, onlineConnectivity())
 
         vm.state.test {
             assertEquals(UploadLabReportViewModel.UiState.Idle, awaitItem())
@@ -57,7 +67,7 @@ class UploadLabReportViewModelTest {
         val reports = FakeReportRepository(
             uploadEvents = listOf(UploadEvent.Uploading, UploadEvent.Failed("Could not read PDF")),
         )
-        val vm = UploadLabReportViewModel(reports)
+        val vm = UploadLabReportViewModel(reports, onlineConnectivity())
         vm.upload("report.pdf", ByteArray(4))
         advanceUntilIdle()
         val state = vm.state.value
@@ -68,7 +78,7 @@ class UploadLabReportViewModelTest {
     @Test
     fun thrownErrorMapsToFailed() = runTest {
         val reports = FakeReportRepository(uploadError = RuntimeException("network down"))
-        val vm = UploadLabReportViewModel(reports)
+        val vm = UploadLabReportViewModel(reports, onlineConnectivity())
         vm.upload("report.pdf", ByteArray(4))
         advanceUntilIdle()
         assertTrue(vm.state.value is UploadLabReportViewModel.UiState.Failed)

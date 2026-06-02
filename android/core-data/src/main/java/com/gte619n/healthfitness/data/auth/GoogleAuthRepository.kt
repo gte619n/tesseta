@@ -25,6 +25,12 @@ class GoogleAuthRepository(
     private val cache: IdTokenCache,
     private val webOauthClientId: String,
     private val onTokenIssued: suspend (token: String, expiresAt: Long) -> Unit = { _, _ -> },
+    // IMPL-AND-20 (Phase 3): invoked on sign-out so the caller can wipe the
+    // encrypted offline DB (and, later, deregister the FCM token). Kept as a
+    // callback — mirroring [onTokenIssued] — so :core-data's auth layer doesn't
+    // take a hard dependency on the DB module wiring. Default no-op for the
+    // manual constructions (MainActivity/wear) that never sign out.
+    private val onSignOut: suspend () -> Unit = {},
 ) {
     private val manager = CredentialManager.create(context)
 
@@ -70,6 +76,13 @@ class GoogleAuthRepository(
 
     suspend fun signOut() {
         cache.clear()
+        // PHI hygiene (D5): drop the encrypted offline DB before clearing the
+        // credential state, so a signed-out device retains no local health data.
+        try {
+            onSignOut()
+        } catch (_: Exception) {
+            // best-effort; failure to wipe must not block the sign-out itself.
+        }
         try {
             manager.clearCredentialState(ClearCredentialStateRequest())
         } catch (_: Exception) {

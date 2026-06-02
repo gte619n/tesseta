@@ -19,6 +19,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
 import retrofit2.http.GET
@@ -262,16 +263,56 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
     }
 }
 
+/**
+ * IMPL-AND-20 (Phase 5) — Room-backed daily metrics (pull-only, D9).
+ *
+ * Daily metrics are Google-Health-sourced and never written from the client, so
+ * this domain reads from the `dailyMetrics` mirror (D8) and NEVER enqueues to the
+ * outbox. [loadRecent] fills the mirror from the 30-day network window (filling on
+ * a cold miss, then refreshing) and serves the rows from Room, so the dashboard
+ * renders the trend offline. Each row's `payloadJson` is the full [DailyMetricDto]
+ * (every field the chart consumes), keyed by date.
+ */
 internal class DashboardDailyMetricsRepositoryImpl @Inject constructor(
     private val api: DashboardApi,
+    private val dao: com.gte619n.healthfitness.data.db.dao.DailyMetricDao,
+    private val support: com.gte619n.healthfitness.data.sync.MirrorRepositorySupport,
+    moshi: com.squareup.moshi.Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : DashboardDailyMetricsRepository {
     private val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
+    private val dtoAdapter = moshi.adapter(DailyMetricDto::class.java)
 
     override suspend fun loadRecent(): List<DailyMetricPoint> = withContext(io) {
         val today = LocalDate.now()
         val from = today.minusDays(30)
-        DailyMetricMapper.toDomain(api.dailyMetrics(from.format(dateFmt), today.format(dateFmt)))
+        if (support.killSwitchOn()) {
+            return@withContext DailyMetricMapper.toDomain(
+                api.dailyMetrics(from.format(dateFmt), today.format(dateFmt)),
+            )
+        }
+        // Refresh the mirror from the recent window (idempotent; won't clobber dirty
+        // rows — daily metrics are never dirty since they're pull-only), then serve
+        // from Room.
+        runCatching {
+            val dtos = api.dailyMetrics(from.format(dateFmt), today.format(dateFmt))
+            support.refreshInto(
+                com.gte619n.healthfitness.data.db.entity.MirrorTables.DAILY_METRICS,
+                dtos.map {
+                    com.gte619n.healthfitness.data.sync.MirrorRepositorySupport.RefreshRow(
+                        id = it.date,
+                        payloadJson = dtoAdapter.toJson(it),
+                        lastUpdate = runCatching { LocalDate.parse(it.date).toEpochDay() * 86_400_000L }
+                            .getOrDefault(System.currentTimeMillis()),
+                    )
+                },
+            )
+        }
+        val rows = dao.observeActive().first()
+            .mapNotNull { runCatching { dtoAdapter.fromJson(it.payloadJson) }.getOrNull() }
+            .filter { it.date >= from.format(dateFmt) }
+            .sortedBy { it.date }
+        DailyMetricMapper.toDomain(rows)
     }
 }
 
