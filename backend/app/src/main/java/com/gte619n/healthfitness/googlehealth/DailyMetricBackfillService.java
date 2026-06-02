@@ -52,10 +52,14 @@ public class DailyMetricBackfillService {
         Executors.newVirtualThreadPerTaskExecutor().submit(() -> runBackfill(userId));
     }
 
-    void runBackfill(String userId) {
+    // Returns stored-count per data type (type name -> count). Types that
+    // failed are absent from the map; an empty map means the backfill could
+    // not start (e.g. token exchange failed).
+    java.util.Map<String, Integer> runBackfill(String userId) {
         Instant now = Instant.now();
         Instant windowStart = now.minus(Duration.ofDays(backfillDays));
         log.info("Daily-metric backfill start user={} window=[{},{}]", userId, windowStart, now);
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
         int total = 0;
         Set<String> platforms = new LinkedHashSet<>();
         try {
@@ -65,7 +69,9 @@ public class DailyMetricBackfillService {
             // transient API error) must not abort the other types' backfill.
             for (DailyMetricDataType type : DailyMetricDataType.values()) {
                 try {
-                    total += backfillType(userId, accessToken, type, windowStart, now, platforms);
+                    int stored = backfillType(userId, accessToken, type, windowStart, now, platforms);
+                    counts.put(type.name(), stored);
+                    total += stored;
                 } catch (RuntimeException e) {
                     log.warn("Daily-metric backfill type={} user={} failed (skipping): {}",
                         type, userId, e.getMessage());
@@ -80,6 +86,7 @@ public class DailyMetricBackfillService {
             log.error("Daily-metric backfill failed user={} totalStored={} cause={}",
                 userId, total, e.getMessage(), e);
         }
+        return counts;
     }
 
     private int backfillType(

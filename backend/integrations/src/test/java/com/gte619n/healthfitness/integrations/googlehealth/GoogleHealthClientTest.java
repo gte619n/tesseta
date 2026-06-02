@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.integrations.googlehealth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -9,6 +10,7 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -113,6 +115,76 @@ class GoogleHealthClientTest {
             assertThat(p.value()).isEqualTo(19.4);
             assertThat(p.sourcePlatform()).isEqualTo("WITHINGS");
         });
+    }
+
+    // --- daily metrics: the three distinct fetch strategies, against the
+    //     verbatim payload shapes captured live from the API. ---
+
+    @Test
+    void dailyMetrics_restingHeartRate_listsWithCivilDateFilter() {
+        responseBodies.add("""
+            { "dataPoints": [
+              { "dataSource": { "platform": "FITBIT", "recordingMethod": "DERIVED" },
+                "dailyRestingHeartRate": {
+                  "date": { "year": 2026, "month": 6, "day": 1 }, "beatsPerMinute": "66" } }
+            ] }
+            """);
+        List<DailyMetricDataPoint> pts = client.listDailyMetricPoints(
+            "tok", DailyMetricDataType.RESTING_HEART_RATE,
+            Instant.parse("2026-05-20T00:00:00Z"), Instant.parse("2026-06-02T00:00:00Z"));
+
+        assertThat(pts).singleElement().satisfies(p -> {
+            assertThat(p.value()).isEqualTo(66);
+            assertThat(p.date()).isEqualTo(LocalDate.of(2026, 6, 1));
+        });
+        assertThat(requests.get(0).query.get("filter")).contains("daily_resting_heart_rate.date >= \"2026-05-20\"");
+    }
+
+    @Test
+    void dailyMetrics_steps_aggregatesViaDailyRollUp() {
+        responseBodies.add("""
+            { "rollupDataPoints": [
+              { "civilStartTime": { "date": { "year": 2026, "month": 6, "day": 1 } },
+                "steps": { "countSum": "6975" } },
+              { "civilStartTime": { "date": { "year": 2026, "month": 5, "day": 31 } },
+                "steps": { "countSum": "8813" } } ] }
+            """);
+        List<DailyMetricDataPoint> pts = client.listDailyMetricPoints(
+            "tok", DailyMetricDataType.STEPS,
+            Instant.parse("2026-05-30T00:00:00Z"), Instant.parse("2026-06-02T00:00:00Z"));
+
+        assertThat(pts).extracting(DailyMetricDataPoint::date, DailyMetricDataPoint::value)
+            .containsExactlyInAnyOrder(
+                tuple(LocalDate.of(2026, 6, 1), 6975),
+                tuple(LocalDate.of(2026, 5, 31), 8813));
+        // Steps uses the dailyRollUp collection-action endpoint, not list.
+        assertThat(requests.get(0).path).isEqualTo("/users/me/dataTypes/steps/dataPoints:dailyRollUp");
+    }
+
+    @Test
+    void dailyMetrics_sleep_sumsAsleepStagesPerWakeDay() {
+        responseBodies.add("""
+            { "dataPoints": [
+              { "name": "users/u/dataTypes/sleep/dataPoints/s1",
+                "dataSource": { "platform": "FITBIT", "recordingMethod": "DERIVED" },
+                "sleep": { "interval": { "startTime": "2026-06-01T02:24:00Z",
+                                          "endTime": "2026-06-01T09:46:00Z", "endUtcOffset": "-14400s" },
+                  "stages": [
+                    { "startTime": "2026-06-01T02:24:00Z", "endTime": "2026-06-01T02:39:30Z", "type": "AWAKE" },
+                    { "startTime": "2026-06-01T02:39:30Z", "endTime": "2026-06-01T03:09:30Z", "type": "LIGHT" },
+                    { "startTime": "2026-06-01T03:09:30Z", "endTime": "2026-06-01T04:09:30Z", "type": "REM" } ] } }
+            ] }
+            """);
+        List<DailyMetricDataPoint> pts = client.listDailyMetricPoints(
+            "tok", DailyMetricDataType.SLEEP,
+            Instant.parse("2026-05-31T00:00:00Z"), Instant.parse("2026-06-02T00:00:00Z"));
+
+        assertThat(pts).singleElement().satisfies(p -> {
+            assertThat(p.date()).isEqualTo(LocalDate.of(2026, 6, 1)); // wake day (local)
+            assertThat(p.value()).isEqualTo(90);                      // LIGHT 30 + REM 60; AWAKE excluded
+            assertThat(p.sleepScore()).isNull();
+        });
+        assertThat(requests.get(0).query.get("filter")).contains("sleep.interval.civil_end_time");
     }
 
     private void handle(HttpExchange exchange) throws IOException {

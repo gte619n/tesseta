@@ -67,9 +67,8 @@ public class GoogleHealthClient {
     //     and filtered on their civil `date` member.
     //   - STEPS: an interval (per-minute) type with no daily form. We POST
     //     :dailyRollUp to get one countSum per civil day.
-    //   - SLEEP: a session type; :dailyRollUp is unsupported and a sleep score
-    //     isn't exposed, so it is not handled here yet (see DailyMetricDataType
-    //     notes) — callers get an empty list rather than a 400.
+    //   - SLEEP: a session type; listed and filtered on its civil wake time,
+    //     then asleep-stage durations are summed per wake day.
     public List<DailyMetricDataPoint> listDailyMetricPoints(
         String accessToken,
         DailyMetricDataType dataType,
@@ -118,22 +117,25 @@ public class GoogleHealthClient {
             throw new RuntimeException(
                 "Google Health steps dailyRollUp failed (" + resp.statusCode() + "): " + resp.body());
         }
-        List<DailyMetricDataPoint> out = new ArrayList<>();
         try {
-            JsonNode body = mapper.readTree(resp.body());
-            for (JsonNode p : body.path("rollupDataPoints")) {
-                JsonNode d = p.path("civilStartTime").path("date");
-                if (!d.hasNonNull("year")) continue;
-                java.time.LocalDate day =
-                    java.time.LocalDate.of(d.path("year").asInt(), d.path("month").asInt(),
-                        d.path("day").asInt());
-                int count = p.path("steps").path("countSum").asInt();
-                out.add(new DailyMetricDataPoint(
-                    null, null, "steps:" + day, DailyMetricDataType.STEPS, day, count,
-                    null, "UNKNOWN", "UNKNOWN"));
-            }
+            return parseStepRollup(mapper.readTree(resp.body()));
         } catch (java.io.IOException e) {
             throw new RuntimeException("Failed to parse steps dailyRollUp response", e);
+        }
+    }
+
+    // Maps a dailyRollUp response body into one STEPS point per civil day.
+    private static List<DailyMetricDataPoint> parseStepRollup(JsonNode body) {
+        List<DailyMetricDataPoint> out = new ArrayList<>();
+        for (JsonNode p : body.path("rollupDataPoints")) {
+            JsonNode d = p.path("civilStartTime").path("date");
+            if (!d.hasNonNull("year")) continue;
+            LocalDate day = LocalDate.of(
+                d.path("year").asInt(), d.path("month").asInt(), d.path("day").asInt());
+            int count = p.path("steps").path("countSum").asInt();
+            out.add(new DailyMetricDataPoint(
+                null, null, "steps:" + day, DailyMetricDataType.STEPS, day, count,
+                null, "UNKNOWN", "UNKNOWN"));
         }
         return out;
     }
@@ -370,85 +372,6 @@ public class GoogleHealthClient {
             url.append("&page_token=").append(URLEncoder.encode(pageToken, StandardCharsets.UTF_8));
         }
         return url.toString();
-    }
-
-    // Raw, non-throwing single-page fetch used by the admin sync/inspect
-    // endpoint to examine the actual API response (data OR error body)
-    // without the mapping layer in the way. Returns exactly what the API
-    // returned so the real on-the-wire field shapes can be verified.
-    public RawResponse rawFirstPage(
-        String accessToken,
-        String urlSegment,
-        String filterFieldName,
-        Instant from,
-        Instant to
-    ) {
-        String url = buildDataPointsUrl(urlSegment, physicalTimeFilter(filterFieldName, from, to), null);
-        HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Authorization", "Bearer " + accessToken)
-            .header("Accept", "application/json")
-            .GET()
-            .build();
-        try {
-            HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
-            return new RawResponse(url, response.statusCode(), response.body());
-        } catch (java.io.IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            return new RawResponse(url, -1, "request failed: " + e.getMessage());
-        }
-    }
-
-    // Same as rawFirstPage but WITHOUT a filter — used to discover the real
-    // data-point shape (and thus the correct filterable members) when the
-    // standard sample_time.physical_time filter is rejected for a data type.
-    public RawResponse rawFirstPageNoFilter(String accessToken, String urlSegment, int pageSize) {
-        String url = apiBaseUrl + "/users/me/dataTypes/" + urlSegment
-            + "/dataPoints?page_size=" + pageSize;
-        HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Authorization", "Bearer " + accessToken)
-            .header("Accept", "application/json")
-            .GET()
-            .build();
-        try {
-            HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
-            return new RawResponse(url, response.statusCode(), response.body());
-        } catch (java.io.IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            return new RawResponse(url, -1, "request failed: " + e.getMessage());
-        }
-    }
-
-    // Raw single page with a caller-supplied filter expression verbatim —
-    // used to discover the correct filterable members for daily types.
-    public RawResponse rawFirstPageCustomFilter(
-        String accessToken, String urlSegment, String rawFilter, int pageSize) {
-        String url = apiBaseUrl + "/users/me/dataTypes/" + urlSegment
-            + "/dataPoints?page_size=" + pageSize;
-        if (rawFilter != null && !rawFilter.isBlank()) {
-            url += "&filter=" + URLEncoder.encode(rawFilter, StandardCharsets.UTF_8);
-        }
-        HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Authorization", "Bearer " + accessToken)
-            .header("Accept", "application/json")
-            .GET()
-            .build();
-        try {
-            HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
-            return new RawResponse(url, response.statusCode(), response.body());
-        } catch (java.io.IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            return new RawResponse(url, -1, "request failed: " + e.getMessage());
-        }
-    }
-
-    // Public inspect wrapper over the dailyRollUp POST (used by the admin
-    // endpoint to examine the raw aggregation response).
-    public RawResponse rawDailyRollUp(
-        String accessToken, String urlSegment, java.time.LocalDate from, java.time.LocalDate to) {
-        return postDailyRollUp(accessToken, urlSegment, from, to);
     }
 
     // dailyRollUp POST — aggregates an interval data type into one value per
