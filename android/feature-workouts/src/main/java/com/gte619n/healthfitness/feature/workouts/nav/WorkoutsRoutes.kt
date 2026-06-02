@@ -9,26 +9,55 @@ import com.gte619n.healthfitness.feature.workouts.EditGymScreen
 import com.gte619n.healthfitness.feature.workouts.GymDetailScreen
 import com.gte619n.healthfitness.feature.workouts.GymsListScreen
 import com.gte619n.healthfitness.feature.workouts.NewGymScreen
+import com.gte619n.healthfitness.feature.workouts.program.ProgramDetailRoute
+import com.gte619n.healthfitness.feature.workouts.program.ProgramsListRoute
+import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubScreen
 
 /**
- * String-based Navigation-Compose routes for the workouts (gym/equipment)
- * feature. The detail/edit routes carry a `locationId` path arg, read back
- * by ViewModels via [androidx.lifecycle.SavedStateHandle].
+ * String-based Navigation-Compose routes for the workouts area. The Workouts
+ * destination is a hub (IMPL-AND-15): [HUB] renders [WorkoutsHubScreen] with
+ * Gyms / Programs cards. The gyms list (IMPL-AND-06) rebased one level down to
+ * [GYMS] = "workouts/gyms" (and its detail/edit under it) so it no longer
+ * collides with the new "workouts/programs" routes. Programs are read-only.
+ *
+ * Path args (`locationId`, `programId`) are read back by ViewModels via
+ * [androidx.lifecycle.SavedStateHandle].
  */
 object WorkoutsRoutes {
-    const val GYMS = "workouts"
-    const val NEW_GYM = "workouts/new"
+    const val HUB = "workouts"
+
+    // Gyms (IMPL-AND-06), rebased under the hub.
+    const val GYMS = "workouts/gyms"
+    const val NEW_GYM = "workouts/gyms/new"
 
     const val ARG_LOCATION_ID = "locationId"
 
-    const val DETAIL = "workouts/{locationId}"
-    const val EDIT = "workouts/{locationId}/edit"
+    const val DETAIL = "workouts/gyms/{locationId}"
+    const val EDIT = "workouts/gyms/{locationId}/edit"
 
-    fun gymDetail(locationId: String): String = "workouts/$locationId"
-    fun editGym(locationId: String): String = "workouts/$locationId/edit"
+    fun gymDetail(locationId: String): String = "workouts/gyms/$locationId"
+    fun editGym(locationId: String): String = "workouts/gyms/$locationId/edit"
+
+    // Programs (IMPL-AND-15, read-only).
+    const val PROGRAMS = "workouts/programs"
+    const val ARG_PROGRAM_ID = "programId"
+    const val PROGRAM_DETAIL = "workouts/programs/{programId}"
+
+    fun programDetail(programId: String): String = "workouts/programs/$programId"
 }
 
-fun NavGraphBuilder.workoutsGraph(navController: NavHostController) {
+fun NavGraphBuilder.workoutsGraph(
+    navController: NavHostController,
+    onOpenGoal: (String) -> Unit = {},
+) {
+    composable(WorkoutsRoutes.HUB) {
+        WorkoutsHubScreen(
+            onBack = { navController.popBackStack() },
+            onOpenGyms = { navController.navigate(WorkoutsRoutes.GYMS) },
+            onOpenPrograms = { navController.navigate(WorkoutsRoutes.PROGRAMS) },
+        )
+    }
+
     composable(WorkoutsRoutes.GYMS) {
         GymsListScreen(
             onBack = { navController.popBackStack() },
@@ -66,6 +95,23 @@ fun NavGraphBuilder.workoutsGraph(navController: NavHostController) {
         EditGymScreen(
             onBack = { navController.popBackStack() },
             onSaved = { navController.popBackStack() },
+        )
+    }
+
+    composable(WorkoutsRoutes.PROGRAMS) {
+        ProgramsListRoute(
+            onBack = { navController.popBackStack() },
+            onOpenProgram = { id -> navController.navigate(WorkoutsRoutes.programDetail(id)) },
+        )
+    }
+
+    composable(
+        route = WorkoutsRoutes.PROGRAM_DETAIL,
+        arguments = listOf(navArgument(WorkoutsRoutes.ARG_PROGRAM_ID) { type = NavType.StringType }),
+    ) {
+        ProgramDetailRoute(
+            onBack = { navController.popBackStack() },
+            onOpenGoal = onOpenGoal,
         )
     }
 }

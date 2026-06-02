@@ -1,0 +1,66 @@
+{
+  "model" : "gemini-3.5-flash",
+  "enrichments" : {
+    "Barbell Bench Press" : {
+      "movementPattern" : "PUSH_HORIZONTAL",
+      "primaryMuscles" : [ "pectoralis major", "triceps brachii", "anterior deltoid" ],
+      "secondaryMuscles" : [ "serratus anterior" ],
+      "laterality" : "BILATERAL",
+      "mechanic" : "COMPOUND",
+      "description" : "A classic upper-body pressing exercise performed by lowering a barbell to the chest and pressing it back up while lying flat on a bench.",
+      "formCues" : [ "Keep your feet flat on the floor", "Retract and depress your shoulder blades", "Lower the bar to your mid-chest", "Push yourself away from the bar to press" ],
+      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "defaultRepRange" : {
+        "min" : 5,
+        "max" : 10
+      },
+      "isTimed" : false,
+      "equipmentNameGroups" : [ [ "Adjustable Weight Bench" ] ]
+    },
+    "Dumbbell Goblet Squat" : {
+      "movementPattern" : "SQUAT",
+      "primaryMuscles" : [ "quadriceps", "glutes" ],
+      "secondaryMuscles" : [ "hamstrings", "core", "calves" ],
+      "laterality" : "BILATERAL",
+      "mechanic" : "COMPOUND",
+      "description" : "A front-loaded squat variation where a single dumbbell is held vertically in front of the chest, promoting an upright torso.",
+      "formCues" : [ "Hold the dumbbell vertically close to your chest", "Keep your chest upright and core engaged", "Drive your knees outward as you squat", "Push through your heels to stand" ],
+      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "defaultRepRange" : {
+        "min" : 8,
+        "max" : 15
+      },
+      "isTimed" : false,
+      "equipmentNameGroups" : [ [ "Dumbbells" ] ]
+    },
+    "Single-Arm Dumbbell Row" : {
+      "movementPattern" : "PULL_HORIZONTAL",
+      "primaryMuscles" : [ "latissimus dorsi", "rhomboids", "trapezius" ],
+      "secondaryMuscles" : [ "biceps", "posterior deltoids", "core" ],
+      "laterality" : "UNILATERAL",
+      "mechanic" : "COMPOUND",
+      "description" : "A unilateral horizontal pull where a single dumbbell is rowed toward the hip while supporting the body with the opposite hand and knee on a bench.",
+      "formCues" : [ "Keep your spine neutral and flat", "Pull the dumbbell toward your hip, not your chest", "Squeeze your shoulder blade at the top of the movement", "Avoid rotating your torso as you pull" ],
+      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "defaultRepRange" : {
+        "min" : 8,
+        "max" : 12
+      },
+      "isTimed" : false,
+      "equipmentNameGroups" : [ [ "Dumbbells" ], [ "Adjustable Weight Bench" ] ]
+    },
+    "Recover" : {
+      "movementPattern" : "OTHER",
+      "primaryMuscles" : [ ],
+      "secondaryMuscles" : [ ],
+      "laterality" : "BILATERAL",
+      "mechanic" : "ISOLATION",
+      "description" : "A designated rest period to allow your heart rate to recover and prepare for the next effort.",
+      "formCues" : [ "Focus on slow deep breathing", "Relax your muscles entirely" ],
+      "suitableBlockTypes" : [ "WARMUP", "MAIN", "ACCESSORY", "CORE", "CARDIO", "COOLDOWN" ],
+      "defaultRepRange" : null,
+      "isTimed" : true,
+      "equipmentNameGroups" : [ ]
+    }
+  }
+}

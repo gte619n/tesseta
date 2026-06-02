@@ -91,6 +91,35 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.exercise.ExerciseRepository exerciseRepository() {
+        return new InMemoryExerciseRepository();
+    }
+
+    // IMPL-15: the live GeminiExerciseMetadataEnricher is gated off in tests
+    // (app.exercises.enrich-enabled = false). Provide a deterministic fake so
+    // WorkoutHistoryImporter (a core @Service) can wire and the seed-mapping
+    // test can produce meaningful preview output offline.
+    @Bean
+    com.gte619n.healthfitness.core.exercise.ExerciseMetadataEnricher exerciseMetadataEnricher() {
+        return new com.gte619n.healthfitness.testsupport.exercise.FakeExerciseMetadataEnricher();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository workoutProgramRepository() {
+        return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutProgramRepository();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository scheduledWorkoutRepository() {
+        return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryScheduledWorkoutRepository();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.workoutprogram.chat.WorkoutProgramChatRepository workoutProgramChatRepository() {
+        return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutProgramChatRepository();
+    }
+
+    @Bean
     GoalRepository goalRepository() {
         return new InMemoryGoalRepository();
     }
@@ -123,6 +152,22 @@ public class TestPersistenceConfig {
                 onToken.accept(word + " ");
             }
             return new GoalChatClient.StreamResult(reply, null);
+        };
+    }
+
+    // IMPL-15: the live GeminiWorkoutProgramChatClient is gated off in tests
+    // (app.workout-programs.enabled = false). Provide a deterministic fake so
+    // the WorkoutProgramChatController can wire; it echoes a reply and emits no
+    // proposal (chat tests can install a richer fake).
+    @Bean
+    com.gte619n.healthfitness.integrations.workoutprogram.WorkoutProgramChatClient workoutProgramChatClient() {
+        return (history, userMessage, context, onToken) -> {
+            String reply = "Let me design that program.";
+            for (String word : reply.split(" ")) {
+                onToken.accept(word + " ");
+            }
+            return new com.gte619n.healthfitness.integrations.workoutprogram.WorkoutProgramChatClient
+                .StreamResult(reply, null);
         };
     }
 

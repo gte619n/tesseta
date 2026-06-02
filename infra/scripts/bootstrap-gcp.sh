@@ -79,6 +79,22 @@ gcloud storage buckets add-iam-policy-binding "$NUTRITION_BUCKET" \
   --project="$PROJECT_ID" --quiet >/dev/null
 echo "    ${NUTRITION_BUCKET} public-read"
 
+# Exercise demo media (IMPL-15): generated stills served as public URLs, same
+# pattern as nutrition. Was missing in prod and broke exercise media generation
+# ("Media Failed") — create-if-absent so a re-bootstrap provisions it.
+EXERCISE_MEDIA_BUCKET="gs://${PROJECT_ID}-exercise-media"
+if ! gcloud storage buckets describe "$EXERCISE_MEDIA_BUCKET" \
+    --project="$PROJECT_ID" &>/dev/null; then
+  gcloud storage buckets create "$EXERCISE_MEDIA_BUCKET" \
+    --location="$REGION" --uniform-bucket-level-access --project="$PROJECT_ID"
+else
+  echo "    ${EXERCISE_MEDIA_BUCKET} exists, skipping create"
+fi
+gcloud storage buckets add-iam-policy-binding "$EXERCISE_MEDIA_BUCKET" \
+  --member="allUsers" --role="roles/storage.objectViewer" \
+  --project="$PROJECT_ID" --quiet >/dev/null
+echo "    ${EXERCISE_MEDIA_BUCKET} public-read"
+
 echo "==> Firestore default database"
 if ! gcloud firestore databases describe --database='(default)' \
     --project="$PROJECT_ID" &>/dev/null; then

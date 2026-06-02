@@ -137,7 +137,7 @@ private fun FoldableSidebar(
                 "Goals" -> onOpenGoals
                 "Body" -> ({ onNavigate(com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes.BODY) })
                 "Blood" -> ({ onNavigate(com.gte619n.healthfitness.feature.blood.nav.BloodRoutes.OVERVIEW) })
-                "Workouts" -> ({ onNavigate(com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes.GYMS) })
+                "Workouts" -> ({ onNavigate(com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes.HUB) })
                 "Meds" -> ({ onNavigate(com.gte619n.healthfitness.feature.medical.nav.MedicationRoutes.LIST) })
                 "Nutrition" -> ({ onNavigate(com.gte619n.healthfitness.mobile.nav.Routes.NUTRITION) })
                 else -> ({})

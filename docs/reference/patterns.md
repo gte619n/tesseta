@@ -155,3 +155,25 @@ path that feeds a cache must `@CacheEvict`:
 
 Pair caching with the indexed `findLatest*` reads in
 [data-model.md](data-model.md#latest-value-reads-findlatest).
+
+## Batched Firestore writes
+
+When a single logical operation writes or deletes **more than one** document,
+commit a `WriteBatch` (`firestore.batch()` → `batch.set`/`batch.delete` →
+`batch.commit()`) instead of awaiting one round-trip per doc. Firestore caps a
+batch at **500 ops**, so chunk: `for (int start = 0; start < items.size();
+start += 500) { … }`. This is the write-side companion to the IMPL-20 read
+patterns (N+1 batching, indexed `findLatest`).
+
+- **Materialization / re-write** — `WorkoutScheduleService.activate` builds all
+  sessions then calls `ScheduledWorkoutRepository.saveAll`; the Firestore impl
+  commits in ≤500-op batches (the in-memory test impl keeps the per-doc default).
+- **Cascade delete** — Firestore doesn't cascade subcollections, so deleting a
+  parent means deleting its children first. Batch those deletes
+  (`FirestoreWorkoutProgramChatRepository.deleteThread`,
+  `LocationRepository.setDefault`).
+
+Single-document `save`/`delete` stays a plain `await(...set/delete)` — don't
+wrap one write in a batch. Writes that must go through service-layer business
+logic per item (e.g. `ExerciseCatalogSeeder` → `ExerciseService.create`) are
+not batch candidates.

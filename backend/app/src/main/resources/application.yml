@@ -132,6 +132,25 @@ app:
     parser-api-key: ${GEMINI_API_KEY:}
     parser-model: ${EQUIPMENT_PARSER_MODEL:gemini-3.5-flash}
     parser-enabled: ${EQUIPMENT_PARSER_ENABLED:true}
+  # IMPL-14: global exercise catalog. Demo media (phase stills) uses the
+  # project image model; never auto-published (admin review gate).
+  exercises:
+    bucket: ${EXERCISE_MEDIA_BUCKET:health-fitness-160-exercise-media}
+    gemini-api-key: ${GEMINI_API_KEY:}
+    # When true, an exercise must have APPROVED demo media (not just PUBLISHED)
+    # before it is shown to users / offered to the program generator. Set false
+    # to allow programming published exercises whose media isn't approved yet.
+    require-approved-media: ${EXERCISE_REQUIRE_APPROVED_MEDIA:true}
+    media:
+      enabled: ${EXERCISE_MEDIA_ENABLED:true}
+      model: ${EXERCISE_MEDIA_MODEL:gemini-3.1-flash-image-preview}
+  # IMPL-15: AI workout-program design. Second deliberate exception to the
+  # flash-only convention (see ADR-0007), on its OWN env var independent of
+  # GEMINI_MODEL and GOALS_GEMINI_MODEL.
+  workout-programs:
+    enabled: ${WORKOUT_PROGRAMS_ENABLED:true}
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${WORKOUT_PROGRAM_GEMINI_MODEL:gemini-3.1-pro-preview}
   gym:
     bucket: ${GYM_BUCKET:health-fitness-160-gym-photos}
   medications:

@@ -9,7 +9,13 @@ export default async function SignInPage({
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
   const params = await searchParams;
-  const callbackUrl = params.callbackUrl ?? "/";
+  // Only honor same-site app paths. Never bounce to an /api route (those 404 as
+  // pages) or an off-site/protocol-relative URL; fall back to the dashboard.
+  const raw = params.callbackUrl ?? "/";
+  const callbackUrl =
+    raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/api")
+      ? raw
+      : "/";
 
   async function doSignIn() {
     "use server";

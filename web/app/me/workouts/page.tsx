@@ -1,14 +1,31 @@
 import Link from "next/link";
 import { getLocations } from "@/lib/gym-api";
+import { listPrograms, getWorkoutHistorySummary } from "@/lib/workout-program-api";
 import { pageMetadata } from "@/lib/page-metadata";
 
 export const metadata = pageMetadata("Workouts");
 
 export const dynamic = "force-dynamic";
 
+// "Mar 20, 2026" — TZ-stable for date-only strings.
+function formatShortDate(iso: string): string {
+  const value = iso.length === 10 ? `${iso}T00:00:00` : iso;
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default async function WorkoutsPage() {
-  const locations = await getLocations();
+  // Fetch in parallel; a failure on any card's summary shouldn't blank the hub.
+  const [locations, programs, historySummary] = await Promise.all([
+    getLocations().catch(() => []),
+    listPrograms().catch(() => []),
+    getWorkoutHistorySummary().catch(() => ({ count: 0, lastWorkoutDate: null })),
+  ]);
   const defaultLocation = locations.find((l) => l.isDefault);
+  const activeProgramCount = programs.filter((p) => p.status === "ACTIVE").length;
 
   return (
     <main className="min-h-screen bg-canvas p-8">
@@ -91,8 +108,11 @@ export default async function WorkoutsPage() {
             )}
           </Link>
 
-          {/* Workout History Card - Coming Soon */}
-          <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 opacity-50">
+          {/* Workout History Card */}
+          <Link
+            href="/me/workouts/history"
+            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -105,7 +125,7 @@ export default async function WorkoutsPage() {
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-tertiary"
+                    className="text-accent"
                   >
                     <path d="M12 8v4l3 3" />
                     <circle cx="12" cy="12" r="10" />
@@ -118,13 +138,35 @@ export default async function WorkoutsPage() {
                   View past workouts and track progress.
                 </p>
               </div>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-tertiary transition-colors group-hover:text-accent"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </div>
-            <div className="mt-4 border-t border-border-subtle pt-3">
-              <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-tertiary">
-                Coming soon
-              </span>
-            </div>
-          </div>
+            {historySummary.count > 0 && (
+              <div className="mt-4 border-t border-border-subtle pt-3">
+                <div className="flex items-center gap-2 text-[12px] text-tertiary">
+                  <span className="font-medium text-primary">{historySummary.count}</span>
+                  workout{historySummary.count !== 1 && "s"}
+                  {historySummary.lastWorkoutDate && (
+                    <>
+                      <span className="text-border-default">•</span>
+                      <span>Last: {formatShortDate(historySummary.lastWorkoutDate)}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </Link>
 
           {/* Log Workout Card - Coming Soon */}
           <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 opacity-50">
@@ -161,8 +203,11 @@ export default async function WorkoutsPage() {
             </div>
           </div>
 
-          {/* Programs Card - Coming Soon */}
-          <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 opacity-50">
+          {/* Programs Card */}
+          <Link
+            href="/me/workouts/programs"
+            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -175,7 +220,7 @@ export default async function WorkoutsPage() {
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-tertiary"
+                    className="text-accent"
                   >
                     <line x1="8" y1="6" x2="21" y2="6" />
                     <line x1="8" y1="12" x2="21" y2="12" />
@@ -189,16 +234,38 @@ export default async function WorkoutsPage() {
                   </h2>
                 </div>
                 <p className="mt-2 text-[13px] text-secondary">
-                  Create and follow training programs.
+                  Create and follow periodized training programs.
                 </p>
               </div>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-tertiary transition-colors group-hover:text-accent"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </div>
-            <div className="mt-4 border-t border-border-subtle pt-3">
-              <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-tertiary">
-                Coming soon
-              </span>
-            </div>
-          </div>
+            {programs.length > 0 && (
+              <div className="mt-4 border-t border-border-subtle pt-3">
+                <div className="flex items-center gap-2 text-[12px] text-tertiary">
+                  <span className="font-medium text-primary">{programs.length}</span>
+                  program{programs.length !== 1 && "s"}
+                  {activeProgramCount > 0 && (
+                    <>
+                      <span className="text-border-default">•</span>
+                      <span>{activeProgramCount} active</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </Link>
         </section>
       </div>
     </main>

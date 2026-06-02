@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getPendingEquipment, getAdminCatalog } from '@/lib/gym-api';
 import { listAdminDrugs } from '@/lib/drug-admin-api';
+import { getAdminExerciseCatalog, getAdminExerciseReview } from '@/lib/exercise-admin-api';
 import { pageMetadata } from '@/lib/page-metadata';
 
 export const metadata = pageMetadata('Admin');
@@ -12,10 +13,12 @@ export const revalidate = 60;
 
 export default async function AdminOverviewPage() {
   // Admin gating handled by app/admin/layout.tsx
-  const [pending, catalog, drugs] = await Promise.all([
+  const [pending, catalog, drugs, exercises, exerciseReview] = await Promise.all([
     getPendingEquipment().catch(() => []),
     getAdminCatalog().catch(() => []),
     listAdminDrugs().catch(() => []),
+    getAdminExerciseCatalog().catch(() => []),
+    getAdminExerciseReview().catch(() => []),
   ]);
 
   return (
@@ -32,6 +35,13 @@ export default async function AdminOverviewPage() {
           title="Equipment"
           line1={`${pending.length} pending review`}
           line2={`${catalog.length} active in catalog`}
+        />
+        <SectionCard
+          href="/admin/exercises"
+          icon="stretching"
+          title="Exercises"
+          line1={`${exerciseReview.length} pending media review`}
+          line2={`${exercises.length} in catalog`}
         />
         <SectionCard
           href="/admin/drugs"
