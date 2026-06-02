@@ -15,10 +15,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -67,6 +73,16 @@ fun TodaysDosesCardContent(
     onSeeAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val doses = (state as? TodaysDosesUiState.Ready)?.doses.orEmpty()
+    val allTaken = doses.isNotEmpty() && doses.all { it.taken }
+
+    // Once every dose is checked off the card collapses to a compact
+    // "Complete" header; the chevron expands it back to the full list.
+    // Re-completing the list (un-check then re-check) re-collapses it.
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(allTaken) { if (allTaken) expanded = false }
+    val showDoses = !allTaken || expanded
+
     HfCard(modifier = modifier) {
         Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
             Row(
@@ -74,41 +90,85 @@ fun TodaysDosesCardContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SectionTitle("Today's doses")
-                Text(
-                    "View all",
-                    style = Hf.type.capsSm,
-                    color = Hf.colors.accent,
-                    modifier = Modifier.clickable { onSeeAll() },
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SectionTitle("Today's doses")
+                    if (allTaken) CompleteBadge()
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        "View all",
+                        style = Hf.type.capsSm,
+                        color = Hf.colors.accent,
+                        modifier = Modifier.clickable { onSeeAll() },
+                    )
+                    if (allTaken) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp
+                            else Icons.Outlined.KeyboardArrowDown,
+                            contentDescription = if (expanded) "Collapse doses" else "Expand doses",
+                            tint = Hf.colors.textTertiary,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable { expanded = !expanded },
+                        )
+                    }
+                }
             }
-            Spacer(Modifier.height(12.dp))
 
             when (state) {
-                is TodaysDosesUiState.Loading ->
+                is TodaysDosesUiState.Loading -> {
+                    Spacer(Modifier.height(12.dp))
                     Text("Loading…", style = Hf.type.bodySm, color = Hf.colors.textTertiary)
-                is TodaysDosesUiState.Error ->
+                }
+                is TodaysDosesUiState.Error -> {
+                    Spacer(Modifier.height(12.dp))
                     Text(state.message, style = Hf.type.bodySm, color = Hf.colors.alert)
+                }
                 is TodaysDosesUiState.Ready ->
                     if (state.doses.isEmpty()) {
+                        Spacer(Modifier.height(12.dp))
                         Text(
                             "No scheduled doses for today.",
                             style = Hf.type.bodySm,
                             color = Hf.colors.textTertiary,
                         )
-                    } else {
+                    } else if (showDoses) {
                         // Render every dose for today; the dashboard hosting
                         // this card is itself vertically scrollable, so a long
                         // list stays reachable by scrolling (no inner scroll —
                         // that would conflict with the parent's vertical scroll).
+                        Spacer(Modifier.height(12.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             state.doses.forEach { dose ->
                                 DoseRow(dose = dose, onToggle = { onToggle(dose) })
                             }
                         }
                     }
+                // Collapsed + complete: header-only, nothing rendered below.
             }
         }
+    }
+}
+
+@Composable
+private fun CompleteBadge() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Check,
+            contentDescription = null,
+            tint = Hf.colors.accent,
+            modifier = Modifier.size(14.dp),
+        )
+        Text("Complete", style = Hf.type.capsSm, color = Hf.colors.accent)
     }
 }
 
