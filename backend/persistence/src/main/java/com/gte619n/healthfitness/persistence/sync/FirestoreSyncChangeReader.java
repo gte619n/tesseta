@@ -92,7 +92,8 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         "dailyMetrics",
         "deviceSyncs",
         "dexaScans",
-        "weeklyWorkoutAggregates"
+        "weeklyWorkoutAggregates",
+        "workoutPrograms"
     );
 
     /**
@@ -107,7 +108,12 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         "phases", "goals/phases",
         "steps", "goals/phases/steps",
         "messages", "goalChatThreads/messages",
-        "entries", "nutritionDays/entries"
+        "entries", "nutritionDays/entries",
+        // Materialized program sessions. Workout-program *chat* threads/messages
+        // are deliberately NOT synced (online-only, web-driven SSE) — and the
+        // chat's "messages" leaf is excluded from the goal-chat collectionGroup
+        // query by the top-level-segment guard in readChanges.
+        "scheduled", "workoutPrograms/scheduled"
     );
 
     /** Field keys never forwarded to clients in {@code doc}. */
@@ -141,6 +147,14 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
             String emittedCollection = entry.getValue();
             for (QueryDocumentSnapshot doc : scanGroup(leaf, since, emittedCollection, userId, limit)) {
                 if (!ownedBy(doc.getReference(), userId)) {
+                    continue;
+                }
+                // A collectionGroup leaf can be shared by unrelated parents (e.g.
+                // "messages" lives under both goalChatThreads and the online-only
+                // workoutPrograms/{id}/chat). Keep only docs whose top-level
+                // collection matches the routing name so a shared leaf is never
+                // misrouted to the wrong table.
+                if (!topLevelMatches(doc.getReference(), userId, emittedCollection)) {
                     continue;
                 }
                 String id = subcollectionId(doc.getReference(), userId);
@@ -303,6 +317,22 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
     private static boolean ownedBy(DocumentReference ref, String userId) {
         String path = ref.getPath();
         return path.startsWith(USERS + "/" + userId + "/");
+    }
+
+    /**
+     * True if the doc's top-level collection (the first segment below
+     * {@code users/{uid}}) equals the first segment of the emitted routing name.
+     * Guards a collectionGroup leaf shared across unrelated parents (e.g.
+     * {@code messages}) from being misrouted to the wrong table.
+     */
+    private static boolean topLevelMatches(DocumentReference ref, String userId, String emittedCollection) {
+        List<String> segments = pathSegmentsBelowUser(ref, userId);
+        if (segments.isEmpty()) {
+            return false;
+        }
+        int slash = emittedCollection.indexOf('/');
+        String expectedTop = slash < 0 ? emittedCollection : emittedCollection.substring(0, slash);
+        return segments.get(0).equals(expectedTop);
     }
 
     /** Path segments after {@code users/{userId}/}. */

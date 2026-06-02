@@ -351,6 +351,9 @@ public class NutritionController {
         MealType resolved = meal != null ? meal : mealForHour(LocalTime.now().getHour());
         try {
             FoodEntry entry = mealCapture.captureMeal(userId, date, resolved, bytes, photo.getContentType());
+            // Wake other devices to the new ANALYZING placeholder; the async
+            // finalize fans out again (origin=null) when it flips to READY/FAILED.
+            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(

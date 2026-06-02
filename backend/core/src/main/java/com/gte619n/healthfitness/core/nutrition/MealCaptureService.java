@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -36,19 +37,22 @@ public class MealCaptureService {
     private final FoodCatalogService catalog;
     private final NutritionService nutrition;
     private final FoodEntryImageService foodEntryImages;
+    private final SyncChangeNotifier syncNotifier;
 
     public MealCaptureService(
         ObjectProvider<MealPhotoAnalyzer> mealAnalyzer,
         ObjectProvider<MealPhotoStore> photoStore,
         FoodCatalogService catalog,
         NutritionService nutrition,
-        FoodEntryImageService foodEntryImages
+        FoodEntryImageService foodEntryImages,
+        SyncChangeNotifier syncNotifier
     ) {
         this.mealAnalyzer = mealAnalyzer;
         this.photoStore = photoStore;
         this.catalog = catalog;
         this.nutrition = nutrition;
         this.foodEntryImages = foodEntryImages;
+        this.syncNotifier = syncNotifier;
     }
 
     /**
@@ -101,6 +105,11 @@ public class MealCaptureService {
             System.err.println(
                 "Meal capture analysis failed for entry " + entryId + ": " + e.getMessage());
             nutrition.markAnalysisFailed(userId, date, entryId);
+        } finally {
+            // The placeholder transitioned (READY/FAILED) — wake the user's
+            // devices to pull the updated entry. origin=null: the analysis ran
+            // server-side, so even the capturing device should refresh.
+            syncNotifier.changed(userId, null, "nutritionEntries");
         }
     }
 

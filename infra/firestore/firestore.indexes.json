@@ -140,6 +140,14 @@
       ]
     },
     {
+      "_comment": "IMPL-AND-20: workout-program materialized sessions (users/{uid}/workoutPrograms/{id}/scheduled/{id}) join the delta sync; the collectionGroup(scheduled).orderBy(updatedAt) read needs a COLLECTION_GROUP override (the existing (status,date) composite above is for deletePlannedFrom, a different query). The workoutPrograms top-level collection needs no override per the note above.",
+      "collectionGroup": "scheduled",
+      "fieldPath": "updatedAt",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "locations",
       "fieldPath": "equipmentIds",
       "indexes": [

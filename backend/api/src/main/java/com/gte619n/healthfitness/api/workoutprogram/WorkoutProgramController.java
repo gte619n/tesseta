@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.api.workoutprogram;
 
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
@@ -32,19 +33,22 @@ public class WorkoutProgramController {
     private final WorkoutScheduleService schedule;
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
+    private final SyncChangeNotifier syncNotifier;
 
     public WorkoutProgramController(
         CurrentUserProvider currentUser,
         WorkoutProgramService service,
         WorkoutScheduleService schedule,
         WorkoutProgramValidator validator,
-        WorkoutProgramAssembler assembler
+        WorkoutProgramAssembler assembler,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.service = service;
         this.schedule = schedule;
         this.validator = validator;
         this.assembler = assembler;
+        this.syncNotifier = syncNotifier;
     }
 
     @GetMapping
@@ -61,6 +65,7 @@ public class WorkoutProgramController {
             ProgramStatus.DRAFT, body.source(), body.startDate(), body.schedule(),
             null, body.phases(), null, null, null);
         WorkoutProgram created = service.create(input);
+        syncNotifier.changed(userId, null, "workoutPrograms");
         return ResponseEntity.status(HttpStatus.CREATED).body(assembler.deep(created));
     }
 
@@ -85,9 +90,10 @@ public class WorkoutProgramController {
         if (service.findById(userId, programId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        WorkoutProgram updated = service.update(userId, programId, body.title(), body.description(),
+        WorkoutProgram updatedProgram = service.update(userId, programId, body.title(), body.description(),
             body.goalId(), body.schedule(), body.startDate(), body.status(), body.phases());
-        return assembler.deep(updated);
+        syncNotifier.changed(userId, null, "workoutPrograms");
+        return assembler.deep(updatedProgram);
     }
 
     @DeleteMapping("/{programId}")
@@ -97,6 +103,7 @@ public class WorkoutProgramController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         service.archive(userId, programId);
+        syncNotifier.changed(userId, null, "workoutPrograms");
         return ResponseEntity.noContent().build();
     }
 
@@ -119,6 +126,7 @@ public class WorkoutProgramController {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, String.join("; ", issues));
         }
         List<ScheduledWorkout> scheduled = schedule.activate(userId, programId);
+        syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
         return assembler.scheduled(userId, scheduled);
     }
 
