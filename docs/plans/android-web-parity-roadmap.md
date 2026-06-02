@@ -1,8 +1,8 @@
 # Android ↔ Web Feature Parity Roadmap
 
 **Date:** 2026-05-26
-**Updated:** 2026-05-31
-**Status:** Mostly shipped — foundations (§3) + IMPL-AND-01..06 + IMPL-AND-12 (goals) + IMPL-13 (testosterone marker, nutrition) have landed; Android phone is now at near-parity with web. Remaining work is active workout logging (Phase 7, needs ADR), Wear OS surfaces (Phase 8), and a few Phase 9 stretch items (sleep, push notifications, dark mode). Original discovery survey from 2026-05-26 preserved below with status indicators brought current.
+**Updated:** 2026-06-02
+**Status:** Mostly shipped — foundations (§3) + IMPL-AND-01..06 + IMPL-AND-12 (goals) + IMPL-13 (testosterone marker, nutrition) have landed; Android phone is now at near-parity with web. Remaining work is active workout logging (Phase 7, needs ADR), Wear OS surfaces (Phase 8), a few Phase 9 stretch items (sleep, push notifications, dark mode), and a new cross-cutting **offline-first sync** workstream (IMPL-AND-20 / ADR-0007, planned). Original discovery survey from 2026-05-26 preserved below with status indicators brought current.
 
 This document compares the current state of the **web** (Next.js 15) and **Android** (Compose) clients, identifies the gap, and proposes a phased roadmap to bring Android to feature parity. It began as a living survey, not an authoritative spec — individual workstreams were split into IMPL specs under `docs/specs/` before implementation. The status section below (§0) is the at-a-glance source of truth; the domain-by-domain and phase sections that follow retain the original discovery analysis with statuses updated.
 
@@ -20,7 +20,7 @@ At-a-glance truth. Foundations and all phone domains through Goals have shipped;
 | §3.2 Navigation | ✅ Shipped | Single NavHost (string routes, not typed `Routes`) + nested per-feature graphs + phone "More" hub |
 | §3.3 Network | ✅ Shipped | Retrofit + OkHttp + Moshi in `core-data/net`; AuthInterceptor + 401 silent-refresh; 12 API services |
 | §3.4 SSE consumer | ✅ Shipped | `core-data/net/Sse.kt`; drug lookup, goal chat, blood + DEXA upload |
-| §3.5 Room | ⏳ Incremental | Kept as-needed; backend remains source of truth, DataStore for prefs/token |
+| §3.5 Room | ⏳ Incremental | Kept as-needed; backend remains source of truth, DataStore for prefs/token. **Planned activation:** IMPL-AND-20 makes an encrypted Room store the on-device source of truth (offline-first) |
 | §3.6 Coil | ✅ Shipped | coil-compose 2.7.0 |
 | §3.7 File picker + multipart | ✅ Shipped | `MultipartUploadClient`; blood/DEXA PDF, gym cover photo, nutrition capture |
 | §3.8 ViewModels | ✅ Shipped | Convention adopted, ~30 `@HiltViewModel` screens |
@@ -43,6 +43,7 @@ At-a-glance truth. Foundations and all phone domains through Goals have shipped;
 | Phase 7 | Active workout logging | ⏳ Remaining | Not built; `WorkoutSessionService` is a commented-out manifest stub; needs its own ADR |
 | Phase 8 | Wear OS surfaces | ⏳ Remaining | Only sign-in/token relay works; no glance/Tiles/Complications/Health Services |
 | Phase 9 (remainder) | Stretch | ⏳ Remaining | Sleep tracking, push/dose reminders, dark mode still open (Nutrition + Unit prefs done) |
+| Cross-cutting / IMPL-AND-20 | Offline-first sync | 📋 Planned | Encrypted Room store as UI source of truth, background sync engine (delta pull + outbox), backend soft-delete/tombstone contract, unified `/api/me/sync` API, idempotent client-UUID writes, FCM silent-push fan-out. Decision: ADR-0007. Not started |
 | §2.8 | Admin | ⏳ Deferred | Intentionally deferred to desktop |
 
 ### Empty modules (intentional / forward-looking)
