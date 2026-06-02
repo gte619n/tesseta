@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataType;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataType;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -41,17 +42,23 @@ class GoogleHealthWebhookControllerTest {
         WebhookHandlerService webhookHandlerService() {
             return org.mockito.Mockito.mock(WebhookHandlerService.class);
         }
+
+        @Bean
+        DailyMetricWebhookHandler dailyMetricWebhookHandler() {
+            return org.mockito.Mockito.mock(DailyMetricWebhookHandler.class);
+        }
     }
 
     @LocalServerPort int port;
     @Autowired WebhookHandlerService handler;
+    @Autowired DailyMetricWebhookHandler dailyHandler;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
     @BeforeEach
     void resetHandlerMock() {
-        // Bean is a singleton, so previous tests' invocations leak. Reset.
-        Mockito.reset(handler);
+        // Beans are singletons, so previous tests' invocations leak. Reset.
+        Mockito.reset(handler, dailyHandler);
     }
 
     @Test
@@ -171,5 +178,95 @@ class GoogleHealthWebhookControllerTest {
         verify(handler).handle(captor.capture());
         assertThat(captor.getValue().operation()).isEqualTo(WebhookHandlerService.Operation.DELETE);
         assertThat(captor.getValue().dataType()).isEqualTo(GoogleHealthDataType.BODY_FAT);
+    }
+
+    @Test
+    void routesStepsNotificationToDailyMetricHandler() throws Exception {
+        String body = """
+            {
+              "healthUserId": "12345",
+              "dataType": "steps",
+              "operation": "UPSERT",
+              "intervals": [
+                { "startTime": "2026-05-01T00:00:00Z", "endTime": "2026-05-20T00:00:00Z" }
+              ]
+            }
+            """;
+
+        HttpResponse<String> response = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/webhooks/google-health"))
+                .header("Authorization", "Bearer test-webhook-secret")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        ArgumentCaptor<DailyMetricWebhookHandler.Notification> captor =
+            ArgumentCaptor.forClass(DailyMetricWebhookHandler.Notification.class);
+        verify(dailyHandler).handle(captor.capture());
+        DailyMetricWebhookHandler.Notification got = captor.getValue();
+        assertThat(got.healthUserId()).isEqualTo("12345");
+        assertThat(got.dataType()).isEqualTo(DailyMetricDataType.STEPS);
+        assertThat(got.operation()).isEqualTo(DailyMetricWebhookHandler.Operation.UPSERT);
+        // A daily-metric notification must not leak into the body-comp handler.
+        verify(handler, never()).handle(any());
+    }
+
+    @Test
+    void routesSleepNotificationToDailyMetricHandler() throws Exception {
+        String body = """
+            {
+              "healthUserId": "12345",
+              "dataType": "sleep",
+              "operation": "UPSERT",
+              "intervals": [
+                { "startTime": "2026-05-01T00:00:00Z", "endTime": "2026-05-20T00:00:00Z" }
+              ]
+            }
+            """;
+
+        HttpResponse<String> response = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/webhooks/google-health"))
+                .header("Authorization", "Bearer test-webhook-secret")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        ArgumentCaptor<DailyMetricWebhookHandler.Notification> captor =
+            ArgumentCaptor.forClass(DailyMetricWebhookHandler.Notification.class);
+        verify(dailyHandler).handle(captor.capture());
+        assertThat(captor.getValue().dataType()).isEqualTo(DailyMetricDataType.SLEEP);
+        verify(handler, never()).handle(any());
+    }
+
+    @Test
+    void acknowledgesUnmodeledDataTypeWithoutDispatch() throws Exception {
+        String body = """
+            {
+              "healthUserId": "12345",
+              "dataType": "blood-glucose",
+              "operation": "UPSERT",
+              "intervals": [
+                { "startTime": "2026-05-01T00:00:00Z", "endTime": "2026-05-20T00:00:00Z" }
+              ]
+            }
+            """;
+
+        HttpResponse<String> response = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/webhooks/google-health"))
+                .header("Authorization", "Bearer test-webhook-secret")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        // Unknown type is acked (200) so Google stops retrying; neither
+        // handler is invoked.
+        assertThat(response.statusCode()).isEqualTo(200);
+        verify(handler, never()).handle(any());
+        verify(dailyHandler, never()).handle(any());
     }
 }
