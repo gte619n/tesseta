@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.core.user.UserRepository;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthClient;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataPoint;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataType;
+import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthOAuthClient;
 import com.gte619n.healthfitness.integrations.googlehealth.KmsTokenCipher;
 import java.time.Duration;
 import java.time.Instant;
@@ -20,10 +21,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// Connect / disconnect for the Google Health integration. The web client
-// completes the incremental OAuth authorization for the
-// health_metrics_and_measurements.readonly scope, then POSTs the
-// resulting refresh + access token here. We:
+// Connect / disconnect for the Google Health integration. Two client
+// shapes hit /connect:
+//   - Web: completes the incremental OAuth authorization for the
+//     health_metrics_and_measurements.readonly scope and POSTs the
+//     resulting {refreshToken, accessToken}.
+//   - Android: POSTs a GIS {serverAuthCode} that we redeem server-side
+//     for the refresh + access token.
+// Once we have tokens, regardless of shape, we:
 //   1. Encrypt the refresh token via KMS envelope encryption.
 //   2. Use the access token immediately to call the Google Health API
 //      once, parse the healthUserId out of the response.
@@ -40,6 +45,7 @@ public class GoogleHealthConnectController {
     private final BackfillService backfill;
     private final DailyMetricBackfillService dailyMetricBackfill;
     private final AccessTokenService tokens;
+    private final GoogleHealthOAuthClient oauthClient;
 
     public GoogleHealthConnectController(
         CurrentUserProvider currentUser,
@@ -48,7 +54,8 @@ public class GoogleHealthConnectController {
         GoogleHealthClient googleHealth,
         BackfillService backfill,
         DailyMetricBackfillService dailyMetricBackfill,
-        AccessTokenService tokens
+        AccessTokenService tokens,
+        GoogleHealthOAuthClient oauthClient
     ) {
         this.currentUser = currentUser;
         this.users = users;
@@ -57,15 +64,32 @@ public class GoogleHealthConnectController {
         this.backfill = backfill;
         this.dailyMetricBackfill = dailyMetricBackfill;
         this.tokens = tokens;
+        this.oauthClient = oauthClient;
     }
 
     @PostMapping("/connect")
     public ResponseEntity<Void> connect(@RequestBody ConnectRequest body) {
         String userId = currentUser.get().userId();
 
-        String healthUserId = discoverHealthUserId(body.accessToken());
+        // Two request shapes converge here:
+        //   - Android: {serverAuthCode} — a GIS server auth code we redeem
+        //     server-side for a refresh + access token.
+        //   - Web: {refreshToken, accessToken} — already-exchanged tokens.
+        String refreshToken;
+        String accessToken;
+        if (body.serverAuthCode() != null && !body.serverAuthCode().isBlank()) {
+            GoogleHealthOAuthClient.AuthCodeGrant grant =
+                oauthClient.exchangeAuthCode(body.serverAuthCode());
+            refreshToken = grant.refreshToken();
+            accessToken = grant.accessToken();
+        } else {
+            refreshToken = body.refreshToken();
+            accessToken = body.accessToken();
+        }
 
-        KmsTokenCipher.EncryptedToken encrypted = cipher.encrypt(body.refreshToken());
+        String healthUserId = discoverHealthUserId(accessToken);
+
+        KmsTokenCipher.EncryptedToken encrypted = cipher.encrypt(refreshToken);
         users.recordGoogleHealthConnection(userId, new GoogleHealthConnection(
             healthUserId,
             encrypted.refreshTokenCiphertext(),
@@ -133,5 +157,5 @@ public class GoogleHealthConnectController {
             "Could not discover healthUserId — no body-comp data points exist for this user");
     }
 
-    public record ConnectRequest(String refreshToken, String accessToken) {}
+    public record ConnectRequest(String serverAuthCode, String refreshToken, String accessToken) {}
 }

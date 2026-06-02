@@ -62,16 +62,55 @@ steps:
         printf '%s' "$$VERSION_CODE" > /workspace/version-code
         printf '%s' "$$VERSION_NAME" > /workspace/version-name
 
-        # Release notes: headline (latest commit subject) + its body + a short
-        # recent-change list + a version/commit/date footer. Reads far better in
-        # the tester email than "main @ <sha>".
+        # Release notes. We ask Gemini (the project's standard text model,
+        # CLAUDE.md -> gemini-3.5-flash) to rewrite the commit log since the
+        # last released build into plain English for testers, instead of
+        # dumping raw conventional-commit subjects. Everything here is
+        # best-effort: any failure falls back to the previous deterministic
+        # git-commit notes so a release is never blocked by note generation.
+        # The version/build footer is always appended deterministically.
+
+        # "Last released build" is a marker object written by distribute-firebase
+        # on success (avoids pushing git tags back to GitHub from CI). Summarize
+        # commits since that marker when it points at a real ancestor of HEAD;
+        # otherwise summarize recent history.
+        MARKER="gs://health-fitness-160-android-releases/last-release-sha"
+        LAST_SHA="$(gsutil cat "$$MARKER" 2>/dev/null | tr -d '[:space:]' || true)"
+        if [ -n "$$LAST_SHA" ] \
+           && git -C /workspace cat-file -e "$${LAST_SHA}^{commit}" 2>/dev/null \
+           && git -C /workspace merge-base --is-ancestor "$$LAST_SHA" HEAD 2>/dev/null; then
+          COMMITS="$(git -C /workspace log "$${LAST_SHA}..HEAD" --no-merges --pretty='- %s%n%b')"
+        else
+          COMMITS=""
+        fi
+        # No usable range (first build under this scheme, or nothing new):
+        # summarize the most recent commits instead.
+        if [ -z "$$COMMITS" ]; then
+          COMMITS="$(git -C /workspace log -n 15 --no-merges --pretty='- %s%n%b')"
+        fi
+
+        # Plain-English rewrite via Gemini (best-effort; empty on any failure).
+        GEMINI_API_KEY="$(gcloud secrets versions access latest \
+          --secret=gemini_api_key --project=$PROJECT_ID 2>/dev/null || true)"
+        NOTES=""
+        if [ -n "$$GEMINI_API_KEY" ]; then
+          NOTES="$(GEMINI_API_KEY="$$GEMINI_API_KEY" COMMITS="$$COMMITS" \
+            python3 /workspace/android/ci/release-notes.py 2>/dev/null || true)"
+        fi
+
+        # Deterministic fallback = the previous git-based notes (headline +
+        # body + short recent-change list).
         SUBJECT="$(git -C /workspace log -1 --pretty=%s)"
         BODY="$(git -C /workspace log -1 --pretty=%b)"
         {
-          printf '%s\n' "$$SUBJECT"
-          if [ -n "$$BODY" ]; then printf '\n%s\n' "$$BODY"; fi
-          printf '\nRecent changes:\n'
-          git -C /workspace log -n 8 --no-merges --pretty='- %s'
+          if [ -n "$$NOTES" ]; then
+            printf '%s\n' "$$NOTES"
+          else
+            printf '%s\n' "$$SUBJECT"
+            if [ -n "$$BODY" ]; then printf '\n%s\n' "$$BODY"; fi
+            printf '\nRecent changes:\n'
+            git -C /workspace log -n 8 --no-merges --pretty='- %s'
+          fi
           printf '\nTesseta %s (build %s) · %s · %s\n' \
             "$$BASE_VERSION" "$$VERSION_CODE" "$SHORT_SHA" "$(date -u +%Y-%m-%d)"
         } > /workspace/release-notes.txt
@@ -121,6 +160,12 @@ steps:
           --app "$$FIREBASE_APP_ID" \
           --groups "internal-testers" \
           --release-notes-file /workspace/release-notes.txt
+
+        # Record this commit as the last successfully-released build so the next
+        # build's notes summarize only what changed since here. Best-effort: a
+        # marker write failure must not fail an otherwise-successful release.
+        printf '%s' "$COMMIT_SHA" | gsutil -q cp - \
+          gs://health-fitness-160-android-releases/last-release-sha || true
 
 artifacts:
   objects:

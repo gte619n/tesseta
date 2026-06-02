@@ -68,6 +68,48 @@ public class GoogleHealthOAuthClient {
         }
     }
 
+    public AuthCodeGrant exchangeAuthCode(String serverAuthCode) {
+        if (clientId.isBlank() || clientSecret.isBlank()) {
+            throw new IllegalStateException(
+                "Google Health OAuth client credentials are not configured");
+        }
+        // GIS Android requestOfflineAccess(webClientId, true) hands us a
+        // server auth code. Redeeming it uses the web client id/secret with
+        // an EMPTY redirect_uri (not "postmessage") and no PKCE.
+        String body = formEncode(
+            "grant_type", "authorization_code",
+            "code", serverAuthCode,
+            "client_id", clientId,
+            "client_secret", clientSecret,
+            "redirect_uri", ""
+        );
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(tokenUrl))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        try {
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() / 100 != 2) {
+                throw new RuntimeException(
+                    "Auth code exchange failed (" + response.statusCode() + "): " + response.body());
+            }
+            JsonNode json = mapper.readTree(response.body());
+            String refreshToken = json.path("refresh_token").asText();
+            if (refreshToken == null || refreshToken.isBlank()) {
+                throw new IllegalStateException("Auth code exchange returned no refresh token");
+            }
+            return new AuthCodeGrant(
+                refreshToken,
+                json.path("access_token").asText(),
+                json.path("expires_in").asLong()
+            );
+        } catch (java.io.IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new RuntimeException("Auth code exchange interrupted/failed", e);
+        }
+    }
+
     private static String formEncode(String... pairs) {
         if (pairs.length % 2 != 0) throw new IllegalArgumentException("even args required");
         StringBuilder sb = new StringBuilder();
@@ -81,4 +123,6 @@ public class GoogleHealthOAuthClient {
     }
 
     public record AccessTokenGrant(String accessToken, long expiresInSeconds) {}
+
+    public record AuthCodeGrant(String refreshToken, String accessToken, long expiresInSeconds) {}
 }
