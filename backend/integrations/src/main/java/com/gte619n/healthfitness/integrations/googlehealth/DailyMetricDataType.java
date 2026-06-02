@@ -6,17 +6,33 @@ import java.util.Optional;
 // reports through the Google Health API to their API data-type identifiers.
 //
 // Same three-form naming convention as GoogleHealthDataType:
-//   URL path:            kebab-case  ("resting-heart-rate")
-//   Filter field prefix: snake_case  ("resting_heart_rate")
-//   JSON response key:   camelCase   ("restingHeartRate", used by the mapper)
+//   URL path:            kebab-case  ("daily-resting-heart-rate")
+//   Filter field prefix: snake_case  ("daily_resting_heart_rate")
+//   JSON response key:   camelCase   ("dailyRestingHeartRate", used by the mapper)
 //
-// Unlike body composition these are day-grained aggregates: one data point
-// per calendar day per type. They land on the DailyMetric record
-// (users/{userId}/dailyMetrics/{yyyy-MM-dd}) rather than body composition.
+// These land on the DailyMetric record (users/{userId}/dailyMetrics/
+// {yyyy-MM-dd}) as one value per calendar day, but they reach that shape
+// differently in the API (see GoogleHealthClient.listDailyMetricPoints):
+//   - RESTING_HEART_RATE, HRV: genuine daily roll-up data types — listed and
+//     filtered on their civil `date` member.
+//   - STEPS: a per-minute interval type with no daily form; aggregated to a
+//     daily total via the :dailyRollUp endpoint (countSum).
+//   - SLEEP: a session type; listed and filtered on its civil END (wake) time
+//     (sleep.interval.civil_end_time, YYYY-MM-DD), then the asleep-stage
+//     durations are summed per wake day. No sleep score is exposed, so
+//     sleepScore stays null.
+//
+// IMPORTANT: the Google Health API names daily roll-ups with a "daily-"
+// prefix (daily-resting-heart-rate, daily-heart-rate-variability). The bare
+// "resting-heart-rate" / "heart-rate-variability" forms are the per-sample
+// types, which we do NOT subscribe to — a daily DailyMetric value is the
+// roll-up. Routing on the bare forms silently drops every notification, so
+// these strings must match the daily roll-up identifiers exactly.
 public enum DailyMetricDataType {
     STEPS("steps", "steps", "steps"),
-    RESTING_HEART_RATE("resting-heart-rate", "resting_heart_rate", "restingHeartRate"),
-    HRV("heart-rate-variability", "heart_rate_variability", "heartRateVariability"),
+    RESTING_HEART_RATE(
+        "daily-resting-heart-rate", "daily_resting_heart_rate", "dailyRestingHeartRate"),
+    HRV("daily-heart-rate-variability", "daily_heart_rate_variability", "dailyHeartRateVariability"),
     SLEEP("sleep", "sleep", "sleep");
 
     private final String urlSegment;

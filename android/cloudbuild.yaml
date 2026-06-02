@@ -23,6 +23,63 @@ steps:
           --secret=oauth-web-client-id --project=$PROJECT_ID \
           --out-file=/workspace/web-oauth-client-id
 
+  # Derive a real version + release notes for this build so Firebase App
+  # Distribution stops showing a perpetual "(1) / 0.1.0" with a bare SHA. The
+  # cloud-sdk image ships git; we persist the results to /workspace so the
+  # (unprivileged, different-image) build + distribute steps can read them.
+  - id: compute-version
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+
+        # Cloud Build checks out a shallow clone; unshallow so `rev-list
+        # --count` reflects true main history. Network/auth may forbid it on a
+        # private repo, so this is best-effort.
+        git -C /workspace fetch --unshallow --quiet 2>/dev/null || true
+
+        # versionCode: monotonic, ordered build number. Commit count on main is
+        # human-meaningful and increases with every merge; fall back to
+        # minutes-since-anchor (always available, strictly increasing per build,
+        # stays well under the 2.1e9 versionCode ceiling) if history is too
+        # shallow to count.
+        COMMIT_COUNT="$(git -C /workspace rev-list --count HEAD 2>/dev/null || echo 0)"
+        if [ "$$COMMIT_COUNT" -gt 1 ]; then
+          VERSION_CODE="$$COMMIT_COUNT"
+        else
+          VERSION_CODE="$(( ( $(date -u +%s) - 1700000000 ) / 60 ))"
+        fi
+
+        # baseVersionName is the single source of truth in build.gradle.kts;
+        # read it so the marketing prefix isn't duplicated here.
+        BASE_VERSION="$(grep -E 'val baseVersionName' \
+          /workspace/android/app/build.gradle.kts \
+          | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+        VERSION_NAME="$$BASE_VERSION ($$VERSION_CODE)"
+
+        printf '%s' "$$VERSION_CODE" > /workspace/version-code
+        printf '%s' "$$VERSION_NAME" > /workspace/version-name
+
+        # Release notes: headline (latest commit subject) + its body + a short
+        # recent-change list + a version/commit/date footer. Reads far better in
+        # the tester email than "main @ <sha>".
+        SUBJECT="$(git -C /workspace log -1 --pretty=%s)"
+        BODY="$(git -C /workspace log -1 --pretty=%b)"
+        {
+          printf '%s\n' "$$SUBJECT"
+          if [ -n "$$BODY" ]; then printf '\n%s\n' "$$BODY"; fi
+          printf '\nRecent changes:\n'
+          git -C /workspace log -n 8 --no-merges --pretty='- %s'
+          printf '\nTesseta %s (build %s) · %s · %s\n' \
+            "$$BASE_VERSION" "$$VERSION_CODE" "$SHORT_SHA" "$(date -u +%Y-%m-%d)"
+        } > /workspace/release-notes.txt
+
+        echo "version=$$VERSION_NAME code=$$VERSION_CODE"
+        echo "----- release notes -----"
+        cat /workspace/release-notes.txt
+
   # TODO(infra): replace cimg/android with a custom builder image baked
   # once and pushed to this project's Artifact Registry, with USER root so
   # the chown workaround can be removed.
@@ -43,6 +100,10 @@ steps:
         export ANDROID_KEY_ALIAS=upload
         export ANDROID_KEY_PASSWORD="$(cat /workspace/key.password)"
         export WEB_OAUTH_CLIENT_ID="$(cat /workspace/web-oauth-client-id)"
+        # Inject the version derived in the compute-version step (see
+        # resolveVersionCode/resolveVersionName in app/build.gradle.kts).
+        export ANDROID_VERSION_CODE="$(cat /workspace/version-code)"
+        export ANDROID_VERSION_NAME="$(cat /workspace/version-name)"
         ./gradlew :app:assembleRelease --no-daemon
 
   - id: distribute-firebase
@@ -59,7 +120,7 @@ steps:
           android/app/build/outputs/apk/release/app-release.apk \
           --app "$$FIREBASE_APP_ID" \
           --groups "internal-testers" \
-          --release-notes "main @ $SHORT_SHA"
+          --release-notes-file /workspace/release-notes.txt
 
 artifacts:
   objects:

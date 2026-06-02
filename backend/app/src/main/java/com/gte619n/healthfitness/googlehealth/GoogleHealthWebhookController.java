@@ -2,10 +2,12 @@ package com.gte619n.healthfitness.googlehealth;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataType;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataType;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,8 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 //      and one without; we respond 200 / 401 respectively so Google can
 //      confirm our auth filter actually filters.
 //   2. Real notifications about UPSERT or DELETE events. We verify the
-//      Authorization header, parse the body, hand off to
-//      WebhookHandlerService which hydrates via REST and writes Firestore.
+//      Authorization header, parse the body, then route on dataType:
+//      body-composition types (weight, body-fat) go to
+//      WebhookHandlerService; day-grained vitals/activity (steps, sleep,
+//      daily-resting-heart-rate, daily-heart-rate-variability) go to
+//      DailyMetricWebhookHandler. Both hydrate via REST and write Firestore.
 //
 // The endpoint is public-by-design (no JWT auth filter); the
 // Authorization header is the shared secret, not a bearer token.
@@ -38,13 +43,16 @@ public class GoogleHealthWebhookController {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String configuredSecret;
     private final WebhookHandlerService handler;
+    private final DailyMetricWebhookHandler dailyHandler;
 
     public GoogleHealthWebhookController(
         @Value("${app.googlehealth.webhook-secret:}") String configuredSecret,
-        WebhookHandlerService handler
+        WebhookHandlerService handler,
+        DailyMetricWebhookHandler dailyHandler
     ) {
         this.configuredSecret = configuredSecret;
         this.handler = handler;
+        this.dailyHandler = dailyHandler;
     }
 
     @PostMapping
@@ -81,7 +89,7 @@ public class GoogleHealthWebhookController {
         }
 
         try {
-            handler.handle(parse(node));
+            dispatch(node);
             return ResponseEntity.ok().build();
         } catch (RuntimeException e) {
             log.error("Webhook notification handling failed: {}", e.getMessage(), e);
@@ -112,7 +120,13 @@ public class GoogleHealthWebhookController {
         return diff == 0;
     }
 
-    private static WebhookHandlerService.Notification parse(JsonNode node) {
+    // Parse the common envelope once, then route on dataType. A single
+    // dataType string is either a daily-metric type (steps, sleep,
+    // daily-resting-heart-rate, daily-heart-rate-variability) or a
+    // body-composition type (weight, body-fat) — never both. An unrecognized type is
+    // logged and acked (200) rather than 500'd: Google retries 5xx for 7
+    // days, and there's nothing to gain by retrying a type we don't model.
+    private void dispatch(JsonNode node) {
         String healthUserId = node.path("healthUserId").asText();
         String dataTypeRaw = node.path("dataType").asText();
         String operationRaw = node.path("operation").asText("UPSERT");
@@ -120,8 +134,25 @@ public class GoogleHealthWebhookController {
         Instant from = Instant.parse(interval.path("startTime").asText());
         Instant to = Instant.parse(interval.path("endTime").asText());
 
-        GoogleHealthDataType dataType = GoogleHealthDataType.fromApiName(dataTypeRaw);
-        WebhookHandlerService.Operation op = WebhookHandlerService.Operation.valueOf(operationRaw);
-        return new WebhookHandlerService.Notification(healthUserId, dataType, op, from, to);
+        Optional<DailyMetricDataType> dailyType = DailyMetricDataType.tryFromApiName(dataTypeRaw);
+        if (dailyType.isPresent()) {
+            DailyMetricWebhookHandler.Operation op =
+                DailyMetricWebhookHandler.Operation.valueOf(operationRaw);
+            dailyHandler.handle(new DailyMetricWebhookHandler.Notification(
+                healthUserId, dailyType.get(), op, from, to));
+            return;
+        }
+
+        Optional<GoogleHealthDataType> bodyType = GoogleHealthDataType.tryFromApiName(dataTypeRaw);
+        if (bodyType.isPresent()) {
+            WebhookHandlerService.Operation op =
+                WebhookHandlerService.Operation.valueOf(operationRaw);
+            handler.handle(new WebhookHandlerService.Notification(
+                healthUserId, bodyType.get(), op, from, to));
+            return;
+        }
+
+        log.warn("Webhook notification for unmodeled dataType={} — acknowledged, not stored",
+            dataTypeRaw);
     }
 }

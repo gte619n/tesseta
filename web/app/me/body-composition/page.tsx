@@ -73,8 +73,15 @@ type Row = {
 const KG_TO_LB = 2.20462;
 const SESSION_WINDOW_MS = 5 * 60 * 1000;
 
-const GOOGLE_HEALTH_SCOPE =
-  "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
+// Google Health read scopes. Each data-type family needs its own scope:
+// resting HR / HRV / body composition fall under health_metrics_and_
+// measurements; steps under activity_and_fitness; sleep under sleep.
+// Without all three, the daily-metric sync 403s on the ungranted families.
+const GOOGLE_HEALTH_SCOPE = [
+  "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+  "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+  "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+].join(" ");
 
 export const dynamic = "force-dynamic";
 
