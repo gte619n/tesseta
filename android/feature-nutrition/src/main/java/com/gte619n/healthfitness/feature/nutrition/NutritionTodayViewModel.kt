@@ -9,6 +9,7 @@ import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
+import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.gte619n.healthfitness.domain.nutrition.forPortion
