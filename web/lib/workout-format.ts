@@ -2,7 +2,11 @@
 // client and server (no apiFetch). Renders a prescription row as the canonical
 // "3 × 8–10 @ RPE 8 · rest 90s" string.
 
-import type { Prescription, Intensity } from "./types/workout-program";
+import type {
+  Prescription,
+  Intensity,
+  ScheduledWorkoutResponse,
+} from "./types/workout-program";
 
 function formatIntensity(intensity: Intensity | null): string | null {
   if (!intensity || intensity.kind === "NONE" || intensity.value == null) return null;
@@ -53,6 +57,37 @@ export function formatPrescription(p: Prescription): string {
 function formatRest(seconds: number): string {
   if (seconds >= 60 && seconds % 60 === 0) return `${seconds / 60}m`;
   return `${seconds}s`;
+}
+
+// Renders the sets a user actually performed, e.g. "135 × 8 · 135 × 8 · 155 × 6"
+// (lb), or just the weights when the export carried no reps ("95 · 100 · 100 lb").
+// Null when nothing was logged (a plan template, not a performed session).
+export function formatLoggedSets(p: Prescription): string | null {
+  const sets = p.loggedSets;
+  if (!sets || sets.length === 0) return null;
+  const anyReps = sets.some((s) => s.reps != null);
+  const anyWeight = sets.some((s) => s.weightLbs != null);
+  const parts = sets.map((s) => {
+    const w = s.weightLbs != null ? `${trimWeight(s.weightLbs)}` : anyWeight ? "BW" : "";
+    if (s.reps != null) return w ? `${w} × ${s.reps}` : `${s.reps}`;
+    return w;
+  });
+  const body = parts.filter(Boolean).join(" · ");
+  if (!body) return `${sets.length} set${sets.length === 1 ? "" : "s"}`;
+  return anyWeight && !anyReps ? `${body} lb` : body;
+}
+
+function trimWeight(w: number): string {
+  return Number.isInteger(w) ? `${w}` : `${w}`.replace(/\.0+$/, "");
+}
+
+// Total number of performed sets across every exercise in a session.
+export function totalLoggedSets(session: ScheduledWorkoutResponse): number {
+  let n = 0;
+  for (const block of session.session.blocks) {
+    for (const p of block.prescriptions) n += p.loggedSets?.length ?? 0;
+  }
+  return n;
 }
 
 export function formatDeloadModifier(p: Prescription): string | null {

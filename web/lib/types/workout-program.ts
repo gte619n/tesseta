@@ -32,6 +32,14 @@ export type PrescriptionExercise = {
   demoFrames: DemoFrame[];
 };
 
+// One set as actually performed. Populated on completed-session snapshots
+// (history import); null/absent on plan templates. Reps are null in the
+// imported export — only the weight was recorded.
+export type LoggedSet = {
+  weightLbs: number | null;
+  reps: number | null;
+};
+
 export type Prescription = {
   exerciseId: string;
   orderIndex: number;
@@ -44,6 +52,7 @@ export type Prescription = {
   tempo: string | null;
   notes: string | null;
   deloadModifier: DeloadModifier | null;
+  loggedSets: LoggedSet[] | null;
   exercise: PrescriptionExercise | null;
   // Inline validation note set by the backend validator (e.g. "not executable
   // at this gym"). Used to flag the offending row.
@@ -118,6 +127,12 @@ export type WorkoutProgramDeepResponse = {
 // A DayResponse: same shape as a WorkoutDay's session, used by ScheduledWorkout.
 export type DayResponse = WorkoutDay;
 
+// Lightweight history counts for the Workouts hub (no full session payloads).
+export type WorkoutHistorySummary = {
+  count: number;
+  lastWorkoutDate: string | null;
+};
+
 export type ScheduledWorkoutResponse = {
   scheduledId: string;
   date: string;
@@ -130,6 +145,9 @@ export type ScheduledWorkoutResponse = {
   locationName: string;
   status: ScheduledStatus;
   session: DayResponse;
+  // Performed-session metadata (history import). Null for PLANNED sessions.
+  completedAt: string | null;
+  durationSeconds: number | null;
 };
 
 // ── Create / update request shapes (mirror backend records) ──────────

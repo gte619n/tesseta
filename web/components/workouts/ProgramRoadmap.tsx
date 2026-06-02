@@ -11,7 +11,11 @@ import type {
 } from "@/lib/types/workout-program";
 import { WEEK_DAY_LABEL } from "@/lib/types/workout-program";
 import { BLOCK_TYPE_LABEL } from "@/lib/types/exercise";
-import { formatPrescription, formatDeloadModifier } from "@/lib/workout-format";
+import {
+  formatPrescription,
+  formatDeloadModifier,
+  formatLoggedSets,
+} from "@/lib/workout-format";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
 
 function formatDate(iso: string): string {
@@ -163,7 +167,8 @@ function DayRow({
         <div className="min-w-0">
           <span className="text-[14px] font-medium text-primary">{day.label}</span>
           <span className="caps-mono ml-2 text-[10px] tracking-[0.06em] text-tertiary">
-            {WEEK_DAY_LABEL[day.dayOfWeek]} · {day.locationName}
+            {WEEK_DAY_LABEL[day.dayOfWeek]}
+            {day.locationName ? ` · ${day.locationName}` : ""}
           </span>
         </div>
         <span className="caps-mono shrink-0 text-[10px] tracking-[0.06em] text-tertiary">
@@ -219,7 +224,8 @@ function PrescriptionRow({
 }) {
   const ex = prescription.exercise;
   const name = ex?.name ?? prescription.exerciseId;
-  const dosage = formatPrescription(prescription);
+  // Performed sessions carry logged weights; prefer them over the bare set count.
+  const dosage = formatLoggedSets(prescription) ?? formatPrescription(prescription);
   const deload = formatDeloadModifier(prescription);
   const flagged = !!prescription.validationError;
 
@@ -242,7 +248,7 @@ function PrescriptionRow({
           {dosage ? (
             <span className="ml-2 text-[12px] text-tertiary">{dosage}</span>
           ) : null}
-          {prescription.notes ? (
+          {prescription.notes && prescription.notes !== name ? (
             <p className="mt-0.5 text-[11px] italic text-tertiary">{prescription.notes}</p>
           ) : null}
           {deload ? (
