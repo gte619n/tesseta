@@ -335,6 +335,71 @@ those collections are pull-only (D9).
 
 ---
 
+## Prerequisites — Firebase/FCM provisioning (completed 2026-06-02)
+
+The external setup the engine depends on is **done**; the build no longer has an
+out-of-band blocker. Recorded here so it is reproducible and auditable. All
+identifiers below are public; no secret values are reproduced.
+
+**Project / app**
+
+| Thing | Value |
+|---|---|
+| GCP / Firebase project | `health-fitness-160` (project number `146599669983`) |
+| Firebase + FCM APIs | enabled (`firebase.googleapis.com`, `fcm.googleapis.com`, `fcmregistrations.googleapis.com`) |
+| Android app | display name **tesseta**, App ID `1:146599669983:android:35bedcd90d90bc9afbb96a`, package `com.gte619n.healthfitness` |
+| `google-services.json` | committed at `android/app/google-services.json` (public IDs only; `android/.gitignore` carries an explicit un-ignore) |
+
+**Signing SHA-1s registered with the Firebase app** (both also have SHA-256):
+
+| Cert | SHA-1 | Source |
+|---|---|---|
+| Debug | `DB:7E:E7:57:44:00:ED:CB:8C:C8:59:F2:94:B6:DC:47:84:B4:F8:35` | `~/.android/debug.keystore` (alias `androiddebugkey`) |
+| Release | `25:B8:BA:47:E0:93:53:B6:89:82:03:FB:D0:5B:71:28:C9:7F:F7:FD` | Secret Manager `android-release-keystore` (alias `upload`) |
+
+**API key restriction.** The auto-created **Android key**
+(uid `9a2b5642-ed0b-4d36-acb0-a0bda032ff2c`) is locked to package
+`com.gte619n.healthfitness` + the two SHA-1s above. ⚠️ If **Play App Signing**
+is ever enabled, add Google's app-signing SHA-1 here too or released-app API
+calls will be rejected.
+
+**Backend FCM auth (no key — ADC).** Runtime SA
+`health-fitness-runtime@health-fitness-160.iam.gserviceaccount.com` was granted
+`roles/firebasecloudmessaging.admin` (least-privilege). See the
+[Firebase credentials risk note](#risks--open-questions) for the rationale.
+
+**Reproduce / extend (commands):**
+
+```bash
+# Fetch google-services.json for the registered app
+firebase apps:sdkconfig ANDROID 1:146599669983:android:35bedcd90d90bc9afbb96a \
+  --project=health-fitness-160 > android/app/google-services.json
+
+# Register a SHA with the Firebase app (e.g. a new release/Play-signing cert)
+firebase apps:android:sha:create 1:146599669983:android:35bedcd90d90bc9afbb96a \
+  <SHA1> --project=health-fitness-160
+
+# Read the release SHA-1 from Secret Manager (NOTE: pull via base64 payload —
+# `versions access` mangles binary on stdout). Alias is `upload`.
+gcloud secrets versions access latest --secret=android-release-keystore \
+  --project=health-fitness-160 --format='get(payload.data)' | base64 -d > /tmp/release.jks
+keytool -list -v -keystore /tmp/release.jks -alias upload \
+  -storepass "$(gcloud secrets versions access latest \
+    --secret=android-release-keystore-password --project=health-fitness-160)" && rm /tmp/release.jks
+
+# Restrict the Android API key to package + SHA-1(s)
+gcloud services api-keys update 9a2b5642-ed0b-4d36-acb0-a0bda032ff2c \
+  --project=health-fitness-160 \
+  --allowed-application=sha1_fingerprint=<SHA1>,package_name=com.gte619n.healthfitness
+
+# Grant the backend runtime SA permission to send FCM (ADC; no JSON key)
+gcloud projects add-iam-policy-binding health-fitness-160 \
+  --member=serviceAccount:health-fitness-runtime@health-fitness-160.iam.gserviceaccount.com \
+  --role=roles/firebasecloudmessaging.admin --condition=None
+```
+
+---
+
 ## Implementation Phases
 
 > Delivered as one effort (D19); phases are tracking + verification units (D16).
@@ -385,7 +450,7 @@ those collections are pull-only (D9).
 | `backend/core/.../push/FcmTokenRepository.java` | Create | `users/{uid}/fcmTokens` CRUD |
 | `backend/core/.../push/SyncChangePublisher.java` | Create | App-event on every in-scope write (incl. Google Health webhook) |
 | `backend/integrations/.../push/FcmFanoutService.java` | Create | Send data-only message to user tokens minus `originDeviceId` |
-| `backend/app/build.gradle.kts` | Modify | Add `firebase-admin` |
+| `backend/app/build.gradle.kts` | Modify | Add `firebase-admin`; init SDK with ADC (no key — see [Prerequisites](#prerequisites--firebasefcm-provisioning-completed-2026-06-02)) |
 
 **Verification (Phase 2):**
 1. `./gradlew :backend:integrations:test` → green (fake FCM transport).
@@ -447,7 +512,7 @@ those collections are pull-only (D9).
 | `android/app/.../push/TokenRegistration.kt` | Create | `PUT` on sign-in, `DELETE` on sign-out (D18) |
 | `android/app/.../sync/FirstSyncGate.kt` | Create | Brief blocking initial sync (heavy series = last 14 days) + lazy backfill (D14) |
 | `android/core-ui/.../SyncStatusBar.kt`, badges | Create | Global indicator + per-row PENDING/FAILED badges + retry (D11) |
-| `android/app/google-services.json` | Add | Firebase config (public identifiers only — safe to commit; restrict the API key). Backend Admin SA JSON stays in Secret Manager. |
+| `android/app/google-services.json` | ✅ Added | Committed; API key restricted (see [Prerequisites](#prerequisites--firebasefcm-provisioning-completed-2026-06-02)). Backend uses ADC, no Admin SA JSON. |
 
 **Verification (Phase 6):**
 1. `./gradlew :android:assembleDebug` → builds.
