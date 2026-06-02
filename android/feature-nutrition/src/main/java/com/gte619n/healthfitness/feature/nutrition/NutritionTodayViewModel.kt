@@ -132,12 +132,17 @@ class NutritionTodayViewModel @Inject constructor(
 
     /**
      * True when at least one entry on the day is still settling: its image is
-     * generating (PENDING) or its captured photo is still being analyzed
-     * (ANALYZING). Either keeps the poll alive so the row updates in place.
+     * generating (PENDING), its captured photo is still being analyzed
+     * (ANALYZING), or it has an unsynced local mutation in flight
+     * (`syncState == "PENDING"` — e.g. just moved between meals). Any of these
+     * keeps the poll alive so the row — and its sync badge — updates in place
+     * once the outbox drain flips it to SYNCED.
      */
     private fun NutritionDay?.hasGeneratingImage(): Boolean =
         this?.meals?.any { group ->
-            group.entries.any { it.imageStatus == "PENDING" || it.isAnalyzing }
+            group.entries.any {
+                it.imageStatus == "PENDING" || it.isAnalyzing || it.syncState == "PENDING"
+            }
         } == true
 
     /**
