@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -383,36 +385,36 @@ private fun LogMenuOverlay(onDismiss: () -> Unit, onFood: () -> Unit) {
                 indication = null,
             ) { onDismiss() },
     ) {
+        // A single popup menu card, anchored above the "Log" nav item (index 1
+        // of Today/Log/Trends/More). It sizes to its widest row
+        // (IntrinsicSize.Max) so labels never wrap, with a comfortable minimum.
         Column(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
+                .align(Alignment.BottomStart)
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 80.dp),
+                .padding(start = 16.dp, bottom = 80.dp)
+                .widthIn(min = 200.dp)
+                .width(IntrinsicSize.Max)
+                .background(Hf.colors.surface, RoundedCornerShape(14.dp))
+                .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(14.dp)),
         ) {
-            // Mirror the bottom nav's four equal slots so the menu lines up
-            // above the "Log" item (index 1: Today, Log, Trends, More).
-            Row(modifier = Modifier.fillMaxWidth()) {
-                repeat(4) { index ->
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.BottomCenter,
-                    ) {
-                        if (index == 1) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                LogMenuItem(DashboardIcons.Barbell, "Workout", enabled = false)
-                                LogMenuItem(DashboardIcons.Scale, "Weight", enabled = false)
-                                LogMenuItem(DashboardIcons.Bowl, "Food", enabled = true, onClick = onFood)
-                            }
-                        }
-                    }
-                }
-            }
+            LogMenuItem(DashboardIcons.Barbell, "Workout", enabled = false)
+            LogMenuDivider()
+            LogMenuItem(DashboardIcons.Scale, "Weight", enabled = false)
+            LogMenuDivider()
+            LogMenuItem(DashboardIcons.Bowl, "Food", enabled = true, onClick = onFood)
         }
     }
+}
+
+@Composable
+private fun LogMenuDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .background(Hf.colors.borderDefault),
+    )
 }
 
 @Composable
@@ -426,12 +428,11 @@ private fun LogMenuItem(
     val textColor = if (enabled) Hf.colors.textPrimary else Hf.colors.textTertiary.copy(alpha = 0.4f)
     Row(
         modifier = Modifier
-            .background(Hf.colors.surface, RoundedCornerShape(12.dp))
-            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(12.dp))
+            .fillMaxWidth()
             .clickable(enabled = enabled) { onClick() }
-            .padding(horizontal = 18.dp, vertical = 13.dp),
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
             imageVector = icon,
@@ -443,6 +444,8 @@ private fun LogMenuItem(
             text = label.uppercase(),
             style = Hf.type.capsSm.copy(fontSize = 11.sp),
             color = textColor,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
