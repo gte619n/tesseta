@@ -50,8 +50,9 @@ In scope (phase-tracked, delivered as one cohesive effort — see
   (reactive Flows); the network layer's only job is to fill/refresh the DB.
 - **Android sync UX:** a global sync-state indicator, per-row pending/failed
   badges, pull-to-refresh, and manual retry.
-- **First-run UX:** a brief blocking initial sync (recent window) then lazy
-  backfill of heavy historical time-series.
+- **First-run UX:** a brief blocking initial sync (CRUD domains in full; heavy
+  time-series limited to the **last 14 days**) then lazy backfill of older
+  historical time-series.
 
 Out of scope (deferred, by decision):
 
@@ -90,7 +91,7 @@ Captured from the planning interview. Each row is binding for this spec.
 | D11 | Sync UX | **Global sync-state indicator + per-row pending/failed badges**, pull-to-refresh, manual retry. Conflicts resolve silently (LWW); a lightweight "updated elsewhere" note appears if a visible item changes underneath the user. |
 | D12 | Wear | **Deferred entirely.** |
 | D13 | Cutover & governance | **Lazy default** (`status` missing ⇒ treated as `ACTIVE` on read; stamped going forward) + **`schemaVersion`** in the sync protocol (bump ⇒ client wipes Room and full-resyncs) + a **remote kill-switch** flag to force any client back to live-network mode. |
-| D14 | First-run | **Brief blocking first-sync** (recent window: CRUD domains fully, heavy time-series last N days) then **lazy backfill** of older history. |
+| D14 | First-run | **Brief blocking first-sync** (recent window: CRUD domains fully, heavy time-series **last 14 days**) then **lazy backfill** of older history. |
 | D15 | Test bar | **Full pyramid + functional E2E gates per phase.** Unit (resolver, outbox reducer, cursor math) + Room DAO instrumented + MockWebServer protocol (tombstones, pagination) + scripted functional E2E (airplane-mode create/edit → reconnect → assert server state; FCM-triggered pull; two-client convergence). |
 | D16 | Agent verification | **Per-phase Verification block with evidence required.** Each phase lists exact commands, expected green output, and an observable functional assertion. A phase flips to ✅ only when every check passes and evidence is pasted; partial ⇒ ⏳ with a note. |
 | D17 | Offline AI flows | **Disabled offline** with a clear "needs connection" affordance; no deferred-intent queue. |
@@ -444,9 +445,9 @@ those collections are pull-only (D9).
 |---|---|---|
 | `android/app/.../push/HfMessagingService.kt` | Create | FirebaseMessagingService → expedited `SyncWorker`; token register/refresh |
 | `android/app/.../push/TokenRegistration.kt` | Create | `PUT` on sign-in, `DELETE` on sign-out (D18) |
-| `android/app/.../sync/FirstSyncGate.kt` | Create | Brief blocking initial sync + lazy backfill (D14) |
+| `android/app/.../sync/FirstSyncGate.kt` | Create | Brief blocking initial sync (heavy series = last 14 days) + lazy backfill (D14) |
 | `android/core-ui/.../SyncStatusBar.kt`, badges | Create | Global indicator + per-row PENDING/FAILED badges + retry (D11) |
-| `android/app/google-services.json` | Add | Firebase config (not committed if it carries secrets — see Never rules) |
+| `android/app/google-services.json` | Add | Firebase config (public identifiers only — safe to commit; restrict the API key). Backend Admin SA JSON stays in Secret Manager. |
 
 **Verification (Phase 6):**
 1. `./gradlew :android:assembleDebug` → builds.
@@ -531,16 +532,21 @@ Legend: ✅ done · ⏳ in progress / partial · ❌ not started.
 
 ## Risks & open questions
 
-- **Initial-sync payload size.** Years of Google Health data could make the
-  first full sync large even with windowing (D14); confirm the recent-window
-  size (proposed: 90 days eager) once real volumes are measured.
+- **Initial-sync payload size.** The eager first-sync window for heavy
+  time-series is fixed at **14 days** (D14); CRUD domains sync in full. Older
+  history pages in lazily. Revisit only if even 14 days proves heavy on real
+  volumes.
 - **FCM on non-Play devices.** Data messages won't arrive; the periodic floor
   (D10) is the only backstop there — acceptable per decision, flagged for QA.
 - **Firestore index/cost.** A cross-collection `lastUpdate`-ordered sync query
   needs per-collection composite indexes and may increase read cost; monitor.
-- **`google-services.json` secrecy.** Must not commit secrets (project Never
-  rules); confirm whether the Firebase config file is safe to commit or must be
-  injected at build time like `backendBaseUrl`.
+- **Firebase credentials.** `google-services.json` (Android) contains only
+  public identifiers (project number/sender ID, app ID, package name,
+  restrictable Android API key) — **safe to commit**, with the API key
+  restricted by package name + signing SHA-1 in GCP. The **secret** is the
+  backend Firebase Admin **service-account JSON** used by `FcmFanoutService`;
+  it must NOT be committed (project Never rules) and is injected via Secret
+  Manager like other backend credentials.
 - **Tombstone growth.** No TTL purge (D2) means archived rows accumulate
   forever; revisit if Firestore storage/read costs grow.
 
