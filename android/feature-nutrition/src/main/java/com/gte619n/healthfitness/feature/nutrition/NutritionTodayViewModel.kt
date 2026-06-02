@@ -9,6 +9,7 @@ import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
+import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.gte619n.healthfitness.domain.nutrition.forPortion
@@ -177,6 +178,30 @@ class NutritionTodayViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Move an entry to another meal via drag-and-drop. Updates the day
+     * optimistically (so the row hops sections immediately and both subtotals
+     * re-sum), PATCHes the entry's meal, then reloads. A failure reverts.
+     */
+    fun moveEntry(entryId: String, targetMeal: String) {
+        val current = _state.value.day ?: return
+        val source = current.meals.firstOrNull { g -> g.entries.any { it.entryId == entryId } } ?: return
+        if (source.meal == targetMeal) return
+        val entry = source.entries.first { it.entryId == entryId }
+
+        _state.update { it.copy(day = current.withEntryMoved(entry, targetMeal)) }
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                repository.patchEntry(date, entryId, EntryPatchRequest(meal = targetMeal))
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, error = null) }
+            } catch (e: Exception) {
+                _state.update { it.copy(day = current, error = e.message ?: "Move failed") }
+            }
+        }
+    }
+
     /** Edit an existing entry (serving / quantity / macros / meal), then reload. */
     fun updateEntry(entryId: String, patch: EntryPatchRequest) {
         val date = _state.value.date.format(ISO_DATE)
@@ -241,3 +266,44 @@ class NutritionTodayViewModel @Inject constructor(
         }
     }
 }
+
+/**
+ * Return a copy of this day with [entry] moved into [targetMeal]: it leaves its
+ * source group and joins the target group (created if the day had no entries
+ * there yet), with both groups' subtotals re-summed.
+ */
+private fun NutritionDay.withEntryMoved(entry: Entry, targetMeal: String): NutritionDay {
+    val moved = entry.copy(meal = targetMeal)
+    val withoutEntry = meals.map { g ->
+        if (g.entries.any { it.entryId == entry.entryId }) {
+            val entries = g.entries.filterNot { it.entryId == entry.entryId }
+            g.copy(entries = entries, subtotal = entries.sumMacros())
+        } else {
+            g
+        }
+    }
+    val hasTarget = withoutEntry.any { it.meal == targetMeal }
+    val withTarget = if (hasTarget) {
+        withoutEntry.map { g ->
+            if (g.meal == targetMeal) {
+                val entries = g.entries + moved
+                g.copy(entries = entries, subtotal = entries.sumMacros())
+            } else {
+                g
+            }
+        }
+    } else {
+        withoutEntry + MealGroup(meal = targetMeal, subtotal = listOf(moved).sumMacros(), entries = listOf(moved))
+    }
+    return copy(meals = withTarget)
+}
+
+/** Sum a list of entries' macros into a single subtotal snapshot. */
+private fun List<Entry>.sumMacros(): Macros = Macros(
+    caloriesKcal = sumOf { it.macros.caloriesKcal ?: 0.0 },
+    proteinGrams = sumOf { it.macros.proteinGrams ?: 0.0 },
+    carbsGrams = sumOf { it.macros.carbsGrams ?: 0.0 },
+    fatGrams = sumOf { it.macros.fatGrams ?: 0.0 },
+    fiberGrams = sumOf { it.macros.fiberGrams ?: 0.0 },
+    sugarGrams = sumOf { it.macros.sugarGrams ?: 0.0 },
+)

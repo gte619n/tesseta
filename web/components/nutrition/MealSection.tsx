@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type {
   MealGroup,
   Entry,
@@ -56,6 +57,9 @@ type Props = {
       source: string;
     }[]
   >;
+  // The entryId currently being dragged (lifted by the DnD context), so this
+  // section can suppress its drop highlight when the entry already lives here.
+  activeId: string | null;
 };
 
 export function MealSection({
@@ -66,6 +70,7 @@ export function MealSection({
   updateIngredient,
   deleteEntry,
   searchFoods,
+  activeId,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Entry | null>(null);
@@ -102,8 +107,23 @@ export function MealSection({
   const sub = group.subtotal;
   const hasEntries = group.entries.length > 0;
 
+  // Each meal section is a drop target keyed by its meal. Highlight only when an
+  // entry from *another* meal is hovering over it (dropping in place is a no-op).
+  const { setNodeRef, isOver } = useDroppable({ id: group.meal });
+  const isForeignDragOver =
+    isOver &&
+    activeId !== null &&
+    !group.entries.some((e) => e.entryId === activeId);
+
   return (
-    <div className="rounded-[12px] border-[0.5px] border-border-default bg-surface">
+    <div
+      ref={setNodeRef}
+      className={`rounded-[12px] border-[0.5px] bg-surface transition-colors ${
+        isForeignDragOver
+          ? "border-accent ring-2 ring-accent/40"
+          : "border-border-default"
+      }`}
+    >
       {/* Meal header */}
       <div className="flex items-center justify-between border-b-[0.5px] border-border-subtle px-5 py-3">
         <div className="flex items-center gap-2.5">
@@ -203,8 +223,28 @@ function EntryRow({
   onEdit: () => void;
   onDelete: () => Promise<void>;
 }) {
+  // Drag handle moves the entry between meals. Only the grip carries the drag
+  // listeners so the row's edit / delete clicks keep working.
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+    id: entry.entryId,
+  });
   return (
-    <div className="group flex items-center gap-3 px-5 py-3 hover:bg-canvas-sunken/30">
+    <div
+      ref={setNodeRef}
+      className={`group flex items-center gap-3 px-5 py-3 hover:bg-canvas-sunken/30 ${
+        isDragging ? "opacity-40" : ""
+      }`}
+    >
+      {/* Drag handle: hold and drag to move this food to another meal */}
+      <button
+        type="button"
+        {...listeners}
+        {...attributes}
+        className="-ml-1 shrink-0 cursor-grab touch-none rounded p-1 text-tertiary opacity-60 hover:text-secondary active:cursor-grabbing group-hover:opacity-100"
+        aria-label={`Move ${entry.foodName} to another meal`}
+      >
+        <i className="ti ti-grip-vertical text-[14px]" aria-hidden />
+      </button>
       {/* Click the food (image + name) to edit serving / macros */}
       <button
         type="button"
