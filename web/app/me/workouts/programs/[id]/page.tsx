@@ -8,6 +8,7 @@ import {
   getProgramCalendar,
   activateProgram,
   deleteProgram,
+  updateProgram,
 } from "@/lib/workout-program-api";
 import type { ScheduledWorkoutResponse } from "@/lib/types/workout-program";
 import { ProgramRoadmap } from "@/components/workouts/ProgramRoadmap";
@@ -73,6 +74,13 @@ export default async function ProgramDetailPage(props: {
     revalidatePath(detailPath);
   }
 
+  async function updateDetails(title: string, description: string) {
+    "use server";
+    await updateProgram(id, { title, description });
+    revalidatePath(detailPath);
+    revalidatePath("/me/workouts/programs");
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[860px] space-y-6">
@@ -108,9 +116,11 @@ export default async function ProgramDetailPage(props: {
 
           <ProgramDetailActions
             programTitle={program.title}
+            programDescription={program.description ?? ""}
             status={program.status}
             activate={activate}
             archive={archive}
+            update={updateDetails}
           />
         </header>
 

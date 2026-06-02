@@ -1,22 +1,33 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
+import { ProgramEditModal } from "./ProgramEditModal";
 
 type Props = {
   programTitle: string;
+  programDescription: string;
   status: string;
   activate: () => Promise<void>;
   archive: () => Promise<void>;
+  update: (title: string, description: string) => Promise<void>;
 };
 
-export function ProgramDetailActions({ programTitle, status, activate, archive }: Props) {
+export function ProgramDetailActions({
+  programTitle,
+  programDescription,
+  status,
+  activate,
+  archive,
+  update,
+}: Props) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
 
   function onActivate() {
     startTransition(async () => {
@@ -53,6 +64,14 @@ export function ProgramDetailActions({ programTitle, status, activate, archive }
 
   return (
     <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        disabled={pending}
+        className="caps-mono cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[10px] tracking-[0.06em] text-secondary hover:text-primary disabled:opacity-60"
+      >
+        Edit
+      </button>
       {status === "DRAFT" || status === "ACTIVE" ? (
         <button
           type="button"
@@ -73,6 +92,18 @@ export function ProgramDetailActions({ programTitle, status, activate, archive }
           Archive
         </button>
       ) : null}
+
+      <ProgramEditModal
+        isOpen={editing}
+        initialTitle={programTitle}
+        initialDescription={programDescription}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          router.refresh();
+        }}
+        save={update}
+      />
     </div>
   );
 }
