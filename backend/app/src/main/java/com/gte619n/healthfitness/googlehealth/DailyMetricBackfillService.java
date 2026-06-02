@@ -60,8 +60,16 @@ public class DailyMetricBackfillService {
         Set<String> platforms = new LinkedHashSet<>();
         try {
             String accessToken = tokens.accessTokenFor(userId);
+            // Isolate failures per type: one data type erroring (e.g. a 403
+            // because the user didn't grant that type's OAuth scope, or a
+            // transient API error) must not abort the other types' backfill.
             for (DailyMetricDataType type : DailyMetricDataType.values()) {
-                total += backfillType(userId, accessToken, type, windowStart, now, platforms);
+                try {
+                    total += backfillType(userId, accessToken, type, windowStart, now, platforms);
+                } catch (RuntimeException e) {
+                    log.warn("Daily-metric backfill type={} user={} failed (skipping): {}",
+                        type, userId, e.getMessage());
+                }
             }
             for (String platform : platforms) {
                 deviceSyncs.recordSync(userId, platform, now);

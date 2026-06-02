@@ -61,7 +61,8 @@ public class GoogleHealthSyncController {
         @RequestParam String userId,
         @RequestParam(defaultValue = "7") int days,
         @RequestParam(defaultValue = "false") boolean persist,
-        @RequestParam(defaultValue = "false") boolean noFilter
+        @RequestParam(defaultValue = "false") boolean noFilter,
+        @RequestParam(required = false) String filterExpr
     ) {
         User user = users.findById(userId).orElse(null);
         if (user == null) {
@@ -91,10 +92,20 @@ public class GoogleHealthSyncController {
 
         List<TypeResult> results = new ArrayList<>();
         for (DailyMetricDataType type : DailyMetricDataType.values()) {
-            GoogleHealthClient.RawResponse raw = noFilter
-                ? googleHealth.rawFirstPageNoFilter(accessToken, type.urlSegment(), 25)
-                : googleHealth.rawFirstPage(
+            // filterExpr may reference the per-type field via the literal
+            // token FIELD, substituted with this type's snake_case name.
+            String perTypeFilter = filterExpr == null ? null
+                : filterExpr.replace("FIELD", type.filterFieldName());
+            GoogleHealthClient.RawResponse raw;
+            if (filterExpr != null) {
+                raw = googleHealth.rawFirstPageCustomFilter(
+                    accessToken, type.urlSegment(), perTypeFilter, 25);
+            } else if (noFilter) {
+                raw = googleHealth.rawFirstPageNoFilter(accessToken, type.urlSegment(), 25);
+            } else {
+                raw = googleHealth.rawFirstPage(
                     accessToken, type.urlSegment(), type.filterFieldName(), from, to);
+            }
             String body = raw.body() == null ? "" : raw.body();
             boolean truncated = body.length() > MAX_BODY_CHARS;
             results.add(new TypeResult(

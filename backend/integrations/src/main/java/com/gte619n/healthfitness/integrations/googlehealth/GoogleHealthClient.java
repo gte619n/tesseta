@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -51,15 +52,15 @@ public class GoogleHealthClient {
         return listPaged(
             accessToken,
             dataType.urlSegment(),
-            dataType.filterFieldName(),
-            from,
-            to,
+            physicalTimeFilter(dataType.filterFieldName(), from, to),
             dp -> BodyCompositionMapper.fromJson(dp, dataType),
             GoogleHealthDataPoint::recordId);
     }
 
     // Day-grained activity / vitals metrics (steps, resting HR, HRV, sleep).
-    // Same HTTP shape as body composition; only the mapper differs.
+    // Same paged HTTP shape as body composition, but daily roll-up types are
+    // filtered on their civil `date` member (YYYY-MM-DD) — they have no
+    // sample_time.physical_time, and filtering on it is rejected with 400.
     public List<DailyMetricDataPoint> listDailyMetricPoints(
         String accessToken,
         DailyMetricDataType dataType,
@@ -69,11 +70,29 @@ public class GoogleHealthClient {
         return listPaged(
             accessToken,
             dataType.urlSegment(),
-            dataType.filterFieldName(),
-            from,
-            to,
+            dailyDateFilter(dataType.filterFieldName(), from, to),
             dp -> DailyMetricMapper.fromJson(dp, dataType),
             DailyMetricDataPoint::recordId);
+    }
+
+    // Sample/interval types (body composition): filter on the physical
+    // timestamp. `>=` and `<` only; `to` is exclusive.
+    private static String physicalTimeFilter(String field, Instant from, Instant to) {
+        return String.format(
+            "%s.sample_time.physical_time >= \"%s\" AND %s.sample_time.physical_time < \"%s\"",
+            field, from, field, to);
+    }
+
+    // Daily roll-up types: filter on the civil `date` member with ISO
+    // YYYY-MM-DD literals (verified against the live API). The upper bound is
+    // the day AFTER `to`'s UTC date so the current day is included, mirroring
+    // the inclusive intent of the callers' [from, now] windows.
+    private static String dailyDateFilter(String field, Instant from, Instant to) {
+        java.time.LocalDate fromDate = from.atZone(ZoneOffset.UTC).toLocalDate();
+        java.time.LocalDate toDateExclusive = to.atZone(ZoneOffset.UTC).toLocalDate().plusDays(1);
+        return String.format(
+            "%s.date >= \"%s\" AND %s.date < \"%s\"",
+            field, fromDate, field, toDateExclusive);
     }
 
     // Generic paginated fetch over one data type. Dedupes by recordId across
@@ -85,9 +104,7 @@ public class GoogleHealthClient {
     private <T> List<T> listPaged(
         String accessToken,
         String urlSegment,
-        String filterFieldName,
-        Instant from,
-        Instant to,
+        String filterExpr,
         Function<JsonNode, T> mapper,
         Function<T, String> idFn
     ) {
@@ -97,7 +114,7 @@ public class GoogleHealthClient {
         String prevPageToken = null;
         int pageCount = 0;
         do {
-            JsonNode body = fetchOnePage(accessToken, urlSegment, filterFieldName, from, to, pageToken);
+            JsonNode body = fetchOnePage(accessToken, urlSegment, filterExpr, pageToken);
             JsonNode dataPoints = body.path("dataPoints");
             int newOnThisPage = 0;
             if (dataPoints.isArray()) {
@@ -136,12 +153,10 @@ public class GoogleHealthClient {
     private JsonNode fetchOnePage(
         String accessToken,
         String urlSegment,
-        String filterFieldName,
-        Instant from,
-        Instant to,
+        String filterExpr,
         String pageToken
     ) {
-        String url = buildDataPointsUrl(urlSegment, filterFieldName, from, to, pageToken);
+        String url = buildDataPointsUrl(urlSegment, filterExpr, pageToken);
         HttpRequest req = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Authorization", "Bearer " + accessToken)
@@ -164,25 +179,19 @@ public class GoogleHealthClient {
 
     private String buildDataPointsUrl(
         String urlSegment,
-        String filterFieldName,
-        Instant from,
-        Instant to,
+        String filterExpr,
         String pageToken
     ) {
-        // Google Health filter only supports `>=` and `<` on physical_time
-        // — neither `<=`, `=`, nor BETWEEN are accepted. We treat `to` as
-        // exclusive in this client; callers wanting an inclusive upper
-        // bound should pass `to.plusSeconds(1)` or similar.
-        String filter = String.format(
-            "%s.sample_time.physical_time >= \"%s\" AND %s.sample_time.physical_time < \"%s\"",
-            filterFieldName, from,
-            filterFieldName, to);
+        // The API filter only supports `>=` and `<` (no `<=`, `=`, BETWEEN).
+        // The filter expression is built per data-type family by the caller
+        // (physical_time for sample/interval types, civil `date` for daily
+        // roll-ups).
         StringBuilder url = new StringBuilder(apiBaseUrl)
             .append("/users/me/dataTypes/")
             .append(urlSegment)
             .append("/dataPoints")
             .append("?filter=")
-            .append(URLEncoder.encode(filter, StandardCharsets.UTF_8))
+            .append(URLEncoder.encode(filterExpr, StandardCharsets.UTF_8))
             .append("&page_size=1000");
         if (pageToken != null) {
             url.append("&page_token=").append(URLEncoder.encode(pageToken, StandardCharsets.UTF_8));
@@ -201,7 +210,7 @@ public class GoogleHealthClient {
         Instant from,
         Instant to
     ) {
-        String url = buildDataPointsUrl(urlSegment, filterFieldName, from, to, null);
+        String url = buildDataPointsUrl(urlSegment, physicalTimeFilter(filterFieldName, from, to), null);
         HttpRequest req = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Authorization", "Bearer " + accessToken)
@@ -223,6 +232,30 @@ public class GoogleHealthClient {
     public RawResponse rawFirstPageNoFilter(String accessToken, String urlSegment, int pageSize) {
         String url = apiBaseUrl + "/users/me/dataTypes/" + urlSegment
             + "/dataPoints?page_size=" + pageSize;
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Accept", "application/json")
+            .GET()
+            .build();
+        try {
+            HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
+            return new RawResponse(url, response.statusCode(), response.body());
+        } catch (java.io.IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new RawResponse(url, -1, "request failed: " + e.getMessage());
+        }
+    }
+
+    // Raw single page with a caller-supplied filter expression verbatim —
+    // used to discover the correct filterable members for daily types.
+    public RawResponse rawFirstPageCustomFilter(
+        String accessToken, String urlSegment, String rawFilter, int pageSize) {
+        String url = apiBaseUrl + "/users/me/dataTypes/" + urlSegment
+            + "/dataPoints?page_size=" + pageSize;
+        if (rawFilter != null && !rawFilter.isBlank()) {
+            url += "&filter=" + URLEncoder.encode(rawFilter, StandardCharsets.UTF_8);
+        }
         HttpRequest req = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Authorization", "Bearer " + accessToken)
