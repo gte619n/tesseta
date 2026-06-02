@@ -1,8 +1,11 @@
 package com.gte619n.healthfitness.mobile.dashboard
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,9 +25,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,42 +52,59 @@ import kotlin.math.abs
 
 @Composable
 fun PhoneTodayScreen(
-    onOpenGoals: () -> Unit = {},
     onNavigate: (route: String) -> Unit = {},
 ) {
     val vm: DashboardViewModel = hiltViewModel()
     val ui by vm.uiState.collectAsStateWithLifecycle()
     val weightUnit by vm.weightUnit.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Hf.colors.canvas),
-    ) {
+    // Long-pressing the bottom-nav "Log" button opens this quick-log menu.
+    var showLogMenu by remember { mutableStateOf(false) }
+    val openFoodCapture = { onNavigate(com.gte619n.healthfitness.mobile.nav.Routes.NUTRITION_CAPTURE) }
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 18.dp)
-                .padding(top = 6.dp, bottom = 16.dp),
+                .fillMaxSize()
+                .background(Hf.colors.canvas),
         ) {
-            PhoneHeader(user = ui.user)
-            Spacer(Modifier.height(16.dp))
-            PhoneVitalsGrid(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
-            Spacer(Modifier.height(11.dp))
-            TodayCard(modifier = Modifier.fillMaxWidth(), showHrInMeta = false)
-            Spacer(Modifier.height(11.dp))
-            TodaysDosesCard(
-                onSeeAll = { onNavigate(MedicationRoutes.LIST) },
-                modifier = Modifier.fillMaxWidth(),
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 18.dp)
+                    .padding(top = 6.dp, bottom = 16.dp),
+            ) {
+                PhoneHeader(user = ui.user)
+                Spacer(Modifier.height(16.dp))
+                PhoneVitalsGrid(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
+                Spacer(Modifier.height(11.dp))
+                TodayCard(modifier = Modifier.fillMaxWidth(), showHrInMeta = false)
+                Spacer(Modifier.height(11.dp))
+                TodaysDosesCard(
+                    onSeeAll = { onNavigate(MedicationRoutes.LIST) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(11.dp))
+                QuickLogTiles(onNavigate = onNavigate)
+                Spacer(Modifier.height(13.dp))
+                RecentFeed(entries = DashboardFallbacks.recentPhone, showViewAll = true, modifier = Modifier.fillMaxWidth())
+            }
+            BottomNav(
+                onLogTap = openFoodCapture,
+                onLogLongPress = { showLogMenu = true },
+                onNavigate = onNavigate,
             )
-            Spacer(Modifier.height(11.dp))
-            QuickLogTiles(onNavigate = onNavigate)
-            Spacer(Modifier.height(13.dp))
-            RecentFeed(entries = DashboardFallbacks.recentPhone, showViewAll = true, modifier = Modifier.fillMaxWidth())
         }
-        BottomNav(onOpenGoals = onOpenGoals, onNavigate = onNavigate)
+        if (showLogMenu) {
+            LogMenuOverlay(
+                onDismiss = { showLogMenu = false },
+                onFood = {
+                    showLogMenu = false
+                    openFoodCapture()
+                },
+            )
+        }
     }
 }
 
@@ -254,7 +277,11 @@ private fun QuickTile(icon: ImageVector, label: String, modifier: Modifier, onCl
 }
 
 @Composable
-private fun BottomNav(onOpenGoals: () -> Unit, onNavigate: (route: String) -> Unit = {}) {
+private fun BottomNav(
+    onLogTap: () -> Unit,
+    onLogLongPress: () -> Unit,
+    onNavigate: (route: String) -> Unit = {},
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -274,11 +301,12 @@ private fun BottomNav(onOpenGoals: () -> Unit, onNavigate: (route: String) -> Un
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 DashboardFallbacks.phoneBottomNav.forEach { dest ->
-                    // "More" → the feature hub; "Log" → Goals so the phone
-                    // keeps a path to the goals surface (IMPL-12).
+                    // "More" → the feature hub. "Log" → tap jumps straight to
+                    // the food camera capture; long-press opens the quick-log
+                    // menu (Workout/Weight/Food).
                     val onClick: () -> Unit = when (dest.label) {
                         "More" -> ({ onNavigate(com.gte619n.healthfitness.mobile.nav.Routes.MORE) })
-                        "Log" -> onOpenGoals
+                        "Log" -> onLogTap
                         else -> ({})
                     }
                     BottomNavItem(
@@ -286,6 +314,7 @@ private fun BottomNav(onOpenGoals: () -> Unit, onNavigate: (route: String) -> Un
                         label = dest.label,
                         active = dest.active,
                         onClick = onClick,
+                        onLongClick = if (dest.label == "Log") onLogLongPress else null,
                     )
                 }
             }
@@ -293,11 +322,23 @@ private fun BottomNav(onOpenGoals: () -> Unit, onNavigate: (route: String) -> Un
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BottomNavItem(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit = {}) {
+private fun BottomNavItem(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null,
+) {
+    val clickModifier = if (onLongClick != null) {
+        Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    } else {
+        Modifier.clickable { onClick() }
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() },
+        modifier = clickModifier,
     ) {
         if (active) {
             Box(
@@ -321,6 +362,87 @@ private fun BottomNavItem(icon: ImageVector, label: String, active: Boolean, onC
             text = label.uppercase(),
             style = Hf.type.capsSm.copy(fontSize = 10.sp),
             color = if (active) Hf.colors.accent else Hf.colors.textTertiary,
+        )
+    }
+}
+
+/**
+ * Quick-log menu shown when the bottom-nav "Log" button is long-pressed. A
+ * full-screen scrim dims the dashboard; a vertical stack of options sits above
+ * the Log button (Workout, Weight, Food, top-to-bottom). Workout and Weight are
+ * dimmed/disabled for now; Food jumps to the nutrition camera capture.
+ */
+@Composable
+private fun LogMenuOverlay(onDismiss: () -> Unit, onFood: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.45f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { onDismiss() },
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 80.dp),
+        ) {
+            // Mirror the bottom nav's four equal slots so the menu lines up
+            // above the "Log" item (index 1: Today, Log, Trends, More).
+            Row(modifier = Modifier.fillMaxWidth()) {
+                repeat(4) { index ->
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.BottomCenter,
+                    ) {
+                        if (index == 1) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                LogMenuItem(DashboardIcons.Barbell, "Workout", enabled = false)
+                                LogMenuItem(DashboardIcons.Scale, "Weight", enabled = false)
+                                LogMenuItem(DashboardIcons.Bowl, "Food", enabled = true, onClick = onFood)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogMenuItem(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit = {},
+) {
+    val tint = if (enabled) Hf.colors.accent else Hf.colors.textTertiary.copy(alpha = 0.4f)
+    val textColor = if (enabled) Hf.colors.textPrimary else Hf.colors.textTertiary.copy(alpha = 0.4f)
+    Row(
+        modifier = Modifier
+            .background(Hf.colors.surface, RoundedCornerShape(12.dp))
+            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled) { onClick() }
+            .padding(horizontal = 18.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(19.dp),
+        )
+        Text(
+            text = label.uppercase(),
+            style = Hf.type.capsSm.copy(fontSize = 11.sp),
+            color = textColor,
         )
     }
 }

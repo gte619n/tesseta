@@ -209,7 +209,7 @@ fun DashboardRoot(
     // Compact (< 600 dp) → phone Today screen.
     // Medium / Expanded (≥ 600 dp) → foldable/tablet dashboard with icon-only sidebar.
     when (widthClass) {
-        WindowWidthSizeClass.Compact -> PhoneTodayScreen(onOpenGoals = onOpenGoals, onNavigate = onNavigate)
+        WindowWidthSizeClass.Compact -> PhoneTodayScreen(onNavigate = onNavigate)
         else -> FoldableDashboardScreen(onOpenGoals = onOpenGoals, onNavigate = onNavigate)
     }
 }
