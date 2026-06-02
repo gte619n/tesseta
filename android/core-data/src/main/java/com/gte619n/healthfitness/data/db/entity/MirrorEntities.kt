@@ -216,6 +216,26 @@ data class WeeklyWorkoutAggregateEntity(
     override val syncState: String,
 ) : MirrorRow
 
+@Entity(tableName = MirrorTables.WORKOUT_PROGRAMS, indices = [Index("lastUpdate")])
+data class WorkoutProgramEntity(
+    @PrimaryKey override val id: String,
+    override val payloadJson: String,
+    override val lastUpdate: Long,
+    override val status: String,
+    override val dirty: Boolean,
+    override val syncState: String,
+) : MirrorRow
+
+@Entity(tableName = MirrorTables.WORKOUT_SCHEDULED, indices = [Index("lastUpdate")])
+data class WorkoutScheduledEntity(
+    @PrimaryKey override val id: String,
+    override val payloadJson: String,
+    override val lastUpdate: Long,
+    override val status: String,
+    override val dirty: Boolean,
+    override val syncState: String,
+) : MirrorRow
+
 @Entity(tableName = MirrorTables.USER_PROFILE, indices = [Index("lastUpdate")])
 data class UserProfileEntity(
     @PrimaryKey override val id: String,

@@ -64,6 +64,8 @@ object MirrorTables {
     const val DEVICE_SYNCS = "deviceSyncs"
     const val DEXA_SCANS = "dexaScans"
     const val WEEKLY_WORKOUT_AGGREGATES = "weeklyWorkoutAggregates"
+    const val WORKOUT_PROGRAMS = "workoutPrograms"
+    const val WORKOUT_SCHEDULED = "workoutScheduled"
     const val USER_PROFILE = "userProfile"
 
     /** Every in-scope mirror table, in the order the sync engine pulls them. */
@@ -72,6 +74,7 @@ object MirrorTables {
         MEDICATION_ADHERENCE, MEDICATION_HISTORY, PROTOCOLS, GOALS, GOAL_PHASES,
         GOAL_STEPS, GOAL_CHAT_THREADS, GOAL_CHAT_MESSAGES, NUTRITION_DAILY_LOGS,
         NUTRITION_ENTRIES, NUTRITION_TARGETS, LOCATIONS, DAILY_METRICS,
-        DEVICE_SYNCS, DEXA_SCANS, WEEKLY_WORKOUT_AGGREGATES, USER_PROFILE,
+        DEVICE_SYNCS, DEXA_SCANS, WEEKLY_WORKOUT_AGGREGATES, WORKOUT_PROGRAMS,
+        WORKOUT_SCHEDULED, USER_PROFILE,
     )
 }

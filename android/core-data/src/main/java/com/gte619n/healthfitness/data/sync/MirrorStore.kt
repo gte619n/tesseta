@@ -21,6 +21,8 @@ import com.gte619n.healthfitness.data.db.dao.NutritionTargetDao
 import com.gte619n.healthfitness.data.db.dao.ProtocolDao
 import com.gte619n.healthfitness.data.db.dao.UserProfileDao
 import com.gte619n.healthfitness.data.db.dao.WeeklyWorkoutAggregateDao
+import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
+import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.entity.BloodReadingEntity
 import com.gte619n.healthfitness.data.db.entity.BloodTestReportEntity
 import com.gte619n.healthfitness.data.db.entity.BodyCompositionEntity
@@ -44,6 +46,8 @@ import com.gte619n.healthfitness.data.db.entity.NutritionTargetEntity
 import com.gte619n.healthfitness.data.db.entity.ProtocolEntity
 import com.gte619n.healthfitness.data.db.entity.UserProfileEntity
 import com.gte619n.healthfitness.data.db.entity.WeeklyWorkoutAggregateEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutProgramEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -116,6 +120,8 @@ class MirrorStore @Inject constructor(
     private val deviceSync: DeviceSyncDao,
     private val dexaScan: DexaScanDao,
     private val weeklyWorkoutAggregate: WeeklyWorkoutAggregateDao,
+    private val workoutProgram: WorkoutProgramDao,
+    private val workoutScheduled: WorkoutScheduledDao,
     private val userProfile: UserProfileDao,
 ) : MirrorOps {
 
@@ -251,6 +257,18 @@ class MirrorStore @Inject constructor(
             override suspend fun delete(id: String) = weeklyWorkoutAggregate.delete(id)
             override suspend fun getRow(id: String) = weeklyWorkoutAggregate.getById(id)?.toData()
         })
+        put(MirrorTables.WORKOUT_PROGRAMS, object : Adapter {
+            override suspend fun upsert(row: MirrorRowData) = workoutProgram.upsert(row.toWorkoutProgram())
+            override suspend fun markArchived(id: String, lastUpdate: Long) = workoutProgram.markArchived(id, lastUpdate)
+            override suspend fun delete(id: String) = workoutProgram.delete(id)
+            override suspend fun getRow(id: String) = workoutProgram.getById(id)?.toData()
+        })
+        put(MirrorTables.WORKOUT_SCHEDULED, object : Adapter {
+            override suspend fun upsert(row: MirrorRowData) = workoutScheduled.upsert(row.toWorkoutScheduled())
+            override suspend fun markArchived(id: String, lastUpdate: Long) = workoutScheduled.markArchived(id, lastUpdate)
+            override suspend fun delete(id: String) = workoutScheduled.delete(id)
+            override suspend fun getRow(id: String) = workoutScheduled.getById(id)?.toData()
+        })
         put(MirrorTables.USER_PROFILE, object : Adapter {
             override suspend fun upsert(row: MirrorRowData) = userProfile.upsert(row.toUserProfile())
             override suspend fun markArchived(id: String, lastUpdate: Long) = userProfile.markArchived(id, lastUpdate)
@@ -317,6 +335,8 @@ private fun MirrorRowData.toDailyMetric() = DailyMetricEntity(id, payloadJson, l
 private fun MirrorRowData.toDeviceSync() = DeviceSyncEntity(id, payloadJson, lastUpdate, status, dirty, syncState)
 private fun MirrorRowData.toDexaScan() = DexaScanEntity(id, payloadJson, lastUpdate, status, dirty, syncState)
 private fun MirrorRowData.toWeeklyWorkoutAggregate() = WeeklyWorkoutAggregateEntity(id, payloadJson, lastUpdate, status, dirty, syncState)
+private fun MirrorRowData.toWorkoutProgram() = WorkoutProgramEntity(id, payloadJson, lastUpdate, status, dirty, syncState)
+private fun MirrorRowData.toWorkoutScheduled() = WorkoutScheduledEntity(id, payloadJson, lastUpdate, status, dirty, syncState)
 private fun MirrorRowData.toUserProfile() = UserProfileEntity(id, payloadJson, lastUpdate, status, dirty, syncState)
 
 private fun MirrorRow.toData() = MirrorRowData(id, payloadJson, lastUpdate, status, dirty, syncState)

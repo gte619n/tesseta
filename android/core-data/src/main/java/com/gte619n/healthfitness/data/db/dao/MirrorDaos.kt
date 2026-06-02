@@ -25,6 +25,8 @@ import com.gte619n.healthfitness.data.db.entity.NutritionTargetEntity
 import com.gte619n.healthfitness.data.db.entity.ProtocolEntity
 import com.gte619n.healthfitness.data.db.entity.UserProfileEntity
 import com.gte619n.healthfitness.data.db.entity.WeeklyWorkoutAggregateEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutProgramEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -486,5 +488,47 @@ interface UserProfileDao {
     suspend fun markArchived(id: String, lastUpdate: Long)
 
     @Query("DELETE FROM userProfile WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
+interface WorkoutProgramDao {
+    @Query("SELECT * FROM workoutPrograms WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
+    fun observeActive(): Flow<List<WorkoutProgramEntity>>
+
+    @Query("SELECT * FROM workoutPrograms WHERE id = :id")
+    suspend fun getById(id: String): WorkoutProgramEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: WorkoutProgramEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(rows: List<WorkoutProgramEntity>)
+
+    @Query("UPDATE workoutPrograms SET status = 'ARCHIVED', lastUpdate = :lastUpdate WHERE id = :id")
+    suspend fun markArchived(id: String, lastUpdate: Long)
+
+    @Query("DELETE FROM workoutPrograms WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
+interface WorkoutScheduledDao {
+    @Query("SELECT * FROM workoutScheduled WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
+    fun observeActive(): Flow<List<WorkoutScheduledEntity>>
+
+    @Query("SELECT * FROM workoutScheduled WHERE id = :id")
+    suspend fun getById(id: String): WorkoutScheduledEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: WorkoutScheduledEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(rows: List<WorkoutScheduledEntity>)
+
+    @Query("UPDATE workoutScheduled SET status = 'ARCHIVED', lastUpdate = :lastUpdate WHERE id = :id")
+    suspend fun markArchived(id: String, lastUpdate: Long)
+
+    @Query("DELETE FROM workoutScheduled WHERE id = :id")
     suspend fun delete(id: String)
 }

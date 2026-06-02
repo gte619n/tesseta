@@ -3,12 +3,12 @@
   "enrichments" : {
     "Barbell Bench Press" : {
       "movementPattern" : "PUSH_HORIZONTAL",
-      "primaryMuscles" : [ "pectoralis major", "triceps brachii", "anterior deltoid" ],
-      "secondaryMuscles" : [ "serratus anterior" ],
+      "primaryMuscles" : [ "pectorals" ],
+      "secondaryMuscles" : [ "triceps", "anterior deltoids" ],
       "laterality" : "BILATERAL",
       "mechanic" : "COMPOUND",
-      "description" : "A classic upper-body pressing exercise performed by lowering a barbell to the chest and pressing it back up while lying flat on a bench.",
-      "formCues" : [ "Keep your feet flat on the floor", "Retract and depress your shoulder blades", "Lower the bar to your mid-chest", "Push yourself away from the bar to press" ],
+      "description" : "A classic upper body compound lift performed by pressing a barbell upward from the chest while lying flat on a bench.",
+      "formCues" : [ "Keep your feet flat on the floor", "Retract and depress your shoulder blades", "Lower the bar to your mid-chest", "Drive your feet into the floor as you press up" ],
       "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
       "defaultRepRange" : {
         "min" : 5,
@@ -23,9 +23,9 @@
       "secondaryMuscles" : [ "hamstrings", "core", "calves" ],
       "laterality" : "BILATERAL",
       "mechanic" : "COMPOUND",
-      "description" : "A front-loaded squat variation where a single dumbbell is held vertically in front of the chest, promoting an upright torso.",
-      "formCues" : [ "Hold the dumbbell vertically close to your chest", "Keep your chest upright and core engaged", "Drive your knees outward as you squat", "Push through your heels to stand" ],
-      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "description" : "A squat variation performed while holding a single dumbbell vertically in front of the chest.",
+      "formCues" : [ "Hold the dumbbell vertically close to your chest", "Keep your chest up and core engaged", "Drive your knees out as you lower down", "Push through your midfoot to stand up" ],
+      "suitableBlockTypes" : [ "WARMUP", "MAIN", "ACCESSORY" ],
       "defaultRepRange" : {
         "min" : 8,
         "max" : 15
@@ -35,13 +35,13 @@
     },
     "Single-Arm Dumbbell Row" : {
       "movementPattern" : "PULL_HORIZONTAL",
-      "primaryMuscles" : [ "latissimus dorsi", "rhomboids", "trapezius" ],
-      "secondaryMuscles" : [ "biceps", "posterior deltoids", "core" ],
+      "primaryMuscles" : [ "latissimus dorsi", "rhomboids" ],
+      "secondaryMuscles" : [ "biceps brachii", "rear deltoids", "trapezius", "core" ],
       "laterality" : "UNILATERAL",
       "mechanic" : "COMPOUND",
-      "description" : "A unilateral horizontal pull where a single dumbbell is rowed toward the hip while supporting the body with the opposite hand and knee on a bench.",
-      "formCues" : [ "Keep your spine neutral and flat", "Pull the dumbbell toward your hip, not your chest", "Squeeze your shoulder blade at the top of the movement", "Avoid rotating your torso as you pull" ],
-      "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
+      "description" : "A unilateral pulling exercise performed by supporting the body on a bench and pulling a dumbbell toward the hip to target the upper back.",
+      "formCues" : [ "Keep your spine neutral and core tight", "Pull the dumbbell toward your hip rather than your chest", "Squeeze your shoulder blade at the top of the movement" ],
+      "suitableBlockTypes" : [ "ACCESSORY" ],
       "defaultRepRange" : {
         "min" : 8,
         "max" : 12
@@ -54,10 +54,10 @@
       "primaryMuscles" : [ ],
       "secondaryMuscles" : [ ],
       "laterality" : "BILATERAL",
-      "mechanic" : "ISOLATION",
+      "mechanic" : "COMPOUND",
       "description" : "A designated rest period to allow your heart rate to recover and prepare for the next effort.",
-      "formCues" : [ "Focus on slow deep breathing", "Relax your muscles entirely" ],
-      "suitableBlockTypes" : [ "WARMUP", "MAIN", "ACCESSORY", "CORE", "CARDIO", "COOLDOWN" ],
+      "formCues" : [ "Focus on slow, deep nasal breathing.", "Allow your muscles to fully relax.", "Prepare mentally for the next set." ],
+      "suitableBlockTypes" : [ "WARMUP", "CARDIO", "MAIN", "ACCESSORY", "CORE", "COOLDOWN" ],
       "defaultRepRange" : null,
       "isTimed" : true,
       "equipmentNameGroups" : [ ]

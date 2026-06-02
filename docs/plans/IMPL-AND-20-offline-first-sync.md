@@ -179,7 +179,10 @@ In-scope per-user collections (the sync set): `bodyComposition`,
 `protocols`, `goals` (+ `phases`, `steps`), `goalChatThreads` (+ `messages`),
 `nutritionDailyLogs`, `nutritionDays/entries`, `nutritionTargets`, `locations`,
 `dailyMetrics`, `deviceSyncs`, `dexaScans`, `weeklyWorkoutAggregates`,
-`workouts` (when implemented), and the user profile (`users/{uid}`).
+`workoutPrograms` (+ the materialized `scheduled` sessions subcollection;
+workout-program **chat** is online-only and not synced — see
+[outstanding question #47](IMPL-AND-20-outstanding-questions.md)), and the user
+profile (`users/{uid}`).
 
 ### Android — Room schema (D5, D8)
 

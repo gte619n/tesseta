@@ -59,6 +59,14 @@ object CollectionRegistry {
         put("users", MirrorTables.USER_PROFILE)
         put("user", MirrorTables.USER_PROFILE)
         put("profile", MirrorTables.USER_PROFILE)
+
+        // Workout-program materialized sessions (backend emits the subcollection
+        // under "workoutPrograms/scheduled"). The "workoutPrograms" program docs
+        // themselves match the table name verbatim (canonical). Workout-program
+        // chat is online-only and never synced.
+        put("scheduled", MirrorTables.WORKOUT_SCHEDULED)
+        put("workoutPrograms/scheduled", MirrorTables.WORKOUT_SCHEDULED)
+        put("workoutPrograms.scheduled", MirrorTables.WORKOUT_SCHEDULED)
     }
 
     /** Local table names accepted verbatim (collection string == table name). */

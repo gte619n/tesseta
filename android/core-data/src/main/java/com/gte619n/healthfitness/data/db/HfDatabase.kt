@@ -27,6 +27,8 @@ import com.gte619n.healthfitness.data.db.dao.ProtocolDao
 import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.db.dao.UserProfileDao
 import com.gte619n.healthfitness.data.db.dao.WeeklyWorkoutAggregateDao
+import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
+import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.entity.BloodReadingEntity
 import com.gte619n.healthfitness.data.db.entity.BloodTestReportEntity
 import com.gte619n.healthfitness.data.db.entity.BodyCompositionEntity
@@ -50,6 +52,8 @@ import com.gte619n.healthfitness.data.db.entity.ProtocolEntity
 import com.gte619n.healthfitness.data.db.entity.SyncStateEntity
 import com.gte619n.healthfitness.data.db.entity.UserProfileEntity
 import com.gte619n.healthfitness.data.db.entity.WeeklyWorkoutAggregateEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutProgramEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import net.sqlcipher.database.SupportFactory
 
 /**
@@ -89,9 +93,11 @@ import net.sqlcipher.database.SupportFactory
         DeviceSyncEntity::class,
         DexaScanEntity::class,
         WeeklyWorkoutAggregateEntity::class,
+        WorkoutProgramEntity::class,
+        WorkoutScheduledEntity::class,
         UserProfileEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {
@@ -118,6 +124,8 @@ abstract class HfDatabase : RoomDatabase() {
     abstract fun deviceSyncDao(): DeviceSyncDao
     abstract fun dexaScanDao(): DexaScanDao
     abstract fun weeklyWorkoutAggregateDao(): WeeklyWorkoutAggregateDao
+    abstract fun workoutProgramDao(): WorkoutProgramDao
+    abstract fun workoutScheduledDao(): WorkoutScheduledDao
     abstract fun userProfileDao(): UserProfileDao
 
     companion object {

@@ -479,3 +479,47 @@ failures).
     derived field survives; no ghost rows) is therefore proven against the
     *client-side* LWW apply, with the backend's serverTimestamp ordering assumed
     from the Phase 1 contract. Acceptable split of responsibility?
+
+### Catch-up: features merged from `main` after the branch point (this follow-up)
+
+Workout programs (IMPL-14/15) and async meal-photo capture landed on `main`
+while this branch was in flight; both were folded into the offline contract when
+`main` was merged in. Decisions taken:
+
+47. 🟡 **Workout programs are now an offline collection set; workout-program chat
+    is not.** Backend: `workoutPrograms` (top-level) + the materialized
+    `scheduled` sessions subcollection register in `FirestoreSyncChangeReader`;
+    the program `delete` is now a soft-delete tombstone (was a hard delete) with
+    `syncStatus` stamped on save and archive-filtered reads; create/update/
+    archive/activate fan out (activate also fans out `workoutPrograms/scheduled`).
+    A `scheduled` `updatedAt` `COLLECTION_GROUP` index override was added. The
+    program **chat** (threads/messages) stays online-only (web-driven SSE) and is
+    **not** synced. Confirm chat-stays-online is intended.
+
+48. 🟡 **Shared `collectionGroup` leaf guard.** Workout-program chat reuses the
+    `messages` leaf already used by goal chat, so a `collectionGroup("messages")`
+    delta scan would otherwise misroute workout-chat messages into
+    `goalChatThreads/messages`. The reader now requires a doc's top-level
+    collection to equal the routing name's first segment, excluding the
+    (un-synced) workout-chat messages. Confirm this guard over renaming the leaf.
+
+49. 🟡 **Android workout-program reads are Room-backed (read-only, no outbox).**
+    New `workoutPrograms` + `workoutScheduled` mirror tables/DAOs/`MirrorStore`
+    adapters/`CollectionRegistry` aliases; `HfDatabase` version 1→2 (destructive
+    fallback per #13). `WorkoutProgramRepositoryImpl.list()` serves the mirror
+    (fills on a cold miss); `get()` (deep) and `calendar()` are Room-first with a
+    network fill. **Nuance (the #7 raw-doc-vs-DTO gap):** the delta pull writes the
+    raw Firestore doc as `payloadJson`, which may not decode to the deep
+    `WorkoutProgramDeepDto`/`ScheduledWorkoutDto`; when it doesn't, the deep read
+    self-heals from the network while online. Offline, the deep view/calendar show
+    whatever a prior fetch stored. Same staging as goals-deep (#26). Confirm.
+
+50. 🟡 **Async meal-capture (`POST .../capture-meal`) stays online-only (D17) — the
+    multipart photo is never queued — but now fans out `nutritionEntries` when the
+    ANALYZING placeholder is created and again (origin=null) when the background
+    analysis flips it to READY/FAILED, so other devices pull the filled-in entry.
+    FOLLOW-UP:** the *capturing* device is origin-suppressed from its own fan-out,
+    so the ANALYZING placeholder is not guaranteed to appear on it immediately on
+    return to the day view (it lands on the next foreground/periodic pull). An
+    optimistic mirror insert (or a post-capture pull trigger) on the capture
+    screen is a small deferred refinement. Confirm acceptable for now.

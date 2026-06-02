@@ -24,6 +24,8 @@ import com.gte619n.healthfitness.data.db.dao.ProtocolDao
 import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.db.dao.UserProfileDao
 import com.gte619n.healthfitness.data.db.dao.WeeklyWorkoutAggregateDao
+import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
+import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -77,5 +79,7 @@ object DbModule {
     @Provides fun provideDeviceSyncDao(db: HfDatabase): DeviceSyncDao = db.deviceSyncDao()
     @Provides fun provideDexaScanDao(db: HfDatabase): DexaScanDao = db.dexaScanDao()
     @Provides fun provideWeeklyWorkoutAggregateDao(db: HfDatabase): WeeklyWorkoutAggregateDao = db.weeklyWorkoutAggregateDao()
+    @Provides fun provideWorkoutProgramDao(db: HfDatabase): WorkoutProgramDao = db.workoutProgramDao()
+    @Provides fun provideWorkoutScheduledDao(db: HfDatabase): WorkoutScheduledDao = db.workoutScheduledDao()
     @Provides fun provideUserProfileDao(db: HfDatabase): UserProfileDao = db.userProfileDao()
 }
