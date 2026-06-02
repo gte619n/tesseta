@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.data.nutrition
 
+import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.LabelCaptureResponse
 import com.gte619n.healthfitness.domain.nutrition.MealCaptureResponse
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,6 +17,15 @@ class NutritionCaptureRepository @Inject constructor(
 ) {
     suspend fun analyzeMeal(jpegBytes: ByteArray): MealCaptureResponse =
         api.analyzeMeal(photoPart(jpegBytes))
+
+    /**
+     * Capture a meal/product photo and log it asynchronously. Returns the
+     * ANALYZING placeholder entry; the server fills it in in the background.
+     */
+    suspend fun captureMeal(date: String, mealWire: String, jpegBytes: ByteArray): Entry {
+        val mealPart = mealWire.toRequestBody("text/plain".toMediaType())
+        return api.captureMeal(date, mealPart, photoPart(jpegBytes))
+    }
 
     suspend fun analyzeLabel(jpegBytes: ByteArray, barcode: String? = null): LabelCaptureResponse {
         val barcodePart = barcode?.toRequestBody("text/plain".toMediaType())

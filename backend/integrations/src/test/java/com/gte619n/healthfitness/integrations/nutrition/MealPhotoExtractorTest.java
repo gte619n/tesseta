@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.integrations.nutrition;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealAnalysis;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealItem;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,6 +48,37 @@ class MealPhotoExtractorTest {
         assertThat(items.get(1).name()).isEqualTo("White rice");
         assertThat(items.get(1).macrosPer100g().carbsGrams()).isEqualTo(28.0);
         assertThat(items.get(1).confidence()).isNull();
+    }
+
+    @Test
+    void toAnalysis_extractsMealNameAndPackagedFlag() {
+        Map<String, Object> args = orderedMap(
+            "mealName", "Salmon and broccoli",
+            "isPackagedProduct", false,
+            "items", List.of(orderedMap(
+                "name", "Grilled salmon",
+                "estimatedPortionGrams", 200.0,
+                "macrosPer100g", orderedMap("caloriesKcal", 208.0, "proteinGrams", 20.0))));
+
+        MealAnalysis analysis = MealPhotoExtractor.toAnalysis(args);
+
+        assertThat(analysis.mealName()).isEqualTo("Salmon and broccoli");
+        assertThat(analysis.packagedProduct()).isFalse();
+        assertThat(analysis.items()).hasSize(1);
+    }
+
+    @Test
+    void toAnalysis_packagedProduct_isFlagged_blankNameBecomesNull() {
+        Map<String, Object> args = orderedMap(
+            "mealName", "  ",
+            "isPackagedProduct", true,
+            "items", List.of(orderedMap("name", "Protein shake", "estimatedPortionGrams", 330.0)));
+
+        MealAnalysis analysis = MealPhotoExtractor.toAnalysis(args);
+
+        assertThat(analysis.packagedProduct()).isTrue();
+        assertThat(analysis.mealName()).isNull();
+        assertThat(analysis.items()).hasSize(1);
     }
 
     @Test

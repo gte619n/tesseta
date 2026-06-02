@@ -58,11 +58,18 @@ data class Entry(
     // For a composite (photo-logged) meal this is the finished-meal image.
     val imageUrl: String? = null,
     val imageStatus: String = "NONE",
+    // Background photo-analysis lifecycle: NONE for ordinary entries, ANALYZING
+    // while a freshly captured photo is still being itemized server-side, then
+    // READY (or FAILED). An ANALYZING entry is a placeholder to be polled.
+    val analysisStatus: String = "NONE",
     // Present for a composite meal: its components, each with a raw-ingredient
     // image. Null/empty for a plain single-food entry.
     val ingredients: List<EntryIngredient>? = null,
 ) {
     val isComposite: Boolean get() = !ingredients.isNullOrEmpty()
+
+    /** True while the server is still analyzing the captured photo. */
+    val isAnalyzing: Boolean get() = analysisStatus == "ANALYZING"
 }
 
 /** One ingredient of a composite meal, with its generated raw-ingredient image. */
