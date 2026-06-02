@@ -70,7 +70,14 @@ object OutboxEndpointRegistry {
             .addPathSegment(date)
             .addPathSegment("entries")
         if (op != OutboxOp.CREATE) b.addPathSegment(entryId)
-        Resolved(op.httpMethod(), b.build())
+        // The backend entry update is @PatchMapping (not PUT) — e.g. moving an
+        // entry between meals patches its `meal` field — so map UPDATE→PATCH.
+        val method = when (op) {
+            OutboxOp.CREATE -> "POST"
+            OutboxOp.UPDATE -> "PATCH"
+            OutboxOp.DELETE -> "DELETE"
+        }
+        Resolved(method, b.build())
     }
 
     /**

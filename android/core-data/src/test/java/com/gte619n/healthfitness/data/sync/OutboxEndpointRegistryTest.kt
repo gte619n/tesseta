@@ -70,6 +70,16 @@ class OutboxEndpointRegistryTest {
     }
 
     @Test
+    fun `nutrition entry update is a PATCH (backend is PatchMapping, e g moving meals)`() {
+        val r = resolve(MirrorTables.NUTRITION_ENTRIES, OutboxOp.UPDATE, "2026-06-02/entry-1")
+        assertEquals("PATCH", r.method)
+        assertEquals(
+            "https://api.example.com/api/me/nutrition/2026-06-02/entries/entry-1",
+            r.url.toString(),
+        )
+    }
+
+    @Test
     fun `goal step update targets the step nested under its goal and phase`() {
         // #26: structural step edits are a PATCH nested under the phase.
         val r = resolve(MirrorTables.GOAL_STEPS, OutboxOp.UPDATE, "goal-1/phase-2/step-9")
