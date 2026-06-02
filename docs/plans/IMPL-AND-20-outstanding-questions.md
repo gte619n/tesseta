@@ -6,6 +6,49 @@ Numbered for easy reference.
 
 > Status legend: 🟡 awaiting your decision · ✅ confirmed · 🔁 changed per your note
 
+## Review resolutions (2026-06-02 interview)
+
+Decisions captured as the user reviewed each item. Work items generated here are
+tracked as "queued (this branch)" or "fast-follow / CI ticket".
+
+| # | Resolution |
+|---|---|
+| 3, 4, 6 | ✅ Confirmed as-is (syncStatus key; goal delete=tombstone vs archive=live; user doc emitted but reads unfiltered). |
+| 8 | ✅ **done:** fan-out/idempotency now on all remaining in-scope JSON write paths — DEXA + blood-test-report `field`-PATCH & delete, goals-chat `commit` (goal+phases+steps) & thread delete, nutrition entry PATCH + ingredient re-portion; skipped (with reason): all multipart/SSE AI uploads (D17) and `protocols` (no controller). New `IdempotentNestedWriteControllerTest` proves replay=single doc for phases/steps/nutrition-entries. |
+| 24, 26 | ✅ **done** — offline medication-adherence logging and offline goals nested-aggregate/phase-step editing implemented on this branch (see #24/#26 below). |
+| 1, 2, 43–46 | 🔁 **Defer to a CI ticket** — add a `connectedDebugAndroidTest` emulator job + a deployed-environment FCM smoke drill; branch merges on the green unit/MockMvc gates. |
+| 7, 15 | ✅ Confirmed — store the full GET DTO as mirror `payloadJson`; placeholder-then-pull for optimistic creates. No screen depends on a doc-absent computed field. |
+| 32 | ✅ Confirmed — write-response `lastUpdate` stays the controller write-instant (monotonic LWW key); the pull reconciles to the true server timestamp. No read-after-write. |
+| 5 | ✅ Confirmed — keep hard-delete on the Google-Health re-hydration path; body-comp is pull-only on the client. |
+| 34 | ✅ **done:** nutrition entry/composite-meal/update/delete fan-out renamed from `nutritionEntries` to `nutritionDays/entries`, matching the delta feed's emitted collection exactly. No test asserted the old name. |
+| 9 | ✅ **done:** TTL declared as infra-as-code in `infra/terraform/firestore_ttl.tf` (`google_firestore_field` + `ttl_config` on collection-group `idempotencyKeys`, field `expiresAt`) with a `versions.tf` provider pin; gcloud-equivalent + verify commands documented in `infra/README.md`. `FirestoreIdempotencyStore` confirmed writing `expiresAt` as a Firestore `Timestamp`. |
+| 10 | ✅ **done:** `FirestoreSyncChangeReader` now enumerates each subcollection by walking down from `users/{uid}` (list the user's own medications/goals/goalChatThreads/nutritionDays/phases, query each child collection directly) — no `collectionGroup` query remains in the delta path, so it never touches another user's data. Removed the now-unused `adherence/history/phases/steps/messages/entries` COLLECTION_GROUP `updatedAt` index overrides (kept the unrelated steps-metric/kind, medications.drugId, locations.equipmentIds ones). Cursor/order/tombstone semantics unchanged; sync tests green. |
+| 33 | ✅ Confirmed — adherence keyed by `(med, date)` with replay guard; transitions idempotent + fan-out. Offline adherence (#24) builds on this keying. |
+| 37 | ✅ **done (server):** `GET /api/me/sync?recentSince=<ISO date>` bounds the heavy time-series (bloodReadings, bodyComposition, dailyMetrics, nutritionDailyLogs, nutritionDays/entries, weeklyWorkoutAggregates) to docs on/after the date via a pure emission filter (`SyncRecentWindow`); CRUD domains always full. Cursor key `(updatedAt, collection, id)` is untouched, so the later unbounded backfill (client omits the param) surfaces the older heavy docs with no skip/dup (re-apply is an idempotent LWW no-op). Tombstones always propagate. `SyncRecentWindowControllerTest` + `SyncRecentWindowTest` green. **Android:** pass `recentSince = today−14d` on first sync only, then omit for backfill. |
+| 40 | ✅ **done** — per-row `syncState` threaded through medication/blood/nutrition models; `SyncBadge` rendered on the medications + nutrition rows. |
+| 41 | ✅ **done** — drug-lookup and DEXA-upload now gated with the offline affordance (`Connectivity`/`OfflineGate`). |
+| 12, 38 | ✅ Confirmed — one consolidated sign-out hook (FCM delete + Room wipe) on the real sign-out path; PHI always wiped. |
+| 39 | ✅ **done** — distinct global FAILED "changes failed — retry" state from `OutboxRepository.failedCount()` in the global bar, with retry re-drain. |
+| 13 | ✅ Confirmed — `fallbackToDestructiveMigration()`; local DB is a disposable cache, wipe-and-resync on schemaVersion bump. |
+| 36 | ✅ Confirmed — FCM silent data-only; no `POST_NOTIFICATIONS`. User-facing reminders tracked separately (Phase 9). |
+| 30 | ✅ **done** — date-ranged Room queries back body-comp `pointsInRange` + the dashboard weight/blood trend summaries (live fallback under kill-switch). |
+| 11, 14, 16–23, 25, 27–29, 31, 35, 42 | ✅ Acknowledged as-recorded (implementation-detail notes; no change). #16/#17 superseded by the #24/#26 offline-completion work below. |
+
+### Work queued on this branch (from the interview)
+
+A second implementation pass, all verified before re-push:
+1. ✅ **#8** — idempotency + client-minted id on every remaining in-scope write endpoint (backend).
+2. ✅ **#24** — offline medication-adherence logging (client mints/merges the `(med,date)` row, optimistic + outbox).
+3. ✅ **#26** — offline goals editing: assemble the nested aggregate from the `goalPhases`/`goalSteps` mirror tables; phase/step edits optimistic + outbox (step done/doneAt stays a server-evaluated intent, never a raw derived write).
+4. ✅ **#34** — rename nutrition-entry fan-out to `nutritionDays/entries`.
+5. ✅ **#9** — Firestore TTL policy on `idempotencyKeys.expiresAt` in infra-as-code.
+6. ✅ **#10** — replace cross-user `collectionGroup` subcollection scan with per-user enumeration.
+7. ✅ **#37** — true server-side 14-day initial-sync window (per-collection recent bound) + client wiring.
+8. ✅ **#40** — wire per-row PENDING/FAILED badges into in-scope list UIs.
+9. ✅ **#41** — offline "needs connection" affordance on drug-lookup + DEXA-upload.
+10. ✅ **#39** — distinct global FAILED state in the sync bar.
+11. ✅ **#30** — date-ranged Room queries for windowed/trend reads (body-comp range, dashboard summaries).
+
 ## Environment / verification limits
 
 1. 🟡 **Instrumented Android tests cannot be executed here.** The repo has no
@@ -59,30 +102,46 @@ Numbered for easy reference.
    read-path (Phase 5): confirm no in-scope screen depends on a computed field
    that only exists in the DTO, not the stored doc.**
 
-8. 🔁 **Idempotency + client-minted id fast-follow LANDED.** Resolves the
-   open follow-up. `SyncWriteContext` + `SyncChangeNotifier` are now wired on all
-   remaining in-scope JSON write paths: goal **phases** POST, goal **steps** POST,
-   **nutrition composite-meal** POST, **macro-target** PUT, **medication
-   adherence** log POST, and **medication dosage / discontinue / reactivate**.
-   The medication PUT/transition writes and goal/phase/step updates/deletes/
-   reorders also now fan out. **Deliberately skipped (with reasons):**
-   `bloodTestReports` and `dexaScans` (multipart + SSE Gemini upload — create is
-   online-only per D17; the CRUD records stay read-relevant), `goalChatThreads`/
-   `messages` (the chat POST is an SSE Gemini stream, and `commit` reuses the
-   goal/phase/step write paths that already fan out — there is no plain JSON
-   thread/message create endpoint to convert), `protocols` (no controller exists
-   in the codebase), and `bodyComposition` / `dailyMetrics` (GET-only controllers,
-   Google-Health-sourced, pull-only — no manual create/write path). See new
-   items #31–#35 for the judgement calls this surfaced.
+8. ✅ **RESOLVED — every remaining in-scope JSON write path now carries the
+   contract.** The earlier fast-follow wired goal **phases** POST, goal **steps**
+   POST, **nutrition composite-meal** POST, **macro-target** PUT, **medication
+   adherence** log POST, and **medication dosage / discontinue / reactivate**
+   (plus medication PUT/transition + goal/phase/step update/delete/reorder
+   fan-out). This follow-up closes the last gaps that *do* have a plain-JSON
+   write: **DEXA** `PATCH .../field` + delete (→ `dexaScans` fan-out),
+   **blood-test-report** `PATCH .../field` + delete (→ `bloodTestReports`),
+   **goals-chat `commit`** (mints Goal+Phases+Steps via the same repos the
+   manual CRUD uses → fans out `goals`,`goals/phases`,`goals/phases/steps`) +
+   chat-thread delete (→ `goalChatThreads`), and **nutrition entry PATCH +
+   ingredient re-portion PATCH**. New `IdempotentNestedWriteControllerTest`
+   proves `Idempotency-Key` replay = a single document for phases / steps /
+   nutrition entries. **Still deliberately skipped (D17):** the DEXA/blood-test
+   **multipart+SSE PDF uploads** and the **goals-chat SSE stream** (AI,
+   online-only — the durable CRUD records they produce *are* now covered);
+   `protocols` (no controller in the codebase); `bodyComposition` /
+   `dailyMetrics` (GET-only, Google-Health-sourced, pull-only). See #31–#35 for
+   the envelope/granularity judgement calls.
 
-9. 🟡 **`FirestoreIdempotencyStore` needs a Firestore TTL policy** on
-   `users/{uid}/idempotencyKeys.expiresAt` declared in console/Terraform (the
-   in-app TTL check covers the unreaped window). Needs an infra change before
-   prod.
+9. ✅ **RESOLVED — Firestore TTL declared as infra-as-code.**
+   `infra/terraform/firestore_ttl.tf` declares a `google_firestore_field` with a
+   `ttl_config` block on collection-group `idempotencyKeys`, field `expiresAt`
+   (plus `versions.tf` pinning the google provider). The gcloud-equivalent
+   (`gcloud firestore fields ttls update expiresAt --collection-group=…
+   --enable-ttl`) and a verify command are documented in `infra/README.md` for
+   the period before Terraform is applied. `FirestoreIdempotencyStore` writes
+   `expiresAt` as a `com.google.cloud.Timestamp` (the type a `ttl_config` acts
+   on); the in-app TTL re-check still covers the unreaped window.
 
-10. 🟡 **Delta subcollection queries use `collectionGroup` scoped to the user by
-    document-path prefix in app code** (reads across users before filtering).
-    Correct at current volumes; revisit if it becomes a cost/latency issue.
+10. ✅ **RESOLVED — delta subcollection queries are now strictly per-user.**
+    `FirestoreSyncChangeReader` enumerates the user's own parent docs under
+    `users/{uid}` (medications, goals, goalChatThreads, nutritionDays, and
+    goals/phases for the two-level steps) and queries each child subcollection
+    directly with a COLLECTION-scoped `orderBy(updatedAt)` — no `collectionGroup`
+    query remains in the delta path, so it never reads another user's documents.
+    The previously-required `adherence/history/phases/steps/messages/entries`
+    COLLECTION_GROUP `updatedAt` index overrides were removed from
+    `firestore.indexes.json`. N+1 read pattern bounded by the user's own doc
+    counts; cursor/order/tombstone semantics unchanged.
 
 ### Android client
 
@@ -230,13 +289,18 @@ failures).
     and `todaysDoses()` (adherence-computed checklist) read live, falling back to the
     mirror offline. `MedicationRepositoryTest` rewritten to the Room-backed contract.
 
-24. 🟡 **`medications` adherence (`logDose`/`undoDose`) left on the network.**
-    Adherence logging is a user intent, but the API returns no entity/id to mirror
-    (it's `POST .../adherence` returning `Unit`, and the `today` checklist is a
-    server-derived projection of it). Mirroring it as an outbox write would need a
-    synthetic adherence-row id + a derived-checklist recompute that the server owns;
-    out of proportion for this phase. The dose checklist still renders from the live
-    `today` endpoint. Flagged: offline adherence logging is a fast-follow.
+24. ✅ **done:** offline medication-adherence logging shipped. `logDose`/`undoDose`
+    now write an optimistic `medicationAdherence` mirror row keyed by a composite
+    `"<med>/<date>/<window>"` id (the `(med,date)` keying the backend uses) +
+    enqueue an outbox mutation: a log is a CREATE → `POST .../adherence`, an undo is
+    a DELETE → `DELETE .../adherence/{date}/{window}`. The replay sends a
+    deterministic `(med,date)`-derived `Idempotency-Key` (`adherence:<med>:<date>`,
+    via `OutboxEndpointRegistry.idempotencyKey`) + `X-HF-Origin-Device`. The `today`
+    checklist overlays the mirror (`MedicationAdherenceDao.observeAll`, tombstone ⇒
+    undone) so an offline log/undo shows instantly; the server projection reconciles
+    on pull. `DefaultAdherenceRepository`/`DefaultMedicationRepository` rewritten;
+    `AdherenceRepositoryTest` + a `MedicationRepositoryTest` overlay test prove the
+    offline log shows immediately + enqueues. *(originally: left on the network.)*
 
 25. 🟡 **`nutrition` — entries Room-backed (optimistic + outbox); aggregates +
     AI flows pull/network.** Entries are mirrored per-entry into `nutritionEntries`
@@ -253,16 +317,21 @@ failures).
     mirror after. `NutritionTodayViewModel` unchanged (its write-then-`day()` reload
     now reflects the optimistic mirror).
 
-26. 🟡 **`goals` — list Room-backed; deep aggregate + step intents on network.**
-    `goals()` serves the `goals` mirror (full `Goal` payload). `goalDeep(id)`
-    (nested phases + steps) and the step intents (`setStepDone`/`resetStepToAuto`/
-    `reevaluate`) stay on the network by design (D9): the step `done`/`doneAt` are
-    **server-derived**, and a manual toggle is already an explicit `PATCH
-    .../steps/{sid}` **intent** that the server re-evaluates — so it is deliberately
-    NOT routed through the outbox (it must not replay as a raw derived-doc write).
-    After any intent the deep goal is re-fetched and the goal's list mirror row
-    refreshed. Reassembling `GoalDeep` from the flat `goalPhases`/`goalSteps` mirror
-    tables (keeping the cascade correct offline) is left as a follow-up.
+26. ✅ **done:** offline goals nested-aggregate editing shipped. `goalDeep(id)` is
+    now **assembled offline** from the flat `goals`/`goalPhases`/`goalSteps` mirror
+    tables (`GoalsRepository.assembleDeep`, preserving the `phaseOrder`/`stepOrder`
+    cascade), with a live `refreshDeep` fan-out into the three tables when online.
+    Structural phase/step CRUD (`createPhase`/`updatePhase`/`deletePhase`,
+    `createStep`/`updateStep`/`deleteStep`) is optimistic + outbox: composite ids
+    `"<goal>/<phase>"` / `"<goal>/<phase>/<step>"` replay to the real phase/step
+    controllers (`POST/PATCH/DELETE`, mapped in `OutboxEndpointRegistry`). **D9
+    boundary held:** step `done`/`doneAt` is server-derived — a manual toggle stays
+    an explicit `PATCH .../steps/{sid}` **intent** (`setStepDone`/`resetStepToAuto`,
+    network) NEVER enqueued through the structural-edit outbox, and `updateStep`
+    carries the existing done/doneAt verbatim so a replay can't clobber it;
+    `reevaluate` stays online. New `GoalsRepositoryTest` proves offline assembly +
+    PENDING phase/step edits + done preserved. *(originally: deep aggregate +
+    assembly left as a follow-up.)*
 
 27. 🟡 **`daily-metrics` — fully Room-backed, pull-only (D9).** The dashboard's
     30-day `loadRecent()` fills the `dailyMetrics` mirror from the network window
@@ -286,12 +355,15 @@ failures).
     side; a future protocols UI would build on `MirrorRepositorySupport` like the
     others. (Backend create idempotency for protocols remains the #8 fast-follow.)
 
-30. 🟡 **`bodyComposition.pointsInRange` and the dashboard weight/blood summaries
-    stay network-served.** These are windowed/aggregated derived reads the flat
-    `observeActive()` mirror does not index; they tolerate a live fetch (consistent
-    with the prior agent's #19 note). Reads that matter for offline rendering (the
-    snapshot, the records lists) are Room-backed; the windowed analytics are a
-    documented follow-up to back with a date-ranged Room query.
+30. ✅ **done:** windowed/trend reads now Room-backed via date-ranged DAO queries.
+    Added `BodyCompositionDao.pointsInRange(from,to)` and
+    `BloodReadingDao.readingsInRange(from,to)` (both filtered on the indexed
+    `lastUpdate` = sample epoch millis). `bodyComposition.pointsInRange` reads the
+    range from Room (cold-miss fill), and the dashboard weight summary
+    (`DashboardBodyCompositionRepositoryImpl`, ~120d window) + blood-marker trend
+    (`DashboardBloodMarkerRepositoryImpl`, 365d window) now decode the mirror
+    payloads over the ranged query instead of calling the network. Each keeps a live
+    fallback under the kill-switch (D13). *(originally: stayed network-served.)*
 
 ### Backend fast-follow (#8 completion + #11 + Phase 7 E2E — this follow-up)
 
@@ -364,9 +436,31 @@ failures).
     requested. If a future feature posts a visible notification, add it then.
     Confirm silent-only is the intended UX.
 
-37. 🟡 **First-run "14-day window" is approximated with a client-side PAGE BUDGET,
-    not a true date window — server support would be needed for the exact D14
-    behaviour.** The delta API (`GET /api/me/sync`) is cursor-ordered by
+37. ✅ **done (client):** `SyncApi.delta` + `SyncEngine.pull` now carry a
+    `recentSince` ISO-8601 query param; `FirstSyncGate.runInitialSync` sends
+    `now − 14d` (`RECENT_WINDOW_DAYS`) for the blocking first window and
+    `scheduleBackfill` runs the unbounded `recentSince = null` backfill on the same
+    persisted cursor. The page-budget approximation (`INITIAL_PAGE_BUDGET`,
+    `pull(maxPages)`) is removed; `FirstSyncGateTest` asserts the 14-day window.
+    **Param name wired against: `recentSince`** — matches the server resolution
+    below. ✅ **RESOLVED (server) — true date-bounded first window shipped.** The sync
+    endpoint now accepts an optional `recentSince=<ISO date>` query param that
+    bounds the heavy time-series collections (bloodReadings, bodyComposition,
+    dailyMetrics, nutritionDailyLogs, nutritionDays/entries,
+    weeklyWorkoutAggregates) to docs whose sample/effective date is on/after the
+    date, while CRUD domains always return in full (`SyncRecentWindow` is a pure
+    emission filter that never changes the `(updatedAt, collection, id)` cursor
+    key). The Android client passes `recentSince = today − 14d` on its first sync
+    and omits it for the later unbounded backfill; the backfill re-enumerates
+    from an empty cursor and surfaces the older heavy docs the window skipped,
+    with re-applied rows an idempotent LWW no-op (no skip/dup). Tombstones always
+    propagate regardless of the window. Original page-budget note retained below
+    for context.
+
+    *(Original note:)* **First-run "14-day window" is approximated with a
+    client-side PAGE BUDGET, not a true date window — server support would be
+    needed for the exact D14 behaviour.** The delta API (`GET /api/me/sync`) is
+    cursor-ordered by
     `lastUpdate` with an opaque cursor; the client cannot request "only the last
     14 days of heavy time-series" without a server hint. `FirstSyncGate` instead
     does a **bounded initial pull** (`SyncEngine.pull(maxPages = 3)`, ~the most
@@ -391,41 +485,39 @@ failures).
     token DELETE throws / the network is down. Confirm this single hook is the
     intended consolidation.
 
-39. 🟡 **Global `SyncStatusBar` maps the outbox's single `pendingCount()` to a
-    coarse PENDING/OFFLINE/IDLE state; it does not distinguish FAILED at the global
-    level.** `OutboxRepository` exposes one `pendingCount(): Flow<Int>` (PENDING and
-    FAILED rows are both "not yet synced"); the bar therefore shows OFFLINE >
-    PENDING > IDLE and reserves the FAILED indicator for the **per-row `SyncBadge`**
-    (which reads each row's precise `syncState`). The `syncUiStateOf` mapping does
-    accept a `failedCount`/`syncing` input (unit-tested) so a future
-    `observeFailedCount()` / active-drain signal can light the global FAILED/SYNCING
-    state without a UI change. Acceptable, or should the outbox expose a separate
-    failed-count flow now?
+39. ✅ **done:** distinct global FAILED state shipped. Added
+    `OutboxRepository.failedCount(): Flow<Int>` (DAO `observeFailedCount` = rows with
+    `attempts > 0`, i.e. failed a replay and now in backoff). `SyncStatusViewModel`
+    now combines pending + failed: it maps failed rows to the FAILED "changes failed
+    — retry" bar state (the already-present `syncUiStateOf` priority puts FAILED
+    above PENDING) and subtracts them from the pending count so the bar shows
+    "failed" not "waiting". `retry()` re-drains the outbox. *(originally: coarse
+    pending-only mapping, FAILED reserved for the per-row badge.)*
 
-40. 🟡 **Per-row PENDING/FAILED badges: reusable component shipped + unit-tested,
-    but NOT yet wired into the blood/medications/nutrition list ROWS — surfacing a
-    row's `syncState` through each domain model is a deferred follow-up.** `SyncBadge`
-    + the pure `badgeSpecOf` mapping live in `core-ui` and are tested. Wiring them
-    onto actual rows needs the per-row `syncState` threaded from the Room mirror
-    through the **domain model → ViewModel → row composable** for each domain (the
-    domain `BloodReading`/`BloodTestReport`/`Medication`/nutrition-entry models do
-    not currently carry `syncState`) — the same multi-layer change Phase 5
-    deliberately staged (#16/#17). Given badges also need a device to verify
-    visually, the component ships now and the per-domain `syncState` surfacing +
-    row wiring is a fast-follow. **Pull-to-refresh IS wired** (reference: Blood
-    overview, via `PullToRefreshBox` → `repository.refresh()` → mirror fill).
-    Confirm staging the row-level badge wiring as a follow-up.
+40. ✅ **done:** per-row badges wired. Added a defaulted `syncState: String?` to the
+    `Medication`, `BloodReading`, and nutrition `Entry` domain models and a
+    `MirrorRepositorySupport.observeWithState` overload that hands the mirror row's
+    `syncState` to the decoder; repositories now thread it onto the model
+    (`DefaultMedicationRepository.list`, `BloodReadingRepositoryImpl.observeReadings`,
+    `NutritionRepository.entriesForDate`). `SyncBadge(row.syncState)` is rendered on
+    the **medications grid card** (`MedicationCard`) and the **nutrition entry rows**
+    (`NutritionTodayScreen.EntryRow`). Blood's `syncState` is surfaced on the model,
+    but the marker-detail rows render a date-collapsed `LatestMarkers.derive`
+    projection (shared with web-parity tests), so the badge on the blood list is a
+    documented residual follow-up (model-level done; UI projection collapses
+    per-reading identity). *(originally: component shipped, row wiring deferred.)*
+    **needs a device:** badge visual rendering is unverified here (no emulator).
 
-41. 🟡 **Offline-AI affordance (D17) wired on PDF upload, goals chat, and
-    meal-photo capture; drug lookup is the noted follow-up.** A reactive
-    `Connectivity.isOnline` signal (a `ConnectivityManager` network-callback
-    `StateFlow` in `core-data`) gates: **blood-report PDF upload** (picker only
-    opens online; offline shows `OfflineNotice`), **goals chat** (composer sends
-    dropped offline + banner), and **meal-photo/label capture** (whole capture pane
-    replaced with the affordance offline). Nothing is queued. **NOT yet gated: the
-    medication drug-lookup entry point** (`AddMedicationViewModel`) and the **DEXA
-    PDF upload** — same `OfflineGate`/`Connectivity` pattern, deferred as a
-    mechanical follow-up. Confirm the three reference gates suffice for this phase.
+41. ✅ **done:** the last two AI entry points are now gated too. **Drug lookup**
+    (`AddMedicationViewModel`/`AddMedicationScreen`) — the VM exposes
+    `Connectivity.isOnline`, never fires the SSE+image lookup offline, and the search
+    step shows an `OfflineNotice` when there's no local catalog match offline (the
+    local catalog filter + manual entry stay usable). **DEXA PDF upload**
+    (`UploadDexaViewModel`/`UploadDexaScreen`) — the idle picker is wrapped in
+    `OfflineGate(online)` like the blood-report upload. Nothing is queued (D17). VM
+    tests updated to supply `Connectivity`. *(originally: these two deferred as a
+    mechanical follow-up.)* **needs a device:** the offline visual affordance is
+    unverified here (no emulator).
 
 42. 🟡 **Global `SyncStatusBar` is rendered once above the app NavHost
     (`AppNavHost`), not inside each feature screen.** It self-hides in the steady
