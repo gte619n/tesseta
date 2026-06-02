@@ -8,9 +8,11 @@ import com.gte619n.healthfitness.domain.dashboard.DailyMetricPoint
 import com.gte619n.healthfitness.domain.dashboard.DashboardBloodMarkerRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardBodyCompositionRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardDailyMetricsRepository
+import com.gte619n.healthfitness.domain.dashboard.DashboardNutritionRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardTodaysDosesRepository
 import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
+import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import com.gte619n.healthfitness.domain.profile.ProfileRepository
@@ -46,10 +48,12 @@ data class DashboardUiState(
     val dailyMetrics: CardState<List<DailyMetricPoint>>,
     val blood: CardState<List<BloodMarkerSummary>>,
     val todaysDoses: CardState<List<TodaysDoseSummary>>,
+    val nutrition: CardState<NutritionDay>,
     val user: DashboardUser? = null,
 ) {
     companion object {
         val initial = DashboardUiState(
+            CardState.Loading,
             CardState.Loading,
             CardState.Loading,
             CardState.Loading,
@@ -64,6 +68,7 @@ class DashboardViewModel @Inject constructor(
     private val dailyMetrics: DashboardDailyMetricsRepository,
     private val blood: DashboardBloodMarkerRepository,
     private val doses: DashboardTodaysDosesRepository,
+    private val nutrition: DashboardNutritionRepository,
     private val profile: ProfileRepository,
     unitPrefs: UnitPreferencesRepository,
 ) : ViewModel() {
@@ -102,6 +107,7 @@ class DashboardViewModel @Inject constructor(
                 loadDailyMetrics(),
                 loadBlood(),
                 loadDoses(),
+                loadNutrition(),
             ).awaitAll()
             // Stamp when at least one primary card loaded; if everything failed,
             // leave lastRefreshAt untouched so the next resume retries.
@@ -114,6 +120,7 @@ class DashboardViewModel @Inject constructor(
     fun retryDailyMetrics() { loadDailyMetrics() }
     fun retryBlood() { loadBlood() }
     fun retryDoses() { loadDoses() }
+    fun retryNutrition() { loadNutrition() }
 
     // Each loader returns a Deferred<Boolean> — true on success — so refresh()
     // can settle the whole batch before deciding whether to stamp the TTL.
@@ -153,6 +160,14 @@ class DashboardViewModel @Inject constructor(
         runCatching { doses.loadToday() }
             .onSuccess { d -> _ui.update { it.copy(todaysDoses = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(todaysDoses = CardState.Error("Couldn't load doses", t)) } }
+            .isSuccess
+    }
+
+    private fun loadNutrition() = viewModelScope.async {
+        if (_ui.value.nutrition !is CardState.Loaded) _ui.update { it.copy(nutrition = CardState.Loading) }
+        runCatching { nutrition.loadToday() }
+            .onSuccess { d -> _ui.update { it.copy(nutrition = CardState.Loaded(d)) } }
+            .onFailure { t -> _ui.update { it.copy(nutrition = CardState.Error("Couldn't load nutrition", t)) } }
             .isSuccess
     }
 

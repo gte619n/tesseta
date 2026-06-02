@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.domain.dashboard
 
+import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import java.time.Instant
 import java.time.LocalDate
 
@@ -89,4 +90,9 @@ interface DashboardBloodMarkerRepository {
 
 interface DashboardTodaysDosesRepository {
     suspend fun loadToday(): List<TodaysDoseSummary>
+}
+
+interface DashboardNutritionRepository {
+    /** Today's logged nutrition: totals + target for the Today card's macro tier. */
+    suspend fun loadToday(): NutritionDay
 }
