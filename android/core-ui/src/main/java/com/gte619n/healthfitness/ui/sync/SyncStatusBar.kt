@@ -1,12 +1,20 @@
 package com.gte619n.healthfitness.ui.sync
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
@@ -74,6 +82,52 @@ fun SyncStatusBar(
                 }
             }
         }
+    }
+}
+
+/**
+ * Overlay sync indicator — drawn *on top of* the screen content (place it in a
+ * [Box] over the nav graph) so it never shifts the layout. Unlike [SyncStatusBar]
+ * it adds no height in the common case:
+ *
+ *  - **FAILED** → the full banner, floated at the top (the one state worth
+ *    interrupting for; carries the Retry action).
+ *  - **SYNCING / PENDING / OFFLINE** (or an "updated elsewhere" note) → a small,
+ *    semi-transparent status icon tucked in the top-right corner.
+ *  - **IDLE** → nothing.
+ */
+@Composable
+fun BoxScope.SyncStatusOverlay(
+    state: SyncUiState,
+    onRetry: (() -> Unit)? = null,
+) {
+    if (state.kind == SyncIndicatorKind.FAILED) {
+        SyncStatusBar(
+            state = state,
+            onRetry = onRetry,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+        return
+    }
+    val showIcon = state.kind != SyncIndicatorKind.IDLE || state.updatedElsewhere
+    AnimatedVisibility(
+        visible = showIcon,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.TopEnd),
+    ) {
+        val palette = state.kind.palette()
+        Icon(
+            imageVector = state.kind.icon(),
+            contentDescription = state.message(),
+            tint = palette.fg.copy(alpha = 0.55f),
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 6.dp, end = 12.dp)
+                .background(palette.bg.copy(alpha = 0.6f), CircleShape)
+                .padding(5.dp)
+                .size(16.dp),
+        )
     }
 }
 

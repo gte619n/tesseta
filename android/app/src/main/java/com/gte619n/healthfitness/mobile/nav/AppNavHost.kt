@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.mobile.sync.SyncStatusViewModel
-import com.gte619n.healthfitness.ui.sync.SyncStatusBar
+import com.gte619n.healthfitness.ui.sync.SyncStatusOverlay
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -70,20 +70,15 @@ fun AppNavHost(
     syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
-    // IMPL-AND-20 (Phase 6, D11): the global sync-state indicator sits above the
-    // nav graph. It self-hides in the steady (all-synced, online) state, so it
-    // only takes space when there is something to report (offline / pending /
-    // failed / "updated elsewhere"). Retry re-drains the outbox.
+    // IMPL-AND-20 (Phase 6, D11): the global sync-state indicator is an OVERLAY
+    // drawn on top of the nav graph, so it never shifts the layout (no content
+    // jump). In the common states (syncing / pending / offline) it's just a faint
+    // status icon in the top-right corner; only a FAILED sync surfaces the full
+    // banner (with Retry). Steady state shows nothing.
     val syncState by syncStatusViewModel.state.collectAsStateWithLifecycle()
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Pad the pill below the status bar so it doesn't sit under the clock.
-        androidx.compose.foundation.layout.Spacer(
-            Modifier.windowInsetsTopHeight(WindowInsets.statusBars),
-        )
-        SyncStatusBar(state = syncState, onRetry = syncStatusViewModel::retry)
-        Box(modifier = Modifier.weight(1f)) {
-            AppNavHostGraph(widthClass = widthClass, navController = navController)
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        AppNavHostGraph(widthClass = widthClass, navController = navController)
+        SyncStatusOverlay(state = syncState, onRetry = syncStatusViewModel::retry)
     }
 }
 
