@@ -36,12 +36,17 @@ import com.gte619n.healthfitness.core.medication.MedicationStatus;
 import com.gte619n.healthfitness.core.medication.Protocol;
 import com.gte619n.healthfitness.core.medication.ProtocolRepository;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
+import com.gte619n.healthfitness.core.push.FcmTokenRepository;
 import com.gte619n.healthfitness.core.user.UserRepository;
+import com.gte619n.healthfitness.testsupport.push.InMemoryFcmTokenRepository;
+import com.gte619n.healthfitness.testsupport.push.RecordingFcmSender;
+import com.gte619n.healthfitness.testsupport.sync.InMemorySyncChangeReader;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 
 // Replaces the Firestore-backed persistence beans with in-memory fakes for
 // unit tests that don't need real Firestore. Wired by @Import on each test
@@ -60,6 +65,15 @@ public class TestPersistenceConfig {
         return new InMemoryUserRepository();
     }
 
+    // IMPL-AND-20 Phase 1: in-memory delta-read change source. Tests seed it
+    // with created/archived docs and page through GET /api/me/sync. Exposed as
+    // the concrete type so tests can @Autowired it directly; it also satisfies
+    // the SyncChangeReader dependency of SyncService.
+    @Bean
+    InMemorySyncChangeReader syncChangeReader() {
+        return new InMemorySyncChangeReader();
+    }
+
     @Bean
     BodyCompositionRepository bodyCompositionRepository() {
         return new InMemoryBodyCompositionRepository();
@@ -73,6 +87,21 @@ public class TestPersistenceConfig {
     @Bean
     DeviceSyncRepository deviceSyncRepository() {
         return new InMemoryDeviceSyncRepository();
+    }
+
+    // IMPL-AND-20 Phase 2: in-memory FCM token registry + capturing transport.
+    // Exposed as concrete types so fan-out tests can @Autowired them directly to
+    // seed tokens and assert recipients/payload. RecordingFcmSender is @Primary
+    // so it wins over the production NoOpFcmSender default.
+    @Bean
+    InMemoryFcmTokenRepository fcmTokenRepository() {
+        return new InMemoryFcmTokenRepository();
+    }
+
+    @Bean
+    @Primary
+    RecordingFcmSender recordingFcmSender() {
+        return new RecordingFcmSender();
     }
 
     @Bean

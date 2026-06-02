@@ -50,7 +50,7 @@ class StepControllerTest {
         String phaseId = createPhase(goalId, "Phase 1");
 
         // THRESHOLD without metric -> 400
-        CreateStepRequest req = new CreateStepRequest("bad", StepKind.THRESHOLD, null);
+        CreateStepRequest req = new CreateStepRequest(null, "bad", StepKind.THRESHOLD, null);
         mvc.perform(post("/api/me/goals/" + goalId + "/phases/" + phaseId + "/steps")
                 .header("X-Dev-User", USER)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -59,7 +59,7 @@ class StepControllerTest {
 
         // SUSTAINED without windowDays -> 400
         CreateStepRequest sustainedNoWindow = new CreateStepRequest(
-            "bad-sustained", StepKind.SUSTAINED,
+            null, "bad-sustained", StepKind.SUSTAINED,
             new StepMetricBindingDto("vitals.restingHr", Comparator.LT, 55.0, null, null)
         );
         mvc.perform(post("/api/me/goals/" + goalId + "/phases/" + phaseId + "/steps")
@@ -70,7 +70,7 @@ class StepControllerTest {
 
         // MANUAL with metric -> 400
         CreateStepRequest manualWithMetric = new CreateStepRequest(
-            "bad-manual", StepKind.MANUAL,
+            null, "bad-manual", StepKind.MANUAL,
             new StepMetricBindingDto("blood.ldl", Comparator.LT, 100.0, null, null)
         );
         mvc.perform(post("/api/me/goals/" + goalId + "/phases/" + phaseId + "/steps")
@@ -193,6 +193,7 @@ class StepControllerTest {
 
     private String createGoal() throws Exception {
         CreateGoalRequest req = new CreateGoalRequest(
+            null, /* client id */
             "Goal " + java.util.UUID.randomUUID(),
             "desc", GoalDomain.METABOLIC,
             null, java.time.LocalDate.now().plusMonths(6), null
@@ -208,7 +209,7 @@ class StepControllerTest {
     }
 
     private String createPhase(String goalId, String title) throws Exception {
-        CreatePhaseRequest req = new CreatePhaseRequest(title, null, null, null);
+        CreatePhaseRequest req = new CreatePhaseRequest(null, title, null, null, null);
         MvcResult res = mvc.perform(post("/api/me/goals/" + goalId + "/phases")
                 .header("X-Dev-User", USER)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -220,7 +221,7 @@ class StepControllerTest {
     }
 
     private String createManualStep(String goalId, String phaseId, String title) throws Exception {
-        CreateStepRequest req = new CreateStepRequest(title, StepKind.MANUAL, null);
+        CreateStepRequest req = new CreateStepRequest(null, title, StepKind.MANUAL, null);
         MvcResult res = mvc.perform(post("/api/me/goals/" + goalId + "/phases/" + phaseId + "/steps")
                 .header("X-Dev-User", USER)
                 .contentType(MediaType.APPLICATION_JSON)

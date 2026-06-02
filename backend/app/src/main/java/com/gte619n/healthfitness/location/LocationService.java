@@ -37,7 +37,27 @@ public class LocationService {
         List<String> amenities,
         List<String> equipmentIds
     ) {
-        String locationId = "loc_" + UUID.randomUUID().toString().substring(0, 12);
+        return create(userId, name, address, is24Hours, hours, amenities, equipmentIds, null);
+    }
+
+    /**
+     * Create a location with an optional client-minted {@code locationId}
+     * (IMPL-AND-20 D7). When null/blank a server id is generated, preserving the
+     * previous {@code loc_<uuid>} convention.
+     */
+    public Location create(
+        String userId,
+        String name,
+        String address,
+        boolean is24Hours,
+        Map<DayOfWeek, HoursSlot> hours,
+        List<String> amenities,
+        List<String> equipmentIds,
+        String locationId
+    ) {
+        if (locationId == null || locationId.isBlank()) {
+            locationId = "loc_" + UUID.randomUUID().toString().substring(0, 12);
+        }
         Instant now = Instant.now();
 
         Location location = new Location(

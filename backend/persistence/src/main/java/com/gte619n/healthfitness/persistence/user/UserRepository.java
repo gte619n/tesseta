@@ -1,8 +1,10 @@
 package com.gte619n.healthfitness.persistence.user;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.gte619n.healthfitness.core.user.GoogleHealthConnection;
 import com.gte619n.healthfitness.core.user.User;
 import com.google.api.core.ApiFuture;
@@ -103,6 +105,10 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         Map<String, Object> body = new HashMap<>();
         body.put("email", user.email());
         body.put("displayName", user.displayName());
+        // Sync lifecycle status (IMPL-AND-20 D2). User profiles are never
+        // soft-deleted via this app, but the sync set includes users/{uid},
+        // so stamp ACTIVE for delta-read consistency.
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (!existing.exists()) {
             body.put("createdAt", serverTimestamp());

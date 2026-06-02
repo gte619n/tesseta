@@ -4,9 +4,12 @@ import com.gte619n.healthfitness.api.location.CreateLocationRequest;
 import com.gte619n.healthfitness.api.location.LocationResponse;
 import com.gte619n.healthfitness.api.location.UpdateEquipmentSpecsRequest;
 import com.gte619n.healthfitness.api.location.UpdateLocationRequest;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
+import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.List;
@@ -34,15 +37,21 @@ public class LocationController {
     private final CurrentUserProvider currentUser;
     private final LocationService service;
     private final LocationRepository repository;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public LocationController(
         CurrentUserProvider currentUser,
         LocationService service,
-        LocationRepository repository
+        LocationRepository repository,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.service = service;
         this.repository = repository;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     @GetMapping
@@ -65,22 +74,38 @@ public class LocationController {
     }
 
     @PostMapping
-    public ResponseEntity<LocationResponse> create(@Valid @RequestBody CreateLocationRequest body) {
+    public ResponseEntity<WriteResult<LocationResponse>> create(@Valid @RequestBody CreateLocationRequest body) {
         String userId = currentUser.get().userId();
-        Location location = service.create(
+        // Client-minted id + idempotent replay (IMPL-AND-20 D7).
+        String locationId = syncWrite.resolveId(body.id());
+
+        WriteResult<LocationResponse> response = syncWrite.idempotentCreate(
+            "locations:create",
             userId,
-            body.name(),
-            body.address(),
-            body.is24Hours(),
-            body.hours(),
-            body.amenities(),
-            body.equipmentIds()
+            () -> {
+                Location location = service.create(
+                    userId,
+                    body.name(),
+                    body.address(),
+                    body.is24Hours(),
+                    body.hours(),
+                    body.amenities(),
+                    body.equipmentIds(),
+                    locationId
+                );
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "locations");
+                return new SyncWriteContext.Created<>(
+                    location.locationId(),
+                    WriteResult.of(LocationResponse.from(location), location.updatedAt()));
+            },
+            id -> repository.findById(userId, id)
+                .map(l -> WriteResult.of(LocationResponse.from(l), l.updatedAt()))
         );
-        return ResponseEntity.status(HttpStatus.CREATED).body(LocationResponse.from(location));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PatchMapping("/{locationId}")
-    public LocationResponse update(
+    public WriteResult<LocationResponse> update(
         @PathVariable String locationId,
         @RequestBody UpdateLocationRequest body
     ) {
@@ -99,7 +124,8 @@ public class LocationController {
             body.amenities(),
             body.equipmentIds()
         );
-        return LocationResponse.from(updated);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "locations");
+        return WriteResult.of(LocationResponse.from(updated), updated.updatedAt());
     }
 
     @DeleteMapping("/{locationId}")
@@ -110,6 +136,7 @@ public class LocationController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         service.softDelete(userId, locationId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "locations");
         return ResponseEntity.noContent().build();
     }
 

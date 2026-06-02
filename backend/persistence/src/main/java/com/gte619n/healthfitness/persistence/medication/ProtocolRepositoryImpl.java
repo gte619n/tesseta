@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.medication;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.medication.Protocol;
 import com.gte619n.healthfitness.core.medication.ProtocolRepository;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -40,7 +43,7 @@ public class ProtocolRepositoryImpl implements ProtocolRepository {
     @Override
     public Optional<Protocol> findById(String userId, String protocolId) {
         DocumentSnapshot snapshot = await(collection(userId).document(protocolId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toProtocol(userId, snapshot));
     }
 
@@ -50,7 +53,10 @@ public class ProtocolRepositoryImpl implements ProtocolRepository {
             .orderBy("name", Query.Direction.ASCENDING)
             .limit(100)
             .get()).getDocuments();
-        return docs.stream().map(d -> toProtocol(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toProtocol(userId, d))
+            .toList();
     }
 
     @Override
@@ -63,7 +69,11 @@ public class ProtocolRepositoryImpl implements ProtocolRepository {
 
     @Override
     public void delete(String userId, String protocolId) {
-        await(collection(userId).document(protocolId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId).document(protocolId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId) {
@@ -88,6 +98,7 @@ public class ProtocolRepositoryImpl implements ProtocolRepository {
         body.put("name", p.name());
         body.put("description", p.description());
         body.put("medicationIds", p.medicationIds());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

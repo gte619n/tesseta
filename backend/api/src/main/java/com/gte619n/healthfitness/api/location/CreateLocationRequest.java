@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 public record CreateLocationRequest(
+    String id,              // optional client-minted id (IMPL-AND-20 D7); null ⇒ server-generated
     @NotBlank(message = "name is required")
     String name,
     String address,

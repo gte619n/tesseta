@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.workoutaggregate;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregate;
 import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregateRepository;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -39,7 +42,7 @@ public class FirestoreWeeklyWorkoutAggregateRepository implements WeeklyWorkoutA
     @Override
     public Optional<WeeklyWorkoutAggregate> findByWeekStart(String userId, LocalDate weekStart) {
         DocumentSnapshot snapshot = await(collection(userId).document(weekStart.toString()).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toAggregate(userId, snapshot));
     }
 
@@ -50,7 +53,10 @@ public class FirestoreWeeklyWorkoutAggregateRepository implements WeeklyWorkoutA
             .whereGreaterThanOrEqualTo("weekStart", from.toString())
             .whereLessThanOrEqualTo("weekStart", to.toString())
             .get()).getDocuments();
-        return docs.stream().map(d -> toAggregate(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toAggregate(userId, d))
+            .toList();
     }
 
     @Override
@@ -70,6 +76,7 @@ public class FirestoreWeeklyWorkoutAggregateRepository implements WeeklyWorkoutA
         body.put("weekStart", agg.weekStart().toString());
         body.put("totalTonnage", agg.totalTonnage());
         body.put("sessionCount", agg.sessionCount());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

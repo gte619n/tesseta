@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.dexa;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.dexa.DexaRegion;
 import com.gte619n.healthfitness.core.dexa.DexaScan;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -48,7 +51,7 @@ public class DexaScanRepository implements com.gte619n.healthfitness.core.dexa.D
     @Override
     public Optional<DexaScan> findById(String userId, String scanId) {
         DocumentSnapshot snap = await(collection(userId).document(scanId).get());
-        if (!snap.exists()) return Optional.empty();
+        if (!snap.exists() || isArchived(snap)) return Optional.empty();
         return Optional.of(toScan(userId, snap));
     }
 
@@ -58,7 +61,10 @@ public class DexaScanRepository implements com.gte619n.healthfitness.core.dexa.D
             .orderBy("measuredOn", Query.Direction.DESCENDING)
             .limit(200)
             .get()).getDocuments();
-        return docs.stream().map(d -> toScan(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toScan(userId, d))
+            .toList();
     }
 
     @Override
@@ -66,15 +72,21 @@ public class DexaScanRepository implements com.gte619n.healthfitness.core.dexa.D
         if (contentHash == null) return Optional.empty();
         List<QueryDocumentSnapshot> docs = await(collection(userId)
             .whereEqualTo("contentHash", contentHash)
-            .limit(1)
+            .limit(10)
             .get()).getDocuments();
-        if (docs.isEmpty()) return Optional.empty();
-        return Optional.of(toScan(userId, docs.get(0)));
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .findFirst()
+            .map(d -> toScan(userId, d));
     }
 
     @Override
     public void delete(String userId, String scanId) {
-        await(collection(userId).document(scanId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId).document(scanId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId) {
@@ -111,6 +123,7 @@ public class DexaScanRepository implements com.gte619n.healthfitness.core.dexa.D
 
         body.put("restingMetabolicRateKcal", s.restingMetabolicRateKcal());
 
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) body.put("createdAt", serverTimestamp());
         return body;

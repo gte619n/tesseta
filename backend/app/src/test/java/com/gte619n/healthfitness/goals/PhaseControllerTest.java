@@ -122,6 +122,7 @@ class PhaseControllerTest {
 
     private String createGoal() throws Exception {
         CreateGoalRequest req = new CreateGoalRequest(
+            null, /* client id */
             "Goal " + java.util.UUID.randomUUID(),
             "desc", GoalDomain.STRENGTH,
             null, java.time.LocalDate.now().plusMonths(6), null
@@ -137,7 +138,7 @@ class PhaseControllerTest {
     }
 
     private String createPhase(String goalId, String title) throws Exception {
-        CreatePhaseRequest req = new CreatePhaseRequest(title, null, null, null);
+        CreatePhaseRequest req = new CreatePhaseRequest(null, title, null, null, null);
         MvcResult res = mvc.perform(post("/api/me/goals/" + goalId + "/phases")
                 .header("X-Dev-User", USER)
                 .contentType(MediaType.APPLICATION_JSON)

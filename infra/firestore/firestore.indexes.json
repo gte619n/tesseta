@@ -88,6 +88,49 @@
   ],
   "fieldOverrides": [
     {
+      "_comment": "IMPL-AND-20 Phase 1: the unified delta-read enumerates each subcollection with a collectionGroup(leaf).orderBy(updatedAt ASC) [+ updatedAt >= cursor range] query. A collection-group single-field order/range needs a COLLECTION_GROUP-scoped index override (the auto single-field index is COLLECTION-scoped only). Top-level per-user collections (bloodReadings, medications, goals, locations, etc.) need NO composite/override here: their delta query is a pure single-field updatedAt order+range that the automatic COLLECTION-scope single-field index already serves (tombstones are emitted, so no extra equality filter on syncStatus is combined in the delta path).",
+      "collectionGroup": "adherence",
+      "fieldPath": "updatedAt",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "history",
+      "fieldPath": "updatedAt",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "phases",
+      "fieldPath": "updatedAt",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "steps",
+      "fieldPath": "updatedAt",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "messages",
+      "fieldPath": "updatedAt",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "entries",
+      "fieldPath": "updatedAt",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "locations",
       "fieldPath": "equipmentIds",
       "indexes": [

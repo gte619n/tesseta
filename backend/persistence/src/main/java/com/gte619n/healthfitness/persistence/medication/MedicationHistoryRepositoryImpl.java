@@ -1,11 +1,14 @@
 package com.gte619n.healthfitness.persistence.medication;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.medication.ChangeType;
 import com.gte619n.healthfitness.core.medication.MedicationHistory;
 import com.gte619n.healthfitness.core.medication.MedicationHistoryRepository;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentSnapshot;
@@ -39,7 +42,10 @@ public class MedicationHistoryRepositoryImpl implements MedicationHistoryReposit
             .orderBy("changedAt", Query.Direction.DESCENDING)
             .limit(100)
             .get()).getDocuments();
-        return docs.stream().map(d -> toHistory(userId, medicationId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toHistory(userId, medicationId, d))
+            .toList();
     }
 
     @Override
@@ -78,6 +84,7 @@ public class MedicationHistoryRepositoryImpl implements MedicationHistoryReposit
         body.put("newValue", h.newValue());
         body.put("changedAt", serverTimestamp());
         body.put("notes", h.notes());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         return body;
     }
 

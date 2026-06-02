@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.nutrition;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -39,7 +42,7 @@ public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRe
     @Override
     public Optional<NutritionDailyLog> findByDate(String userId, LocalDate date) {
         DocumentSnapshot snapshot = await(collection(userId).document(date.toString()).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toLog(userId, snapshot));
     }
 
@@ -50,7 +53,10 @@ public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRe
             .whereGreaterThanOrEqualTo("date", from.toString())
             .whereLessThanOrEqualTo("date", to.toString())
             .get()).getDocuments();
-        return docs.stream().map(d -> toLog(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toLog(userId, d))
+            .toList();
     }
 
     @Override
@@ -74,6 +80,7 @@ public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRe
         body.put("fiberGrams", log.fiberGrams());
         body.put("sugarGrams", log.sugarGrams());
         body.put("caloriesKcal", log.caloriesKcal());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

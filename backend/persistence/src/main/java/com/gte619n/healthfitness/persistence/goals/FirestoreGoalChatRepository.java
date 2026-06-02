@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.persistence.goals;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
@@ -7,6 +9,7 @@ import com.gte619n.healthfitness.core.goals.chat.ChatRole;
 import com.gte619n.healthfitness.core.goals.chat.GoalChatMessage;
 import com.gte619n.healthfitness.core.goals.chat.GoalChatRepository;
 import com.gte619n.healthfitness.core.goals.chat.GoalChatThread;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -50,7 +53,7 @@ public class FirestoreGoalChatRepository implements GoalChatRepository {
     @Override
     public Optional<GoalChatThread> findThread(String userId, String threadId) {
         DocumentSnapshot snapshot = await(threads(userId).document(threadId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toThread(userId, snapshot));
     }
 
@@ -60,7 +63,10 @@ public class FirestoreGoalChatRepository implements GoalChatRepository {
             .orderBy("updatedAt", Query.Direction.DESCENDING)
             .limit(200)
             .get()).getDocuments();
-        return docs.stream().map(d -> toThread(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toThread(userId, d))
+            .toList();
     }
 
     @Override
@@ -80,18 +86,26 @@ public class FirestoreGoalChatRepository implements GoalChatRepository {
             .orderBy("createdAt", Query.Direction.ASCENDING)
             .limit(500)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMessage(threadId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMessage(threadId, d))
+            .toList();
     }
 
     @Override
     public void deleteThread(String userId, String threadId) {
-        // Delete every message doc in the thread's subcollection first, then
-        // the thread doc itself. Firestore doesn't cascade subcollections.
+        // Soft-delete (tombstone) per IMPL-AND-20 D2: archive every message
+        // doc and the thread doc itself instead of hard-deleting, so offline
+        // clients get tombstones via the delta API.
+        Map<String, Object> tombstone = new HashMap<>();
+        tombstone.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        tombstone.put("updatedAt", serverTimestamp());
+
         List<QueryDocumentSnapshot> msgs = await(messages(userId, threadId).get()).getDocuments();
         for (QueryDocumentSnapshot msg : msgs) {
-            await(msg.getReference().delete());
+            await(msg.getReference().set(tombstone, SetOptions.merge()));
         }
-        await(threads(userId).document(threadId).delete());
+        await(threads(userId).document(threadId).set(tombstone, SetOptions.merge()));
     }
 
     private CollectionReference threads(String userId) {
@@ -105,6 +119,7 @@ public class FirestoreGoalChatRepository implements GoalChatRepository {
     private static Map<String, Object> toThreadBody(GoalChatThread t, boolean isNew) {
         Map<String, Object> body = new HashMap<>();
         body.put("title", t.title());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -127,6 +142,7 @@ public class FirestoreGoalChatRepository implements GoalChatRepository {
         body.put("role", m.role() != null ? m.role().name() : null);
         body.put("content", m.content());
         body.put("proposalJson", m.proposalJson());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         // Persist a real timestamp the first time; serverTimestamp keeps
         // ordering monotonic even when two messages land in the same ms.
         body.put("createdAt", serverTimestamp());

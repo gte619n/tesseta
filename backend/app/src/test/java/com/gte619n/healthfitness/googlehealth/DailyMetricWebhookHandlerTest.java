@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
 import com.gte619n.healthfitness.core.goals.eval.MetricKey;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.core.metric.DailyMetric;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
 import com.gte619n.healthfitness.core.user.User;
@@ -35,6 +36,7 @@ class DailyMetricWebhookHandlerTest {
     private AccessTokenService tokens;
     private GoogleHealthClient googleHealth;
     private MetricChangedPublisher metricChangedPublisher;
+    private SyncChangeNotifier syncNotifier;
     private DailyMetricWebhookHandler handler;
 
     private static final Instant FROM = Instant.parse("2026-05-20T00:00:00Z");
@@ -48,8 +50,9 @@ class DailyMetricWebhookHandlerTest {
         tokens = Mockito.mock(AccessTokenService.class);
         googleHealth = Mockito.mock(GoogleHealthClient.class);
         metricChangedPublisher = Mockito.mock(MetricChangedPublisher.class);
+        syncNotifier = Mockito.mock(SyncChangeNotifier.class);
         handler = new DailyMetricWebhookHandler(
-            users, dailyMetrics, deviceSyncs, tokens, googleHealth, metricChangedPublisher);
+            users, dailyMetrics, deviceSyncs, tokens, googleHealth, metricChangedPublisher, syncNotifier);
 
         when(users.findByHealthUserId("h-1")).thenReturn(Optional.of(
             new User("u-1", "u@example.com", "U", null, null, Instant.EPOCH, Instant.EPOCH)));

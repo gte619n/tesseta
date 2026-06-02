@@ -49,6 +49,14 @@ app:
     firestore-database-id: ${FIRESTORE_DATABASE_ID:(default)}
   persistence:
     firestore-enabled: true
+  # IMPL-AND-20 Phase 2: FCM silent-push fan-out. When enabled, the Firebase
+  # Admin SDK is initialized with Application Default Credentials (no service-
+  # account JSON key — the Cloud Run runtime SA holds
+  # roles/firebasecloudmessaging.admin) and the real FirebaseMessaging transport
+  # is wired. Disabled in application-test.yml so tests/local need no credentials;
+  # a no-op transport handles fan-out there.
+  fcm:
+    enabled: ${FCM_ENABLED:true}
   googlehealth:
     api-base-url: https://health.googleapis.com/v4
     oauth-token-url: https://oauth2.googleapis.com/token

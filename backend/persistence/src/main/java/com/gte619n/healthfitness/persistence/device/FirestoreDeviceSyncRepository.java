@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.device;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.device.DeviceSync;
 import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.CollectionReference;
@@ -43,6 +46,7 @@ public class FirestoreDeviceSyncRepository implements DeviceSyncRepository {
         Map<String, Object> body = new HashMap<>();
         body.put("platform", platform);
         body.put("lastSyncedAt", Timestamp.of(java.util.Date.from(syncedAt)));
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         await(collection(userId).document(platform).set(body, SetOptions.merge()));
     }
@@ -51,6 +55,7 @@ public class FirestoreDeviceSyncRepository implements DeviceSyncRepository {
     public List<DeviceSync> findByUser(String userId) {
         List<QueryDocumentSnapshot> docs = await(collection(userId).get()).getDocuments();
         return docs.stream()
+            .filter(d -> !isArchived(d))
             .map(d -> new DeviceSync(d.getString("platform"), toInstant(d.get("lastSyncedAt"))))
             .toList();
     }

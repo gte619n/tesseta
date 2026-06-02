@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.persistence.nutrition;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
@@ -10,6 +12,7 @@ import com.gte619n.healthfitness.core.nutrition.FoodEntryRepository;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.MealType;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -45,13 +48,16 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
     @Override
     public List<FoodEntry> findByDate(String userId, LocalDate date) {
         List<QueryDocumentSnapshot> docs = await(entries(userId, date).get()).getDocuments();
-        return docs.stream().map(d -> toEntry(userId, date, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toEntry(userId, date, d))
+            .toList();
     }
 
     @Override
     public Optional<FoodEntry> findById(String userId, LocalDate date, String entryId) {
         DocumentSnapshot snapshot = await(entries(userId, date).document(entryId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toEntry(userId, date, snapshot));
     }
 
@@ -65,7 +71,11 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
 
     @Override
     public void delete(String userId, LocalDate date, String entryId) {
-        await(entries(userId, date).document(entryId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(entries(userId, date).document(entryId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference entries(String userId, LocalDate date) {
@@ -89,6 +99,7 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
         body.put("ingredients", ingredientsToList(e.ingredients()));
         body.put("mealImageUrl", e.mealImageUrl());
         body.put("mealImageStatus", e.mealImageStatus() != null ? e.mealImageStatus().name() : null);
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

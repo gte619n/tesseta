@@ -48,6 +48,7 @@ class LocationControllerTest {
     @Test
     void createLocationWithMinimalFields() throws Exception {
         CreateLocationRequest request = new CreateLocationRequest(
+            null, // client id (server-generated)
             "Gold's Gym",
             null, // address
             false, // is24Hours
@@ -79,6 +80,7 @@ class LocationControllerTest {
         );
 
         CreateLocationRequest request = new CreateLocationRequest(
+            null,
             "24 Hour Fitness",
             "123 Main St, San Francisco, CA",
             true,
@@ -107,6 +109,7 @@ class LocationControllerTest {
     @Test
     void createLocationWithoutNameFails() throws Exception {
         CreateLocationRequest request = new CreateLocationRequest(
+            null,
             "", // empty name
             "123 Main St",
             false,
@@ -235,9 +238,12 @@ class LocationControllerTest {
                 .header("X-Dev-User", TEST_USER))
             .andExpect(status().isNoContent());
 
-        // Verify it's soft deleted (isActive = false)
-        Location deleted = locationRepository.findById(TEST_USER, "loc_001").orElseThrow();
-        assert !deleted.isActive();
+        // IMPL-AND-20 Phase 0: delete is now a sync tombstone. The row is
+        // hidden from reads (findById empty, excluded from list) rather than
+        // merely flagged isActive=false.
+        assert locationRepository.findById(TEST_USER, "loc_001").isEmpty();
+        assert locationRepository.findByUser(TEST_USER, true).stream()
+            .noneMatch(l -> "loc_001".equals(l.locationId()));
     }
 
     @Test

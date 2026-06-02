@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.api.nutrition;
 
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
+import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.nutrition.CatalogFood;
 import com.gte619n.healthfitness.core.nutrition.CompositeIngredient;
@@ -16,6 +18,7 @@ import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionService;
 import com.gte619n.healthfitness.core.nutrition.ServingSize;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,19 +46,25 @@ public class NutritionController {
     private final MacroTargetService targets;
     private final FoodCatalogService foodCatalog;
     private final FoodEntryImageService foodEntryImages;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public NutritionController(
         CurrentUserProvider currentUser,
         NutritionService nutrition,
         MacroTargetService targets,
         FoodCatalogService foodCatalog,
-        FoodEntryImageService foodEntryImages
+        FoodEntryImageService foodEntryImages,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
         this.targets = targets;
         this.foodCatalog = foodCatalog;
         this.foodEntryImages = foodEntryImages;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -113,13 +122,20 @@ public class NutritionController {
     }
 
     @PutMapping("/target")
-    public MacrosDto setTarget(@RequestBody MacrosDto body) {
+    public WriteResult<MacrosDto> setTarget(@RequestBody MacrosDto body) {
         if (body == null) {
             throw new IllegalArgumentException("target macros are required");
         }
         String userId = currentUser.get().userId();
+        // PUT is set-semantics (inherently idempotent), so no Idempotency-Key /
+        // client-id is needed; the write still fans out (origin suppressed) and
+        // carries an authoritative lastUpdate (#11, D18).
+        java.time.Instant writtenAt = java.time.Instant.now();
         MacroTarget target = targets.setTarget(userId, body.toMacros());
-        return MacrosDto.from(target.macros());
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionTargets");
+        return WriteResult.of(
+            MacrosDto.from(target.macros()),
+            target.updatedAt() != null ? target.updatedAt() : writtenAt);
     }
 
     // ----- Day view + entries ------------------------------------------
@@ -158,7 +174,7 @@ public class NutritionController {
     }
 
     @PostMapping("/{date}/entries")
-    public ResponseEntity<EntryResponse> addEntry(
+    public ResponseEntity<WriteResult<EntryResponse>> addEntry(
         @PathVariable LocalDate date,
         @RequestBody AddEntryRequest body
     ) {
@@ -166,18 +182,37 @@ public class NutritionController {
             throw new IllegalArgumentException("meal is required");
         }
         String userId = currentUser.get().userId();
-        FoodEntry entry = nutrition.addEntry(
+        // Client-minted entry id + idempotent replay (IMPL-AND-20 D7). The
+        // entry's identity is (userId, date, entryId); the replay loader keys on
+        // the same date.
+        String entryId = syncWrite.resolveId(body.id());
+
+        WriteResult<EntryResponse> response = syncWrite.idempotentCreate(
+            "nutritionEntries:create",
             userId,
-            date,
-            body.meal(),
-            body.foodId(),
-            body.foodName(),
-            body.servingLabel(),
-            body.servingGrams(),
-            body.quantity(),
-            body.macros() != null ? body.macros().toMacros() : null,
-            body.source());
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
+            () -> {
+                java.time.Instant writtenAt = java.time.Instant.now();
+                FoodEntry entry = nutrition.addEntry(
+                    userId,
+                    date,
+                    body.meal(),
+                    body.foodId(),
+                    body.foodName(),
+                    body.servingLabel(),
+                    body.servingGrams(),
+                    body.quantity(),
+                    body.macros() != null ? body.macros().toMacros() : null,
+                    body.source(),
+                    entryId);
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
+                return new SyncWriteContext.Created<>(
+                    entry.entryId(), WriteResult.of(toResponse(entry), writtenAt));
+            },
+            id -> nutrition.findEntry(userId, date, id)
+                .map(e -> WriteResult.of(toResponse(e),
+                    e.updatedAt() != null ? e.updatedAt() : java.time.Instant.now()))
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PatchMapping("/{date}/entries/{entryId}")
@@ -207,6 +242,7 @@ public class NutritionController {
     ) {
         String userId = currentUser.get().userId();
         nutrition.deleteEntry(userId, date, entryId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
         return ResponseEntity.noContent().build();
     }
 
@@ -219,7 +255,7 @@ public class NutritionController {
      * is generated asynchronously from the meal name + the user's capture photo.
      */
     @PostMapping("/{date}/composite-meal")
-    public ResponseEntity<EntryResponse> addCompositeMeal(
+    public ResponseEntity<WriteResult<EntryResponse>> addCompositeMeal(
         @PathVariable LocalDate date,
         @RequestBody CompositeMealRequest body
     ) {
@@ -233,37 +269,57 @@ public class NutritionController {
             throw new IllegalArgumentException("at least one ingredient is required");
         }
         String userId = currentUser.get().userId();
+        // Client-minted entry id + idempotent replay (IMPL-AND-20 D7). The whole
+        // create — ingredient catalog-food creation (with AI image gen) AND the
+        // entry write AND the finished-meal image enqueue — runs at most once per
+        // key, so a replay never re-triggers AI generation or duplicates foods.
+        String entryId = syncWrite.resolveId(body.id());
 
-        List<CompositeIngredient> ingredients = new ArrayList<>();
-        for (CompositeIngredientDto dto : body.ingredients()) {
-            Macros per100g = dto.macrosPer100g() != null ? dto.macrosPer100g().toMacros() : null;
-            double grams = dto.servingGrams() != null ? dto.servingGrams() : 0.0;
-            double qty = dto.quantity() != null ? dto.quantity() : 1.0;
-            Macros portion = dto.macros() != null
-                ? dto.macros().toMacros()
-                : (per100g != null ? per100g.scale((grams * qty) / 100.0) : Macros.zero());
-            // Catalog food for the raw-ingredient image (fire-and-forget gen).
-            CatalogFood food = foodCatalog.create(
-                userId,
-                dto.name(),
-                null,
-                null,
-                "ingredient",
-                per100g,
-                List.of(new ServingSize(
-                    dto.servingLabel() != null ? dto.servingLabel() : "100 g", grams > 0 ? grams : 100.0)),
-                0,
-                FoodSource.GEMINI_PHOTO,
-                null);
-            ingredients.add(new CompositeIngredient(
-                dto.name(), food.foodId(), per100g, grams, dto.servingLabel(), qty, portion));
-        }
+        WriteResult<EntryResponse> response = syncWrite.idempotentCreate(
+            "nutritionCompositeMeal:create",
+            userId,
+            () -> {
+                java.time.Instant writtenAt = java.time.Instant.now();
+                List<CompositeIngredient> ingredients = new ArrayList<>();
+                for (CompositeIngredientDto dto : body.ingredients()) {
+                    Macros per100g = dto.macrosPer100g() != null ? dto.macrosPer100g().toMacros() : null;
+                    double grams = dto.servingGrams() != null ? dto.servingGrams() : 0.0;
+                    double qty = dto.quantity() != null ? dto.quantity() : 1.0;
+                    Macros portion = dto.macros() != null
+                        ? dto.macros().toMacros()
+                        : (per100g != null ? per100g.scale((grams * qty) / 100.0) : Macros.zero());
+                    // Catalog food for the raw-ingredient image (fire-and-forget gen).
+                    CatalogFood food = foodCatalog.create(
+                        userId,
+                        dto.name(),
+                        null,
+                        null,
+                        "ingredient",
+                        per100g,
+                        List.of(new ServingSize(
+                            dto.servingLabel() != null ? dto.servingLabel() : "100 g",
+                            grams > 0 ? grams : 100.0)),
+                        0,
+                        FoodSource.GEMINI_PHOTO,
+                        null);
+                    ingredients.add(new CompositeIngredient(
+                        dto.name(), food.foodId(), per100g, grams, dto.servingLabel(), qty, portion));
+                }
 
-        FoodEntry entry = nutrition.addCompositeMeal(
-            userId, date, body.meal(), body.mealName(), ingredients, EntrySource.PHOTO);
-        foodEntryImages.enqueueGeneration(
-            userId, date, entry.entryId(), body.mealName(), body.referencePhotoRef());
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
+                FoodEntry entry = nutrition.addCompositeMeal(
+                    userId, date, body.meal(), body.mealName(), ingredients,
+                    EntrySource.PHOTO, entryId);
+                foodEntryImages.enqueueGeneration(
+                    userId, date, entry.entryId(), body.mealName(), body.referencePhotoRef());
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
+                return new SyncWriteContext.Created<>(
+                    entry.entryId(), WriteResult.of(toResponse(entry), writtenAt));
+            },
+            id -> nutrition.findEntry(userId, date, id)
+                .map(e -> WriteResult.of(toResponse(e),
+                    e.updatedAt() != null ? e.updatedAt() : java.time.Instant.now()))
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /** Re-portion one ingredient of a composite meal and recompute totals. */
@@ -406,6 +462,7 @@ public class NutritionController {
     ) {}
 
     public record AddEntryRequest(
+        String id,                  // optional client-minted UUID (IMPL-AND-20 D7); null ⇒ server-generated
         MealType meal,
         String foodId,
         String foodName,
@@ -426,6 +483,7 @@ public class NutritionController {
     ) {}
 
     public record CompositeMealRequest(
+        String id,                  // optional client-minted UUID (IMPL-AND-20 D7); null ⇒ server-generated
         MealType meal,
         String mealName,
         List<CompositeIngredientDto> ingredients,

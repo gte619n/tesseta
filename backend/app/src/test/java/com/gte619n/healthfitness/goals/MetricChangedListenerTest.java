@@ -57,7 +57,7 @@ class MetricChangedListenerTest {
     void postingBloodReadingUnderTargetAutoCompletesThresholdStep() throws Exception {
         // 1 — create goal
         CreateGoalRequest goalReq = new CreateGoalRequest(
-            "Lower LDL", "get to optimal range", GoalDomain.CARDIOVASCULAR,
+            null, "Lower LDL", "get to optimal range", GoalDomain.CARDIOVASCULAR,
             null, LocalDate.now().plusMonths(6), null
         );
         MvcResult goalRes = mvc.perform(post("/api/me/goals")
@@ -70,7 +70,7 @@ class MetricChangedListenerTest {
             .get("goalId").asText();
 
         // 2 — add phase
-        CreatePhaseRequest phaseReq = new CreatePhaseRequest("Phase 1", null, null, null);
+        CreatePhaseRequest phaseReq = new CreatePhaseRequest(null, "Phase 1", null, null, null);
         MvcResult phaseRes = mvc.perform(post("/api/me/goals/" + goalId + "/phases")
                 .header("X-Dev-User", USER)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -82,6 +82,7 @@ class MetricChangedListenerTest {
 
         // 3 — add THRESHOLD step: blood.ldl < 100
         CreateStepRequest stepReq = new CreateStepRequest(
+            null,
             "LDL under 100",
             StepKind.THRESHOLD,
             new StepMetricBindingDto("blood.ldl", Comparator.LT, 100.0, null, null)
@@ -102,7 +103,7 @@ class MetricChangedListenerTest {
 
         // 4 — POST a blood reading with LDL = 95 (< 100 → condition holds).
         BloodController.CreateRequest bloodReq = new BloodController.CreateRequest(
-            BloodMarker.LDL, 95.0, "mg/dL", LocalDate.now(), null, null
+            null, BloodMarker.LDL, 95.0, "mg/dL", LocalDate.now(), null, null
         );
         mvc.perform(post("/api/me/blood")
                 .header("X-Dev-User", USER)

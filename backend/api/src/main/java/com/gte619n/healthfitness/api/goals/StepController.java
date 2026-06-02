@@ -5,6 +5,8 @@ import com.gte619n.healthfitness.api.goals.dto.ReorderRequest;
 import com.gte619n.healthfitness.api.goals.dto.StepMetricBindingDto;
 import com.gte619n.healthfitness.api.goals.dto.StepResponse;
 import com.gte619n.healthfitness.api.goals.dto.UpdateStepRequest;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
+import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.goals.GoalService;
 import com.gte619n.healthfitness.core.goals.Phase;
@@ -13,7 +15,8 @@ import com.gte619n.healthfitness.core.goals.Step;
 import com.gte619n.healthfitness.core.goals.StepKind;
 import com.gte619n.healthfitness.core.goals.StepMetricBinding;
 import com.gte619n.healthfitness.core.goals.StepRepository;
-import java.util.UUID;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,21 +37,27 @@ public class StepController {
     private final PhaseRepository phases;
     private final StepRepository steps;
     private final GoalService service;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public StepController(
         CurrentUserProvider currentUser,
         PhaseRepository phases,
         StepRepository steps,
-        GoalService service
+        GoalService service,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.phases = phases;
         this.steps = steps;
         this.service = service;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     @PostMapping
-    public ResponseEntity<StepResponse> create(
+    public ResponseEntity<WriteResult<StepResponse>> create(
         @PathVariable String goalId,
         @PathVariable String phaseId,
         @RequestBody CreateStepRequest body
@@ -66,23 +75,38 @@ public class StepController {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
         int orderIndex = phase.stepOrder() == null ? 0 : phase.stepOrder().size();
-        String stepId = UUID.randomUUID().toString();
+        // Client-minted id + idempotent replay (IMPL-AND-20 D7); replay returns
+        // the existing step WITHOUT re-appending it to the phase's stepOrder.
+        String stepId = syncWrite.resolveId(body.id());
         StepMetricBinding metric = body.metric() != null ? body.metric().toModel() : null;
-        Step step = new Step(
-            goalId,
-            phaseId,
-            stepId,
-            body.title(),
-            orderIndex,
-            body.kind(),
-            false,
-            null,
-            false,
-            metric
+        WriteResult<StepResponse> response = syncWrite.idempotentCreate(
+            "goals:steps:create:" + goalId + ":" + phaseId,
+            userId,
+            () -> {
+                Instant writtenAt = Instant.now();
+                Step step = new Step(
+                    goalId,
+                    phaseId,
+                    stepId,
+                    body.title(),
+                    orderIndex,
+                    body.kind(),
+                    false,
+                    null,
+                    false,
+                    metric
+                );
+                steps.save(userId, step);
+                service.appendStepId(userId, goalId, phaseId, stepId);
+                // Subcollection delta name: goals/phases/steps.
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases/steps");
+                return new SyncWriteContext.Created<>(
+                    stepId, WriteResult.of(StepResponse.from(step), writtenAt));
+            },
+            id -> steps.findById(userId, goalId, phaseId, id)
+                .map(s -> WriteResult.of(StepResponse.from(s), Instant.now()))
         );
-        steps.save(userId, step);
-        service.appendStepId(userId, goalId, phaseId, stepId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(StepResponse.from(step));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PatchMapping("/{stepId}")
@@ -122,6 +146,9 @@ public class StepController {
             metric
         );
         steps.save(userId, updatedNonDone);
+        // One fan-out for the whole update covers all branches below (each
+        // persists through this save or a subsequent markStepDone save).
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases/steps");
 
         // Reset-to-auto wins over `done` if both are sent.
         if (Boolean.TRUE.equals(body.resetToAuto())) {
@@ -163,6 +190,7 @@ public class StepController {
         // Hard delete + remove from Phase's stepOrder in the same op.
         service.removeStepId(userId, goalId, phaseId, stepId);
         steps.delete(userId, goalId, phaseId, stepId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases/steps");
         return ResponseEntity.noContent().build();
     }
 
@@ -180,6 +208,7 @@ public class StepController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         service.reorderSteps(userId, goalId, phaseId, body.ids());
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases/steps");
         return ResponseEntity.noContent().build();
     }
 

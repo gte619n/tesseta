@@ -12,6 +12,11 @@ app:
     project-id: health-fitness-test
   persistence:
     firestore-enabled: false
+  fcm:
+    # IMPL-AND-20 Phase 2: keep FCM OFF in tests so no Firebase ADC / credentials
+    # are needed at context load. The no-op (or a test RecordingFcmSender) handles
+    # fan-out; the FirebaseConfig and FirebaseMessagingFcmSender beans stay dormant.
+    enabled: false
   dexa:
     # Tests don't exercise the DEXA pipeline. Turning it off skips the
     # GCS + Gemini beans that would otherwise try to authenticate during
