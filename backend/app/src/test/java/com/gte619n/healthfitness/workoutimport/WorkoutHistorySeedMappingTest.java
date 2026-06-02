@@ -17,6 +17,8 @@ import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository;
+import com.gte619n.healthfitness.api.workoutprogram.WorkoutProgramAssembler;
+import com.gte619n.healthfitness.api.workoutprogram.WorkoutProgramDeepResponse;
 import com.gte619n.healthfitness.testsupport.TestPersistenceConfig;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,6 +54,7 @@ class WorkoutHistorySeedMappingTest {
     @Autowired ExerciseRepository exercises;
     @Autowired WorkoutProgramRepository programs;
     @Autowired ScheduledWorkoutRepository scheduled;
+    @Autowired WorkoutProgramAssembler assembler;
     @Autowired ObjectMapper objectMapper;
 
     @Test
@@ -123,6 +126,33 @@ class WorkoutHistorySeedMappingTest {
         assertThat((long) loggedSetsTotal)
             .as("logged sets preserved 1:1 from source (excluding null-id entries)")
             .isEqualTo(sourceSets);
+
+        // ---- performed-session timing (Workout History) ----
+        // Each session carries the finish timestamp and elapsed duration the
+        // history view shows; completedAt's date matches the session date.
+        for (ScheduledWorkout sw : sessions) {
+            assertThat(sw.completedAt())
+                .as("session %s has a finish timestamp", sw.scheduledId())
+                .isNotNull();
+            assertThat(sw.completedAt().atZone(java.time.ZoneOffset.UTC).toLocalDate())
+                .isEqualTo(sw.date());
+        }
+        assertThat(sessions).anySatisfy(sw ->
+            assertThat(sw.durationSeconds()).as("at least one session records a duration").isNotNull());
+
+        // ---- program view derives days from sessions ----
+        // Storage keeps phases template-free (lean docs); the deep response fills
+        // each empty phase from its performed sessions so the program view isn't blank.
+        assertThat(phases).allSatisfy(ph ->
+            assertThat(ph.days()).as("phase %s stays template-free in storage", ph.phaseId()).isEmpty());
+        WorkoutProgramDeepResponse deep = assembler.deep(program.get(), sessions);
+        int derivedDays = deep.phases().stream().mapToInt(ph -> ph.days().size()).sum();
+        assertThat(derivedDays)
+            .as("every performed session surfaces as a day in the program view")
+            .isEqualTo(sessions.size());
+        assertThat(deep.phases())
+            .as("no phase renders empty once sessions are derived")
+            .allSatisfy(ph -> assertThat(ph.days()).isNotEmpty());
 
         // ---- examinable preview artifact ----
         writePreview(json.getParent(), data, result, program.get(), sessions);

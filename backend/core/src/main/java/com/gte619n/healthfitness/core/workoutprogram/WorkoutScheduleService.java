@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /**
@@ -57,7 +58,8 @@ public class WorkoutScheduleService {
                         date + "_" + day.dayId(),
                         date, phase.phaseId(), day.dayId(), day.label(),
                         week, isDeload, day.locationId(),
-                        ScheduledStatus.PLANNED, day
+                        ScheduledStatus.PLANNED, day,
+                        null, null
                     ));
                 }
             }
@@ -69,5 +71,15 @@ public class WorkoutScheduleService {
 
     public List<ScheduledWorkout> calendar(String userId, String programId, LocalDate from, LocalDate to) {
         return scheduled.findByProgram(userId, programId, from, to);
+    }
+
+    /** Number of COMPLETED sessions in a program (no document reads on Firestore). */
+    public int completedCount(String userId, String programId) {
+        return scheduled.countByStatus(userId, programId, ScheduledStatus.COMPLETED);
+    }
+
+    /** Date of the most recent COMPLETED session in a program, if any. */
+    public Optional<LocalDate> lastCompletedDate(String userId, String programId) {
+        return scheduled.latestDateByStatus(userId, programId, ScheduledStatus.COMPLETED);
     }
 }

@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.api.workoutprogram;
 
 import com.gte619n.healthfitness.api.workoutprogram.WorkoutProgramDeepResponse.DayResponse;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
+import java.time.Instant;
 import java.time.LocalDate;
 
 public record ScheduledWorkoutResponse(
@@ -15,5 +16,7 @@ public record ScheduledWorkoutResponse(
     String locationId,
     String locationName,
     ScheduledStatus status,
-    DayResponse session
+    DayResponse session,
+    Instant completedAt,
+    Integer durationSeconds
 ) {}

@@ -12,10 +12,12 @@ import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutDay;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
@@ -86,10 +88,35 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
         body.put("isDeload", sw.isDeload());
         body.put("locationId", sw.locationId());
         body.put("status", sw.status() == null ? ScheduledStatus.PLANNED.name() : sw.status().name());
+        body.put("completedAt", sw.completedAt() == null ? null : sw.completedAt().toString());
+        body.put("durationSeconds", sw.durationSeconds());
         List<Map<String, Object>> sessionDays =
             FirestoreWorkoutProgramRepository.daysToWire(sw.session() == null ? List.of() : List.of(sw.session()));
         body.put("session", sessionDays.isEmpty() ? null : sessionDays.get(0));
         return body;
+    }
+
+    @Override
+    public int countByStatus(String userId, String programId, ScheduledStatus status) {
+        // Count aggregation: server-side tally, reads no documents.
+        return (int) await(collection(userId, programId)
+            .whereEqualTo("status", status.name())
+            .count().get()).getCount();
+    }
+
+    @Override
+    public Optional<LocalDate> latestDateByStatus(String userId, String programId, ScheduledStatus status) {
+        // Reverse of the (status, date) composite index — one doc, not the whole set.
+        List<QueryDocumentSnapshot> docs = await(collection(userId, programId)
+            .whereEqualTo("status", status.name())
+            .orderBy("date", Query.Direction.DESCENDING)
+            .limit(1)
+            .get()).getDocuments();
+        if (docs.isEmpty()) {
+            return Optional.empty();
+        }
+        String date = docs.get(0).getString("date");
+        return Optional.ofNullable(date == null ? null : LocalDate.parse(date));
     }
 
     @Override
@@ -118,6 +145,8 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
         }
         String statusStr = s.getString("status");
         Long week = s.getLong("weekIndexInPhase");
+        String completedAtStr = s.getString("completedAt");
+        Long duration = s.getLong("durationSeconds");
         return new ScheduledWorkout(
             userId, programId, s.getId(),
             dateStr == null ? null : LocalDate.parse(dateStr),
@@ -126,7 +155,9 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
             Boolean.TRUE.equals(s.getBoolean("isDeload")),
             s.getString("locationId"),
             statusStr == null ? ScheduledStatus.PLANNED : ScheduledStatus.valueOf(statusStr),
-            day
+            day,
+            completedAtStr == null ? null : Instant.parse(completedAtStr),
+            duration == null ? null : duration.intValue()
         );
     }
 

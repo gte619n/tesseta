@@ -69,7 +69,14 @@ public class WorkoutProgramController {
         String userId = currentUser.get().userId();
         WorkoutProgram p = service.findById(userId, programId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        return assembler.deep(p);
+        // When a phase has no template days (e.g. imported history), render its
+        // days from the performed sessions. Only pay for that read when needed.
+        boolean needsSessions = p.phases() != null
+            && p.phases().stream().anyMatch(ph -> ph.days() == null || ph.days().isEmpty());
+        List<ScheduledWorkout> sessions = needsSessions
+            ? schedule.calendar(userId, programId, LocalDate.of(1970, 1, 1), LocalDate.of(2999, 12, 31))
+            : List.of();
+        return assembler.deep(p, sessions);
     }
 
     @PatchMapping("/{programId}")

@@ -16,6 +16,7 @@ import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutDay;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -42,16 +43,51 @@ public class WorkoutProgramAssembler {
     }
 
     public WorkoutProgramDeepResponse deep(WorkoutProgram p) {
-        Map<String, ExerciseSummary> summaries = summariesFor(collectExerciseIds(p.phases()));
-        Map<String, String> gymNames = gymNamesFor(p.userId(), collectLocationIds(p.phases()));
+        return deep(p, List.of());
+    }
+
+    /**
+     * Deep response, optionally backfilling each phase's day list from performed
+     * sessions. A phase with no template days (e.g. the imported-history program,
+     * whose source has no weekly microcycle) is rendered from its {@code sessions}
+     * — each performed session becomes a day under its phase, ordered by date — so
+     * the program view shows the workouts that happened rather than an empty phase.
+     * Phases that carry a real template are left untouched.
+     */
+    public WorkoutProgramDeepResponse deep(WorkoutProgram p, List<ScheduledWorkout> sessions) {
+        // Sessions grouped by phase, oldest first, so derived days read chronologically.
+        Map<String, List<ScheduledWorkout>> sessionsByPhase = new HashMap<>();
+        List<ScheduledWorkout> ordered = new ArrayList<>(sessions);
+        ordered.sort(Comparator.comparing(
+            ScheduledWorkout::date, Comparator.nullsLast(Comparator.naturalOrder())));
+        for (ScheduledWorkout sw : ordered) {
+            if (sw.session() != null && sw.phaseId() != null) {
+                sessionsByPhase.computeIfAbsent(sw.phaseId(), k -> new ArrayList<>()).add(sw);
+            }
+        }
+
+        Set<String> exerciseIds = collectExerciseIds(p.phases());
+        exerciseIds.addAll(collectExerciseIdsFromDays(sessionDays(ordered)));
+        Map<String, ExerciseSummary> summaries = summariesFor(exerciseIds);
+        Set<String> locationIds = collectLocationIds(p.phases());
+        for (ScheduledWorkout sw : ordered) {
+            if (sw.locationId() != null) locationIds.add(sw.locationId());
+        }
+        Map<String, String> gymNames = gymNamesFor(p.userId(), locationIds);
         String goalTitle = p.goalId() == null ? null
             : goals.findById(p.userId(), p.goalId()).map(g -> g.title()).orElse(null);
 
         List<PhaseResponse> phases = new ArrayList<>();
         for (ProgramPhase ph : p.phases()) {
             List<DayResponse> days = new ArrayList<>();
-            for (WorkoutDay d : ph.days()) {
-                days.add(dayResponse(d, summaries, gymNames));
+            if (!ph.days().isEmpty()) {
+                for (WorkoutDay d : ph.days()) {
+                    days.add(dayResponse(d, summaries, gymNames));
+                }
+            } else {
+                for (ScheduledWorkout sw : sessionsByPhase.getOrDefault(ph.phaseId(), List.of())) {
+                    days.add(dayResponse(sw.session(), summaries, gymNames));
+                }
             }
             phases.add(new PhaseResponse(
                 ph.phaseId(), ph.title(), ph.focus(), ph.orderIndex(), ph.status(),
@@ -62,6 +98,14 @@ public class WorkoutProgramAssembler {
             p.startDate(),
             p.schedule() == null ? List.of() : p.schedule().trainingDays(),
             phases, p.createdAt(), p.updatedAt(), p.completedAt());
+    }
+
+    private static List<WorkoutDay> sessionDays(List<ScheduledWorkout> sessions) {
+        List<WorkoutDay> days = new ArrayList<>();
+        for (ScheduledWorkout sw : sessions) {
+            if (sw.session() != null) days.add(sw.session());
+        }
+        return days;
     }
 
     public List<ScheduledWorkoutResponse> scheduled(String userId, List<ScheduledWorkout> items) {
@@ -78,7 +122,8 @@ public class WorkoutProgramAssembler {
             out.add(new ScheduledWorkoutResponse(
                 sw.scheduledId(), sw.date(), sw.phaseId(), sw.dayId(), sw.dayLabel(),
                 sw.weekIndexInPhase(), sw.isDeload(), sw.locationId(),
-                gymNames.get(sw.locationId()), sw.status(), session));
+                gymNames.get(sw.locationId()), sw.status(), session,
+                sw.completedAt(), sw.durationSeconds()));
         }
         return out;
     }

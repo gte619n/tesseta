@@ -2,10 +2,39 @@ package com.gte619n.healthfitness.core.workoutprogram;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface ScheduledWorkoutRepository {
     List<ScheduledWorkout> findByProgram(String userId, String programId, LocalDate from, LocalDate to);
     void save(ScheduledWorkout scheduled);
+
+    /**
+     * Count sessions in a program with the given status. The default scans
+     * {@link #findByProgram}; Firestore-backed impls override with a count
+     * aggregation that reads no documents.
+     */
+    default int countByStatus(String userId, String programId, ScheduledStatus status) {
+        int n = 0;
+        for (ScheduledWorkout sw : findByProgram(userId, programId, LocalDate.MIN, LocalDate.MAX)) {
+            if (sw.status() == status) n++;
+        }
+        return n;
+    }
+
+    /**
+     * The most recent session date for a status, if any. The default scans
+     * {@link #findByProgram}; Firestore-backed impls override with an ordered
+     * limit-1 read.
+     */
+    default Optional<LocalDate> latestDateByStatus(String userId, String programId, ScheduledStatus status) {
+        LocalDate latest = null;
+        for (ScheduledWorkout sw : findByProgram(userId, programId, LocalDate.MIN, LocalDate.MAX)) {
+            if (sw.status() == status && sw.date() != null && (latest == null || sw.date().isAfter(latest))) {
+                latest = sw.date();
+            }
+        }
+        return Optional.ofNullable(latest);
+    }
 
     /**
      * Persist many sessions at once. The default falls back to per-doc

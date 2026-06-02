@@ -294,7 +294,8 @@ public class WorkoutHistoryImporter {
             out.add(new ScheduledWorkout(
                 userId, PROGRAM_ID, date + "_" + dayId, date, s.phaseId(), dayId,
                 s.workoutName(), Math.max(1, weekIndex), isDeload(s.workoutName()),
-                null, ScheduledStatus.COMPLETED, session));
+                null, ScheduledStatus.COMPLETED, session,
+                instantOf(s), s.durationSec()));
         }
         scheduled.saveAll(out);
         return new int[] {out.size(), skippedExercises};
@@ -319,6 +320,16 @@ public class WorkoutHistoryImporter {
             return LocalDateTime.parse(s.completedTime().trim(), TS).toLocalDate();
         } catch (Exception e) {
             log.log(System.Logger.Level.WARNING, "Unparseable completed_time ''{0}''", s.completedTime());
+            return null;
+        }
+    }
+
+    /** Full finish timestamp (the export records local wall-clock; we treat it as UTC). */
+    private static Instant instantOf(FutureWorkouts.Session s) {
+        if (s.completedTime() == null || s.completedTime().isBlank()) return null;
+        try {
+            return LocalDateTime.parse(s.completedTime().trim(), TS).toInstant(ZoneOffset.UTC);
+        } catch (Exception e) {
             return null;
         }
     }

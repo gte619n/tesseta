@@ -33,8 +33,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-01T14:50:48.732644Z",
-    "updatedAt" : "2026-06-01T14:50:48.732644Z",
+    "createdAt" : "2026-06-02T17:22:26.569232Z",
+    "updatedAt" : "2026-06-02T17:22:26.569232Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "3f6ec27f-bbb2-479a-98d3-1aa0242f5511",
@@ -61,8 +61,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-01T14:50:48.732864Z",
-    "updatedAt" : "2026-06-01T14:50:48.732864Z",
+    "createdAt" : "2026-06-02T17:22:26.569332Z",
+    "updatedAt" : "2026-06-02T17:22:26.569332Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "d09748b1-5876-42a9-a927-62a96aa772e8",
@@ -86,8 +86,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-01T14:50:48.732900Z",
-    "updatedAt" : "2026-06-01T14:50:48.732900Z",
+    "createdAt" : "2026-06-02T17:22:26.569359Z",
+    "updatedAt" : "2026-06-02T17:22:26.569359Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "eb06d263-ab43-4352-9346-f32c8df5739b",
@@ -114,8 +114,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-01T14:50:48.732911Z",
-    "updatedAt" : "2026-06-01T14:50:48.732911Z",
+    "createdAt" : "2026-06-02T17:22:26.569366Z",
+    "updatedAt" : "2026-06-02T17:22:26.569366Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "c37ea438-db56-46be-b13e-eb95f32b62bb",
@@ -142,8 +142,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-01T14:50:48.732923Z",
-    "updatedAt" : "2026-06-01T14:50:48.732923Z",
+    "createdAt" : "2026-06-02T17:22:26.569371Z",
+    "updatedAt" : "2026-06-02T17:22:26.569371Z",
     "aliasOfExerciseId" : null
   } ],
   "program" : {
@@ -398,8 +398,8 @@
       "completedAt" : "2025-11-24T23:59:59Z",
       "days" : [ ]
     } ],
-    "createdAt" : "2026-06-01T14:50:48.742678Z",
-    "updatedAt" : "2026-06-01T14:50:48.742678Z",
+    "createdAt" : "2026-06-02T17:22:26.575775Z",
+    "updatedAt" : "2026-06-02T17:22:26.575775Z",
     "completedAt" : "2025-11-24T23:59:59Z"
   },
   "sampleCompletedSessions" : [ {
@@ -715,7 +715,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-20T12:54:36Z",
+    "durationSeconds" : 2342
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -1173,7 +1175,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-21T08:13:04Z",
+    "durationSeconds" : 3137
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -1480,7 +1484,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-23T08:39:41Z",
+    "durationSeconds" : 2363
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -1778,7 +1784,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-24T12:47:36Z",
+    "durationSeconds" : 2048
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -2076,7 +2084,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-27T12:03:05Z",
+    "durationSeconds" : 2563
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -2374,7 +2384,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-28T12:34:45Z",
+    "durationSeconds" : 2563
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -2800,7 +2812,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-30T12:01:48Z",
+    "durationSeconds" : 2725
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -3146,7 +3160,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-03-31T11:42:49Z",
+    "durationSeconds" : 1742
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -3492,7 +3508,9 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-04-03T12:01:26Z",
+    "durationSeconds" : 2496
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -3758,6 +3776,8 @@
           } ]
         } ]
       } ]
-    }
+    },
+    "completedAt" : "2023-04-04T13:03:05Z",
+    "durationSeconds" : 2004
   } ]
 }
