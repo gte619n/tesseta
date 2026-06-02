@@ -196,6 +196,14 @@ private class FakeBloodReadingDao : BloodReadingDao {
         return flow
     }
 
+    override suspend fun readingsInRange(fromMillis: Long, toMillis: Long): List<BloodReadingEntity> =
+        mirror.rows.entries
+            .filter { it.key.startsWith("${MirrorTables.BLOOD_READINGS}:") }
+            .map { it.value }
+            .filter { it.status != "ARCHIVED" && it.lastUpdate in fromMillis..toMillis }
+            .map { BloodReadingEntity(it.id, it.payloadJson, it.lastUpdate, it.status, it.dirty, it.syncState) }
+            .sortedByDescending { it.lastUpdate }
+
     override suspend fun getById(id: String): BloodReadingEntity? =
         mirror.getRow(MirrorTables.BLOOD_READINGS, id)
             ?.let { BloodReadingEntity(it.id, it.payloadJson, it.lastUpdate, it.status, it.dirty, it.syncState) }

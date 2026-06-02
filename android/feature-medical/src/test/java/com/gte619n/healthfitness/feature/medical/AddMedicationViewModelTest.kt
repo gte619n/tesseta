@@ -4,9 +4,13 @@ import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
 import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.FrequencyType
+import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.feature.medical.add.AddMedicationUiState
 import com.gte619n.healthfitness.feature.medical.add.AddMedicationViewModel
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -21,6 +25,11 @@ class AddMedicationViewModelTest {
     @get:Rule
     val dispatcherRule = MainDispatcherRule()
 
+    // IMPL-AND-20 (#41): the VM now takes Connectivity to gate the AI drug lookup.
+    private fun onlineConnectivity(): Connectivity = mockk {
+        every { isOnline } returns MutableStateFlow(true)
+    }
+
     @Test
     fun `lookup collects progress then found advances to form`() = runTest {
         val events = listOf<DrugLookupEvent>(
@@ -29,7 +38,7 @@ class AddMedicationViewModelTest {
             DrugLookupEvent.Found(sampleDrug()),
         )
         val drugs = FakeDrugRepository(events = events)
-        val vm = AddMedicationViewModel(drugs, FakeMedicationRepository())
+        val vm = AddMedicationViewModel(drugs, FakeMedicationRepository(), onlineConnectivity())
         advanceUntilIdle()
 
         vm.startLookup("testosterone")
@@ -44,7 +53,7 @@ class AddMedicationViewModelTest {
     @Test
     fun `not found keeps search step`() = runTest {
         val drugs = FakeDrugRepository(events = listOf(DrugLookupEvent.NotFound("no match")))
-        val vm = AddMedicationViewModel(drugs, FakeMedicationRepository())
+        val vm = AddMedicationViewModel(drugs, FakeMedicationRepository(), onlineConnectivity())
         advanceUntilIdle()
 
         vm.startLookup("zzzz")
@@ -56,7 +65,7 @@ class AddMedicationViewModelTest {
 
     @Test
     fun `submit success invokes onDone`() = runTest {
-        val vm = AddMedicationViewModel(FakeDrugRepository(), FakeMedicationRepository())
+        val vm = AddMedicationViewModel(FakeDrugRepository(), FakeMedicationRepository(), onlineConnectivity())
         advanceUntilIdle()
 
         var done = false
@@ -80,7 +89,7 @@ class AddMedicationViewModelTest {
             override suspend fun create(request: CreateMedicationRequest) =
                 throw RuntimeException("save failed")
         }
-        val vm = AddMedicationViewModel(FakeDrugRepository(), failingRepo)
+        val vm = AddMedicationViewModel(FakeDrugRepository(), failingRepo, onlineConnectivity())
         advanceUntilIdle()
 
         var done = false

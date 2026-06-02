@@ -201,9 +201,13 @@ class NutritionRepository @Inject constructor(
 
     private suspend fun entriesForDate(date: String): List<Entry> =
         entryDao.observeActive().first()
-            .mapNotNull { runCatching { rowAdapter.fromJson(it.payloadJson) }.getOrNull() }
-            .filter { it.date == date }
-            .map { it.entry }
+            // #40: carry the mirror row's syncState onto the entry for the per-row
+            // PENDING/FAILED SyncBadge.
+            .mapNotNull { row ->
+                runCatching { rowAdapter.fromJson(row.payloadJson) }.getOrNull()
+                    ?.takeIf { it.date == date }
+                    ?.let { it.entry.copy(syncState = row.syncState) }
+            }
 
     private suspend fun mirroredTarget(): Macros? =
         targetDao.observeActive().first().firstOrNull()

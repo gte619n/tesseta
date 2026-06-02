@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.data.medications
 
+import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
 import com.gte619n.healthfitness.data.db.dao.MedicationDao
+import com.gte619n.healthfitness.data.db.entity.MedicationAdherenceEntity
 import com.gte619n.healthfitness.data.db.entity.MedicationEntity
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.db.entity.OutboxOp
@@ -48,6 +50,7 @@ class MedicationRepositoryTest {
     private lateinit var repository: DefaultMedicationRepository
 
     private lateinit var dao: FakeMedicationDao
+    private lateinit var adherenceDao: FakeMedicationAdherenceDao
     private lateinit var outboxDao: FakeOutboxDao
     private var drains = 0
 
@@ -62,6 +65,7 @@ class MedicationRepositoryTest {
             .create(MedicationsApi::class.java)
 
         dao = FakeMedicationDao()
+        adherenceDao = FakeMedicationAdherenceDao(dao.mirror)
         outboxDao = FakeOutboxDao()
         val outbox = OutboxRepository(
             outboxDao = outboxDao,
@@ -77,7 +81,7 @@ class MedicationRepositoryTest {
             killSwitch = KillSwitchGate { false },
             drainTrigger = DrainTrigger { drains++ },
         )
-        repository = DefaultMedicationRepository(api, dao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
+        repository = DefaultMedicationRepository(api, dao, adherenceDao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
     }
 
     @After
@@ -231,6 +235,37 @@ class MedicationRepositoryTest {
     }
 
     @Test
+    fun `todaysDoses overlays an offline adherence log so it shows immediately as taken`() = runBlocking {
+        // The live `today` projection shows the dose NOT taken yet.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """[{"medicationId":"m1","drugName":"X","window":"MORNING","dose":250.0,"unit":"mg","taken":false}]""",
+            ),
+        )
+        // Seed an offline adherence log for today via the same mirror store.
+        val today = java.time.LocalDate.now()
+        val id = "m1/$today/MORNING"
+        val payload = MedsTestMoshi.instance.adapter(AdherenceMirrorPayload::class.java).toJson(
+            AdherenceMirrorPayload(
+                medicationId = "m1",
+                date = today,
+                window = "MORNING",
+                taken = true,
+                takenAt = java.time.Instant.parse("2026-05-30T08:00:00Z"),
+                dose = 250.0,
+            ),
+        )
+        dao.mirror.upsert(
+            MirrorTables.MEDICATION_ADHERENCE,
+            MirrorRowData(id, payload, 1L, "ACTIVE", true, "PENDING"),
+        )
+
+        val doses = repository.todaysDoses()
+        assertEquals(1, doses.size)
+        assertTrue("offline log overlays the live checklist as taken", doses.single().taken)
+    }
+
+    @Test
     fun `delete tombstones the row and enqueues a DELETE mutation`() = runBlocking {
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("[$activeMedJson]"))
         repository.list() // fill the mirror with m1 (one request)
@@ -280,6 +315,32 @@ private class FakeMedicationDao : MedicationDao {
     override suspend fun markArchived(id: String, lastUpdate: Long) =
         mirror.markArchived(MirrorTables.MEDICATIONS, id, lastUpdate)
     override suspend fun delete(id: String) = mirror.delete(MirrorTables.MEDICATIONS, id)
+}
+
+/**
+ * In-memory [MedicationAdherenceDao] reading the SAME [FakeMirrorOps] store the
+ * support writes to, so an optimistic adherence log surfaces in the overlay.
+ */
+private class FakeMedicationAdherenceDao(private val mirror: FakeMirrorOps) : MedicationAdherenceDao {
+    private fun all() = mirror.rows.entries
+        .filter { it.key.startsWith("${MirrorTables.MEDICATION_ADHERENCE}:") }
+        .map { it.value }
+        .map { MedicationAdherenceEntity(it.id, it.payloadJson, it.lastUpdate, it.status, it.dirty, it.syncState) }
+        .sortedByDescending { it.lastUpdate }
+
+    override fun observeActive(): Flow<List<MedicationAdherenceEntity>> =
+        MutableStateFlow(all().filter { it.status != "ARCHIVED" })
+    override fun observeAll(): Flow<List<MedicationAdherenceEntity>> = MutableStateFlow(all())
+    override suspend fun getById(id: String): MedicationAdherenceEntity? = all().firstOrNull { it.id == id }
+    override suspend fun upsert(row: MedicationAdherenceEntity) =
+        mirror.upsert(
+            MirrorTables.MEDICATION_ADHERENCE,
+            MirrorRowData(row.id, row.payloadJson, row.lastUpdate, row.status, row.dirty, row.syncState),
+        )
+    override suspend fun upsertAll(rows: List<MedicationAdherenceEntity>) { rows.forEach { upsert(it) } }
+    override suspend fun markArchived(id: String, lastUpdate: Long) =
+        mirror.markArchived(MirrorTables.MEDICATION_ADHERENCE, id, lastUpdate)
+    override suspend fun delete(id: String) = mirror.delete(MirrorTables.MEDICATION_ADHERENCE, id)
 }
 
 /** [FakeMirrorOps] that fires [onChange] after each mutating op. */

@@ -41,9 +41,13 @@ internal class BloodReadingRepositoryImpl @Inject constructor(
 
     private val dtoAdapter = moshi.adapter(BloodReadingDto::class.java)
 
-    override fun observeReadings(): Flow<List<BloodReading>> = support.observe(
+    override fun observeReadings(): Flow<List<BloodReading>> = support.observeWithState(
         rows = dao.observeActive(),
-        decode = { json -> runCatching { dtoAdapter.fromJson(json)?.toDomain() }.getOrNull() },
+        // #40: carry the mirror row's syncState onto the domain model for the
+        // per-row PENDING/FAILED SyncBadge.
+        decode = { json, syncState ->
+            runCatching { dtoAdapter.fromJson(json)?.toDomain()?.copy(syncState = syncState) }.getOrNull()
+        },
         liveFallback = {
             api.listReadings().map { it.toDomain() }.sortedByDescending { it.sampleDate }
         },

@@ -103,6 +103,7 @@ internal class FakeOutboxDao : OutboxDao {
     override suspend fun listDue(now: Long): List<OutboxEntity> =
         store.filter { it.nextAttemptAt <= now }.sortedBy { it.seq }
     override fun observePendingCount(): Flow<Int> = pending
+    override fun observeFailedCount(): Flow<Int> = pending.map { store.count { row -> row.attempts > 0 } }
     override suspend fun listByEntity(entityId: String): List<OutboxEntity> =
         store.filter { it.entityId == entityId }.sortedBy { it.seq }
     override suspend fun listAll(): List<OutboxEntity> = store.sortedBy { it.seq }

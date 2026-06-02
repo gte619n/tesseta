@@ -53,6 +53,18 @@ interface BodyCompositionDao {
     @Query("SELECT * FROM bodyComposition WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
     fun observeActive(): Flow<List<BodyCompositionEntity>>
 
+    /**
+     * IMPL-AND-20 (#30) — date-ranged read for the windowed/trend views so they
+     * render offline. `lastUpdate` carries the reading's `sampleTime` epoch millis
+     * for this table, and the [Index] on `lastUpdate` backs the range scan.
+     * Inclusive `[from, to]`, ascending so the chart consumes it in time order.
+     */
+    @Query(
+        "SELECT * FROM bodyComposition WHERE status != 'ARCHIVED' " +
+            "AND lastUpdate BETWEEN :fromMillis AND :toMillis ORDER BY lastUpdate ASC",
+    )
+    suspend fun pointsInRange(fromMillis: Long, toMillis: Long): List<BodyCompositionEntity>
+
     @Query("SELECT * FROM bodyComposition WHERE id = :id")
     suspend fun getById(id: String): BodyCompositionEntity?
 
@@ -73,6 +85,18 @@ interface BodyCompositionDao {
 interface BloodReadingDao {
     @Query("SELECT * FROM bloodReadings WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
     fun observeActive(): Flow<List<BloodReadingEntity>>
+
+    /**
+     * IMPL-AND-20 (#30) — date-ranged read for the dashboard blood-marker trend so
+     * it renders offline. `lastUpdate` carries the reading's `sampleDate` epoch
+     * millis; the [Index] on `lastUpdate` backs the range scan. Inclusive `[from,
+     * to]`, newest first.
+     */
+    @Query(
+        "SELECT * FROM bloodReadings WHERE status != 'ARCHIVED' " +
+            "AND lastUpdate BETWEEN :fromMillis AND :toMillis ORDER BY lastUpdate DESC",
+    )
+    suspend fun readingsInRange(fromMillis: Long, toMillis: Long): List<BloodReadingEntity>
 
     @Query("SELECT * FROM bloodReadings WHERE id = :id")
     suspend fun getById(id: String): BloodReadingEntity?
@@ -136,6 +160,15 @@ interface MedicationDao {
 interface MedicationAdherenceDao {
     @Query("SELECT * FROM medicationAdherence WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
     fun observeActive(): Flow<List<MedicationAdherenceEntity>>
+
+    /**
+     * IMPL-AND-20 (#24) — every adherence row INCLUDING tombstones, for the
+     * `today` checklist overlay: an offline **undo** tombstones its `(med,date,
+     * window)` row, and the checklist must reflect `taken=false` immediately, so
+     * the overlay needs the archived rows too (unlike the UI-facing `observeActive`).
+     */
+    @Query("SELECT * FROM medicationAdherence ORDER BY lastUpdate DESC")
+    fun observeAll(): Flow<List<MedicationAdherenceEntity>>
 
     @Query("SELECT * FROM medicationAdherence WHERE id = :id")
     suspend fun getById(id: String): MedicationAdherenceEntity?

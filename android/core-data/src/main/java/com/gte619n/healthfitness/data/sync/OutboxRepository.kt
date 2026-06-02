@@ -40,6 +40,13 @@ class OutboxRepository @Inject constructor(
     fun pendingCount(): Flow<Int> = outboxDao.observePendingCount()
 
     /**
+     * Reactive count of mutations that have failed at least one replay attempt
+     * (D11, #39). Drives the distinct global "changes failed — retry" state; a
+     * retry re-drains them and a success clears the row.
+     */
+    fun failedCount(): Flow<Int> = outboxDao.observeFailedCount()
+
+    /**
      * Queue a local mutation. The caller is expected to have already applied the
      * optimistic local upsert (dirty=true, syncState=PENDING) to the mirror so
      * the UI updates instantly (Phase 5 wires that). Returns the new mutationId.

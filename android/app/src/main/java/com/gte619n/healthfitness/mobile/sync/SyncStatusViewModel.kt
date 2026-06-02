@@ -21,17 +21,17 @@ import javax.inject.Inject
 /**
  * IMPL-AND-20 (Phase 6) — drives the global [com.gte619n.healthfitness.ui.sync.SyncStatusBar] (D11).
  *
- * Combines the three Phase-5-exposed signals into a single [SyncUiState] via the
- * pure [syncUiStateOf] mapping:
- *  - [OutboxRepository.pendingCount] — queued/failed write count,
+ * Combines the Phase-5-exposed signals into a single [SyncUiState] via the pure
+ * [syncUiStateOf] mapping:
+ *  - [OutboxRepository.pendingCount] — total queued write count,
+ *  - [OutboxRepository.failedCount] — writes that failed a replay attempt (#39),
  *  - [Connectivity.isOnline] — offline pill,
  *  - [SyncEngine.updatedElsewhere] — the lightweight "updated elsewhere" note.
  *
- * Note: the outbox surfaces a single pending count (PENDING and FAILED rows are
- * both "not yet synced"); we treat any pending as PENDING and reserve the FAILED
- * indicator for an explicit signal. A coarser-but-honest mapping; per-row FAILED
- * badges (the [com.gte619n.healthfitness.ui.sync.SyncBadge]) give the precise
- * per-item state.
+ * The distinct global **FAILED** "changes failed — retry" state (D11, #39) is now
+ * surfaced from the failed-row count; [retry] re-drains the outbox. The per-row
+ * FAILED badge (the [com.gte619n.healthfitness.ui.sync.SyncBadge]) gives the
+ * precise per-item state.
  */
 @HiltViewModel
 class SyncStatusViewModel @Inject constructor(
@@ -55,12 +55,15 @@ class SyncStatusViewModel @Inject constructor(
         combine(
             connectivity.isOnline,
             outbox.pendingCount(),
+            outbox.failedCount(),
             updatedElsewhere,
-        ) { online, pending, updated ->
+        ) { online, pending, failed, updated ->
             syncUiStateOf(
                 online = online,
-                pendingCount = pending,
-                failedCount = 0,
+                // Pending = queued rows that have not yet failed; the FAILED state
+                // owns the failed rows so the bar shows "failed" not "waiting".
+                pendingCount = (pending - failed).coerceAtLeast(0),
+                failedCount = failed,
                 syncing = false,
                 updatedElsewhere = updated && pending == 0,
             )

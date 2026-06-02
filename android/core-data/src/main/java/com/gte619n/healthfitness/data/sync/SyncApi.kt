@@ -23,12 +23,26 @@ interface SyncApi {
      * @param limit page size (server caps it).
      * @param schemaVersion client's sync-protocol version; a server mismatch
      *        signals the client to wipe Room and full-resync (D13).
+     * @param recentSince ISO-8601 lower bound for the heavy time-series collections
+     *        (D14). When present the server bounds the per-collection recent window
+     *        (heavy series only return docs whose record date is ≥ this instant);
+     *        the CRUD domains are always returned in full. Omit (null) for the
+     *        unbounded backfill that follows the first window.
+     *
+     *        Contract note (IMPL-AND-20 #37): the parallel backend agent is adding
+     *        the matching `recentSince` request param on `GET /api/me/sync`. Until
+     *        it lands the server ignores the unknown query param (Spring drops
+     *        unbound params), so a client that sends it degrades gracefully to the
+     *        full enumeration — the first-window UI release still works, just not
+     *        bounded. The agreed param name the client wires against is
+     *        **`recentSince`** (an ISO-8601 instant, `now - 14d`).
      */
     @GET("api/me/sync")
     suspend fun delta(
         @Query("since") since: String?,
         @Query("limit") limit: Int = 500,
         @Query("schemaVersion") schemaVersion: Int,
+        @Query("recentSince") recentSince: String? = null,
     ): SyncDeltaResponse
 
     // FCM device-token registry (D18). Defined here so the registry contract

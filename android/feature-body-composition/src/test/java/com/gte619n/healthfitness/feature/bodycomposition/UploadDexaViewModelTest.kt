@@ -1,11 +1,14 @@
 package com.gte619n.healthfitness.feature.bodycomposition
 
+import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.domain.bodycomposition.DexaUploadEvent
 import com.gte619n.healthfitness.feature.bodycomposition.upload.UploadDexaViewModel
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -19,12 +22,17 @@ class UploadDexaViewModelTest {
     @get:Rule
     val mainRule = MainDispatcherRule()
 
+    // IMPL-AND-20 (#41): the VM now takes Connectivity to gate the AI PDF upload.
+    private fun onlineConnectivity(): Connectivity = mockk {
+        every { isOnline } returns MutableStateFlow(true)
+    }
+
     @Test
     fun `file above 25 MB short-circuits to Failed without network`() =
         runTest(mainRule.dispatcher) {
             val repo = FakeDexaScanRepository()
             val snackbar = mockk<SnackbarController>(relaxed = true)
-            val vm = UploadDexaViewModel(repo, snackbar)
+            val vm = UploadDexaViewModel(repo, snackbar, onlineConnectivity())
 
             val tooBig = ByteArray((UploadDexaViewModel.MAX_PDF_BYTES + 1).toInt())
             vm.upload("big.pdf", tooBig)
@@ -47,7 +55,7 @@ class UploadDexaViewModelTest {
                     DexaUploadEvent.Complete(sampleScan("new-scan")),
                 ),
             )
-            val vm = UploadDexaViewModel(repo, mockk(relaxed = true))
+            val vm = UploadDexaViewModel(repo, mockk(relaxed = true), onlineConnectivity())
 
             vm.upload("ok.pdf", ByteArray(10))
             advanceUntilIdle()
@@ -65,7 +73,7 @@ class UploadDexaViewModelTest {
                 DexaUploadEvent.Failed("extraction blew up"),
             ),
         )
-        val vm = UploadDexaViewModel(repo, mockk(relaxed = true))
+        val vm = UploadDexaViewModel(repo, mockk(relaxed = true), onlineConnectivity())
 
         vm.upload("bad.pdf", ByteArray(10))
         advanceUntilIdle()

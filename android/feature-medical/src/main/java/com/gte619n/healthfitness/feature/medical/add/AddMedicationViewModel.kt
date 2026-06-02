@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.medical.add
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.Drug
 import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
@@ -36,10 +37,16 @@ data class AddMedicationUiState(
 class AddMedicationViewModel @Inject constructor(
     private val drugs: DrugRepository,
     private val medications: MedicationRepository,
+    connectivity: Connectivity,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AddMedicationUiState())
     val state: StateFlow<AddMedicationUiState> = _state.asStateFlow()
+
+    // IMPL-AND-20 (Phase 6, D17, #41): the AI drug lookup (SSE stream + image
+    // generation) is online-only. The screen gates the lookup affordance behind
+    // this; the local catalog search and manual entry stay available offline.
+    val isOnline: StateFlow<Boolean> = connectivity.isOnline
 
     private var lookupJob: Job? = null
     private var debounceJob: Job? = null
@@ -67,9 +74,10 @@ class AddMedicationViewModel @Inject constructor(
         debounceJob?.cancel()
         _state.update { it.copy(isLooking = false) }
 
-        // Auto-trigger SSE lookup only when there's no local match and the
-        // query is meaningful (>= 3 chars), after a short debounce.
-        if (matches.isEmpty() && query.trim().length >= 3) {
+        // Auto-trigger SSE lookup only when there's no local match, the query is
+        // meaningful (>= 3 chars), and we are online (D17 #41 — never fire the AI
+        // lookup offline), after a short debounce.
+        if (matches.isEmpty() && query.trim().length >= 3 && isOnline.value) {
             debounceJob = viewModelScope.launch {
                 delay(400)
                 startLookup(query.trim())

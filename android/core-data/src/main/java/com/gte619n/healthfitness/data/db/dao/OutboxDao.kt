@@ -28,6 +28,16 @@ interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox")
     fun observePendingCount(): Flow<Int>
 
+    /**
+     * Reactive count of mutations that have failed at least one replay attempt —
+     * feeds the distinct global FAILED "changes failed — retry" state (D11, #39).
+     * `attempts > 0` means the row tripped a non-2xx/transport error on its last
+     * drain and is now in exponential backoff; a successful replay deletes the row
+     * (so it leaves this count), and a manual retry re-drains it.
+     */
+    @Query("SELECT COUNT(*) FROM outbox WHERE attempts > 0")
+    fun observeFailedCount(): Flow<Int>
+
     /** The mutation chain for one entity, in `seq` order (reducer input, D7). */
     @Query("SELECT * FROM outbox WHERE entityId = :entityId ORDER BY seq ASC")
     suspend fun listByEntity(entityId: String): List<OutboxEntity>

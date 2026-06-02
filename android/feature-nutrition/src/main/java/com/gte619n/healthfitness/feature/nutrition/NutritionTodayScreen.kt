@@ -47,6 +47,7 @@ import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.sync.SyncBadge
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -297,7 +298,11 @@ private fun EntryRow(entry: Entry, pending: Boolean, onClick: () -> Unit, onDele
         FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 40.dp)
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
+                // #40: per-row PENDING/FAILED badge for an offline nutrition write.
+                SyncBadge(syncState = entry.syncState)
+            }
             Spacer(Modifier.height(2.dp))
             Text(
                 "${formatQuantity(entry.quantity)} × ${entry.servingLabel} · ${formatKcal(entry.macros.caloriesKcal)}",

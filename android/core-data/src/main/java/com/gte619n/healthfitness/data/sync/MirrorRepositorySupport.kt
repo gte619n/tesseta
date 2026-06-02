@@ -70,6 +70,24 @@ class MirrorRepositorySupport @Inject constructor(
         emitAll(rows.map { list -> list.mapNotNull { decode(it.payloadJson) } })
     }
 
+    /**
+     * Like [observe], but the decoder also receives the row's per-row `syncState`
+     * (`SYNCED | PENDING | FAILED`) so the domain model can carry it for the D11
+     * per-row [com.gte619n.healthfitness.ui.sync.SyncBadge] (#40). Under the
+     * kill-switch the live-fallback items have no mirror state, so a null is passed.
+     */
+    fun <E : MirrorRow, D> observeWithState(
+        rows: Flow<List<E>>,
+        decode: (json: String, syncState: String?) -> D?,
+        liveFallback: suspend () -> List<D>,
+    ): Flow<List<D>> = flow {
+        if (killSwitch.isOn()) {
+            emit(runCatching { liveFallback() }.getOrDefault(emptyList()))
+            return@flow
+        }
+        emitAll(rows.map { list -> list.mapNotNull { decode(it.payloadJson, it.syncState) } })
+    }
+
     /** Optimistic CREATE: write a PENDING mirror row, enqueue, drain. */
     suspend fun createLocal(table: String, id: String, payloadJson: String, lastUpdate: Long) {
         mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))

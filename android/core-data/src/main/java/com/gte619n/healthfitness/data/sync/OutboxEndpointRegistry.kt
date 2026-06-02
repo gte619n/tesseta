@@ -74,19 +74,77 @@ object OutboxEndpointRegistry {
     }
 
     /**
-     * Goal steps: manual toggles go up as an explicit intent (D9). The composite
-     * entityId is `"<goalId>/<stepId>"`; the only write is an UPDATE (PATCH-like
-     * PUT) to the step. CREATE/DELETE of steps is server-derived and never
-     * enqueued, but we still resolve a sane URL defensively.
+     * Medication adherence (#24). Offline-capable dose log/undo keyed by
+     * `(medication, date)` (the backend idempotency-keys adherence by med+date).
+     * The composite entityId is `"<medicationId>/<date>/<window>"`:
+     *  - CREATE  ⇒ `POST api/me/medications/{med}/adherence` (the body carries the
+     *    window/takenAt/dose/date).
+     *  - DELETE  ⇒ `DELETE api/me/medications/{med}/adherence/{date}/{window}`
+     *    (an undo).
+     * There is no UPDATE; a re-log after an undo is a fresh CREATE.
      */
-    private val goalSteps = EndpointSpec { base, op, entityId ->
-        val (goalId, stepId) = splitComposite(entityId)
+    private val medicationAdherence = EndpointSpec { base, op, entityId ->
+        val (medId, date, window) = splitTriple(entityId)
+        val b = base.newBuilder()
+            .addPathSegments("api/me/medications")
+            .addPathSegment(medId)
+            .addPathSegment("adherence")
+        if (op == OutboxOp.DELETE) {
+            b.addPathSegment(date).addPathSegment(window)
+        }
+        Resolved(op.httpMethod(), b.build())
+    }
+
+    /**
+     * Goal phases (#26): `POST api/me/goals/{goalId}/phases` for CREATE,
+     * `PATCH/DELETE .../phases/{phaseId}` for UPDATE/DELETE. The composite
+     * entityId is `"<goalId>/<phaseId>"`. The backend update is a PATCH.
+     */
+    private val goalPhases = EndpointSpec { base, op, entityId ->
+        val (goalId, phaseId) = splitComposite(entityId)
         val b = base.newBuilder()
             .addPathSegments("api/me/goals")
             .addPathSegment(goalId)
+            .addPathSegments("phases")
+        if (op != OutboxOp.CREATE) b.addPathSegment(phaseId)
+        // The backend phase update is PATCH (not PUT); map UPDATE→PATCH.
+        val method = when (op) {
+            OutboxOp.CREATE -> "POST"
+            OutboxOp.UPDATE -> "PATCH"
+            OutboxOp.DELETE -> "DELETE"
+        }
+        Resolved(method, b.build())
+    }
+
+    /**
+     * Goal steps (#26): the structural step CRUD (title/description/order) routes
+     * through here. The composite entityId is `"<goalId>/<phaseId>/<stepId>"`
+     * (the backend nests steps under their phase):
+     *  - CREATE ⇒ `POST api/me/goals/{goalId}/phases/{phaseId}/steps`
+     *  - UPDATE ⇒ `PATCH .../steps/{stepId}` (title/description/order edit)
+     *  - DELETE ⇒ `DELETE .../steps/{stepId}`
+     *
+     * D9 boundary: a manual **done/doneAt** toggle is server-evaluated and goes up
+     * as an explicit `PATCH .../steps/{sid}` **intent** on the network path
+     * ([com.gte619n.healthfitness.data.goals.GoalsRepository.setStepDone]) — it is
+     * NEVER enqueued here, so a structural-edit replay can never clobber the
+     * server-derived completion fields.
+     */
+    private val goalSteps = EndpointSpec { base, op, entityId ->
+        val (goalId, phaseId, stepId) = splitTriple(entityId)
+        val b = base.newBuilder()
+            .addPathSegments("api/me/goals")
+            .addPathSegment(goalId)
+            .addPathSegment("phases")
+            .addPathSegment(phaseId)
             .addPathSegments("steps")
         if (op != OutboxOp.CREATE) b.addPathSegment(stepId)
-        Resolved(op.httpMethod(), b.build())
+        val method = when (op) {
+            OutboxOp.CREATE -> "POST"
+            OutboxOp.UPDATE -> "PATCH"
+            OutboxOp.DELETE -> "DELETE"
+        }
+        Resolved(method, b.build())
     }
 
     /**
@@ -127,7 +185,9 @@ object OutboxEndpointRegistry {
         put(MirrorTables.BODY_COMPOSITION, flat("api/me/body-composition"))
         put(MirrorTables.NUTRITION_TARGETS, nutritionTarget)
         put(MirrorTables.NUTRITION_ENTRIES, nutritionEntries)
+        put(MirrorTables.GOAL_PHASES, goalPhases)
         put(MirrorTables.GOAL_STEPS, goalSteps)
+        put(MirrorTables.MEDICATION_ADHERENCE, medicationAdherence)
         put(MirrorTables.USER_PROFILE, profile)
     }
 
@@ -143,4 +203,33 @@ object OutboxEndpointRegistry {
         return if (idx < 0) entityId to entityId
         else entityId.substring(0, idx) to entityId.substring(idx + 1)
     }
+
+    /**
+     * Split a composite `"a/b/c"` entityId into its three segments, tolerant of a
+     * shorter id (missing segments echo the last available one). Used for the
+     * adherence (`med/date/window`) and step (`goal/phase/step`) endpoints.
+     */
+    private fun splitTriple(entityId: String): Triple<String, String, String> {
+        val parts = entityId.split('/', limit = 3)
+        val a = parts.getOrNull(0) ?: entityId
+        val b = parts.getOrNull(1) ?: a
+        val c = parts.getOrNull(2) ?: b
+        return Triple(a, b, c)
+    }
+
+    /**
+     * The `Idempotency-Key` to send for a replayed mutation (#24/#33). Most tables
+     * use the random per-mutation `mutationId` (a fresh client UUID per write).
+     * **Adherence** instead derives a deterministic `(med,date)` key so a re-queued
+     * log of the same dose-day is a server-side no-op returning the current state —
+     * matching the backend's `medicationAdherence:log:{med}:{date}` idempotency
+     * scope (the day's log is keyed by med+date, not by an opaque write id).
+     */
+    fun idempotencyKey(table: String, entityId: String, mutationId: String): String =
+        if (table == MirrorTables.MEDICATION_ADHERENCE) {
+            val (med, date, _) = splitTriple(entityId)
+            "adherence:$med:$date"
+        } else {
+            mutationId
+        }
 }

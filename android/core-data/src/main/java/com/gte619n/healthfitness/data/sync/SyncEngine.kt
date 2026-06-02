@@ -45,7 +45,11 @@ class SyncEngine @Inject constructor(
      * "Updated elsewhere" signal (D11): emits the table+id of any local dirty
      * edit discarded by LWW so Phase 6 UX can surface the lightweight note.
      */
-    private val _updatedElsewhere = MutableSharedFlow<UpdatedElsewhere>(extraBufferCapacity = 32)
+    // replay=1 so a subscriber that attaches just after a pull still observes the
+    // most recent "updated elsewhere" note (the ViewModel latch + the
+    // deterministic test both rely on the latest signal being retained rather than
+    // lost to a subscription-timing race).
+    private val _updatedElsewhere = MutableSharedFlow<UpdatedElsewhere>(replay = 1, extraBufferCapacity = 32)
     val updatedElsewhere: SharedFlow<UpdatedElsewhere> = _updatedElsewhere
 
     data class UpdatedElsewhere(val table: String, val id: String)
@@ -64,14 +68,18 @@ class SyncEngine @Inject constructor(
      * Pull the delta to completion (`hasMore=false`).
      *
      * @param maxPages cap the number of pages pulled in this pass. The default
-     *        [Int.MAX_VALUE] means "drain the whole delta". The first-run gate
-     *        (D14) passes a small cap so it can release the UI after a brief,
-     *        bounded initial sync, then a background pass backfills the rest. The
-     *        cursor is persisted after each page, so a capped pull simply leaves
-     *        `hasMore=true` work for the next (unbounded) pull to finish.
+     *        [Int.MAX_VALUE] means "drain the whole delta". The cursor is persisted
+     *        after each page, so a capped pull simply leaves `hasMore=true` work for
+     *        the next (unbounded) pull to finish.
+     * @param recentSince ISO-8601 lower bound for heavy time-series (D14, #37).
+     *        Passed verbatim as the `recentSince` query param on every page of this
+     *        pull. The first-run gate ([FirstSyncGate]) supplies `now - 14d` so the
+     *        initial blocking sync is **date-windowed** (last 14 days of heavy
+     *        series + full CRUD), then runs a second `recentSince = null` pull that
+     *        backfills the older history continuing the SAME cursor (no skip/dup).
      */
     @Suppress("ReturnCount")
-    suspend fun pull(maxPages: Int = Int.MAX_VALUE): PullResult = withContext(io) {
+    suspend fun pull(maxPages: Int = Int.MAX_VALUE, recentSince: String? = null): PullResult = withContext(io) {
         // If the kill-switch is already latched, do not pull (DB is not the
         // source of truth until a future delta clears it).
         var cursor = ensureState().cursor
@@ -82,7 +90,11 @@ class SyncEngine @Inject constructor(
         var wiped = false
 
         while (true) {
-            val resp = api.delta(since = cursor, schemaVersion = SYNC_SCHEMA_VERSION)
+            val resp = api.delta(
+                since = cursor,
+                schemaVersion = SYNC_SCHEMA_VERSION,
+                recentSince = recentSince,
+            )
 
             // D13 kill-switch: persist + stop. Leaves the cursor as-is so a later
             // clear resumes where we were.

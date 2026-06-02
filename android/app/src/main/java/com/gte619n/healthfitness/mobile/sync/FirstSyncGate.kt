@@ -4,6 +4,8 @@ import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.sync.SyncEngine
 import com.gte619n.healthfitness.data.sync.SyncFlags
 import com.gte619n.healthfitness.data.sync.SyncScheduler
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,21 +22,27 @@ import javax.inject.Singleton
  *  1. [needsFirstSync] reads `sync_state.lastFullSyncAt`. Null ⇒ first run.
  *     (Kill-switch on ⇒ the client is in live-network mode and Room is not the
  *     source of truth, so there is nothing to gate — treat as "no gate".)
- *  2. [runInitialSync] performs a **bounded** pull ([INITIAL_PAGE_BUDGET] pages)
- *     so the CRUD domains and the recent heavy time-series land fast, then
- *     releases the UI.
- *  3. [scheduleBackfill] enqueues the periodic floor; its first (unbounded) pull
- *     drains the remaining `hasMore` pages — the older historical time-series —
- *     lazily in the background.
+ *  2. [runInitialSync] performs a **date-windowed** pull
+ *     (`recentSince = now - `[RECENT_WINDOW_DAYS]` days`) so the CRUD domains land
+ *     in full and the heavy time-series land only for the recent window, then
+ *     releases the UI fast.
+ *  3. [scheduleBackfill] enqueues an unbounded backfill (`recentSince = null`) that
+ *     continues the SAME persisted cursor — picking up the older historical
+ *     time-series the window omitted, with no skip/dup — plus the periodic floor.
  *
- * ### 14-day windowing (D14) — client-side limitation, documented
- * The delta API is cursor-ordered by `lastUpdate`, not by record date, and the
- * cursor is opaque, so the client cannot ask the server for "only the last 14
- * days of heavy series" without server support. We approximate the intent with a
- * **page budget**: the bounded initial pull releases the UI quickly with the most
- * recently-updated docs, and the remainder backfills lazily. A true date-windowed
- * first sync (`since=14d`) would need a server-side hint on `GET /api/me/sync`;
- * flagged in the outstanding questions.
+ * ### 14-day windowing (D14, #37) — true server-side window
+ * `GET /api/me/sync` now accepts a `recentSince` lower bound (the parallel backend
+ * agent's #37 work): heavy time-series collections only return docs whose record
+ * date is ≥ `recentSince`, while the CRUD domains are always returned in full. The
+ * gate sends `now - 14d` for the first window and `null` for the unbounded
+ * backfill, replacing the prior client-side page-budget approximation. The cursor
+ * is shared across both passes (persisted after every page in [SyncEngine.pull]),
+ * so the backfill resumes strictly after the windowed pull with no duplicates.
+ *
+ * Contract assumption: the client wires against the param name **`recentSince`**
+ * (ISO-8601 instant). If the server has not yet deployed the param it simply
+ * ignores the unknown query value and returns the full enumeration — the gate
+ * still releases the UI correctly, just not date-bounded.
  */
 @Singleton
 class FirstSyncGate @Inject constructor(
@@ -53,33 +61,34 @@ class FirstSyncGate @Inject constructor(
     }
 
     /**
-     * Brief blocking initial sync (D14). Bounded so the UI is released quickly;
-     * best-effort — a failure still releases the UI (the user lands on a possibly
-     * empty dashboard that the background triggers will fill), it must never wedge
-     * the app on a cold sign-in.
+     * Brief blocking initial sync (D14, #37): a **date-windowed** pull bounding the
+     * heavy time-series to the last [RECENT_WINDOW_DAYS] days (CRUD in full) so the
+     * UI is released quickly. Best-effort — a failure still releases the UI (the
+     * user lands on a possibly-empty dashboard the background triggers will fill);
+     * it must never wedge the app on a cold sign-in.
      */
     suspend fun runInitialSync() {
-        runCatching { syncEngine.pull(maxPages = INITIAL_PAGE_BUDGET) }
+        runCatching { syncEngine.pull(recentSince = recentWindowSince()) }
     }
 
     /**
-     * Register the periodic floor so the remaining history backfills lazily after
-     * the gate releases. Safe to call every launch (idempotent KEEP policy).
+     * Register the periodic floor and kick the **unbounded backfill** that drains
+     * whatever the windowed initial sync left (`recentSince = null`), continuing the
+     * same persisted cursor (no skip/dup) so the older historical time-series fill
+     * in lazily without waiting up to ~6h for the floor. Safe every launch
+     * (idempotent KEEP policy).
      */
     fun scheduleBackfill() {
         scheduler.registerPeriodic()
-        // Kick a one-shot unbounded pull to drain whatever the bounded initial
-        // sync left as `hasMore` work, without waiting up to ~6h for the floor.
         scheduler.enqueuePull()
     }
 
+    /** ISO-8601 lower bound for the first window: `now - `[RECENT_WINDOW_DAYS]` days`. */
+    private fun recentWindowSince(): String =
+        Instant.now().minus(RECENT_WINDOW_DAYS.toLong(), ChronoUnit.DAYS).toString()
+
     companion object {
-        /**
-         * Page budget for the bounded first sync. At the server's default 500
-         * docs/page this is up to 1500 of the most-recently-updated docs before
-         * the UI is released — comfortably covers the CRUD domains + recent
-         * time-series for a typical user, with older history backfilling after.
-         */
-        const val INITIAL_PAGE_BUDGET = 3
+        /** The D14 heavy-series recent window for the first blocking sync. */
+        const val RECENT_WINDOW_DAYS = 14
     }
 }

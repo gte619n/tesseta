@@ -70,13 +70,72 @@ class OutboxEndpointRegistryTest {
     }
 
     @Test
-    fun `goal step update targets the step under its goal`() {
-        val r = resolve(MirrorTables.GOAL_STEPS, OutboxOp.UPDATE, "goal-1/step-9")
-        assertEquals("PUT", r.method)
+    fun `goal step update targets the step nested under its goal and phase`() {
+        // #26: structural step edits are a PATCH nested under the phase.
+        val r = resolve(MirrorTables.GOAL_STEPS, OutboxOp.UPDATE, "goal-1/phase-2/step-9")
+        assertEquals("PATCH", r.method)
         assertEquals(
-            "https://api.example.com/api/me/goals/goal-1/steps/step-9",
+            "https://api.example.com/api/me/goals/goal-1/phases/phase-2/steps/step-9",
             r.url.toString(),
         )
+    }
+
+    @Test
+    fun `goal step create posts to the phase's steps collection`() {
+        val r = resolve(MirrorTables.GOAL_STEPS, OutboxOp.CREATE, "goal-1/phase-2/step-9")
+        assertEquals("POST", r.method)
+        assertEquals(
+            "https://api.example.com/api/me/goals/goal-1/phases/phase-2/steps",
+            r.url.toString(),
+        )
+    }
+
+    @Test
+    fun `goal phase create posts to the goal's phases collection`() {
+        val r = resolve(MirrorTables.GOAL_PHASES, OutboxOp.CREATE, "goal-1/phase-2")
+        assertEquals("POST", r.method)
+        assertEquals("https://api.example.com/api/me/goals/goal-1/phases", r.url.toString())
+    }
+
+    @Test
+    fun `goal phase update is a patch to the specific phase`() {
+        val r = resolve(MirrorTables.GOAL_PHASES, OutboxOp.UPDATE, "goal-1/phase-2")
+        assertEquals("PATCH", r.method)
+        assertEquals("https://api.example.com/api/me/goals/goal-1/phases/phase-2", r.url.toString())
+    }
+
+    @Test
+    fun `adherence log posts to the medication's adherence collection`() {
+        // #24: composite id is "med/date/window"; CREATE posts to the day's log.
+        val r = resolve(MirrorTables.MEDICATION_ADHERENCE, OutboxOp.CREATE, "m1/2026-06-02/MORNING")
+        assertEquals("POST", r.method)
+        assertEquals("https://api.example.com/api/me/medications/m1/adherence", r.url.toString())
+    }
+
+    @Test
+    fun `adherence undo deletes the specific date and window`() {
+        val r = resolve(MirrorTables.MEDICATION_ADHERENCE, OutboxOp.DELETE, "m1/2026-06-02/EVENING")
+        assertEquals("DELETE", r.method)
+        assertEquals(
+            "https://api.example.com/api/me/medications/m1/adherence/2026-06-02/EVENING",
+            r.url.toString(),
+        )
+    }
+
+    @Test
+    fun `adherence idempotency key is derived from med and date`() {
+        val key = OutboxEndpointRegistry.idempotencyKey(
+            MirrorTables.MEDICATION_ADHERENCE, "m1/2026-06-02/MORNING", "random-uuid",
+        )
+        assertEquals("adherence:m1:2026-06-02", key)
+    }
+
+    @Test
+    fun `non-adherence idempotency key is the mutation id`() {
+        val key = OutboxEndpointRegistry.idempotencyKey(
+            MirrorTables.BLOOD_READINGS, "reading-1", "random-uuid",
+        )
+        assertEquals("random-uuid", key)
     }
 
     @Test

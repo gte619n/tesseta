@@ -27,6 +27,7 @@ import com.gte619n.healthfitness.domain.medications.TimeWindowLabels
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfTone
 import com.gte619n.healthfitness.ui.components.Pill
+import com.gte619n.healthfitness.ui.sync.SyncBadge
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -72,6 +73,8 @@ fun MedicationCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    // #40: per-row PENDING/FAILED badge for an offline med write.
+                    SyncBadge(syncState = medication.syncState)
                     medication.drug?.category?.let { category ->
                         Spacer(Modifier.height(0.dp))
                         Pill(text = categoryLabel(category), tone = HfTone.Neutral)
