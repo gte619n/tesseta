@@ -10,13 +10,23 @@ class DailyMetricDataTypeTest {
     @Test
     void fromApiNameMatchesUrlSegmentAndFilterFieldName() {
         assertThat(DailyMetricDataType.fromApiName("steps")).isEqualTo(DailyMetricDataType.STEPS);
-        assertThat(DailyMetricDataType.fromApiName("resting-heart-rate"))
+        assertThat(DailyMetricDataType.fromApiName("daily-resting-heart-rate"))
             .isEqualTo(DailyMetricDataType.RESTING_HEART_RATE);
-        assertThat(DailyMetricDataType.fromApiName("resting_heart_rate"))
+        assertThat(DailyMetricDataType.fromApiName("daily_resting_heart_rate"))
             .isEqualTo(DailyMetricDataType.RESTING_HEART_RATE);
-        assertThat(DailyMetricDataType.fromApiName("heart-rate-variability"))
+        assertThat(DailyMetricDataType.fromApiName("daily-heart-rate-variability"))
+            .isEqualTo(DailyMetricDataType.HRV);
+        assertThat(DailyMetricDataType.fromApiName("daily_heart_rate_variability"))
             .isEqualTo(DailyMetricDataType.HRV);
         assertThat(DailyMetricDataType.fromApiName("sleep")).isEqualTo(DailyMetricDataType.SLEEP);
+    }
+
+    @Test
+    void doesNotMatchBarePerSampleHeartRateForms() {
+        // The bare (non-"daily-") forms are per-sample types we don't model;
+        // they must not resolve to the daily roll-up enum.
+        assertThat(DailyMetricDataType.tryFromApiName("resting-heart-rate")).isEmpty();
+        assertThat(DailyMetricDataType.tryFromApiName("heart-rate-variability")).isEmpty();
     }
 
     @Test

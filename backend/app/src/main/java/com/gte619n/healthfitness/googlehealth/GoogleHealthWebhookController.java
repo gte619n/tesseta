@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 //      Authorization header, parse the body, then route on dataType:
 //      body-composition types (weight, body-fat) go to
 //      WebhookHandlerService; day-grained vitals/activity (steps, sleep,
-//      resting-heart-rate, heart-rate-variability) go to
+//      daily-resting-heart-rate, daily-heart-rate-variability) go to
 //      DailyMetricWebhookHandler. Both hydrate via REST and write Firestore.
 //
 // The endpoint is public-by-design (no JWT auth filter); the
@@ -122,8 +122,8 @@ public class GoogleHealthWebhookController {
 
     // Parse the common envelope once, then route on dataType. A single
     // dataType string is either a daily-metric type (steps, sleep,
-    // resting-heart-rate, heart-rate-variability) or a body-composition
-    // type (weight, body-fat) — never both. An unrecognized type is
+    // daily-resting-heart-rate, daily-heart-rate-variability) or a
+    // body-composition type (weight, body-fat) — never both. An unrecognized type is
     // logged and acked (200) rather than 500'd: Google retries 5xx for 7
     // days, and there's nothing to gain by retrying a type we don't model.
     private void dispatch(JsonNode node) {

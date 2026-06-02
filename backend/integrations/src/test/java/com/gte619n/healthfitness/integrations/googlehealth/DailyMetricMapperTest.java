@@ -40,9 +40,9 @@ class DailyMetricMapperTest {
     @Test
     void mapsRestingHeartRateBpm() {
         JsonNode dp = node("""
-            { "name": "users/h1/dataTypes/resting-heart-rate/dataPoints/r2",
+            { "name": "users/h1/dataTypes/daily-resting-heart-rate/dataPoints/r2",
               "dataSource": { "platform": "FITBIT", "recordingMethod": "AUTOMATIC" },
-              "restingHeartRate": { "bpm": 54,
+              "dailyRestingHeartRate": { "bpm": 54,
                 "sampleTime": { "physicalTime": "2026-05-20T08:00:00Z" } } }
             """);
         DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.RESTING_HEART_RATE);
@@ -53,9 +53,9 @@ class DailyMetricMapperTest {
     @Test
     void mapsHrvMilliseconds() {
         JsonNode dp = node("""
-            { "name": "users/h1/dataTypes/heart-rate-variability/dataPoints/r3",
+            { "name": "users/h1/dataTypes/daily-heart-rate-variability/dataPoints/r3",
               "dataSource": { "platform": "FITBIT", "recordingMethod": "AUTOMATIC" },
-              "heartRateVariability": { "milliseconds": 62,
+              "dailyHeartRateVariability": { "milliseconds": 62,
                 "sampleTime": { "physicalTime": "2026-05-20T08:00:00Z" } } }
             """);
         DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.HRV);

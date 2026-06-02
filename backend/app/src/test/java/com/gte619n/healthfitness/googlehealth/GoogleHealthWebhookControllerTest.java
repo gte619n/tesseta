@@ -243,6 +243,38 @@ class GoogleHealthWebhookControllerTest {
     }
 
     @Test
+    void routesDailyRestingHeartRateNotificationToDailyMetricHandler() throws Exception {
+        // Google names daily roll-ups with a "daily-" prefix. Routing must
+        // match the API identifier exactly; the bare "resting-heart-rate"
+        // form would fall through to the unmodeled branch and drop silently.
+        String body = """
+            {
+              "healthUserId": "12345",
+              "dataType": "daily-resting-heart-rate",
+              "operation": "UPSERT",
+              "intervals": [
+                { "startTime": "2026-05-01T00:00:00Z", "endTime": "2026-05-20T00:00:00Z" }
+              ]
+            }
+            """;
+
+        HttpResponse<String> response = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/webhooks/google-health"))
+                .header("Authorization", "Bearer test-webhook-secret")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        ArgumentCaptor<DailyMetricWebhookHandler.Notification> captor =
+            ArgumentCaptor.forClass(DailyMetricWebhookHandler.Notification.class);
+        verify(dailyHandler).handle(captor.capture());
+        assertThat(captor.getValue().dataType()).isEqualTo(DailyMetricDataType.RESTING_HEART_RATE);
+        verify(handler, never()).handle(any());
+    }
+
+    @Test
     void acknowledgesUnmodeledDataTypeWithoutDispatch() throws Exception {
         String body = """
             {
