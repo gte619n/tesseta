@@ -542,11 +542,19 @@ Legend: ✅ done · ⏳ in progress / partial · ❌ not started.
   needs per-collection composite indexes and may increase read cost; monitor.
 - **Firebase credentials.** `google-services.json` (Android) contains only
   public identifiers (project number/sender ID, app ID, package name,
-  restrictable Android API key) — **safe to commit**, with the API key
-  restricted by package name + signing SHA-1 in GCP. The **secret** is the
-  backend Firebase Admin **service-account JSON** used by `FcmFanoutService`;
-  it must NOT be committed (project Never rules) and is injected via Secret
-  Manager like other backend credentials.
+  restrictable Android API key) — **safe to commit** (committed; API key
+  restricted to `com.gte619n.healthfitness` + the debug & release signing
+  SHA-1s in GCP). The backend `FcmFanoutService` authenticates to FCM via
+  **Application Default Credentials — no service-account JSON key**: the
+  Cloud Run runtime SA (`health-fitness-runtime@…`) holds
+  `roles/firebasecloudmessaging.admin` (least-privilege:
+  `cloudmessaging.messages.create`), and the Firebase Admin SDK is initialized
+  with no explicit credential (`FirebaseApp.initializeApp()` → ADC + metadata
+  project ID). This avoids a long-lived key entirely (honoring the project
+  Never rule). **Local dev:** `FcmFanoutService` is exercised against live FCM
+  only when the developer's ADC (`gcloud auth application-default login`) can
+  `cloudmessaging.messages.create` or impersonates the runtime SA; otherwise
+  fan-out is a no-op locally and verified in deployed/integration runs.
 - **Tombstone growth.** No TTL purge (D2) means archived rows accumulate
   forever; revisit if Firestore storage/read costs grow.
 
