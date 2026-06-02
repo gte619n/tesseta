@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.core.sync;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,19 +47,33 @@ public class SyncService {
     }
 
     /**
+     * Build one delta page for {@code userId} (no recent-window bound).
+     */
+    public SyncPage page(String userId, String encodedSince, Integer requestedLimit) {
+        return page(userId, encodedSince, requestedLimit, null);
+    }
+
+    /**
      * Build one delta page for {@code userId}.
      *
      * @param encodedSince   opaque cursor from the client, or null/blank for an
      *                       initial full sync
      * @param requestedLimit client page size; clamped to {@code [1, MAX_LIMIT]}
+     * @param recentSince    when non-null, bounds the heavy time-series
+     *                       collections to docs on/after this date (IMPL-AND-20
+     *                       #37 / D14); CRUD domains are always returned in full.
+     *                       The client passes this on its first sync only and
+     *                       omits it for the later unbounded backfill.
      */
-    public SyncPage page(String userId, String encodedSince, Integer requestedLimit) {
+    public SyncPage page(
+        String userId, String encodedSince, Integer requestedLimit, LocalDate recentSince) {
         SyncCursor since = SyncCursor.decode(encodedSince); // throws on malformed
         int limit = clampLimit(requestedLimit);
+        SyncRecentWindow window = recentSince == null ? null : new SyncRecentWindow(recentSince);
 
         // Ask for one extra so we can tell whether more remain beyond this page
         // without a second round-trip.
-        List<SyncChange> fetched = reader.readChanges(userId, since, limit + 1);
+        List<SyncChange> fetched = reader.readChanges(userId, since, limit + 1, window);
 
         // The reader returns canonical order, but normalize defensively so the
         // cursor/hasMore math is correct regardless of impl quirks.

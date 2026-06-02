@@ -186,11 +186,35 @@ public class TestPersistenceConfig {
 
     @Bean
     FoodEntryRepository foodEntryRepository() {
+        // Real in-memory map (keyed by userId|date|entryId) so entry CRUD round-
+        // trips in MockMvc tests — the unified delta + idempotent-replay paths
+        // (IMPL-AND-20 #8) depend on findById returning the originally-saved
+        // entry on an Idempotency-Key replay.
         return new FoodEntryRepository() {
-            @Override public List<FoodEntry> findByDate(String userId, LocalDate date) { return List.of(); }
-            @Override public Optional<FoodEntry> findById(String userId, LocalDate date, String entryId) { return Optional.empty(); }
-            @Override public void save(FoodEntry entry) {}
-            @Override public void delete(String userId, LocalDate date, String entryId) {}
+            private final java.util.Map<String, FoodEntry> store =
+                new java.util.concurrent.ConcurrentHashMap<>();
+
+            private String key(String userId, LocalDate date, String entryId) {
+                return userId + "|" + date + "|" + entryId;
+            }
+
+            @Override public List<FoodEntry> findByDate(String userId, LocalDate date) {
+                return store.values().stream()
+                    .filter(e -> e.userId().equals(userId) && e.date().equals(date))
+                    .toList();
+            }
+
+            @Override public Optional<FoodEntry> findById(String userId, LocalDate date, String entryId) {
+                return Optional.ofNullable(store.get(key(userId, date, entryId)));
+            }
+
+            @Override public void save(FoodEntry entry) {
+                store.put(key(entry.userId(), entry.date(), entry.entryId()), entry);
+            }
+
+            @Override public void delete(String userId, LocalDate date, String entryId) {
+                store.remove(key(userId, date, entryId));
+            }
         };
     }
 
