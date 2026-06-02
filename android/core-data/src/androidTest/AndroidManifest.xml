@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  IMPL-AND-20: the instrumented sync tests (SyncE2ETest / ConvergenceTest /
+  TombstoneApplyTest) run a localhost MockWebServer over plain HTTP, which binds
+  a ServerSocket (needs INTERNET) and serves cleartext (blocked by default on
+  API 28+). core-data is an otherwise manifest-less library, so this test-only
+  manifest grants both to the androidTest APK.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:usesCleartextTraffic="true" />
+</manifest>

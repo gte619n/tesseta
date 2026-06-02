@@ -44,6 +44,8 @@ internal fun mirrorStore(db: HfDatabase): MirrorStore = MirrorStore(
     deviceSync = db.deviceSyncDao(),
     dexaScan = db.dexaScanDao(),
     weeklyWorkoutAggregate = db.weeklyWorkoutAggregateDao(),
+    workoutProgram = db.workoutProgramDao(),
+    workoutScheduled = db.workoutScheduledDao(),
     userProfile = db.userProfileDao(),
 )
 
