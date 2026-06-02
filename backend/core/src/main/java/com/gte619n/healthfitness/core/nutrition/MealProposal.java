@@ -8,11 +8,20 @@ import java.util.List;
  * nothing is persisted as an entry or catalog food. The client reviews/edits and
  * saves via the existing M1 endpoints.
  *
- * @param photoRef storage reference for the uploaded meal photo (nullable when
- *                 storage is unavailable, e.g. core-only test context)
- * @param items    one proposed item per identified food component
+ * @param photoRef        storage reference for the uploaded meal photo (nullable
+ *                        when storage is unavailable, e.g. core-only test context)
+ * @param mealName        short natural name for the dish (e.g. "Salmon and
+ *                        broccoli"), or null when the model didn't name it
+ * @param packagedProduct true when the photo is a single packaged product rather
+ *                        than a prepared, multi-ingredient meal
+ * @param items           one proposed item per identified food component
  */
-public record MealProposal(String photoRef, List<MealProposalItem> items) {
+public record MealProposal(
+    String photoRef,
+    String mealName,
+    boolean packagedProduct,
+    List<MealProposalItem> items
+) {
 
     /**
      * A single proposed meal component, with an optional catalog match.

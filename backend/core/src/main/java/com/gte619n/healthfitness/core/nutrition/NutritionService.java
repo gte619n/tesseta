@@ -128,7 +128,7 @@ public class NutritionService {
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
             servingGrams, quantity, macros, null, source,
-            null, null, FoodImageStatus.NONE, null, null);
+            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -172,10 +172,118 @@ public class NutritionService {
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, mealName,
             ingredients.size() + " ingredients", grams, 1.0, total, null, source,
-            List.copyOf(ingredients), null, FoodImageStatus.NONE, null, null);
+            List.copyOf(ingredients), null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
+    }
+
+    // ----- Background photo-analysis lifecycle --------------------------
+
+    /**
+     * Create a placeholder entry for a freshly captured photo: it carries the
+     * stored {@code photoRef}, zero macros and {@code ANALYZING} status, and is
+     * filled in later by {@link #finalizeCompositeMeal}/{@link #finalizeSingleFood}
+     * once the background AI analysis returns. The day rollup is unaffected (the
+     * placeholder contributes zero) until the entry is finalized.
+     */
+    public FoodEntry beginAnalyzingEntry(
+        String userId, LocalDate date, MealType meal, String photoRef) {
+        requireUser(userId);
+        requireDate(date);
+        if (meal == null) {
+            throw new IllegalArgumentException("meal is required");
+        }
+        String entryId = UUID.randomUUID().toString();
+        FoodEntry entry = new FoodEntry(
+            userId, date, entryId, meal, null, "Analyzing photo…",
+            null, null, 1.0, Macros.zero(), photoRef, EntrySource.PHOTO,
+            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null);
+        entries.save(entry);
+        return entry;
+    }
+
+    /**
+     * Fill in an {@code ANALYZING} placeholder as a composite (multi-ingredient)
+     * meal: set its name, ingredients and summed macros and flip it to
+     * {@code READY}. Recomputes the day rollup. No-op if the entry vanished.
+     */
+    public FoodEntry finalizeCompositeMeal(
+        String userId, LocalDate date, String entryId,
+        String mealName, List<CompositeIngredient> ingredients) {
+        requireUser(userId);
+        requireDate(date);
+        if (mealName == null || mealName.isBlank()) {
+            throw new IllegalArgumentException("mealName is required");
+        }
+        if (ingredients == null || ingredients.isEmpty()) {
+            throw new IllegalArgumentException("a composite meal needs at least one ingredient");
+        }
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        Macros total = Macros.zero();
+        double grams = 0.0;
+        for (CompositeIngredient ing : ingredients) {
+            total = total.plus(ing.macros());
+            if (ing.servingGrams() != null) {
+                grams += ing.servingGrams() * (ing.quantity() != null ? ing.quantity() : 1.0);
+            }
+        }
+        FoodEntry updated = new FoodEntry(
+            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            null, mealName, ingredients.size() + " ingredients", grams, 1.0, total,
+            existing.photoRef(), existing.source(), List.copyOf(ingredients),
+            existing.mealImageUrl(), existing.mealImageStatus(),
+            EntryAnalysisStatus.READY, existing.createdAt(), null);
+        entries.save(updated);
+        recomputeDay(userId, date);
+        return updated;
+    }
+
+    /**
+     * Fill in an {@code ANALYZING} placeholder as a single food (a packaged
+     * product): set its catalog {@code foodId}, name, portion and macros and flip
+     * it to {@code READY}. The product's studio image rides on the catalog food.
+     */
+    public FoodEntry finalizeSingleFood(
+        String userId, LocalDate date, String entryId,
+        String foodId, String foodName, String servingLabel,
+        Double servingGrams, Double quantity, Macros macros) {
+        requireUser(userId);
+        requireDate(date);
+        if (foodName == null || foodName.isBlank()) {
+            throw new IllegalArgumentException("foodName is required");
+        }
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        FoodEntry updated = new FoodEntry(
+            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            foodId, foodName, servingLabel, servingGrams,
+            quantity != null ? quantity : 1.0, macros, existing.photoRef(),
+            existing.source(), null, null, FoodImageStatus.NONE,
+            EntryAnalysisStatus.READY, existing.createdAt(), null);
+        entries.save(updated);
+        recomputeDay(userId, date);
+        return updated;
+    }
+
+    /**
+     * Mark a placeholder entry's analysis as {@code FAILED} (the photo couldn't
+     * be understood). Keeps the entry so the client can surface the failure and
+     * let the user retry or delete it.
+     */
+    public void markAnalysisFailed(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        entries.findById(userId, date, entryId).ifPresent(e -> {
+            FoodEntry failed = new FoodEntry(
+                e.userId(), e.date(), e.entryId(), e.meal(), e.foodId(),
+                "Couldn’t read photo", e.servingLabel(), e.servingGrams(),
+                e.quantity(), e.macros(), e.photoRef(), e.source(), e.ingredients(),
+                e.mealImageUrl(), e.mealImageStatus(), EntryAnalysisStatus.FAILED,
+                e.createdAt(), null);
+            entries.save(failed);
+        });
     }
 
     /**
@@ -212,7 +320,7 @@ public class NutritionService {
             existing.foodId(), existing.foodName(), existing.servingLabel(),
             existing.servingGrams(), existing.quantity(), total, existing.photoRef(),
             existing.source(), updated, existing.mealImageUrl(), existing.mealImageStatus(),
-            existing.createdAt(), null);
+            existing.analysisStatus(), existing.createdAt(), null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -253,6 +361,7 @@ public class NutritionService {
             existing.ingredients(),
             existing.mealImageUrl(),
             existing.mealImageStatus(),
+            existing.analysisStatus(),
             existing.createdAt(),
             null
         );

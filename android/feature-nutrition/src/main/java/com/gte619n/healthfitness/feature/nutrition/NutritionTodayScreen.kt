@@ -420,13 +420,23 @@ private fun EntryRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 40.dp)
+        // An entry still being analyzed shows the generating spinner; its real
+        // name/macros/image arrive via polling once the backend finishes.
+        FoodThumbnail(
+            imageUrl = entry.imageUrl,
+            imageStatus = if (entry.isAnalyzing) "PENDING" else entry.imageStatus,
+            size = 40.dp,
+        )
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
             Spacer(Modifier.height(2.dp))
             Text(
-                "${formatQuantity(entry.quantity)} × ${entry.servingLabel} · ${formatKcal(entry.macros.caloriesKcal)}",
+                when {
+                    entry.isAnalyzing -> "Analyzing your photo…"
+                    entry.analysisStatus == "FAILED" -> "Couldn’t read photo · delete and retry"
+                    else -> "${formatQuantity(entry.quantity)} × ${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"
+                },
                 style = Hf.type.capsSm,
                 color = Hf.colors.textTertiary,
             )

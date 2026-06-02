@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.api.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus;
 import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
@@ -30,6 +31,7 @@ public record EntryResponse(
     EntrySource source,
     String imageUrl,
     FoodImageStatus imageStatus,
+    EntryAnalysisStatus analysisStatus,
     List<IngredientResponse> ingredients
 ) {
     /** Bare mapping with no catalog image (used where the food isn't loaded). */
@@ -66,6 +68,7 @@ public record EntryResponse(
             e.source(),
             imageUrl,
             imageStatus != null ? imageStatus : FoodImageStatus.NONE,
+            e.analysisStatus() != null ? e.analysisStatus() : EntryAnalysisStatus.NONE,
             ingredients
         );
     }

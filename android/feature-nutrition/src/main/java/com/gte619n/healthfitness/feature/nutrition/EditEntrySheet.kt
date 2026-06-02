@@ -55,8 +55,8 @@ fun EditEntrySheet(
     var meal by remember(entry.entryId) {
         mutableStateOf(Meal.entries.firstOrNull { it.wire == entry.meal } ?: Meal.BREAKFAST)
     }
-    var servingLabel by remember(entry.entryId) { mutableStateOf(entry.servingLabel) }
-    var servingGrams by remember(entry.entryId) { mutableStateOf(trimDouble(entry.servingGrams)) }
+    var servingLabel by remember(entry.entryId) { mutableStateOf(entry.servingLabel.orEmpty()) }
+    var servingGrams by remember(entry.entryId) { mutableStateOf(trimDouble(entry.servingGrams ?: 0.0)) }
     var quantity by remember(entry.entryId) { mutableStateOf(entry.quantity) }
     var quantityText by remember(entry.entryId) { mutableStateOf(trimDouble(entry.quantity)) }
     var kcal by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.caloriesKcal)) }
@@ -214,7 +214,7 @@ fun EditEntrySheet(
                         EntryPatchRequest(
                             meal = meal.wire,
                             foodName = name.ifBlank { entry.foodName },
-                            servingLabel = servingLabel.ifBlank { entry.servingLabel },
+                            servingLabel = servingLabel.ifBlank { entry.servingLabel.orEmpty() },
                             servingGrams = grams,
                             quantity = quantity,
                             macros = Macros(
@@ -252,7 +252,7 @@ private fun EditNumberField(
 
 /** Back out the per-100g baseline implied by a snapshot + its portion. */
 private fun Entry.derivedPer100g(): Macros {
-    val factor = (servingGrams * quantity) / 100.0
+    val factor = ((servingGrams ?: 0.0) * quantity) / 100.0
     fun back(v: Double?): Double? = v?.let { if (factor > 0) it / factor else it }
     return Macros(
         caloriesKcal = back(macros.caloriesKcal),

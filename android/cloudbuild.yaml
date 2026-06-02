@@ -155,11 +155,29 @@ steps:
         FIREBASE_APP_ID="$(gcloud secrets versions access latest \
           --secret=firebase-android-app-id --project=$PROJECT_ID)"
         curl -sL https://firebase.tools | bash
-        firebase appdistribution:distribute \
+
+        # The App Distribution upload endpoint occasionally returns a transient
+        # 5xx (e.g. HTTP 503) that has nothing to do with the build. Retry the
+        # upload with exponential backoff so one flaky request doesn't fail an
+        # otherwise-good release.
+        attempts=0
+        max_attempts=5
+        delay=15
+        until firebase appdistribution:distribute \
           android/app/build/outputs/apk/release/app-release.apk \
           --app "$$FIREBASE_APP_ID" \
           --groups "internal-testers" \
           --release-notes-file /workspace/release-notes.txt
+        do
+          attempts=$$((attempts + 1))
+          if [ "$$attempts" -ge "$$max_attempts" ]; then
+            echo "App Distribution upload failed after $$max_attempts attempts" >&2
+            exit 1
+          fi
+          echo "Upload failed (attempt $$attempts/$$max_attempts); retrying in $${delay}s..." >&2
+          sleep "$$delay"
+          delay=$$((delay * 2))
+        done
 
         # Record this commit as the last successfully-released build so the next
         # build's notes summarize only what changed since here. Best-effort: a

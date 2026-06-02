@@ -103,7 +103,12 @@ export default async function MedsPage() {
       throw new Error(`Failed to add medication: ${text}`);
     }
 
+    // Revalidate both the meds page and the dashboard ("/"), whose "Today's
+    // doses" card reads the schedule from /api/me/medications/today. Without
+    // the "/" entry that cached fetch survives the edit and the dashboard
+    // shows the old dose/schedule.
     revalidatePath("/me/meds");
+    revalidatePath("/");
   }
 
   async function updateMedication(medicationId: string, data: {
@@ -129,6 +134,7 @@ export default async function MedsPage() {
     }
 
     revalidatePath("/me/meds");
+    revalidatePath("/");
   }
 
   async function changeDose(medicationId: string, data: {
@@ -150,6 +156,7 @@ export default async function MedsPage() {
     }
 
     revalidatePath("/me/meds");
+    revalidatePath("/");
   }
 
   async function discontinueMedication(
@@ -170,6 +177,7 @@ export default async function MedsPage() {
     }
 
     revalidatePath("/me/meds");
+    revalidatePath("/");
   }
 
   async function reactivateMedication(medicationId: string, resumeDate?: string) {
@@ -186,6 +194,7 @@ export default async function MedsPage() {
     }
 
     revalidatePath("/me/meds");
+    revalidatePath("/");
   }
 
   async function deleteMedication(medicationId: string) {
@@ -199,6 +208,7 @@ export default async function MedsPage() {
     }
 
     revalidatePath("/me/meds");
+    revalidatePath("/");
   }
 
   const hasActiveMeds = activeMeds.length > 0;

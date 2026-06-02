@@ -5,8 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.nutrition.FoodRepository
 import com.gte619n.healthfitness.data.nutrition.NutritionCaptureRepository
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
-import com.gte619n.healthfitness.domain.nutrition.CompositeIngredientRequest
-import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.FoodCreateRequest
@@ -178,57 +176,24 @@ class NutritionCaptureViewModel @Inject constructor(
     // ---- Photo: meal ----------------------------------------------------
 
     /**
-     * Analyze a meal photo and log it directly as one composite meal entry — the
-     * itemized ingredients plus a generated finished-meal image — then pop back
-     * to the nutrition page. No confirmation step: the user reviews/edits
-     * portions afterwards by tapping the entry.
+     * Capture a meal/product photo and hand it to the backend to analyze and log
+     * asynchronously, then pop straight back to the nutrition page. The entry
+     * appears there immediately as "Analyzing photo…" and fills itself in (name,
+     * macros, ingredients, image) as the background analysis completes — the day
+     * view polls for it. The (slow) analysis no longer blocks this screen.
      */
     fun analyzeMeal(jpeg: ByteArray) {
         _state.update { it.copy(stage = CaptureStage.Working, error = null) }
         viewModelScope.launch {
             try {
-                val proposal = capture.analyzeMeal(jpeg)
-                if (proposal.items.isEmpty()) {
-                    _state.update {
-                        it.copy(stage = CaptureStage.Scanning, error = "No food detected in the photo")
-                    }
-                    return@launch
-                }
-                val mealName = composeMealName(proposal.items.map { it.name })
-                val ingredients = proposal.items.map { item ->
-                    CompositeIngredientRequest(
-                        name = item.name,
-                        servingGrams = item.estimatedPortionGrams,
-                        servingLabel = item.suggestedServingLabel,
-                        quantity = 1.0,
-                        macrosPer100g = item.macrosPer100g,
-                        macros = item.macrosForPortion,
-                    )
-                }
-                nutrition.addCompositeMeal(
-                    today,
-                    CompositeMealRequest(
-                        meal = currentMeal().wire,
-                        mealName = mealName,
-                        ingredients = ingredients,
-                        referencePhotoRef = proposal.photoRef,
-                    ),
-                )
-                snackbar.show("$mealName logged")
+                capture.captureMeal(today, currentMeal().wire, jpeg)
+                snackbar.show("Analyzing your photo…")
                 _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
                 _events.send(CaptureEvent.NavigateBack)
             } catch (e: Exception) {
-                _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Analysis failed") }
+                _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Capture failed") }
             }
         }
-    }
-
-    /** "Salmon", "Salmon & Rice", "Salmon, Rice & Broccolini" from item names. */
-    private fun composeMealName(names: List<String>): String = when (names.size) {
-        0 -> "Meal"
-        1 -> names[0]
-        2 -> "${names[0]} & ${names[1]}"
-        else -> names.dropLast(1).joinToString(", ") + " & " + names.last()
     }
 
     /**

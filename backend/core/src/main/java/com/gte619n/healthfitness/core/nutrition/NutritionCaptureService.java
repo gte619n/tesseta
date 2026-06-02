@@ -58,10 +58,10 @@ public class NutritionCaptureService {
         }
 
         String photoRef = storePhoto(userId, imageBytes, mimeType);
-        List<MealPhotoAnalyzer.MealItem> items = analyzer.analyze(imageBytes, mimeType);
+        MealPhotoAnalyzer.MealAnalysis analysis = analyzer.analyzeMeal(imageBytes, mimeType);
 
         List<MealProposal.MealProposalItem> proposed = new ArrayList<>();
-        for (MealPhotoAnalyzer.MealItem item : items) {
+        for (MealPhotoAnalyzer.MealItem item : analysis.items()) {
             if (item == null) continue;
             proposed.add(new MealProposal.MealProposalItem(
                 item.name(),
@@ -71,7 +71,8 @@ public class NutritionCaptureService {
                 matchCatalogFoodId(item.name())
             ));
         }
-        return new MealProposal(photoRef, proposed);
+        return new MealProposal(
+            photoRef, analysis.mealName(), analysis.packagedProduct(), proposed);
     }
 
     /**
