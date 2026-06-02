@@ -17,8 +17,10 @@ import java.util.Optional;
 //     filtered on their civil `date` member.
 //   - STEPS: a per-minute interval type with no daily form; aggregated to a
 //     daily total via the :dailyRollUp endpoint (countSum).
-//   - SLEEP: a session type (stage list); :dailyRollUp is unsupported and no
-//     sleep score is exposed, so it is not yet ingested.
+//   - SLEEP: a session type; listed and filtered on its civil END (wake) time
+//     (sleep.interval.civil_end_time, YYYY-MM-DD), then the asleep-stage
+//     durations are summed per wake day. No sleep score is exposed, so
+//     sleepScore stays null.
 //
 // IMPORTANT: the Google Health API names daily roll-ups with a "daily-"
 // prefix (daily-resting-heart-rate, daily-heart-rate-variability). The bare
