@@ -112,9 +112,13 @@ public class WorkoutHistoryImporter {
 
     private int[] seedCatalog(FutureWorkouts data, TreeSet<String> unresolved) {
         Map<String, String> equipmentByName = new HashMap<>();
+        Map<String, String> equipmentByNormalized = new HashMap<>();
+        List<String> catalogNames = new ArrayList<>();
         for (Equipment e : equipment.findCatalog(null, null, null)) {
             if (e.name() != null) {
                 equipmentByName.put(e.name().toLowerCase(), e.equipmentId());
+                equipmentByNormalized.putIfAbsent(normalizeEquipmentName(e.name()), e.equipmentId());
+                catalogNames.add(e.name());
             }
         }
         int seeded = 0;
@@ -127,8 +131,8 @@ public class WorkoutHistoryImporter {
                 skipped++;
                 continue;
             }
-            ExerciseMetadataEnricher.Enrichment m = enricher.enrich(src.name());
-            List<EquipmentRequirement> reqs = resolveEquipment(m.equipmentNameGroups(), equipmentByName, unresolved);
+            ExerciseMetadataEnricher.Enrichment m = enricher.enrich(src.name(), catalogNames);
+            List<EquipmentRequirement> reqs = resolveEquipment(m.equipmentNameGroups(), equipmentByName, equipmentByNormalized, unresolved);
             Instant now = Instant.now();
             exercises.save(new Exercise(
                 src.id(),
@@ -161,7 +165,8 @@ public class WorkoutHistoryImporter {
     }
 
     private List<EquipmentRequirement> resolveEquipment(
-        List<List<String>> groups, Map<String, String> byName, TreeSet<String> unresolved) {
+        List<List<String>> groups, Map<String, String> byName, Map<String, String> byNormalized,
+        TreeSet<String> unresolved) {
         List<EquipmentRequirement> reqs = new ArrayList<>();
         if (groups == null) {
             return reqs;
@@ -169,10 +174,18 @@ public class WorkoutHistoryImporter {
         for (List<String> group : groups) {
             List<String> ids = new ArrayList<>();
             for (String name : group) {
-                String id = name == null ? null : byName.get(name.toLowerCase());
+                if (name == null) {
+                    continue;
+                }
+                String id = byName.get(name.toLowerCase());
+                if (id == null) {
+                    id = byNormalized.get(normalizeEquipmentName(name));
+                }
                 if (id != null) {
-                    ids.add(id);
-                } else if (name != null) {
+                    if (!ids.contains(id)) {
+                        ids.add(id);
+                    }
+                } else {
                     unresolved.add(name);
                 }
             }
@@ -181,6 +194,14 @@ public class WorkoutHistoryImporter {
             }
         }
         return reqs;
+    }
+
+    /** Normalize an equipment name for tolerant matching: lowercase, trim, collapse internal whitespace, and fold a trailing plural 's'. */
+    private static String normalizeEquipmentName(String name) {
+        if (name == null) return "";
+        String n = name.toLowerCase().trim().replaceAll("\\s+", " ");
+        if (n.endsWith("s") && n.length() > 1) n = n.substring(0, n.length() - 1);
+        return n;
     }
 
     // ---- 2. program + phases ----

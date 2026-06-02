@@ -13,8 +13,13 @@ import java.util.List;
  */
 public interface ExerciseMetadataEnricher {
 
-    /** Enrich a single exercise by name. Never throws — returns {@link #empty(String)} on failure. */
-    Enrichment enrich(String exerciseName);
+    /** Enrich a single exercise by name, constraining equipment to the given catalog vocabulary (exact names). Pass an empty list for unconstrained. Never throws — returns {@link #empty(String)} on failure. */
+    Enrichment enrich(String exerciseName, List<String> allowedEquipmentNames);
+
+    /** Convenience: enrich without constraining the equipment vocabulary. */
+    default Enrichment enrich(String exerciseName) {
+        return enrich(exerciseName, List.of());
+    }
 
     /**
      * Structured metadata for one exercise. Mirrors {@link ExerciseEdit} minus

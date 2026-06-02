@@ -3,51 +3,51 @@
   "enrichments" : {
     "Barbell Bench Press" : {
       "movementPattern" : "PUSH_HORIZONTAL",
-      "primaryMuscles" : [ "pectoralis major", "triceps" ],
-      "secondaryMuscles" : [ "anterior deltoids" ],
+      "primaryMuscles" : [ "pectoralis major", "triceps brachii", "anterior deltoid" ],
+      "secondaryMuscles" : [ "serratus anterior" ],
       "laterality" : "BILATERAL",
       "mechanic" : "COMPOUND",
-      "description" : "A classic compound upper-body exercise where you lower a barbell to your chest and press it back up while lying flat on a bench.",
-      "formCues" : [ "Retract your shoulder blades and pin them to the bench", "Keep your feet flat on the floor", "Lower the bar to your mid-chest under control" ],
+      "description" : "A classic upper-body pressing exercise performed by lowering a barbell to the chest and pressing it back up while lying flat on a bench.",
+      "formCues" : [ "Keep your feet flat on the floor", "Retract and depress your shoulder blades", "Lower the bar to your mid-chest", "Push yourself away from the bar to press" ],
       "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
       "defaultRepRange" : {
         "min" : 5,
-        "max" : 12
+        "max" : 10
       },
       "isTimed" : false,
-      "equipmentNameGroups" : [ [ "Barbell" ], [ "Flat Bench" ] ]
+      "equipmentNameGroups" : [ [ "Adjustable Weight Bench" ] ]
     },
     "Dumbbell Goblet Squat" : {
       "movementPattern" : "SQUAT",
       "primaryMuscles" : [ "quadriceps", "glutes" ],
-      "secondaryMuscles" : [ "hamstrings", "core", "erector spinae" ],
+      "secondaryMuscles" : [ "hamstrings", "core", "calves" ],
       "laterality" : "BILATERAL",
       "mechanic" : "COMPOUND",
-      "description" : "A front-loaded squat variation where a single dumbbell is held vertically against the chest to encourage an upright torso.",
-      "formCues" : [ "Hold the dumbbell vertically close to your chest", "Keep your elbows tucked and chest up", "Push your knees out as you sink your hips", "Drive through your mid-foot to stand up" ],
+      "description" : "A front-loaded squat variation where a single dumbbell is held vertically in front of the chest, promoting an upright torso.",
+      "formCues" : [ "Hold the dumbbell vertically close to your chest", "Keep your chest upright and core engaged", "Drive your knees outward as you squat", "Push through your heels to stand" ],
       "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
       "defaultRepRange" : {
         "min" : 8,
         "max" : 15
       },
       "isTimed" : false,
-      "equipmentNameGroups" : [ [ "Dumbbell" ] ]
+      "equipmentNameGroups" : [ [ "Dumbbells" ] ]
     },
     "Single-Arm Dumbbell Row" : {
       "movementPattern" : "PULL_HORIZONTAL",
-      "primaryMuscles" : [ "lats", "rhomboids" ],
-      "secondaryMuscles" : [ "biceps", "rear deltoids", "trapezius", "core" ],
+      "primaryMuscles" : [ "latissimus dorsi", "rhomboids", "trapezius" ],
+      "secondaryMuscles" : [ "biceps", "posterior deltoids", "core" ],
       "laterality" : "UNILATERAL",
       "mechanic" : "COMPOUND",
-      "description" : "An upper body pulling exercise performed by rowing a dumbbell to the hip while supporting the torso with the opposite arm.",
-      "formCues" : [ "Keep your spine neutral and flat", "Pull the dumbbell toward your hip, not your chest", "Drive your elbow toward the ceiling" ],
+      "description" : "A unilateral horizontal pull where a single dumbbell is rowed toward the hip while supporting the body with the opposite hand and knee on a bench.",
+      "formCues" : [ "Keep your spine neutral and flat", "Pull the dumbbell toward your hip, not your chest", "Squeeze your shoulder blade at the top of the movement", "Avoid rotating your torso as you pull" ],
       "suitableBlockTypes" : [ "MAIN", "ACCESSORY" ],
       "defaultRepRange" : {
         "min" : 8,
         "max" : 12
       },
       "isTimed" : false,
-      "equipmentNameGroups" : [ [ "Dumbbell" ] ]
+      "equipmentNameGroups" : [ [ "Dumbbells" ], [ "Adjustable Weight Bench" ] ]
     },
     "Recover" : {
       "movementPattern" : "OTHER",
@@ -55,9 +55,9 @@
       "secondaryMuscles" : [ ],
       "laterality" : "BILATERAL",
       "mechanic" : "ISOLATION",
-      "description" : "A designated rest period to recover and prepare for the next work interval.",
-      "formCues" : [ "Focus on deep, slow breathing", "Keep moving lightly if needed to prevent stiffness", "Mentally prepare for the next effort" ],
-      "suitableBlockTypes" : [ "WARMUP", "CARDIO", "MAIN", "ACCESSORY", "CORE", "COOLDOWN" ],
+      "description" : "A designated rest period to allow your heart rate to recover and prepare for the next effort.",
+      "formCues" : [ "Focus on slow deep breathing", "Relax your muscles entirely" ],
+      "suitableBlockTypes" : [ "WARMUP", "MAIN", "ACCESSORY", "CORE", "CARDIO", "COOLDOWN" ],
       "defaultRepRange" : null,
       "isTimed" : true,
       "equipmentNameGroups" : [ ]

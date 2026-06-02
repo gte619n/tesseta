@@ -16,7 +16,7 @@ import java.util.List;
 public class FakeExerciseMetadataEnricher implements ExerciseMetadataEnricher {
 
     @Override
-    public Enrichment enrich(String name) {
+    public Enrichment enrich(String name, List<String> allowedEquipmentNames) {
         if (name == null || name.isBlank()) {
             return ExerciseMetadataEnricher.empty(name);
         }

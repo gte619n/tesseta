@@ -88,14 +88,22 @@ public class GeminiExerciseMetadataEnricher implements ExerciseMetadataEnricher 
     }
 
     @Override
-    public Enrichment enrich(String exerciseName) {
+    public Enrichment enrich(String exerciseName, List<String> allowedEquipmentNames) {
         if (exerciseName == null || exerciseName.isBlank()) {
             return ExerciseMetadataEnricher.empty(exerciseName);
         }
         try {
-            Content content = Content.fromParts(
-                Part.fromText(SYSTEM_PROMPT),
-                Part.fromText("Exercise name: " + exerciseName));
+            java.util.List<Part> parts = new java.util.ArrayList<>();
+            parts.add(Part.fromText(SYSTEM_PROMPT));
+            if (allowedEquipmentNames != null && !allowedEquipmentNames.isEmpty()) {
+                String vocab = String.join(", ", allowedEquipmentNames);
+                parts.add(Part.fromText(
+                    "EQUIPMENT CONSTRAINT: For equipmentNameGroups you MUST use ONLY names from this exact catalog, copied with the exact spelling shown. "
+                  + "If no listed item fits a requirement, omit that requirement (use [] for fully bodyweight). Do NOT invent names outside this list.\n"
+                  + "Catalog: " + vocab));
+            }
+            parts.add(Part.fromText("Exercise name: " + exerciseName));
+            Content content = Content.fromParts(parts.toArray(new Part[0]));
             GenerateContentResponse response =
                 client.models.generateContent(model, content, GenerateContentConfig.builder().build());
             String text = stripFences(response.text());

@@ -1,13 +1,18 @@
 package com.gte619n.healthfitness.workoutimport;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte619n.healthfitness.core.exercise.ExerciseMetadataEnricher;
+import com.gte619n.healthfitness.core.exercise.ExerciseMetadataEnricher.Enrichment;
 import com.gte619n.healthfitness.integrations.exercise.GeminiExerciseMetadataEnricher;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
@@ -29,6 +34,16 @@ class WorkoutSeedEnrichmentPreviewTest {
         "Single-Arm Dumbbell Row",
         "Recover");
 
+    /** The real production equipment catalog vocabulary (29 names). */
+    private static final List<String> CATALOG = List.of(
+        "Abdominal / Back Extension Bench", "Adjustable Weight Bench", "Assisted Dip / Chin-Up Machine",
+        "Bosu Ball", "Chest Press Machine", "Dual Adjustable Pulley Cable Machine", "Dumbbells",
+        "EZ Curl Barbells", "Echo Air Bike", "Elliptical Machine", "Exercise Mat",
+        "Functional Trainer Cable Machine", "Kettlebells", "Lat Pulldown Machine", "Leg Extension Machine",
+        "Leg Press Machine", "Medicine Balls", "Pec Deck / Rear Delt Machine", "Recumbent Bike",
+        "Rowing Machine", "Seated Leg Curl Machine", "Seated Row Machine", "Smith Machine",
+        "Stability Ball", "Stationary Bike", "Treadmill", "Triceps Press Machine", "Vibration Platform");
+
     @Test
     void previewRealEnrichment() throws Exception {
         ExerciseMetadataEnricher enricher = new GeminiExerciseMetadataEnricher(
@@ -36,9 +51,9 @@ class WorkoutSeedEnrichmentPreviewTest {
 
         Map<String, Object> preview = new LinkedHashMap<>();
         preview.put("model", "gemini-3.5-flash");
-        Map<String, Object> results = new LinkedHashMap<>();
+        Map<String, Enrichment> results = new LinkedHashMap<>();
         for (String name : SAMPLES) {
-            results.put(name, enricher.enrich(name));
+            results.put(name, enricher.enrich(name, CATALOG));
         }
         preview.put("enrichments", results);
 
@@ -46,6 +61,22 @@ class WorkoutSeedEnrichmentPreviewTest {
         Files.createDirectories(out.getParent());
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(out.toFile(), preview);
         System.out.println("Wrote enrichment preview to " + out.toAbsolutePath());
+
+        // Equipment-vocabulary constraint: every emitted equipment name must be a
+        // member of the real production catalog (exact string match).
+        Set<String> emittedEquipment = new LinkedHashSet<>();
+        for (Map.Entry<String, Enrichment> entry : results.entrySet()) {
+            String sampleName = entry.getKey();
+            for (List<String> group : entry.getValue().equipmentNameGroups()) {
+                for (String equipName : group) {
+                    emittedEquipment.add(equipName);
+                    assertThat(CATALOG)
+                        .as("model emitted in-vocabulary equipment for %s", sampleName)
+                        .contains(equipName);
+                }
+            }
+        }
+        System.out.println("Emitted equipment names: " + emittedEquipment);
     }
 
     private static Path locate(String relative) {
