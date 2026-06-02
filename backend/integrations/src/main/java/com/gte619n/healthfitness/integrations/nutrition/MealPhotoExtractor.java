@@ -45,21 +45,40 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
     static final String TOOL_NAME = "extract_meal_items";
 
     private static final String SYSTEM_PROMPT = """
-        You are a nutrition vision assistant. You are given ONE photo of a meal
-        on a plate or in a bowl. Identify each DISTINCT food component visible
-        (e.g. "grilled chicken breast", "white rice", "steamed broccoli"). For
-        each component:
-          - estimate its portion weight in GRAMS as actually served in the photo,
+        You are a nutrition vision assistant. You are given ONE photo of food.
+        First decide what kind of photo it is:
+
+        A) A SINGLE PACKAGED PRODUCT — a branded, packaged good shown as one unit
+           (a bottle, can, carton, tub, pouch, bar or wrapper), e.g. a protein
+           shake, a tub of yogurt, an energy bar. Treat it as ONE product:
+           - set isPackagedProduct = true,
+           - return exactly ONE item whose name is the product itself (e.g.
+             "Greek yogurt", "Chocolate protein shake") — NOT a list of its
+             ingredients and NOT the brand/label text,
+           - mealName = that same product name.
+
+        B) A PREPARED MEAL — a plate or bowl of food with distinct components.
+           Treat it as a multi-ingredient meal:
+           - set isPackagedProduct = false,
+           - return one item per DISTINCT food component (e.g. "grilled chicken
+             breast", "white rice", "steamed broccoli"); do not merge a mixed
+             plate into one item,
+           - mealName = a SHORT, natural dish name of its main components, e.g.
+             "Salmon and broccoli" or "Chicken burrito bowl" — NOT a comma-joined
+             list of every ingredient.
+
+        For EACH item:
+          - estimate its portion weight in GRAMS as actually served/contained,
           - give its macros PER 100 GRAMS of that food (not per portion):
             caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams,
           - give a confidence in [0,1] for how sure you are of the identification.
 
         Rules:
-        - One entry per distinct food; do not merge a mixed plate into one item.
         - Macros are ALWAYS per 100 g of the food itself, independent of portion.
         - Use realistic reference values for common foods.
         - If you cannot identify any food, return an empty items array.
-        - Call the extract_meal_items tool with the full list; do not reply in prose.
+        - Always provide mealName and isPackagedProduct.
+        - Call the extract_meal_items tool; do not reply in prose.
         """;
 
     private final Client client;
@@ -83,6 +102,11 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
 
     @Override
     public List<MealItem> analyze(byte[] imageBytes, String mimeType) {
+        return analyzeMeal(imageBytes, mimeType).items();
+    }
+
+    @Override
+    public MealAnalysis analyzeMeal(byte[] imageBytes, String mimeType) {
         if (imageBytes == null || imageBytes.length == 0) {
             throw new NutritionExtractionException("meal photo is empty");
         }
@@ -109,7 +133,7 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
             throw new NutritionExtractionException(
                 "Gemini did not return an extract_meal_items tool call");
         }
-        return toItems(args);
+        return toAnalysis(args);
     }
 
     private Map<String, Object> toolArgs(GenerateContentResponse response) {
@@ -123,6 +147,19 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
             }
         }
         return null;
+    }
+
+    /** Build the full analysis (name + packaged flag + items) from tool args. */
+    static MealAnalysis toAnalysis(Map<String, Object> args) {
+        if (args == null) {
+            return new MealAnalysis(null, false, List.of());
+        }
+        String mealName = str(args.get("mealName"));
+        boolean packaged = bool(args.get("isPackagedProduct"));
+        return new MealAnalysis(
+            (mealName != null && !mealName.isBlank()) ? mealName : null,
+            packaged,
+            toItems(args));
     }
 
     @SuppressWarnings("unchecked")
@@ -173,6 +210,11 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
         }
     }
 
+    private static boolean bool(Object o) {
+        if (o instanceof Boolean b) return b;
+        return o != null && Boolean.parseBoolean(o.toString());
+    }
+
     // ---- tool schema ----
 
     private static FunctionDeclaration extractMealItemsTool() {
@@ -207,9 +249,15 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
         Schema params = Schema.builder()
             .type(Type.Known.OBJECT)
             .properties(orderedMap(
+                "mealName", Schema.builder().type(Type.Known.STRING)
+                    .description("Short natural dish/product name, e.g. 'Salmon and broccoli' "
+                        + "or 'Greek yogurt' — not a comma-joined ingredient list.").build(),
+                "isPackagedProduct", Schema.builder().type(Type.Known.BOOLEAN)
+                    .description("True if the photo is a single packaged product (bottle, tub, "
+                        + "can, bar, wrapper) rather than a prepared multi-ingredient meal.").build(),
                 "items", Schema.builder().type(Type.Known.ARRAY).items(item).build()
             ))
-            .required("items")
+            .required("mealName", "isPackagedProduct", "items")
             .build();
 
         return FunctionDeclaration.builder()

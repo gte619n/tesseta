@@ -29,6 +29,34 @@ public interface MealPhotoAnalyzer {
     List<MealItem> analyze(byte[] imageBytes, String mimeType);
 
     /**
+     * Richer analysis: in addition to the itemized components, a short natural
+     * meal name (e.g. "Salmon and broccoli", not a comma-joined ingredient list)
+     * and whether the photo is a single packaged product (a bottle, tub, can or
+     * wrapper — e.g. a protein shake or a tub of yogurt) rather than a prepared
+     * meal.
+     *
+     * <p>Default delegates to {@link #analyze} with no name and not-packaged, so
+     * lightweight test doubles only need to implement {@code analyze}.
+     */
+    default MealAnalysis analyzeMeal(byte[] imageBytes, String mimeType) {
+        return new MealAnalysis(null, false, analyze(imageBytes, mimeType));
+    }
+
+    /**
+     * Outcome of analyzing a meal/product photo.
+     *
+     * @param mealName        short natural name for the dish, or null when unknown
+     * @param packagedProduct true when the photo is a single packaged product
+     *                        (treat as one food, not a multi-ingredient meal)
+     * @param items           the identified components (one for a packaged product)
+     */
+    record MealAnalysis(
+        String mealName,
+        boolean packagedProduct,
+        List<MealItem> items
+    ) {}
+
+    /**
      * A single proposed food component identified on the plate.
      *
      * @param name                 human-readable name, e.g. "Grilled chicken breast"
