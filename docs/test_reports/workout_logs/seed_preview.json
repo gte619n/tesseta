@@ -33,8 +33,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-02T20:49:54.340061Z",
-    "updatedAt" : "2026-06-02T20:49:54.340061Z",
+    "createdAt" : "2026-06-02T21:07:48.209939Z",
+    "updatedAt" : "2026-06-02T21:07:48.209939Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "3f6ec27f-bbb2-479a-98d3-1aa0242f5511",
@@ -61,8 +61,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-02T20:49:54.340073Z",
-    "updatedAt" : "2026-06-02T20:49:54.340073Z",
+    "createdAt" : "2026-06-02T21:07:48.209953Z",
+    "updatedAt" : "2026-06-02T21:07:48.209953Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "d09748b1-5876-42a9-a927-62a96aa772e8",
@@ -86,8 +86,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-02T20:49:54.340094Z",
-    "updatedAt" : "2026-06-02T20:49:54.340094Z",
+    "createdAt" : "2026-06-02T21:07:48.209974Z",
+    "updatedAt" : "2026-06-02T21:07:48.209974Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "eb06d263-ab43-4352-9346-f32c8df5739b",
@@ -114,8 +114,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-02T20:49:54.340101Z",
-    "updatedAt" : "2026-06-02T20:49:54.340101Z",
+    "createdAt" : "2026-06-02T21:07:48.209981Z",
+    "updatedAt" : "2026-06-02T21:07:48.209981Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "c37ea438-db56-46be-b13e-eb95f32b62bb",
@@ -142,8 +142,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-02T20:49:54.340107Z",
-    "updatedAt" : "2026-06-02T20:49:54.340107Z",
+    "createdAt" : "2026-06-02T21:07:48.209987Z",
+    "updatedAt" : "2026-06-02T21:07:48.209987Z",
     "aliasOfExerciseId" : null
   } ],
   "program" : {
@@ -398,8 +398,8 @@
       "completedAt" : "2025-11-24T23:59:59Z",
       "days" : [ ]
     } ],
-    "createdAt" : "2026-06-02T20:49:54.345219Z",
-    "updatedAt" : "2026-06-02T20:49:54.345219Z",
+    "createdAt" : "2026-06-02T21:07:48.215799Z",
+    "updatedAt" : "2026-06-02T21:07:48.215799Z",
     "completedAt" : "2025-11-24T23:59:59Z"
   },
   "sampleCompletedSessions" : [ {

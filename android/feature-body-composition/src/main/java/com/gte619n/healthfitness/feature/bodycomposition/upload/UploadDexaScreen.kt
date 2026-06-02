@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.sync.OfflineGate
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -40,6 +41,7 @@ import com.gte619n.healthfitness.ui.theme.type
 fun UploadDexaScreen(navController: NavHostController) {
     val vm: UploadDexaViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    val online by vm.isOnline.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val picker = rememberLauncherForActivityResult(
@@ -89,21 +91,27 @@ fun UploadDexaScreen(navController: NavHostController) {
         ) {
             when (val s = state) {
             is UploadDexaViewModel.UiState.Idle -> {
-                Text(
-                    text = "Pick a DEXA report PDF (max 25 MB).",
-                    style = Hf.type.bodyMd,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Hf.colors.accent, RoundedCornerShape(10.dp))
-                        .clickable { picker.launch("application/pdf") }
-                        .padding(vertical = 13.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
+                // D17 (#41): online-only AI extraction — gate the picker offline.
+                OfflineGate(
+                    online = online,
+                    message = "Importing a DEXA PDF uses AI and needs an internet connection.",
                 ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null, tint = Hf.colors.textInverse, modifier = Modifier.size(16.dp))
-                    Text("  CHOOSE PDF", style = Hf.type.capsSm, color = Hf.colors.textInverse)
+                    Text(
+                        text = "Pick a DEXA report PDF (max 25 MB).",
+                        style = Hf.type.bodyMd,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Hf.colors.accent, RoundedCornerShape(10.dp))
+                            .clickable { picker.launch("application/pdf") }
+                            .padding(vertical = 13.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = null, tint = Hf.colors.textInverse, modifier = Modifier.size(16.dp))
+                        Text("  CHOOSE PDF", style = Hf.type.capsSm, color = Hf.colors.textInverse)
+                    }
                 }
             }
 

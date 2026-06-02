@@ -84,10 +84,15 @@ class RestOutboxReplayClient @Inject constructor(
             else -> (payloadJson ?: "{}").toRequestBody(jsonMedia)
         }
 
+        // Most tables key idempotency by the random per-mutation id; adherence
+        // (#24) derives a deterministic `(med,date)` key so a re-queued dose log is
+        // a server no-op (matching the backend's med+date idempotency scope).
+        val idempotencyKey = OutboxEndpointRegistry.idempotencyKey(table, entityId, mutationId)
+
         val request = Request.Builder()
             .url(url)
             .method(method, body)
-            .header("Idempotency-Key", mutationId)
+            .header("Idempotency-Key", idempotencyKey)
             .header("X-HF-Origin-Device", originDeviceId)
             .build()
 

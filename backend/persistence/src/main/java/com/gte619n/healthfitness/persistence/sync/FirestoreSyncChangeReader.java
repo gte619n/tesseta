@@ -6,6 +6,7 @@ import static com.gte619n.healthfitness.persistence.FirestoreMapper.statusOf;
 import com.gte619n.healthfitness.core.sync.SyncChange;
 import com.gte619n.healthfitness.core.sync.SyncChangeReader;
 import com.gte619n.healthfitness.core.sync.SyncCursor;
+import com.gte619n.healthfitness.core.sync.SyncRecentWindow;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.Timestamp;
@@ -16,8 +17,9 @@ import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
-import com.google.cloud.firestore.QuerySnapshot;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +35,14 @@ import org.springframework.stereotype.Component;
  * subcollection) for documents whose {@code updatedAt} server timestamp is
  * strictly after the cursor — or all of them on a full initial sync — ordered
  * by {@code updatedAt} ascending, <b>including archived tombstones</b>.
+ *
+ * <p><b>Strictly user-scoped (IMPL-AND-20 #10).</b> Both the top-level
+ * collections and the nested subcollections are read by walking down from
+ * {@code users/{uid}} — top-level collections directly, subcollections by
+ * enumerating the user's own parent docs and querying each child subcollection
+ * in turn. No {@code collectionGroup} query is used, so the delta never reads
+ * (or filters out) another user's documents. This is an N+1 read pattern bounded
+ * by the user's own document counts, traded for hard per-user isolation.
  *
  * <h2>Emitted {@code collection} → Android Room mirror table</h2>
  *
@@ -97,23 +107,43 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
     );
 
     /**
-     * Subcollections, keyed by the Firestore collection-id leaf used by a
-     * {@code collectionGroup} query, mapped to the emitted {@code collection}
-     * routing name. The emitted {@code id} embeds the parent id segments parsed
-     * from the document path.
+     * Per-user subcollection descriptors (IMPL-AND-20 #10). Each entry says how
+     * to reach a nested subcollection by walking down from {@code users/{uid}}
+     * one parent collection at a time — never via a {@code collectionGroup}
+     * query, which would scan across all users before app-side filtering. We
+     * enumerate the parent docs under the user and query each child
+     * subcollection directly, so the read is strictly user-scoped (an N+1 read
+     * pattern, but it never touches another user's data).
+     *
+     * <p>{@code parentChain} is the ordered list of intermediate collection
+     * names between {@code users/{uid}} and the target subcollection. {@code
+     * leaf} is the target subcollection name. {@code emitted} is the routing
+     * name surfaced on the {@link SyncChange}; the emitted {@code id} embeds the
+     * parent id segments (mirroring the Firestore path below the user).
+     *
+     * <pre>
+     *  medications/{m}/adherence        parentChain=[medications]        leaf=adherence
+     *  medications/{m}/history          parentChain=[medications]        leaf=history
+     *  goals/{g}/phases                 parentChain=[goals]              leaf=phases
+     *  goals/{g}/phases/{p}/steps       parentChain=[goals, phases]      leaf=steps
+     *  goalChatThreads/{t}/messages     parentChain=[goalChatThreads]    leaf=messages
+     *  nutritionDays/{d}/entries        parentChain=[nutritionDays]      leaf=entries
+     * </pre>
      */
-    private static final Map<String, String> SUBCOLLECTIONS = Map.of(
-        "adherence", "medications/adherence",
-        "history", "medications/history",
-        "phases", "goals/phases",
-        "steps", "goals/phases/steps",
-        "messages", "goalChatThreads/messages",
-        "entries", "nutritionDays/entries",
-        // Materialized program sessions. Workout-program *chat* threads/messages
-        // are deliberately NOT synced (online-only, web-driven SSE) — and the
-        // chat's "messages" leaf is excluded from the goal-chat collectionGroup
-        // query by the top-level-segment guard in readChanges.
-        "scheduled", "workoutPrograms/scheduled"
+    private record Subcollection(List<String> parentChain, String leaf, String emitted) {}
+
+    private static final List<Subcollection> SUBCOLLECTIONS = List.of(
+        new Subcollection(List.of("medications"), "adherence", "medications/adherence"),
+        new Subcollection(List.of("medications"), "history", "medications/history"),
+        new Subcollection(List.of("goals"), "phases", "goals/phases"),
+        new Subcollection(List.of("goals", "phases"), "steps", "goals/phases/steps"),
+        new Subcollection(List.of("goalChatThreads"), "messages", "goalChatThreads/messages"),
+        new Subcollection(List.of("nutritionDays"), "entries", "nutritionDays/entries"),
+        // Materialized program sessions: users/{uid}/workoutPrograms/{id}/scheduled/{id}.
+        // Per-user enumeration walks workoutPrograms → scheduled directly, so the
+        // online-only workout-program *chat* (its own messages leaf) is never
+        // reached. Workout-program chat is web-driven SSE and not synced.
+        new Subcollection(List.of("workoutPrograms"), "scheduled", "workoutPrograms/scheduled")
     );
 
     /** Field keys never forwarded to clients in {@code doc}. */
@@ -126,7 +156,8 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
     }
 
     @Override
-    public List<SyncChange> readChanges(String userId, SyncCursor since, int limit) {
+    public List<SyncChange> readChanges(
+        String userId, SyncCursor since, int limit, SyncRecentWindow window) {
         List<SyncChange> all = new ArrayList<>();
 
         // Top-level collections: a bounded ascending scan per collection. We
@@ -134,31 +165,32 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         // a correct globally-ordered prefix of size `limit`.
         for (String name : TOP_LEVEL) {
             CollectionReference ref = firestore.collection(USERS).document(userId).collection(name);
-            for (QueryDocumentSnapshot doc : scan(ref, since, name, limit)) {
+            for (QueryDocumentSnapshot doc : scan(ref, since, name, limit, /*subUserId*/ null)) {
+                if (!windowAllows(name, doc, window)) {
+                    continue;
+                }
                 all.add(toChange(name, doc.getId(), doc));
             }
         }
 
-        // Subcollections via collectionGroup, scoped to this user by document
-        // path prefix (a collectionGroup query spans all users, so we filter to
-        // those whose path starts at users/{userId}).
-        for (Map.Entry<String, String> entry : SUBCOLLECTIONS.entrySet()) {
-            String leaf = entry.getKey();
-            String emittedCollection = entry.getValue();
-            for (QueryDocumentSnapshot doc : scanGroup(leaf, since, emittedCollection, userId, limit)) {
-                if (!ownedBy(doc.getReference(), userId)) {
-                    continue;
+        // Subcollections via strict per-user enumeration (IMPL-AND-20 #10):
+        // walk down from users/{userId} one parent collection at a time and
+        // query each child subcollection directly. This never issues a
+        // collectionGroup query, so it never reads another user's documents
+        // before filtering — at the cost of an N+1 read pattern (bounded by the
+        // user's own parent-doc counts).
+        DocumentReference userRef = firestore.collection(USERS).document(userId);
+        for (Subcollection sub : SUBCOLLECTIONS) {
+            for (CollectionReference ref : leafCollections(userRef, sub.parentChain(), sub.leaf())) {
+                // Pass userId so the cursor tiebreak probes the composite id
+                // (e.g. "{med}/{adherenceId}"), matching the emitted change id.
+                for (QueryDocumentSnapshot doc : scan(ref, since, sub.emitted(), limit, userId)) {
+                    if (!windowAllows(sub.emitted(), doc, window)) {
+                        continue;
+                    }
+                    String id = subcollectionId(doc.getReference(), userId);
+                    all.add(toChange(sub.emitted(), id, doc));
                 }
-                // A collectionGroup leaf can be shared by unrelated parents (e.g.
-                // "messages" lives under both goalChatThreads and the online-only
-                // workoutPrograms/{id}/chat). Keep only docs whose top-level
-                // collection matches the routing name so a shared leaf is never
-                // misrouted to the wrong table.
-                if (!topLevelMatches(doc.getReference(), userId, emittedCollection)) {
-                    continue;
-                }
-                String id = subcollectionId(doc.getReference(), userId);
-                all.add(toChange(emittedCollection, id, doc));
             }
         }
 
@@ -188,39 +220,65 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
      * neither skipped nor duplicated.
      */
     private List<QueryDocumentSnapshot> scan(
-        CollectionReference ref, SyncCursor since, String emittedCollection, int limit) {
+        CollectionReference ref, SyncCursor since, String emittedCollection, int limit,
+        String subUserId) {
         Query q = ref.orderBy(UPDATED_AT, Query.Direction.ASCENDING);
         if (since != null) {
             q = q.whereGreaterThanOrEqualTo(UPDATED_AT, Timestamp.ofTimeMicroseconds(since.lastUpdateMillis() * 1000L));
         }
         List<QueryDocumentSnapshot> docs = await(q.limit(limit + 1).get()).getDocuments();
-        return filterAfterCursor(docs, since, emittedCollection, /*subcollection*/ false, null);
+        return filterAfterCursor(docs, since, emittedCollection, subUserId);
     }
 
-    private List<QueryDocumentSnapshot> scanGroup(
-        String leaf, SyncCursor since, String emittedCollection, String userId, int limit) {
-        Query q = firestore.collectionGroup(leaf).orderBy(UPDATED_AT, Query.Direction.ASCENDING);
-        if (since != null) {
-            q = q.whereGreaterThanOrEqualTo(UPDATED_AT, Timestamp.ofTimeMicroseconds(since.lastUpdateMillis() * 1000L));
+    /**
+     * Resolve every concrete leaf {@link CollectionReference} for a subcollection
+     * descriptor, by enumerating the parent docs under {@code users/{uid}} one
+     * level at a time. For a single-parent subcollection (e.g. {@code
+     * medications/{m}/adherence}) this lists the medications and returns each
+     * one's {@code adherence} collection; for a two-level one (e.g. {@code
+     * goals/{g}/phases/{p}/steps}) it lists goals, then each goal's phases, then
+     * returns each phase's {@code steps} collection. Every read is rooted at the
+     * user document, so no other user's data is ever queried.
+     */
+    private List<CollectionReference> leafCollections(
+        DocumentReference base, List<String> parentChain, String leaf) {
+        // Frontier of parent docs reachable so far; starts at the user doc.
+        List<DocumentReference> frontier = new ArrayList<>();
+        frontier.add(base);
+        for (String parentCollection : parentChain) {
+            List<DocumentReference> next = new ArrayList<>();
+            for (DocumentReference parent : frontier) {
+                // listDocuments() returns an Iterable of child doc refs directly
+                // (it is itself the blocking enumeration), scoped to this parent.
+                for (DocumentReference child : parent.collection(parentCollection).listDocuments()) {
+                    next.add(child);
+                }
+            }
+            frontier = next;
         }
-        // Over-fetch: a collectionGroup spans all users, so after user-filtering
-        // we may have fewer than `limit`; the merge/truncate in readChanges
-        // bounds the final page. Cap the scan to avoid unbounded reads.
-        List<QueryDocumentSnapshot> docs = await(q.limit((limit + 1) * 4).get()).getDocuments();
-        return filterAfterCursor(docs, since, emittedCollection, /*subcollection*/ true, userId);
+        List<CollectionReference> leaves = new ArrayList<>(frontier.size());
+        for (DocumentReference parent : frontier) {
+            leaves.add(parent.collection(leaf));
+        }
+        return leaves;
     }
 
-    /** Drop docs at-or-before the cursor in canonical order (tiebreak in-app). */
+    /**
+     * Drop docs at-or-before the cursor in canonical order (tiebreak in-app).
+     * For a subcollection scan, {@code subUserId} is non-null and the probe id
+     * is the composite path id ("{parent}/{doc}"); for a top-level scan it is
+     * null and the bare doc id is used.
+     */
     private List<QueryDocumentSnapshot> filterAfterCursor(
         List<QueryDocumentSnapshot> docs, SyncCursor since,
-        String emittedCollection, boolean subcollection, String userId) {
+        String emittedCollection, String subUserId) {
         if (since == null) {
             return docs;
         }
         List<QueryDocumentSnapshot> kept = new ArrayList<>();
         for (QueryDocumentSnapshot doc : docs) {
-            String id = subcollection
-                ? subcollectionId(doc.getReference(), userId)
+            String id = subUserId != null
+                ? subcollectionId(doc.getReference(), subUserId)
                 : doc.getId();
             SyncChange probe = new SyncChange(
                 emittedCollection, id, statusOf(doc), updatedAt(doc), null);
@@ -236,6 +294,43 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         Instant lastUpdate = updatedAt(doc);
         Object payload = status == SyncStatus.ARCHIVED ? null : sanitize(doc.getData(), collection);
         return new SyncChange(collection, id, status, lastUpdate, payload);
+    }
+
+    /**
+     * Apply the recent-window bound (IMPL-AND-20 #37). Returns true (emit) when
+     * there is no window, the collection is not heavy, the doc is a tombstone
+     * (deletes always propagate so offline clients can drop the row), or the
+     * heavy doc's sample/effective date is on/after the window date. A heavy doc
+     * whose date can't be read is conservatively emitted.
+     */
+    private static boolean windowAllows(String collection, DocumentSnapshot doc, SyncRecentWindow window) {
+        if (window == null || !window.isHeavy(collection)) {
+            return true;
+        }
+        if (statusOf(doc) == SyncStatus.ARCHIVED) {
+            return true;
+        }
+        return window.includes(collection, effectiveDate(collection, doc));
+    }
+
+    /** Read a heavy doc's sample/effective date from its persisted field, or null. */
+    private static LocalDate effectiveDate(String collection, DocumentSnapshot doc) {
+        String field = SyncRecentWindow.HEAVY_DATE_FIELDS.get(collection);
+        if (field == null) {
+            return null;
+        }
+        Object raw = doc.get(field);
+        if (raw instanceof Timestamp ts) {
+            return ts.toDate().toInstant().atZone(ZoneOffset.UTC).toLocalDate();
+        }
+        if (raw instanceof String s && s.length() >= 10) {
+            try {
+                return LocalDate.parse(s.substring(0, 10));
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static Instant updatedAt(DocumentSnapshot doc) {
@@ -312,27 +407,6 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
             ids.add(segments.get(i));
         }
         return String.join("/", ids);
-    }
-
-    private static boolean ownedBy(DocumentReference ref, String userId) {
-        String path = ref.getPath();
-        return path.startsWith(USERS + "/" + userId + "/");
-    }
-
-    /**
-     * True if the doc's top-level collection (the first segment below
-     * {@code users/{uid}}) equals the first segment of the emitted routing name.
-     * Guards a collectionGroup leaf shared across unrelated parents (e.g.
-     * {@code messages}) from being misrouted to the wrong table.
-     */
-    private static boolean topLevelMatches(DocumentReference ref, String userId, String emittedCollection) {
-        List<String> segments = pathSegmentsBelowUser(ref, userId);
-        if (segments.isEmpty()) {
-            return false;
-        }
-        int slash = emittedCollection.indexOf('/');
-        String expectedTop = slash < 0 ? emittedCollection : emittedCollection.substring(0, slash);
-        return segments.get(0).equals(expectedTop);
     }
 
     /** Path segments after {@code users/{userId}/}. */

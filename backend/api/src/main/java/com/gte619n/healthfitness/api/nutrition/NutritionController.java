@@ -214,7 +214,9 @@ public class NutritionController {
                     body.macros() != null ? body.macros().toMacros() : null,
                     body.source(),
                     entryId);
-                syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
+                // Fan-out collection name matches the delta feed's emitted
+                // "nutritionDays/entries" exactly (IMPL-AND-20 #34).
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
                 return new SyncWriteContext.Created<>(
                     entry.entryId(), WriteResult.of(toResponse(entry), writtenAt));
             },
@@ -242,6 +244,10 @@ public class NutritionController {
             body != null ? body.servingGrams() : null,
             body != null ? body.quantity() : null,
             body != null && body.macros() != null ? body.macros().toMacros() : null);
+        // PATCH edits are idempotent set-semantics, so no Idempotency-Key / id is
+        // needed; the write still fans out (origin suppressed) under the delta
+        // feed's "nutritionDays/entries" name (IMPL-AND-20 #8/#34).
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
         return toResponse(entry);
     }
 
@@ -252,7 +258,7 @@ public class NutritionController {
     ) {
         String userId = currentUser.get().userId();
         nutrition.deleteEntry(userId, date, entryId);
-        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
         return ResponseEntity.noContent().build();
     }
 
@@ -321,7 +327,7 @@ public class NutritionController {
                     EntrySource.PHOTO, entryId);
                 foodEntryImages.enqueueGeneration(
                     userId, date, entry.entryId(), body.mealName(), body.referencePhotoRef());
-                syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
                 return new SyncWriteContext.Created<>(
                     entry.entryId(), WriteResult.of(toResponse(entry), writtenAt));
             },
@@ -353,7 +359,7 @@ public class NutritionController {
             FoodEntry entry = mealCapture.captureMeal(userId, date, resolved, bytes, photo.getContentType());
             // Wake other devices to the new ANALYZING placeholder; the async
             // finalize fans out again (origin=null) when it flips to READY/FAILED.
-            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionEntries");
+            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(
@@ -397,6 +403,7 @@ public class NutritionController {
             body != null ? body.servingGrams() : null,
             body != null ? body.servingLabel() : null,
             body != null ? body.quantity() : null);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
         return toResponse(entry);
     }
 

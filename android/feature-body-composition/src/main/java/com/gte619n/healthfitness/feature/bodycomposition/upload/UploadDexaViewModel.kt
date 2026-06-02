@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.bodycomposition.upload
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScanRepository
 import com.gte619n.healthfitness.domain.bodycomposition.DexaUploadEvent
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
@@ -17,7 +18,13 @@ import javax.inject.Inject
 class UploadDexaViewModel @Inject constructor(
     private val repo: DexaScanRepository,
     private val snackbar: SnackbarController,
+    connectivity: Connectivity,
 ) : ViewModel() {
+
+    // IMPL-AND-20 (Phase 6, D17, #41): the DEXA PDF extraction is an online-only AI
+    // flow. The screen gates the picker behind this and shows a "needs connection"
+    // affordance when false; nothing is queued offline.
+    val isOnline: StateFlow<Boolean> = connectivity.isOnline
 
     sealed interface UiState {
         data object Idle : UiState

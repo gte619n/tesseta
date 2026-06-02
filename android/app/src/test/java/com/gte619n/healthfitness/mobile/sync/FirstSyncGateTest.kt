@@ -11,7 +11,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -70,18 +73,23 @@ class FirstSyncGateTest {
     }
 
     @Test
-    fun `initial sync runs a bounded pull`() = runTest {
-        coEvery { syncEngine.pull(any()) } returns
+    fun `initial sync runs a date-windowed pull with a 14-day recentSince`() = runTest {
+        val recentSinceSlot = slot<String>()
+        coEvery { syncEngine.pull(any(), capture(recentSinceSlot)) } returns
             SyncEngine.PullResult(1, 0, 0, 0, wiped = false, killSwitch = false)
 
         gate().runInitialSync()
 
-        coVerify { syncEngine.pull(FirstSyncGate.INITIAL_PAGE_BUDGET) }
+        // The window is `now - 14d`; assert it parses and is ~14 days in the past.
+        val sent = Instant.parse(recentSinceSlot.captured)
+        val expected = Instant.now().minus(FirstSyncGate.RECENT_WINDOW_DAYS.toLong(), ChronoUnit.DAYS)
+        val deltaSeconds = kotlin.math.abs(java.time.Duration.between(sent, expected).seconds)
+        assertTrue("recentSince should be ~14 days ago (off by ${deltaSeconds}s)", deltaSeconds < 60)
     }
 
     @Test
     fun `initial sync swallows a pull failure so the UI is never wedged`() = runTest {
-        coEvery { syncEngine.pull(any()) } throws RuntimeException("network down")
+        coEvery { syncEngine.pull(any(), any()) } throws RuntimeException("network down")
         // Should not throw.
         gate().runInitialSync()
     }

@@ -109,7 +109,7 @@ public class MealCaptureService {
             // The placeholder transitioned (READY/FAILED) — wake the user's
             // devices to pull the updated entry. origin=null: the analysis ran
             // server-side, so even the capturing device should refresh.
-            syncNotifier.changed(userId, null, "nutritionEntries");
+            syncNotifier.changed(userId, null, "nutritionDays/entries");
         }
     }
 

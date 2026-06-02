@@ -42,6 +42,13 @@ data class BloodReading(
     val labSource: String?,
     val notes: String?,
     val reference: ReferenceRange,
+    /**
+     * IMPL-AND-20 (#40) — the mirror row's per-row sync state
+     * (`SYNCED | PENDING | FAILED`) for the D11 [SyncBadge]. Null when the source
+     * isn't the Room mirror (e.g. a live/kill-switch read). Defaulted so it never
+     * breaks existing constructions.
+     */
+    val syncState: String? = null,
 )
 
 /**

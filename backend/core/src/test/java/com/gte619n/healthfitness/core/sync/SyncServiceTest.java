@@ -25,7 +25,10 @@ class SyncServiceTest {
         }
 
         @Override
-        public List<SyncChange> readChanges(String userId, SyncCursor since, int limit) {
+        public List<SyncChange> readChanges(
+            String userId, SyncCursor since, int limit, SyncRecentWindow window) {
+            // These tests exercise pure cursor/paging math; the recent-window
+            // bound is unit-tested separately, so it is ignored here.
             List<SyncChange> out = new ArrayList<>();
             for (SyncChange c : all) {
                 if (since == null || since.isBefore(c)) {

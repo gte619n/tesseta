@@ -14,6 +14,7 @@ import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.Duration
@@ -75,12 +76,21 @@ class BodyCompositionRepositoryImpl @Inject constructor(
         from: Instant,
         to: Instant,
     ): List<BodyCompositionPoint> = withContext(io) {
-        // Range queries stay network-served: they are a derived, windowed read the
-        // mirror's flat ACTIVE list does not index, and the chart tolerates a live
-        // fetch. (Listed as a follow-up to back this with a date-ranged Room query.)
-        api.list(from.toString(), to.toString(), metric.name)
-            .mapNotNull { it.toDomainOrNull() }
-            .filter { it.metric == metric }
+        // #30: back the windowed read with a date-ranged Room query so the chart
+        // renders offline. Under the kill-switch (D13) Room is not the source of
+        // truth, so fall back to the live network range fetch.
+        if (support.killSwitchOn()) {
+            return@withContext api.list(from.toString(), to.toString(), metric.name)
+                .mapNotNull { it.toDomainOrNull() }
+                .filter { it.metric == metric }
+                .sortedBy { it.sampleTime }
+        }
+        // Fill the mirror on a cold miss so the first windowed read after a fresh
+        // install isn't empty (the background pull keeps it fresh thereafter).
+        if (dao.observeActive().first().isEmpty()) refresh()
+        dao.pointsInRange(from.toEpochMilli(), to.toEpochMilli())
+            .mapNotNull { runCatching { dtoAdapter.fromJson(it.payloadJson)?.toDomainOrNull() }.getOrNull() }
+            .filter { it.metric == metric && !it.sampleTime.isBefore(from) && !it.sampleTime.isAfter(to) }
             .sortedBy { it.sampleTime }
     }
 

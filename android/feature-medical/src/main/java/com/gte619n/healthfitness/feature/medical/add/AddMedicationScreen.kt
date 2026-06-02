@@ -52,6 +52,7 @@ import com.gte619n.healthfitness.feature.medical.components.TimeSlotEditor
 import com.gte619n.healthfitness.feature.medical.components.categoryLabel
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.sync.OfflineNotice
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -62,6 +63,7 @@ fun AddMedicationScreen(
     viewModel: AddMedicationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val online by viewModel.isOnline.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -81,6 +83,7 @@ fun AddMedicationScreen(
         when (state.step) {
             AddMedicationUiState.Step.SEARCH -> SearchStep(
                 state = state,
+                online = online,
                 onQueryChange = viewModel::onQueryChange,
                 onSelectDrug = viewModel::selectDrug,
                 onManual = viewModel::startManualEntry,
@@ -128,6 +131,7 @@ private fun ModalTopBar(title: String, onClose: () -> Unit) {
 @Composable
 private fun SearchStep(
     state: AddMedicationUiState,
+    online: Boolean,
     onQueryChange: (String) -> Unit,
     onSelectDrug: (Drug) -> Unit,
     onManual: () -> Unit,
@@ -150,6 +154,16 @@ private fun SearchStep(
         state.filteredCatalog.forEach { drug ->
             DrugResultRow(drug = drug, onClick = { onSelectDrug(drug) })
             Spacer(Modifier.height(8.dp))
+        }
+
+        // D17 (#41): the AI drug lookup is online-only. Offline, when there's no
+        // local catalog match for a meaningful query, show the "needs connection"
+        // affordance instead of the SSE lookup region. Manual entry stays available.
+        if (!online && state.filteredCatalog.isEmpty() && state.query.trim().length >= 3) {
+            OfflineNotice(
+                message = "Searching for a new drug uses AI and needs an internet connection. " +
+                    "You can still add a medication manually.",
+            )
         }
 
         // SSE lookup state.

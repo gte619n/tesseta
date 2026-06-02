@@ -103,6 +103,12 @@ data class Medication(
     val correlatedMarkers: List<String>,
     val dosagePeriods: List<DosagePeriod> = emptyList(), // [PR#8] dated dose history
     val adherence: AdherenceSummary?,
+    /**
+     * IMPL-AND-20 (#40) — the mirror row's per-row sync state
+     * (`SYNCED | PENDING | FAILED`) for the D11 SyncBadge. Null for a live read.
+     * Defaulted so existing constructions are unaffected.
+     */
+    val syncState: String? = null,
 ) {
     val displayName: String
         get() = customName ?: drug?.name ?: "Unknown"

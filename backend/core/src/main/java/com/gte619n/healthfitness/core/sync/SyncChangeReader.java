@@ -49,5 +49,18 @@ public interface SyncChangeReader {
      *               full initial enumeration
      * @param limit  soft page size; the caller truncates to exactly this
      */
-    List<SyncChange> readChanges(String userId, SyncCursor since, int limit);
+    default List<SyncChange> readChanges(String userId, SyncCursor since, int limit) {
+        return readChanges(userId, since, limit, null);
+    }
+
+    /**
+     * As {@link #readChanges(String, SyncCursor, int)} but, when {@code window}
+     * is non-null, bounds the heavy time-series collections to documents whose
+     * sample/effective date is on or after the window's date (IMPL-AND-20 #37 /
+     * D14). CRUD domains are always returned in full. A {@code null} window means
+     * no date bound (the normal/backfill path).
+     *
+     * @param window the recent-window bound, or {@code null} for no bound
+     */
+    List<SyncChange> readChanges(String userId, SyncCursor since, int limit, SyncRecentWindow window);
 }

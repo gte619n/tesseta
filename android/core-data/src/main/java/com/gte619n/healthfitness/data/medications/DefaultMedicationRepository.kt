@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.data.medications
 
+import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
 import com.gte619n.healthfitness.data.db.dao.MedicationDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.di.IoDispatcher
@@ -48,12 +49,14 @@ import javax.inject.Singleton
 internal class DefaultMedicationRepository @Inject constructor(
     private val api: MedicationsApi,
     private val dao: MedicationDao,
+    private val adherenceDao: MedicationAdherenceDao,
     private val support: MirrorRepositorySupport,
     moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : MedicationRepository {
 
     private val dtoAdapter = moshi.adapter(MedicationDto::class.java)
+    private val adherencePayloadAdapter = moshi.adapter(AdherenceMirrorPayload::class.java)
 
     override suspend fun list(status: MedicationStatus?): List<Medication> = withContext(io) {
         if (support.killSwitchOn()) {
@@ -61,8 +64,9 @@ internal class DefaultMedicationRepository @Inject constructor(
         }
         if (dao.observeActive().first().isEmpty()) fillMirror()
         dao.observeActive().first()
-            .mapNotNull { decode(it.payloadJson) }
-            .map { MedicationMapper.toDomain(it) }
+            // #40: carry the mirror row's syncState onto the domain model for the
+            // per-row PENDING/FAILED SyncBadge.
+            .mapNotNull { row -> decode(row.payloadJson)?.let { MedicationMapper.toDomain(it).copy(syncState = row.syncState) } }
             .filter { status == null || it.status == status }
     }
 
@@ -176,8 +180,51 @@ internal class DefaultMedicationRepository @Inject constructor(
     override suspend fun todaysDoses(): List<TodaysDose> = withContext(io) {
         // Server-derived, adherence-computed checklist (D9). Anchor "today" to the
         // device's local date so it resets at the user's local midnight.
-        api.today(LocalDate.now().toString()).map { MedicationMapper.toDomain(it) }
+        val today = LocalDate.now()
+        // Fetch the live projection (the authoritative window/dose layout); fall
+        // back to an empty base when offline so the overlay still surfaces what the
+        // user just logged this session.
+        val base = runCatching { api.today(today.toString()).map { MedicationMapper.toDomain(it) } }
+            .getOrDefault(emptyList())
+        // #24: overlay the offline adherence mirror so a just-logged/undone dose
+        // shows immediately, before the server projection reconciles on the next
+        // pull. An ACTIVE mirror row ⇒ taken; a tombstoned (undone) row ⇒ not taken.
+        overlayMirroredAdherence(base, today)
     }
+
+    /**
+     * Overlay today's mirrored adherence rows onto the live checklist (#24). A
+     * PENDING optimistic log flips its `(med,window)` dose to `taken=true`; an undo
+     * (which tombstones the row) flips it to `taken=false`. Reads the raw mirror
+     * INCLUDING tombstones (`observeAll`) so an undo is visible. Rows for other
+     * dates are ignored.
+     */
+    private suspend fun overlayMirroredAdherence(
+        base: List<TodaysDose>,
+        today: LocalDate,
+    ): List<TodaysDose> {
+        val overrides = adherenceDao.observeAll().first()
+            .mapNotNull { row ->
+                val payload = decodeAdherence(row.payloadJson)?.takeIf { it.date == today }
+                    ?: return@mapNotNull null
+                // A tombstoned row is an undo ⇒ taken=false; otherwise the log's value.
+                val taken = row.status != "ARCHIVED" && payload.taken
+                Triple(payload.medicationId, payload.window, AdherenceOverride(taken, payload.takenAt))
+            }
+            .associate { (med, window, ov) -> (med to window) to ov }
+        if (overrides.isEmpty()) return base
+        return base.map { dose ->
+            val key = dose.medicationId to dose.window.name
+            overrides[key]?.let {
+                dose.copy(taken = it.taken, takenAt = if (it.taken) it.takenAt ?: dose.takenAt else null)
+            } ?: dose
+        }
+    }
+
+    private data class AdherenceOverride(val taken: Boolean, val takenAt: java.time.Instant?)
+
+    private fun decodeAdherence(json: String): AdherenceMirrorPayload? =
+        runCatching { adherencePayloadAdapter.fromJson(json) }.getOrNull()
 
     /** Pull the full medication list from the network into the mirror as SYNCED rows. */
     private suspend fun fillMirror() {

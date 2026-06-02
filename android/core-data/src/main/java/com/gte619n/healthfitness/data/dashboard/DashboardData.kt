@@ -254,12 +254,48 @@ internal object DailyMetricMapper {
 
 // ---- Repository impls ----
 
+/**
+ * IMPL-AND-20 (#30) — Room-backed dashboard weight summary.
+ *
+ * The weight trend is a windowed/derived read; it now reads the `bodyComposition`
+ * mirror over a date-ranged Room query so the dashboard card renders offline. The
+ * window is the last ~120 days (a comfortable superset of the 90-day summary
+ * window so the 7/90-day deltas have an anchor). Under the kill-switch (D13) it
+ * falls back to the live network list.
+ */
 internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
     private val api: DashboardApi,
+    private val dao: com.gte619n.healthfitness.data.db.dao.BodyCompositionDao,
+    private val support: com.gte619n.healthfitness.data.sync.MirrorRepositorySupport,
+    moshi: com.squareup.moshi.Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : DashboardBodyCompositionRepository {
+    private val dtoAdapter = moshi.adapter(BodyCompositionDto::class.java)
+
     override suspend fun loadRecent(): WeightSummary? = withContext(io) {
-        BodyCompositionMapper.toWeightSummary(api.bodyComposition())
+        if (support.killSwitchOn()) {
+            return@withContext BodyCompositionMapper.toWeightSummary(api.bodyComposition())
+        }
+        if (dao.observeActive().first().isEmpty()) runCatching { fillFromNetwork() }
+        val now = Instant.now()
+        val from = now.minusSeconds(120L * 24 * 3600)
+        val rows = dao.pointsInRange(from.toEpochMilli(), now.toEpochMilli())
+            .mapNotNull { runCatching { dtoAdapter.fromJson(it.payloadJson) }.getOrNull() }
+        BodyCompositionMapper.toWeightSummary(rows, now)
+    }
+
+    private suspend fun fillFromNetwork() {
+        val dtos = api.bodyComposition()
+        support.refreshInto(
+            com.gte619n.healthfitness.data.db.entity.MirrorTables.BODY_COMPOSITION,
+            dtos.map {
+                com.gte619n.healthfitness.data.sync.MirrorRepositorySupport.RefreshRow(
+                    id = it.recordId,
+                    payloadJson = dtoAdapter.toJson(it),
+                    lastUpdate = it.sampleTime.toEpochMilli(),
+                )
+            },
+        )
     }
 }
 
@@ -316,12 +352,50 @@ internal class DashboardDailyMetricsRepositoryImpl @Inject constructor(
     }
 }
 
+/**
+ * IMPL-AND-20 (#30) — Room-backed dashboard blood-marker trend.
+ *
+ * Reads the `bloodReadings` mirror over a date-ranged Room query (the marker
+ * summary uses up to a 365-day history) so the dashboard renders offline. The
+ * mirror payload is the blood repo's reading DTO, whose JSON is field-compatible
+ * with the dashboard DTO. Under the kill-switch (D13) it falls back to live.
+ */
 internal class DashboardBloodMarkerRepositoryImpl @Inject constructor(
     private val api: DashboardApi,
+    private val dao: com.gte619n.healthfitness.data.db.dao.BloodReadingDao,
+    private val support: com.gte619n.healthfitness.data.sync.MirrorRepositorySupport,
+    moshi: com.squareup.moshi.Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : DashboardBloodMarkerRepository {
+    private val dtoAdapter = moshi.adapter(BloodReadingDto::class.java)
+
     override suspend fun loadDashboardMarkers(): List<BloodMarkerSummary> = withContext(io) {
-        BloodMarkerSummaryMapper.toDashboardMarkers(api.bloodReadings())
+        if (support.killSwitchOn()) {
+            return@withContext BloodMarkerSummaryMapper.toDashboardMarkers(api.bloodReadings())
+        }
+        if (dao.observeActive().first().isEmpty()) runCatching { fillFromNetwork() }
+        val now = LocalDate.now()
+        val from = now.minusDays(365)
+        val fromMillis = from.toEpochDay() * 86_400_000L
+        val toMillis = now.toEpochDay() * 86_400_000L + 86_400_000L // inclusive of today
+        val rows = dao.readingsInRange(fromMillis, toMillis)
+            .mapNotNull { runCatching { dtoAdapter.fromJson(it.payloadJson) }.getOrNull() }
+        BloodMarkerSummaryMapper.toDashboardMarkers(rows)
+    }
+
+    private suspend fun fillFromNetwork() {
+        val dtos = api.bloodReadings()
+        support.refreshInto(
+            com.gte619n.healthfitness.data.db.entity.MirrorTables.BLOOD_READINGS,
+            dtos.map {
+                com.gte619n.healthfitness.data.sync.MirrorRepositorySupport.RefreshRow(
+                    id = it.readingId,
+                    payloadJson = dtoAdapter.toJson(it),
+                    lastUpdate = runCatching { LocalDate.parse(it.sampleDate).toEpochDay() * 86_400_000L }
+                        .getOrDefault(System.currentTimeMillis()),
+                )
+            },
+        )
     }
 }
 

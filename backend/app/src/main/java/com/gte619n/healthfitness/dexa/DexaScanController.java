@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gte619n.healthfitness.api.dexa.DexaScanResponse;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.dexa.DexaScan;
 import com.gte619n.healthfitness.core.dexa.DexaScanRepository;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.integrations.dexa.DexaDuplicateException;
 import com.gte619n.healthfitness.integrations.dexa.DexaExtractionException;
 import com.gte619n.healthfitness.integrations.dexa.DexaPdfStorage;
@@ -57,17 +59,23 @@ public class DexaScanController {
     private final DexaScanService service;
     private final DexaScanRepository scans;
     private final DexaPdfStorage pdfStorage;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public DexaScanController(
         CurrentUserProvider currentUser,
         DexaScanService service,
         DexaScanRepository scans,
-        DexaPdfStorage pdfStorage
+        DexaPdfStorage pdfStorage,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.service = service;
         this.scans = scans;
         this.pdfStorage = pdfStorage;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     @PostMapping(
@@ -157,6 +165,10 @@ public class DexaScanController {
         }
         try {
             DexaScan updated = service.updateField(userId, scanId, body.path(), body.value());
+            // The PDF/SSE AI upload stays online-only (D17), but this manual
+            // field correction is an in-scope JSON write: fan out so other
+            // devices pull the edit (origin suppressed, IMPL-AND-20 #8/D18).
+            syncNotifier.changed(userId, syncWrite.originDeviceId(), "dexaScans");
             return DexaScanResponse.from(updated);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
@@ -172,6 +184,7 @@ public class DexaScanController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         service.delete(userId, scanId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "dexaScans");
         return ResponseEntity.noContent().build();
     }
 
