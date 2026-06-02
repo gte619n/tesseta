@@ -208,6 +208,9 @@ class NutritionTodayViewModel @Inject constructor(
                 repository.patchEntry(date, entryId, EntryPatchRequest(meal = targetMeal))
                 val day = repository.day(date)
                 _state.update { it.copy(day = day, error = null) }
+                // Keep refreshing so the row's PENDING badge clears once the
+                // optimistic move drains to the server.
+                pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(day = current, error = e.message ?: "Move failed") }
             }
@@ -225,6 +228,7 @@ class NutritionTodayViewModel @Inject constructor(
                 _state.update {
                     it.copy(day = day, savingEdit = false, editingEntry = null, error = null)
                 }
+                pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update {
                     it.copy(savingEdit = false, error = e.message ?: "Update failed")
@@ -272,6 +276,7 @@ class NutritionTodayViewModel @Inject constructor(
                 repository.addEntry(date, body)
                 val day = repository.day(date)
                 _state.update { it.copy(day = day, addSheetOpen = false, error = null) }
+                pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Add failed") }
             }
