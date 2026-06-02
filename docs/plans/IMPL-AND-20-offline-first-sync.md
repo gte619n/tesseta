@@ -463,7 +463,7 @@ those collections are pull-only (D9).
 | `android/.../androidTest/SyncE2ETest.kt` | Create | Airplane-mode CRUD → reconnect → assert server state |
 | `android/.../androidTest/ConvergenceTest.kt` | Create | Two-client edit → both converge under LWW |
 | `backend/.../SyncContractIntegrationTest.java` | Create | End-to-end delta + idempotency + fan-out |
-| `docs/decisions/ADR-00XX-offline-first-sync.md` | Create | Record the architecture decision (D1–D19) |
+| `docs/decisions/ADR-0007-android-offline-first-sync.md` | ✅ Created | Records the architecture decision set (D1–D19) |
 
 **Verification (Phase 7):**
 1. Full suites green on backend + Android (unit + instrumented).
@@ -558,4 +558,4 @@ Legend: ✅ done · ⏳ in progress / partial · ❌ not started.
   bearer auth.
 - ADR-0004 (KMS envelope encryption) — server-side; unaffected, but reinforces
   why the phone must not read Firestore directly (D1).
-- A new ADR (Phase 7) will record this offline-first decision set.
+- ADR-0007 (Android offline-first sync) — records this decision set (D1–D19).
