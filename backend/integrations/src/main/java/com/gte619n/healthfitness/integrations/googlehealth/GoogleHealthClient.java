@@ -57,22 +57,81 @@ public class GoogleHealthClient {
             GoogleHealthDataPoint::recordId);
     }
 
-    // Day-grained activity / vitals metrics (steps, resting HR, HRV, sleep).
-    // Same paged HTTP shape as body composition, but daily roll-up types are
-    // filtered on their civil `date` member (YYYY-MM-DD) — they have no
-    // sample_time.physical_time, and filtering on it is rejected with 400.
+    // Day-grained activity / vitals metrics. Three of the four model cleanly
+    // as one value per civil day, but they reach it different ways:
+    //   - RESTING_HEART_RATE, HRV: genuine daily roll-up data types. Listed
+    //     and filtered on their civil `date` member.
+    //   - STEPS: an interval (per-minute) type with no daily form. We POST
+    //     :dailyRollUp to get one countSum per civil day.
+    //   - SLEEP: a session type; :dailyRollUp is unsupported and a sleep score
+    //     isn't exposed, so it is not handled here yet (see DailyMetricDataType
+    //     notes) — callers get an empty list rather than a 400.
     public List<DailyMetricDataPoint> listDailyMetricPoints(
         String accessToken,
         DailyMetricDataType dataType,
         Instant from,
         Instant to
     ) {
-        return listPaged(
-            accessToken,
-            dataType.urlSegment(),
-            dailyDateFilter(dataType.filterFieldName(), from, to),
-            dp -> DailyMetricMapper.fromJson(dp, dataType),
-            DailyMetricDataPoint::recordId);
+        return switch (dataType) {
+            case STEPS -> listDailyStepTotals(accessToken, from, to);
+            case SLEEP -> List.of();
+            case RESTING_HEART_RATE, HRV -> listPaged(
+                accessToken,
+                dataType.urlSegment(),
+                dailyDateFilter(dataType.filterFieldName(), from, to),
+                dp -> DailyMetricMapper.fromJson(dp, dataType),
+                DailyMetricDataPoint::recordId);
+        };
+    }
+
+    // Steps as one total per civil day via the :dailyRollUp aggregation.
+    // Response shape (verified live):
+    //   { "rollupDataPoints": [ { "civilStartTime": { "date": {y,m,d} },
+    //                             "steps": { "countSum": "6975" } } ] }
+    private static final int ROLLUP_MAX_RANGE_DAYS = 90;
+
+    private List<DailyMetricDataPoint> listDailyStepTotals(
+        String accessToken, Instant from, Instant to) {
+        // dailyRollUp caps the range at 90 days; the backfill hands us much
+        // wider windows, so sub-chunk into <=90-day spans and concatenate.
+        java.time.LocalDate windowStart = from.atZone(ZoneOffset.UTC).toLocalDate();
+        java.time.LocalDate windowEnd = to.atZone(ZoneOffset.UTC).toLocalDate();
+        List<DailyMetricDataPoint> out = new ArrayList<>();
+        java.time.LocalDate cursor = windowStart;
+        while (cursor.isBefore(windowEnd)) {
+            java.time.LocalDate chunkEnd = cursor.plusDays(ROLLUP_MAX_RANGE_DAYS);
+            if (chunkEnd.isAfter(windowEnd)) chunkEnd = windowEnd;
+            out.addAll(fetchStepTotalsChunk(accessToken, cursor, chunkEnd));
+            cursor = chunkEnd;
+        }
+        return out;
+    }
+
+    private List<DailyMetricDataPoint> fetchStepTotalsChunk(
+        String accessToken, java.time.LocalDate fromDate, java.time.LocalDate toDate) {
+        RawResponse resp = postDailyRollUp(accessToken, "steps", fromDate, toDate);
+        if (resp.statusCode() / 100 != 2) {
+            throw new RuntimeException(
+                "Google Health steps dailyRollUp failed (" + resp.statusCode() + "): " + resp.body());
+        }
+        List<DailyMetricDataPoint> out = new ArrayList<>();
+        try {
+            JsonNode body = mapper.readTree(resp.body());
+            for (JsonNode p : body.path("rollupDataPoints")) {
+                JsonNode d = p.path("civilStartTime").path("date");
+                if (!d.hasNonNull("year")) continue;
+                java.time.LocalDate day =
+                    java.time.LocalDate.of(d.path("year").asInt(), d.path("month").asInt(),
+                        d.path("day").asInt());
+                int count = p.path("steps").path("countSum").asInt();
+                out.add(new DailyMetricDataPoint(
+                    null, null, "steps:" + day, DailyMetricDataType.STEPS, day, count,
+                    null, "UNKNOWN", "UNKNOWN"));
+            }
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to parse steps dailyRollUp response", e);
+        }
+        return out;
     }
 
     // Sample/interval types (body composition): filter on the physical
@@ -265,6 +324,40 @@ public class GoogleHealthClient {
         try {
             HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
             return new RawResponse(url, response.statusCode(), response.body());
+        } catch (java.io.IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new RawResponse(url, -1, "request failed: " + e.getMessage());
+        }
+    }
+
+    // Public inspect wrapper over the dailyRollUp POST (used by the admin
+    // endpoint to examine the raw aggregation response).
+    public RawResponse rawDailyRollUp(
+        String accessToken, String urlSegment, java.time.LocalDate from, java.time.LocalDate to) {
+        return postDailyRollUp(accessToken, urlSegment, from, to);
+    }
+
+    // dailyRollUp POST — aggregates an interval data type into one value per
+    // civil day. `range` is a CivilTimeInterval of CivilDateTimes; we send
+    // date-only civil times. Non-throwing: returns the raw status/body.
+    private RawResponse postDailyRollUp(
+        String accessToken, String urlSegment, java.time.LocalDate from, java.time.LocalDate to) {
+        String url = apiBaseUrl + "/users/me/dataTypes/" + urlSegment + "/dataPoints:dailyRollUp";
+        String body = String.format(
+            "{\"range\":{\"start\":{\"date\":{\"year\":%d,\"month\":%d,\"day\":%d}},"
+                + "\"end\":{\"date\":{\"year\":%d,\"month\":%d,\"day\":%d}}},\"windowSizeDays\":1}",
+            from.getYear(), from.getMonthValue(), from.getDayOfMonth(),
+            to.getYear(), to.getMonthValue(), to.getDayOfMonth());
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+        try {
+            HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
+            return new RawResponse(url + " body=" + body, response.statusCode(), response.body());
         } catch (java.io.IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             return new RawResponse(url, -1, "request failed: " + e.getMessage());

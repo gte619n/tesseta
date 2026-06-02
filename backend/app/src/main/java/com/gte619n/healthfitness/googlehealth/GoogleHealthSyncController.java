@@ -62,7 +62,8 @@ public class GoogleHealthSyncController {
         @RequestParam(defaultValue = "7") int days,
         @RequestParam(defaultValue = "false") boolean persist,
         @RequestParam(defaultValue = "false") boolean noFilter,
-        @RequestParam(required = false) String filterExpr
+        @RequestParam(required = false) String filterExpr,
+        @RequestParam(defaultValue = "false") boolean rollUp
     ) {
         User user = users.findById(userId).orElse(null);
         if (user == null) {
@@ -97,7 +98,11 @@ public class GoogleHealthSyncController {
             String perTypeFilter = filterExpr == null ? null
                 : filterExpr.replace("FIELD", type.filterFieldName());
             GoogleHealthClient.RawResponse raw;
-            if (filterExpr != null) {
+            if (rollUp) {
+                raw = googleHealth.rawDailyRollUp(accessToken, type.urlSegment(),
+                    from.atZone(java.time.ZoneOffset.UTC).toLocalDate(),
+                    to.atZone(java.time.ZoneOffset.UTC).toLocalDate());
+            } else if (filterExpr != null) {
                 raw = googleHealth.rawFirstPageCustomFilter(
                     accessToken, type.urlSegment(), perTypeFilter, 25);
             } else if (noFilter) {

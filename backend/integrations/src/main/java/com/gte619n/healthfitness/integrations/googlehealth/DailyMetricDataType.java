@@ -10,9 +10,15 @@ import java.util.Optional;
 //   Filter field prefix: snake_case  ("daily_resting_heart_rate")
 //   JSON response key:   camelCase   ("dailyRestingHeartRate", used by the mapper)
 //
-// Unlike body composition these are day-grained aggregates: one data point
-// per calendar day per type. They land on the DailyMetric record
-// (users/{userId}/dailyMetrics/{yyyy-MM-dd}) rather than body composition.
+// These land on the DailyMetric record (users/{userId}/dailyMetrics/
+// {yyyy-MM-dd}) as one value per calendar day, but they reach that shape
+// differently in the API (see GoogleHealthClient.listDailyMetricPoints):
+//   - RESTING_HEART_RATE, HRV: genuine daily roll-up data types — listed and
+//     filtered on their civil `date` member.
+//   - STEPS: a per-minute interval type with no daily form; aggregated to a
+//     daily total via the :dailyRollUp endpoint (countSum).
+//   - SLEEP: a session type (stage list); :dailyRollUp is unsupported and no
+//     sleep score is exposed, so it is not yet ingested.
 //
 // IMPORTANT: the Google Health API names daily roll-ups with a "daily-"
 // prefix (daily-resting-heart-rate, daily-heart-rate-variability). The bare
