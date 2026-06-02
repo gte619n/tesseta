@@ -4,8 +4,7 @@ import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.sync.SyncEngine
 import com.gte619n.healthfitness.data.sync.SyncFlags
 import com.gte619n.healthfitness.data.sync.SyncScheduler
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,9 +82,15 @@ class FirstSyncGate @Inject constructor(
         scheduler.enqueuePull()
     }
 
-    /** ISO-8601 lower bound for the first window: `now - `[RECENT_WINDOW_DAYS]` days`. */
+    /**
+     * ISO **date** lower bound for the first window: `today - `[RECENT_WINDOW_DAYS]
+     * ` days`. The backend `recentSince` param is an `@DateTimeFormat(iso = DATE)
+     * LocalDate` (yyyy-MM-dd), so it must be a bare date — sending a full Instant
+     * (`…T…Z`) makes the controller 500 on parameter conversion and the whole
+     * first sync fails.
+     */
     private fun recentWindowSince(): String =
-        Instant.now().minus(RECENT_WINDOW_DAYS.toLong(), ChronoUnit.DAYS).toString()
+        LocalDate.now().minusDays(RECENT_WINDOW_DAYS.toLong()).toString()
 
     companion object {
         /** The D14 heavy-series recent window for the first blocking sync. */
