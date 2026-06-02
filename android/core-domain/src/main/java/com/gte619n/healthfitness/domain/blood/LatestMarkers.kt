@@ -117,6 +117,27 @@ object LatestMarkers {
 
     private fun matches(name: String, marker: BloodMarker): Boolean {
         val normalized = name.trim().uppercase().replace(Regex("[^A-Z0-9]"), "_")
-        return normalized == marker.name
+        if (normalized == marker.name) return true
+        return ALIASES[marker]?.invoke(normalized) == true
     }
+
+    /**
+     * Lab reports rarely print the bare canonical token — testosterone arrives
+     * as "Total Testosterone", "Testosterone, Total, LC/MS", etc., none of which
+     * normalize to "TESTOSTERONE". These per-marker matchers recognise those
+     * variants, mirroring the web client's MARKER_PATTERNS, so a report keeps
+     * resolving even if it was extracted before the marker was added to the
+     * extraction prompt. Scoped per marker (not a blanket substring check) so we
+     * don't false-positive "NON_HDL" → HDL or "VLDL" → LDL.
+     *
+     * The input is the upper-cased, non-alphanumerics-as-underscore form.
+     */
+    private val ALIASES: Map<BloodMarker, (String) -> Boolean> = mapOf(
+        // Total / serum testosterone resolves to TESTOSTERONE. Free and
+        // Bioavailable testosterone are clinically distinct and must NOT
+        // collapse into it.
+        BloodMarker.TESTOSTERONE to { n ->
+            n.contains("TESTOSTERONE") && !n.contains("FREE") && !n.contains("BIO")
+        },
+    )
 }

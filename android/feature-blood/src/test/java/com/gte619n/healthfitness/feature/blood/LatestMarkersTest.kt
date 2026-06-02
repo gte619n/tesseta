@@ -134,4 +134,40 @@ class LatestMarkersTest {
         assertEquals(BloodMarker.HS_CRP, LatestMarkers.toMarker("hs-CRP"))
         assertNull(LatestMarkers.toMarker("Vitamin D"))
     }
+
+    @Test
+    fun toMarkerResolvesTotalTestosteroneVariants() {
+        // Lab reports print testosterone with descriptors; none normalize to the
+        // bare "TESTOSTERONE" token, so the strict path alone would miss them.
+        assertEquals(BloodMarker.TESTOSTERONE, LatestMarkers.toMarker("Total Testosterone"))
+        assertEquals(BloodMarker.TESTOSTERONE, LatestMarkers.toMarker("Testosterone, Total, LC/MS"))
+        assertEquals(BloodMarker.TESTOSTERONE, LatestMarkers.toMarker("Testosterone, Serum"))
+        assertEquals(BloodMarker.TESTOSTERONE, LatestMarkers.toMarker("TESTOSTERONE"))
+    }
+
+    @Test
+    fun toMarkerDoesNotCollapseFreeOrBioavailableTestosterone() {
+        // Free / Bioavailable testosterone are distinct markers — they must not
+        // masquerade as the (total) TESTOSTERONE marker.
+        assertNull(LatestMarkers.toMarker("Free Testosterone"))
+        assertNull(LatestMarkers.toMarker("Bioavailable Testosterone"))
+    }
+
+    @Test
+    fun totalTestosteroneFromReportSurfacesInLatestGrid() {
+        // Regression: a Rythm-style report naming the marker "Total Testosterone"
+        // must populate the TESTOSTERONE cell rather than render as missing ("—").
+        val report = BloodTestReport(
+            reportId = "rep-t",
+            sampleDate = today,
+            labSource = "Rythm",
+            markers = listOf(ExtractedMarker("Total Testosterone", 650.0, "ng/dL", 300.0, 1000.0, null)),
+            pdfDownloadPath = "/api/me/blood/reports/rep-t/pdf",
+            createdAt = Instant.EPOCH,
+        )
+        val t = LatestMarkers.derive(emptyList(), listOf(report), today)
+            .first { it.marker == BloodMarker.TESTOSTERONE }
+        assertEquals(650.0, t.value!!, 0.0001)
+        assertEquals(LatestMarker.Source.LAB, t.source)
+    }
 }

@@ -38,7 +38,8 @@ public class BloodTestExtractor {
                        TOTAL_CHOLESTEROL, LDL, HDL, TRIGLYCERIDES, APO_B,
                        HBA1C, FASTING_GLUCOSE, HS_CRP, VLDL, NON_HDL_CHOLESTEROL,
                        TC_HDL_RATIO, INSULIN, HOMA_IR, ALT, AST, GGT,
-                       CREATININE, EGFR, BUN, URIC_ACID, TSH, FREE_T4, FREE_T3,
+                       CREATININE, EGFR, BUN, URIC_ACID, TESTOSTERONE,
+                       TSH, FREE_T4, FREE_T3,
                        VITAMIN_D, VITAMIN_B12, FERRITIN, IRON, TIBC,
                        WBC, RBC, HEMOGLOBIN, HEMATOCRIT, PLATELETS",
               "value": number or null,
@@ -53,6 +54,10 @@ public class BloodTestExtractor {
         Rules:
         - Extract ALL markers present in the report, not just common ones.
         - Use the canonical name from the list above when the marker matches.
+        - TESTOSTERONE means TOTAL testosterone — map "Total Testosterone",
+          "Testosterone, Total", "Testosterone, Serum" etc. to TESTOSTERONE.
+          Keep "Free Testosterone" / "Bioavailable Testosterone" as their exact
+          report names; they are distinct markers, not TESTOSTERONE.
         - For markers not in the canonical list, use the exact name from the report.
         - Reference ranges may be shown as "< X" (use null for low, X for high)
           or "> X" (use X for low, null for high) or "X - Y" (use X for low, Y for high).
