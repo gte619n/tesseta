@@ -97,7 +97,11 @@ import net.sqlcipher.database.SupportFactory
         WorkoutScheduledEntity::class,
         UserProfileEntity::class,
     ],
-    version = 2,
+    // v3: bumped to force a destructive wipe + full resync so rows pulled before
+    // the delta-doc id injection (which lacked their document id) are re-fetched
+    // cleanly. The auth token lives in DataStore, not Room, so this doesn't sign
+    // the user out.
+    version = 3,
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {

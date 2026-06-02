@@ -179,7 +179,7 @@ class SyncEngine @Inject constructor(
             // the UI Flows.
             mirror.markArchived(table, change.id, incomingMillis)
         } else {
-            val payloadJson = change.doc?.let { mapAdapter.toJson(it) } ?: "{}"
+            val payloadJson = payloadWithId(table, change.id, change.doc)
             mirror.upsert(
                 table,
                 MirrorRowData(
@@ -192,6 +192,20 @@ class SyncEngine @Inject constructor(
                 ),
             )
         }
+    }
+
+    /**
+     * Serialize a pulled change's `doc`, injecting the document id under the
+     * field name the table's DTO expects (a Firestore doc has no id field of its
+     * own). Without this a pulled row decodes with a missing/blank id — required-id
+     * DTOs (gyms, programs, medications) fail to decode and vanish; default-id ones
+     * (body composition) collide on a blank LazyColumn key and crash the screen.
+     */
+    private fun payloadWithId(table: String, id: String, doc: Map<String, Any?>?): String {
+        if (doc == null) return "{}"
+        val idField = CollectionRegistry.idFieldFor(table)
+        val withId = if (idField != null && doc[idField] == null) doc + (idField to id) else doc
+        return mapAdapter.toJson(withId)
     }
 
     private suspend fun ensureState(): SyncStateEntity {

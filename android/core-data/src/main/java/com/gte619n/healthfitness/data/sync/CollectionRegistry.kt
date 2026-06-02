@@ -80,4 +80,27 @@ object CollectionRegistry {
         in canonical -> collection
         else -> aliases[collection]
     }
+
+    /**
+     * The id field name the table's domain DTO expects, for tables whose delta
+     * `doc` must carry it. A Firestore document never stores its own id as a
+     * field, so the sync delta's `doc` omits it — but the GET-endpoint DTOs the
+     * repositories decode require it (e.g. `locationId`, and a `recordId` keys the
+     * weight list). The SyncEngine injects the change id under this name when it
+     * applies a pulled change, so a pulled row decodes exactly like a GET-filled
+     * one. Tables absent here need no injection (their doc already suffices, or
+     * they're not decoded by id). Top-level collections only — subcollection
+     * composite ids are handled by their own repos.
+     */
+    fun idFieldFor(table: String): String? = idFields[table]
+
+    private val idFields: Map<String, String> = mapOf(
+        MirrorTables.LOCATIONS to "locationId",
+        MirrorTables.WORKOUT_PROGRAMS to "programId",
+        MirrorTables.MEDICATIONS to "medicationId",
+        MirrorTables.BODY_COMPOSITION to "recordId",
+        MirrorTables.BLOOD_READINGS to "readingId",
+        MirrorTables.BLOOD_TEST_REPORTS to "reportId",
+        MirrorTables.DEXA_SCANS to "scanId",
+    )
 }
