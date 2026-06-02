@@ -130,15 +130,22 @@ class NutritionTodayViewModel @Inject constructor(
         }
     }
 
-    /** True when at least one entry on the day still has a generating image. */
+    /**
+     * True when at least one entry on the day is still settling: its image is
+     * generating (PENDING) or its captured photo is still being analyzed
+     * (ANALYZING). Either keeps the poll alive so the row updates in place.
+     */
     private fun NutritionDay?.hasGeneratingImage(): Boolean =
-        this?.meals?.any { group -> group.entries.any { it.imageStatus == "PENDING" } } == true
+        this?.meals?.any { group ->
+            group.entries.any { it.imageStatus == "PENDING" || it.isAnalyzing }
+        } == true
 
     /**
-     * While any entry image is PENDING, re-fetch the day on a short interval and
-     * swap in fresh data, so generated images appear as soon as they're ready.
-     * Stops when nothing is pending (or after a cap, to avoid an endless loop on
-     * a stuck generation), and only polls the still-current date.
+     * While any entry is still analyzing or generating its image, re-fetch the
+     * day on a short interval and swap in fresh data, so a captured photo's name,
+     * macros and image appear as soon as they're ready. Stops when nothing is
+     * pending (or after a cap, to avoid an endless loop on a stuck generation),
+     * and only polls the still-current date.
      */
     private fun pollWhileImagesGenerate(date: LocalDate) {
         imagePollJob?.cancel()
