@@ -1,52 +1,32 @@
-"use client";
-
 /**
- * Loads icon/symbol fonts asynchronously so they don't block First Contentful
- * Paint.  The `media="print"` trick causes the browser to fetch the stylesheet
- * at low priority (non-render-blocking), then the onLoad handler promotes it
- * to `media="all"` so it applies normally once the sheet arrives.
+ * Loads the icon / symbol webfonts.
  *
- * A <noscript> fallback re-instates the blocking link for JS-disabled clients.
+ * We use React 19's managed-stylesheet support (the `precedence` prop): React
+ * hoists these into <head>, de-duplicates them, and — crucially — applies them
+ * reliably. The previous approach loaded each sheet with `media="print"` and an
+ * `onLoad` handler that promoted it to `media="all"`, but under React 19's
+ * hoisted-<link> handling that onLoad did not fire, so the sheets stayed at
+ * `media="print"` and every `ti …` glyph (and Material Symbol) rendered blank.
  *
- * Rendered inside <head> by the root Server-Component layout; the `"use
- * client"` directive is required for the onLoad JSX event handler.
+ * The root layout still `preconnect`s to both origins, so the fetch cost of
+ * these render-blocking sheets stays small.
  */
 export function IconFonts() {
   return (
     <>
-      {/* Tabler Icons webfont — async, non-blocking */}
+      {/* Tabler Icons webfont */}
       <link
         rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css"
-        media="print"
-        onLoad={(e) => {
-          const el = e.currentTarget as HTMLLinkElement;
-          el.media = "all";
-        }}
+        precedence="default"
       />
-      <noscript>
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css"
-        />
-      </noscript>
 
-      {/* Material Symbols Rounded — async, non-blocking */}
+      {/* Material Symbols Rounded */}
       <link
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0"
-        media="print"
-        onLoad={(e) => {
-          const el = e.currentTarget as HTMLLinkElement;
-          el.media = "all";
-        }}
+        precedence="default"
       />
-      <noscript>
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0"
-        />
-      </noscript>
     </>
   );
 }
