@@ -49,8 +49,10 @@ data class Entry(
     val meal: String,
     val foodId: String? = null,
     val foodName: String,
-    val servingLabel: String,
-    val servingGrams: Double,
+    // Null on an ANALYZING placeholder (a freshly captured photo not yet
+    // itemized server-side); filled in once analysis finalizes the entry.
+    val servingLabel: String? = null,
+    val servingGrams: Double? = null,
     val quantity: Double,
     val macros: Macros,
     val source: String,

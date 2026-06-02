@@ -435,7 +435,7 @@ private fun EntryRow(
                 when {
                     entry.isAnalyzing -> "Analyzing your photo…"
                     entry.analysisStatus == "FAILED" -> "Couldn’t read photo · delete and retry"
-                    else -> "${formatQuantity(entry.quantity)} × ${entry.servingLabel} · ${formatKcal(entry.macros.caloriesKcal)}"
+                    else -> "${formatQuantity(entry.quantity)} × ${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"
                 },
                 style = Hf.type.capsSm,
                 color = Hf.colors.textTertiary,
