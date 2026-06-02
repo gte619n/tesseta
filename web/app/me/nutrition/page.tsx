@@ -19,7 +19,7 @@ import type {
 } from "@/lib/types/nutrition";
 import { MEALS } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
-import { MealSection } from "@/components/nutrition/MealSection";
+import { NutritionMeals } from "@/components/nutrition/NutritionMeals";
 import { PendingImageRefresher } from "@/components/nutrition/PendingImageRefresher";
 
 export const metadata: Metadata = { title: "Nutrition" };
@@ -260,21 +260,16 @@ export default async function NutritionPage(props: {
         )}
         <DailySummaryCard totals={day.totals} target={day.target} />
 
-        {/* Meal sections */}
-        <div className="space-y-3">
-          {day.meals.map((group) => (
-            <MealSection
-              key={group.meal}
-              group={group}
-              date={date}
-              addEntry={addEntryAction}
-              updateEntry={updateEntryAction}
-              updateIngredient={updateIngredientAction}
-              deleteEntry={deleteEntryAction}
-              searchFoods={searchFoodsAction}
-            />
-          ))}
-        </div>
+        {/* Meal sections — drag an entry's grip to move it between meals */}
+        <NutritionMeals
+          meals={day.meals}
+          date={date}
+          addEntry={addEntryAction}
+          updateEntry={updateEntryAction}
+          updateIngredient={updateIngredientAction}
+          deleteEntry={deleteEntryAction}
+          searchFoods={searchFoodsAction}
+        />
       </div>
     </main>
   );
