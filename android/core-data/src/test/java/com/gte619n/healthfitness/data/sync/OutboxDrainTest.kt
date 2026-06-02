@@ -140,6 +140,32 @@ class OutboxDrainTest {
     }
 
     @Test
+    fun `nutrition entry replay unwraps the date-wrapped payload to the bare entry`() = runTest {
+        // The mirror stores a date-wrapped row so the day view can reassemble by
+        // date; the replay must send the inner entry (meal/foodName at top level)
+        // so the backend's EntryPatchRequest actually applies the change.
+        val wrapped =
+            """{"date":"2026-06-02","entry":{"entryId":"e1","meal":"snack","foodName":"Eggs"}}"""
+        mirror.upsert(
+            MirrorTables.NUTRITION_ENTRIES,
+            MirrorRowData("2026-06-02/e1", wrapped, now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.UPDATE, MirrorTables.NUTRITION_ENTRIES, "2026-06-02/e1", wrapped)
+        server.enqueue(
+            MockResponse().setBody("""{"entryId":"e1","lastUpdate":"2026-06-02T18:00:00Z"}"""),
+        )
+
+        repo.drain()
+
+        val recorded = server.takeRequest()
+        assertEquals("PATCH", recorded.method)
+        assertTrue(recorded.path!!.endsWith("/api/me/nutrition/2026-06-02/entries/e1"))
+        val body = recorded.body.readUtf8()
+        assertTrue("bare entry has top-level meal", body.contains("\"meal\":\"snack\""))
+        assertTrue("wrapper stripped (no nested entry/date)", !body.contains("\"entry\":"))
+    }
+
+    @Test
     fun `backoff is exponential and capped`() {
         assertEquals(30_000L, OutboxRepository.backoffMillis(1))
         assertEquals(60_000L, OutboxRepository.backoffMillis(2))

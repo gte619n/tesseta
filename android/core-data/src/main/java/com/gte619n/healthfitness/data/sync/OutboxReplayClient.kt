@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.data.sync
 
+import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.db.entity.OutboxOp
 import com.gte619n.healthfitness.data.net.BackendBaseUrl
 import com.squareup.moshi.Moshi
@@ -81,7 +82,7 @@ class RestOutboxReplayClient @Inject constructor(
 
         val body = when (op) {
             OutboxOp.DELETE -> null
-            else -> (payloadJson ?: "{}").toRequestBody(jsonMedia)
+            else -> wireBody(table, payloadJson).toRequestBody(jsonMedia)
         }
 
         // Most tables key idempotency by the random per-mutation id; adherence
@@ -103,6 +104,26 @@ class RestOutboxReplayClient @Inject constructor(
             val text = resp.body?.string().orEmpty()
             return extractLastUpdate(text)
         }
+    }
+
+    /**
+     * The JSON body to replay. Most tables store the bare endpoint DTO as
+     * `payloadJson`, which is already the shape the controller expects. Nutrition
+     * entries are the exception: the mirror stores a date-wrapped row
+     * (`{"date":…, "entry":{…}}`) so the day view can reassemble per date — but
+     * the backend's `EntryRequest`/`EntryPatchRequest` expect the entry's fields
+     * (meal, foodName, serving…) at the top level. Unwrap to the inner `entry`
+     * so e.g. moving an entry between meals actually patches its `meal`.
+     */
+    private fun wireBody(table: String, payloadJson: String?): String {
+        val json = payloadJson ?: "{}"
+        if (table != MirrorTables.NUTRITION_ENTRIES) return json
+        return runCatching {
+            val map = mapAdapter.fromJson(json)
+            @Suppress("UNCHECKED_CAST")
+            val entry = map?.get("entry") as? Map<String, Any?>
+            if (entry != null) mapAdapter.toJson(entry) else json
+        }.getOrDefault(json)
     }
 
     /** Pull the server `lastUpdate` from the write response; fall back to now. */
