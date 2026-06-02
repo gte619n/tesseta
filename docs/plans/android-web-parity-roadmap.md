@@ -20,7 +20,7 @@ At-a-glance truth. Foundations and all phone domains through Goals have shipped;
 | §3.2 Navigation | ✅ Shipped | Single NavHost (string routes, not typed `Routes`) + nested per-feature graphs + phone "More" hub |
 | §3.3 Network | ✅ Shipped | Retrofit + OkHttp + Moshi in `core-data/net`; AuthInterceptor + 401 silent-refresh; 12 API services |
 | §3.4 SSE consumer | ✅ Shipped | `core-data/net/Sse.kt`; drug lookup, goal chat, blood + DEXA upload |
-| §3.5 Room | ⏳ Incremental | Kept as-needed; backend remains source of truth, DataStore for prefs/token. **Planned activation:** IMPL-AND-20 makes an encrypted Room store the on-device source of truth (offline-first) |
+| §3.5 Room | ✅ Activated | IMPL-AND-20 landed an encrypted Room+SQLCipher store (`hf-offline.db`) as the on-device source of truth for all in-scope domains; wiped on sign-out. DataStore still holds prefs/token |
 | §3.6 Coil | ✅ Shipped | coil-compose 2.7.0 |
 | §3.7 File picker + multipart | ✅ Shipped | `MultipartUploadClient`; blood/DEXA PDF, gym cover photo, nutrition capture |
 | §3.8 ViewModels | ✅ Shipped | Convention adopted, ~30 `@HiltViewModel` screens |
@@ -43,7 +43,7 @@ At-a-glance truth. Foundations and all phone domains through Goals have shipped;
 | Phase 7 | Active workout logging | ⏳ Remaining | Not built; `WorkoutSessionService` is a commented-out manifest stub; needs its own ADR |
 | Phase 8 | Wear OS surfaces | ⏳ Remaining | Only sign-in/token relay works; no glance/Tiles/Complications/Health Services |
 | Phase 9 (remainder) | Stretch | ⏳ Remaining | Sleep tracking, push/dose reminders, dark mode still open (Nutrition + Unit prefs done) |
-| Cross-cutting / IMPL-AND-20 | Offline-first sync | 📋 Planned | Encrypted Room store as UI source of truth, background sync engine (delta pull + outbox), backend soft-delete/tombstone contract, unified `/api/me/sync` API, idempotent client-UUID writes, FCM silent-push fan-out. Decision: ADR-0007. Not started |
+| Cross-cutting / IMPL-AND-20 | Offline-first sync | ✅ Built (pending device E2E) | Encrypted Room store as UI source of truth, background sync engine (delta pull + outbox + LWW), backend soft-delete/tombstone contract, unified `/api/me/sync` API, idempotent client-UUID writes, FCM silent-push fan-out. Decision: ADR-0007. All 8 phases implemented & unit/MockMvc-green; instrumented + live-FCM E2E authored but need a device/emulator + deployed run (see plan status table + outstanding-questions). A few documented fast-follows remain (offline adherence logging, goal nested-aggregate offline, per-row badge wiring, idempotency on the long tail of write endpoints) |
 | §2.8 | Admin | ⏳ Deferred | Intentionally deferred to desktop |
 
 ### Empty modules (intentional / forward-looking)

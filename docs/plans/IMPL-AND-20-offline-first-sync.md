@@ -580,18 +580,23 @@ The feature is done when **all** hold:
 ## Status Tracking
 
 Legend: ✅ done · ⏳ in progress / partial · ❌ not started.
-"Pushed" = merged/pushed to the working branch.
+"Pushed" = merged/pushed to the working branch. **All phases below are
+implemented and green in the `feature/offline_sync` working tree but not yet
+committed** — "Pushed" is ⏳ across the board pending review/commit. "Tested" is
+✅ for layers runnable here (JVM unit, MockMvc/MockWebServer protocol) and ⏳
+where the remaining gate is instrumented/device/deployed (authored, compiles,
+not executed — see [outstanding questions](IMPL-AND-20-outstanding-questions.md)).
 
 | Phase | Implemented | Tested | Pushed | Note |
 |---|---|---|---|---|
-| 0 — Backend sync contract & soft-delete | ❌ | ❌ | ❌ | |
-| 1 — Backend delta API & idempotent writes | ❌ | ❌ | ❌ | |
-| 2 — Backend FCM registry & fan-out | ❌ | ❌ | ❌ | |
-| 3 — Android local store (Room+SQLCipher) | ❌ | ❌ | ❌ | |
-| 4 — Android sync engine | ❌ | ❌ | ❌ | |
-| 5 — Android read-path refactor | ❌ | ❌ | ❌ | |
-| 6 — Android FCM + first-run + sync UX | ❌ | ❌ | ❌ | |
-| 7 — Hardening, E2E & convergence | ❌ | ❌ | ❌ | |
+| 0 — Backend sync contract & soft-delete | ✅ | ✅ | ⏳ | `SyncStatus` enum; universal `syncStatus` field written on every in-scope per-user write (dedicated key — `status` stays the domain enum on medications/goals); all hard DELETEs → soft-delete tombstones (`syncStatus=ARCHIVED` + `updatedAt` bump); all reads exclude tombstones in app code (lazy ACTIVE default, no `whereNotEqualTo` gotcha). `FirestoreMapper.statusOf/isArchived`. `:core/:persistence/:app` tests green incl. blood + location soft-delete MockMvc proofs. |
+| 1 — Backend delta API & idempotent writes | ✅ | ✅ | ⏳ | `GET /api/me/sync` (opaque cursor / pagination / `killSwitch` / `schemaVersion`); `Idempotency-Key` + client-minted id + `X-HF-Origin-Device` on blood, medications, nutrition-entries, goals, locations (+ phases/steps, composite-meal, macro-target, adherence in the fast-follow) via a reusable `SyncWriteContext`; Firestore + in-memory `IdempotencyStore`; `FirestoreSyncChangeReader` (collectionGroup subcollections, tombstones emitted, sanitized payloads); write responses expose top-level `lastUpdate` (`WriteResult` envelope). Tests green; subcollection `updatedAt` index overrides added. |
+| 2 — Backend FCM registry & fan-out | ✅ | ✅ | ⏳ | `PUT/DELETE /api/me/devices/fcm` token registry (`users/{uid}/fcmTokens`); `SyncChangedEvent` → `SyncChangePublisher` → `FcmSender` data-only `{type:sync,collections}` with origin-device suppression + unregistered-token pruning; published from the 5 write endpoints + both Google-Health webhook handlers; `firebase-admin` via ADC (no key), gated `app.fcm.enabled` (off in test, no-op sender). `RecordingFcmSender` asserts B,C-not-A suppression + all-tokens on webhook origin. `:integrations`/`:app` tests green. |
+| 3 — Android local store (Room+SQLCipher) | ✅ | ✅ | ⏳ | `HfDatabase` (Room + SQLCipher `SupportFactory`, Keystore-wrapped passphrase, `hf-offline.db`); 21 mirror `@Entity` + `sync_state` + `outbox` + one `@Dao` each; `DbWipe` on sign-out; Hilt `DbModule`. JVM crypto tests green; instrumented DAO round-trip/tombstone/wrong-key/wipe authored + compiles (needs device). |
+| 4 — Android sync engine | ✅ | ✅ | ⏳ | Engine + outbox (reducer + ordered drain + backoff) + `ConflictResolver` (LWW) + WorkManager triggers (`SyncWorker`/`PeriodicSyncWorker`/`OutboxDrainWorker` + `SyncScheduler`) + `SyncApi` + `DeviceIdProvider`. 29 JVM tests green incl. MockWebServer pull (tombstone/pagination/schemaVersion-wipe/killSwitch) + outbox drain (idempotency/origin-device headers). |
+| 5 — Android read-path refactor | ✅ | ✅ | ⏳ | `MirrorRepositorySupport` (Room-Flow reads w/ kill-switch live-fallback; optimistic create/update/delete → outbox → drain; `refreshInto` that won't clobber dirty rows) + `OutboxEndpointRegistry` (single per-domain mutation→real-endpoint map). **All in-scope domains now read from Room**: bloodReadings, bodyComposition, medications(+history), nutrition(entries+target), goals(list), locations, profile, daily-metrics, dexa list, blood-report list. Writes optimistic+outbox where applicable; server-derived (D9) stays pull-only and out of the outbox (goal step intents, nutrition rollups, GH metrics, med state-transitions). Documented fast-follows: offline adherence logging, goal nested-aggregate offline assembly (#16–#30). JVM tests green across `:core-data` + 8 feature modules; `:app:assembleDebug` builds. |
+| 6 — Android FCM + first-run + sync UX | ✅ | ⏳ | ⏳ | `HfMessagingService` (silent `{type:sync}` → expedited `SyncWorker`; `onNewToken`); `TokenRegistration` (PUT on sign-in / DELETE on sign-out); consolidated `SignOutSideEffects` (FCM delete + Room wipe); `FirstSyncGate` (bounded blocking first-sync + lazy backfill); `SyncStatusBar` + `SyncBadge` + `OfflineGate` (D17 on chat/meal-photo/PDF-upload); profile replay remapped to live `PATCH /api/me`; `google-services` plugin applied, `:app:assembleDebug` green with FCM. JVM tests green; UI rendering, device FCM delivery, first-run gate visuals unverified (need device — #36–#42). |
+| 7 — Hardening, E2E & convergence | ✅ | ⏳ | ⏳ | Backend `SyncContractIntegrationTest` (delta + idempotent replay + tombstone paging + fan-out suppression) green on JVM. Android `SyncE2ETest` (airplane-mode CRUD→reconnect→server state, create→edit→delete collapse) + `ConvergenceTest` (two-client LWW, server-derived field preserved) + `TombstoneApplyTest` authored under `androidTest` and compile (`compileDebugAndroidTestKotlin` green); execution needs `connectedDebugAndroidTest` on an emulator/device (#43–#46). Live cross-device FCM ~30s drill is a deployed/manual gate (#44). |
 
 ---
 
