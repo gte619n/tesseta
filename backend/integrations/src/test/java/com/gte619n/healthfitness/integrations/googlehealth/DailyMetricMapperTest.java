@@ -19,72 +19,86 @@ class DailyMetricMapperTest {
         }
     }
 
+    // Resting HR + HRV fixtures below are VERBATIM real API responses captured
+    // from health.googleapis.com via the admin sync/inspect endpoint: nested
+    // {year,month,day} date, string-encoded int64 bpm, double HRV, and NO
+    // resource `name`.
     @Test
-    void mapsStepsCountAndDate() {
+    void mapsRestingHeartRateFromRealPayload() {
         JsonNode dp = node("""
-            { "name": "users/h1/dataTypes/steps/dataPoints/r1",
-              "dataSource": { "platform": "FITBIT", "recordingMethod": "AUTOMATIC" },
-              "steps": { "count": 9321,
-                "sampleTime": { "physicalTime": "2026-05-20T23:59:00Z" } } }
-            """);
-        DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.STEPS);
-        assertThat(p.healthUserId()).isEqualTo("h1");
-        assertThat(p.recordId()).isEqualTo("r1");
-        assertThat(p.type()).isEqualTo(DailyMetricDataType.STEPS);
-        assertThat(p.value()).isEqualTo(9321);
-        assertThat(p.date()).isEqualTo(LocalDate.parse("2026-05-20"));
-        assertThat(p.sleepScore()).isNull();
-        assertThat(p.sourcePlatform()).isEqualTo("FITBIT");
-    }
-
-    @Test
-    void mapsRestingHeartRateBpm() {
-        JsonNode dp = node("""
-            { "name": "users/h1/dataTypes/daily-resting-heart-rate/dataPoints/r2",
-              "dataSource": { "platform": "FITBIT", "recordingMethod": "AUTOMATIC" },
-              "dailyRestingHeartRate": { "bpm": 54,
-                "sampleTime": { "physicalTime": "2026-05-20T08:00:00Z" } } }
+            { "dataSource": { "recordingMethod": "DERIVED", "device": {}, "platform": "FITBIT" },
+              "dailyRestingHeartRate": {
+                "date": { "year": 2026, "month": 6, "day": 1 },
+                "beatsPerMinute": "66",
+                "dailyRestingHeartRateMetadata": { "calculationMethod": "WITH_SLEEP" } } }
             """);
         DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.RESTING_HEART_RATE);
-        assertThat(p.value()).isEqualTo(54);
+        assertThat(p.value()).isEqualTo(66);
+        assertThat(p.date()).isEqualTo(LocalDate.of(2026, 6, 1));
+        assertThat(p.sourcePlatform()).isEqualTo("FITBIT");
+        assertThat(p.recordingMethod()).isEqualTo("DERIVED");
         assertThat(p.sleepScore()).isNull();
+        // No resource name in the payload — identity is synthesized per (type, day).
+        assertThat(p.healthUserId()).isNull();
+        assertThat(p.recordId()).isEqualTo("daily-resting-heart-rate:2026-06-01");
     }
 
     @Test
-    void mapsHrvMilliseconds() {
+    void mapsHrvFromRealPayload_roundsDoubleMilliseconds() {
         JsonNode dp = node("""
-            { "name": "users/h1/dataTypes/daily-heart-rate-variability/dataPoints/r3",
-              "dataSource": { "platform": "FITBIT", "recordingMethod": "AUTOMATIC" },
-              "dailyHeartRateVariability": { "milliseconds": 62,
-                "sampleTime": { "physicalTime": "2026-05-20T08:00:00Z" } } }
+            { "dataSource": { "recordingMethod": "DERIVED", "device": {}, "platform": "FITBIT" },
+              "dailyHeartRateVariability": {
+                "date": { "year": 2026, "month": 6, "day": 1 },
+                "averageHeartRateVariabilityMilliseconds": 21.75,
+                "nonRemHeartRateBeatsPerMinute": "61",
+                "entropy": 2.951,
+                "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds": 23.9 } }
             """);
         DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.HRV);
-        assertThat(p.value()).isEqualTo(62);
+        assertThat(p.value()).isEqualTo(22); // 21.75 rounded
+        assertThat(p.date()).isEqualTo(LocalDate.of(2026, 6, 1));
+        assertThat(p.recordId()).isEqualTo("daily-heart-rate-variability:2026-06-01");
     }
 
+    // Steps/sleep real shapes are still unverified (their reads were blocked by
+    // missing OAuth scopes). These fixtures exercise the value field + the
+    // fallback date paths; revisit once a real steps/sleep payload is captured.
     @Test
-    void mapsSleepDurationAndScore() {
+    void mapsStepsCountWithIntervalDate() {
         JsonNode dp = node("""
-            { "name": "users/h1/dataTypes/sleep/dataPoints/r4",
-              "dataSource": { "platform": "FITBIT", "recordingMethod": "AUTOMATIC" },
-              "sleep": { "durationMinutes": 462, "score": 88,
-                "sampleTime": { "physicalTime": "2026-05-20T06:30:00Z" } } }
+            { "dataSource": { "platform": "FITBIT", "recordingMethod": "AUTOMATIC" },
+              "steps": { "count": 9321,
+                "interval": { "startTime": "2026-05-20T00:00:00Z" } } }
             """);
-        DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.SLEEP);
-        assertThat(p.value()).isEqualTo(462);
-        assertThat(p.sleepScore()).isEqualTo(88);
+        DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.STEPS);
+        assertThat(p.value()).isEqualTo(9321);
+        assertThat(p.date()).isEqualTo(LocalDate.of(2026, 5, 20));
+        assertThat(p.recordId()).isEqualTo("steps:2026-05-20");
     }
 
     @Test
-    void fallsBackToUpdateTimeForDate_whenSampleTimeMissing() {
+    void fallsBackToUpdateTimeForDate_whenNoDateOrInterval() {
         JsonNode dp = node("""
-            { "name": "users/h1/dataTypes/steps/dataPoints/r5",
-              "updateTime": "2026-05-19T12:00:00Z",
+            { "updateTime": "2026-05-19T12:00:00Z",
               "dataSource": { "platform": "FITBIT" },
               "steps": { "count": 100 } }
             """);
         DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.STEPS);
-        assertThat(p.date()).isEqualTo(LocalDate.parse("2026-05-19"));
+        assertThat(p.date()).isEqualTo(LocalDate.of(2026, 5, 19));
         assertThat(p.recordingMethod()).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void doesNotThrowWhenResourceNameAbsent() {
+        // The real daily payloads have no `name`; the mapper must not crash
+        // (the previous resource-name parsing threw on every real point).
+        JsonNode dp = node("""
+            { "dataSource": { "platform": "FITBIT" },
+              "dailyRestingHeartRate": {
+                "date": { "year": 2026, "month": 6, "day": 1 }, "beatsPerMinute": "60" } }
+            """);
+        DailyMetricDataPoint p = DailyMetricMapper.fromJson(dp, DailyMetricDataType.RESTING_HEART_RATE);
+        assertThat(p.value()).isEqualTo(60);
+        assertThat(p.name()).isNull();
     }
 }

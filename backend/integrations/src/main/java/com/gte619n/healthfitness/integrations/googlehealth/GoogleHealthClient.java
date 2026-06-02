@@ -141,6 +141,34 @@ public class GoogleHealthClient {
         Instant to,
         String pageToken
     ) {
+        String url = buildDataPointsUrl(urlSegment, filterFieldName, from, to, pageToken);
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Accept", "application/json")
+            .GET()
+            .build();
+        try {
+            HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() / 100 != 2) {
+                throw new RuntimeException(
+                    "Google Health API " + urlSegment + " list failed ("
+                        + response.statusCode() + "): " + response.body());
+            }
+            return mapper.readTree(response.body());
+        } catch (java.io.IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new RuntimeException("Google Health API call failed", e);
+        }
+    }
+
+    private String buildDataPointsUrl(
+        String urlSegment,
+        String filterFieldName,
+        Instant from,
+        Instant to,
+        String pageToken
+    ) {
         // Google Health filter only supports `>=` and `<` on physical_time
         // — neither `<=`, `=`, nor BETWEEN are accepted. We treat `to` as
         // exclusive in this client; callers wanting an inclusive upper
@@ -159,23 +187,56 @@ public class GoogleHealthClient {
         if (pageToken != null) {
             url.append("&page_token=").append(URLEncoder.encode(pageToken, StandardCharsets.UTF_8));
         }
+        return url.toString();
+    }
+
+    // Raw, non-throwing single-page fetch used by the admin sync/inspect
+    // endpoint to examine the actual API response (data OR error body)
+    // without the mapping layer in the way. Returns exactly what the API
+    // returned so the real on-the-wire field shapes can be verified.
+    public RawResponse rawFirstPage(
+        String accessToken,
+        String urlSegment,
+        String filterFieldName,
+        Instant from,
+        Instant to
+    ) {
+        String url = buildDataPointsUrl(urlSegment, filterFieldName, from, to, null);
         HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(url.toString()))
+            .uri(URI.create(url))
             .header("Authorization", "Bearer " + accessToken)
             .header("Accept", "application/json")
             .GET()
             .build();
         try {
             HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() / 100 != 2) {
-                throw new RuntimeException(
-                    "Google Health API " + urlSegment + " list failed ("
-                        + response.statusCode() + "): " + response.body());
-            }
-            return mapper.readTree(response.body());
+            return new RawResponse(url, response.statusCode(), response.body());
         } catch (java.io.IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            throw new RuntimeException("Google Health API call failed", e);
+            return new RawResponse(url, -1, "request failed: " + e.getMessage());
         }
     }
+
+    // Same as rawFirstPage but WITHOUT a filter — used to discover the real
+    // data-point shape (and thus the correct filterable members) when the
+    // standard sample_time.physical_time filter is rejected for a data type.
+    public RawResponse rawFirstPageNoFilter(String accessToken, String urlSegment, int pageSize) {
+        String url = apiBaseUrl + "/users/me/dataTypes/" + urlSegment
+            + "/dataPoints?page_size=" + pageSize;
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Accept", "application/json")
+            .GET()
+            .build();
+        try {
+            HttpResponse<String> response = http.send(req, HttpResponse.BodyHandlers.ofString());
+            return new RawResponse(url, response.statusCode(), response.body());
+        } catch (java.io.IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new RawResponse(url, -1, "request failed: " + e.getMessage());
+        }
+    }
+
+    public record RawResponse(String url, int statusCode, String body) {}
 }
