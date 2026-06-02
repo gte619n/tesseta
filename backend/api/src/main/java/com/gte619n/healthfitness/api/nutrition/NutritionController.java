@@ -14,17 +14,21 @@ import com.gte619n.healthfitness.core.nutrition.FoodSource;
 import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetService;
 import com.gte619n.healthfitness.core.nutrition.Macros;
+import com.gte619n.healthfitness.core.nutrition.MealCaptureService;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionService;
 import com.gte619n.healthfitness.core.nutrition.ServingSize;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,7 +39,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/me/nutrition")
@@ -48,6 +55,7 @@ public class NutritionController {
     private final FoodEntryImageService foodEntryImages;
     private final SyncWriteContext syncWrite;
     private final SyncChangeNotifier syncNotifier;
+    private final MealCaptureService mealCapture;
 
     public NutritionController(
         CurrentUserProvider currentUser,
@@ -56,7 +64,8 @@ public class NutritionController {
         FoodCatalogService foodCatalog,
         FoodEntryImageService foodEntryImages,
         SyncWriteContext syncWrite,
-        SyncChangeNotifier syncNotifier
+        SyncChangeNotifier syncNotifier,
+        MealCaptureService mealCapture
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
@@ -65,6 +74,7 @@ public class NutritionController {
         this.foodEntryImages = foodEntryImages;
         this.syncWrite = syncWrite;
         this.syncNotifier = syncNotifier;
+        this.mealCapture = mealCapture;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -320,6 +330,51 @@ public class NutritionController {
                     e.updatedAt() != null ? e.updatedAt() : java.time.Instant.now()))
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Capture a meal/product photo and log it asynchronously. Stores the photo,
+     * creates an {@code ANALYZING} placeholder entry and returns it immediately
+     * (202); the Gemini analysis — naming, itemization, packaged-product
+     * detection and image generation — runs in the background and the client
+     * polls the day view until the entry fills in. {@code meal} is optional and
+     * defaults to the meal for the current local hour.
+     */
+    @PostMapping(value = "/{date}/capture-meal", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<EntryResponse> captureMeal(
+        @PathVariable LocalDate date,
+        @RequestParam(value = "meal", required = false) MealType meal,
+        @RequestPart("photo") MultipartFile photo
+    ) {
+        String userId = currentUser.get().userId();
+        byte[] bytes = readPhotoBytes(photo);
+        MealType resolved = meal != null ? meal : mealForHour(LocalTime.now().getHour());
+        try {
+            FoodEntry entry = mealCapture.captureMeal(userId, date, resolved, bytes, photo.getContentType());
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY, "meal analysis is unavailable");
+        }
+    }
+
+    private static byte[] readPhotoBytes(MultipartFile photo) {
+        if (photo == null || photo.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "photo is required");
+        }
+        try {
+            return photo.getBytes();
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "could not read uploaded photo");
+        }
+    }
+
+    /** Same time-of-day windows the clients use when they don't pass a meal. */
+    private static MealType mealForHour(int hour) {
+        if (hour >= 4 && hour <= 10) return MealType.BREAKFAST;
+        if (hour >= 11 && hour <= 15) return MealType.LUNCH;
+        if (hour >= 16 && hour <= 21) return MealType.DINNER;
+        return MealType.SNACK;
     }
 
     /** Re-portion one ingredient of a composite meal and recompute totals. */

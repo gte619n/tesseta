@@ -6,6 +6,7 @@ import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimest
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.nutrition.CompositeIngredient;
+import com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus;
 import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodEntryRepository;
@@ -100,6 +101,7 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
         body.put("mealImageUrl", e.mealImageUrl());
         body.put("mealImageStatus", e.mealImageStatus() != null ? e.mealImageStatus().name() : null);
         body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
+        body.put("analysisStatus", e.analysisStatus() != null ? e.analysisStatus().name() : null);
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -126,6 +128,7 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
             ingredientsFromList(snapshot.get("ingredients")),
             snapshot.getString("mealImageUrl"),
             imageStatusFrom(snapshot.getString("mealImageStatus")),
+            analysisStatusFrom(snapshot.getString("analysisStatus")),
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt"))
         );
@@ -133,6 +136,12 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
 
     private static FoodImageStatus imageStatusFrom(String raw) {
         return raw != null ? FoodImageStatus.valueOf(raw) : null;
+    }
+
+    // Legacy entries (pre-async-capture) have no analysisStatus field; treat
+    // their absence as NONE so they read back as ordinary, finished entries.
+    private static EntryAnalysisStatus analysisStatusFrom(String raw) {
+        return raw != null ? EntryAnalysisStatus.valueOf(raw) : EntryAnalysisStatus.NONE;
     }
 
     private static List<Map<String, Object>> ingredientsToList(List<CompositeIngredient> ingredients) {

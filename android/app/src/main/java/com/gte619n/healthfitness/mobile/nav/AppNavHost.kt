@@ -54,7 +54,7 @@ object Routes {
     const val MEDICATIONS = MedicationRoutes.LIST
     const val BLOOD = BloodRoutes.OVERVIEW
     const val BODY = BodyCompositionRoutes.BODY
-    const val WORKOUTS = WorkoutsRoutes.GYMS
+    const val WORKOUTS = WorkoutsRoutes.HUB
     const val SETTINGS = SettingsRoutes.SETTINGS
 
     const val MORE = "more"
@@ -128,7 +128,10 @@ private fun AppNavHostGraph(
         medicationsGraph(navController)
         bloodGraph(navController)
         bodyCompositionGraph(navController)
-        workoutsGraph(navController)
+        workoutsGraph(
+            navController = navController,
+            onOpenGoal = { goalId -> navController.navigate(Routes.goalDetail(goalId)) },
+        )
         settingsGraph(
             navController = navController,
             onSignedOut = { navController.popBackStack(Routes.DASHBOARD, inclusive = false) },

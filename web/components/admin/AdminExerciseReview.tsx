@@ -1,0 +1,193 @@
+"use client";
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/Toast';
+import { ExerciseDemoFrames } from './ExerciseDemoFrames';
+import { RegenerateMediaModal } from './RegenerateMediaModal';
+import { MediaStatusPill } from './ExercisePills';
+import type { ExerciseResponse, DemoPhase } from '@/lib/types/exercise';
+import { MOVEMENT_PATTERN_LABEL } from '@/lib/types/exercise';
+
+export interface ExerciseAdminActions {
+  approveMedia: (exerciseId: string) => Promise<void>;
+  getDemoPrompt: (exerciseId: string, phase: DemoPhase) => Promise<string>;
+  regenerateMedia: (
+    exerciseId: string,
+    promptOverride: string,
+    phase: DemoPhase | null,
+  ) => Promise<void>;
+  regeneratePhase: (exerciseId: string, phase: DemoPhase) => Promise<void>;
+  uploadFrame: (exerciseId: string, phase: DemoPhase, file: File) => Promise<void>;
+  selectFrame: (exerciseId: string, phase: DemoPhase, imageUrl: string) => Promise<void>;
+  deleteFrame: (exerciseId: string, phase: DemoPhase, imageUrl: string) => Promise<void>;
+}
+
+interface Props extends ExerciseAdminActions {
+  review: ExerciseResponse[];
+}
+
+export function AdminExerciseReview({
+  review,
+  approveMedia,
+  getDemoPrompt,
+  regenerateMedia,
+  regeneratePhase,
+  uploadFrame,
+  selectFrame,
+  deleteFrame,
+}: Props) {
+  if (review.length === 0) {
+    return (
+      <div className="rounded-lg border border-border-default bg-surface px-6 py-12 text-center">
+        <p className="text-sm text-secondary">No exercises pending media review</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-warn/40 bg-warn-bg px-4 py-2.5 text-xs text-warn">
+        <i className="ti ti-alert-triangle mr-1" aria-hidden />
+        Review each phase for anatomical correctness — check joint angles, spinal position, and grip
+        before approving. A wrong angle teaches an injurious movement.
+      </div>
+      {review.map((ex) => (
+        <ReviewCard
+          key={ex.exerciseId}
+          exercise={ex}
+          approveMedia={approveMedia}
+          getDemoPrompt={getDemoPrompt}
+          regenerateMedia={regenerateMedia}
+          regeneratePhase={regeneratePhase}
+          uploadFrame={uploadFrame}
+          selectFrame={selectFrame}
+          deleteFrame={deleteFrame}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReviewCard({
+  exercise,
+  approveMedia,
+  getDemoPrompt,
+  regenerateMedia,
+  regeneratePhase,
+  uploadFrame,
+  selectFrame,
+  deleteFrame,
+}: { exercise: ExerciseResponse } & ExerciseAdminActions) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [isRegenOpen, setIsRegenOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function handleApprove() {
+    const ok = await confirm({
+      title: 'Approve media',
+      description: `Mark the demo media for "${exercise.name}" as approved? It becomes visible to users and the program generator.`,
+      confirmLabel: 'Approve',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await approveMedia(exercise.exerciseId);
+      toast.success('Media approved');
+      router.refresh();
+    } catch (e) {
+      toast.error('Failed to approve media', {
+        description: e instanceof Error ? e.message : 'Unknown error',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="rounded-lg border border-border-default bg-surface p-5">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate text-base font-semibold text-primary">{exercise.name}</h3>
+              <MediaStatusPill status={exercise.mediaStatus} />
+            </div>
+            <p className="mt-0.5 text-xs text-secondary">
+              {MOVEMENT_PATTERN_LABEL[exercise.movementPattern]}
+              {exercise.primaryMuscles.length > 0
+                ? ` · ${exercise.primaryMuscles.join(', ')}`
+                : ''}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => setIsRegenOpen(true)}
+              disabled={busy}
+              className="cursor-pointer rounded-md border border-border-default bg-canvas px-3 py-1.5 text-xs font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Regenerate all
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={busy}
+              className="cursor-pointer rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Approve media
+            </button>
+          </div>
+        </div>
+
+        <ExerciseDemoFrames
+          exerciseId={exercise.exerciseId}
+          exerciseName={exercise.name}
+          frames={exercise.demoFrames}
+          mediaStatus={exercise.mediaStatus}
+          regeneratePhase={async (id, phase) => {
+            await regeneratePhase(id, phase);
+            router.refresh();
+          }}
+          uploadFrame={async (id, phase, file) => {
+            await uploadFrame(id, phase, file);
+            router.refresh();
+          }}
+          selectFrame={async (id, phase, url) => {
+            await selectFrame(id, phase, url);
+            router.refresh();
+          }}
+          deleteFrame={async (id, phase, url) => {
+            await deleteFrame(id, phase, url);
+            router.refresh();
+          }}
+        />
+
+        {exercise.formCues.length > 0 ? (
+          <div className="mt-3 border-t border-border-subtle pt-3">
+            <span className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">Form cues</span>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-secondary">
+              {exercise.formCues.map((cue, i) => (
+                <li key={i}>{cue}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+
+      <RegenerateMediaModal
+        exerciseId={exercise.exerciseId}
+        exerciseName={exercise.name}
+        isOpen={isRegenOpen}
+        onClose={() => setIsRegenOpen(false)}
+        onStarted={() => {
+          setIsRegenOpen(false);
+          router.refresh();
+        }}
+        getPrompt={getDemoPrompt}
+        regenerate={regenerateMedia}
+      />
+    </>
+  );
+}

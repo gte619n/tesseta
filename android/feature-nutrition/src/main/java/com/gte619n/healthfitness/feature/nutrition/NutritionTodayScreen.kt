@@ -1,7 +1,9 @@
 package com.gte619n.healthfitness.feature.nutrition
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -31,8 +34,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -69,6 +83,7 @@ fun NutritionTodayRoute(
         onPrevDay = viewModel::previousDay,
         onNextDay = viewModel::nextDay,
         onDeleteEntry = viewModel::deleteEntry,
+        onMoveEntry = viewModel::moveEntry,
         onOpenEditSheet = viewModel::openEditSheet,
         onCloseEditSheet = viewModel::closeEditSheet,
         onUpdateEntry = viewModel::updateEntry,
@@ -89,6 +104,7 @@ fun NutritionTodayScreen(
     onPrevDay: () -> Unit,
     onNextDay: () -> Unit,
     onDeleteEntry: (String) -> Unit,
+    onMoveEntry: (String, String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
     onCloseEditSheet: () -> Unit,
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
@@ -125,6 +141,7 @@ fun NutritionTodayScreen(
                 day = state.day,
                 pendingEntryIds = state.pendingEntryIds,
                 onDeleteEntry = onDeleteEntry,
+                onMoveEntry = onMoveEntry,
                 onOpenEditSheet = onOpenEditSheet,
             )
         }
@@ -212,35 +229,86 @@ private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
     }
 }
 
+/** An entry being dragged, plus the current pointer position in window space. */
+private data class MealDragState(val entry: Entry, val pointerWindow: Offset)
+
 @Composable
 private fun DayContent(
     day: NutritionDay?,
     pendingEntryIds: Set<String>,
     onDeleteEntry: (String) -> Unit,
+    onMoveEntry: (String, String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
 ) {
     val mealsByName = day?.meals?.associateBy { it.meal } ?: emptyMap()
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp),
+    val density = LocalDensity.current
+
+    // Window-space vertical bounds of each meal section, captured as they lay
+    // out, so a dragged entry can resolve which meal it's currently over.
+    val mealBounds = remember { mutableStateMapOf<String, ClosedFloatingPointRange<Float>>() }
+    var drag by remember { mutableStateOf<MealDragState?>(null) }
+    var boxTopInWindow by remember { mutableStateOf(0f) }
+
+    fun targetMealAt(windowY: Float): String? =
+        mealBounds.entries.firstOrNull { windowY in it.value }?.key
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { boxTopInWindow = it.positionInWindow().y },
     ) {
-        item("progress") {
-            MacroProgressCard(totals = day?.totals, target = day?.target)
-        }
-        Meal.entries.forEach { meal ->
-            val group = mealsByName[meal.wire]
-            item(meal.wire) {
-                MealSection(
-                    meal = meal,
-                    group = group,
-                    pendingEntryIds = pendingEntryIds,
-                    onDeleteEntry = onDeleteEntry,
-                    onOpenEditSheet = onOpenEditSheet,
-                )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            item("progress") {
+                MacroProgressCard(totals = day?.totals, target = day?.target)
             }
+            Meal.entries.forEach { meal ->
+                val group = mealsByName[meal.wire]
+                item(meal.wire) {
+                    val active = drag
+                    MealSection(
+                        meal = meal,
+                        group = group,
+                        pendingEntryIds = pendingEntryIds,
+                        draggingEntryId = active?.entry?.entryId,
+                        isDropTarget = active != null &&
+                            active.entry.meal != meal.wire &&
+                            targetMealAt(active.pointerWindow.y) == meal.wire,
+                        onBounds = { top, bottom -> mealBounds[meal.wire] = top..bottom },
+                        onDeleteEntry = onDeleteEntry,
+                        onOpenEditSheet = onOpenEditSheet,
+                        onDragStart = { entry, pointer -> drag = MealDragState(entry, pointer) },
+                        onDrag = { pointer -> drag = drag?.copy(pointerWindow = pointer) },
+                        onDragEnd = {
+                            val d = drag
+                            drag = null
+                            if (d != null) {
+                                val target = targetMealAt(d.pointerWindow.y)
+                                if (target != null && target != d.entry.meal) {
+                                    onMoveEntry(d.entry.entryId, target)
+                                }
+                            }
+                        },
+                        onDragCancel = { drag = null },
+                    )
+                }
+            }
+            item("tail") { Spacer(Modifier.height(8.dp)) }
         }
-        item("tail") { Spacer(Modifier.height(8.dp)) }
+
+        // A chip that follows the finger while dragging, so the in-flight move
+        // is legible even as the source row dims in place.
+        drag?.let { d ->
+            val xDp = with(density) { d.pointerWindow.x.toDp() }
+            val yDp = with(density) { (d.pointerWindow.y - boxTopInWindow).toDp() }
+            DragChip(
+                entry = d.entry,
+                modifier = Modifier.offset(x = xDp - 70.dp, y = yDp - 24.dp),
+            )
+        }
     }
 }
 
@@ -249,10 +317,30 @@ private fun MealSection(
     meal: Meal,
     group: MealGroup?,
     pendingEntryIds: Set<String>,
+    draggingEntryId: String?,
+    isDropTarget: Boolean,
+    onBounds: (Float, Float) -> Unit,
     onDeleteEntry: (String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
+    onDragStart: (Entry, Offset) -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
 ) {
-    HfCard(modifier = Modifier.fillMaxWidth()) {
+    val cardModifier = Modifier
+        .fillMaxWidth()
+        .onGloballyPositioned {
+            val top = it.positionInWindow().y
+            onBounds(top, top + it.size.height)
+        }
+        .then(
+            if (isDropTarget) {
+                Modifier.border(1.5.dp, Hf.colors.accent, RoundedCornerShape(10.dp))
+            } else {
+                Modifier
+            },
+        )
+    HfCard(modifier = cardModifier) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -269,15 +357,24 @@ private fun MealSection(
             val entries = group?.entries.orEmpty()
             if (entries.isEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Text("No entries yet.", style = Hf.type.bodySm, color = Hf.colors.textTertiary)
+                Text(
+                    if (isDropTarget) "Drop here" else "No entries yet.",
+                    style = Hf.type.bodySm,
+                    color = if (isDropTarget) Hf.colors.accent else Hf.colors.textTertiary,
+                )
             } else {
                 entries.forEach { entry ->
                     Spacer(Modifier.height(10.dp))
                     EntryRow(
                         entry = entry,
                         pending = entry.entryId in pendingEntryIds,
+                        dragging = entry.entryId == draggingEntryId,
                         onClick = { onOpenEditSheet(entry) },
                         onDelete = { onDeleteEntry(entry.entryId) },
+                        onDragStart = onDragStart,
+                        onDrag = onDrag,
+                        onDragEnd = onDragEnd,
+                        onDragCancel = onDragCancel,
                     )
                 }
             }
@@ -286,21 +383,60 @@ private fun MealSection(
 }
 
 @Composable
-private fun EntryRow(entry: Entry, pending: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun EntryRow(
+    entry: Entry,
+    pending: Boolean,
+    dragging: Boolean,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    onDragStart: (Entry, Offset) -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+) {
+    // Track this row's window origin so drag offsets (which arrive relative to
+    // the row) can be reported in window space for hit-testing meal sections.
+    var rowOriginInWindow by remember { mutableStateOf(Offset.Zero) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { rowOriginInWindow = it.positionInWindow() }
+            .graphicsLayer { alpha = if (dragging) 0.3f else 1f }
+            // Long-press to pick the entry up, then drag onto another meal.
+            // Drags are consumed so the list doesn't scroll mid-move.
+            .pointerInput(entry.entryId, pending) {
+                if (pending) return@pointerInput
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset -> onDragStart(entry, rowOriginInWindow + offset) },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        onDrag(rowOriginInWindow + change.position)
+                    },
+                    onDragEnd = { onDragEnd() },
+                    onDragCancel = { onDragCancel() },
+                )
+            }
             .clickable(enabled = !pending) { onClick() },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 40.dp)
+        // An entry still being analyzed shows the generating spinner; its real
+        // name/macros/image arrive via polling once the backend finishes.
+        FoodThumbnail(
+            imageUrl = entry.imageUrl,
+            imageStatus = if (entry.isAnalyzing) "PENDING" else entry.imageStatus,
+            size = 40.dp,
+        )
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
             Spacer(Modifier.height(2.dp))
             Text(
-                "${formatQuantity(entry.quantity)} × ${entry.servingLabel} · ${formatKcal(entry.macros.caloriesKcal)}",
+                when {
+                    entry.isAnalyzing -> "Analyzing your photo…"
+                    entry.analysisStatus == "FAILED" -> "Couldn’t read photo · delete and retry"
+                    else -> "${formatQuantity(entry.quantity)} × ${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"
+                },
                 style = Hf.type.capsSm,
                 color = Hf.colors.textTertiary,
             )
@@ -316,6 +452,23 @@ private fun EntryRow(entry: Entry, pending: Boolean, onClick: () -> Unit, onDele
                 Icon(Icons.Outlined.Delete, contentDescription = "Delete entry", tint = Hf.colors.textTertiary, modifier = Modifier.size(18.dp))
             }
         }
+    }
+}
+
+/** Floating preview of the entry being dragged between meals. */
+@Composable
+private fun DragChip(entry: Entry, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .shadow(8.dp, RoundedCornerShape(10.dp))
+            .background(Hf.colors.surface, RoundedCornerShape(10.dp))
+            .border(0.5.dp, Hf.colors.accent, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 28.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
     }
 }
 
@@ -349,7 +502,7 @@ private fun NutritionTodayPreview() {
                     ),
                 ),
             ),
-            onPrevDay = {}, onNextDay = {}, onDeleteEntry = {},
+            onPrevDay = {}, onNextDay = {}, onDeleteEntry = {}, onMoveEntry = { _, _ -> },
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
             onSaveComposite = { _, _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},

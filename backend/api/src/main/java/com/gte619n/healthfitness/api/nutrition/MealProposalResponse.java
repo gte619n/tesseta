@@ -8,12 +8,18 @@ import java.util.List;
  * reference plus the itemized proposal. Nothing is persisted — the client
  * reviews/edits and saves via the M1 endpoints.
  */
-public record MealProposalResponse(String photoRef, List<MealItemDto> items) {
+public record MealProposalResponse(
+    String photoRef,
+    String mealName,
+    boolean packagedProduct,
+    List<MealItemDto> items
+) {
 
     public static MealProposalResponse from(MealProposal proposal) {
         List<MealItemDto> items = proposal.items() == null
             ? List.of()
             : proposal.items().stream().map(MealItemDto::from).toList();
-        return new MealProposalResponse(proposal.photoRef(), items);
+        return new MealProposalResponse(
+            proposal.photoRef(), proposal.mealName(), proposal.packagedProduct(), items);
     }
 }

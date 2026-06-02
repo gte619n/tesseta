@@ -13,6 +13,11 @@ import java.util.List;
  * raw-ingredient image), and {@code mealImageUrl}/{@code mealImageStatus} carry
  * the generated image of the finished plated meal. A plain single-food entry
  * leaves {@code ingredients} null and the meal-image fields unset.
+ *
+ * <p>{@code analysisStatus} tracks the background photo-analysis lifecycle: a
+ * freshly captured photo logs a placeholder entry as {@code ANALYZING} and a
+ * background task fills it in and flips it to {@code READY}. Entries created any
+ * other way are {@code NONE}.
  */
 public record FoodEntry(
     String userId,
@@ -30,11 +35,17 @@ public record FoodEntry(
     List<CompositeIngredient> ingredients,
     String mealImageUrl,
     FoodImageStatus mealImageStatus,
+    EntryAnalysisStatus analysisStatus,
     Instant createdAt,
     Instant updatedAt
 ) {
     /** True when this entry is a photo-logged meal with sub-ingredients. */
     public boolean isComposite() {
         return ingredients != null && !ingredients.isEmpty();
+    }
+
+    /** True while the background photo analysis is still running. */
+    public boolean isAnalyzing() {
+        return analysisStatus == EntryAnalysisStatus.ANALYZING;
     }
 }

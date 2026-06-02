@@ -102,6 +102,40 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
         %s
         """;
 
+    /**
+     * Style for a single PACKAGED PRODUCT (a protein shake, a tub of yogurt, an
+     * energy bar). The image must depict the product itself — its food/drink as
+     * served — NOT a flat-lay of its ingredients and NOT a rendering of its
+     * label, name or brand text.
+     */
+    private static final String PACKAGED_PRODUCT_STYLE = """
+        PHOTOGRAPHY SPECIFICATIONS:
+        - A SINGLE serving of the product itself, presented appetizingly on a
+          clean white marble surface (e.g. the shake poured in a clean glass, the
+          yogurt in a simple bowl, the bar unwrapped on a plate)
+        - Soft diffused natural lighting from the upper left
+        - Gentle shadows for depth and dimension
+        - Shallow depth of field (f/2.8 aperture equivalent)
+        - 100mm macro lens perspective
+        - Centered composition with generous negative space
+        - Premium editorial food-photography aesthetic
+
+        CRITICAL REQUIREMENTS:
+        - Photorealistic rendering of the PRODUCT ITSELF — one single product
+        - Do NOT depict a list of ingredients laid out separately
+        - No text, labels, packaging copy, brand names or nutrition panels visible
+        - No human hands or body parts
+        - No background clutter or props
+        """;
+
+    private static final String PACKAGED_PRODUCT_PROMPT_TEMPLATE = """
+        Generate a professional still-life photograph of a single packaged product.
+
+        PRODUCT: %s
+
+        %s
+        """;
+
     /** Reference-image prompt: the user's real meal photo informs the dish. */
     private static final String REFERENCE_PROMPT_TEMPLATE = """
         The attached image is a real photo of a meal a user logged.
@@ -146,6 +180,20 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
             String prompt = String.format(RAW_INGREDIENT_PROMPT_TEMPLATE, name, RAW_INGREDIENT_STYLE);
             return execute(prompt, food.name());
         }
+        // Packaged products render as the single product itself (using the
+        // capture photo as a visual reference when available), never as a
+        // breakdown of ingredients or a picture of the label/name.
+        if (isPackagedProduct(food)) {
+            String name = (food.name() == null || food.name().isBlank())
+                ? "a packaged product" : food.name();
+            if (referencePhoto != null && referencePhoto.length > 0) {
+                String prompt = String.format(REFERENCE_PROMPT_TEMPLATE, name, PACKAGED_PRODUCT_STYLE);
+                String mime = (referenceMime == null || referenceMime.isBlank()) ? "image/jpeg" : referenceMime;
+                return executeWithReference(prompt, referencePhoto, mime, food.name());
+            }
+            String prompt = String.format(PACKAGED_PRODUCT_PROMPT_TEMPLATE, name, PACKAGED_PRODUCT_STYLE);
+            return execute(prompt, food.name());
+        }
         String subject = subjectFor(food);
         if (referencePhoto != null && referencePhoto.length > 0) {
             String prompt = String.format(REFERENCE_PROMPT_TEMPLATE, subject, STYLE);
@@ -159,6 +207,11 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
     /** Ingredient foods are tagged with the "ingredient" category at creation. */
     private static boolean isRawIngredient(CatalogFood food) {
         return food.category() != null && food.category().equalsIgnoreCase("ingredient");
+    }
+
+    /** Single packaged products are tagged with the "product" category. */
+    private static boolean isPackagedProduct(CatalogFood food) {
+        return food.category() != null && food.category().equalsIgnoreCase("product");
     }
 
     /** Human-readable subject: "<name> (<category>)" when a category exists. */

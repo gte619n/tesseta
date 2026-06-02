@@ -1,0 +1,8 @@
+import { redirect } from 'next/navigation';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata('Exercises');
+
+export default function Page() {
+  redirect('/admin/exercises/catalog');
+}

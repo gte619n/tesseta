@@ -73,6 +73,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/me/**", "/api/me").authenticated()
                 // Equipment catalog endpoints - authenticated users can browse
                 .requestMatchers("/api/equipment/**").authenticated()
+                // Exercise catalog endpoints - authenticated users can browse
+                .requestMatchers("/api/exercises/**", "/api/exercises").authenticated()
                 // Admin endpoints require authentication (aspect handles admin check)
                 .requestMatchers("/api/admin/**").authenticated()
                 .requestMatchers("/api/drugs", "/api/drugs/**").authenticated()

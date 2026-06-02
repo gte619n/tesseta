@@ -18,6 +18,7 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
+import com.google.cloud.firestore.WriteBatch;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,8 @@ public class FirestoreGoalChatRepository implements GoalChatRepository {
 
     private static final String THREADS = "goalChatThreads";
     private static final String MESSAGES = "messages";
+    /** Firestore commits at most 500 writes per batch. */
+    private static final int MAX_BATCH = 500;
 
     private final Firestore firestore;
 
@@ -101,9 +104,15 @@ public class FirestoreGoalChatRepository implements GoalChatRepository {
         tombstone.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
         tombstone.put("updatedAt", serverTimestamp());
 
+        // Adopt main's batched writes (MAX_BATCH per commit) but keep the
+        // IMPL-AND-20 D2 soft-delete: batch tombstone merges, not hard deletes.
         List<QueryDocumentSnapshot> msgs = await(messages(userId, threadId).get()).getDocuments();
-        for (QueryDocumentSnapshot msg : msgs) {
-            await(msg.getReference().set(tombstone, SetOptions.merge()));
+        for (int start = 0; start < msgs.size(); start += MAX_BATCH) {
+            WriteBatch batch = firestore.batch();
+            for (QueryDocumentSnapshot msg : msgs.subList(start, Math.min(start + MAX_BATCH, msgs.size()))) {
+                batch.set(msg.getReference(), tombstone, SetOptions.merge());
+            }
+            await(batch.commit());
         }
         await(threads(userId).document(threadId).set(tombstone, SetOptions.merge()));
     }

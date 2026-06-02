@@ -45,7 +45,7 @@ fun GymsListScreen(
     Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).background(Hf.colors.canvas)) {
         Column(modifier = Modifier.fillMaxSize()) {
             HfScreenHeader(
-                title = "Workouts",
+                title = "Gyms",
                 subtitle = "Your gyms and their equipment",
                 onBack = onBack,
             )

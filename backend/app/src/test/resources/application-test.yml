@@ -52,6 +52,19 @@ app:
     # at construction time. The Goals chat tests install a fake GoalChatClient
     # via @TestConfiguration; everything else skips the live bean.
     enabled: false
+  exercises:
+    # IMPL-14: skip the live Gemini media bean (needs an API key at
+    # construction). AdminExerciseController takes it as Optional.
+    media:
+      enabled: false
+    # IMPL-15: skip the live GeminiExerciseMetadataEnricher (needs an API key).
+    # TestPersistenceConfig installs a deterministic fake ExerciseMetadataEnricher
+    # so WorkoutHistoryImporter (a core @Service) can wire.
+    enrich-enabled: false
+  workout-programs:
+    # IMPL-15: skip the live GeminiWorkoutProgramChatClient (needs an API key).
+    # Chat tests install a fake WorkoutProgramChatClient via @TestConfiguration.
+    enabled: false
   equipment:
     # EquipmentParserService.<init> throws if the parser API key is missing,
     # and the unconditional BulkImportService needs an EquipmentParser bean

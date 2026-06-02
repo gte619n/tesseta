@@ -23,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.medications.DoseFormatter
 import com.gte619n.healthfitness.domain.medications.TimeWindowLabels
@@ -45,6 +47,11 @@ fun TodaysDosesCard(
     viewModel: TodaysDosesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Re-fetch on resume so dose/schedule edits made on the medication detail
+    // screen show up when the user returns to the dashboard. The VM only loads
+    // once in init, and its instance survives in the back stack, so without
+    // this the card keeps showing the pre-edit schedule.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
     TodaysDosesCardContent(
         state = state,
         onToggle = viewModel::toggle,
