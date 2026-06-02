@@ -240,7 +240,7 @@ function EntryRow({
         type="button"
         {...listeners}
         {...attributes}
-        className="-ml-1 shrink-0 cursor-grab touch-none rounded p-1 text-quaternary opacity-0 hover:text-secondary active:cursor-grabbing group-hover:opacity-100"
+        className="-ml-1 shrink-0 cursor-grab touch-none rounded p-1 text-tertiary opacity-60 hover:text-secondary active:cursor-grabbing group-hover:opacity-100"
         aria-label={`Move ${entry.foodName} to another meal`}
       >
         <i className="ti ti-grip-vertical text-[14px]" aria-hidden />

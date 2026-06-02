@@ -209,8 +209,8 @@ export default async function NutritionPage(props: {
           </div>
         </header>
 
-        {/* Date switcher */}
-        <div className="flex items-center gap-2">
+        {/* Date switcher — arrows hug the date label so they read as one control */}
+        <div className="flex items-center justify-center gap-2">
           <Link
             href={`/me/nutrition?date=${prevDate}`}
             className="flex h-8 w-8 items-center justify-center rounded-md border-[0.5px] border-border-default bg-canvas text-secondary hover:text-primary"
@@ -218,7 +218,7 @@ export default async function NutritionPage(props: {
           >
             <i className="ti ti-chevron-left text-[14px]" aria-hidden />
           </Link>
-          <div className="flex-1 text-center">
+          <div className="min-w-[140px] text-center">
             <span className="text-[14px] font-medium text-primary">
               {isToday ? "Today" : formatDisplay(date)}
             </span>
