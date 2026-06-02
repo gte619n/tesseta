@@ -28,8 +28,14 @@ class WorkoutScheduleServiceTest {
             List.of(new Block(null, BlockType.MAIN, "Bench", 0, List.of())));
         ProgramPhase phase = new ProgramPhase(null, "Accumulation", "Hypertrophy", 0, null,
             4, 4, null, null, null, List.of(mon, thu));
+        // Start on a Monday safely in the future so activate() — which skips
+        // past-dated sessions relative to today — materializes all of them
+        // regardless of when this test runs.
+        LocalDate start = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY))
+            .plusWeeks(1);
         WorkoutProgram input = new WorkoutProgram("u1", null, "Test", null, null, ProgramStatus.DRAFT,
-            ProgramSource.MANUAL, LocalDate.of(2026, 6, 1), null, null, List.of(phase), null, null, null);
+            ProgramSource.MANUAL, start, null, null, List.of(phase), null, null, null);
 
         WorkoutProgram created = programService.create(input);
         List<ScheduledWorkout> sessions = scheduleService.activate("u1", created.programId());
