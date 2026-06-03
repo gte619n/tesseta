@@ -13,9 +13,10 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import java.time.Instant
+import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,11 +81,15 @@ class FirstSyncGateTest {
 
         gate().runInitialSync()
 
-        // The window is `now - 14d`; assert it parses and is ~14 days in the past.
-        val sent = Instant.parse(recentSinceSlot.captured)
-        val expected = Instant.now().minus(FirstSyncGate.RECENT_WINDOW_DAYS.toLong(), ChronoUnit.DAYS)
-        val deltaSeconds = kotlin.math.abs(java.time.Duration.between(sent, expected).seconds)
-        assertTrue("recentSince should be ~14 days ago (off by ${deltaSeconds}s)", deltaSeconds < 60)
+        // recentSince is a bare ISO date (yyyy-MM-dd) — `today - 14d` — because the
+        // backend param is an @DateTimeFormat(iso = DATE) LocalDate, not an Instant.
+        val sent = LocalDate.parse(recentSinceSlot.captured)
+        val daysAgo = ChronoUnit.DAYS.between(sent, LocalDate.now())
+        assertEquals(
+            "recentSince should be a bare ISO date 14 days ago",
+            FirstSyncGate.RECENT_WINDOW_DAYS.toLong(),
+            daysAgo,
+        )
     }
 
     @Test
