@@ -6,6 +6,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,15 +40,26 @@ public class FirebaseConfig {
      * across tests, don't double-initialize).
      */
     @Bean
-    FirebaseApp firebaseApp() throws IOException {
+    FirebaseApp firebaseApp(@Value("${app.gcp.project-id:}") String projectId) throws IOException {
         if (!FirebaseApp.getApps().isEmpty()) {
             return FirebaseApp.getInstance();
         }
-        FirebaseOptions options = FirebaseOptions.builder()
+        FirebaseOptions.Builder builder = FirebaseOptions.builder()
             // ADC — no explicit credential; resolves the runtime SA on Cloud Run.
-            .setCredentials(com.google.auth.oauth2.GoogleCredentials.getApplicationDefault())
-            .build();
-        log.info("Initializing FirebaseApp with Application Default Credentials (FCM enabled)");
+            .setCredentials(com.google.auth.oauth2.GoogleCredentials.getApplicationDefault());
+        // Set the project id EXPLICITLY. ADC on Cloud Run does not reliably
+        // surface a project id to the Admin SDK, and FCM's sendEachForMulticast
+        // then throws "Project ID is required to access messaging service" —
+        // every sync fan-out failed, so devices were never woken to re-sync
+        // (e.g. a finished meal analysis never reached the phone). We already
+        // have the id as app.gcp.project-id (GCP_PROJECT_ID); use it.
+        if (projectId != null && !projectId.isBlank()) {
+            builder.setProjectId(projectId);
+        }
+        FirebaseOptions options = builder.build();
+        log.info(
+            "Initializing FirebaseApp with Application Default Credentials (FCM enabled), projectId={}",
+            projectId);
         return FirebaseApp.initializeApp(options);
     }
 
