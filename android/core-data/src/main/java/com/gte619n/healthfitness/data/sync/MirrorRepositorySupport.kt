@@ -116,20 +116,25 @@ class MirrorRepositorySupport @Inject constructor(
      * not be clobbered by a concurrent refresh).
      */
     suspend fun refreshInto(table: String, items: List<RefreshRow>) {
-        for (item in items) {
-            val existing = mirror.getRow(table, item.id)
-            if (existing?.dirty == true) continue
-            mirror.upsert(
-                table,
-                MirrorRowData(
-                    id = item.id,
-                    payloadJson = item.payloadJson,
-                    lastUpdate = item.lastUpdate,
-                    status = SyncRowStatus.ACTIVE.name,
-                    dirty = false,
-                    syncState = SyncRowState.SYNCED.name,
-                ),
-            )
+        // Single transaction ⇒ one Room observer emission for the whole fill, so a
+        // chart backed by this table renders the final series at once instead of
+        // redrawing/rescaling per row as the fill streams in.
+        mirror.runInTransaction {
+            for (item in items) {
+                val existing = mirror.getRow(table, item.id)
+                if (existing?.dirty == true) continue
+                mirror.upsert(
+                    table,
+                    MirrorRowData(
+                        id = item.id,
+                        payloadJson = item.payloadJson,
+                        lastUpdate = item.lastUpdate,
+                        status = SyncRowStatus.ACTIVE.name,
+                        dirty = false,
+                        syncState = SyncRowState.SYNCED.name,
+                    ),
+                )
+            }
         }
     }
 

@@ -120,12 +120,17 @@ class SyncEngine @Inject constructor(
             }
 
             pages++
-            for (change in resp.changes) {
-                when (applyChange(change)) {
-                    ApplyOutcome.APPLIED -> applied++
-                    ApplyOutcome.REJECTED -> rejected++
-                    ApplyOutcome.DISCARDED_LOCAL -> { applied++; discarded++ }
-                    ApplyOutcome.SKIPPED -> Unit
+            // Apply the whole page in one transaction so Room observers (and the
+            // charts they back) see a single emission per page rather than one per
+            // changed row streaming in.
+            mirror.runInTransaction {
+                for (change in resp.changes) {
+                    when (applyChange(change)) {
+                        ApplyOutcome.APPLIED -> applied++
+                        ApplyOutcome.REJECTED -> rejected++
+                        ApplyOutcome.DISCARDED_LOCAL -> { applied++; discarded++ }
+                        ApplyOutcome.SKIPPED -> Unit
+                    }
                 }
             }
 

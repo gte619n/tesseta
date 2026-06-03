@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.data.sync
 
+import androidx.room.withTransaction
+import com.gte619n.healthfitness.data.db.HfDatabase
 import com.gte619n.healthfitness.data.db.dao.BloodReadingDao
 import com.gte619n.healthfitness.data.db.dao.BloodTestReportDao
 import com.gte619n.healthfitness.data.db.dao.BodyCompositionDao
@@ -66,6 +68,14 @@ import javax.inject.Singleton
  * Room/SQLCipher/device.
  */
 interface MirrorOps {
+    /**
+     * Run [block] as a single DB transaction so Room's InvalidationTracker fires
+     * one observer emission for the whole batch instead of one per row. Without
+     * this, a multi-row fill (`refreshInto`, a sync page) re-emits every observing
+     * Flow once per row, which makes charts redraw/rescale incrementally ("jumpy").
+     */
+    suspend fun runInTransaction(block: suspend () -> Unit)
+
     /** Insert-or-replace an ACTIVE/ARCHIVED row keyed by [table]. No-op if table unknown. */
     suspend fun upsert(table: String, row: MirrorRowData)
 
@@ -100,6 +110,7 @@ data class MirrorRowData(
 
 @Singleton
 class MirrorStore @Inject constructor(
+    private val db: HfDatabase,
     private val bodyComposition: BodyCompositionDao,
     private val bloodReading: BloodReadingDao,
     private val bloodTestReport: BloodTestReportDao,
@@ -275,6 +286,10 @@ class MirrorStore @Inject constructor(
             override suspend fun delete(id: String) = userProfile.delete(id)
             override suspend fun getRow(id: String) = userProfile.getById(id)?.toData()
         })
+    }
+
+    override suspend fun runInTransaction(block: suspend () -> Unit) {
+        db.withTransaction { block() }
     }
 
     override suspend fun upsert(table: String, row: MirrorRowData) {

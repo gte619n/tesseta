@@ -31,6 +31,8 @@ internal open class FakeMirrorOps : MirrorOps {
     val rows = linkedMapOf<String, MirrorRowData>()
     private fun key(table: String, id: String) = "$table:$id"
 
+    override suspend fun runInTransaction(block: suspend () -> Unit) = block()
+
     override suspend fun upsert(table: String, row: MirrorRowData) {
         rows[key(table, row.id)] = row
     }
