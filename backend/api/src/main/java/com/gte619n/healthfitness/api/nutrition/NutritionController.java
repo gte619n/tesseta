@@ -153,6 +153,9 @@ public class NutritionController {
     @GetMapping("/{date}")
     public DayResponse day(@PathVariable LocalDate date) {
         String userId = currentUser.get().userId();
+        // Self-heal any orphaned photo placeholder (its async analysis died with
+        // the instance) so the day reflects FAILED instead of a perpetual spinner.
+        nutrition.sweepStaleAnalyzing(userId, date);
         List<FoodEntry> entries = nutrition.listEntries(userId, date);
 
         Macros totals = nutrition.findByDate(userId, date)
