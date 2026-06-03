@@ -61,9 +61,15 @@ class BodyCompositionRepositoryImpl @Inject constructor(
         support.refreshInto(
             MirrorTables.BODY_COMPOSITION,
             dtos.mapNotNull { dto ->
-                val id = dto.recordId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val recordId = dto.recordId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val metric = dto.metric?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                // Key on the Firestore doc id / sync key ("{METRIC}__{recordId}"),
+                // not the bare recordId. A single weigh-in emits a WEIGHT_KG and a
+                // BODY_FAT_PERCENT reading that share one recordId; keying on the bare
+                // value collapses the pair into one row, so most of the weight series
+                // gets clobbered by body-fat (and refresh disagreed with the sync key).
                 MirrorRepositorySupport.RefreshRow(
-                    id = id,
+                    id = "${metric}__$recordId",
                     payloadJson = dtoAdapter.toJson(dto),
                     lastUpdate = dto.sampleTime.toEpochMillisOrZero(),
                 )
