@@ -61,6 +61,7 @@ fun WeightTrendChart(
 ) {
     // Capture composition-locals before entering the non-composable DrawScope.
     val accent = Hf.colors.accent
+    val surface = Hf.colors.surface
     val bodyFatColor = Hf.colors.textSecondary
     val axisColor = Hf.colors.borderDefault
     val gridColor = Hf.colors.borderSubtle
@@ -94,6 +95,8 @@ fun WeightTrendChart(
             ) {
                 LegendSwatch(color = accent, dashed = false)
                 Text("Weight", style = Hf.type.capsSm, color = Hf.colors.textSecondary)
+                LegendSwatch(color = accent, dashed = true)
+                Text("7-day avg", style = Hf.type.capsSm, color = Hf.colors.textSecondary)
                 if (hasBodyFat) {
                     LegendSwatch(color = bodyFatColor, dashed = true)
                     Text("Body fat", style = Hf.type.capsSm, color = Hf.colors.textSecondary)
@@ -204,13 +207,23 @@ fun WeightTrendChart(
                     plotBottom + 4.dp.toPx(),
                 )
 
+                // Weight points in plot space (reused for the area, line + marker).
+                val weightPts = weightDisplay.mapIndexed { i, v ->
+                    Offset(x(i, weightDisplay.size), yWeight(v))
+                }
+
+                // ---- Soft area fill under the weight line. ----
+                val areaPath = Path().apply {
+                    weightPts.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
+                    lineTo(weightPts.last().x, plotBottom)
+                    lineTo(weightPts.first().x, plotBottom)
+                    close()
+                }
+                drawPath(path = areaPath, color = accent, alpha = 0.06f)
+
                 // ---- Weight line (solid, accent). ----
                 val weightPath = Path().apply {
-                    weightDisplay.forEachIndexed { i, v ->
-                        val px = x(i, weightDisplay.size)
-                        val py = yWeight(v)
-                        if (i == 0) moveTo(px, py) else lineTo(px, py)
-                    }
+                    weightPts.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
                 }
                 drawPath(
                     path = weightPath,
@@ -219,6 +232,26 @@ fun WeightTrendChart(
                         width = 2.dp.toPx(),
                         cap = StrokeCap.Round,
                         join = StrokeJoin.Round,
+                    ),
+                )
+
+                // ---- 7-day moving average (dashed, faint accent). ----
+                val maPath = Path().apply {
+                    movingAverage(weightDisplay, 7).forEachIndexed { i, v ->
+                        val px = x(i, weightDisplay.size)
+                        val py = yWeight(v)
+                        if (i == 0) moveTo(px, py) else lineTo(px, py)
+                    }
+                }
+                drawPath(
+                    path = maPath,
+                    color = accent,
+                    alpha = 0.45f,
+                    style = Stroke(
+                        width = 1.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f, 3f), 0f),
                     ),
                 )
 
@@ -242,10 +275,27 @@ fun WeightTrendChart(
                         ),
                     )
                 }
+
+                // ---- Latest-weight marker (accent dot with a surface halo). ----
+                weightPts.lastOrNull()?.let { last ->
+                    drawCircle(color = surface, radius = 4.5.dp.toPx(), center = last)
+                    drawCircle(color = accent, radius = 3.dp.toPx(), center = last)
+                }
             }
         }
     }
 }
+
+/**
+ * Trailing simple moving average over [window] samples (mirrors web's
+ * `movingAverage` in `lib/chart.ts`): each point averages itself and up to the
+ * preceding `window - 1` samples, so the line is defined from the first point.
+ */
+private fun movingAverage(series: List<Double>, window: Int): List<Double> =
+    series.indices.map { i ->
+        val start = maxOf(0, i - (window - 1))
+        series.subList(start, i + 1).average()
+    }
 
 @Composable
 private fun LegendSwatch(color: Color, dashed: Boolean) {
