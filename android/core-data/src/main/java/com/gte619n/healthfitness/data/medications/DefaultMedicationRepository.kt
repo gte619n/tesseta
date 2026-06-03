@@ -8,6 +8,8 @@ import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
+import com.gte619n.healthfitness.domain.medications.Drug
+import com.gte619n.healthfitness.domain.medications.DrugRepository
 import com.gte619n.healthfitness.domain.medications.Medication
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
 import com.gte619n.healthfitness.domain.medications.MedicationRepository
@@ -16,6 +18,9 @@ import com.gte619n.healthfitness.domain.medications.TodaysDose
 import com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -48,6 +53,7 @@ import javax.inject.Singleton
 @Singleton
 internal class DefaultMedicationRepository @Inject constructor(
     private val api: MedicationsApi,
+    private val drugRepo: DrugRepository,
     private val dao: MedicationDao,
     private val adherenceDao: MedicationAdherenceDao,
     private val support: MirrorRepositorySupport,
@@ -63,11 +69,12 @@ internal class DefaultMedicationRepository @Inject constructor(
             return@withContext api.list(status?.name).map { MedicationMapper.toDomain(it) }
         }
         if (dao.observeActive().first().isEmpty()) fillMirror()
-        dao.observeActive().first()
+        val meds = dao.observeActive().first()
             // #40: carry the mirror row's syncState onto the domain model for the
             // per-row PENDING/FAILED SyncBadge.
             .mapNotNull { row -> decode(row.payloadJson)?.let { MedicationMapper.toDomain(it).copy(syncState = row.syncState) } }
             .filter { status == null || it.status == status }
+        withDrugs(meds)
     }
 
     override suspend fun get(medicationId: String): MedicationDetail = withContext(io) {
@@ -78,7 +85,7 @@ internal class DefaultMedicationRepository @Inject constructor(
             .map { MedicationMapper.toDomain(it) }
             .getOrElse {
                 val dto = mirroredDto(medicationId) ?: throw it
-                MedicationDetail(medication = MedicationMapper.toDomain(dto), history = emptyList())
+                MedicationDetail(medication = withDrugs(listOf(MedicationMapper.toDomain(dto))).first(), history = emptyList())
             }
     }
 
@@ -225,6 +232,26 @@ internal class DefaultMedicationRepository @Inject constructor(
 
     private fun decodeAdherence(json: String): AdherenceMirrorPayload? =
         runCatching { adherencePayloadAdapter.fromJson(json) }.getOrNull()
+
+    /**
+     * Resolve the embedded [Drug] for mirror-backed medications. The synced
+     * `medications` doc only carries `drugId` (the backend joins the drug catalog
+     * at API time from its `drugById` cache — that join isn't in Firestore), so a
+     * row read straight from the mirror has `drug == null`, which surfaces as
+     * "Unknown" + a broken image. Look each distinct drug up once (OkHttp
+     * disk-cached, so it survives offline once warm) and graft it on.
+     */
+    private suspend fun withDrugs(meds: List<Medication>): List<Medication> {
+        val needed = meds.filter { it.drug == null }.mapNotNull { it.drugId }.toSet()
+        if (needed.isEmpty()) return meds
+        val drugs: Map<String, Drug> = coroutineScope {
+            needed.map { id -> async { runCatching { drugRepo.get(id) }.getOrNull() } }.awaitAll()
+        }.filterNotNull().associateBy { it.drugId }
+        if (drugs.isEmpty()) return meds
+        return meds.map { med ->
+            if (med.drug == null) med.drugId?.let { drugs[it] }?.let { med.copy(drug = it) } ?: med else med
+        }
+    }
 
     /** Pull the full medication list from the network into the mirror as SYNCED rows. */
     private suspend fun fillMirror() {

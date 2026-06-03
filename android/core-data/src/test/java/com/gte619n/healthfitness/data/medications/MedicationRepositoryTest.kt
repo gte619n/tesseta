@@ -17,12 +17,18 @@ import com.gte619n.healthfitness.data.sync.fakeDeviceIdProvider
 import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
+import com.gte619n.healthfitness.domain.medications.Drug
+import com.gte619n.healthfitness.domain.medications.DrugCategory
+import com.gte619n.healthfitness.domain.medications.DrugForm
+import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
+import com.gte619n.healthfitness.domain.medications.DrugRepository
 import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.FrequencyType
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -52,6 +58,15 @@ class MedicationRepositoryTest {
     private lateinit var dao: FakeMedicationDao
     private lateinit var adherenceDao: FakeMedicationAdherenceDao
     private lateinit var outboxDao: FakeOutboxDao
+
+    // Mirror-backed meds carry only `drugId`; the repo resolves `drug` through this.
+    private val fakeDrugs = mutableMapOf<String, Drug>()
+    private val drugRepo = object : DrugRepository {
+        override suspend fun catalog(): List<Drug> = fakeDrugs.values.toList()
+        override suspend fun get(drugId: String): Drug =
+            fakeDrugs[drugId] ?: throw NoSuchElementException(drugId)
+        override fun lookupStream(query: String): Flow<DrugLookupEvent> = emptyFlow()
+    }
     private var drains = 0
 
     @Before
@@ -81,7 +96,7 @@ class MedicationRepositoryTest {
             killSwitch = KillSwitchGate { false },
             drainTrigger = DrainTrigger { drains++ },
         )
-        repository = DefaultMedicationRepository(api, dao, adherenceDao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
+        repository = DefaultMedicationRepository(api, drugRepo, dao, adherenceDao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
     }
 
     @After
@@ -122,6 +137,32 @@ class MedicationRepositoryTest {
         // The mirror fill calls GET with no status param; filtering is client-side.
         val request = server.takeRequest()
         assertTrue(request.path!!.endsWith("/api/me/medications"))
+    }
+
+    // A synced (mirror) row carries only drugId — `drug` is null, as Firestore
+    // stores it. Without resolution this renders "Unknown" + a broken image.
+    private val syncedMedJson = """
+        {"medicationId":"m9","drugId":"d9","drug":null,"customName":null,"status":"ACTIVE",
+         "dose":5.0,"unit":"mg",
+         "frequency":{"type":"DAILY","timesPerPeriod":1},
+         "timeSlots":[],"startDate":"2026-01-01","endDate":null,"correlatedMarkers":[]}
+    """.trimIndent()
+
+    @Test
+    fun `list resolves the drug for a mirror row that only has drugId`() = runBlocking {
+        fakeDrugs["d9"] = Drug(
+            drugId = "d9",
+            name = "Tadalafil",
+            category = DrugCategory.PRESCRIPTION,
+            form = DrugForm.INJECTABLE_VIAL,
+            defaultUnit = "mg",
+            imageUrl = "https://img/tadalafil.png",
+            imageFallback = null,
+        )
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("[$syncedMedJson]"))
+        val med = repository.list(MedicationStatus.ACTIVE).single()
+        assertEquals("Tadalafil", med.displayName)
+        assertEquals("https://img/tadalafil.png", med.drug?.imageUrl)
     }
 
     @Test
