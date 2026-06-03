@@ -100,7 +100,6 @@ fun FoldableDashboardScreen(
                     }
                     TodayCard(
                         modifier = Modifier.weight(1f),
-                        showHrInMeta = false,
                         nutrition = (ui.nutrition as? CardState.Loaded)?.data,
                     )
                 }

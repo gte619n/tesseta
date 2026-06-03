@@ -2,7 +2,6 @@ package com.gte619n.healthfitness.data.net
 
 import com.gte619n.healthfitness.data.auth.AuthState
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
-import com.gte619n.healthfitness.data.auth.IdTokenCache
 import kotlinx.coroutines.runBlocking
 import okhttp3.Authenticator
 import okhttp3.Request
@@ -23,7 +22,6 @@ import okhttp3.Route
 // runBlocking on OkHttp's own dispatcher thread (mirrors AuthInterceptor).
 class TokenAuthenticator(
     private val repo: GoogleAuthRepository,
-    private val cache: IdTokenCache,
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
@@ -36,12 +34,13 @@ class TokenAuthenticator(
             (repo.silentRefresh() as? AuthState.SignedIn)?.idToken
         } ?: return null
 
-        // silentRefresh() already persists the token via IdTokenCache, but we
-        // write through here too so the cache is consistent even if that
-        // behavior changes. expiresAt is derived server-side; 0 keeps the
-        // existing cache contract (a stale exp just triggers an earlier
-        // refresh next time).
-        runBlocking { cache.write(refreshed, 0L) }
+        // Do NOT write the token here. silentRefresh() already persisted it via
+        // IdTokenCache with the real `exp` claim decoded from the JWT. Writing
+        // through with expiresAt = 0 (as this used to) clobbered that expiry,
+        // permanently forcing IdTokenCache.isFresh() to false — which made the
+        // launch path refresh (and show the "Signing you in…" UI) every time and
+        // sent stale tokens on every request. The single write in silentRefresh
+        // is the source of truth.
 
         return response.request.newBuilder()
             .header("Authorization", "Bearer $refreshed")

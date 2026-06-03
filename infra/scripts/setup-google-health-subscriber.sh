@@ -55,7 +55,14 @@ BODY="$(jq -n \
      endpointAuthorization: { secret: $secret },
      subscriberConfigs: [
        {
-         dataTypes: ["weight", "body-fat"],
+         dataTypes: [
+           "weight",
+           "body-fat",
+           "steps",
+           "sleep",
+           "daily-resting-heart-rate",
+           "daily-heart-rate-variability"
+         ],
          subscriptionCreatePolicy: "AUTOMATIC"
        }
      ]

@@ -28,9 +28,13 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import kotlin.math.roundToInt
 
-// A single macro tier cell for the Today card, derived from either live totals
-// or the fixture fallback.
+// A single macro tier cell for the Today card, derived from live totals (or an
+// em-dash placeholder while the day's nutrition is still loading).
 private data class TodayMacro(val label: String, val value: String, val pct: Float)
+
+// Placeholder shown while the dashboard load/sync is still in flight. We never
+// show fabricated numbers in that window — a dash makes "no data yet" obvious.
+private const val DASH = "—"
 
 /** Group-separated calories, e.g. 1247.0 → "1,247". */
 private fun formatCalories(kcal: Double): String = "%,d".format(kcal.roundToInt())
@@ -50,28 +54,33 @@ private fun macroFraction(consumed: Double?, target: Double?): Float {
 @Composable
 fun TodayCard(
     modifier: Modifier = Modifier,
-    showHrInMeta: Boolean = false,
-    // Today's logged nutrition (totals + target). Null until the dashboard load
-    // settles — the calories/macros tier falls back to fixtures in the meantime.
+    // Today's logged nutrition (totals + target). Null while the dashboard load
+    // is still in flight (or it errored). In that window we render em-dash
+    // placeholders rather than fabricated fixtures, so nothing fake shows while
+    // the data is syncing. Once loaded, an empty day reads as real 0s.
     nutrition: NutritionDay? = null,
 ) {
+    val loaded = nutrition != null
     val totals = nutrition?.totals
     val target = nutrition?.target
     val caloriesCurrent =
-        totals?.caloriesKcal?.let { formatCalories(it) } ?: DashboardFallbacks.caloriesCurrent
+        if (!loaded) DASH else formatCalories(totals?.caloriesKcal ?: 0.0)
     val caloriesTarget =
-        target?.caloriesKcal?.let { formatCalories(it) } ?: DashboardFallbacks.caloriesTarget
+        if (!loaded) DASH else target?.caloriesKcal?.let { formatCalories(it) } ?: DASH
     val caloriesPct =
-        if (nutrition != null) macroFraction(totals?.caloriesKcal, target?.caloriesKcal)
-        else DashboardFallbacks.caloriesPct
-    val macros: List<TodayMacro> = if (nutrition != null) {
+        if (!loaded) 0f else macroFraction(totals?.caloriesKcal, target?.caloriesKcal)
+    val macros: List<TodayMacro> = if (loaded) {
         listOf(
             TodayMacro("Protein", macroGrams(totals?.proteinGrams), macroFraction(totals?.proteinGrams, target?.proteinGrams)),
             TodayMacro("Carbs", macroGrams(totals?.carbsGrams), macroFraction(totals?.carbsGrams, target?.carbsGrams)),
             TodayMacro("Fat", macroGrams(totals?.fatGrams), macroFraction(totals?.fatGrams, target?.fatGrams)),
         )
     } else {
-        DashboardFallbacks.macros.map { TodayMacro(it.label, it.value, it.pct) }
+        listOf(
+            TodayMacro("Protein", DASH, 0f),
+            TodayMacro("Carbs", DASH, 0f),
+            TodayMacro("Fat", DASH, 0f),
+        )
     }
     HfCard(modifier = modifier) {
         Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
@@ -135,26 +144,13 @@ fun TodayCard(
             Spacer(Modifier.height(13.dp))
             HRule()
             Spacer(Modifier.height(11.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(
-                        text = DashboardFallbacks.workoutTitle,
-                        style = Hf.type.bodyMd.copy(fontSize = 12.sp),
-                        color = Hf.colors.textPrimary,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = if (showHrInMeta) DashboardFallbacks.workoutMetaDesktop else DashboardFallbacks.workoutMetaPhone,
-                        style = Hf.type.monoSm,
-                        color = Hf.colors.textTertiary,
-                    )
-                }
-                Pill("Done", Tone.Good)
-            }
+            // Workouts aren't wired to a data source yet, so we say so plainly
+            // rather than showing a fabricated session.
+            Text(
+                text = "No workout data available",
+                style = Hf.type.bodySm.copy(fontSize = 12.sp),
+                color = Hf.colors.textTertiary,
+            )
         }
     }
 }

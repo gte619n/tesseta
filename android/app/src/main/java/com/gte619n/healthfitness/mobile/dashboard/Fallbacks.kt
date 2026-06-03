@@ -114,48 +114,55 @@ object DashboardFlags {
 // from DashboardViewModel; everything below is fixture-backed placeholder.
 object DashboardFallbacks {
     const val GREETING = "Good morning, Evan"
-    const val DATE_WEEKDAY = "TUE"
-    const val DATE_MONTH_DAY = "MAY 20"
-    const val TIME = "07:42"
-    const val TZ = "ATL"
+    // The header date/time were a hardcoded fixture ("TUE · MAY 20 · 07:42")
+    // that read as a real, current timestamp. Dashed until wired to the clock.
+    const val DATE_WEEKDAY = "—"
+    const val DATE_MONTH_DAY = "—"
+    const val TIME = "—"
+    const val TZ = "—"
     const val USER_NAME = "Evan Glazier"
     const val USER_ROLE = "CEO"
+
+    /** Flat 9-point sparkline used by the dashed (no-data) vital fixtures. */
+    private val FLAT_SPARK = List(9) { 11f }
 
     /** Avatar initials derived from [USER_NAME], mirroring the web `initialsFor`. */
     val USER_INITIALS: String get() = initialsFor(USER_NAME)
 
+    // Dashed no-data fixtures: a vital tile that has no live series shows "—"
+    // (no fabricated value, delta, or trend line) so real data is unmistakable.
     val vitals = listOf(
         Vital(
             label = "Body",
             icon = DashboardIcons.Body,
-            value = "189.2",
+            value = "—",
             unit = "lb",
-            delta = VitalDelta(ArrowDir.Down, "0.4", "7d", Tone.Good),
-            sparkline = listOf(12f, 10f, 13f, 9f, 11f, 8f, 9f, 6f, 7f),
+            delta = null,
+            sparkline = FLAT_SPARK,
         ),
         Vital(
             label = "HRV",
             icon = DashboardIcons.ActivityHeartbeat,
-            value = "62",
+            value = "—",
             unit = "ms",
-            delta = VitalDelta(ArrowDir.Up, "3", "7d", Tone.Good),
-            sparkline = listOf(14f, 11f, 12f, 8f, 10f, 7f, 6f, 5f, 4f),
+            delta = null,
+            sparkline = FLAT_SPARK,
         ),
         Vital(
             label = "Resting HR",
             icon = DashboardIcons.Heart,
-            value = "51",
+            value = "—",
             unit = "bpm",
-            delta = VitalDelta(ArrowDir.Down, "1", "7d", Tone.Good),
-            sparkline = listOf(7f, 9f, 8f, 10f, 9f, 11f, 10f, 12f, 13f),
+            delta = null,
+            sparkline = FLAT_SPARK,
         ),
         Vital(
             label = "Readiness",
             icon = DashboardIcons.Flame,
-            value = "84",
+            value = "—",
             unit = "%",
-            pill = "Primed" to Tone.Good,
-            sparkline = listOf(9f, 8f, 11f, 7f, 8f, 6f, 5f, 7f, 5f),
+            pill = null,
+            sparkline = FLAT_SPARK,
         ),
     )
 

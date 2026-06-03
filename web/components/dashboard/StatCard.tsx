@@ -1,4 +1,5 @@
 import type { Vital } from "@/lib/fixtures/dashboard";
+import { Sparkline } from "./Sparkline";
 
 export function StatCard({ stat }: { stat: Vital }) {
   return (
@@ -74,28 +75,5 @@ export function Pill({
     >
       {children}
     </span>
-  );
-}
-
-export function Sparkline({
-  points,
-  width = 48,
-  height = 18,
-}: {
-  points: string;
-  width?: number;
-  height?: number;
-}) {
-  return (
-    <svg width={width} height={height} viewBox="0 0 48 20" aria-hidden>
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--color-accent)"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }

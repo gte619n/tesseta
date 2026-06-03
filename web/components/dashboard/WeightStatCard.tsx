@@ -1,7 +1,7 @@
 "use client";
 
 import { useUnits } from "@/components/ui/UnitsProvider";
-import { Sparkline } from "@/components/dashboard/StatCard";
+import { Sparkline } from "@/components/dashboard/Sparkline";
 import { weightUnitLabel, weightValue } from "@/lib/units";
 
 // Client variant of the Weight StatCard. Identical markup to StatCard's
