@@ -184,11 +184,11 @@ private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetr
     }
 }
 
-/** Builds the Weight [Vital] card model from the live body-composition summary. */
+/** Builds the Body [Vital] card model from the live body-composition summary. */
 fun weightVital(s: WeightSummary?, weightUnit: WeightUnit): Vital =
     Vital(
-        label = "Weight",
-        icon = DashboardIcons.Scale,
+        label = "Body",
+        icon = DashboardIcons.Body,
         value = s?.let { UnitFormat.weightValueString(it.latestLb, weightUnit) } ?: "—",
         unit = UnitFormat.weightLabel(weightUnit),
         delta = s?.sevenDayDeltaLb?.let {
