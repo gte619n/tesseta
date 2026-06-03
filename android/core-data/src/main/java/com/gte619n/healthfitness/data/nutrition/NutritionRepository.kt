@@ -64,6 +64,19 @@ class NutritionRepository @Inject constructor(
         return assembleDay(date)
     }
 
+    /**
+     * Force this date's entries + target to be re-pulled from the network into
+     * the mirror, even when the date already has rows. Photo capture creates the
+     * ANALYZING entry server-side only (multipart, network path), so without this
+     * it never lands locally — and day() won't re-fetch once the date is
+     * non-empty, so the placeholder would never appear (and the settle-poll would
+     * exit immediately). Mirrors addCompositeMeal's post-create fillDay.
+     */
+    suspend fun refreshDay(date: String) {
+        if (support.killSwitchOn()) return
+        fillDay(date)
+    }
+
     suspend fun addEntry(date: String, body: EntryRequest): Entry {
         val entryId = UUID.randomUUID().toString()
         val entry = Entry(
