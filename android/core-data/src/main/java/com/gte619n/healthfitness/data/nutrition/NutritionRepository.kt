@@ -58,9 +58,16 @@ class NutritionRepository @Inject constructor(
 
     suspend fun day(date: String): NutritionDay {
         if (support.killSwitchOn()) return api.getDay(date)
-        // Fill this date's entries + target from the network if we have nothing yet,
-        // then assemble the day from the mirror so it renders offline.
-        if (entriesForDate(date).isEmpty()) fillDay(date)
+        // Offline-first: serve from the mirror. But re-pull from the REST day when
+        // either (a) we have nothing mirrored yet, or (b) an entry is still
+        // settling — a photo still ANALYZING or an image still PENDING. The mirror
+        // only learns of the server-side finalize (ANALYZING→READY, image ready)
+        // via a sync delta, which can lag or miss, so polling day() would
+        // otherwise just re-read the stale placeholder forever. Re-fetching while
+        // settling is the same source the web reads and converges the row.
+        val local = entriesForDate(date)
+        val settling = local.any { it.isAnalyzing || it.imageStatus == "PENDING" }
+        if (local.isEmpty() || settling) fillDay(date)
         return assembleDay(date)
     }
 
