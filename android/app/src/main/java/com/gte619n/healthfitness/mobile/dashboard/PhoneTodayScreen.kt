@@ -83,7 +83,6 @@ fun PhoneTodayScreen(
                 Spacer(Modifier.height(11.dp))
                 TodayCard(
                     modifier = Modifier.fillMaxWidth(),
-                    showHrInMeta = false,
                     nutrition = (ui.nutrition as? CardState.Loaded)?.data,
                 )
                 Spacer(Modifier.height(11.dp))
