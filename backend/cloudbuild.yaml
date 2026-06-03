@@ -40,6 +40,11 @@ steps:
       # forever) and breaking image stores ("Broken pipe"). 2Gi gives headroom.
       - --memory=2Gi
       - --cpu=2
+      # Cap requests per instance well below the default 80: each meal capture
+      # marshals multi-MB images (and spawns background image generation), so
+      # packing dozens onto one instance is what blew past memory. At 16, Cloud
+      # Run scales out more small instances instead of overloading one.
+      - --concurrency=16
       # IMPL-02: CORS allow-list is the deployed web origin. IMPL-04:
       # GCP_PROJECT_ID makes the Firestore + KMS clients pick the right
       # project; GOOGLE_HEALTH_KMS_KEY pins the envelope-encryption key.

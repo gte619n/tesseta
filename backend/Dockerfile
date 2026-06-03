@@ -23,4 +23,10 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=builder /workspace/app/build/libs/app.jar /app/app.jar
 EXPOSE 8080
-ENTRYPOINT ["sh", "-c", "exec java -jar /app/app.jar"]
+# MaxRAMPercentage=65 lets the heap actually use the 2Gi container. The default
+# (25%) would cap the heap at ~512MB even on 2Gi — and meal/image work allocates
+# the photo + base64 + generated-image byte[]s on the HEAP, so an untuned heap
+# stays as starved as the old 512Mi box. Bounding the heap also turns a memory
+# spike into a catchable per-task OutOfMemoryError (→ markAnalysisFailed) instead
+# of a cgroup OOM-kill that orphans every in-flight analysis.
+ENTRYPOINT ["sh", "-c", "exec java -XX:MaxRAMPercentage=65.0 -jar /app/app.jar"]
