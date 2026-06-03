@@ -24,6 +24,14 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 
+// Photo-meal analysis (itemize + generate the finished-meal/ingredient images)
+// can take a few minutes. FCM normally wakes the app the instant the server
+// finalizes the entry, but the foreground screen still needs to keep checking
+// in case the push is missed — so the settle-poll runs generously (120 × 2.5s ≈
+// 5 min) rather than the old ~50 s, which gave up long before image-bearing
+// meals finished and left the row stuck on "Analyzing photo…".
+private const val MAX_SETTLE_POLL_ATTEMPTS = 120
+
 data class NutritionTodayUiState(
     val loading: Boolean = true,
     val date: LocalDate = LocalDate.now(),
@@ -157,7 +165,7 @@ class NutritionTodayViewModel @Inject constructor(
         if (!_state.value.day.hasGeneratingImage()) return
         imagePollJob = viewModelScope.launch {
             var attempts = 0
-            while (attempts < 20 && _state.value.date == date && _state.value.day.hasGeneratingImage()) {
+            while (attempts < MAX_SETTLE_POLL_ATTEMPTS && _state.value.date == date && _state.value.day.hasGeneratingImage()) {
                 attempts++
                 delay(2500)
                 if (_state.value.date != date) return@launch
