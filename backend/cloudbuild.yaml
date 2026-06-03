@@ -34,6 +34,12 @@ steps:
       - --service-account=health-fitness-runtime@$PROJECT_ID.iam.gserviceaccount.com
       - --allow-unauthenticated
       - --port=8080
+      # Meal-photo capture runs Gemini analysis + studio-image generation, which
+      # holds multi-MB images in memory; the default 512Mi OOM-kills the instance
+      # mid-analysis, orphaning the in-memory finalize task (entry stuck ANALYZING
+      # forever) and breaking image stores ("Broken pipe"). 2Gi gives headroom.
+      - --memory=2Gi
+      - --cpu=2
       # IMPL-02: CORS allow-list is the deployed web origin. IMPL-04:
       # GCP_PROJECT_ID makes the Firestore + KMS clients pick the right
       # project; GOOGLE_HEALTH_KMS_KEY pins the envelope-encryption key.
