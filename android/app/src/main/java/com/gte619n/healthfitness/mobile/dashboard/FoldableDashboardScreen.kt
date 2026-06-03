@@ -98,7 +98,11 @@ fun FoldableDashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    TodayCard(modifier = Modifier.weight(1f), showHrInMeta = false)
+                    TodayCard(
+                        modifier = Modifier.weight(1f),
+                        showHrInMeta = false,
+                        nutrition = (ui.nutrition as? CardState.Loaded)?.data,
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 TodaysDosesCard(

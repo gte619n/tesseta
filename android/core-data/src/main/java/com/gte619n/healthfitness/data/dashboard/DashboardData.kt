@@ -1,18 +1,21 @@
 package com.gte619n.healthfitness.data.dashboard
 
 import com.gte619n.healthfitness.data.di.IoDispatcher
+import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
 import com.gte619n.healthfitness.domain.dashboard.ChartXLabel
 import com.gte619n.healthfitness.domain.dashboard.DailyMetricPoint
 import com.gte619n.healthfitness.domain.dashboard.DashboardBloodMarkerRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardBodyCompositionRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardDailyMetricsRepository
+import com.gte619n.healthfitness.domain.dashboard.DashboardNutritionRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardTodaysDosesRepository
 import com.gte619n.healthfitness.domain.dashboard.DoseWindow
 import com.gte619n.healthfitness.domain.dashboard.HistoryPoint
 import com.gte619n.healthfitness.domain.dashboard.MarkerTone
 import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
+import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -409,6 +412,19 @@ internal class DashboardTodaysDosesRepositoryImpl @Inject constructor(
     }
 }
 
+// Reuses the feature NutritionRepository (same getDay endpoint as the nutrition
+// Today screen) so the dashboard card and the full screen never disagree. The
+// returned day carries both totals and the macro target.
+internal class DashboardNutritionRepositoryImpl @Inject constructor(
+    private val nutrition: NutritionRepository,
+    @IoDispatcher private val io: CoroutineDispatcher,
+) : DashboardNutritionRepository {
+    override suspend fun loadToday(): NutritionDay = withContext(io) {
+        // Device-local date so the card rolls over on the user's day.
+        nutrition.day(LocalDate.now().toString())
+    }
+}
+
 // ---- Hilt ----
 
 @Module
@@ -425,6 +441,9 @@ internal abstract class DashboardDataModule {
 
     @Binds @Singleton
     abstract fun bindDoses(impl: DashboardTodaysDosesRepositoryImpl): DashboardTodaysDosesRepository
+
+    @Binds @Singleton
+    abstract fun bindNutrition(impl: DashboardNutritionRepositoryImpl): DashboardNutritionRepository
 
     companion object {
         @Provides @Singleton

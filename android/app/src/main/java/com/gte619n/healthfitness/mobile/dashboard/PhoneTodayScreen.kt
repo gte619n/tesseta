@@ -81,7 +81,11 @@ fun PhoneTodayScreen(
                 Spacer(Modifier.height(16.dp))
                 PhoneVitalsGrid(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
                 Spacer(Modifier.height(11.dp))
-                TodayCard(modifier = Modifier.fillMaxWidth(), showHrInMeta = false)
+                TodayCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    showHrInMeta = false,
+                    nutrition = (ui.nutrition as? CardState.Loaded)?.data,
+                )
                 Spacer(Modifier.height(11.dp))
                 TodaysDosesCard(
                     onSeeAll = { onNavigate(MedicationRoutes.LIST) },

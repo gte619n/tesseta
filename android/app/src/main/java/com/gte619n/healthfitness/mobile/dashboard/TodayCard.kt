@@ -23,14 +23,56 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import kotlin.math.roundToInt
+
+// A single macro tier cell for the Today card, derived from either live totals
+// or the fixture fallback.
+private data class TodayMacro(val label: String, val value: String, val pct: Float)
+
+/** Group-separated calories, e.g. 1247.0 → "1,247". */
+private fun formatCalories(kcal: Double): String = "%,d".format(kcal.roundToInt())
+
+/** A macro's grams, rounded for the compact cell (null/absent → "0"). */
+private fun macroGrams(value: Double?): String = (value ?: 0.0).roundToInt().toString()
+
+/**
+ * Consumed-vs-target fraction in [0,1] for the donut / progress tracks. No
+ * (positive) target → 0 so the ring reads empty rather than guessing.
+ */
+private fun macroFraction(consumed: Double?, target: Double?): Float {
+    if (target == null || target <= 0.0) return 0f
+    return ((consumed ?: 0.0) / target).toFloat().coerceIn(0f, 1f)
+}
 
 @Composable
 fun TodayCard(
     modifier: Modifier = Modifier,
     showHrInMeta: Boolean = false,
+    // Today's logged nutrition (totals + target). Null until the dashboard load
+    // settles — the calories/macros tier falls back to fixtures in the meantime.
+    nutrition: NutritionDay? = null,
 ) {
+    val totals = nutrition?.totals
+    val target = nutrition?.target
+    val caloriesCurrent =
+        totals?.caloriesKcal?.let { formatCalories(it) } ?: DashboardFallbacks.caloriesCurrent
+    val caloriesTarget =
+        target?.caloriesKcal?.let { formatCalories(it) } ?: DashboardFallbacks.caloriesTarget
+    val caloriesPct =
+        if (nutrition != null) macroFraction(totals?.caloriesKcal, target?.caloriesKcal)
+        else DashboardFallbacks.caloriesPct
+    val macros: List<TodayMacro> = if (nutrition != null) {
+        listOf(
+            TodayMacro("Protein", macroGrams(totals?.proteinGrams), macroFraction(totals?.proteinGrams, target?.proteinGrams)),
+            TodayMacro("Carbs", macroGrams(totals?.carbsGrams), macroFraction(totals?.carbsGrams, target?.carbsGrams)),
+            TodayMacro("Fat", macroGrams(totals?.fatGrams), macroFraction(totals?.fatGrams, target?.fatGrams)),
+        )
+    } else {
+        DashboardFallbacks.macros.map { TodayMacro(it.label, it.value, it.pct) }
+    }
     HfCard(modifier = modifier) {
         Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
             Row(
@@ -60,30 +102,30 @@ fun TodayCard(
                     Spacer(Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = DashboardFallbacks.caloriesCurrent,
+                            text = caloriesCurrent,
                             style = Hf.type.displayMd.copy(fontSize = 22.sp, lineHeight = 22.sp),
                             color = Hf.colors.textPrimary,
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = "/ ${DashboardFallbacks.caloriesTarget}",
+                            text = "/ $caloriesTarget",
                             style = Hf.type.bodySm.copy(fontSize = 11.sp),
                             color = Hf.colors.textTertiary,
                         )
                     }
                 }
-                CaloriesDonut(pct = DashboardFallbacks.caloriesPct, sizeDp = 42)
+                CaloriesDonut(pct = caloriesPct, sizeDp = 42)
             }
             Spacer(Modifier.height(13.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                DashboardFallbacks.macros.forEachIndexed { i, macro ->
+                macros.forEachIndexed { i, macro ->
                     MacroCell(
                         label = macro.label,
                         value = macro.value,
-                        unit = macro.unit,
+                        unit = "g",
                         pct = macro.pct,
                         color = listOf(Hf.colors.accent, Hf.colors.goodAlt, Hf.colors.muted)[i],
                         modifier = Modifier.weight(1f),

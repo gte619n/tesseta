@@ -101,7 +101,9 @@ data class Vital(
 object DashboardFlags {
     const val showVitalsFixtures = true       // HRV / RHR / Readiness
     const val showRecentFeedFixtures = true
-    const val showTodayCardFixtures = true    // calories / macros / workout line
+    // Today card: calories + macros are live (DashboardViewModel.nutrition).
+    // Only the workout line is still fixture-backed.
+    const val showTodayCardFixtures = true    // workout line only
 }
 
 // IMPL-AND-01: remaining static content the dashboard falls back to for the
