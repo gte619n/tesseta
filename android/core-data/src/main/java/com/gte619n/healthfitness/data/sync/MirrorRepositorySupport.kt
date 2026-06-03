@@ -138,6 +138,26 @@ class MirrorRepositorySupport @Inject constructor(
         }
     }
 
+    /**
+     * Local-only reconcile: archive mirror rows that a refresh found the server
+     * no longer has (deleted on another device, or an orphaned placeholder the
+     * server cleaned up). Unlike [deleteLocal] this does NOT enqueue an outbox
+     * DELETE — the server already lacks these rows, so there's nothing to replay;
+     * we just stop surfacing them. [refreshInto] only upserts, so without this a
+     * server-side deletion would linger locally forever. Locally-dirty rows (an
+     * unsynced optimistic create) are left untouched.
+     */
+    suspend fun pruneLocal(table: String, ids: Collection<String>, lastUpdate: Long) {
+        if (ids.isEmpty()) return
+        mirror.runInTransaction {
+            for (id in ids) {
+                val existing = mirror.getRow(table, id) ?: continue
+                if (existing.dirty) continue
+                mirror.markArchived(table, id, lastUpdate)
+            }
+        }
+    }
+
     private fun pendingRow(id: String, payloadJson: String, lastUpdate: Long) = MirrorRowData(
         id = id,
         payloadJson = payloadJson,

@@ -187,16 +187,26 @@ class NutritionRepository @Inject constructor(
     private suspend fun fillDay(date: String) {
         val day = api.getDay(date)
         val entries = day.meals.flatMap { it.entries }
+        val now = System.currentTimeMillis()
+        val serverIds = entries.map { composite(date, it.entryId) }.toSet()
         support.refreshInto(
             MirrorTables.NUTRITION_ENTRIES,
             entries.map { entry ->
                 MirrorRepositorySupport.RefreshRow(
                     id = composite(date, entry.entryId),
                     payloadJson = rowAdapter.toJson(NutritionEntryRow(date, entry)),
-                    lastUpdate = System.currentTimeMillis(),
+                    lastUpdate = now,
                 )
             },
         )
+        // Reconcile: drop any local row for THIS date the server no longer has, so
+        // a deletion elsewhere — or an orphaned placeholder the server cleaned up —
+        // stops lingering. refreshInto only upserts; it never prunes. Local-only
+        // (no outbox); dirty optimistic creates are preserved by pruneLocal.
+        val staleIds = entriesForDate(date)
+            .map { composite(date, it.entryId) }
+            .filterNot { it in serverIds }
+        support.pruneLocal(MirrorTables.NUTRITION_ENTRIES, staleIds, now)
         day.target?.let { refreshTarget(it) }
     }
 
