@@ -75,4 +75,26 @@ class EquipmentSpecMoshiAdapterTest {
         val json = """{"foo":1}"""
         assertEquals(EquipmentSpec.Bodyweight, adapter.fromJson(json))
     }
+
+    @Test
+    fun `json null decodes to bodyweight`() {
+        // Catalog rows with no persisted specs serialize as `null` on the wire.
+        assertEquals(EquipmentSpec.Bodyweight, adapter.fromJson("null"))
+    }
+
+    @Test
+    fun `equipment dto with null specs parses instead of being dropped`() {
+        // Regression: a non-null `specs` field received `null` from the adapter,
+        // which made Moshi reject the whole equipment object — so gym detail
+        // silently dropped every catalog row that had no specs.
+        val dtoAdapter = moshi.adapter(EquipmentDto::class.java)
+        val json = """
+            {"equipmentId":"eq_1","name":"Treadmill","category":"Cardio",
+             "subcategory":"Treadmills","specSchema":"BODYWEIGHT","specs":null,
+             "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}
+        """.trimIndent()
+        val dto = dtoAdapter.fromJson(json)
+        assertEquals("Treadmill", dto?.name)
+        assertEquals(EquipmentSpec.Bodyweight, dto?.specs)
+    }
 }
