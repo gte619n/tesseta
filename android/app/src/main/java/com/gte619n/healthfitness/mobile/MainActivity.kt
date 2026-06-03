@@ -15,9 +15,13 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -32,16 +36,26 @@ import com.gte619n.healthfitness.mobile.auth.SignInScreen
 import com.gte619n.healthfitness.mobile.dashboard.FoldableDashboardScreen
 import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
 import com.gte619n.healthfitness.mobile.nav.AppNavHost
+import com.gte619n.healthfitness.mobile.push.TokenRegistration
+import com.gte619n.healthfitness.mobile.sync.FirstSyncGate
+import com.gte619n.healthfitness.mobile.sync.SettingUpScreen
 import com.gte619n.healthfitness.mobile.wear.PhoneTokenPublisher
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.theme.Hf
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private lateinit var authCoordinator: AuthCoordinator
+
+    // IMPL-AND-20 (Phase 6): post-sign-in token registration (D18) + the first-run
+    // sync gate (D14). Hilt-injected singletons (Retrofit/WorkManager-backed).
+    @Inject lateinit var tokenRegistration: TokenRegistration
+
+    @Inject lateinit var firstSyncGate: FirstSyncGate
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +85,8 @@ class MainActivity : ComponentActivity() {
                     AppRoot(
                         coordinator = authCoordinator,
                         widthClass = windowSize.widthSizeClass,
+                        tokenRegistration = tokenRegistration,
+                        firstSyncGate = firstSyncGate,
                     )
                 }
             }
@@ -109,6 +125,8 @@ class MainActivity : ComponentActivity() {
 private fun AppRoot(
     coordinator: AuthCoordinator,
     widthClass: WindowWidthSizeClass,
+    tokenRegistration: TokenRegistration,
+    firstSyncGate: FirstSyncGate,
 ) {
     val state by coordinator.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -120,7 +138,11 @@ private fun AppRoot(
     ) { scope.launch { coordinator.bootstrap() } }
 
     when (state) {
-        is AuthState.SignedIn -> AppNavHost(widthClass)
+        is AuthState.SignedIn -> SignedInRoot(
+            widthClass = widthClass,
+            tokenRegistration = tokenRegistration,
+            firstSyncGate = firstSyncGate,
+        )
         AuthState.Loading -> SignInScreen(state = state, onSignIn = {})
         else -> SignInScreen(
             state = state,
@@ -134,6 +156,50 @@ private fun AppRoot(
     }
 }
 
+/**
+ * IMPL-AND-20 (Phase 6) — the post-sign-in entry. Runs the FCM token
+ * registration (D18) and the first-run sync gate (D14) exactly once per sign-in,
+ * showing the blocking "Setting up…" screen only for a fresh sign-in; returning
+ * users (who already have a full sync) drop straight to the dashboard.
+ */
+@Composable
+private fun SignedInRoot(
+    widthClass: WindowWidthSizeClass,
+    tokenRegistration: TokenRegistration,
+    firstSyncGate: FirstSyncGate,
+) {
+    // gateDecided: null until needsFirstSync() resolves; then false (released) or
+    // true (blocking initial sync in flight).
+    var gating by remember { mutableStateOf<Boolean?>(null) }
+
+    LaunchedEffect(Unit) {
+        // FCM token registration is best-effort and must NOT block the UI; run it
+        // off to the side. (HfMessagingService.onNewToken also re-registers.)
+        launch { tokenRegistration.register() }
+
+        // A fresh sign-in blocks on a brief, bounded initial sync; a returning
+        // user (already has a full sync) is released immediately.
+        if (firstSyncGate.needsFirstSync()) {
+            gating = true
+            firstSyncGate.runInitialSync()
+        } else {
+            gating = false
+        }
+        // Always schedule the lazy backfill + periodic floor after the gate.
+        firstSyncGate.scheduleBackfill()
+        gating = false
+    }
+
+    if (gating != false) {
+        // null (deciding) or true (gating) — both show the brief setup screen.
+        // The decide step is a single fast Room read, so a returning user only
+        // flashes this for a frame before dropping to the dashboard.
+        SettingUpScreen()
+    } else {
+        AppNavHost(widthClass)
+    }
+}
+
 @Composable
 fun DashboardRoot(
     widthClass: WindowWidthSizeClass,
@@ -143,7 +209,7 @@ fun DashboardRoot(
     // Compact (< 600 dp) → phone Today screen.
     // Medium / Expanded (≥ 600 dp) → foldable/tablet dashboard with icon-only sidebar.
     when (widthClass) {
-        WindowWidthSizeClass.Compact -> PhoneTodayScreen(onOpenGoals = onOpenGoals, onNavigate = onNavigate)
+        WindowWidthSizeClass.Compact -> PhoneTodayScreen(onNavigate = onNavigate)
         else -> FoldableDashboardScreen(onOpenGoals = onOpenGoals, onNavigate = onNavigate)
     }
 }

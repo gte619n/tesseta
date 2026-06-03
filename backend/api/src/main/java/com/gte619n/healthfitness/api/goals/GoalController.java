@@ -6,6 +6,8 @@ import com.gte619n.healthfitness.api.goals.dto.GoalResponse;
 import com.gte619n.healthfitness.api.goals.dto.PhaseResponse;
 import com.gte619n.healthfitness.api.goals.dto.StepResponse;
 import com.gte619n.healthfitness.api.goals.dto.UpdateGoalRequest;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
+import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.goals.Goal;
 import com.gte619n.healthfitness.core.goals.GoalDomain;
@@ -18,6 +20,8 @@ import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.Step;
 import com.gte619n.healthfitness.core.goals.StepRepository;
 import com.gte619n.healthfitness.core.goals.eval.StepEvaluationService;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,6 +51,8 @@ public class GoalController {
     private final StepRepository steps;
     private final GoalService service;
     private final StepEvaluationService evaluator;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public GoalController(
         CurrentUserProvider currentUser,
@@ -54,7 +60,9 @@ public class GoalController {
         PhaseRepository phases,
         StepRepository steps,
         GoalService service,
-        StepEvaluationService evaluator
+        StepEvaluationService evaluator,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.goals = goals;
@@ -62,6 +70,8 @@ public class GoalController {
         this.steps = steps;
         this.service = service;
         this.evaluator = evaluator;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     @GetMapping
@@ -73,7 +83,7 @@ public class GoalController {
     }
 
     @PostMapping
-    public ResponseEntity<GoalResponse> create(@RequestBody CreateGoalRequest body) {
+    public ResponseEntity<WriteResult<GoalResponse>> create(@RequestBody CreateGoalRequest body) {
         if (body.title() == null || body.title().isBlank()) {
             throw new IllegalArgumentException("title is required");
         }
@@ -81,26 +91,40 @@ public class GoalController {
             throw new IllegalArgumentException("domain is required");
         }
         String userId = currentUser.get().userId();
-        String goalId = UUID.randomUUID().toString();
+        // Client-minted id + idempotent replay (IMPL-AND-20 D7).
+        String goalId = syncWrite.resolveId(body.id());
         LocalDate startDate = body.startDate() != null ? body.startDate() : LocalDate.now();
         GoalSource source = body.source() != null ? body.source() : GoalSource.MANUAL;
-        Goal goal = new Goal(
+
+        WriteResult<GoalResponse> response = syncWrite.idempotentCreate(
+            "goals:create",
             userId,
-            goalId,
-            body.title(),
-            body.description(),
-            body.domain(),
-            GoalStatus.ACTIVE,
-            startDate,
-            body.targetDate(),
-            null,
-            null,
-            null,
-            List.of(),
-            source
+            () -> {
+                Instant writtenAt = Instant.now();
+                Goal goal = new Goal(
+                    userId,
+                    goalId,
+                    body.title(),
+                    body.description(),
+                    body.domain(),
+                    GoalStatus.ACTIVE,
+                    startDate,
+                    body.targetDate(),
+                    writtenAt,
+                    writtenAt,
+                    null,
+                    List.of(),
+                    source
+                );
+                goals.save(goal);
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals");
+                return new SyncWriteContext.Created<>(
+                    goalId, WriteResult.of(GoalResponse.from(goal), writtenAt));
+            },
+            id -> goals.findById(userId, id)
+                .map(g -> WriteResult.of(GoalResponse.from(g), g.updatedAt()))
         );
-        goals.save(goal);
-        return ResponseEntity.status(HttpStatus.CREATED).body(GoalResponse.from(goal));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{goalId}")
@@ -181,7 +205,7 @@ public class GoalController {
     }
 
     @PatchMapping("/{goalId}")
-    public GoalResponse update(@PathVariable String goalId, @RequestBody UpdateGoalRequest body) {
+    public WriteResult<GoalResponse> update(@PathVariable String goalId, @RequestBody UpdateGoalRequest body) {
         String userId = currentUser.get().userId();
         Goal existing = goals.findById(userId, goalId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
@@ -199,6 +223,7 @@ public class GoalController {
         LocalDate startDate = body.startDate() != null ? body.startDate() : existing.startDate();
         LocalDate targetDate = body.targetDate() != null ? body.targetDate() : existing.targetDate();
 
+        Instant writtenAt = Instant.now();
         Goal updated = new Goal(
             existing.userId(),
             existing.goalId(),
@@ -209,13 +234,14 @@ public class GoalController {
             startDate,
             targetDate,
             existing.createdAt(),
-            null,
+            writtenAt,
             existing.completedAt(),
             existing.phaseOrder(),
             existing.source()
         );
         goals.save(updated);
-        return GoalResponse.from(updated);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals");
+        return WriteResult.of(GoalResponse.from(updated), writtenAt);
     }
 
     @DeleteMapping("/{goalId}")
@@ -225,6 +251,7 @@ public class GoalController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         service.archive(userId, goalId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals");
         return ResponseEntity.noContent().build();
     }
 

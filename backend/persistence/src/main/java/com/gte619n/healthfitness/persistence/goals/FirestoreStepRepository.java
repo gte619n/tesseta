@@ -1,5 +1,8 @@
 package com.gte619n.healthfitness.persistence.goals;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.goals.Comparator;
@@ -7,6 +10,7 @@ import com.gte619n.healthfitness.core.goals.Step;
 import com.gte619n.healthfitness.core.goals.StepKind;
 import com.gte619n.healthfitness.core.goals.StepMetricBinding;
 import com.gte619n.healthfitness.core.goals.StepRepository;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -40,7 +44,7 @@ public class FirestoreStepRepository implements StepRepository {
     @Override
     public Optional<Step> findById(String userId, String goalId, String phaseId, String stepId) {
         DocumentSnapshot snapshot = await(collection(userId, goalId, phaseId).document(stepId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toStep(goalId, phaseId, snapshot));
     }
 
@@ -50,7 +54,10 @@ public class FirestoreStepRepository implements StepRepository {
             .orderBy("orderIndex", Query.Direction.ASCENDING)
             .limit(200)
             .get()).getDocuments();
-        return docs.stream().map(d -> toStep(goalId, phaseId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toStep(goalId, phaseId, d))
+            .toList();
     }
 
     @Override
@@ -70,6 +77,7 @@ public class FirestoreStepRepository implements StepRepository {
                 .orderBy("orderIndex", Query.Direction.ASCENDING)
                 .get()).getDocuments();
             for (QueryDocumentSnapshot s : stepDocs) {
+                if (isArchived(s)) continue;
                 result.add(toStep(goalId, phaseId, s));
             }
         }
@@ -86,6 +94,7 @@ public class FirestoreStepRepository implements StepRepository {
             .get()
         ).getDocuments();
         return docs.stream()
+            .filter(d -> !isArchived(d))
             .filter(d -> isUnderUser(d, userId))
             .map(this::toStepFromGroupQuery)
             .toList();
@@ -100,6 +109,7 @@ public class FirestoreStepRepository implements StepRepository {
             .get()
         ).getDocuments();
         return docs.stream()
+            .filter(d -> !isArchived(d))
             .filter(d -> isUnderUser(d, userId))
             .map(this::toStepFromGroupQuery)
             .toList();
@@ -115,7 +125,11 @@ public class FirestoreStepRepository implements StepRepository {
 
     @Override
     public void delete(String userId, String goalId, String phaseId, String stepId) {
-        await(collection(userId, goalId, phaseId).document(stepId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId, goalId, phaseId).document(stepId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId, String goalId, String phaseId) {
@@ -156,6 +170,7 @@ public class FirestoreStepRepository implements StepRepository {
         body.put("doneAt", s.doneAt());
         body.put("manualOverride", s.manualOverride());
         body.put("metric", metricToMap(s.metric()));
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         return body;
     }
 

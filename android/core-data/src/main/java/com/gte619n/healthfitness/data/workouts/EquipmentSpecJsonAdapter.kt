@@ -34,8 +34,15 @@ class EquipmentSpecJsonAdapter(moshi: Moshi) : JsonAdapter<EquipmentSpec>() {
     private val mapAdapter: JsonAdapter<Map<String, Any?>> =
         moshi.adapter(Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java))
 
-    override fun fromJson(reader: JsonReader): EquipmentSpec? {
-        if (reader.peek() == JsonReader.Token.NULL) return reader.nextNull()
+    override fun fromJson(reader: JsonReader): EquipmentSpec {
+        // A JSON `null` (catalog rows with no specs persisted) degrades to the
+        // Bodyweight default, same as a missing/unknown discriminator. Returning
+        // Kotlin null here would make Moshi reject the whole non-null `specs`
+        // field and drop the entire equipment object on the floor.
+        if (reader.peek() == JsonReader.Token.NULL) {
+            reader.skipValue()
+            return EquipmentSpec.Bodyweight
+        }
         // Read the whole object generically so we can peek the discriminator,
         // then re-decode the body with the right subtype adapter.
         @Suppress("UNCHECKED_CAST")

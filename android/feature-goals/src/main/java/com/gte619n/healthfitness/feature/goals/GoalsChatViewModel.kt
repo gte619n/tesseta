@@ -52,8 +52,13 @@ data class GoalsChatUiState(
 class GoalsChatViewModel @Inject constructor(
     private val sseClient: ChatSseClient,
     private val chatRepository: ChatRepository,
+    connectivity: com.gte619n.healthfitness.data.net.Connectivity,
     moshi: Moshi,
 ) : ViewModel() {
+
+    // IMPL-AND-20 (Phase 6, D17): goals chat is an online-only SSE AI flow. The
+    // screen disables the composer + shows "needs connection" when offline.
+    val isOnline: StateFlow<Boolean> = connectivity.isOnline
 
     private val proposalAdapter = moshi.adapter(GoalProposal::class.java)
 

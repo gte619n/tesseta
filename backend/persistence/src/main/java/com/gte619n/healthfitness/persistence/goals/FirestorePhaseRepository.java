@@ -1,10 +1,14 @@
 package com.gte619n.healthfitness.persistence.goals;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.goals.Phase;
 import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.PhaseStatus;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -40,7 +44,7 @@ public class FirestorePhaseRepository implements PhaseRepository {
     @Override
     public Optional<Phase> findById(String userId, String goalId, String phaseId) {
         DocumentSnapshot snapshot = await(collection(userId, goalId).document(phaseId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toPhase(goalId, snapshot));
     }
 
@@ -50,7 +54,10 @@ public class FirestorePhaseRepository implements PhaseRepository {
             .orderBy("orderIndex", Query.Direction.ASCENDING)
             .limit(100)
             .get()).getDocuments();
-        return docs.stream().map(d -> toPhase(goalId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toPhase(goalId, d))
+            .toList();
     }
 
     @Override
@@ -62,7 +69,11 @@ public class FirestorePhaseRepository implements PhaseRepository {
 
     @Override
     public void delete(String userId, String goalId, String phaseId) {
-        await(collection(userId, goalId).document(phaseId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId, goalId).document(phaseId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId, String goalId) {
@@ -83,6 +94,7 @@ public class FirestorePhaseRepository implements PhaseRepository {
         body.put("targetEndDate", p.targetEndDate() != null ? p.targetEndDate().toString() : null);
         body.put("completedAt", p.completedAt());
         body.put("stepOrder", p.stepOrder() == null ? List.of() : p.stepOrder());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         return body;
     }
 

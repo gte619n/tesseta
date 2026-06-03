@@ -101,7 +101,8 @@ class MealCaptureServiceTest {
         final FoodEntryImageService images =
             new FoodEntryImageService(entries, empty(), empty(), empty());
         final MealCaptureService svc =
-            new MealCaptureService(empty(), empty(), catalog, nutrition, images);
+            new MealCaptureService(empty(), empty(), catalog, nutrition, images,
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
     }
 
     private static MealPhotoAnalyzer analyzer(MealAnalysis analysis) {

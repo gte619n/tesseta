@@ -99,6 +99,13 @@ public class NutritionService {
         return entries.findByDate(userId, date);
     }
 
+    /** Look up a single entry by id (used for idempotent-create replay, D7). */
+    public Optional<FoodEntry> findEntry(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        return entries.findById(userId, date, entryId);
+    }
+
     /**
      * Add a food entry to {@code date}. The caller supplies the already-computed
      * {@code macros} snapshot; the service stores it verbatim, generates an
@@ -116,6 +123,29 @@ public class NutritionService {
         Macros macros,
         EntrySource source
     ) {
+        return addEntry(userId, date, meal, foodId, foodName, servingLabel,
+            servingGrams, quantity, macros, source, null);
+    }
+
+    /**
+     * Add a food entry with an optional client-minted {@code entryId}
+     * (IMPL-AND-20 D7). When {@code entryId} is null/blank a server UUID is
+     * generated, preserving the previous behaviour. Look an entry back up via
+     * {@link #findEntry} for idempotent replay.
+     */
+    public FoodEntry addEntry(
+        String userId,
+        LocalDate date,
+        MealType meal,
+        String foodId,
+        String foodName,
+        String servingLabel,
+        Double servingGrams,
+        Double quantity,
+        Macros macros,
+        EntrySource source,
+        String entryId
+    ) {
         requireUser(userId);
         requireDate(date);
         if (meal == null) {
@@ -124,7 +154,9 @@ public class NutritionService {
         if (foodName == null || foodName.isBlank()) {
             throw new IllegalArgumentException("foodName is required");
         }
-        String entryId = UUID.randomUUID().toString();
+        if (entryId == null || entryId.isBlank()) {
+            entryId = UUID.randomUUID().toString();
+        }
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
             servingGrams, quantity, macros, null, source,
@@ -149,6 +181,23 @@ public class NutritionService {
         List<CompositeIngredient> ingredients,
         EntrySource source
     ) {
+        return addCompositeMeal(userId, date, meal, mealName, ingredients, source, null);
+    }
+
+    /**
+     * As {@link #addCompositeMeal(String, LocalDate, MealType, String, List,
+     * EntrySource)} but honoring a client-minted {@code entryId} (IMPL-AND-20
+     * D7); a null/blank {@code entryId} falls back to a server-generated UUID.
+     */
+    public FoodEntry addCompositeMeal(
+        String userId,
+        LocalDate date,
+        MealType meal,
+        String mealName,
+        List<CompositeIngredient> ingredients,
+        EntrySource source,
+        String entryId
+    ) {
         requireUser(userId);
         requireDate(date);
         if (meal == null) {
@@ -168,7 +217,9 @@ public class NutritionService {
                 grams += ing.servingGrams() * (ing.quantity() != null ? ing.quantity() : 1.0);
             }
         }
-        String entryId = UUID.randomUUID().toString();
+        if (entryId == null || entryId.isBlank()) {
+            entryId = UUID.randomUUID().toString();
+        }
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, mealName,
             ingredients.size() + " ingredients", grams, 1.0, total, null, source,

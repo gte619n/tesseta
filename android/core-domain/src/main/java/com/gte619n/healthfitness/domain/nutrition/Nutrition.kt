@@ -67,6 +67,12 @@ data class Entry(
     // Present for a composite meal: its components, each with a raw-ingredient
     // image. Null/empty for a plain single-food entry.
     val ingredients: List<EntryIngredient>? = null,
+    /**
+     * IMPL-AND-20 (#40) — the mirror row's per-row sync state
+     * (`SYNCED | PENDING | FAILED`) for the D11 SyncBadge. Null for a live read.
+     * Defaulted so existing constructions are unaffected.
+     */
+    val syncState: String? = null,
 ) {
     val isComposite: Boolean get() = !ingredients.isNullOrEmpty()
 

@@ -1,7 +1,19 @@
 package com.gte619n.healthfitness.mobile.nav
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.mobile.sync.SyncStatusViewModel
+import com.gte619n.healthfitness.ui.sync.SyncStatusOverlay
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -53,8 +65,28 @@ object Routes {
 }
 
 @Composable
-fun AppNavHost(widthClass: WindowWidthSizeClass) {
+fun AppNavHost(
+    widthClass: WindowWidthSizeClass,
+    syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
+) {
     val navController = rememberNavController()
+    // IMPL-AND-20 (Phase 6, D11): the global sync-state indicator is an OVERLAY
+    // drawn on top of the nav graph, so it never shifts the layout (no content
+    // jump). In the common states (syncing / pending / offline) it's just a faint
+    // status icon in the top-right corner; only a FAILED sync surfaces the full
+    // banner (with Retry). Steady state shows nothing.
+    val syncState by syncStatusViewModel.state.collectAsStateWithLifecycle()
+    Box(modifier = Modifier.fillMaxSize()) {
+        AppNavHostGraph(widthClass = widthClass, navController = navController)
+        SyncStatusOverlay(state = syncState, onRetry = syncStatusViewModel::retry)
+    }
+}
+
+@Composable
+private fun AppNavHostGraph(
+    widthClass: WindowWidthSizeClass,
+    navController: androidx.navigation.NavHostController,
+) {
     NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
         composable(Routes.DASHBOARD) {
             DashboardRoot(

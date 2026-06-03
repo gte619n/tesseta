@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.persistence.workoutprogram;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
@@ -26,6 +28,7 @@ import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutDay;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -60,13 +63,14 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
     @Override
     public Optional<WorkoutProgram> findById(String userId, String programId) {
         DocumentSnapshot snap = await(collection(userId).document(programId).get());
-        return snap.exists() ? Optional.of(toProgram(userId, snap)) : Optional.empty();
+        return snap.exists() && !isArchived(snap)
+            ? Optional.of(toProgram(userId, snap)) : Optional.empty();
     }
 
     @Override
     public List<WorkoutProgram> findByUser(String userId) {
         List<QueryDocumentSnapshot> docs = await(collection(userId).limit(200).get()).getDocuments();
-        return docs.stream().map(d -> toProgram(userId, d)).toList();
+        return docs.stream().filter(d -> !isArchived(d)).map(d -> toProgram(userId, d)).toList();
     }
 
     @Override
@@ -78,7 +82,12 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
 
     @Override
     public void delete(String userId, String programId) {
-        await(collection(userId).document(programId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2: archive + bump updatedAt so
+        // offline clients learn of the deletion via the delta feed.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId).document(programId).set(updates, SetOptions.merge()));
     }
 
     // ---- serialization ----
@@ -95,6 +104,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
         body.put("phaseOrder", p.phaseOrder() == null ? List.of() : p.phaseOrder());
         body.put("phases", phasesToWire(p.phases()));
         body.put("completedAt", p.completedAt() == null ? null : p.completedAt().toString());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

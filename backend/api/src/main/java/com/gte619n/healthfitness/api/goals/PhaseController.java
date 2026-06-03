@@ -4,6 +4,8 @@ import com.gte619n.healthfitness.api.goals.dto.CreatePhaseRequest;
 import com.gte619n.healthfitness.api.goals.dto.PhaseResponse;
 import com.gte619n.healthfitness.api.goals.dto.ReorderRequest;
 import com.gte619n.healthfitness.api.goals.dto.UpdatePhaseRequest;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
+import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.goals.Goal;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
@@ -11,9 +13,10 @@ import com.gte619n.healthfitness.core.goals.GoalService;
 import com.gte619n.healthfitness.core.goals.Phase;
 import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.PhaseStatus;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,21 +37,27 @@ public class PhaseController {
     private final GoalRepository goals;
     private final PhaseRepository phases;
     private final GoalService service;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public PhaseController(
         CurrentUserProvider currentUser,
         GoalRepository goals,
         PhaseRepository phases,
-        GoalService service
+        GoalService service,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.goals = goals;
         this.phases = phases;
         this.service = service;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     @PostMapping
-    public ResponseEntity<PhaseResponse> create(
+    public ResponseEntity<WriteResult<PhaseResponse>> create(
         @PathVariable String goalId,
         @RequestBody CreatePhaseRequest body
     ) {
@@ -64,22 +73,37 @@ public class PhaseController {
         PhaseStatus status = order.isEmpty() ? PhaseStatus.ACTIVE : PhaseStatus.LOCKED;
         int orderIndex = order.size();
 
-        String phaseId = UUID.randomUUID().toString();
-        Phase phase = new Phase(
-            goalId,
-            phaseId,
-            body.title(),
-            body.description(),
-            orderIndex,
-            status,
-            body.targetStartDate(),
-            body.targetEndDate(),
-            null,
-            List.of()
+        // Client-minted id + idempotent replay (IMPL-AND-20 D7). The replay
+        // returns the existing phase WITHOUT re-appending it to phaseOrder.
+        String phaseId = syncWrite.resolveId(body.id());
+        WriteResult<PhaseResponse> response = syncWrite.idempotentCreate(
+            "goals:phases:create:" + goalId,
+            userId,
+            () -> {
+                Instant writtenAt = Instant.now();
+                Phase phase = new Phase(
+                    goalId,
+                    phaseId,
+                    body.title(),
+                    body.description(),
+                    orderIndex,
+                    status,
+                    body.targetStartDate(),
+                    body.targetEndDate(),
+                    null,
+                    List.of()
+                );
+                phases.save(userId, phase);
+                service.appendPhaseId(userId, goalId, phaseId);
+                // Subcollection delta name (FirestoreSyncChangeReader): goals/phases.
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases");
+                return new SyncWriteContext.Created<>(
+                    phaseId, WriteResult.of(PhaseResponse.from(phase, List.of()), writtenAt));
+            },
+            id -> phases.findById(userId, goalId, id)
+                .map(p -> WriteResult.of(PhaseResponse.from(p, List.of()), Instant.now()))
         );
-        phases.save(userId, phase);
-        service.appendPhaseId(userId, goalId, phaseId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(PhaseResponse.from(phase, List.of()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PatchMapping("/{phaseId}")
@@ -110,6 +134,7 @@ public class PhaseController {
             existing.stepOrder()
         );
         phases.save(userId, updated);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases");
         return PhaseResponse.from(updated, List.of());
     }
 
@@ -125,6 +150,7 @@ public class PhaseController {
         // Hard delete + remove from parent Goal's phaseOrder in the same op.
         service.removePhaseId(userId, goalId, phaseId);
         phases.delete(userId, goalId, phaseId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases");
         return ResponseEntity.noContent().build();
     }
 
@@ -141,6 +167,7 @@ public class PhaseController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         service.reorderPhases(userId, goalId, body.ids());
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goals/phases");
         return ResponseEntity.noContent().build();
     }
 }

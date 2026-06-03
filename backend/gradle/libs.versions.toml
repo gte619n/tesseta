@@ -7,6 +7,7 @@ googleApiClient = "2.7.0"
 googleKms = "2.55.0"
 googleStorage = "2.59.0"
 googleGenai = "1.53.0"
+firebaseAdmin = "9.4.3"
 junit = "5.11.0"
 
 [libraries]
@@ -28,6 +29,7 @@ google-auth-library = { module = "com.google.auth:google-auth-library-oauth2-htt
 google-api-client = { module = "com.google.api-client:google-api-client", version.ref = "googleApiClient" }
 google-cloud-storage = { module = "com.google.cloud:google-cloud-storage", version.ref = "googleStorage" }
 google-genai = { module = "com.google.genai:google-genai", version.ref = "googleGenai" }
+firebase-admin = { module = "com.google.firebase:firebase-admin", version.ref = "firebaseAdmin" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

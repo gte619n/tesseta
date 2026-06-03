@@ -41,6 +41,7 @@ class GoalControllerTest {
     @Test
     void createThenGetDeepRoundTrip() throws Exception {
         CreateGoalRequest req = new CreateGoalRequest(
+            null, /* client id */
             "Lower ApoB", "into optimal range", GoalDomain.CARDIOVASCULAR,
             null, java.time.LocalDate.now().plusMonths(6), null
         );
@@ -61,7 +62,7 @@ class GoalControllerTest {
             .get("goalId").asText();
 
         // Add a Phase
-        CreatePhaseRequest phaseReq = new CreatePhaseRequest("Phase 1", "lay groundwork", null, null);
+        CreatePhaseRequest phaseReq = new CreatePhaseRequest(null, "Phase 1", "lay groundwork", null, null);
         MvcResult phaseRes = mvc.perform(post("/api/me/goals/" + goalId + "/phases")
                 .header("X-Dev-User", USER)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -76,6 +77,7 @@ class GoalControllerTest {
 
         // Add a Step
         CreateStepRequest stepReq = new CreateStepRequest(
+            null,
             "Reduce ApoB below 80",
             StepKind.THRESHOLD,
             new StepMetricBindingDto("blood.apoB", Comparator.LT, 80.0, null, null)
@@ -133,6 +135,7 @@ class GoalControllerTest {
         // Use an isolated user id so this test doesn't see Goals from other tests.
         String isolatedUser = "user-goals-list-" + java.util.UUID.randomUUID();
         CreateGoalRequest activeReq = new CreateGoalRequest(
+            null, /* client id */
             "Active goal", "desc", GoalDomain.CARDIOVASCULAR,
             null, java.time.LocalDate.now().plusMonths(3), null
         );
@@ -146,6 +149,7 @@ class GoalControllerTest {
                 .header("X-Dev-User", isolatedUser)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(new CreateGoalRequest(
+                    null, /* client id */
                     "To archive", "desc", GoalDomain.CARDIOVASCULAR,
                     null, java.time.LocalDate.now().plusMonths(3), null
                 ))))
@@ -181,6 +185,7 @@ class GoalControllerTest {
 
     private String createGoal() throws Exception {
         CreateGoalRequest req = new CreateGoalRequest(
+            null, /* client id */
             "Goal " + java.util.UUID.randomUUID(),
             "desc", GoalDomain.CARDIOVASCULAR,
             null, java.time.LocalDate.now().plusMonths(3), null

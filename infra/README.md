@@ -86,7 +86,44 @@ The Google Health API scopes are **Restricted**, which means:
 Current state: `evan.ruff@oxos.com` is on the test users list. No
 production review submitted yet.
 
+## IMPL-AND-20: Firestore TTL on idempotencyKeys
+
+The offline-sync idempotency store (`FirestoreIdempotencyStore`) writes records
+at `users/{uid}/idempotencyKeys/{scope#key}` carrying an `expiresAt` Firestore
+`Timestamp`. A Firestore **TTL policy** on that field reaps expired records
+automatically so the subcollection does not grow without bound. The in-app read
+also re-checks `expiresAt`, so an unreaped-but-expired key still behaves as
+absent — the TTL is purely a storage-hygiene reaper, not a correctness gate.
+
+Declared as infra-as-code in
+[`terraform/firestore_ttl.tf`](terraform/firestore_ttl.tf) (a
+`google_firestore_field` with a `ttl_config` block on collection group
+`idempotencyKeys`, field `expiresAt`). That file is the source of truth.
+
+If Terraform is not yet being applied for this project, apply the **equivalent
+one-time gcloud command** (idempotent; safe to re-run):
+
+```bash
+# Enable the TTL policy on idempotencyKeys.expiresAt (collection-group scope).
+gcloud firestore fields ttls update expiresAt \
+  --collection-group=idempotencyKeys \
+  --enable-ttl \
+  --project=health-fitness-160 \
+  --database='(default)'
+
+# Verify it is now SERVING:
+gcloud firestore fields ttls list \
+  --collection-group=idempotencyKeys \
+  --project=health-fitness-160 \
+  --database='(default)'
+```
+
+The policy takes effect asynchronously (state goes `CREATING` → `ACTIVE`);
+Firestore then deletes documents within ~24h of their `expiresAt` passing.
+
 ## Terraform
 
-`terraform/` is a placeholder; no modules yet. Bootstrap is shell scripts
-for now to keep the first run as simple as possible.
+`terraform/` currently holds only the Firestore TTL policy above
+(`firestore_ttl.tf` + `versions.tf`). The rest of the bootstrap is still shell
+scripts to keep the first run simple; new infra-as-code lands here as it is
+adopted.

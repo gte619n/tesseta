@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.bodycomposition;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMeasurement;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMetric;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.CollectionReference;
@@ -69,7 +72,10 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
             .whereLessThanOrEqualTo("sampleTime", Timestamp.of(java.util.Date.from(to)))
             .orderBy("sampleTime", Query.Direction.DESCENDING)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMeasurement(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMeasurement(userId, d))
+            .toList();
     }
 
     @Override
@@ -78,7 +84,10 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
             .orderBy("sampleTime", Query.Direction.DESCENDING)
             .limit(500)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMeasurement(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMeasurement(userId, d))
+            .toList();
     }
 
     @Override
@@ -89,10 +98,12 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
         List<QueryDocumentSnapshot> docs = await(collection(userId)
             .whereEqualTo("metric", metric.name())
             .orderBy("sampleTime", Query.Direction.DESCENDING)
-            .limit(1)
+            .limit(20)
             .get()).getDocuments();
-        if (docs.isEmpty()) return Optional.empty();
-        return Optional.of(toMeasurement(userId, docs.get(0)));
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .findFirst()
+            .map(d -> toMeasurement(userId, d));
     }
 
     @Override
@@ -175,6 +186,7 @@ public class BodyCompositionRepository implements com.gte619n.healthfitness.core
         body.put("sampleTime", Timestamp.of(java.util.Date.from(m.sampleTime())));
         body.put("sourcePlatform", m.sourcePlatform());
         body.put("recordingMethod", m.recordingMethod());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

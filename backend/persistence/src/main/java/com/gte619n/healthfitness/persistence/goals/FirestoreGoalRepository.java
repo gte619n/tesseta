@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.persistence.goals;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
@@ -8,6 +10,7 @@ import com.gte619n.healthfitness.core.goals.GoalDomain;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
 import com.gte619n.healthfitness.core.goals.GoalSource;
 import com.gte619n.healthfitness.core.goals.GoalStatus;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -43,7 +46,7 @@ public class FirestoreGoalRepository implements GoalRepository {
     @Override
     public Optional<Goal> findById(String userId, String goalId) {
         DocumentSnapshot snapshot = await(collection(userId).document(goalId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toGoal(userId, snapshot));
     }
 
@@ -54,7 +57,12 @@ public class FirestoreGoalRepository implements GoalRepository {
             query = query.whereEqualTo("status", status.name());
         }
         List<QueryDocumentSnapshot> docs = await(query.limit(200).get()).getDocuments();
-        return docs.stream().map(d -> toGoal(userId, d)).toList();
+        // "status" filtered above is the domain GoalStatus; sync tombstones
+        // (syncStatus=ARCHIVED) are excluded here regardless.
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toGoal(userId, d))
+            .toList();
     }
 
     @Override
@@ -67,8 +75,13 @@ public class FirestoreGoalRepository implements GoalRepository {
 
     @Override
     public void delete(String userId, String goalId) {
-        // Hard delete here; soft archive lives in GoalService.archive.
-        await(collection(userId).document(goalId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2: flip the sync lifecycle
+        // syncStatus to ARCHIVED (distinct from the domain GoalStatus.ARCHIVED
+        // that GoalService.archive sets, which keeps the goal live/listable).
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId).document(goalId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId) {
@@ -86,6 +99,7 @@ public class FirestoreGoalRepository implements GoalRepository {
         body.put("completedAt", g.completedAt());
         body.put("phaseOrder", g.phaseOrder() == null ? List.of() : g.phaseOrder());
         body.put("source", g.source() != null ? g.source().name() : null);
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

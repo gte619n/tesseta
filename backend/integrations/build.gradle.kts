@@ -18,6 +18,10 @@ dependencies {
     implementation(libs.google.cloud.storage)
     implementation(libs.google.genai)
     implementation(libs.google.auth.library)
+    // IMPL-AND-20 Phase 2: FCM fan-out transport (data-only silent push) via the
+    // Firebase Admin SDK. `api` so the FirebaseMessaging bean the `app` module
+    // provides is on the compile classpath there too.
+    api(libs.firebase.admin)
 
     testImplementation(libs.spring.boot.starter.test)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

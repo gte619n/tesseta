@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.bloodtest;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.bloodtest.BloodTestReport;
 import com.gte619n.healthfitness.core.bloodtest.ExtractedMarker;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -48,7 +51,7 @@ public class BloodTestReportRepository implements com.gte619n.healthfitness.core
     @Override
     public Optional<BloodTestReport> findById(String userId, String reportId) {
         DocumentSnapshot snap = await(collection(userId).document(reportId).get());
-        if (!snap.exists()) return Optional.empty();
+        if (!snap.exists() || isArchived(snap)) return Optional.empty();
         return Optional.of(toReport(userId, snap));
     }
 
@@ -59,6 +62,7 @@ public class BloodTestReportRepository implements com.gte619n.healthfitness.core
             .limit(200)
             .get()).getDocuments();
         return docs.stream()
+            .filter(d -> !isArchived(d))
             .map(d -> toReport(userId, d))
             .sorted((a, b) -> {
                 // nulls last, then descending by sampleDate
@@ -75,15 +79,21 @@ public class BloodTestReportRepository implements com.gte619n.healthfitness.core
         if (contentHash == null) return Optional.empty();
         List<QueryDocumentSnapshot> docs = await(collection(userId)
             .whereEqualTo("contentHash", contentHash)
-            .limit(1)
+            .limit(10)
             .get()).getDocuments();
-        if (docs.isEmpty()) return Optional.empty();
-        return Optional.of(toReport(userId, docs.get(0)));
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .findFirst()
+            .map(d -> toReport(userId, d));
     }
 
     @Override
     public void delete(String userId, String reportId) {
-        await(collection(userId).document(reportId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId).document(reportId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId) {
@@ -112,6 +122,7 @@ public class BloodTestReportRepository implements com.gte619n.healthfitness.core
         }
         body.put("markers", markerMaps);
 
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) body.put("createdAt", serverTimestamp());
         return body;

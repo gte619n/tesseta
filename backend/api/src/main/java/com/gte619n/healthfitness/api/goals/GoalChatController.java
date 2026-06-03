@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.api.goals.dto.ChatMessageRequest;
 import com.gte619n.healthfitness.api.goals.dto.ChatThreadResponse;
 import com.gte619n.healthfitness.api.goals.dto.CommitResponse;
 import com.gte619n.healthfitness.api.goals.dto.GoalProposalDto;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.goals.Goal;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
@@ -29,6 +30,7 @@ import com.gte619n.healthfitness.core.goals.chat.GoalProposal;
 import com.gte619n.healthfitness.core.goals.chat.GoalProposalValidator;
 import com.gte619n.healthfitness.core.goals.chat.UserHealthSnapshotService;
 import com.gte619n.healthfitness.core.goals.eval.StepEvaluationService;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.integrations.goals.GoalChatClient;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -92,6 +94,8 @@ public class GoalChatController {
     private final StepRepository steps;
     private final StepEvaluationService evaluator;
     private final UserHealthSnapshotService snapshots;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public GoalChatController(
         CurrentUserProvider currentUser,
@@ -103,7 +107,9 @@ public class GoalChatController {
         PhaseRepository phases,
         StepRepository steps,
         StepEvaluationService evaluator,
-        UserHealthSnapshotService snapshots
+        UserHealthSnapshotService snapshots,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.chat = chat;
@@ -115,6 +121,8 @@ public class GoalChatController {
         this.steps = steps;
         this.evaluator = evaluator;
         this.snapshots = snapshots;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     // ---- POST /api/me/goals/chat (SSE) ----
@@ -272,6 +280,16 @@ public class GoalChatController {
         // Initial evaluation so already-satisfied Steps auto-check.
         evaluator.evaluateGoal(userId, goalId);
 
+        // Fan out the committed goal aggregate so the user's other devices pull
+        // the new goal + its phases/steps (IMPL-AND-20 #8/D18). The chat stream
+        // itself stays online-only (SSE Gemini, D17); only this committed CRUD
+        // write — which mints durable Goal/Phase/Step docs via the same
+        // repositories the manual controllers use — is in scope for fan-out.
+        // Origin suppressed via X-HF-Origin-Device.
+        String originDevice = syncWrite.originDeviceId();
+        syncNotifier.changed(userId, originDevice,
+            "goals", "goals/phases", "goals/phases/steps");
+
         return ResponseEntity.ok(new CommitResponse(goalId));
     }
 
@@ -296,6 +314,7 @@ public class GoalChatController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat thread not found");
         }
         chat.deleteThread(userId, threadId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "goalChatThreads");
         return ResponseEntity.noContent().build();
     }
 

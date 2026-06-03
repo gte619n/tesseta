@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gte619n.healthfitness.api.bloodtest.BloodTestReportResponse;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.bloodtest.BloodTestReport;
 import com.gte619n.healthfitness.core.bloodtest.BloodTestReportRepository;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.integrations.bloodtest.BloodTestDuplicateException;
 import com.gte619n.healthfitness.integrations.bloodtest.BloodTestExtractionException;
 import com.gte619n.healthfitness.integrations.bloodtest.BloodTestPdfStorage;
@@ -57,17 +59,23 @@ public class BloodTestController {
     private final BloodTestService service;
     private final BloodTestReportRepository reports;
     private final BloodTestPdfStorage pdfStorage;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public BloodTestController(
         CurrentUserProvider currentUser,
         BloodTestService service,
         BloodTestReportRepository reports,
-        BloodTestPdfStorage pdfStorage
+        BloodTestPdfStorage pdfStorage,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.service = service;
         this.reports = reports;
         this.pdfStorage = pdfStorage;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     @PostMapping(
@@ -161,6 +169,10 @@ public class BloodTestController {
         try {
             BloodTestReport updated = service.updateField(
                 userId, reportId, body.path(), body.value());
+            // The PDF/SSE AI upload stays online-only (D17), but this manual
+            // field correction is an in-scope JSON write: fan out so other
+            // devices pull the edit (origin suppressed, IMPL-AND-20 #8/D18).
+            syncNotifier.changed(userId, syncWrite.originDeviceId(), "bloodTestReports");
             return BloodTestReportResponse.from(updated);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
@@ -176,6 +188,7 @@ public class BloodTestController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         service.delete(userId, reportId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "bloodTestReports");
         return ResponseEntity.noContent().build();
     }
 

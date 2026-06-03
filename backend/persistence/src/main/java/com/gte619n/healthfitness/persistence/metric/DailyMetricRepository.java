@@ -1,9 +1,12 @@
 package com.gte619n.healthfitness.persistence.metric;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.metric.DailyMetric;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -45,7 +48,7 @@ public class DailyMetricRepository implements com.gte619n.healthfitness.core.met
     @Override
     public Optional<DailyMetric> findByDate(String userId, LocalDate date) {
         DocumentSnapshot snapshot = await(collection(userId).document(date.toString()).get());
-        if (!snapshot.exists()) {
+        if (!snapshot.exists() || isArchived(snapshot)) {
             return Optional.empty();
         }
         return Optional.of(toMetric(userId, snapshot));
@@ -58,7 +61,10 @@ public class DailyMetricRepository implements com.gte619n.healthfitness.core.met
             .whereLessThanOrEqualTo("date", to.toString())
             .orderBy("date", Query.Direction.ASCENDING)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMetric(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMetric(userId, d))
+            .toList();
     }
 
     @Override
@@ -71,7 +77,10 @@ public class DailyMetricRepository implements com.gte619n.healthfitness.core.met
             .orderBy("date", Query.Direction.DESCENDING)
             .limit(limit)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMetric(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMetric(userId, d))
+            .toList();
     }
 
     @Override
@@ -95,6 +104,7 @@ public class DailyMetricRepository implements com.gte619n.healthfitness.core.met
         putIfPresent(body, "sleepMinutes", m.sleepMinutes());
         putIfPresent(body, "hrvMs", m.hrvMs());
         putIfPresent(body, "sleepScore", m.sleepScore());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

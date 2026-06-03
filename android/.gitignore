@@ -14,3 +14,8 @@ captures/
 # developers and CI; release keystores still match the rule above.
 !debug.keystore
 google-services.json
+# The phone app's google-services.json holds only public Firebase identifiers
+# (project number, app ID, package, restrictable API key) and is required by the
+# google-services Gradle plugin at build time (IMPL-AND-20, FCM). Safe to commit;
+# the sensitive backend Firebase Admin credential never lives in the repo.
+!app/google-services.json

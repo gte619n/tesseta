@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
 import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
 import com.gte619n.healthfitness.core.goals.eval.MetricKey;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthClient;
@@ -34,6 +35,7 @@ public class WebhookHandlerService {
     private final AccessTokenService tokens;
     private final GoogleHealthClient googleHealth;
     private final MetricChangedPublisher metricChangedPublisher;
+    private final SyncChangeNotifier syncNotifier;
 
     public WebhookHandlerService(
         UserRepository users,
@@ -41,7 +43,8 @@ public class WebhookHandlerService {
         DeviceSyncRepository deviceSyncs,
         AccessTokenService tokens,
         GoogleHealthClient googleHealth,
-        MetricChangedPublisher metricChangedPublisher
+        MetricChangedPublisher metricChangedPublisher,
+        SyncChangeNotifier syncNotifier
     ) {
         this.users = users;
         this.measurements = measurements;
@@ -49,6 +52,7 @@ public class WebhookHandlerService {
         this.tokens = tokens;
         this.googleHealth = googleHealth;
         this.metricChangedPublisher = metricChangedPublisher;
+        this.syncNotifier = syncNotifier;
     }
 
     public void handle(Notification notification) {
@@ -90,6 +94,11 @@ public class WebhookHandlerService {
         for (String platform : platforms) {
             deviceSyncs.recordSync(userId, platform, now);
         }
+        // Server-originated change (not from a device) — fan out to ALL of the
+        // user's tokens (originDeviceId=null, IMPL-AND-20 D18) so every device pulls.
+        if (!measurementsList.isEmpty()) {
+            syncNotifier.changed(userId, null, "bodyComposition");
+        }
         // Publish after save; collect distinct metric keys from the saved measurements.
         Set<MetricKey> keys = new LinkedHashSet<>();
         for (BodyCompositionMeasurement m : measurementsList) {
@@ -104,6 +113,8 @@ public class WebhookHandlerService {
             userId, n.dataType.toMetric(), n.intervalStart, n.intervalEnd);
         log.info("Webhook DELETE user={} type={} range=[{},{}]",
             userId, n.dataType, n.intervalStart, n.intervalEnd);
+        // Server-originated tombstone(s) — fan out to ALL devices (D18).
+        syncNotifier.changed(userId, null, "bodyComposition");
         // Publish after delete — the metric value may have changed if rows were removed.
         MetricKey key = MetricKey.fromBodyCompositionMetric(n.dataType.toMetric());
         if (key != null) {

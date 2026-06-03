@@ -1,11 +1,14 @@
 package com.gte619n.healthfitness.persistence.location;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.location.DayOfWeek;
 import com.gte619n.healthfitness.core.location.HoursSlot;
 import com.gte619n.healthfitness.core.location.Location;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -42,7 +45,7 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
     @Override
     public Optional<Location> findById(String userId, String locationId) {
         DocumentSnapshot snapshot = await(collection(userId).document(locationId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toLocation(userId, snapshot));
     }
 
@@ -53,7 +56,13 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
             query = query.whereEqualTo("isActive", true);
         }
         List<QueryDocumentSnapshot> docs = await(query.limit(100).get()).getDocuments();
-        return docs.stream().map(d -> toLocation(userId, d)).toList();
+        // Tombstones (syncStatus=ARCHIVED) are dropped even when
+        // includeInactive is requested — that flag is the domain isActive
+        // toggle, not the sync lifecycle.
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toLocation(userId, d))
+            .toList();
     }
 
     @Override
@@ -66,9 +75,13 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
 
     @Override
     public void delete(String userId, String locationId) {
-        // Soft delete - set isActive to false
+        // Soft-delete (tombstone) per IMPL-AND-20 D2: flip syncStatus to
+        // ARCHIVED so the delta API tells offline clients to drop the row.
+        // isActive=false is kept for backward compatibility with any reader
+        // still consulting the domain flag.
         DocumentReference docRef = collection(userId).document(locationId);
         Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
         updates.put("isActive", false);
         updates.put("updatedAt", serverTimestamp());
         await(docRef.set(updates, SetOptions.merge()));
@@ -108,6 +121,7 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
                 .get()
         ).getDocuments();
         return docs.stream()
+            .filter(d -> !isArchived(d))
             .map(d -> {
                 String userId = d.getReference().getParent().getParent().getId();
                 return toLocation(userId, d);
@@ -131,6 +145,7 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
         body.put("equipmentSpecs", loc.equipmentSpecs() == null ? Map.of() : loc.equipmentSpecs());
         body.put("isDefault", loc.isDefault());
         body.put("isActive", loc.isActive());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

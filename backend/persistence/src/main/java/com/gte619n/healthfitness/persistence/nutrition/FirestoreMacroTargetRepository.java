@@ -1,11 +1,14 @@
 package com.gte619n.healthfitness.persistence.nutrition;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetRepository;
 import com.gte619n.healthfitness.core.nutrition.Macros;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -43,10 +46,12 @@ public class FirestoreMacroTargetRepository implements MacroTargetRepository {
         List<QueryDocumentSnapshot> docs = await(collection(userId)
             .orderBy("effectiveFrom", Query.Direction.DESCENDING)
             .whereLessThanOrEqualTo("effectiveFrom", today)
-            .limit(1)
+            .limit(20)
             .get()).getDocuments();
-        if (docs.isEmpty()) return Optional.empty();
-        return Optional.of(toTarget(userId, docs.get(0)));
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .findFirst()
+            .map(d -> toTarget(userId, d));
     }
 
     @Override
@@ -62,7 +67,10 @@ public class FirestoreMacroTargetRepository implements MacroTargetRepository {
         List<QueryDocumentSnapshot> docs = await(collection(userId)
             .orderBy("effectiveFrom", Query.Direction.DESCENDING)
             .get()).getDocuments();
-        return docs.stream().map(d -> toTarget(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toTarget(userId, d))
+            .toList();
     }
 
     private CollectionReference collection(String userId) {
@@ -79,6 +87,7 @@ public class FirestoreMacroTargetRepository implements MacroTargetRepository {
         body.put("fiberGrams", m.fiberGrams());
         body.put("sugarGrams", m.sugarGrams());
         body.put("effectiveFrom", t.effectiveFrom() != null ? t.effectiveFrom().toString() : null);
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

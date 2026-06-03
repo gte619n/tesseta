@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.blood
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.domain.blood.BloodTestReport
 import com.gte619n.healthfitness.domain.blood.BloodTestReportRepository
 import com.gte619n.healthfitness.domain.blood.UploadEvent
@@ -18,7 +19,13 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class UploadLabReportViewModel @Inject constructor(
     private val reports: BloodTestReportRepository,
+    connectivity: Connectivity,
 ) : ViewModel() {
+
+    // IMPL-AND-20 (Phase 6, D17): the PDF upload is an online-only AI flow. The
+    // screen disables the picker and shows a "needs connection" affordance when
+    // this is false; nothing is queued offline.
+    val isOnline: StateFlow<Boolean> = connectivity.isOnline
 
     sealed interface UiState {
         data object Idle : UiState

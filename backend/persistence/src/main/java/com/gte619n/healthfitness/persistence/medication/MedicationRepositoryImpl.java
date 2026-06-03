@@ -1,9 +1,12 @@
 package com.gte619n.healthfitness.persistence.medication;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.medication.*;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -41,7 +44,7 @@ public class MedicationRepositoryImpl implements MedicationRepository {
     @Override
     public Optional<Medication> findById(String userId, String medicationId) {
         DocumentSnapshot snapshot = await(collection(userId).document(medicationId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toMedication(userId, snapshot));
     }
 
@@ -51,17 +54,25 @@ public class MedicationRepositoryImpl implements MedicationRepository {
             .orderBy("startDate", Query.Direction.DESCENDING)
             .limit(500)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMedication(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMedication(userId, d))
+            .toList();
     }
 
     @Override
     public List<Medication> findByUserAndStatus(String userId, MedicationStatus status) {
+        // NB: "status" here is the domain MedicationStatus (ACTIVE/DISCONTINUED),
+        // a different field from the sync tombstone "syncStatus".
         List<QueryDocumentSnapshot> docs = await(collection(userId)
             .whereEqualTo("status", status.name())
             .orderBy("startDate", Query.Direction.DESCENDING)
             .limit(500)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMedication(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMedication(userId, d))
+            .toList();
     }
 
     @Override
@@ -70,7 +81,10 @@ public class MedicationRepositoryImpl implements MedicationRepository {
             .whereEqualTo("protocolId", protocolId)
             .limit(100)
             .get()).getDocuments();
-        return docs.stream().map(d -> toMedication(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toMedication(userId, d))
+            .toList();
     }
 
     @Override
@@ -83,7 +97,13 @@ public class MedicationRepositoryImpl implements MedicationRepository {
 
     @Override
     public void delete(String userId, String medicationId) {
-        await(collection(userId).document(medicationId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2. This is distinct from
+        // discontinue (domain status=DISCONTINUED), which leaves the row
+        // live; only the delete endpoint archives.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId).document(medicationId).set(updates, SetOptions.merge()));
     }
 
     @Override
@@ -95,6 +115,7 @@ public class MedicationRepositoryImpl implements MedicationRepository {
                 .get()
         ).getDocuments();
         return docs.stream()
+            .filter(d -> !isArchived(d))
             .map(d -> {
                 String userId = d.getReference().getParent().getParent().getId();
                 return toMedication(userId, d);
@@ -219,6 +240,7 @@ public class MedicationRepositoryImpl implements MedicationRepository {
         body.put("discontinueNotes", m.discontinueNotes());
         body.put("correlatedMarkers", m.correlatedMarkers());
         body.put("dosagePeriods", toDosagePeriodsMap(m.dosagePeriods()));
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

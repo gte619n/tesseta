@@ -18,8 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.background
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -49,11 +51,14 @@ fun BloodOverviewScreen(
     viewModel: BloodOverviewViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.state.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     when (val s = ui) {
         BloodOverviewViewModel.UiState.Loading -> LoadingState()
         is BloodOverviewViewModel.UiState.Error -> ErrorState(message = s.message, onRetry = viewModel::retry)
         is BloodOverviewViewModel.UiState.Ready -> BloodOverviewContent(
             state = s,
+            isRefreshing = isRefreshing,
+            onRefresh = viewModel::refresh,
             onBack = onBack,
             onMarkerClick = onMarkerClick,
             onReportClick = onReportClick,
@@ -63,9 +68,12 @@ fun BloodOverviewScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BloodOverviewContent(
     state: BloodOverviewViewModel.UiState.Ready,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onBack: () -> Unit,
     onMarkerClick: (BloodMarker) -> Unit,
     onReportClick: (String) -> Unit,
@@ -83,6 +91,14 @@ private fun BloodOverviewContent(
             subtitle = "Your lab markers and reports",
             onBack = onBack,
         )
+        // IMPL-AND-20 (Phase 6, D11): pull-to-refresh triggers a foreground delta
+        // pull (the repository refresh fills the Room mirror). Reference wiring;
+        // other in-scope list screens should adopt the same PullToRefreshBox.
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -116,6 +132,7 @@ private fun BloodOverviewContent(
                     ReportRow(report = report, onClick = { onReportClick(report.reportId) })
                 }
             }
+        }
         }
     }
 }

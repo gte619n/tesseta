@@ -93,10 +93,20 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "ASCENDING" }
       ]
+    },
+    {
+      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.latestDateByStatus — whereEqualTo(status) + orderBy(date DESC).limit(1).",
+      "collectionGroup": "scheduled",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
     {
+      "_comment": "IMPL-AND-20 #10: the unified delta-read now reads each subcollection by per-user enumeration — it lists the user's own parent docs (medications, goals, goalChatThreads, nutritionDays, goals/phases, workoutPrograms) and runs a COLLECTION-scoped `<leaf>.orderBy(updatedAt ASC) [+ updatedAt >= cursor range]` query on each child collection directly (including workoutPrograms/{id}/scheduled). That is served by the automatic COLLECTION-scope single-field `updatedAt` index, so the previous COLLECTION_GROUP `updatedAt` overrides on adherence/history/phases/steps/messages/entries/scheduled are no longer required and were removed (no collectionGroup(updatedAt) query remains anywhere). Top-level per-user collections (bloodReadings, medications, goals, locations, workoutPrograms, etc.) likewise need NO composite/override: their delta query is the same pure single-field updatedAt order+range the automatic COLLECTION-scope index already serves (tombstones are emitted, so no extra equality filter on syncStatus is combined in the delta path). The remaining overrides below back unrelated collectionGroup queries (steps metric/kind, medications.drugId) and array-contains (locations.equipmentIds).",
       "collectionGroup": "locations",
       "fieldPath": "equipmentIds",
       "indexes": [

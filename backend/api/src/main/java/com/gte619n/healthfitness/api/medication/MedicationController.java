@@ -1,7 +1,10 @@
 package com.gte619n.healthfitness.api.medication;
 
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
+import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.medication.*;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -27,19 +30,25 @@ public class MedicationController {
     private final MedicationHistoryRepository history;
     private final AdherenceRepository adherence;
     private final DrugRepository drugs;
+    private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public MedicationController(
         CurrentUserProvider currentUser,
         MedicationRepository medications,
         MedicationHistoryRepository history,
         AdherenceRepository adherence,
-        DrugRepository drugs
+        DrugRepository drugs,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
         this.medications = medications;
         this.history = history;
         this.adherence = adherence;
         this.drugs = drugs;
+        this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     /**
@@ -131,13 +140,14 @@ public class MedicationController {
      * 2. With customName (no drugId) - creates a custom medication entry
      */
     @PostMapping
-    public ResponseEntity<MedicationResponse> create(@RequestBody CreateMedicationRequest body) {
+    public ResponseEntity<WriteResult<MedicationResponse>> create(@RequestBody CreateMedicationRequest body) {
         validateCreateRequest(body);
 
         String userId = currentUser.get().userId();
-        String medicationId = UUID.randomUUID().toString();
+        // Client-minted id + idempotent replay (IMPL-AND-20 D7).
+        String medicationId = syncWrite.resolveId(body.id());
 
-        Drug drug = null;
+        Drug resolvedDrug = null;
         final String drugIdFromRequest = body.drugId();
         final String customName = body.customName();
         String drugId;
@@ -147,10 +157,10 @@ public class MedicationController {
         if (drugIdFromRequest != null && !drugIdFromRequest.isBlank()) {
             // Mode 1: Link to existing drug in catalog
             drugId = drugIdFromRequest;
-            drug = drugs.findById(drugId)
+            resolvedDrug = drugs.findById(drugId)
                 .orElseThrow(() -> new IllegalArgumentException("Drug not found: " + drugIdFromRequest));
-            if (unit == null) unit = drug.defaultUnit();
-            if (correlatedMarkers == null) correlatedMarkers = drug.suggestedMarkers();
+            if (unit == null) unit = resolvedDrug.defaultUnit();
+            if (correlatedMarkers == null) correlatedMarkers = resolvedDrug.suggestedMarkers();
         } else if (customName != null && !customName.isBlank()) {
             // Mode 2: Custom medication entry
             // No drugId needed - store customName directly
@@ -161,32 +171,52 @@ public class MedicationController {
             throw new IllegalArgumentException("Either drugId or customName is required");
         }
 
+        final Drug drug = resolvedDrug;
+        final String finalDrugId = drugId;
+        final String finalUnit = unit;
+        final List<String> finalMarkers = correlatedMarkers;
         LocalDate startDate = body.startDate() != null ? body.startDate() : LocalDate.now();
-        Medication medication = new Medication(
-            userId,
-            medicationId,
-            drugId,
-            customName,
-            MedicationStatus.ACTIVE,
-            body.dose(),
-            unit,
-            body.frequency(),
-            body.timeSlots() != null ? body.timeSlots() : List.of(),
-            body.protocolId(),
-            body.notes(),
-            body.prescribedBy(),
-            startDate,
-            null,   // endDate
-            null,   // discontinueReason
-            null,   // discontinueNotes
-            correlatedMarkers,
-            List.of(DosagePeriod.initial(body.dose(), unit, startDate)),
-            Instant.now(),
-            Instant.now()
-        );
 
-        medications.save(medication);
-        return ResponseEntity.status(201).body(MedicationResponse.from(medication, drug));
+        WriteResult<MedicationResponse> response = syncWrite.idempotentCreate(
+            "medications:create",
+            userId,
+            () -> {
+                Medication medication = new Medication(
+                    userId,
+                    medicationId,
+                    finalDrugId,
+                    customName,
+                    MedicationStatus.ACTIVE,
+                    body.dose(),
+                    finalUnit,
+                    body.frequency(),
+                    body.timeSlots() != null ? body.timeSlots() : List.of(),
+                    body.protocolId(),
+                    body.notes(),
+                    body.prescribedBy(),
+                    startDate,
+                    null,   // endDate
+                    null,   // discontinueReason
+                    null,   // discontinueNotes
+                    finalMarkers,
+                    List.of(DosagePeriod.initial(body.dose(), finalUnit, startDate)),
+                    Instant.now(),
+                    Instant.now()
+                );
+                medications.save(medication);
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "medications");
+                return new SyncWriteContext.Created<>(
+                    medicationId,
+                    WriteResult.of(
+                        MedicationResponse.from(medication, drug), medication.updatedAt()));
+            },
+            id -> medications.findById(userId, id)
+                .map(m -> WriteResult.of(
+                    MedicationResponse.from(
+                        m, m.drugId() == null ? null : drugs.findById(m.drugId()).orElse(null)),
+                    m.updatedAt()))
+        );
+        return ResponseEntity.status(201).body(response);
     }
 
     /**
@@ -194,7 +224,7 @@ public class MedicationController {
      * If dose changes, creates a history entry.
      */
     @PutMapping("/{medicationId}")
-    public ResponseEntity<MedicationResponse> update(
+    public ResponseEntity<WriteResult<MedicationResponse>> update(
         @PathVariable String medicationId,
         @RequestBody UpdateMedicationRequest body
     ) {
@@ -286,8 +316,10 @@ public class MedicationController {
         );
 
         medications.save(updated);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "medications");
         Drug drug = drugs.findById(existing.drugId()).orElse(null);
-        return ResponseEntity.ok(MedicationResponse.from(updated, drug));
+        return ResponseEntity.ok(
+            WriteResult.of(MedicationResponse.from(updated, drug), updated.updatedAt()));
     }
 
     /**
@@ -296,7 +328,7 @@ public class MedicationController {
      * Also records a DOSE_CHANGE history entry.
      */
     @PostMapping("/{medicationId}/dosage")
-    public ResponseEntity<MedicationResponse> changeDose(
+    public ResponseEntity<WriteResult<MedicationResponse>> changeDose(
         @PathVariable String medicationId,
         @RequestBody ChangeDoseRequest body
     ) {
@@ -349,15 +381,17 @@ public class MedicationController {
             Instant.now()
         );
         medications.save(updated);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "medications");
         Drug drug = drugs.findById(existing.drugId()).orElse(null);
-        return ResponseEntity.ok(MedicationResponse.from(updated, drug));
+        return ResponseEntity.ok(
+            WriteResult.of(MedicationResponse.from(updated, drug), updated.updatedAt()));
     }
 
     /**
      * Discontinue a medication.
      */
     @PostMapping("/{medicationId}/discontinue")
-    public ResponseEntity<MedicationResponse> discontinue(
+    public ResponseEntity<WriteResult<MedicationResponse>> discontinue(
         @PathVariable String medicationId,
         @RequestBody DiscontinueRequest body
     ) {
@@ -377,9 +411,11 @@ public class MedicationController {
         Medication discontinued =
             existing.discontinue(endDate, body.reason(), body.notes()).withDosagePeriods(closedPeriods);
         medications.save(discontinued);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "medications");
 
         Drug drug = drugs.findById(existing.drugId()).orElse(null);
-        return ResponseEntity.ok(MedicationResponse.from(discontinued, drug));
+        return ResponseEntity.ok(
+            WriteResult.of(MedicationResponse.from(discontinued, drug), discontinued.updatedAt()));
     }
 
     /**
@@ -388,7 +424,7 @@ public class MedicationController {
      * gap in the dose history for the pause.
      */
     @PostMapping("/{medicationId}/reactivate")
-    public ResponseEntity<MedicationResponse> reactivate(
+    public ResponseEntity<WriteResult<MedicationResponse>> reactivate(
         @PathVariable String medicationId,
         @RequestBody(required = false) ReactivateRequest body
     ) {
@@ -410,9 +446,11 @@ public class MedicationController {
 
         Medication reactivated = existing.reactivate(resumeDate, reopened);
         medications.save(reactivated);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "medications");
 
         Drug drug = drugs.findById(existing.drugId()).orElse(null);
-        return ResponseEntity.ok(MedicationResponse.from(reactivated, drug));
+        return ResponseEntity.ok(
+            WriteResult.of(MedicationResponse.from(reactivated, drug), reactivated.updatedAt()));
     }
 
     /**
@@ -422,6 +460,7 @@ public class MedicationController {
     public ResponseEntity<Void> delete(@PathVariable String medicationId) {
         String userId = currentUser.get().userId();
         medications.delete(userId, medicationId);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "medications");
         return ResponseEntity.noContent().build();
     }
 
@@ -443,6 +482,7 @@ public class MedicationController {
     // Request DTOs as inner records
 
     public record CreateMedicationRequest(
+        String id,                  // optional client-minted UUID (IMPL-AND-20 D7); null ⇒ server-generated
         String drugId,
         String customName,
         Double dose,

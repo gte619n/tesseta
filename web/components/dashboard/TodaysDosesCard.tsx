@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 import { TIME_WINDOW_LABELS } from "@/lib/types/medication";
@@ -17,6 +17,15 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
 
   const takenCount = doses.filter(d => d.taken).length;
   const totalCount = doses.length;
+  const allTaken = totalCount > 0 && takenCount === totalCount;
+
+  // Once every dose is checked off the card collapses to a compact "Complete"
+  // header; the chevron expands it back. Re-completing re-collapses it.
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (allTaken) setExpanded(false);
+  }, [allTaken]);
+  const showDoses = !allTaken || expanded;
 
   function handleToggle(medicationId: string, window: TimeWindow) {
     const key = `${medicationId}:${window}`;
@@ -49,18 +58,48 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
               →
             </span>
           </Link>
-          {totalCount > 0 && (
-            <span className="font-mono text-[11px] text-tertiary">
-              {takenCount}/{totalCount}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {allTaken ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-good">
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Complete
+              </span>
+            ) : (
+              totalCount > 0 && (
+                <span className="font-mono text-[11px] text-tertiary">
+                  {takenCount}/{totalCount}
+                </span>
+              )
+            )}
+            {allTaken && (
+              <button
+                type="button"
+                onClick={() => setExpanded(v => !v)}
+                aria-label={expanded ? "Collapse doses" : "Expand doses"}
+                aria-expanded={expanded}
+                className="flex h-5 w-5 items-center justify-center text-tertiary hover:text-primary"
+              >
+                <svg
+                  className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {doses.length === 0 ? (
           <p className="mt-3 text-[13px] text-secondary">
             No scheduled doses for today.
           </p>
-        ) : (
+        ) : showDoses ? (
           <div className="mt-3 space-y-1.5">
             {doses.map((dose) => {
               const key = `${dose.medicationId}:${dose.window}`;
@@ -107,7 +146,7 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
               );
             })}
           </div>
-        )}
+        ) : null}
       </div>
     );
   }

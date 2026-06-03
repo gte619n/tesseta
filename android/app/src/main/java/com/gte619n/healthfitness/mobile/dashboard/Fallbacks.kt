@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SignalCellular4Bar
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material.icons.outlined.SportsGymnastics
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -36,6 +37,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 // the implementations diverge.
 object DashboardIcons {
     val Scale: ImageVector = Icons.Outlined.MonitorWeight
+    // "Body" (composition) tile — a figure rather than a scale/dumbbell.
+    val Body: ImageVector = Icons.Outlined.SportsGymnastics
     val ActivityHeartbeat: ImageVector = Icons.Outlined.MonitorHeart
     val Heart: ImageVector = Icons.Outlined.FavoriteBorder
     val Flame: ImageVector = Icons.Outlined.LocalFireDepartment
@@ -101,7 +104,9 @@ data class Vital(
 object DashboardFlags {
     const val showVitalsFixtures = true       // HRV / RHR / Readiness
     const val showRecentFeedFixtures = true
-    const val showTodayCardFixtures = true    // calories / macros / workout line
+    // Today card: calories + macros are live (DashboardViewModel.nutrition).
+    // Only the workout line is still fixture-backed.
+    const val showTodayCardFixtures = true    // workout line only
 }
 
 // IMPL-AND-01: remaining static content the dashboard falls back to for the
@@ -121,8 +126,8 @@ object DashboardFallbacks {
 
     val vitals = listOf(
         Vital(
-            label = "Weight",
-            icon = DashboardIcons.Scale,
+            label = "Body",
+            icon = DashboardIcons.Body,
             value = "189.2",
             unit = "lb",
             delta = VitalDelta(ArrowDir.Down, "0.4", "7d", Tone.Good),

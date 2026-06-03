@@ -1,11 +1,15 @@
 package com.gte619n.healthfitness.persistence.medication;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.medication.AdherenceLog;
 import com.gte619n.healthfitness.core.medication.AdherenceRepository;
 import com.gte619n.healthfitness.core.medication.DoseLog;
 import com.gte619n.healthfitness.core.medication.TimeWindow;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.CollectionGroup;
@@ -13,6 +17,7 @@ import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
+import com.google.cloud.firestore.SetOptions;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,7 +47,7 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
         DocumentSnapshot snapshot = await(collection(userId, medicationId)
             .document(date.toString())
             .get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toAdherenceLog(userId, medicationId, snapshot));
     }
 
@@ -53,7 +58,10 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
             .whereLessThanOrEqualTo("date", to.toString())
             .orderBy("date", Query.Direction.DESCENDING)
             .get()).getDocuments();
-        return docs.stream().map(d -> toAdherenceLog(userId, medicationId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toAdherenceLog(userId, medicationId, d))
+            .toList();
     }
 
     @Override
@@ -80,6 +88,8 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
 
     @Override
     public void save(AdherenceLog log) {
+        // set() (overwrite) re-stamps syncStatus=ACTIVE, so re-saving a log
+        // for a previously-deleted date correctly resurrects it.
         Map<String, Object> body = toBody(log);
         await(collection(log.userId(), log.medicationId())
             .document(log.date().toString())
@@ -88,7 +98,12 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
 
     @Override
     public void deleteByDate(String userId, String medicationId, LocalDate date) {
-        await(collection(userId, medicationId).document(date.toString()).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId, medicationId).document(date.toString())
+            .set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId, String medicationId) {
@@ -127,6 +142,7 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
         Map<String, Object> body = new HashMap<>();
         body.put("date", log.date().toString());
         body.put("notes", log.notes());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
 
         List<Map<String, Object>> dosesMap = new ArrayList<>();
         if (log.doses() != null) {

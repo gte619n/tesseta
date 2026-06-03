@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.persistence.blood;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
 import com.gte619n.healthfitness.core.blood.BloodMarker;
 import com.gte619n.healthfitness.core.blood.BloodReading;
+import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -39,7 +42,7 @@ public class BloodReadingRepository implements com.gte619n.healthfitness.core.bl
     @Override
     public Optional<BloodReading> findById(String userId, String readingId) {
         DocumentSnapshot snapshot = await(collection(userId).document(readingId).get());
-        if (!snapshot.exists()) return Optional.empty();
+        if (!snapshot.exists() || isArchived(snapshot)) return Optional.empty();
         return Optional.of(toReading(userId, snapshot));
     }
 
@@ -49,20 +52,29 @@ public class BloodReadingRepository implements com.gte619n.healthfitness.core.bl
             .orderBy("sampleDate", Query.Direction.DESCENDING)
             .limit(500)
             .get()).getDocuments();
-        return docs.stream().map(d -> toReading(userId, d)).toList();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .map(d -> toReading(userId, d))
+            .toList();
     }
 
     @Override
     public Optional<BloodReading> findLatestByMarker(String userId, BloodMarker marker) {
-        // Indexed single-doc read: marker ASC, sampleDate DESC composite
-        // index (declared in infra/firestore/firestore.indexes.json).
+        // Indexed read: marker ASC, sampleDate DESC composite index (declared
+        // in infra/firestore/firestore.indexes.json). Fetch a small window
+        // rather than limit(1) so a freshly-archived newest row doesn't mask
+        // an older live reading (tombstones are filtered in application code
+        // per D13 — inequality filters would drop legacy docs lacking the
+        // syncStatus field).
         List<QueryDocumentSnapshot> docs = await(collection(userId)
             .whereEqualTo("marker", marker.name())
             .orderBy("sampleDate", Query.Direction.DESCENDING)
-            .limit(1)
+            .limit(20)
             .get()).getDocuments();
-        if (docs.isEmpty()) return Optional.empty();
-        return Optional.of(toReading(userId, docs.get(0)));
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .findFirst()
+            .map(d -> toReading(userId, d));
     }
 
     @Override
@@ -75,7 +87,13 @@ public class BloodReadingRepository implements com.gte619n.healthfitness.core.bl
 
     @Override
     public void delete(String userId, String readingId) {
-        await(collection(userId).document(readingId).delete());
+        // Soft-delete (tombstone) per IMPL-AND-20 D2: never hard-delete the
+        // doc; flip syncStatus to ARCHIVED and bump the sync cursor so the
+        // delta API can tell offline clients to drop the row.
+        Map<String, Object> updates = new HashMap<>();
+        updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+        updates.put("updatedAt", serverTimestamp());
+        await(collection(userId).document(readingId).set(updates, SetOptions.merge()));
     }
 
     private CollectionReference collection(String userId) {
@@ -90,6 +108,7 @@ public class BloodReadingRepository implements com.gte619n.healthfitness.core.bl
         body.put("sampleDate", r.sampleDate().toString());
         body.put("labSource", r.labSource());
         body.put("notes", r.notes());
+        body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());

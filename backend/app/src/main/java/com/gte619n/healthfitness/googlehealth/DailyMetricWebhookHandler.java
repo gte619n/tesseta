@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.goals.eval.MetricKey;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
 import com.gte619n.healthfitness.core.metric.DailyMetric;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataPoint;
 import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataType;
@@ -37,6 +38,7 @@ public class DailyMetricWebhookHandler {
     private final AccessTokenService tokens;
     private final GoogleHealthClient googleHealth;
     private final MetricChangedPublisher metricChangedPublisher;
+    private final SyncChangeNotifier syncNotifier;
 
     public DailyMetricWebhookHandler(
         UserRepository users,
@@ -44,7 +46,8 @@ public class DailyMetricWebhookHandler {
         DeviceSyncRepository deviceSyncs,
         AccessTokenService tokens,
         GoogleHealthClient googleHealth,
-        MetricChangedPublisher metricChangedPublisher
+        MetricChangedPublisher metricChangedPublisher,
+        SyncChangeNotifier syncNotifier
     ) {
         this.users = users;
         this.dailyMetrics = dailyMetrics;
@@ -52,6 +55,7 @@ public class DailyMetricWebhookHandler {
         this.tokens = tokens;
         this.googleHealth = googleHealth;
         this.metricChangedPublisher = metricChangedPublisher;
+        this.syncNotifier = syncNotifier;
     }
 
     public void handle(Notification notification) {
@@ -85,6 +89,12 @@ public class DailyMetricWebhookHandler {
             deviceSyncs.recordSync(userId, platform, now);
         }
         log.info("Daily-metric UPSERT user={} type={} stored={}", userId, n.dataType, points.size());
+
+        // Server-originated change (not from a device) — fan out to ALL of the
+        // user's tokens (originDeviceId=null, IMPL-AND-20 D18) so every device pulls.
+        if (!points.isEmpty()) {
+            syncNotifier.changed(userId, null, "dailyMetrics");
+        }
 
         MetricKey key = metricKeyFor(n.dataType);
         if (key != null && !points.isEmpty()) {

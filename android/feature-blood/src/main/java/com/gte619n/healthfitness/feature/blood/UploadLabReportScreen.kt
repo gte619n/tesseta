@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.feature.blood.components.UploadPhaseStepper
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.sync.OfflineNotice
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -38,6 +39,7 @@ fun UploadLabReportScreen(
     viewModel: UploadLabReportViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    val online by viewModel.isOnline.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
     ) { uri: Uri? ->
@@ -54,12 +56,34 @@ fun UploadLabReportScreen(
         viewModel.upload(name, bytes)
     }
 
-    LaunchedEffect(Unit) { picker.launch("application/pdf") }
+    // D17: the PDF extraction is an online-only AI flow — only open the picker
+    // when online; offline shows a "needs connection" affordance and queues nothing.
+    LaunchedEffect(online) { if (online) picker.launch("application/pdf") }
 
     val ui by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(ui) {
         (ui as? UploadLabReportViewModel.UiState.Complete)?.let { onComplete(it.report.reportId) }
+    }
+
+    if (!online) {
+        HfCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                HfScreenHeader(
+                    title = "Upload lab PDF",
+                    subtitle = "Extract markers from a report",
+                    onBack = onBack,
+                )
+                Spacer(Modifier.height(12.dp))
+                OfflineNotice(
+                    message = "Reading a lab PDF uses AI and needs an internet connection.",
+                )
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+            }
+        }
+        return
     }
 
     UploadLabReportSheet(state = ui, onBack = onBack, onDismiss = { viewModel.cancel(); onDismiss() })

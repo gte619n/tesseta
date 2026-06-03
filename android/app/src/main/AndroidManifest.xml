@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -42,6 +43,32 @@
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/auth/" />
+            </intent-filter>
+        </service>
+
+        <!-- IMPL-AND-20 (Phase 4): disable WorkManager's default initializer so
+             the Hilt worker factory (HealthFitnessApp implements
+             Configuration.Provider) supplies dependencies to the @HiltWorker sync
+             workers. Removing this node lets WorkManager auto-init without Hilt. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!-- IMPL-AND-20 (Phase 6): FCM client. Receives silent data-only
+             {type:sync} messages and enqueues an expedited WorkManager pull.
+             Not exported; the framework delivers MESSAGING_EVENT internally. -->
+        <service
+            android:name=".push.HfMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
 

@@ -67,7 +67,12 @@ class NutritionCaptureViewModel @Inject constructor(
     private val capture: NutritionCaptureRepository,
     private val nutrition: NutritionRepository,
     private val snackbar: SnackbarController,
+    connectivity: com.gte619n.healthfitness.data.net.Connectivity,
 ) : ViewModel() {
+
+    // IMPL-AND-20 (Phase 6, D17): meal-photo analysis is an online-only AI flow.
+    // The capture screen disables the shutter + shows "needs connection" offline.
+    val isOnline: StateFlow<Boolean> = connectivity.isOnline
 
     private val _state = MutableStateFlow(NutritionCaptureUiState())
     val state: StateFlow<NutritionCaptureUiState> = _state.asStateFlow()
