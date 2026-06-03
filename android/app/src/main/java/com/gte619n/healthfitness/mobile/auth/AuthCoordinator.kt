@@ -26,7 +26,12 @@ class AuthCoordinator(
             _state.value = AuthState.SignedOut
             return
         }
-        // Cached token still fresh — go straight to SignedIn, refresh on next 401.
+        // Cached token still fresh — go straight to SignedIn and stop. Do NOT
+        // call silentRefresh() here: CredentialManager.getCredential() surfaces
+        // the "Signing you in…" UI even on a silent/auto-select request, so
+        // refreshing on every launch makes that toast appear every launch. The
+        // token is good for ~1h; TokenAuthenticator refreshes it on the first
+        // 401, which is the only time we actually need a new one.
         val cachedToken = snapshot.idToken
         if (snapshot.isFresh() && cachedToken != null) {
             _state.value = AuthState.SignedIn(
@@ -35,9 +40,9 @@ class AuthCoordinator(
                 displayName = null,
                 idToken = cachedToken,
             )
-            // Best-effort silent refresh so subsequent calls have a fresh token.
-            _state.value = repo.silentRefresh().fallbackTo(_state.value)
         } else {
+            // Cache empty or expired — this is the one place a launch-time
+            // refresh is warranted, so the first request has a valid token.
             _state.value = repo.silentRefresh()
         }
     }
@@ -51,7 +56,4 @@ class AuthCoordinator(
         repo.signOut()
         _state.value = AuthState.SignedOut
     }
-
-    private fun AuthState.fallbackTo(other: AuthState): AuthState =
-        if (this is AuthState.Failed || this is AuthState.SignedOut) other else this
 }

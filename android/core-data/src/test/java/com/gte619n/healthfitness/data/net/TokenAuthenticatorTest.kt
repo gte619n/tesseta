@@ -2,11 +2,8 @@ package com.gte619n.healthfitness.data.net
 
 import com.gte619n.healthfitness.data.auth.AuthState
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
-import com.gte619n.healthfitness.data.auth.IdTokenCache
-import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -23,15 +20,12 @@ class TokenAuthenticatorTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repo: GoogleAuthRepository
-    private lateinit var cache: IdTokenCache
 
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
         repo = mockk(relaxed = true)
-        cache = mockk(relaxed = true)
-        coEvery { cache.write(any(), any()) } just Runs
     }
 
     @After
@@ -59,7 +53,7 @@ class TokenAuthenticatorTest {
         server.enqueue(MockResponse().setResponseCode(401))
         server.enqueue(MockResponse().setResponseCode(200).setBody("ok"))
 
-        val authenticator = TokenAuthenticator(repo, cache)
+        val authenticator = TokenAuthenticator(repo)
         val client = clientWith(authenticator)
 
         val request = Request.Builder()
@@ -81,8 +75,9 @@ class TokenAuthenticatorTest {
         assertEquals("Bearer new-token", second.getHeader("Authorization"))
         assertEquals("1", second.getHeader("X-HF-Auth-Retry"))
 
+        // silentRefresh() owns persistence (with the real exp); the
+        // authenticator must not write the token itself.
         coVerify(exactly = 1) { repo.silentRefresh() }
-        coVerify(exactly = 1) { cache.write("new-token", 0L) }
     }
 
     @Test
@@ -91,7 +86,7 @@ class TokenAuthenticatorTest {
 
         server.enqueue(MockResponse().setResponseCode(401))
 
-        val authenticator = TokenAuthenticator(repo, cache)
+        val authenticator = TokenAuthenticator(repo)
         val client = clientWith(authenticator)
 
         val request = Request.Builder()
@@ -110,7 +105,7 @@ class TokenAuthenticatorTest {
 
     @Test
     fun `request already tagged returns null without refreshing`() {
-        val authenticator = TokenAuthenticator(repo, cache)
+        val authenticator = TokenAuthenticator(repo)
 
         val taggedRequest = Request.Builder()
             .url(server.url("/data"))

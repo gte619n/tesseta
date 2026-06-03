@@ -64,8 +64,7 @@ object NetworkModule {
     @Singleton
     fun provideTokenAuthenticator(
         repo: GoogleAuthRepository,
-        cache: IdTokenCache,
-    ): TokenAuthenticator = TokenAuthenticator(repo, cache)
+    ): TokenAuthenticator = TokenAuthenticator(repo)
 
     @Provides
     @Singleton
