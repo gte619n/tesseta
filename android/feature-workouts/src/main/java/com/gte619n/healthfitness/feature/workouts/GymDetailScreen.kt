@@ -35,7 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.feature.workouts.ui.AmenityChipGrid
 import com.gte619n.healthfitness.feature.workouts.ui.DeleteLocationButton
-import com.gte619n.healthfitness.feature.workouts.ui.EquipmentRow
+import com.gte619n.healthfitness.feature.workouts.ui.EquipmentTileGrid
 import com.gte619n.healthfitness.feature.workouts.ui.HoursMatrix
 import com.gte619n.healthfitness.feature.workouts.ui.SetDefaultButton
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
@@ -55,7 +55,6 @@ fun GymDetailScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var showAddEquipment by remember { mutableStateOf(false) }
-    var overrideEquipmentId by remember { mutableStateOf<String?>(null) }
 
     Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).background(Hf.colors.canvas)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -147,14 +146,11 @@ fun GymDetailScreen(
                         if (state.equipment.isEmpty()) {
                             Text("No equipment yet.", style = Hf.type.bodySm, color = Hf.colors.muted)
                         } else {
-                            state.equipment.forEach { equipment ->
-                                EquipmentRow(
-                                    equipment = equipment,
-                                    hasOverride = location.equipmentSpecs.containsKey(equipment.equipmentId),
-                                    onTap = { overrideEquipmentId = equipment.equipmentId },
-                                    onRemove = { vm.removeEquipment(equipment.equipmentId) },
-                                )
-                            }
+                            EquipmentTileGrid(
+                                equipment = state.equipment,
+                                onRemove = { vm.removeEquipment(it) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
 
                         DeleteLocationButton(onConfirm = { vm.delete(onDeleted) })
@@ -175,15 +171,4 @@ fun GymDetailScreen(
         )
     }
 
-    overrideEquipmentId?.let { equipmentId ->
-        EquipmentOverrideSheet(
-            locationId = vm.locationId,
-            equipmentId = equipmentId,
-            onDismiss = { overrideEquipmentId = null },
-            onSaved = {
-                overrideEquipmentId = null
-                vm.refresh()
-            },
-        )
-    }
 }
