@@ -31,7 +31,7 @@ class GoogleHealthScopeRepository @Inject constructor(
 
     suspend fun requestHealthAuthorization(): HealthAuthFlow {
         val request = AuthorizationRequest.builder()
-            .setRequestedScopes(listOf(Scope(GoogleHealthScopes.METRICS_READ_ONLY)))
+            .setRequestedScopes(GoogleHealthScopes.ALL_READ_ONLY.map { Scope(it) })
             // forceCodeForRefreshToken = true is the GIS equivalent of the
             // web's prompt=consent: it forces a fresh consent so Google
             // issues a new refresh token even if the scope was granted before.
