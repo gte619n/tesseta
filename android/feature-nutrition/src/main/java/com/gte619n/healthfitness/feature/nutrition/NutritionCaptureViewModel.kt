@@ -192,6 +192,12 @@ class NutritionCaptureViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 capture.captureMeal(today, currentMeal().wire, jpeg)
+                // The capture POST creates the ANALYZING entry server-side only.
+                // Pull it into the local mirror now so it renders immediately on
+                // the Today screen and the settle-poll engages; without this the
+                // offline-first day() won't re-fetch a non-empty date and nothing
+                // shows. Best-effort — the entry still syncs later if this fails.
+                runCatching { nutrition.refreshDay(today) }
                 snackbar.show("Analyzing your photo…")
                 _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
                 _events.send(CaptureEvent.NavigateBack)
