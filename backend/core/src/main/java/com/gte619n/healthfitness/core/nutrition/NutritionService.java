@@ -2,6 +2,8 @@ package com.gte619n.healthfitness.core.nutrition;
 
 import com.gte619n.healthfitness.core.goals.eval.MetricKey;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +41,11 @@ public class NutritionService {
         // re-evaluate after every rollup save.
         MetricKey.NUTRITION_TARGET_MET_DAYS
     );
+
+    // A photo placeholder still ANALYZING past this age is presumed orphaned —
+    // its in-memory analysis task died with the instance (OOM/restart/deploy) and
+    // will never finish — so a day read fails it rather than spin forever.
+    private static final Duration ANALYSIS_STALE_AFTER = Duration.ofMinutes(5);
 
     private final NutritionDailyLogRepository repository;
     private final FoodEntryRepository entries;
@@ -335,6 +342,26 @@ public class NutritionService {
                 e.createdAt(), null);
             entries.save(failed);
         });
+    }
+
+    /**
+     * Self-heal orphaned photo placeholders: fail any entry that has been
+     * {@code ANALYZING} longer than {@link #ANALYSIS_STALE_AFTER}. The analysis
+     * runs in an in-memory task with no retry, so an instance OOM/restart/deploy
+     * mid-analysis leaves the entry ANALYZING forever. Called on the day-read
+     * path so it heals on the next fetch the user (or their poll) makes.
+     */
+    public void sweepStaleAnalyzing(String userId, LocalDate date) {
+        requireUser(userId);
+        requireDate(date);
+        Instant cutoff = Instant.now().minus(ANALYSIS_STALE_AFTER);
+        for (FoodEntry e : entries.findByDate(userId, date)) {
+            if (e.analysisStatus() == EntryAnalysisStatus.ANALYZING
+                && e.createdAt() != null
+                && e.createdAt().isBefore(cutoff)) {
+                markAnalysisFailed(userId, date, e.entryId());
+            }
+        }
     }
 
     /**
