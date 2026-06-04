@@ -19,10 +19,11 @@ import { BodyCompositionPrimaryDelta } from "@/components/dashboard/BodyComposit
 import { isAdmin } from "@/lib/admin";
 import { apiFetch, apiJson } from "@/lib/api";
 import { fetchDailyMetrics } from "@/lib/daily-metrics-api";
-import { recent, todayHeader, vitals, type Vital } from "@/lib/fixtures/dashboard";
+import { LiveDateline } from "@/components/dashboard/LiveDateline";
+import { loadRecentFeed } from "@/lib/recent-feed";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 import type { Reading } from "@/lib/types/body-composition";
-import { buildVital } from "@/lib/dashboard-vitals";
+import { buildVital, emptyVital, type Vital } from "@/lib/dashboard-vitals";
 import {
   DASHBOARD_BLOOD_MARKERS,
   type DashboardMarker,
@@ -99,7 +100,9 @@ export default async function DashboardPage() {
             </Suspense>
           </section>
 
-          <RecentFeed entries={recent} variant="desktop" />
+          <Suspense fallback={<RecentFeedSkeleton />}>
+            <RecentFeedSection />
+          </Suspense>
         </main>
       </div>
     </div>
@@ -124,7 +127,7 @@ async function WeightStatSection() {
   if (view?.weightStat) {
     return <WeightStatCard stat={view.weightStat} />;
   }
-  return vitals[0] ? <StatCard stat={vitals[0]} /> : null;
+  return <StatCard stat={emptyVital("Weight", "scale")} />;
 }
 
 async function DailyVitalsSection() {
@@ -168,6 +171,11 @@ async function TodaysDosesSection() {
   return <TodaysDosesCard doses={todaysDoses} logDose={logDose} compact />;
 }
 
+async function RecentFeedSection() {
+  const entries = await loadRecentFeed();
+  return <RecentFeed entries={entries} variant="desktop" />;
+}
+
 // ── Skeleton fallbacks (sized to match each card to avoid layout shift) ───
 
 // One StatCard cell. The real StatCard renders inside the 5-col grid; the
@@ -197,6 +205,12 @@ function BodyCompositionSkeleton() {
 }
 
 function BloodPanelSkeleton() {
+  return (
+    <div className="h-[220px] animate-pulse rounded-[10px] border-[0.5px] border-border-default bg-surface" />
+  );
+}
+
+function RecentFeedSkeleton() {
   return (
     <div className="h-[220px] animate-pulse rounded-[10px] border-[0.5px] border-border-default bg-surface" />
   );
@@ -346,11 +360,8 @@ async function loadDailyMetrics(): Promise<DailyVitals> {
   // Oldest → newest so "latest" is the final element.
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
 
-  // HRV and Resting HR fall back to fixtures; Steps/Sleep render a "—" tile.
-  // From the fixtures array: [0]=Weight, [1]=HRV, [2]=Resting HR.
-  const hrvFixture = vitals[1]!;
-  const rhrFixture = vitals[2]!;
-
+  // Every tile renders a "—" placeholder when the user has no data for it
+  // (no wearable connected yet) rather than fake numbers.
   return {
     restingHr: buildVital(sorted, {
       field: "restingHeartRate",
@@ -360,7 +371,7 @@ async function loadDailyMetrics(): Promise<DailyVitals> {
       higherIsBetter: false,
       format: (v) => String(Math.round(v)),
       formatDelta: (d) => String(Math.round(d)),
-      emptyFixture: rhrFixture,
+      emptyFixture: null,
     }),
     hrv: buildVital(sorted, {
       field: "hrvMs",
@@ -370,7 +381,7 @@ async function loadDailyMetrics(): Promise<DailyVitals> {
       higherIsBetter: true,
       format: (v) => String(Math.round(v)),
       formatDelta: (d) => String(Math.round(d)),
-      emptyFixture: hrvFixture,
+      emptyFixture: null,
     }),
     sleep: buildVital(sorted, {
       field: "sleepMinutes",
@@ -450,8 +461,7 @@ function TopBar() {
           Dashboard
         </h1>
         <div className="mt-[3px] font-mono text-[11px] tracking-[0.04em] text-tertiary tabular">
-          {todayHeader.weekday} · {todayHeader.date} · {todayHeader.time} ·{" "}
-          {todayHeader.tz}
+          <LiveDateline />
         </div>
       </div>
       <div className="flex items-center gap-[7px]">

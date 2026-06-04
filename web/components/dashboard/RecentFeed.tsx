@@ -1,4 +1,4 @@
-import type { LogEntry } from "@/lib/fixtures/dashboard";
+import type { LogEntry } from "@/lib/recent-feed";
 import { SectionTitle } from "./SectionTitle";
 
 type Variant = "desktop" | "foldable" | "phone";
@@ -38,6 +38,11 @@ export function RecentFeed({
           )
         ) : null}
       </div>
+      {entries.length === 0 ? (
+        <p className="m-0 py-2 font-mono text-[11px] text-tertiary">
+          No recent activity yet
+        </p>
+      ) : (
       <ul className="m-0 list-none p-0">
         {entries.map((e, i) => (
           <li
@@ -75,6 +80,7 @@ export function RecentFeed({
           </li>
         ))}
       </ul>
+      )}
     </div>
   );
 }

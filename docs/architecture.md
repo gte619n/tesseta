@@ -12,7 +12,7 @@ normalized data from the backend's REST API — never from Firestore directly.
 
 | Component | Stack | Deploy |
 |---|---|---|
-| `backend/` | Spring Boot 3.5, Java 21 (virtual threads), Gradle Kotlin DSL, multi-module | Cloud Run, `us-central1` |
+| `backend/` | Spring Boot 3.5, Java 21 (virtual threads), Gradle Kotlin DSL, single-module | Cloud Run, `us-central1` |
 | `web/` | Next.js 15 App Router, TypeScript strict, Tailwind v4, pnpm | Cloud Run, `us-central1` |
 | `android/` | Kotlin 2.0, Jetpack Compose, Material 3, multi-module (+ Wear OS) | Play (phone + wear share `applicationId`) |
 

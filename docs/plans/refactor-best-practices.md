@@ -17,34 +17,93 @@ three recurring patterns:
 3. **Docs drifting from reality** — most acute on Android (see the persistence
    note, now reconciled).
 
-## Implementation status (branch `claude/app-refactor-best-practices-7u6gy`)
+## Implementation status
 
-Worked top-down through the tiers. Every change below is build-verified
-(`./gradlew test`, `tsc --noEmit` + `eslint`) **except** Android, which has no
-SDK in the execution environment and is verified by inspection only.
+Two passes. The first (branch `claude/app-refactor-best-practices-7u6gy`,
+merged) worked top-down through the tiers. A second pass
+(`claude/refactoring-implementation-R9npk`) took on the structural items the
+first deferred: it added the `api` test slices, **collapsed the five Gradle
+modules into one**, normalized packages to `<layer>.<feature>`, ran a
+single-module de-dup batch, and **de-faked the dashboard** (real RecentFeed).
+
+Every change below is build-verified (`./gradlew test`; web: `tsc --noEmit` +
+`eslint` + `next build`) **except** Android, which has no SDK in the execution
+environment and is verified by inspection only. Web changes are not
+visually verified (no browser runtime here).
 
 **Done**
 - **Backend:** Firestore `await`+typed-exception helper; shared Gemini `Client`
   + GCS `Storage` beans; `google-api-client` catalog entry removed; dead
   `PlaceholderService` removed; `AdminCheckAspect` → config-driven
-  `@PreAuthorize` (+ aop starter dropped); `GlobalExceptionHandler` test added.
+  `@PreAuthorize` (+ aop starter dropped); `GlobalExceptionHandler` test added;
+  `@WebMvcTest` slices added (Backend #6 — `WhoAmI`/`Device`/`BodyComposition`
+  controllers, ×9 tests).
+- **Backend — collapsed the 5-module Gradle build into a single module**
+  (supersedes #5). The `app`/`api`/`core`/`persistence`/`integrations` split was
+  internal-only (nothing is published; Android/web talk to it over HTTP), so its
+  one real payoff was *compile-time* enforcement of the layering — not worth the
+  ceremony for a single non-shared Cloud Run deployable. Now one
+  `build.gradle.kts`, all source under `src/`, package names kept (`…​.api`,
+  `…​.core`, …) so the layering survives as **convention** (no enforcement, by
+  explicit choice). This also dissolves #5's blocker: the integration-dependent
+  feature services that couldn't move to `core` (cycle) no longer need a home
+  decision. Dockerfile/dev.sh/README/CLAUDE.md updated; `./gradlew test` green
+  (377 tests). One latent flake surfaced: collapsing the five per-module test
+  JVMs into one widened a pre-existing MockMvc SSE race (the streaming virtual
+  thread vs. `asyncDispatch`'s Spring Security header writers over the
+  non-thread-safe `MockHttpServletResponse`). Fixed at the root by routing all
+  five SSE controllers through one `SseStreamer` seam (prod: virtual thread —
+  unchanged; tests: synchronous, so the stream finishes before dispatch). Also
+  collapses the duplicated `Thread.startVirtualThread` idiom. Verified
+  deterministic across repeated full-suite runs.
+- **Backend — normalized packages to `<layer>.<feature>`** (completes #5's
+  intent without modules). The codebase was already ~95% `<layer>.<feature>`;
+  this sorted the ~18 stray feature files into their existing homes and deleted
+  the `.app.*` root: controllers/integration-services → `api.<feature>` (`dexa`,
+  `location`, `bloodtest`, `medication`, `googlehealth`), `FutureWorkoutsParser`
+  → `core.workoutimport`, batch jobs → root `jobs`. Convention now documented in
+  `backend/CLAUDE.md`: `core.<feature>` = domain + pure-domain services;
+  `api.<feature>` = controllers, DTOs, and the integration-orchestrating service.
+  `./gradlew test` green.
+- **Backend — single-module de-dup batch** (unblocked by the collapse, all
+  build-verified): (1) deleted 4 duplicate in-memory test fakes that the module
+  walls had forced (`core.goals.eval` copies "couldn't reach the app-module
+  repos") — the `testsupport` versions are now the single source; (2) collapsed
+  ~14 hand-rolled `ObjectMapper`s into `config.JsonSupport.{WEB,LENIENT}` (the
+  read-only `integrations` parsers proved `NON_NULL`/JavaTime differences were
+  no-ops; `FutureWorkoutsParser`'s one-off SNAKE_CASE mapper kept); (3) extracted
+  the copy-pasted SSE `sendEvent` helper into `config.SseEvents` (unifies the two
+  chat controllers' send-and-error-handle, completing what `SseStreamer` started).
 - **Web:** `proxySseStream`; `send<T>` consolidation; `<ModalBackdrop>` (14
   modals); `<PdfUploadDropzone>`; shared chat stream-consumer + primitives;
   type/date-helper consolidation; `app/page.tsx` blood-markers + daily-vitals
   extracted (977→839).
+- **Web #6 — de-faked the dashboard + real RecentFeed.** The prod homepage was
+  shipping a fixture person's data (static "MAY 20" header, "Pull Day completed",
+  "189.2 lb") interleaved with real cards. Now: `TopBar` shows the user's live
+  local date/time (`<LiveDateline>`, client-side so it's the user's clock, not
+  Cloud Run UTC); HRV/Resting-HR/Weight render a "—" tile when there's no data
+  (matching Steps/Sleep) instead of fake numbers; **RecentFeed is wired to real
+  activity** — `lib/recent-feed.ts` merges completed workouts + weigh-ins + sleep
+  + meds-taken-today, newest-first, with a "No recent activity yet" empty state.
+  Deleted `lib/fixtures/dashboard.ts` and the dead `TodayCard` (rendered nowhere);
+  `navItems`→`lib/nav.ts`, `Vital`→`lib/dashboard-vitals.ts`. `tsc`, `eslint`,
+  and `next build` all green (visual rendering unverified — no runtime here).
 - **Android:** docs reconciled; empty `:feature-chat` removed; inert
   wear-tiles/complications pruned; `MainActivity` lifecycle-aware collection.
 
 **Deliberately not done (with reasons recorded inline below)**
 - Backend #3 (metric-cache collapse) — design trade-off, not a clean win.
-- Backend #5 (app re-layering) — large multi-module move; warrants a dedicated PR.
-- Backend #7 (drop per-repo `firestore-enabled`) — conditional is load-bearing.
+- ~~Backend #5 (app re-layering)~~ — **superseded:** rather than re-layer across
+  modules, the whole multi-module split was collapsed into one module (see Done).
+- Backend #7 (drop per-repo `firestore-enabled`) — conditional is load-bearing
+  (and now moot as a *module* concern, but the conditional itself still gates the
+  Firestore beans for tests).
 - Backend #8 "dead Goals branches" — none found (read-path-resolvable).
-- Web #6 (remove dashboard fixtures) — a product decision (what to show with no
-  data), not a pure refactor.
 - Android #2/#4/#5/#8 (build-logic plugin, concrete repos, Hilt auth, screen
   splits) — substantive Kotlin/Gradle changes that need a real build to verify.
-- Backend #6 persistence mapper round-trips — need the Firestore emulator.
+- Backend #6 **persistence** mapper round-trips — need the Firestore emulator
+  (the `api`-module half of #6 is now done; see "Done" above).
 
 ## Cross-cutting themes (appear on 2+ platforms)
 
@@ -91,8 +150,13 @@ badly skewed — `api` has **0** tests, `persistence` has **1**.
 5. **Realign `app` with documented layering** `[med]` — controllers → `api`,
    services → `core`; unify the two package roots
    (`...healthfitness.app.*` vs `...healthfitness.*`).
-6. **Backfill tests** `[med]` — `@WebMvcTest` slices + a `GlobalExceptionHandler`
-   test in `api`; mapper round-trip tests (emulator) in `persistence`.
+6. ✅ **Backfilled `api` tests** `[med]` — `GlobalExceptionHandler` unit test plus
+   `@WebMvcTest` slices for the `WhoAmI`/`Device`/`BodyComposition` controllers
+   (request mapping, enum/`Instant` param binding, JSON serialization, and the
+   `ResponseStatusException` → `GlobalExceptionHandler` 400 path). The module had
+   no `@SpringBootConfiguration`, so `ApiTestApplication` (a minimal
+   `@SpringBootApplication`) anchors the slices. **Still open:** mapper
+   round-trip tests in `persistence` need the Firestore emulator.
 7. **~~Drop per-repo `@ConditionalOnProperty(firestore-enabled)` from the 31 impls~~**
    `[don't]` — **investigated: not safe as written.** The impls are
    component-scanned `@Repository` classes that inject the `Firestore` bean.

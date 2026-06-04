@@ -75,7 +75,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "==> Starting backend"
-(cd "${REPO_ROOT}/backend" && ./gradlew :app:bootRun --console=plain) &
+(cd "${REPO_ROOT}/backend" && ./gradlew bootRun --console=plain) &
 BACKEND_PID=$!
 
 echo "==> Starting web"

@@ -1,4 +1,3 @@
-import type { Vital } from "@/lib/fixtures/dashboard";
 import type { DailyMetric } from "@/lib/daily-metrics-api";
 
 // Builders for the dashboard's top-row daily-vitals tiles (Resting HR / HRV /
@@ -6,8 +5,39 @@ import type { DailyMetric } from "@/lib/daily-metrics-api";
 // these to the daily-metrics endpoint) stays in the page; this module holds the
 // pure per-tile builder and its sparkline helper.
 
+// One top-row stat tile's data (a StatCard's props). Formerly a fixture type.
+export type VitalDelta = {
+  direction: "up" | "down";
+  value: string;
+  window: string;
+  tone: "good" | "alert";
+};
+
+export type Vital = {
+  label: string;
+  icon: string;
+  value: string;
+  unit?: string;
+  delta?: VitalDelta;
+  pill?: { label: string; tone: "good" | "warn" | "alert" };
+  // 9-point sparkline path, normalized to a 48×20 viewBox.
+  sparkline: string;
+};
+
 const FLAT_SPARKLINE = "0,10 6,10 12,10 18,10 24,10 30,10 36,10 42,10 48,10";
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// A "no data yet" tile: the metric's label/icon with an em-dash value and a
+// flat sparkline — shown instead of fake numbers when a source has no readings.
+export function emptyVital(label: string, icon: string, unit?: string): Vital {
+  return {
+    label,
+    icon,
+    value: "—",
+    ...(unit ? { unit } : {}),
+    sparkline: FLAT_SPARKLINE,
+  };
+}
 
 export type MetricSpec = {
   field: "restingHeartRate" | "hrvMs" | "sleepMinutes" | "steps";

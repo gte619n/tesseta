@@ -1,4 +1,4 @@
-import type { Vital } from "@/lib/fixtures/dashboard";
+import type { Vital } from "@/lib/dashboard-vitals";
 import { Sparkline } from "./Sparkline";
 
 export function StatCard({ stat }: { stat: Vital }) {

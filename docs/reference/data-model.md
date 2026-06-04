@@ -11,7 +11,7 @@ directly — they call the backend REST API ([api-surface.md](api-surface.md)).
 route to a named database (e.g. `production`).
 
 **Shape conventions.** Domain types are Java **records** in the backend `core`
-module. Repository *interfaces* live in `core`; Firestore *implementations*
+package. Repository *interfaces* live in `core`; Firestore *implementations*
 live in `persistence` and are gated
 `@ConditionalOnProperty("app.persistence.firestore-enabled", matchIfMissing=true)`
 so tests swap in-memory fakes. Mapping is hand-written

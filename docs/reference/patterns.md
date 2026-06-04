@@ -92,7 +92,7 @@ A metric the resolver can't compute returns `MetricValue.unavailable()`
 
 ## Gemini usage
 
-All Gemini clients live in the backend `integrations` module (Google GenAI SDK,
+All Gemini clients live in the backend `integrations` package (Google GenAI SDK,
 `GEMINI_API_KEY`). The project rule (root `CLAUDE.md`): general work uses
 **`gemini-3.5-flash`**, image generation uses **`gemini-3.1-flash-image-preview`**,
 and no other model without an ADR.
