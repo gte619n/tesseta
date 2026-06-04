@@ -8,7 +8,7 @@ import com.gte619n.healthfitness.core.sync.SyncChangeReader;
 import com.gte619n.healthfitness.core.sync.SyncCursor;
 import com.gte619n.healthfitness.core.sync.SyncRecentWindow;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
-import com.google.api.core.ApiFuture;
+import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.Blob;
 import com.google.cloud.firestore.CollectionReference;
@@ -25,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -417,14 +416,4 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         return List.of(rest.split("/"));
     }
 
-    private static <T> T await(ApiFuture<T> future) {
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Firestore call interrupted", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Firestore call failed", e.getCause());
-        }
-    }
 }

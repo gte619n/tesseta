@@ -9,7 +9,7 @@ import com.gte619n.healthfitness.core.location.DayOfWeek;
 import com.gte619n.healthfitness.core.location.HoursSlot;
 import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
-import com.google.api.core.ApiFuture;
+import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
@@ -24,7 +24,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
@@ -236,14 +235,4 @@ public class LocationRepository implements com.gte619n.healthfitness.core.locati
         return result;
     }
 
-    private static <T> T await(ApiFuture<T> future) {
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Firestore call interrupted", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Firestore call failed", e.getCause());
-        }
-    }
 }
