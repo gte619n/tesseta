@@ -3,7 +3,6 @@ package com.gte619n.healthfitness.integrations.exercise;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import com.gte619n.healthfitness.core.exercise.DemoPhase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +22,8 @@ public class ExerciseMediaStorage {
     private final Storage storage;
     private final String bucket;
 
-    public ExerciseMediaStorage(@Value("${app.exercises.bucket}") String bucket) {
-        this.storage = StorageOptions.getDefaultInstance().getService();
+    public ExerciseMediaStorage(Storage storage, @Value("${app.exercises.bucket}") String bucket) {
+        this.storage = storage;
         this.bucket = bucket;
     }
 

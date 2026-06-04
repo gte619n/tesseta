@@ -3,7 +3,6 @@ package com.gte619n.healthfitness.integrations.medication;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,9 +30,10 @@ public class DrugImageStorage {
     private final String bucket;
 
     public DrugImageStorage(
+        Storage storage,
         @Value("${app.medications.bucket}") String bucket
     ) {
-        this.storage = StorageOptions.getDefaultInstance().getService();
+        this.storage = storage;
         this.bucket = bucket;
     }
 

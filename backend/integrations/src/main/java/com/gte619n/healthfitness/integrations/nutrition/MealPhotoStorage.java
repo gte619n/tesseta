@@ -3,7 +3,6 @@ package com.gte619n.healthfitness.integrations.nutrition;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoStore;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -38,8 +37,8 @@ public class MealPhotoStorage implements MealPhotoStore {
     private final Storage storage;
     private final String bucket;
 
-    public MealPhotoStorage(@Value("${app.nutrition.bucket}") String bucket) {
-        this.storage = StorageOptions.getDefaultInstance().getService();
+    public MealPhotoStorage(Storage storage, @Value("${app.nutrition.bucket}") String bucket) {
+        this.storage = storage;
         this.bucket = bucket;
     }
 
