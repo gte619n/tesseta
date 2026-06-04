@@ -17,8 +17,10 @@ Google ID token; the backend is a stateless OAuth2 JWT resource server.**
   (`CurrentUserProvider`) maps the `Authentication` → `CurrentUser` from the
   JWT claims. `DevHeaderAuthFilter` (`app.auth.dev-mode=true`, tests only)
   reads `X-Dev-User` and overrides `shouldNotFilterAsyncDispatch()` so SSE
-  works under dev auth. Admin endpoints are gated by `AdminCheckAspect`
-  (`@AdminOnly`) against a hardcoded `ADMIN_EMAILS` allow-list.
+  works under dev auth. Admin endpoints are gated by `@AdminOnly` — a composed
+  `@PreAuthorize("@adminAuthorizer.isAdmin()")` annotation (`@EnableMethodSecurity`
+  in `SecurityConfig`); `AdminAuthorizer` checks the caller's email against the
+  `app.admin.emails` allow-list (`ADMIN_EMAILS` env).
 - **Web** (`web/auth.ts`): Auth.js v5, Google provider only, JWT session
   (no DB), `maxAge` 1 year. The `jwt` callback rotates the Google `id_token`
   when within 60s of expiry; failure sets `error: "RefreshAccessTokenError"`.
@@ -95,6 +97,12 @@ All Gemini clients live in the backend `integrations` module (Google GenAI SDK,
 **`gemini-3.5-flash`**, image generation uses **`gemini-3.1-flash-image-preview`**,
 and no other model without an ADR.
 
+The feature services below share **one** `Client` bean (`GeminiConfig`,
+conditional on `app.gemini.api-key` so it's absent in tests; missing key in prod
+→ fail-fast) and select their model per-feature via `@Value`. The two equipment
+services keep their own client (they wire in test contexts where the shared bean
+is intentionally absent).
+
 | Job | Client | Model |
 |---|---|---|
 | Drug lookup (grounded) | `DrugLookupService` | `gemini-3.5-flash` |
@@ -112,10 +120,13 @@ LLM streaming uses **Server-Sent Events**, never WebSockets. The backend emits
 
 - **Web** can't use the native `EventSource` (GET-only) for these POST streams,
   so each browser request hits a Next API route under `app/api/**` that
-  re-attaches the bearer and pipes the raw upstream straight through
-  (`text/event-stream`, `X-Accel-Buffering: no`); `lib/sse-client.ts`
-  `readSseStream(body, onEvent, signal)` hand-parses the body. Flows: drug
-  lookup, goal chat, blood upload, DEXA upload.
+  re-attaches the bearer and pipes the raw upstream straight through. The route
+  handlers share `proxySseStream` (`lib/api.ts`), which sets the streaming
+  headers (`text/event-stream`, `X-Accel-Buffering: no`) once. On the client,
+  `lib/sse-client.ts` `readSseStream(body, onEvent, signal)` parses the body;
+  the two chat surfaces share `consumeChatStream` (`lib/chat-stream.ts`) and the
+  blood/DEXA uploads share `<PdfUploadDropzone>`. Flows: drug lookup, goal chat,
+  workout-program chat, blood upload, DEXA upload.
 - **Android** parses SSE in `core-data/.../net/Sse.kt` (read/call timeouts set
   to 0 for long server work). `SseClient` handles JSON-POST streams
   (`DrugLookupStreamClient`, `ChatSseClient` in `core-chat`); `MultipartSseClient`
@@ -177,3 +188,10 @@ Single-document `save`/`delete` stays a plain `await(...set/delete)` — don't
 wrap one write in a batch. Writes that must go through service-layer business
 logic per item (e.g. `ExerciseCatalogSeeder` → `ExerciseService.create`) are
 not batch candidates.
+
+Every Firestore repo blocks on the `ApiFuture` through the shared
+`FirestoreSupport.await(...)` helper (`persistence`), which converts gRPC
+failures/interruptions into a typed `FirestoreAccessException` (`core.error`).
+`GlobalExceptionHandler` switches on that exception (and its gRPC status) for a
+clean HTTP mapping — don't string-match Firestore error messages, and don't
+re-implement the future-await/try-catch per repo.

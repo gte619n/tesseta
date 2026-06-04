@@ -78,7 +78,7 @@ Two transport flags appear inline below:
 | `GET /api/equipment`, `GET /{id}`, `GET /categories` | Shared equipment catalog |
 | `POST·GET·DELETE /api/me/equipment…` | User-contributed equipment |
 
-## Admin (`/api/admin/**`, email-gated by `AdminCheckAspect`)
+## Admin (`/api/admin/**`, email-gated by `@AdminOnly` → `AdminAuthorizer` / `app.admin.emails`)
 | Area | Endpoints |
 |---|---|
 | Drugs | `GET·POST·PATCH·DELETE /admin/drugs…`, image-prompt / regenerate / `upload-image` **[multipart]** / select / delete-image, `merge-into/{targetId}` |
