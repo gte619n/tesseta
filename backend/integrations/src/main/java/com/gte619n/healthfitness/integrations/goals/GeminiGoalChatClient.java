@@ -43,14 +43,10 @@ public class GeminiGoalChatClient implements GoalChatClient {
     private final Tool tool;
 
     public GeminiGoalChatClient(
-        @Value("${app.goals.gemini-api-key:${GEMINI_API_KEY:}}") String apiKey,
+        Client client,
         @Value("${app.goals.gemini-model:gemini-3.5-pro}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY (app.goals.gemini-api-key) is required for Goals chat");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
 
         this.tool = Tool.builder()

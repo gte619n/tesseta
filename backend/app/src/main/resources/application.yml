@@ -57,6 +57,12 @@ app:
   # a no-op transport handles fan-out there.
   fcm:
     enabled: ${FCM_ENABLED:true}
+  gemini:
+    # Single shared Gemini API key (GEMINI_API_KEY secret -> env at deploy time;
+    # local dev reads the same var). All non-equipment Gemini services use one
+    # google-genai Client built from this — see GeminiConfig. The per-module
+    # `gemini-model` settings below still select the model per feature.
+    api-key: ${GEMINI_API_KEY:}
   googlehealth:
     api-base-url: https://health.googleapis.com/v4
     oauth-token-url: https://oauth2.googleapis.com/token

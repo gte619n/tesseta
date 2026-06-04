@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte619n.healthfitness.core.exercise.ExerciseMetadataEnricher;
 import com.gte619n.healthfitness.core.exercise.ExerciseMetadataEnricher.Enrichment;
 import com.gte619n.healthfitness.integrations.exercise.GeminiExerciseMetadataEnricher;
+import com.google.genai.Client;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -47,7 +48,7 @@ class WorkoutSeedEnrichmentPreviewTest {
     @Test
     void previewRealEnrichment() throws Exception {
         ExerciseMetadataEnricher enricher = new GeminiExerciseMetadataEnricher(
-            System.getenv("GEMINI_API_KEY"), "gemini-3.5-flash");
+            Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(), "gemini-3.5-flash");
 
         Map<String, Object> preview = new LinkedHashMap<>();
         preview.put("model", "gemini-3.5-flash");

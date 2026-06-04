@@ -123,14 +123,10 @@ public class DrugImageGenerator {
     private final HttpClient httpClient;
 
     public DrugImageGenerator(
-        @Value("${app.medications.gemini-api-key:}") String apiKey,
+        Client client,
         @Value("${app.medications.imagen-model}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY is required for image generation");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(FETCH_TIMEOUT)

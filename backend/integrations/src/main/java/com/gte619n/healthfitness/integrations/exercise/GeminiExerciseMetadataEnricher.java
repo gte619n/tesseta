@@ -74,13 +74,10 @@ public class GeminiExerciseMetadataEnricher implements ExerciseMetadataEnricher 
     private final ObjectMapper json;
 
     public GeminiExerciseMetadataEnricher(
-        @Value("${app.exercises.enrich-api-key:${app.exercises.gemini-api-key:${GEMINI_API_KEY:}}}") String apiKey,
+        Client client,
         @Value("${app.exercises.enrich-model:gemini-3.5-flash}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("GEMINI_API_KEY is required for exercise metadata enrichment");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
         this.json = JsonMapper.builder()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

@@ -23,6 +23,10 @@ dependencies {
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.security.test)
+    // Manual live-Gemini preview harness (WorkoutSeedEnrichmentPreviewTest)
+    // builds a genai Client directly; integrations exposes it as `implementation`
+    // so it isn't on app's classpath otherwise.
+    testImplementation(libs.google.genai)
     // See persistence/build.gradle.kts — same JUnit Platform alignment.
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

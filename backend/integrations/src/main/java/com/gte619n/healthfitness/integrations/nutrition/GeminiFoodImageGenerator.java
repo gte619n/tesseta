@@ -155,14 +155,10 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
     private final String model;
 
     public GeminiFoodImageGenerator(
-        @Value("${app.nutrition.gemini-api-key:}") String apiKey,
+        Client client,
         @Value("${app.nutrition.images.model:gemini-3.1-flash-image-preview}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY is required for food image generation");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
     }
 

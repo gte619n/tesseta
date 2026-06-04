@@ -86,14 +86,10 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
     private final Tool tool;
 
     public MealPhotoExtractor(
-        @Value("${app.nutrition.gemini-api-key:${GEMINI_API_KEY:}}") String apiKey,
+        Client client,
         @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.5-flash}}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY (app.nutrition.gemini-api-key) is required for meal photo extraction");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
         this.tool = Tool.builder()
             .functionDeclarations(List.of(extractMealItemsTool()))

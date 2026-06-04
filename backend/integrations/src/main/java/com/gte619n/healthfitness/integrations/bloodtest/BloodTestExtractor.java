@@ -71,14 +71,10 @@ public class BloodTestExtractor {
     private final ObjectMapper json;
 
     public BloodTestExtractor(
-        @Value("${app.bloodtest.gemini-api-key:}") String apiKey,
+        Client client,
         @Value("${app.bloodtest.gemini-model}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY is required for blood test extraction");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
         this.json = JsonMapper.builder()
             .addModule(new JavaTimeModule())

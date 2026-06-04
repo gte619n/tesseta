@@ -116,18 +116,13 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     public GeminiExerciseMediaService(
         ExerciseMediaStorage storage,
         ExerciseService exerciseService,
-        @Value("${app.exercises.gemini-api-key:${GEMINI_API_KEY:}}") String apiKey,
+        Client client,
         @Value("${app.exercises.media.model:gemini-3.1-flash-image-preview}") String model
     ) {
         this.storage = storage;
         this.exerciseService = exerciseService;
         this.model = model;
-        if (apiKey == null || apiKey.isBlank()) {
-            log.warn("GEMINI_API_KEY not set — exercise media generation will fail until configured");
-            this.client = null;
-        } else {
-            this.client = Client.builder().apiKey(apiKey).build();
-        }
+        this.client = client;
     }
 
     @Override
