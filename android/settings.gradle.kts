@@ -24,7 +24,6 @@ include(
     ":core-chat",
     ":feature-workouts",
     ":feature-medical",
-    ":feature-chat",
     ":feature-goals",
     ":feature-nutrition",
     ":feature-settings",

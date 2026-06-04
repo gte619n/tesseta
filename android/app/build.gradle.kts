@@ -119,7 +119,6 @@ dependencies {
     implementation(project(":core-health"))
     implementation(project(":feature-workouts"))
     implementation(project(":feature-medical"))
-    implementation(project(":feature-chat"))
     implementation(project(":feature-goals"))
     implementation(project(":feature-nutrition"))
     implementation(project(":feature-settings"))
