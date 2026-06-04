@@ -44,13 +44,21 @@ badly skewed — `api` has **0** tests, `persistence` has **1**.
 2. **`@Bean Client geminiClient` + `@Bean Storage storage`** `[low-med]` — removes
    ~20 duplicated client constructions, centralizes API-key/model config, cuts
    memory/cold-start.
-3. **Collapse the 3-layer metric caching to one** `[med]` — resolve each
-   `MetricKey` once per goal in `StepEvaluationService`, then delete
-   `CachingMetricResolver` + `RequestScopedMetricCache`; keep only the Caffeine
-   snapshot cache.
-4. **Replace `AdminCheckAspect` + hardcoded emails with config + `@PreAuthorize`**
-   `[low-med]` — drops a custom AOP aspect and `spring-boot-starter-aop` from
-   `api`, gets the admin allowlist out of source.
+3. **Collapse the 3-layer metric caching to one** `[med]` — **investigated;
+   needs design review, not a blind refactor.** The repeated `resolve()` spans
+   two passes at *different* call sites: `StepEvaluationService.evaluateGoal`
+   (eval) and the controller response mapper's `computeRegressionFlag` (read).
+   `RequestScopedMetricCache` dedups across both passes *and across all goals in
+   one request*. "Resolve once per goal" would require threading a shared memo
+   through the controller↔service flow and would lose the cross-goal dedup, so
+   it's a behavioral/perf trade-off rather than a clean simplification. The
+   current `CachingMetricResolver` decorator (no-ops outside request scope for
+   event/batch paths) + `@RequestScope` memo is a reasonable pattern; recommend
+   deferring to a reviewed PR with a clear perf rationale.
+4. ✅ **Replaced `AdminCheckAspect` + hardcoded emails with config + `@PreAuthorize`**
+   — `@AdminOnly` is now a composed `@PreAuthorize("@adminAuthorizer.isAdmin()")`
+   annotation; allowlist moved to `app.admin.emails` (`ADMIN_EMAILS` env); custom
+   AOP aspect and `spring-boot-starter-aop` removed from `api`.
 5. **Realign `app` with documented layering** `[med]` — controllers → `api`,
    services → `core`; unify the two package roots
    (`...healthfitness.app.*` vs `...healthfitness.*`).
