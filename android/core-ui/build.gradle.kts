@@ -1,22 +1,13 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    id("healthfitness.android.library")
+    // core-ui re-exports the Compose UI stack to features via `api(...)`, so it
+    // keeps its Compose deps inline rather than using the (implementation-only)
+    // compose convention. It still needs the Compose compiler plugin + build feature.
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.gte619n.healthfitness.ui"
-    compileSdk = 35
-    defaultConfig {
-        minSdk = 29
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
-    }
-    kotlin {
-        jvmToolchain(21)
-    }
     buildFeatures {
         compose = true
     }
