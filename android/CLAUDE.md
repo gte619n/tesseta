@@ -4,11 +4,18 @@
   the obligatory theme XML and manifest.
 - **DI**: Hilt — fully wired (`@Module @InstallIn(SingletonComponent)` providers
   across `app` and `core-data`, `@HiltViewModel` on ~30 screens).
-- **Source of truth is the backend.** Clients read everything over Retrofit
-  (+ a 20 MB OkHttp disk cache); there is no on-device system of record. The
-  only local persistence is **DataStore** — the ID-token cache (`IdTokenCache`)
-  and unit prefs. (Room is declared as a `core-data` dependency but is entirely
-  unused — treat it as dead and don't build on it.)
+- **Backend is the system of record; the app is offline-first against it.**
+  The backend owns Firestore and is the authority. On-device, `core-data` runs
+  an offline-first mirror (see `docs/plans/IMPL-AND-20-offline-first-sync.md`):
+  - **Reads** go through a local mirror backed by **Room (SQLCipher-encrypted)**
+    via `MirrorRepositorySupport` / `MirrorStore`, kept fresh by `SyncEngine`
+    (delta pulls, WorkManager workers, FCM push-to-pull).
+  - **Writes** are journaled to an **outbox** and replayed to the backend with
+    last-write-wins conflict resolution + tombstones.
+  - **DataStore** still holds small key/value state — the ID-token cache
+    (`IdTokenCache`) and unit prefs.
+  - Not every repository is migrated yet: `feature-goals` and `feature-nutrition`
+    still read directly over Retrofit. Treat the mirror as the target pattern.
 - **Network**: Retrofit + OkHttp + Moshi; 401 → silent refresh via
   `TokenAuthenticator`. SSE in `core-data/net/Sse.kt`.
 - All async work via Coroutines + Flow.
