@@ -40,6 +40,10 @@ app:
   auth:
     allowed-audiences: ${OAUTH_ALLOWED_AUDIENCES:}
     dev-mode: false
+  # Admin allowlist for @AdminOnly endpoints (comma-separated emails). Set
+  # ADMIN_EMAILS in deployed environments; defaults to the project owner.
+  admin:
+    emails: ${ADMIN_EMAILS:evan.ruff@gmail.com}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   gcp:

@@ -9,6 +9,7 @@ import com.gte619n.healthfitness.core.user.UserService;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.BadJwtException;
@@ -30,6 +31,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 // with a stub that throws so the bean doesn't try to fetch the Google OIDC
 // discovery document during test startup.
 @Configuration
+@EnableMethodSecurity
 @EnableConfigurationProperties({AppAuthProperties.class, AppCorsProperties.class})
 public class SecurityConfig {
 
@@ -75,7 +77,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/equipment/**").authenticated()
                 // Exercise catalog endpoints - authenticated users can browse
                 .requestMatchers("/api/exercises/**", "/api/exercises").authenticated()
-                // Admin endpoints require authentication (aspect handles admin check)
+                // Admin endpoints require authentication; the admin check itself
+                // is enforced by @AdminOnly (method security) on the controllers.
                 .requestMatchers("/api/admin/**").authenticated()
                 .requestMatchers("/api/drugs", "/api/drugs/**").authenticated()
                 // Food catalog + barcode lookup operate on the current user
