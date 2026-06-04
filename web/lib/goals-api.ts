@@ -1,4 +1,4 @@
-import { apiFetch, apiJson, BackendError } from "./api";
+import { apiFetch, apiJson, BackendError, send } from "./api";
 import type {
   GoalResponse,
   GoalDeepResponse,
@@ -79,29 +79,7 @@ export type UpdateStepInput = Partial<{
   resetToAuto: boolean;
 }>;
 
-// ── Internal request helper ──────────────────────────────────────────
-
-async function send<T>(
-  path: string,
-  method: "POST" | "PATCH" | "PUT" | "DELETE",
-  body?: unknown,
-): Promise<T> {
-  const res = await apiFetch(path, {
-    method,
-    ...(body !== undefined
-      ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      : {}),
-  });
-  if (!res.ok) {
-    throw new BackendError(`${method} ${path} returned ${res.status}`, res.status);
-  }
-  // 204 / empty body responses (DELETE, reorder) have nothing to parse.
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
+// The shared `send` JSON mutation helper lives in lib/api.ts.
 
 // ── Goal mutations ───────────────────────────────────────────────────
 

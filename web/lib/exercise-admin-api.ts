@@ -1,4 +1,4 @@
-import { apiFetch, apiJson, BackendError } from "./api";
+import { apiFetch, apiJson, BackendError, send } from "./api";
 import type {
   ExerciseResponse,
   CreateExerciseRequest,
@@ -9,30 +9,8 @@ import type { Equipment } from "./types/gym";
 
 // Server-only HTTP helpers for the Exercise catalog (IMPL-14). Do not import
 // from client components — apiFetch reads server env + the Auth.js session.
-// Mirrors gym-api.ts / drug-admin-api.ts conventions.
-
-// ── Internal request helper ──────────────────────────────────────────
-
-async function send<T>(
-  path: string,
-  method: "POST" | "PATCH" | "PUT" | "DELETE",
-  body?: unknown,
-): Promise<T> {
-  const res = await apiFetch(path, {
-    method,
-    ...(body !== undefined
-      ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      : {}),
-  });
-  if (!res.ok) {
-    throw new BackendError(`${method} ${path} returned ${res.status}`, res.status);
-  }
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
+// Mirrors gym-api.ts / drug-admin-api.ts conventions. The shared `send` JSON
+// mutation helper lives in lib/api.ts.
 
 // ── Public reads (used to hydrate exercise pickers etc.) ─────────────
 

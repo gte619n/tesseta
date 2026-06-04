@@ -1,4 +1,4 @@
-import { apiFetch, apiJson, BackendError } from "./api";
+import { apiFetch, apiJson, BackendError, send } from "./api";
 import type {
   NutritionDay,
   Macros,
@@ -14,31 +14,8 @@ import type {
 // Server-only HTTP helpers for the Nutrition module (IMPL-13).
 // Do NOT import from "use client" components — apiFetch reads server env
 // + the Auth.js session. Define mutations as inline server actions in
-// server pages and pass them down as props.
-
-// ── Internal request helper (mirrors goals-api.ts) ───────────────────
-
-async function send<T>(
-  path: string,
-  method: "POST" | "PATCH" | "PUT" | "DELETE",
-  body?: unknown,
-): Promise<T> {
-  const res = await apiFetch(path, {
-    method,
-    ...(body !== undefined
-      ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      : {}),
-  });
-  if (!res.ok) {
-    throw new BackendError(`${method} ${path} returned ${res.status}`, res.status);
-  }
-  // 204 / empty body responses (DELETE) have nothing to parse.
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
+// server pages and pass them down as props. The shared `send` JSON mutation
+// helper lives in lib/api.ts.
 
 // ── Reads ────────────────────────────────────────────────────────────
 

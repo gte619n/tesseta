@@ -1,4 +1,4 @@
-import { apiFetch, apiJson, BackendError } from "./api";
+import { apiFetch, apiJson, BackendError, send } from "./api";
 import type {
   WorkoutProgramResponse,
   WorkoutProgramDeepResponse,
@@ -13,28 +13,8 @@ import type {
 // Server-only HTTP helpers for Workout Programs (IMPL-15). Do not import from
 // client components — apiFetch reads server env + the Auth.js session. The SSE
 // chat send goes through the route handler in app/api/workout-programs/chat
-// (the browser needs to read the stream); commit + reads live here.
-
-async function send<T>(
-  path: string,
-  method: "POST" | "PATCH" | "PUT" | "DELETE",
-  body?: unknown,
-): Promise<T> {
-  const res = await apiFetch(path, {
-    method,
-    ...(body !== undefined
-      ? {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      : {}),
-  });
-  if (!res.ok) {
-    throw new BackendError(`${method} ${path} returned ${res.status}`, res.status);
-  }
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
+// (the browser needs to read the stream); commit + reads live here. The shared
+// `send` JSON mutation helper lives in lib/api.ts.
 
 // ── Reads ────────────────────────────────────────────────────────────
 
