@@ -43,7 +43,7 @@ Adopt three deployable components:
   layout.
 - A **Next.js 15 App Router** web application (TypeScript strict, Tailwind v4,
   pnpm) deployed to Cloud Run.
-- A **Spring Boot 3.5** backend (Java 21, Gradle Kotlin DSL, multi-module)
+- A **Spring Boot 3.5** backend (Java 21, Gradle Kotlin DSL, single-module)
   deployed to Cloud Run, persisting to Cloud Firestore.
 
 iOS is explicitly out of scope for now. No directory is reserved for it.

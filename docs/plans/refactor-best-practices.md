@@ -17,11 +17,19 @@ three recurring patterns:
 3. **Docs drifting from reality** — most acute on Android (see the persistence
    note, now reconciled).
 
-## Implementation status (branch `claude/app-refactor-best-practices-7u6gy`)
+## Implementation status
 
-Worked top-down through the tiers. Every change below is build-verified
-(`./gradlew test`, `tsc --noEmit` + `eslint`) **except** Android, which has no
-SDK in the execution environment and is verified by inspection only.
+Two passes. The first (branch `claude/app-refactor-best-practices-7u6gy`,
+merged) worked top-down through the tiers. A second pass
+(`claude/refactoring-implementation-R9npk`) took on the structural items the
+first deferred: it added the `api` test slices, **collapsed the five Gradle
+modules into one**, normalized packages to `<layer>.<feature>`, ran a
+single-module de-dup batch, and **de-faked the dashboard** (real RecentFeed).
+
+Every change below is build-verified (`./gradlew test`; web: `tsc --noEmit` +
+`eslint` + `next build`) **except** Android, which has no SDK in the execution
+environment and is verified by inspection only. Web changes are not
+visually verified (no browser runtime here).
 
 **Done**
 - **Backend:** Firestore `await`+typed-exception helper; shared Gemini `Client`
