@@ -9,108 +9,166 @@ import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
+import retrofit2.HttpException
 
-// Wraps Credential Manager for Google sign-in.
+// Owns authentication for native clients under the backend-issued session-token
+// model (ADR-0010).
 //
-// `interactiveSignIn()` shows the account picker (first-time flow);
-// `silentRefresh()` returns a fresh ID token without UI as long as the
-// user has previously signed in. The web OAuth client ID is the audience
-// — that's Google's documented pattern for Android sign-in.
+//   interactiveSignIn() — the ONLY path that touches Credential Manager (and so
+//     the only one that can show Google's "Signing you in…" UI). It obtains a
+//     Google ID token once, then exchanges it at /api/auth/exchange for a
+//     backend access + refresh token pair.
+//   silentRefresh() — trades the stored refresh token for a fresh access token
+//     over plain HTTP. No Credential Manager, no UI. This is what runs on a 401
+//     and on launch when the access token has expired, so foregrounding the app
+//     never flashes the sign-in UI.
 //
-// Listeners (e.g. the phone-to-wear publisher) can subscribe via
-// `onTokenIssued` so every successful token fetch can be relayed.
+// Concurrent 401s are collapsed by [refreshMutex]: the first caller refreshes,
+// the rest reuse the access token it just wrote — one network call, no storm.
 class GoogleAuthRepository(
     private val context: Context,
     private val cache: IdTokenCache,
+    private val authApi: AuthApi,
     private val webOauthClientId: String,
     private val onTokenIssued: suspend (token: String, expiresAt: Long) -> Unit = { _, _ -> },
-    // IMPL-AND-20 (Phase 3): invoked on sign-out so the caller can wipe the
-    // encrypted offline DB (and, later, deregister the FCM token). Kept as a
-    // callback — mirroring [onTokenIssued] — so :core-data's auth layer doesn't
-    // take a hard dependency on the DB module wiring. Default no-op for the
-    // manual constructions (MainActivity/wear) that never sign out.
+    // Invoked on sign-out so the caller can deregister FCM + wipe the encrypted
+    // offline DB (IMPL-AND-20 D5/D18). Kept as a callback so :core-data's auth
+    // layer doesn't take a hard dependency on the DB module wiring.
     private val onSignOut: suspend () -> Unit = {},
 ) {
     private val manager = CredentialManager.create(context)
+    private val refreshMutex = Mutex()
 
-    // Interactive sign-in shows the account picker, which Credential Manager must
-    // attach to a visible window — so the caller passes the *Activity* context
-    // (the application context the repo is constructed with cannot host UI). The
-    // silent refresh path needs no UI and reuses the stored context, so it can run
-    // headless (e.g. TokenAuthenticator on a 401, or the wear refresh service).
-    suspend fun interactiveSignIn(activityContext: Context): AuthState =
-        runSignIn(uiContext = activityContext, filterByAuthorized = false)
-
-    suspend fun silentRefresh(): AuthState =
-        runSignIn(uiContext = context, filterByAuthorized = true)
-
-    private suspend fun runSignIn(uiContext: Context, filterByAuthorized: Boolean): AuthState {
+    // First sign-in / re-auth. Credential Manager needs a visible window, so the
+    // caller passes the *Activity* context (the application context the repo is
+    // built with cannot host UI).
+    suspend fun interactiveSignIn(activityContext: Context): AuthState {
         val option = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(filterByAuthorized)
+            // Show the full account picker (not just previously-authorized
+            // accounts) — this is the deliberate, user-initiated UI moment.
+            .setFilterByAuthorizedAccounts(false)
             .setServerClientId(webOauthClientId)
-            .setAutoSelectEnabled(filterByAuthorized)
+            .setAutoSelectEnabled(false)
             .build()
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
 
-        return try {
-            val response = manager.getCredential(uiContext, request)
+        val googleIdToken = try {
+            val response = manager.getCredential(activityContext, request)
             val cred = response.credential
             if (cred !is CustomCredential ||
                 cred.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 return AuthState.Failed("unexpected credential type: ${cred.type}")
             }
-            val google = GoogleIdTokenCredential.createFrom(cred.data)
-            val expires = expiryFromIdToken(google.idToken)
-            cache.write(google.idToken, expires)
-            onTokenIssued(google.idToken, expires)
-            AuthState.SignedIn(
-                userId = google.id,
-                email = google.id.takeIf { it.contains("@") },
-                displayName = google.displayName,
-                idToken = google.idToken,
-            )
+            GoogleIdTokenCredential.createFrom(cred.data).idToken
         } catch (e: NoCredentialException) {
-            // No credential available. On an interactive sign-in this means the
-            // device has no Google account to offer — surface NoAccount so the
-            // UI can guide the user to add one. On a silent refresh it just
-            // means the user hasn't signed in yet — that's the normal SignedOut.
-            if (filterByAuthorized) AuthState.SignedOut else AuthState.NoAccount
+            // No Google account on the device — guide the user to add one.
+            return AuthState.NoAccount
         } catch (e: GetCredentialException) {
-            AuthState.Failed(e.errorMessage?.toString() ?: e.javaClass.simpleName)
+            return AuthState.Failed(e.errorMessage?.toString() ?: e.javaClass.simpleName)
+        }
+
+        return try {
+            val tokens = authApi.exchange("Bearer $googleIdToken")
+            persist(tokens)
+            signedInFrom(tokens.accessToken)
+        } catch (e: Exception) {
+            AuthState.Failed("token exchange failed: ${e.message ?: e.javaClass.simpleName}")
+        }
+    }
+
+    // Silent refresh over HTTP. Single-flight: concurrent callers (e.g. a storm
+    // of 401s on foreground) share one refresh and the freshly-stored token.
+    suspend fun silentRefresh(): AuthState = refreshMutex.withLock {
+        val snapshot = cache.read()
+        // Someone else already refreshed while we waited on the lock.
+        val current = snapshot.idToken
+        if (snapshot.isFresh() && current != null) {
+            return signedInFrom(current)
+        }
+        val refreshToken = snapshot.refreshToken
+        if (refreshToken == null || !snapshot.hasUsableRefreshToken) {
+            // Nothing to refresh with — the caller must sign in interactively.
+            return AuthState.SignedOut
+        }
+        return try {
+            val tokens = authApi.refresh(AuthApi.RefreshRequest(refreshToken))
+            persist(tokens)
+            signedInFrom(tokens.accessToken)
+        } catch (e: HttpException) {
+            if (e.code() == 401) {
+                // Refresh token revoked/expired — drop the dead session so the UI
+                // falls back to interactive sign-in.
+                cache.clear()
+                AuthState.SignedOut
+            } else {
+                AuthState.Failed("refresh failed: HTTP ${e.code()}")
+            }
+        } catch (e: Exception) {
+            // Transient (network) failure — keep the session and report Failed so
+            // the next attempt can retry.
+            AuthState.Failed("refresh failed: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
     suspend fun signOut() {
-        cache.clear()
-        // PHI hygiene (D5): drop the encrypted offline DB before clearing the
-        // credential state, so a signed-out device retains no local health data.
+        val refreshToken = cache.read().refreshToken
+        // Best-effort server-side revocation; never blocks the local wipe.
+        if (refreshToken != null) {
+            try {
+                authApi.logout(AuthApi.RefreshRequest(refreshToken))
+            } catch (_: Exception) {
+            }
+        }
+        // PHI hygiene (D5): drop the encrypted offline DB before clearing tokens.
         try {
             onSignOut()
         } catch (_: Exception) {
-            // best-effort; failure to wipe must not block the sign-out itself.
         }
+        cache.clear()
+        // Clear the Google credential state so the next interactive sign-in shows
+        // a fresh picker rather than silently re-selecting the last account.
         try {
             manager.clearCredentialState(ClearCredentialStateRequest())
         } catch (_: Exception) {
-            // best-effort; the next sign-in will surface any real failure
         }
     }
 
-    // Reads the `exp` claim out of the JWT payload without verifying — the
-    // server is the authority. We only use this locally to decide when to
-    // refresh, so a forged value just causes an early refresh attempt.
-    private fun expiryFromIdToken(idToken: String): Long {
-        val parts = idToken.split('.')
-        if (parts.size < 2) return 0L
-        val payload = parts[1]
+    private suspend fun persist(tokens: AuthApi.TokenResponse) {
+        cache.writeSession(
+            accessToken = tokens.accessToken,
+            accessExpiresAtEpochSeconds = tokens.accessTokenExpiresAt,
+            refreshToken = tokens.refreshToken,
+            refreshExpiresAtEpochSeconds = tokens.refreshTokenExpiresAt,
+        )
+        onTokenIssued(tokens.accessToken, tokens.accessTokenExpiresAt)
+    }
+
+    // Build a SignedIn state from the access token, pulling identity claims out
+    // of the JWT payload for display. Unverified — the server is the authority;
+    // these are presentation-only.
+    private fun signedInFrom(accessToken: String): AuthState {
+        val claims = decodeClaims(accessToken)
+        return AuthState.SignedIn(
+            userId = claims.optString("sub", "(session)"),
+            email = claims.optString("email", null),
+            displayName = claims.optString("name", null),
+            idToken = accessToken,
+        )
+    }
+
+    private fun decodeClaims(jwt: String): JSONObject {
+        val parts = jwt.split('.')
+        if (parts.size < 2) return JSONObject()
         return try {
             val decoded = android.util.Base64.decode(
-                payload, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP
+                parts[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP
             )
-            JSONObject(String(decoded, Charsets.UTF_8)).optLong("exp", 0L)
+            JSONObject(String(decoded, Charsets.UTF_8))
         } catch (_: Exception) {
-            0L
+            JSONObject()
         }
     }
 }

@@ -33,6 +33,7 @@ AUTH_GOOGLE_SECRET="$OAUTH_WEB_CLIENT_SECRET"
 AUTH_SECRET="$(secret authjs-secret)"
 GOOGLE_HEALTH_WEBHOOK_SECRET="$(secret google-health-webhook-secret)"
 GEMINI_API_KEY="$(secret gemini_api_key)"
+SESSION_SIGNING_KEY="$(secret session-signing-key)"
 
 # --- Backend env ---
 # IMPL-02 audience checks + CORS allow-list for the local web origin.
@@ -52,6 +53,9 @@ export OAUTH_WEB_CLIENT_SECRET
 export GOOGLE_HEALTH_WEBHOOK_SECRET
 # DEXA: PDFs go to GCS; Gemini API extracts the structured data.
 export GEMINI_API_KEY
+# ADR-0010: HS256 key for minting native-client session access tokens. Without
+# it the local backend accepts Google tokens only and /api/auth/exchange 503s.
+export SESSION_SIGNING_KEY
 
 # --- Web env (.env.local) ---
 WEB_ENV="${REPO_ROOT}/web/.env.local"

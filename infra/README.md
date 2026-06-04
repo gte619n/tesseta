@@ -56,6 +56,11 @@ covers them):
   header value with scheme prefix.
 - Runtime SA bound to `roles/secretmanager.secretAccessor` on the new
   secret.
+- Secret Manager: `session-signing-key` (ADR-0010). 48 random bytes,
+  base64 (`openssl rand -base64 48`), used as the HS256 key for
+  native-client session access tokens. Runtime SA bound to
+  `roles/secretmanager.secretAccessor` on it; wired into the backend
+  service as `SESSION_SIGNING_KEY` via `backend/cloudbuild.yaml`.
 - Firestore composite index: `bodyComposition (metric ASC, sampleTime
   DESC)` — see `infra/firestore/firestore.indexes.json`.
 - Project owner / developer user granted `roles/health.admin`. Project

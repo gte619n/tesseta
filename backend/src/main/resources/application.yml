@@ -40,6 +40,18 @@ app:
   auth:
     allowed-audiences: ${OAUTH_ALLOWED_AUDIENCES:}
     dev-mode: false
+  # ADR-0010: backend-issued session tokens for native clients (Android phone +
+  # Wear). The Google ID token is exchanged once at /api/auth/exchange for a
+  # short-lived HS256 access token + an opaque refresh token, so the app never
+  # calls Credential Manager (and never shows its "Signing you in…" UI) again
+  # until a real re-auth. signing-key arrives from Secret Manager at deploy;
+  # empty disables issuance (exchange returns 503) and the resource server then
+  # accepts Google tokens only.
+  session:
+    signing-key: ${SESSION_SIGNING_KEY:}
+    issuer: tesseta-backend
+    access-ttl: 1h
+    refresh-ttl: 60d
   # Admin allowlist for @AdminOnly endpoints (comma-separated emails). Set
   # ADMIN_EMAILS in deployed environments; defaults to the project owner.
   admin:

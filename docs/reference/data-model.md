@@ -27,6 +27,7 @@ Four top-level collections are **shared/global**: `users`, `drugs`,
 |---|---|---|
 | `users/{userId}` | `user.User` | userId, email, displayName, heightCm, `googleHealth` (embedded), createdAt/updatedAt |
 | ↳ embedded `.googleHealth` | `user.GoogleHealthConnection` | healthUserId, `refreshTokenCiphertext`:Blob, `dekCiphertext`:Blob, connectedAt — queried via `whereEqualTo("googleHealth.healthUserId", …)` |
+| `refreshTokens/{tokenId}` **(shared, ADR-0010)** | `auth.RefreshTokenStore.StoredRefreshToken` | userId, `tokenHash` (SHA-256 of the secret — the secret itself is never stored), createdAt, expiresAt, revoked. Native-client session refresh tokens; rotated on use, `whereEqualTo("userId", …)` for theft-response revocation |
 | `users/{u}/bodyComposition/{metric__recordId}` | `bodycomposition.BodyCompositionMeasurement` | metric:`{WEIGHT_KG, BODY_FAT_PERCENT, LEAN_MASS_KG, BMI}`, value, sampleTime, sourcePlatform, recordingMethod. Doc id = `metric + "__" + recordId`. Composite index `metric ASC, sampleTime DESC` |
 | `users/{u}/bloodReadings/{readingId}` | `blood.BloodReading` | marker:`BloodMarker`, value, unit, sampleDate, labSource, notes |
 | `users/{u}/bloodTestReports/{reportId}` | `bloodtest.BloodTestReport` | sampleDate, labSource, pdfStoragePath, contentHash (SHA-256, dedupe), markers:`List<ExtractedMarker>{name,value,unit,refRangeLow,refRangeHigh,flag}` |

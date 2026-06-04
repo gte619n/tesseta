@@ -6,6 +6,12 @@ app:
   auth:
     dev-mode: true
     allowed-audiences: test-audience
+  # ADR-0010: a fixed 32+ byte HS256 key so SessionTokenService mints/validates
+  # in tests. Firestore is off here, so a fake RefreshTokenStore is provided by
+  # the test config.
+  session:
+    signing-key: test-session-signing-key-0123456789-abcdef
+    issuer: tesseta-backend
   # AdminEquipmentControllerTest authenticates as this email for admin cases.
   admin:
     emails: admin@example.com

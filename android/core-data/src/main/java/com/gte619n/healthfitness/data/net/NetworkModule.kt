@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.data.net
 
+import com.gte619n.healthfitness.data.auth.AuthApi
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
 import com.gte619n.healthfitness.data.goals.ChatApi
@@ -110,6 +111,44 @@ object NetworkModule {
             .client(client)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
+
+    // ADR-0010: a SEPARATE client for the /api/auth/** endpoints. It deliberately
+    // omits both the AuthInterceptor (exchange supplies the Google token itself;
+    // refresh/logout carry an opaque token in the body) and the
+    // TokenAuthenticator (a refresh call must never recurse into 401-refresh).
+    // This is also what keeps the Hilt graph acyclic: the main client's
+    // authenticator depends on GoogleAuthRepository → AuthApi → this client,
+    // which has no authenticator.
+    @Provides
+    @Singleton
+    @Named("auth")
+    fun provideAuthOkHttpClient(
+        @Named("logging") logging: HttpLoggingInterceptor,
+    ): OkHttpClient =
+        OkHttpClient.Builder()
+            .addInterceptor(logging)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+
+    @Provides
+    @Singleton
+    @Named("auth")
+    fun provideAuthRetrofit(
+        @Named("auth") client: OkHttpClient,
+        moshi: Moshi,
+        @BackendBaseUrl baseUrl: String,
+    ): Retrofit =
+        Retrofit.Builder()
+            .baseUrl(baseUrl.ensureTrailingSlash())
+            .client(client)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideAuthApi(@Named("auth") retrofit: Retrofit): AuthApi =
+        retrofit.create(AuthApi::class.java)
 
     @Provides
     @Singleton

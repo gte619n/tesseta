@@ -55,8 +55,10 @@ steps:
       # OAUTH_* feed the IMPL-02 JWT audience check and the IMPL-04
       # refresh-token exchange. GOOGLE_HEALTH_WEBHOOK_SECRET is the
       # shared secret Google sends in the Authorization header on push
-      # notifications.
-      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest
+      # notifications. SESSION_SIGNING_KEY is the HS256 key the backend uses
+      # to mint native-client session access tokens (ADR-0010); without it the
+      # resource server accepts Google tokens only and /api/auth/exchange 503s.
+      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest,SESSION_SIGNING_KEY=session-signing-key:latest
 
   # IMPL-12 Phase 5: keep the goals-sustained-reeval Cloud Run Job's
   # image in sync with the deployed service. The Job re-uses the same

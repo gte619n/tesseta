@@ -82,6 +82,12 @@ public class TestPersistenceConfig {
         return new InMemoryUserRepository();
     }
 
+    // ADR-0010: in-memory refresh-token store (Firestore is off in tests).
+    @Bean
+    com.gte619n.healthfitness.core.auth.RefreshTokenStore refreshTokenStore() {
+        return new InMemoryRefreshTokenStore();
+    }
+
     // IMPL-AND-20 Phase 1: in-memory delta-read change source. Tests seed it
     // with created/archived docs and page through GET /api/me/sync. Exposed as
     // the concrete type so tests can @Autowired it directly; it also satisfies

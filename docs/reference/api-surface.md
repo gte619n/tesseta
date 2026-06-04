@@ -1,8 +1,10 @@
 # Backend API surface
 
 All endpoints are under `/api`. Everything under `/api/me/**` requires a valid
-Google ID token (see [patterns.md → Auth](patterns.md#auth)); `/api/hello` and
-`/api/webhooks/**` are the exceptions. Controllers live in the backend
+bearer JWT — a Google ID token (web) or a backend session access token (native
+clients); see [patterns.md → Auth](patterns.md#auth). `/api/hello`,
+`/api/webhooks/**`, and the public session endpoints (`/api/auth/refresh`,
+`/api/auth/logout`) are the exceptions. Controllers live in the backend
 `api.<feature>` packages and delegate to services (pure-domain services in
 `core.<feature>`, integration-orchestrating ones alongside the controller in
 `api.<feature>`); trivial pass-through reads may use a repository directly.
@@ -16,6 +18,9 @@ Two transport flags appear inline below:
 | Method · path | Purpose |
 |---|---|
 | `GET /api/hello` | Public health probe (no auth) |
+| `POST /api/auth/exchange` | Exchange a Google ID token (header) for a backend access + refresh pair (ADR-0010) |
+| `POST /api/auth/refresh` | Public — trade a refresh token (body) for a new pair; 401 when dead |
+| `POST /api/auth/logout` | Public — revoke a refresh token (body) |
 | `GET /api/me` | Whoami — identity from the verified token |
 | `PATCH /api/me` | Update profile (e.g. heightCm) |
 

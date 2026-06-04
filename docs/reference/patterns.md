@@ -7,11 +7,21 @@ load-bearing shape that is easy to break.
 ## Auth
 
 End-to-end the contract is: **every `/api/me/**` request carries a verified
-Google ID token; the backend is a stateless OAuth2 JWT resource server.**
+bearer JWT; the backend is a stateless OAuth2 JWT resource server.** Web sends a
+Google ID token; native clients (Android phone + Wear) send a backend-issued
+session access token (ADR-0010). The resource server accepts both, routing by
+the `iss` claim.
 
-- **Backend** (`SecurityConfig`): `NimbusJwtDecoder.withIssuerLocation("https://accounts.google.com")`
-  + `GoogleAudienceValidator` accepts a token whose `aud` is one of the
-  configured client IDs (web, Android phone, Wear). `UserProvisioningFilter`
+- **Backend** (`SecurityConfig.jwtDecoder`): a delegating decoder routes by
+  issuer — `accounts.google.com` → `NimbusJwtDecoder.withIssuerLocation(...)` +
+  `GoogleAudienceValidator` (web, Wear-relayed, and the `/api/auth/exchange`
+  bootstrap); `tesseta-backend` → an HS256 `NimbusJwtDecoder.withSecretKey(...)`
+  + `JwtIssuerValidator` for session access tokens. Both decode to a
+  `JwtAuthenticationToken` with `sub`=userId, so the rest of the chain is
+  identical. `SessionTokenService` mints access tokens and rotates opaque
+  refresh tokens (stored hashed in `refreshTokens/{tokenId}`); `AuthController`
+  exposes `/api/auth/{exchange,refresh,logout}`. With no `app.session.signing-key`
+  configured the decoder accepts Google tokens only. `UserProvisioningFilter`
   runs after the bearer filter and calls `UserService.provisionIfAbsent` so
   `users/{sub}` always exists. `SecurityContextCurrentUserProvider`
   (`CurrentUserProvider`) maps the `Authentication` → `CurrentUser` from the
@@ -27,15 +37,22 @@ Google ID token; the backend is a stateless OAuth2 JWT resource server.**
   `web/middleware.ts` redirects any unauthenticated request (outside
   `api/auth` and `/auth/signin`) to sign-in. `isAdmin()`/`requireAdmin()`
   in `lib/admin.ts` gate `/admin`.
-- **Android** (`core-data/.../auth`): Credential Manager + `GetGoogleIdOption`
-  with the **web OAuth client ID** as `serverClientId` (so the backend
-  audience matches). `interactiveSignIn()` vs `silentRefresh()`. `IdTokenCache`
-  (DataStore `hf-auth`) holds the token; `AuthInterceptor` attaches the bearer
-  and `TokenAuthenticator` does **silent-refresh-on-401** (rewrites the
-  request, tags `X-HF-Auth-Retry: 1` to avoid loops).
+- **Android** (`core-data/.../auth`, ADR-0010): `GoogleAuthRepository.interactiveSignIn()`
+  is the **only** Credential Manager caller (`GetGoogleIdOption` with the web
+  OAuth client ID) — it obtains a Google token once and `POST`s it to
+  `/api/auth/exchange` (via `AuthApi`, on a dedicated OkHttp client with no
+  interceptor/authenticator) for an access + refresh pair. `silentRefresh()` is
+  now a plain `/api/auth/refresh` HTTP call — **no Credential Manager, no UI** —
+  mutex-single-flighted so a 401 storm does one refresh and the rest reuse the
+  freshly stored token. `IdTokenCache` (DataStore `hf-auth`) holds the access
+  token (as `idToken`) + the refresh token; `AuthInterceptor` attaches the
+  bearer and `TokenAuthenticator` does **silent-refresh-on-401** (rewrites the
+  request, tags `X-HF-Auth-Retry: 1` to avoid loops). A dead refresh token
+  clears the session → the sign-in screen.
 - **Wear**: no independent sign-in. The phone publishes every issued/refreshed
-  token over the Wearable Data Layer; `PhoneTokenSyncService` on the watch
-  writes it to `WearIdTokenCache`.
+  **access** token over the Wearable Data Layer; `PhoneTokenSyncService` on the
+  watch writes it to `WearIdTokenCache`. A Wear `401` sends `/auth/refresh-request`
+  to `PhoneRefreshRequestService`, which refreshes over HTTP and republishes.
 
 ## Google Health ingestion
 

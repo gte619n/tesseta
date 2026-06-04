@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.mobile.di
 
 import android.content.Context
+import com.gte619n.healthfitness.data.auth.AuthApi
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
 import com.gte619n.healthfitness.feature.settings.AppVersionInfo
@@ -28,10 +29,12 @@ object SettingsAppModule {
     fun provideGoogleAuthRepository(
         @ApplicationContext context: Context,
         cache: IdTokenCache,
+        authApi: AuthApi,
         signOutSideEffects: SignOutSideEffects,
     ): GoogleAuthRepository = GoogleAuthRepository(
         context = context,
         cache = cache,
+        authApi = authApi,
         webOauthClientId = BuildConfig.WEB_OAUTH_CLIENT_ID,
         onTokenIssued = { token, _ -> PhoneTokenPublisher(context).publish(token) },
         // IMPL-AND-20 (Phase 6): the single consolidated sign-out hook (#12) —
