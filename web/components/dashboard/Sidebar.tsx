@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { TessetaMark } from "@/components/brand/TessetaMark";
-import { navItems } from "@/lib/fixtures/dashboard";
+import { navItems } from "@/lib/nav";
 import type { Device, DeviceSyncStatus } from "@/lib/device-api";
 import { SidebarNavItem } from "@/components/dashboard/SidebarNavItem";
 

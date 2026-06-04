@@ -70,6 +70,17 @@ SDK in the execution environment and is verified by inspection only.
   modals); `<PdfUploadDropzone>`; shared chat stream-consumer + primitives;
   type/date-helper consolidation; `app/page.tsx` blood-markers + daily-vitals
   extracted (977→839).
+- **Web #6 — de-faked the dashboard + real RecentFeed.** The prod homepage was
+  shipping a fixture person's data (static "MAY 20" header, "Pull Day completed",
+  "189.2 lb") interleaved with real cards. Now: `TopBar` shows the user's live
+  local date/time (`<LiveDateline>`, client-side so it's the user's clock, not
+  Cloud Run UTC); HRV/Resting-HR/Weight render a "—" tile when there's no data
+  (matching Steps/Sleep) instead of fake numbers; **RecentFeed is wired to real
+  activity** — `lib/recent-feed.ts` merges completed workouts + weigh-ins + sleep
+  + meds-taken-today, newest-first, with a "No recent activity yet" empty state.
+  Deleted `lib/fixtures/dashboard.ts` and the dead `TodayCard` (rendered nowhere);
+  `navItems`→`lib/nav.ts`, `Vital`→`lib/dashboard-vitals.ts`. `tsc`, `eslint`,
+  and `next build` all green (visual rendering unverified — no runtime here).
 - **Android:** docs reconciled; empty `:feature-chat` removed; inert
   wear-tiles/complications pruned; `MainActivity` lifecycle-aware collection.
 
@@ -81,8 +92,6 @@ SDK in the execution environment and is verified by inspection only.
   (and now moot as a *module* concern, but the conditional itself still gates the
   Firestore beans for tests).
 - Backend #8 "dead Goals branches" — none found (read-path-resolvable).
-- Web #6 (remove dashboard fixtures) — a product decision (what to show with no
-  data), not a pure refactor.
 - Android #2/#4/#5/#8 (build-logic plugin, concrete repos, Hilt auth, screen
   splits) — substantive Kotlin/Gradle changes that need a real build to verify.
 - Backend #6 **persistence** mapper round-trips — need the Firestore emulator
