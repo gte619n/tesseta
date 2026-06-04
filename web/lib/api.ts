@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
 // Server-only fetch wrapper that pulls the current ID token from the Auth.js
@@ -68,4 +69,61 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     throw new BackendError(`${path} returned ${res.status}`, res.status);
   }
   return res.json() as Promise<T>;
+}
+
+// Server-only JSON mutation helper shared by the `lib/*-api.ts` modules. Sends
+// a POST/PATCH/PUT/DELETE (with an optional JSON body), throws BackendError on a
+// non-OK status, and tolerates empty (204) responses — DELETE/reorder endpoints
+// return no body to parse.
+export async function send<T>(
+  path: string,
+  method: "POST" | "PATCH" | "PUT" | "DELETE",
+  body?: unknown,
+): Promise<T> {
+  const res = await apiFetch(path, {
+    method,
+    ...(body !== undefined
+      ? {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      : {}),
+  });
+  if (!res.ok) {
+    throw new BackendError(`${method} ${path} returned ${res.status}`, res.status);
+  }
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+// SSE proxy headers — `X-Accel-Buffering: no` disables event-stream buffering
+// on common reverse proxies (nginx, Cloud Run's load balancer).
+const SSE_HEADERS = {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+} as const;
+
+// Proxies a backend SSE endpoint straight through to the browser. The browser
+// can't call the backend directly — the bearer header lives in the Auth.js
+// session, which is server-side only — so route handlers forward through here.
+// Forces `Accept: text/event-stream` and pipes the raw stream untouched; the
+// browser-side client parses the named events. On a non-OK/empty response the
+// backend's error text is returned with its status.
+export async function proxySseStream(
+  path: string,
+  init: RequestInit = {},
+): Promise<NextResponse> {
+  const res = await apiFetch(path, {
+    ...init,
+    headers: { ...init.headers, Accept: "text/event-stream" },
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    return new NextResponse(text || `Backend returned ${res.status}`, {
+      status: res.status,
+    });
+  }
+  return new NextResponse(res.body, { status: 200, headers: SSE_HEADERS });
 }
