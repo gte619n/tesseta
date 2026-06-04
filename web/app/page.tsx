@@ -22,6 +22,13 @@ import { fetchDailyMetrics, type DailyMetric } from "@/lib/daily-metrics-api";
 import { recent, todayHeader, vitals, type Vital } from "@/lib/fixtures/dashboard";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 import type { Reading } from "@/lib/types/body-composition";
+import {
+  DASHBOARD_BLOOD_MARKERS,
+  type DashboardMarker,
+  DASHBOARD_BLOOD_LABELS,
+  DEFAULT_REFS,
+  normalizeBloodMarkerName,
+} from "@/lib/blood-markers";
 
 // IMPL-04 wires the Sidebar identity and the BodyCompositionCard to real
 // data. The other cards (StatCard row, BloodPanel, TodayCard, RecentFeed)
@@ -718,45 +725,6 @@ type BloodTestReport = {
   labSource: string;
   markers: ExtractedMarker[];
 };
-
-// Markers we show on the dashboard compact panel, in display order.
-// Four high-value markers: Testosterone, LDL, ApoB, HbA1c
-const DASHBOARD_BLOOD_MARKERS = ["TESTOSTERONE", "LDL", "APO_B", "HBA1C"] as const;
-type DashboardMarker = (typeof DASHBOARD_BLOOD_MARKERS)[number];
-
-const DASHBOARD_BLOOD_LABELS: Record<string, string> = {
-  TESTOSTERONE: "Testosterone",
-  LDL: "LDL",
-  APO_B: "ApoB",
-  HBA1C: "HbA1c",
-};
-
-// Default reference ranges for markers extracted from lab reports
-const DEFAULT_REFS: Record<DashboardMarker, { min: number; threshold: number; max: number; orientation: "LOWER_IS_BETTER" | "HIGHER_IS_BETTER" }> = {
-  TESTOSTERONE: { min: 200, threshold: 300, max: 1200, orientation: "HIGHER_IS_BETTER" },
-  LDL: { min: 0, threshold: 100, max: 200, orientation: "LOWER_IS_BETTER" },
-  APO_B: { min: 0, threshold: 90, max: 150, orientation: "LOWER_IS_BETTER" },
-  HBA1C: { min: 4, threshold: 5.7, max: 8, orientation: "LOWER_IS_BETTER" },
-};
-
-// Patterns to match marker names from lab reports
-const BLOOD_MARKER_PATTERNS: { pattern: RegExp; marker: DashboardMarker }[] = [
-  { pattern: /\btestosterone\b/i, marker: "TESTOSTERONE" },
-  { pattern: /\bapob\b|\bapo[\s-]?b\b|\bapolipoprotein[\s-]?b\b/i, marker: "APO_B" },
-  { pattern: /\bldl\b/i, marker: "LDL" },
-  { pattern: /\bhba1c\b|\bhgba1c\b|\bhemoglobin\s*a1c\b|\bglycated\s*hemoglobin\b/i, marker: "HBA1C" },
-  { pattern: /^a1c$/i, marker: "HBA1C" },
-];
-
-function normalizeBloodMarkerName(name: string): DashboardMarker | null {
-  const trimmed = name.trim();
-  for (const { pattern, marker } of BLOOD_MARKER_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      return marker;
-    }
-  }
-  return null;
-}
 
 type LatestBloodValue = {
   value: number;
