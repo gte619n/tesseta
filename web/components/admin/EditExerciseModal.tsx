@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 import { useToast } from '@/components/ui/Toast';
 import { EquipmentRequirementPicker } from './EquipmentRequirementPicker';
 import type {
@@ -57,19 +58,6 @@ export function EditExerciseModal({
 }: Props) {
   const toast = useToast();
   const [isSaving, setIsSaving] = useState(false);
-  const downOnBackdropRef = useRef(false);
-
-  function handleBackdropMouseDown(e: React.MouseEvent) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-
-  function handleBackdropClick(e: React.MouseEvent) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) {
-      onClose();
-    }
-  }
 
   const [name, setName] = useState('');
   const [aliases, setAliases] = useState('');
@@ -180,16 +168,10 @@ export function EditExerciseModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+    <ModalBackdrop
+      onClose={onClose}
+      contentClassName="w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-      <div
-        className="w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         <h2 className="mb-4 text-xl font-semibold text-primary">
           {exercise ? 'Edit exercise' : 'New exercise'}
         </h2>
@@ -399,7 +381,6 @@ export function EditExerciseModal({
             {isSaving ? 'Saving…' : 'Save'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalBackdrop>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import type { AdminEquipment, SpecSchema, EquipmentCategory, EquipmentSpecs } from '@/lib/types/gym';
 import { EQUIPMENT_CATEGORIES as CATEGORIES } from '@/lib/types/gym';
 import { useToast } from '@/components/ui/Toast';
+import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 
 interface EditEquipmentModalProps {
   equipment: AdminEquipment;
@@ -23,22 +24,6 @@ interface EditEquipmentModalProps {
 export function EditEquipmentModal({ equipment, isOpen, onClose, onSave, update, onRegenerate }: EditEquipmentModalProps) {
   const toast = useToast();
   const [isSaving, setIsSaving] = useState(false);
-  // Track whether the mousedown landed on the backdrop so we only close on a
-  // true backdrop click. Without this, a text-selection drag that starts
-  // inside the dialog and releases over the backdrop would close the modal.
-  const downOnBackdropRef = useRef(false);
-
-  function handleBackdropMouseDown(e: React.MouseEvent) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-
-  function handleBackdropClick(e: React.MouseEvent) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) {
-      onClose();
-    }
-  }
 
   // Form state - use Record<string, unknown> for easier manipulation
   const [name, setName] = useState(equipment.name);
@@ -93,16 +78,10 @@ export function EditEquipmentModal({ equipment, isOpen, onClose, onSave, update,
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+    <ModalBackdrop
+      onClose={onClose}
+      contentClassName="w-[600px] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-      <div
-        className="w-[600px] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         <h2 className="mb-4 text-xl font-semibold text-primary">Edit Equipment</h2>
 
         <div className="space-y-4">
@@ -214,8 +193,7 @@ export function EditEquipmentModal({ equipment, isOpen, onClose, onSave, update,
             {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalBackdrop>
   );
 }
 

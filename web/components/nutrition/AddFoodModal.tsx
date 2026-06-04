@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useRef, useState, useCallback } from "react";
+import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import type { Meal, Macros, ImageStatus } from "@/lib/types/nutrition";
 import { MEAL_LABELS, QUANTITY_STEPS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -64,32 +65,13 @@ export function AddFoodModal({
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("catalog");
 
-  // Backdrop close tracking (see web/CLAUDE.md modal pattern)
-  const downOnBackdropRef = useRef(false);
-  function handleBackdropMouseDown(e: { target: unknown; currentTarget: unknown }) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-  function handleBackdropClick(e: { target: unknown; currentTarget: unknown }) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) {
-      onClose();
-    }
-  }
-
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+    <ModalBackdrop
+      onClose={onClose}
+      contentClassName="flex max-h-[90vh] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-      <div
-        className="flex max-h-[90vh] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div className="flex items-center justify-between border-b-[0.5px] border-border-subtle px-5 py-4">
           <h2 className="m-0 text-[16px] font-medium tracking-[-0.01em] text-primary">
@@ -136,8 +118,7 @@ export function AddFoodModal({
             />
           )}
         </div>
-      </div>
-    </div>
+    </ModalBackdrop>
   );
 }
 

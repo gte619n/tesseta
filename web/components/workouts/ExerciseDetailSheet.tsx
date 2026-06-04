@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PrescriptionExercise } from "@/lib/types/workout-program";
 import { DEMO_PHASES, DEMO_PHASE_LABEL } from "@/lib/types/exercise";
+import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 
 type Props = {
   exercise: PrescriptionExercise | null;
@@ -12,9 +13,8 @@ type Props = {
 };
 
 // A bottom/side sheet showing an exercise's demo phase stills, form cues, and
-// primary muscles. Reuses the modal-backdrop trio from web/CLAUDE.md.
+// primary muscles. Uses the shared ModalBackdrop (see web/CLAUDE.md).
 export function ExerciseDetailSheet({ exercise, onClose }: Props) {
-  const downOnBackdropRef = useRef(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -32,28 +32,14 @@ export function ExerciseDetailSheet({ exercise, onClose }: Props) {
 
   if (!mounted || !exercise) return null;
 
-  function handleBackdropMouseDown(e: React.MouseEvent) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-  function handleBackdropClick(e: React.MouseEvent) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) onClose();
-  }
-
   const frameByPhase = new Map(exercise.demoFrames.map((f) => [f.phase, f]));
 
   return createPortal(
-    <div
+    <ModalBackdrop
+      onClose={onClose}
       className="fixed inset-0 z-[200] flex items-end justify-center bg-canvas/75 backdrop-blur-sm sm:items-center"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+      contentClassName="max-h-[88vh] w-full max-w-[560px] overflow-y-auto rounded-t-[16px] border-[0.5px] border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)] sm:rounded-[16px]"
     >
-      <div
-        className="max-h-[88vh] w-full max-w-[560px] overflow-y-auto rounded-t-[16px] border-[0.5px] border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)] sm:rounded-[16px]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         <div className="flex items-start justify-between gap-3">
           <h2 className="m-0 text-[18px] font-medium tracking-[-0.01em] text-primary">
             {exercise.name}
@@ -122,8 +108,7 @@ export function ExerciseDetailSheet({ exercise, onClose }: Props) {
             </ul>
           </div>
         ) : null}
-      </div>
-    </div>,
+    </ModalBackdrop>,
     document.body,
   );
 }
