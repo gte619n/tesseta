@@ -28,7 +28,7 @@ import java.time.LocalDate
  */
 class AdherenceRepositoryTest {
 
-    private lateinit var repository: DefaultAdherenceRepository
+    private lateinit var repository: AdherenceRepository
     private lateinit var mirror: FakeMirrorOps
     private lateinit var outboxDao: FakeOutboxDao
     private var drains = 0
@@ -51,7 +51,7 @@ class AdherenceRepositoryTest {
             killSwitch = KillSwitchGate { false },
             drainTrigger = DrainTrigger { drains++ },
         )
-        repository = DefaultAdherenceRepository(support, MedsTestMoshi.instance, Dispatchers.Unconfined)
+        repository = AdherenceRepository(support, MedsTestMoshi.instance, Dispatchers.Unconfined)
     }
 
     @Test
@@ -59,7 +59,7 @@ class AdherenceRepositoryTest {
         val takenAt = Instant.parse("2026-05-30T08:00:00Z")
         repository.logDose("m1", TimeWindow.MORNING, takenAt = takenAt, dose = 200.0)
 
-        val id = DefaultAdherenceRepository.adherenceId(
+        val id = AdherenceRepository.adherenceId(
             "m1",
             takenAt.atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
             TimeWindow.MORNING,
@@ -82,7 +82,7 @@ class AdherenceRepositoryTest {
         repository.logDose("m1", TimeWindow.EVENING, takenAt = date.atTime(20, 0).atZone(java.time.ZoneId.systemDefault()).toInstant())
         repository.undoDose("m1", date, TimeWindow.EVENING)
 
-        val id = DefaultAdherenceRepository.adherenceId("m1", date, TimeWindow.EVENING)
+        val id = AdherenceRepository.adherenceId("m1", date, TimeWindow.EVENING)
         val row = mirror.getRow(MirrorTables.MEDICATION_ADHERENCE, id)!!
         assertEquals("ARCHIVED", row.status)
         val ops = outboxDao.listByEntity(id).map { it.op }

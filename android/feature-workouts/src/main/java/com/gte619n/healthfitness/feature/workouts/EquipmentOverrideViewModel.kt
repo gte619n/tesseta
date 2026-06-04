@@ -3,8 +3,8 @@ package com.gte619n.healthfitness.feature.workouts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.workouts.Equipment
-import com.gte619n.healthfitness.domain.workouts.EquipmentRepository
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
+import com.gte619n.healthfitness.data.workouts.EquipmentRepository
+import com.gte619n.healthfitness.data.workouts.LocationRepository
 import com.gte619n.healthfitness.feature.workouts.ui.toSpecMap
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

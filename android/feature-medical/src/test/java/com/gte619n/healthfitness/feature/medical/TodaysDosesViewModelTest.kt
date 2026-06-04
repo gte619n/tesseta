@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.gte619n.healthfitness.feature.medical.today.TodaysDosesUiState
 import com.gte619n.healthfitness.feature.medical.today.TodaysDosesViewModel
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
+import io.mockk.coVerify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -21,8 +22,8 @@ class TodaysDosesViewModelTest {
 
     @Test
     fun `toggle optimistically flips and logs`() = runTest {
-        val meds = FakeMedicationRepository(doses = listOf(sampleDose(taken = false)))
-        val adherence = FakeAdherenceRepository()
+        val meds = fakeMedicationRepository(doses = listOf(sampleDose(taken = false)))
+        val adherence = fakeAdherenceRepository()
         val vm = TodaysDosesViewModel(meds, adherence, SnackbarController())
         advanceUntilIdle()
 
@@ -33,13 +34,13 @@ class TodaysDosesViewModelTest {
         assertTrue(flipped.taken)
 
         advanceUntilIdle()
-        assertEquals(1, adherence.logCount)
+        coVerify(exactly = 1) { adherence.logDose(any(), any(), any(), any()) }
     }
 
     @Test
     fun `toggle failure reverts and shows error`() = runTest {
-        val meds = FakeMedicationRepository(doses = listOf(sampleDose(taken = false)))
-        val adherence = FakeAdherenceRepository(failOnLog = true)
+        val meds = fakeMedicationRepository(doses = listOf(sampleDose(taken = false)))
+        val adherence = fakeAdherenceRepository(failOnLog = true)
         val snackbar = SnackbarController()
         val vm = TodaysDosesViewModel(meds, adherence, snackbar)
         advanceUntilIdle()

@@ -21,7 +21,6 @@ import com.gte619n.healthfitness.domain.medications.Drug
 import com.gte619n.healthfitness.domain.medications.DrugCategory
 import com.gte619n.healthfitness.domain.medications.DrugForm
 import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
-import com.gte619n.healthfitness.domain.medications.DrugRepository
 import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.FrequencyType
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
@@ -29,6 +28,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -53,7 +55,7 @@ import java.time.LocalDate
 class MedicationRepositoryTest {
 
     private lateinit var server: MockWebServer
-    private lateinit var repository: DefaultMedicationRepository
+    private lateinit var repository: MedicationRepository
 
     private lateinit var dao: FakeMedicationDao
     private lateinit var adherenceDao: FakeMedicationAdherenceDao
@@ -61,12 +63,7 @@ class MedicationRepositoryTest {
 
     // Mirror-backed meds carry only `drugId`; the repo resolves `drug` through this.
     private val fakeDrugs = mutableMapOf<String, Drug>()
-    private val drugRepo = object : DrugRepository {
-        override suspend fun catalog(): List<Drug> = fakeDrugs.values.toList()
-        override suspend fun get(drugId: String): Drug =
-            fakeDrugs[drugId] ?: throw NoSuchElementException(drugId)
-        override fun lookupStream(query: String): Flow<DrugLookupEvent> = emptyFlow()
-    }
+    private val drugRepo: DrugRepository = mockk()
     private var drains = 0
 
     @Before
@@ -96,7 +93,10 @@ class MedicationRepositoryTest {
             killSwitch = KillSwitchGate { false },
             drainTrigger = DrainTrigger { drains++ },
         )
-        repository = DefaultMedicationRepository(api, drugRepo, dao, adherenceDao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
+        coEvery { drugRepo.catalog() } answers { fakeDrugs.values.toList() }
+        coEvery { drugRepo.get(any()) } answers { fakeDrugs[firstArg<String>()] ?: throw NoSuchElementException(firstArg<String>()) }
+        every { drugRepo.lookupStream(any()) } returns emptyFlow()
+        repository = MedicationRepository(api, drugRepo, dao, adherenceDao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
     }
 
     @After

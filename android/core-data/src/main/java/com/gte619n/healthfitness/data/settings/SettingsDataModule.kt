@@ -5,11 +5,9 @@ import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthRepositoryImpl
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthService
 import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepositoryImpl
-import com.gte619n.healthfitness.data.profile.ProfileRepositoryImpl
 import com.gte619n.healthfitness.data.profile.ProfileService
 import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthRepository
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
-import com.gte619n.healthfitness.domain.profile.ProfileRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -23,14 +21,11 @@ import retrofit2.create
 
 // IMPL-AND-02's own Hilt module. Lives in the feature's core-data package
 // rather than touching NetworkModule. Provides the Retrofit services and the
-// GoogleHealthScopeRepository, and binds the repository interfaces.
+// GoogleHealthScopeRepository, and binds the remaining repository interfaces.
+// (ProfileRepository is a concrete @Inject class — no binding needed.)
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class SettingsDataModule {
-
-    @Binds
-    @Singleton
-    abstract fun bindProfileRepository(impl: ProfileRepositoryImpl): ProfileRepository
 
     @Binds
     @Singleton

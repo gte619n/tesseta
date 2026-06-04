@@ -24,7 +24,7 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 class BodyCompositionRefreshTest {
 
     private lateinit var server: MockWebServer
-    private lateinit var repo: BodyCompositionRepositoryImpl
+    private lateinit var repo: BodyCompositionRepository
     private val mirror = FakeMirrorOps()
     private val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
 
@@ -43,7 +43,7 @@ class BodyCompositionRefreshTest {
             killSwitch = KillSwitchGate { false },
             drainTrigger = DrainTrigger { },
         )
-        repo = BodyCompositionRepositoryImpl(
+        repo = BodyCompositionRepository(
             api = api,
             dao = mockk<BodyCompositionDao>(relaxed = true),
             support = support,

@@ -15,7 +15,7 @@ import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
-import com.gte619n.healthfitness.domain.profile.ProfileRepository
+import com.gte619n.healthfitness.data.profile.ProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

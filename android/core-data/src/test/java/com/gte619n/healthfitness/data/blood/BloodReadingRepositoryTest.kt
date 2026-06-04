@@ -55,7 +55,7 @@ class BloodReadingRepositoryImplTest {
     private lateinit var outboxDao: FakeOutboxDao
     private var drains = 0
 
-    private lateinit var repo: BloodReadingRepositoryImpl
+    private lateinit var repo: BloodReadingRepository
 
     @Before
     fun setUp() {
@@ -89,7 +89,7 @@ class BloodReadingRepositoryImplTest {
             killSwitch = KillSwitchGate { false },
             drainTrigger = DrainTrigger { drains++ },
         )
-        repo = BloodReadingRepositoryImpl(api, dao, support, moshi)
+        repo = BloodReadingRepository(api, dao, support, moshi)
     }
 
     @After

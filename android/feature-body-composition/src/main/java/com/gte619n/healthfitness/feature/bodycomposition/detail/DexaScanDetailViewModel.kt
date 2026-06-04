@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.bodycomposition.DexaRegion
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScan
-import com.gte619n.healthfitness.domain.bodycomposition.DexaScanRepository
+import com.gte619n.healthfitness.data.bodycomposition.DexaScanRepository
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes

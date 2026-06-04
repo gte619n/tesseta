@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.feature.bodycomposition.detail
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
-import com.gte619n.healthfitness.domain.bodycomposition.DexaScanRepository
+import com.gte619n.healthfitness.data.bodycomposition.DexaScanRepository
 import java.io.File
 
 /**

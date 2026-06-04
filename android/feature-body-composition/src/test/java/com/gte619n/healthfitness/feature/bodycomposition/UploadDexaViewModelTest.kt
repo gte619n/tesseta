@@ -30,7 +30,7 @@ class UploadDexaViewModelTest {
     @Test
     fun `file above 25 MB short-circuits to Failed without network`() =
         runTest(mainRule.dispatcher) {
-            val repo = FakeDexaScanRepository()
+            val repo = fakeDexaScanRepository()
             val snackbar = mockk<SnackbarController>(relaxed = true)
             val vm = UploadDexaViewModel(repo, snackbar, onlineConnectivity())
 
@@ -47,7 +47,7 @@ class UploadDexaViewModelTest {
     @Test
     fun `phase events produce matching InProgress states then Complete`() =
         runTest(mainRule.dispatcher) {
-            val repo = FakeDexaScanRepository(
+            val repo = fakeDexaScanRepository(
                 uploadEvents = listOf(
                     DexaUploadEvent.Phase("uploading", "Uploading"),
                     DexaUploadEvent.Phase("extracting", "Extracting"),
@@ -67,7 +67,7 @@ class UploadDexaViewModelTest {
 
     @Test
     fun `failed event transitions to Failed`() = runTest(mainRule.dispatcher) {
-        val repo = FakeDexaScanRepository(
+        val repo = fakeDexaScanRepository(
             uploadEvents = listOf(
                 DexaUploadEvent.Phase("uploading", null),
                 DexaUploadEvent.Failed("extraction blew up"),

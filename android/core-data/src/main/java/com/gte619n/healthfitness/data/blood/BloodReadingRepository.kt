@@ -5,7 +5,6 @@ import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.blood.BloodMarker
 import com.gte619n.healthfitness.domain.blood.BloodReading
-import com.gte619n.healthfitness.domain.blood.BloodReadingRepository
 import com.gte619n.healthfitness.domain.blood.ReferenceRange
 import com.squareup.moshi.Moshi
 import java.time.LocalDate
@@ -32,16 +31,16 @@ import kotlinx.coroutines.flow.Flow
  * authoritative value arrives on the next pull/replay-reconcile.
  */
 @Singleton
-internal class BloodReadingRepositoryImpl @Inject constructor(
+class BloodReadingRepository @Inject internal constructor(
     private val api: BloodApi,
     private val dao: BloodReadingDao,
     private val support: MirrorRepositorySupport,
     moshi: Moshi,
-) : BloodReadingRepository {
+) {
 
     private val dtoAdapter = moshi.adapter(BloodReadingDto::class.java)
 
-    override fun observeReadings(): Flow<List<BloodReading>> = support.observeWithState(
+    fun observeReadings(): Flow<List<BloodReading>> = support.observeWithState(
         rows = dao.observeActive(),
         // #40: carry the mirror row's syncState onto the domain model for the
         // per-row PENDING/FAILED SyncBadge.
@@ -53,7 +52,7 @@ internal class BloodReadingRepositoryImpl @Inject constructor(
         },
     )
 
-    override suspend fun refresh() {
+    suspend fun refresh() {
         if (support.killSwitchOn()) return
         val dtos = api.listReadings()
         support.refreshInto(
@@ -68,7 +67,7 @@ internal class BloodReadingRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun create(
+    suspend fun create(
         marker: BloodMarker,
         value: Double,
         unit: String?,
@@ -97,7 +96,7 @@ internal class BloodReadingRepositoryImpl @Inject constructor(
         return dto.toDomain()
     }
 
-    override suspend fun delete(readingId: String) {
+    suspend fun delete(readingId: String) {
         support.deleteLocal(MirrorTables.BLOOD_READINGS, readingId, System.currentTimeMillis())
     }
 

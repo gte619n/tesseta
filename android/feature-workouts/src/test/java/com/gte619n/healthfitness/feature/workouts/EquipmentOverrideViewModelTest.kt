@@ -1,8 +1,8 @@
 package com.gte619n.healthfitness.feature.workouts
 
-import com.gte619n.healthfitness.domain.workouts.EquipmentRepository
+import com.gte619n.healthfitness.data.workouts.EquipmentRepository
 import com.gte619n.healthfitness.domain.workouts.EquipmentSpec
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
+import com.gte619n.healthfitness.data.workouts.LocationRepository
 import com.gte619n.healthfitness.domain.workouts.SpecSchemaTag
 import io.mockk.coEvery
 import io.mockk.coVerify

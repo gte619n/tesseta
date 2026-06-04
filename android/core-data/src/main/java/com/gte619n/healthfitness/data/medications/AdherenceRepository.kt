@@ -3,7 +3,6 @@ package com.gte619n.healthfitness.data.medications
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
-import com.gte619n.healthfitness.domain.medications.AdherenceRepository
 import com.gte619n.healthfitness.domain.medications.TimeWindow
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineDispatcher
@@ -38,19 +37,19 @@ import javax.inject.Singleton
  * offline log converges with the server's `today` computation once online.
  */
 @Singleton
-internal class DefaultAdherenceRepository @Inject constructor(
+class AdherenceRepository @Inject internal constructor(
     private val support: MirrorRepositorySupport,
     moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : AdherenceRepository {
+) {
 
     private val payloadAdapter = moshi.adapter(AdherenceMirrorPayload::class.java)
 
-    override suspend fun logDose(
+    suspend fun logDose(
         medicationId: String,
         window: TimeWindow,
-        takenAt: Instant,
-        dose: Double?,
+        takenAt: Instant = Instant.now(),
+        dose: Double? = null,
     ) = withContext(io) {
         // Record against the device-local calendar day of `takenAt` so the log
         // lands on the same date the `today` checklist queries (timezone-safe).
@@ -73,7 +72,7 @@ internal class DefaultAdherenceRepository @Inject constructor(
         )
     }
 
-    override suspend fun undoDose(
+    suspend fun undoDose(
         medicationId: String,
         date: LocalDate,
         window: TimeWindow,

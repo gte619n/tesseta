@@ -39,8 +39,8 @@ class MarkerDetailViewModelTest {
         readings: List<BloodReading>,
         reports: List<BloodTestReport> = emptyList(),
     ) = MarkerDetailViewModel(
-        readings = FakeReadingRepository(initial = readings),
-        reports = FakeReportRepository(initial = reports),
+        readings = fakeReadingRepository(initial = readings),
+        reports = fakeReportRepository(initial = reports),
         savedState = SavedStateHandle(mapOf(BloodRoutes.ARG_MARKER_KEY to "LDL")),
     )
 

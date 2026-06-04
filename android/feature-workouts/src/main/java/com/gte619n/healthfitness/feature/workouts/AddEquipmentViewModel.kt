@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.workouts.CreateEquipmentRequest
 import com.gte619n.healthfitness.domain.workouts.Equipment
-import com.gte619n.healthfitness.domain.workouts.EquipmentRepository
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
+import com.gte619n.healthfitness.data.workouts.EquipmentRepository
+import com.gte619n.healthfitness.data.workouts.LocationRepository
 import com.gte619n.healthfitness.domain.workouts.SpecSchemaTag
 import com.gte619n.healthfitness.feature.workouts.ui.specFromMap
 import dagger.hilt.android.lifecycle.HiltViewModel

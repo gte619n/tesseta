@@ -4,7 +4,6 @@ import com.gte619n.healthfitness.data.db.dao.UserProfileDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.profile.Profile
-import com.gte619n.healthfitness.domain.profile.ProfileRepository
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -20,21 +19,21 @@ import javax.inject.Inject
  * [com.gte619n.healthfitness.data.sync.OutboxEndpointRegistry]).
  *
  * The mirror `payloadJson` is the full [ProfileDto] the screen consumes, so every
- * field round-trips through Room (computed-field gap #7 handled per #15). The
- * interface stays suspend-`Result`-based to keep `ProfileViewModel` unchanged;
+ * field round-trips through Room (computed-field gap #7 handled per #15). The API
+ * stays suspend-`Result`-based to keep `ProfileViewModel` unchanged;
  * "Room is the source of truth" is satisfied because the read returns the mirror
  * row, not a live network call (except the kill-switch live fallback, D13).
  */
-class ProfileRepositoryImpl @Inject constructor(
+class ProfileRepository @Inject constructor(
     private val service: ProfileService,
     private val dao: UserProfileDao,
     private val support: MirrorRepositorySupport,
     moshi: Moshi,
-) : ProfileRepository {
+) {
 
     private val dtoAdapter = moshi.adapter(ProfileDto::class.java)
 
-    override suspend fun get(): Result<Profile> = runCatching {
+    suspend fun get(): Result<Profile> = runCatching {
         if (support.killSwitchOn()) {
             return@runCatching service.get().toDomain()
         }
@@ -54,7 +53,7 @@ class ProfileRepositoryImpl @Inject constructor(
         dto.toDomain()
     }
 
-    override suspend fun updateHeightCm(heightCm: Int?): Result<Profile> = runCatching {
+    suspend fun updateHeightCm(heightCm: Int?): Result<Profile> = runCatching {
         // Carry every field the screen renders (not just the changed height) into
         // the optimistic row so an offline edit shows the full profile instantly.
         val current = mirroredDto() ?: service.get()

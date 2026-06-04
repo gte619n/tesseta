@@ -1,8 +1,11 @@
 package com.gte619n.healthfitness.feature.settings.profile
 
 import app.cash.turbine.test
+import com.gte619n.healthfitness.data.profile.ProfileRepository
 import com.gte619n.healthfitness.domain.profile.Profile
-import com.gte619n.healthfitness.domain.profile.ProfileRepository
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -37,16 +40,13 @@ class ProfileViewModelTest {
         heightCm = heightCm,
     )
 
-    private class FakeProfileRepository(
-        var getResult: Result<Profile>,
-        var updateResult: (Int?) -> Result<Profile> = { Result.success(Profile("u1", null, null, it)) },
-    ) : ProfileRepository {
-        var lastUpdatedHeightCm: Int? = null
-        override suspend fun get(): Result<Profile> = getResult
-        override suspend fun updateHeightCm(heightCm: Int?): Result<Profile> {
-            lastUpdatedHeightCm = heightCm
-            return updateResult(heightCm)
-        }
+    // ProfileRepository is a concrete @Inject class; MockK mocks it directly.
+    private fun fakeProfileRepository(
+        getResult: Result<Profile>,
+        updateResult: (Int?) -> Result<Profile> = { Result.success(Profile("u1", null, null, it)) },
+    ): ProfileRepository = mockk {
+        coEvery { get() } returns getResult
+        coEvery { updateHeightCm(any()) } answers { updateResult(firstArg()) }
     }
 
     private class FakeUnitPreferencesRepository :
@@ -69,7 +69,7 @@ class ProfileViewModelTest {
 
     @Test
     fun loadingThenLoaded() = runTest {
-        val repo = FakeProfileRepository(getResult = Result.success(profile()))
+        val repo = fakeProfileRepository(getResult = Result.success(profile()))
         val vm = viewModel(repo)
 
         vm.state.test {
@@ -85,7 +85,7 @@ class ProfileViewModelTest {
 
     @Test
     fun saveHeightConvertsFtInToCm() = runTest {
-        val repo = FakeProfileRepository(
+        val repo = fakeProfileRepository(
             getResult = Result.success(profile(heightCm = 180)),
             updateResult = { Result.success(Profile("u1", "a@b.com", "Alice", it)) },
         )
@@ -104,14 +104,14 @@ class ProfileViewModelTest {
 
             val done = awaitItem() as ProfileViewModel.UiState.Loaded
             assertEquals(188, done.profile.heightCm)
-            assertEquals(188, repo.lastUpdatedHeightCm)
+            coVerify { repo.updateHeightCm(188) }
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun repositoryFailureSurfacesError() = runTest {
-        val repo = FakeProfileRepository(
+        val repo = fakeProfileRepository(
             getResult = Result.failure(RuntimeException("boom")),
         )
         val vm = viewModel(repo)

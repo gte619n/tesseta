@@ -1,11 +1,11 @@
 package com.gte619n.healthfitness.feature.bodycomposition
 
+import com.gte619n.healthfitness.data.bodycomposition.BodyCompositionRepository
+import com.gte619n.healthfitness.data.bodycomposition.DexaScanRepository
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionMetric
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionPoint
-import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionRepository
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScan
-import com.gte619n.healthfitness.domain.bodycomposition.DexaScanRepository
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScanSummary
 import com.gte619n.healthfitness.domain.bodycomposition.DexaUploadEvent
 import com.gte619n.healthfitness.domain.prefs.HeightUnit
@@ -13,6 +13,10 @@ import com.gte619n.healthfitness.domain.prefs.TemperatureUnit
 import com.gte619n.healthfitness.domain.prefs.UnitPreferences
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,73 +73,54 @@ fun sampleScan(scanId: String = "scan-1"): DexaScan = DexaScan(
     restingMetabolicRateKcal = 1600,
 )
 
-class FakeBodyCompositionRepository(
-    var snapshotToEmit: BodyCompositionSnapshot = sampleSnapshot(),
-    var failRefresh: Boolean = false,
-) : BodyCompositionRepository {
-    private val flow = MutableSharedFlow<BodyCompositionSnapshot>(replay = 1)
-    var refreshCount = 0
-        private set
+// BodyCompositionRepository / DexaScanRepository are concrete @Inject classes;
+// MockK mocks them (final Kotlin classes are fine). Backing flows preserve the
+// observe/refresh behavior; call counts are asserted with coVerify in the tests.
 
-    override fun observeSnapshot(): Flow<BodyCompositionSnapshot> = flow.asSharedFlow()
-
-    override suspend fun refresh() {
-        refreshCount++
+fun fakeBodyCompositionRepository(
+    snapshotToEmit: BodyCompositionSnapshot = sampleSnapshot(),
+    failRefresh: Boolean = false,
+): BodyCompositionRepository {
+    val flow = MutableSharedFlow<BodyCompositionSnapshot>(replay = 1)
+    val repo = mockk<BodyCompositionRepository>()
+    every { repo.observeSnapshot() } returns flow.asSharedFlow()
+    coEvery { repo.refresh() } coAnswers {
         if (failRefresh) throw RuntimeException("boom")
         flow.emit(snapshotToEmit)
     }
-
-    override suspend fun pointsInRange(
-        metric: BodyCompositionMetric,
-        from: Instant,
-        to: Instant,
-    ): List<BodyCompositionPoint> = emptyList()
+    coEvery { repo.pointsInRange(any(), any(), any()) } returns emptyList()
+    return repo
 }
 
-class FakeDexaScanRepository(
-    var summaries: List<DexaScanSummary> = emptyList(),
-    var scan: DexaScan = sampleScan(),
-    var failGet: Boolean = false,
-    var failPatch: Boolean = false,
-    var failDelete: Boolean = false,
-    var uploadEvents: List<DexaUploadEvent> = emptyList(),
-) : DexaScanRepository {
-    private val flow = MutableSharedFlow<List<DexaScanSummary>>(replay = 1)
-    var deleteCount = 0
-        private set
-    var lastPatch: Triple<String, String, Double?>? = null
-        private set
-
+fun fakeDexaScanRepository(
+    summaries: List<DexaScanSummary> = emptyList(),
+    scan: DexaScan = sampleScan(),
+    failGet: Boolean = false,
+    failPatch: Boolean = false,
+    failDelete: Boolean = false,
+    uploadEvents: List<DexaUploadEvent> = emptyList(),
     /** When set, patchField awaits this gate before returning (deterministic tests). */
-    var patchGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
-
-    override fun observeScans(): Flow<List<DexaScanSummary>> = flow.asSharedFlow()
-
-    override suspend fun refreshScans() {
-        flow.emit(summaries)
-    }
-
-    override suspend fun getScan(scanId: String): DexaScan {
+    patchGate: CompletableDeferred<Unit>? = null,
+): DexaScanRepository {
+    val flow = MutableSharedFlow<List<DexaScanSummary>>(replay = 1)
+    val repo = mockk<DexaScanRepository>()
+    every { repo.observeScans() } returns flow.asSharedFlow()
+    coEvery { repo.refreshScans() } coAnswers { flow.emit(summaries) }
+    coEvery { repo.getScan(any()) } answers {
         if (failGet) throw RuntimeException("get failed")
-        return scan
+        scan
     }
-
-    override suspend fun deleteScan(scanId: String) {
-        deleteCount++
+    coEvery { repo.deleteScan(any()) } answers {
         if (failDelete) throw RuntimeException("delete failed")
     }
-
-    override suspend fun downloadPdf(scanId: String): ByteArray = ByteArray(0)
-
-    override suspend fun patchField(scanId: String, path: String, value: Double?): DexaScan {
-        lastPatch = Triple(scanId, path, value)
+    coEvery { repo.downloadPdf(any()) } returns ByteArray(0)
+    coEvery { repo.patchField(any(), any(), any()) } coAnswers {
         patchGate?.await()
         if (failPatch) throw RuntimeException("patch failed")
-        return scan
+        scan
     }
-
-    override fun uploadPdf(fileName: String, bytes: ByteArray): Flow<DexaUploadEvent> =
-        uploadEvents.asFlow()
+    every { repo.uploadPdf(any(), any()) } returns uploadEvents.asFlow()
+    return repo
 }
 
 class FakeUnitPreferencesRepository(

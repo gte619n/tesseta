@@ -2,9 +2,6 @@ package com.gte619n.healthfitness.data.bodycomposition
 
 import com.gte619n.healthfitness.data.bodycomposition.api.BodyCompositionApi
 import com.gte619n.healthfitness.data.bodycomposition.api.DexaScanApi
-import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionRepository
-import com.gte619n.healthfitness.domain.bodycomposition.DexaScanRepository
-import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -12,27 +9,19 @@ import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
 import javax.inject.Singleton
 
+// BodyCompositionRepository / DexaScanRepository are concrete @Inject classes —
+// no @Binds needed; this module just provides the Retrofit APIs.
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class BodyCompositionModule {
+object BodyCompositionModule {
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindBodyComp(impl: BodyCompositionRepositoryImpl): BodyCompositionRepository
+    fun bodyApi(retrofit: Retrofit): BodyCompositionApi =
+        retrofit.create(BodyCompositionApi::class.java)
 
-    @Binds
+    @Provides
     @Singleton
-    abstract fun bindDexa(impl: DexaScanRepositoryImpl): DexaScanRepository
-
-    companion object {
-        @Provides
-        @Singleton
-        fun bodyApi(retrofit: Retrofit): BodyCompositionApi =
-            retrofit.create(BodyCompositionApi::class.java)
-
-        @Provides
-        @Singleton
-        fun dexaApi(retrofit: Retrofit): DexaScanApi =
-            retrofit.create(DexaScanApi::class.java)
-    }
+    fun dexaApi(retrofit: Retrofit): DexaScanApi =
+        retrofit.create(DexaScanApi::class.java)
 }

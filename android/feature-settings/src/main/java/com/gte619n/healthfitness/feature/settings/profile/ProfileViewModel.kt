@@ -6,7 +6,7 @@ import com.gte619n.healthfitness.domain.prefs.HeightUnit
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.profile.HeightMetric
 import com.gte619n.healthfitness.domain.profile.Profile
-import com.gte619n.healthfitness.domain.profile.ProfileRepository
+import com.gte619n.healthfitness.data.profile.ProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow

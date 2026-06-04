@@ -14,7 +14,6 @@ import com.gte619n.healthfitness.data.net.MultipartSseClient
 import com.gte619n.healthfitness.data.net.SseEvent
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScan
-import com.gte619n.healthfitness.domain.bodycomposition.DexaScanRepository
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScanSummary
 import com.gte619n.healthfitness.domain.bodycomposition.DexaUploadEvent
 import com.squareup.moshi.Moshi
@@ -37,7 +36,7 @@ import javax.inject.Singleton
  * is the full [DexaScanSummaryDto] the grid consumes.
  */
 @Singleton
-class DexaScanRepositoryImpl @Inject constructor(
+class DexaScanRepository @Inject constructor(
     private val api: DexaScanApi,
     private val multipartSseClient: MultipartSseClient,
     @BackendBaseUrl private val baseUrl: String,
@@ -45,18 +44,18 @@ class DexaScanRepositoryImpl @Inject constructor(
     private val support: MirrorRepositorySupport,
     private val moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : DexaScanRepository {
+) {
 
     private val eventAdapter = moshi.adapter(DexaUploadPayload::class.java)
     private val summaryAdapter = moshi.adapter(DexaScanSummaryDto::class.java)
 
-    override fun observeScans(): Flow<List<DexaScanSummary>> = support.observe(
+    fun observeScans(): Flow<List<DexaScanSummary>> = support.observe(
         rows = dao.observeActive(),
         decode = { json -> runCatching { summaryAdapter.fromJson(json)?.toSummary() }.getOrNull() },
         liveFallback = { api.list().map { it.toSummary() } },
     )
 
-    override suspend fun refreshScans() {
+    suspend fun refreshScans() {
         if (support.killSwitchOn()) return
         val dtos = withContext(io) { api.list() }
         support.refreshInto(
@@ -72,24 +71,24 @@ class DexaScanRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun getScan(scanId: String): DexaScan =
+    suspend fun getScan(scanId: String): DexaScan =
         withContext(io) { api.get(scanId).toDomain() }
 
-    override suspend fun deleteScan(scanId: String) {
+    suspend fun deleteScan(scanId: String) {
         withContext(io) { api.delete(scanId) }
         refreshScans()
     }
 
-    override suspend fun patchField(scanId: String, path: String, value: Double?): DexaScan {
+    suspend fun patchField(scanId: String, path: String, value: Double?): DexaScan {
         val scan = withContext(io) { api.patchField(scanId, PatchFieldRequest(path, value)).toDomain() }
         runCatching { refreshScans() }
         return scan
     }
 
-    override suspend fun downloadPdf(scanId: String): ByteArray =
+    suspend fun downloadPdf(scanId: String): ByteArray =
         withContext(io) { api.downloadPdf(scanId).use { it.bytes() } }
 
-    override fun uploadPdf(fileName: String, bytes: ByteArray): Flow<DexaUploadEvent> {
+    fun uploadPdf(fileName: String, bytes: ByteArray): Flow<DexaUploadEvent> {
         val url: HttpUrl = uploadUrl()
         val parts = listOf(
             MultipartSseClient.Part(

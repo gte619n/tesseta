@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.common.DayOfWeek
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
+import com.gte619n.healthfitness.data.workouts.LocationRepository
 import com.gte619n.healthfitness.domain.workouts.PendingUpload
 import com.gte619n.healthfitness.domain.workouts.UpdateLocationRequest
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes

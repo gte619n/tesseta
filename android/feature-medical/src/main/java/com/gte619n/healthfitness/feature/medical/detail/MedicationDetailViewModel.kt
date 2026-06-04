@@ -7,7 +7,7 @@ import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
 import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
-import com.gte619n.healthfitness.domain.medications.MedicationRepository
+import com.gte619n.healthfitness.data.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
 import dagger.hilt.android.lifecycle.HiltViewModel

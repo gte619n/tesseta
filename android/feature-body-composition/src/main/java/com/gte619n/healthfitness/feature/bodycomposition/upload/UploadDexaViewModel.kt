@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.feature.bodycomposition.upload
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.net.Connectivity
-import com.gte619n.healthfitness.domain.bodycomposition.DexaScanRepository
+import com.gte619n.healthfitness.data.bodycomposition.DexaScanRepository
 import com.gte619n.healthfitness.domain.bodycomposition.DexaUploadEvent
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
 import dagger.hilt.android.lifecycle.HiltViewModel

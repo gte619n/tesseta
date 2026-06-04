@@ -9,10 +9,8 @@ import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
 import com.gte619n.healthfitness.domain.medications.Drug
-import com.gte619n.healthfitness.domain.medications.DrugRepository
 import com.gte619n.healthfitness.domain.medications.Medication
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
-import com.gte619n.healthfitness.domain.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import com.gte619n.healthfitness.domain.medications.TodaysDose
 import com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest
@@ -51,7 +49,7 @@ import javax.inject.Singleton
  *    reads live and is not mirrored as a writable row.
  */
 @Singleton
-internal class DefaultMedicationRepository @Inject constructor(
+class MedicationRepository @Inject internal constructor(
     private val api: MedicationsApi,
     private val drugRepo: DrugRepository,
     private val dao: MedicationDao,
@@ -59,12 +57,12 @@ internal class DefaultMedicationRepository @Inject constructor(
     private val support: MirrorRepositorySupport,
     moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : MedicationRepository {
+) {
 
     private val dtoAdapter = moshi.adapter(MedicationDto::class.java)
     private val adherencePayloadAdapter = moshi.adapter(AdherenceMirrorPayload::class.java)
 
-    override suspend fun list(status: MedicationStatus?): List<Medication> = withContext(io) {
+    suspend fun list(status: MedicationStatus? = null): List<Medication> = withContext(io) {
         if (support.killSwitchOn()) {
             return@withContext api.list(status?.name).map { MedicationMapper.toDomain(it) }
         }
@@ -77,7 +75,7 @@ internal class DefaultMedicationRepository @Inject constructor(
         withDrugs(meds)
     }
 
-    override suspend fun get(medicationId: String): MedicationDetail = withContext(io) {
+    suspend fun get(medicationId: String): MedicationDetail = withContext(io) {
         if (support.killSwitchOn()) return@withContext MedicationMapper.toDomain(api.get(medicationId))
         // Detail carries the pull-only history (D9); fetch live, fall back to the
         // mirrored list DTO (no history) when the network is unavailable offline.
@@ -89,7 +87,7 @@ internal class DefaultMedicationRepository @Inject constructor(
             }
     }
 
-    override suspend fun create(request: CreateMedicationRequest): Medication = withContext(io) {
+    suspend fun create(request: CreateMedicationRequest): Medication = withContext(io) {
         val id = UUID.randomUUID().toString()
         val createDto = MedicationMapper.toDto(request)
         val optimistic = MedicationDto(
@@ -124,7 +122,7 @@ internal class DefaultMedicationRepository @Inject constructor(
         MedicationMapper.toDomain(optimistic)
     }
 
-    override suspend fun update(
+    suspend fun update(
         medicationId: String,
         request: UpdateMedicationRequest,
     ): Medication = withContext(io) {
@@ -149,7 +147,7 @@ internal class DefaultMedicationRepository @Inject constructor(
         MedicationMapper.toDomain(merged)
     }
 
-    override suspend fun changeDose(
+    suspend fun changeDose(
         medicationId: String,
         request: ChangeDoseRequest,
     ): Medication = withContext(io) {
@@ -159,11 +157,11 @@ internal class DefaultMedicationRepository @Inject constructor(
         MedicationMapper.toDomain(dto)
     }
 
-    override suspend fun discontinue(
+    suspend fun discontinue(
         medicationId: String,
         reason: DiscontinueReason,
         notes: String?,
-        endDate: LocalDate?,
+        endDate: LocalDate? = null,
     ): Medication = withContext(io) {
         val body = DiscontinueDto(reason = reason.name, notes = notes, endDate = endDate)
         val dto = api.discontinue(medicationId, body)
@@ -171,20 +169,20 @@ internal class DefaultMedicationRepository @Inject constructor(
         MedicationMapper.toDomain(dto)
     }
 
-    override suspend fun reactivate(
+    suspend fun reactivate(
         medicationId: String,
-        resumeDate: LocalDate?,
+        resumeDate: LocalDate? = null,
     ): Medication = withContext(io) {
         val dto = api.reactivate(medicationId, ReactivateDto(resumeDate = resumeDate))
         refreshRow(dto)
         MedicationMapper.toDomain(dto)
     }
 
-    override suspend fun delete(medicationId: String) = withContext(io) {
+    suspend fun delete(medicationId: String) = withContext(io) {
         support.deleteLocal(MirrorTables.MEDICATIONS, medicationId, System.currentTimeMillis())
     }
 
-    override suspend fun todaysDoses(): List<TodaysDose> = withContext(io) {
+    suspend fun todaysDoses(): List<TodaysDose> = withContext(io) {
         // Server-derived, adherence-computed checklist (D9). Anchor "today" to the
         // device's local date so it resets at the user's local midnight.
         val today = LocalDate.now()

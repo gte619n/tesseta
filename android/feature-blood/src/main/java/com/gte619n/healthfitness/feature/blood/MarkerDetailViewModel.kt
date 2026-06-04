@@ -4,8 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.blood.BloodMarker
-import com.gte619n.healthfitness.domain.blood.BloodReadingRepository
-import com.gte619n.healthfitness.domain.blood.BloodTestReportRepository
+import com.gte619n.healthfitness.data.blood.BloodReadingRepository
+import com.gte619n.healthfitness.data.blood.BloodTestReportRepository
 import com.gte619n.healthfitness.domain.blood.LatestMarker
 import com.gte619n.healthfitness.domain.blood.LatestMarkers
 import com.gte619n.healthfitness.domain.blood.MarkerHistoryPoint

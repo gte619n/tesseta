@@ -2,8 +2,8 @@ package com.gte619n.healthfitness.feature.medical.today
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.gte619n.healthfitness.domain.medications.AdherenceRepository
-import com.gte619n.healthfitness.domain.medications.MedicationRepository
+import com.gte619n.healthfitness.data.medications.AdherenceRepository
+import com.gte619n.healthfitness.data.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.TodaysDose
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
 import dagger.hilt.android.lifecycle.HiltViewModel

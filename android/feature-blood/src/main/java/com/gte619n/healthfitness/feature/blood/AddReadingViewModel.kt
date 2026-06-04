@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.feature.blood
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.blood.BloodMarker
-import com.gte619n.healthfitness.domain.blood.BloodReadingRepository
+import com.gte619n.healthfitness.data.blood.BloodReadingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
