@@ -12,28 +12,12 @@ import {
   BodyWeightCell,
   BodyWeightMetricValue,
 } from "@/components/dashboard/BodyWeight";
-
-type WhoAmI = {
-  userId: string;
-  email: string | null;
-  displayName: string | null;
-  heightCm: number | null;
-};
+import type { WhoAmI } from "@/lib/types/profile";
+import type { Reading } from "@/lib/types/body-composition";
 
 type Status = {
   connected: boolean;
   connectedAt: string | null;
-};
-
-type Metric = "WEIGHT_KG" | "BODY_FAT_PERCENT" | "LEAN_MASS_KG" | "BMI";
-
-type Reading = {
-  recordId: string;
-  metric: Metric;
-  value: number;
-  sampleTime: string;
-  sourcePlatform: string | null;
-  recordingMethod: string | null;
 };
 
 type Session = {

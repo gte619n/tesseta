@@ -21,6 +21,7 @@ import { apiFetch, apiJson } from "@/lib/api";
 import { fetchDailyMetrics, type DailyMetric } from "@/lib/daily-metrics-api";
 import { recent, todayHeader, vitals, type Vital } from "@/lib/fixtures/dashboard";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
+import type { Reading } from "@/lib/types/body-composition";
 
 // IMPL-04 wires the Sidebar identity and the BodyCompositionCard to real
 // data. The other cards (StatCard row, BloodPanel, TodayCard, RecentFeed)
@@ -29,17 +30,6 @@ import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 
 const KG_TO_LB = 2.20462;
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-
-type Metric = "WEIGHT_KG" | "BODY_FAT_PERCENT" | "LEAN_MASS_KG" | "BMI";
-
-type Reading = {
-  recordId: string;
-  metric: Metric;
-  value: number;
-  sampleTime: string;
-  sourcePlatform: string | null;
-  recordingMethod: string | null;
-};
 
 type BodyCompositionView = {
   // Latest weight in canonical lb; formatted client-side per unit pref.

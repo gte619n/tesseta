@@ -1,11 +1,6 @@
 import type { WorkoutProgramResponse, ProgramStatus } from "@/lib/types/workout-program";
 import { WEEK_DAY_LABEL } from "@/lib/types/workout-program";
-
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`)
-    .toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    .toUpperCase();
-}
+import { formatDateUpper } from "@/lib/format-date";
 
 const STATUS_PILL: Record<ProgramStatus, { label: string; cls: string }> = {
   DRAFT: { label: "Draft", cls: "bg-canvas-muted text-tertiary" },
@@ -50,7 +45,7 @@ export function ProgramCard({ program }: { program: WorkoutProgramResponse }) {
         <div className="shrink-0 text-right">
           <div className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">Starts</div>
           <div className="caps-mono mt-px text-[11px] tracking-[0.04em] text-secondary">
-            {formatDate(program.startDate)}
+            {formatDateUpper(program.startDate)}
           </div>
         </div>
       </div>

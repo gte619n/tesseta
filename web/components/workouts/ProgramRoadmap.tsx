@@ -10,6 +10,7 @@ import type {
   PrescriptionExercise,
 } from "@/lib/types/workout-program";
 import { WEEK_DAY_LABEL } from "@/lib/types/workout-program";
+import { formatDateUpper } from "@/lib/format-date";
 import { BLOCK_TYPE_LABEL } from "@/lib/types/exercise";
 import {
   formatPrescription,
@@ -17,12 +18,6 @@ import {
   formatLoggedSets,
 } from "@/lib/workout-format";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
-
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`)
-    .toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    .toUpperCase();
-}
 
 export function ProgramRoadmap({ program }: { program: WorkoutProgramDeepResponse }) {
   // The exercise detail sheet is shared across all prescription rows.
@@ -103,7 +98,7 @@ function PhaseRow({
                 </span>
               ) : null}
               <span>
-                {formatDate(phase.targetStartDate)} – {formatDate(phase.targetEndDate)}
+                {formatDateUpper(phase.targetStartDate)} – {formatDateUpper(phase.targetEndDate)}
               </span>
             </div>
           </div>
