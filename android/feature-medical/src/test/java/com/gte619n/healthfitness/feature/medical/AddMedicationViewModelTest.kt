@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.domain.medications.FrequencyType
 import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.feature.medical.add.AddMedicationUiState
 import com.gte619n.healthfitness.feature.medical.add.AddMedicationViewModel
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -37,8 +38,8 @@ class AddMedicationViewModelTest {
             DrugLookupEvent.Progress("generating_image", "Generating image…"),
             DrugLookupEvent.Found(sampleDrug()),
         )
-        val drugs = FakeDrugRepository(events = events)
-        val vm = AddMedicationViewModel(drugs, FakeMedicationRepository(), onlineConnectivity())
+        val drugs = fakeDrugRepository(events = events)
+        val vm = AddMedicationViewModel(drugs, fakeMedicationRepository(), onlineConnectivity())
         advanceUntilIdle()
 
         vm.startLookup("testosterone")
@@ -52,8 +53,8 @@ class AddMedicationViewModelTest {
 
     @Test
     fun `not found keeps search step`() = runTest {
-        val drugs = FakeDrugRepository(events = listOf(DrugLookupEvent.NotFound("no match")))
-        val vm = AddMedicationViewModel(drugs, FakeMedicationRepository(), onlineConnectivity())
+        val drugs = fakeDrugRepository(events = listOf(DrugLookupEvent.NotFound("no match")))
+        val vm = AddMedicationViewModel(drugs, fakeMedicationRepository(), onlineConnectivity())
         advanceUntilIdle()
 
         vm.startLookup("zzzz")
@@ -65,7 +66,7 @@ class AddMedicationViewModelTest {
 
     @Test
     fun `submit success invokes onDone`() = runTest {
-        val vm = AddMedicationViewModel(FakeDrugRepository(), FakeMedicationRepository(), onlineConnectivity())
+        val vm = AddMedicationViewModel(fakeDrugRepository(), fakeMedicationRepository(), onlineConnectivity())
         advanceUntilIdle()
 
         var done = false
@@ -85,11 +86,10 @@ class AddMedicationViewModelTest {
 
     @Test
     fun `submit failure surfaces error`() = runTest {
-        val failingRepo = object : com.gte619n.healthfitness.domain.medications.MedicationRepository by FakeMedicationRepository() {
-            override suspend fun create(request: CreateMedicationRequest) =
-                throw RuntimeException("save failed")
+        val failingRepo = fakeMedicationRepository().apply {
+            coEvery { create(any()) } throws RuntimeException("save failed")
         }
-        val vm = AddMedicationViewModel(FakeDrugRepository(), failingRepo, onlineConnectivity())
+        val vm = AddMedicationViewModel(fakeDrugRepository(), failingRepo, onlineConnectivity())
         advanceUntilIdle()
 
         var done = false

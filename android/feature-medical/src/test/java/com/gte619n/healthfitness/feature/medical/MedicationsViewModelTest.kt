@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import com.gte619n.healthfitness.feature.medical.list.MedicationsUiState
 import com.gte619n.healthfitness.feature.medical.list.MedicationsViewModel
+import io.mockk.coEvery
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -20,7 +21,7 @@ class MedicationsViewModelTest {
 
     @Test
     fun `loads and partitions active and discontinued`() = runTest {
-        val repo = FakeMedicationRepository(
+        val repo = fakeMedicationRepository(
             meds = listOf(
                 sampleMedication("a", MedicationStatus.ACTIVE),
                 sampleMedication("b", MedicationStatus.DISCONTINUED),
@@ -41,7 +42,7 @@ class MedicationsViewModelTest {
 
     @Test
     fun `error path surfaces message`() = runTest {
-        val repo = FakeMedicationRepository(listError = RuntimeException("boom"))
+        val repo = fakeMedicationRepository(listError = RuntimeException("boom"))
         val vm = MedicationsViewModel(repo)
         vm.refresh()
 
@@ -55,11 +56,11 @@ class MedicationsViewModelTest {
 
     @Test
     fun `refresh reloads`() = runTest {
-        val repo = FakeMedicationRepository(meds = listOf(sampleMedication("a")))
+        val repo = fakeMedicationRepository(meds = listOf(sampleMedication("a")))
         val vm = MedicationsViewModel(repo)
         advanceUntilIdle()
 
-        repo.meds = listOf(sampleMedication("a"), sampleMedication("c"))
+        coEvery { repo.list(any()) } returns listOf(sampleMedication("a"), sampleMedication("c"))
         vm.refresh()
         advanceUntilIdle()
 

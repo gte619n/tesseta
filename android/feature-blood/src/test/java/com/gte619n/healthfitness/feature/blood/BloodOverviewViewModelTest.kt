@@ -31,8 +31,8 @@ class BloodOverviewViewModelTest {
 
     @Test
     fun emitsLoadingThenReadyWithDerivedMarkers() = runTest {
-        val readings = FakeReadingRepository(initial = listOf(reading()))
-        val reports = FakeReportRepository()
+        val readings = fakeReadingRepository(initial = listOf(reading()))
+        val reports = fakeReportRepository()
         val vm = BloodOverviewViewModel(readings, reports)
 
         vm.state.test {
@@ -47,8 +47,8 @@ class BloodOverviewViewModelTest {
 
     @Test
     fun emitsErrorWhenStreamThrows() = runTest {
-        val readings = FakeReadingRepository()
-        val reports = ThrowingReportRepository()
+        val readings = fakeReadingRepository()
+        val reports = throwingReportRepository()
         val vm = BloodOverviewViewModel(readings, reports)
         vm.state.test {
             assertEquals(BloodOverviewViewModel.UiState.Loading, awaitItem())

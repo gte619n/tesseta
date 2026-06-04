@@ -4,11 +4,8 @@ import com.gte619n.healthfitness.data.net.BackendBaseUrl
 import com.gte619n.healthfitness.data.net.DayOfWeekMoshiAdapter
 import com.gte619n.healthfitness.data.net.InstantAdapter
 import com.gte619n.healthfitness.data.net.LocalDateAdapter
-import com.gte619n.healthfitness.domain.workouts.EquipmentRepository
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -79,13 +76,5 @@ object WorkoutsDataModule {
     fun provideEquipmentApi(@Named("workoutsRetrofit") retrofit: Retrofit): EquipmentApi =
         retrofit.create(EquipmentApi::class.java)
 }
-
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class WorkoutsRepositoryModule {
-    @Binds
-    abstract fun bindLocationRepository(impl: LocationRepositoryImpl): LocationRepository
-
-    @Binds
-    abstract fun bindEquipmentRepository(impl: EquipmentRepositoryImpl): EquipmentRepository
-}
+// LocationRepository / EquipmentRepository are concrete @Inject classes — no
+// @Binds needed (Hilt provides them from their constructors).

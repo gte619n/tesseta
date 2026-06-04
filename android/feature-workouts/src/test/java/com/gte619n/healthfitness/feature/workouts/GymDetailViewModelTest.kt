@@ -1,8 +1,8 @@
 package com.gte619n.healthfitness.feature.workouts
 
 import androidx.lifecycle.SavedStateHandle
-import com.gte619n.healthfitness.domain.workouts.EquipmentRepository
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
+import com.gte619n.healthfitness.data.workouts.EquipmentRepository
+import com.gte619n.healthfitness.data.workouts.LocationRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import io.mockk.coEvery
 import io.mockk.coVerify

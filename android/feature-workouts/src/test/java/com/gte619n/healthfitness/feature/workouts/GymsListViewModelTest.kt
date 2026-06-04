@@ -1,7 +1,7 @@
 package com.gte619n.healthfitness.feature.workouts
 
 import app.cash.turbine.test
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
+import com.gte619n.healthfitness.data.workouts.LocationRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

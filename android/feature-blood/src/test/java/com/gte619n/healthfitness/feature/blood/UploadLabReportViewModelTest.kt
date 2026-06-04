@@ -40,7 +40,7 @@ class UploadLabReportViewModelTest {
 
     @Test
     fun transitionsThroughPhasesToComplete() = runTest {
-        val reports = FakeReportRepository(
+        val reports = fakeReportRepository(
             uploadEvents = listOf(
                 UploadEvent.Uploading,
                 UploadEvent.Extracting,
@@ -64,7 +64,7 @@ class UploadLabReportViewModelTest {
 
     @Test
     fun streamFailedSurfacesFailedState() = runTest {
-        val reports = FakeReportRepository(
+        val reports = fakeReportRepository(
             uploadEvents = listOf(UploadEvent.Uploading, UploadEvent.Failed("Could not read PDF")),
         )
         val vm = UploadLabReportViewModel(reports, onlineConnectivity())
@@ -77,7 +77,7 @@ class UploadLabReportViewModelTest {
 
     @Test
     fun thrownErrorMapsToFailed() = runTest {
-        val reports = FakeReportRepository(uploadError = RuntimeException("network down"))
+        val reports = fakeReportRepository(uploadError = RuntimeException("network down"))
         val vm = UploadLabReportViewModel(reports, onlineConnectivity())
         vm.upload("report.pdf", ByteArray(4))
         advanceUntilIdle()

@@ -6,7 +6,6 @@ import com.gte619n.healthfitness.data.net.BackendBaseUrl
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.workouts.CreateLocationRequest
 import com.gte619n.healthfitness.domain.workouts.Location
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
 import com.gte619n.healthfitness.domain.workouts.PendingUpload
 import com.gte619n.healthfitness.domain.workouts.UpdateLocationRequest
 import com.squareup.moshi.Moshi
@@ -35,14 +34,14 @@ import javax.inject.Singleton
  * for what the screen renders.
  */
 @Singleton
-class LocationRepositoryImpl @Inject constructor(
+class LocationRepository @Inject constructor(
     private val api: LocationApi,
     private val multipart: MultipartUploadClient,
     @BackendBaseUrl private val baseUrl: String,
     private val dao: LocationDao,
     private val support: MirrorRepositorySupport,
     private val moshi: Moshi,
-) : LocationRepository {
+) {
 
     private val dtoAdapter = moshi.adapter(LocationDto::class.java)
 
@@ -51,7 +50,7 @@ class LocationRepositoryImpl @Inject constructor(
             Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java),
         )
 
-    override suspend fun list(includeInactive: Boolean): Result<List<Location>> = runCatching {
+    suspend fun list(includeInactive: Boolean = false): Result<List<Location>> = runCatching {
         if (support.killSwitchOn()) {
             return@runCatching api.list(if (includeInactive) "inactive" else null).map { it.toDomain() }
         }
@@ -63,12 +62,12 @@ class LocationRepositoryImpl @Inject constructor(
             .filter { includeInactive || it.isActive }
     }
 
-    override suspend fun get(locationId: String): Result<Location> = runCatching {
+    suspend fun get(locationId: String): Result<Location> = runCatching {
         if (support.killSwitchOn()) return@runCatching api.get(locationId).toDomain()
         mirroredDto(locationId)?.toDomain() ?: refreshOne(locationId).toDomain()
     }
 
-    override suspend fun create(req: CreateLocationRequest): Result<Location> = runCatching {
+    suspend fun create(req: CreateLocationRequest): Result<Location> = runCatching {
         val id = UUID.randomUUID().toString()
         val now = Instant.now().toString()
         val dto = LocationDto(
@@ -95,7 +94,7 @@ class LocationRepositoryImpl @Inject constructor(
         dto.toDomain()
     }
 
-    override suspend fun update(
+    suspend fun update(
         locationId: String,
         req: UpdateLocationRequest,
     ): Result<Location> = runCatching {
@@ -118,18 +117,18 @@ class LocationRepositoryImpl @Inject constructor(
         merged.toDomain()
     }
 
-    override suspend fun delete(locationId: String): Result<Unit> = runCatching {
+    suspend fun delete(locationId: String): Result<Unit> = runCatching {
         support.deleteLocal(MirrorTables.LOCATIONS, locationId, System.currentTimeMillis())
     }
 
-    override suspend fun setDefault(locationId: String): Result<Unit> = runCatching {
+    suspend fun setDefault(locationId: String): Result<Unit> = runCatching {
         api.setDefault(locationId).unitOrThrow()
         // Default is exclusive across rows; re-fill the whole list so the prior
         // default's mirror row loses its flag too.
         fillMirror(includeInactive = false)
     }
 
-    override suspend fun uploadCoverPhoto(
+    suspend fun uploadCoverPhoto(
         locationId: String,
         file: PendingUpload,
     ): Result<String> = runCatching {
@@ -148,13 +147,13 @@ class LocationRepositoryImpl @Inject constructor(
         parseCoverPhotoUrl(responseText)
     }
 
-    override suspend fun deleteCoverPhoto(locationId: String): Result<Unit> = runCatching {
+    suspend fun deleteCoverPhoto(locationId: String): Result<Unit> = runCatching {
         api.deleteCoverPhoto(locationId).unitOrThrow()
         runCatching { refreshOne(locationId) }
         Unit
     }
 
-    override suspend fun addEquipment(
+    suspend fun addEquipment(
         locationId: String,
         equipmentId: String,
     ): Result<Unit> = runCatching {
@@ -163,7 +162,7 @@ class LocationRepositoryImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun removeEquipment(
+    suspend fun removeEquipment(
         locationId: String,
         equipmentId: String,
     ): Result<Unit> = runCatching {
@@ -172,7 +171,7 @@ class LocationRepositoryImpl @Inject constructor(
         Unit
     }
 
-    override suspend fun updateEquipmentSpecs(
+    suspend fun updateEquipmentSpecs(
         locationId: String,
         equipmentId: String,
         specs: Map<String, Any?>,

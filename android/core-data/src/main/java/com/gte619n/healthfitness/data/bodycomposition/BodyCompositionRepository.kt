@@ -9,7 +9,6 @@ import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionMetric
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionPoint
-import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionRepository
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineDispatcher
@@ -38,24 +37,24 @@ import javax.inject.Singleton
  * back to a one-shot live-network fetch.
  */
 @Singleton
-class BodyCompositionRepositoryImpl @Inject constructor(
+class BodyCompositionRepository @Inject constructor(
     private val api: BodyCompositionApi,
     private val dao: BodyCompositionDao,
     private val support: MirrorRepositorySupport,
     private val moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : BodyCompositionRepository {
+) {
 
     private val dtoAdapter = moshi.adapter(BodyCompositionReadingDto::class.java)
 
-    override fun observeSnapshot(): Flow<BodyCompositionSnapshot> =
+    fun observeSnapshot(): Flow<BodyCompositionSnapshot> =
         support.observe(
             rows = dao.observeActive(),
             decode = { json -> runCatching { dtoAdapter.fromJson(json)?.toDomainOrNull() }.getOrNull() },
             liveFallback = { api.list().mapNotNull { it.toDomainOrNull() } },
         ).map { points -> buildSnapshot(points) }
 
-    override suspend fun refresh() {
+    suspend fun refresh() {
         if (support.killSwitchOn()) return
         val dtos = withContext(io) { api.list() }
         support.refreshInto(
@@ -77,7 +76,7 @@ class BodyCompositionRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun pointsInRange(
+    suspend fun pointsInRange(
         metric: BodyCompositionMetric,
         from: Instant,
         to: Instant,

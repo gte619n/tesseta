@@ -7,7 +7,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.blood.BloodTestReport
-import com.gte619n.healthfitness.domain.blood.BloodTestReportRepository
+import com.gte619n.healthfitness.data.blood.BloodTestReportRepository
 import com.gte619n.healthfitness.feature.blood.nav.BloodRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext

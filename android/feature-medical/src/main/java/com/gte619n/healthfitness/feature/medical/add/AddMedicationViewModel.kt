@@ -6,9 +6,9 @@ import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.Drug
 import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
-import com.gte619n.healthfitness.domain.medications.DrugRepository
+import com.gte619n.healthfitness.data.medications.DrugRepository
 import com.gte619n.healthfitness.domain.medications.Medication
-import com.gte619n.healthfitness.domain.medications.MedicationRepository
+import com.gte619n.healthfitness.data.medications.MedicationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

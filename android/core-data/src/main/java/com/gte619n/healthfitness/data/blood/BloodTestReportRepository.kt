@@ -7,7 +7,6 @@ import com.gte619n.healthfitness.data.net.MultipartSseClient
 import com.gte619n.healthfitness.data.net.SseEvent
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.blood.BloodTestReport
-import com.gte619n.healthfitness.domain.blood.BloodTestReportRepository
 import com.gte619n.healthfitness.domain.blood.UploadEvent
 import com.squareup.moshi.Moshi
 import javax.inject.Inject
@@ -28,18 +27,18 @@ import okhttp3.MediaType.Companion.toMediaType
  * `payloadJson` is the full [BloodTestReportDto].
  */
 @Singleton
-internal class BloodTestReportRepositoryImpl @Inject constructor(
+class BloodTestReportRepository @Inject internal constructor(
     private val api: BloodApi,
     private val multipartSseClient: MultipartSseClient,
     private val dao: BloodTestReportDao,
     private val support: MirrorRepositorySupport,
     private val moshi: Moshi,
     @BackendBaseUrl private val baseUrl: String,
-) : BloodTestReportRepository {
+) {
 
     private val dtoAdapter = moshi.adapter(BloodTestReportDto::class.java)
 
-    override fun observeReports(): Flow<List<BloodTestReport>> = support.observe(
+    fun observeReports(): Flow<List<BloodTestReport>> = support.observe(
         rows = dao.observeActive(),
         decode = { json -> runCatching { dtoAdapter.fromJson(json)?.toDomain() }.getOrNull() },
         liveFallback = {
@@ -48,7 +47,7 @@ internal class BloodTestReportRepositoryImpl @Inject constructor(
         },
     )
 
-    override suspend fun refresh() {
+    suspend fun refresh() {
         if (support.killSwitchOn()) return
         val dtos = api.listReports()
         support.refreshInto(
@@ -65,16 +64,16 @@ internal class BloodTestReportRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun get(reportId: String): BloodTestReport =
+    suspend fun get(reportId: String): BloodTestReport =
         api.getReport(reportId).toDomain()
 
-    override suspend fun delete(reportId: String) {
+    suspend fun delete(reportId: String) {
         api.deleteReport(reportId)
         // Server soft-deletes; reflect it locally so the list drops the row.
         dao.markArchived(reportId, System.currentTimeMillis())
     }
 
-    override suspend fun downloadPdf(pdfDownloadPath: String): ByteArray {
+    suspend fun downloadPdf(pdfDownloadPath: String): ByteArray {
         // Resolve the relative download path against the backend base URL so the
         // Retrofit @Url call carries the full absolute address.
         val absolute = baseUrl.toHttpUrl()
@@ -85,7 +84,7 @@ internal class BloodTestReportRepositoryImpl @Inject constructor(
         return api.downloadPdf(absolute).use { it.bytes() }
     }
 
-    override fun upload(fileName: String, pdfBytes: ByteArray): Flow<UploadEvent> {
+    fun upload(fileName: String, pdfBytes: ByteArray): Flow<UploadEvent> {
         val url: HttpUrl = baseUrl.toHttpUrl()
             .newBuilder()
             .addPathSegments("api/me/blood/reports")

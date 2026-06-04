@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.feature.medical.list
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.medications.Medication
-import com.gte619n.healthfitness.domain.medications.MedicationRepository
+import com.gte619n.healthfitness.data.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -1,25 +1,23 @@
 package com.gte619n.healthfitness.feature.medical
 
-import com.gte619n.healthfitness.domain.medications.AdherenceRepository
-import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
-import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
-import com.gte619n.healthfitness.domain.medications.DiscontinueReason
+import com.gte619n.healthfitness.data.medications.AdherenceRepository
+import com.gte619n.healthfitness.data.medications.DrugRepository
+import com.gte619n.healthfitness.data.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.Drug
 import com.gte619n.healthfitness.domain.medications.DrugCategory
 import com.gte619n.healthfitness.domain.medications.DrugForm
 import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
-import com.gte619n.healthfitness.domain.medications.DrugRepository
 import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.FrequencyType
 import com.gte619n.healthfitness.domain.medications.Medication
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
-import com.gte619n.healthfitness.domain.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import com.gte619n.healthfitness.domain.medications.TimeWindow
 import com.gte619n.healthfitness.domain.medications.TodaysDose
-import kotlinx.coroutines.flow.Flow
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.flow.asFlow
-import java.time.Instant
 import java.time.LocalDate
 
 internal fun sampleDrug(name: String = "Testosterone Cypionate") = Drug(
@@ -70,51 +68,53 @@ internal fun sampleDose(
     takenAt = null,
 )
 
-internal class FakeMedicationRepository(
-    var meds: List<Medication> = emptyList(),
-    var doses: List<TodaysDose> = emptyList(),
-    var listError: Throwable? = null,
-) : MedicationRepository {
-    override suspend fun list(status: MedicationStatus?): List<Medication> {
+// MedicationRepository / DrugRepository / AdherenceRepository are concrete @Inject
+// classes; MockK mocks them (final Kotlin classes are fine). Call counts are
+// asserted with coVerify in the tests; mutable behavior is set via re-stubbing.
+
+internal fun fakeMedicationRepository(
+    meds: List<Medication> = emptyList(),
+    doses: List<TodaysDose> = emptyList(),
+    listError: Throwable? = null,
+): MedicationRepository {
+    val repo = mockk<MedicationRepository>()
+    coEvery { repo.list(any()) } answers {
         listError?.let { throw it }
-        return if (status == null) meds else meds.filter { it.status == status }
+        val status = firstArg<MedicationStatus?>()
+        if (status == null) meds else meds.filter { it.status == status }
     }
-
-    override suspend fun get(medicationId: String): MedicationDetail =
-        MedicationDetail(meds.first { it.medicationId == medicationId }, emptyList())
-
-    override suspend fun create(request: CreateMedicationRequest): Medication = sampleMedication()
-    override suspend fun update(medicationId: String, request: com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest): Medication = sampleMedication()
-    override suspend fun changeDose(medicationId: String, request: ChangeDoseRequest): Medication = sampleMedication()
-    override suspend fun discontinue(medicationId: String, reason: DiscontinueReason, notes: String?, endDate: LocalDate?): Medication =
+    coEvery { repo.get(any()) } answers {
+        MedicationDetail(meds.first { it.medicationId == firstArg<String>() }, emptyList())
+    }
+    coEvery { repo.create(any()) } returns sampleMedication()
+    coEvery { repo.update(any(), any()) } returns sampleMedication()
+    coEvery { repo.changeDose(any(), any()) } returns sampleMedication()
+    coEvery { repo.discontinue(any(), any(), any(), any()) } returns
         sampleMedication(status = MedicationStatus.DISCONTINUED)
-    override suspend fun reactivate(medicationId: String, resumeDate: LocalDate?): Medication = sampleMedication()
-    override suspend fun delete(medicationId: String) {}
-    override suspend fun todaysDoses(): List<TodaysDose> = doses
+    coEvery { repo.reactivate(any(), any()) } returns sampleMedication()
+    coEvery { repo.delete(any()) } returns Unit
+    coEvery { repo.todaysDoses() } returns doses
+    return repo
 }
 
-internal class FakeAdherenceRepository(
-    var failOnLog: Boolean = false,
-) : AdherenceRepository {
-    var logCount = 0
-    var undoCount = 0
-
-    override suspend fun logDose(medicationId: String, window: TimeWindow, takenAt: Instant, dose: Double?) {
+internal fun fakeAdherenceRepository(failOnLog: Boolean = false): AdherenceRepository {
+    val repo = mockk<AdherenceRepository>()
+    coEvery { repo.logDose(any(), any(), any(), any()) } answers {
         if (failOnLog) throw RuntimeException("network")
-        logCount++
     }
-
-    override suspend fun undoDose(medicationId: String, date: LocalDate, window: TimeWindow) {
+    coEvery { repo.undoDose(any(), any(), any()) } answers {
         if (failOnLog) throw RuntimeException("network")
-        undoCount++
     }
+    return repo
 }
 
-internal class FakeDrugRepository(
-    private val events: List<DrugLookupEvent> = emptyList(),
-    var catalog: List<Drug> = emptyList(),
-) : DrugRepository {
-    override suspend fun catalog(): List<Drug> = catalog
-    override suspend fun get(drugId: String): Drug = sampleDrug()
-    override fun lookupStream(query: String): Flow<DrugLookupEvent> = events.asFlow()
+internal fun fakeDrugRepository(
+    events: List<DrugLookupEvent> = emptyList(),
+    catalog: List<Drug> = emptyList(),
+): DrugRepository {
+    val repo = mockk<DrugRepository>()
+    coEvery { repo.catalog() } returns catalog
+    coEvery { repo.get(any()) } returns sampleDrug()
+    every { repo.lookupStream(any()) } returns events.asFlow()
+    return repo
 }

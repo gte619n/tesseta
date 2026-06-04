@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.feature.workouts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.workouts.CreateLocationRequest
-import com.gte619n.healthfitness.domain.workouts.LocationRepository
+import com.gte619n.healthfitness.data.workouts.LocationRepository
 import com.gte619n.healthfitness.feature.workouts.ui.LocationFormState
 import com.gte619n.healthfitness.feature.workouts.ui.hoursForWire
 import com.gte619n.healthfitness.feature.workouts.ui.validateLocationForm

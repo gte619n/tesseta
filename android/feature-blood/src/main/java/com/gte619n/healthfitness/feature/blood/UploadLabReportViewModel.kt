@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.domain.blood.BloodTestReport
-import com.gte619n.healthfitness.domain.blood.BloodTestReportRepository
+import com.gte619n.healthfitness.data.blood.BloodTestReportRepository
 import com.gte619n.healthfitness.domain.blood.UploadEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject

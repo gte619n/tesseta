@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.gte619n.healthfitness.feature.bodycomposition.detail.DexaScanDetailViewModel
 import com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,7 +28,7 @@ class DexaScanDetailViewModelTest {
 
     @Test
     fun `load populates the scan`() = runTest(mainRule.dispatcher) {
-        val repo = FakeDexaScanRepository(scan = sampleScan())
+        val repo = fakeDexaScanRepository(scan = sampleScan())
         val vm = DexaScanDetailViewModel(repo, SnackbarController(), FakeUnitPreferencesRepository(), handle())
         advanceUntilIdle()
 
@@ -39,7 +40,7 @@ class DexaScanDetailViewModelTest {
 
     @Test
     fun `load failure sets error`() = runTest(mainRule.dispatcher) {
-        val repo = FakeDexaScanRepository(failGet = true)
+        val repo = fakeDexaScanRepository(failGet = true)
         val vm = DexaScanDetailViewModel(repo, SnackbarController(), FakeUnitPreferencesRepository(), handle())
         advanceUntilIdle()
 
@@ -51,9 +52,8 @@ class DexaScanDetailViewModelTest {
     fun `patchField applies optimistic update then settles to server result`() =
         runTest(mainRule.dispatcher) {
             val server = sampleScan().copy(totalMassLb = 200.0)
-            val repo = FakeDexaScanRepository(scan = server)
             val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
-            repo.patchGate = gate
+            val repo = fakeDexaScanRepository(scan = server, patchGate = gate)
             val vm = DexaScanDetailViewModel(repo, SnackbarController(), FakeUnitPreferencesRepository(), handle())
             advanceUntilIdle()
             // load() returned `server` so totalMassLb is 200.0.
@@ -66,12 +66,12 @@ class DexaScanDetailViewModelTest {
             gate.complete(Unit)
             advanceUntilIdle()
             assertEquals(200.0, vm.state.value.scan!!.totalMassLb!!, 0.001)
-            assertEquals(Triple("scan-1", "totalMassLb", 123.4), repo.lastPatch)
+            coVerify { repo.patchField("scan-1", "totalMassLb", 123.4) }
         }
 
     @Test
     fun `patchField failure reverts and fires snackbar`() = runTest(mainRule.dispatcher) {
-        val repo = FakeDexaScanRepository(scan = sampleScan(), failPatch = true)
+        val repo = fakeDexaScanRepository(scan = sampleScan(), failPatch = true)
         val snackbar = mockk<SnackbarController>(relaxed = true)
         val vm = DexaScanDetailViewModel(repo, snackbar, FakeUnitPreferencesRepository(), handle())
         advanceUntilIdle()
@@ -86,9 +86,8 @@ class DexaScanDetailViewModelTest {
 
     @Test
     fun `region patch updates nested field optimistically`() = runTest(mainRule.dispatcher) {
-        val repo = FakeDexaScanRepository(scan = sampleScan())
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
-        repo.patchGate = gate
+        val repo = fakeDexaScanRepository(scan = sampleScan(), patchGate = gate)
         val vm = DexaScanDetailViewModel(repo, mockk(relaxed = true), FakeUnitPreferencesRepository(), handle())
         advanceUntilIdle()
 
@@ -100,7 +99,7 @@ class DexaScanDetailViewModelTest {
 
     @Test
     fun `delete success fires snackbar and calls onDone`() = runTest(mainRule.dispatcher) {
-        val repo = FakeDexaScanRepository(scan = sampleScan())
+        val repo = fakeDexaScanRepository(scan = sampleScan())
         val snackbar = mockk<SnackbarController>(relaxed = true)
         val vm = DexaScanDetailViewModel(repo, snackbar, FakeUnitPreferencesRepository(), handle())
         advanceUntilIdle()
@@ -110,13 +109,13 @@ class DexaScanDetailViewModelTest {
         advanceUntilIdle()
 
         assertTrue(done)
-        assertEquals(1, repo.deleteCount)
+        coVerify(exactly = 1) { repo.deleteScan(any()) }
         verify { snackbar.show("Scan deleted") }
     }
 
     @Test
     fun `delete failure fires error snackbar`() = runTest(mainRule.dispatcher) {
-        val repo = FakeDexaScanRepository(scan = sampleScan(), failDelete = true)
+        val repo = fakeDexaScanRepository(scan = sampleScan(), failDelete = true)
         val snackbar = mockk<SnackbarController>(relaxed = true)
         val vm = DexaScanDetailViewModel(repo, snackbar, FakeUnitPreferencesRepository(), handle())
         advanceUntilIdle()

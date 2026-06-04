@@ -2,9 +2,9 @@ package com.gte619n.healthfitness.feature.blood
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.gte619n.healthfitness.domain.blood.BloodReadingRepository
+import com.gte619n.healthfitness.data.blood.BloodReadingRepository
 import com.gte619n.healthfitness.domain.blood.BloodTestReport
-import com.gte619n.healthfitness.domain.blood.BloodTestReportRepository
+import com.gte619n.healthfitness.data.blood.BloodTestReportRepository
 import com.gte619n.healthfitness.domain.blood.LatestMarker
 import com.gte619n.healthfitness.domain.blood.LatestMarkers
 import dagger.hilt.android.lifecycle.HiltViewModel
