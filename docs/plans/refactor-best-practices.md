@@ -27,7 +27,10 @@ SDK in the execution environment and is verified by inspection only.
 - **Backend:** Firestore `await`+typed-exception helper; shared Gemini `Client`
   + GCS `Storage` beans; `google-api-client` catalog entry removed; dead
   `PlaceholderService` removed; `AdminCheckAspect` → config-driven
-  `@PreAuthorize` (+ aop starter dropped); `GlobalExceptionHandler` test added.
+  `@PreAuthorize` (+ aop starter dropped); `GlobalExceptionHandler` test added;
+  `api`-module `@WebMvcTest` slices added (Backend #6 — `WhoAmI`/`Device`/
+  `BodyComposition` controllers, ×9 tests; the module previously had no
+  bootstrap config, so a minimal `@SpringBootApplication` anchors the slices).
 - **Web:** `proxySseStream`; `send<T>` consolidation; `<ModalBackdrop>` (14
   modals); `<PdfUploadDropzone>`; shared chat stream-consumer + primitives;
   type/date-helper consolidation; `app/page.tsx` blood-markers + daily-vitals
@@ -44,7 +47,8 @@ SDK in the execution environment and is verified by inspection only.
   data), not a pure refactor.
 - Android #2/#4/#5/#8 (build-logic plugin, concrete repos, Hilt auth, screen
   splits) — substantive Kotlin/Gradle changes that need a real build to verify.
-- Backend #6 persistence mapper round-trips — need the Firestore emulator.
+- Backend #6 **persistence** mapper round-trips — need the Firestore emulator
+  (the `api`-module half of #6 is now done; see "Done" above).
 
 ## Cross-cutting themes (appear on 2+ platforms)
 
@@ -91,8 +95,13 @@ badly skewed — `api` has **0** tests, `persistence` has **1**.
 5. **Realign `app` with documented layering** `[med]` — controllers → `api`,
    services → `core`; unify the two package roots
    (`...healthfitness.app.*` vs `...healthfitness.*`).
-6. **Backfill tests** `[med]` — `@WebMvcTest` slices + a `GlobalExceptionHandler`
-   test in `api`; mapper round-trip tests (emulator) in `persistence`.
+6. ✅ **Backfilled `api` tests** `[med]` — `GlobalExceptionHandler` unit test plus
+   `@WebMvcTest` slices for the `WhoAmI`/`Device`/`BodyComposition` controllers
+   (request mapping, enum/`Instant` param binding, JSON serialization, and the
+   `ResponseStatusException` → `GlobalExceptionHandler` 400 path). The module had
+   no `@SpringBootConfiguration`, so `ApiTestApplication` (a minimal
+   `@SpringBootApplication`) anchors the slices. **Still open:** mapper
+   round-trip tests in `persistence` need the Firestore emulator.
 7. **~~Drop per-repo `@ConditionalOnProperty(firestore-enabled)` from the 31 impls~~**
    `[don't]` — **investigated: not safe as written.** The impls are
    component-scanned `@Repository` classes that inject the `Firestore` bean.
