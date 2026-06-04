@@ -1,8 +1,13 @@
 [versions]
 springBoot = "3.5.0"
 springDependencyManagement = "1.1.7"
+# google-auth-library-oauth2-http must track the google-auth-library-credentials
+# version that google-cloud-firestore pulls in (1.40.0). When this lagged at
+# 1.30.0 the runtime hit NoClassDefFoundError for com.google.auth.mtls.* (the
+# mtls package only exists in the newer line), crashing Firestore bean creation
+# at Cloud Run startup. Keep these aligned with `firestore` on every bump.
 firestore = "3.30.0"
-googleAuth = "1.30.0"
+googleAuth = "1.40.0"
 googleKms = "2.55.0"
 googleStorage = "2.59.0"
 googleGenai = "1.53.0"
