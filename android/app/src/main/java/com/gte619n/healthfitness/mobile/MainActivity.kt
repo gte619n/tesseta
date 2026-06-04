@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -29,8 +30,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import com.gte619n.healthfitness.data.auth.AuthState
-import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
-import com.gte619n.healthfitness.data.auth.IdTokenCache
 import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
 import com.gte619n.healthfitness.mobile.auth.SignInScreen
 import com.gte619n.healthfitness.mobile.dashboard.FoldableDashboardScreen
@@ -39,7 +38,6 @@ import com.gte619n.healthfitness.mobile.nav.AppNavHost
 import com.gte619n.healthfitness.mobile.push.TokenRegistration
 import com.gte619n.healthfitness.mobile.sync.FirstSyncGate
 import com.gte619n.healthfitness.mobile.sync.SettingUpScreen
-import com.gte619n.healthfitness.mobile.wear.PhoneTokenPublisher
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.theme.Hf
 import dagger.hilt.android.AndroidEntryPoint
@@ -49,7 +47,9 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private lateinit var authCoordinator: AuthCoordinator
+    // Application-scoped auth state owner (Hilt @Singleton). Survives activity
+    // recreation; bootstrapped below on each onCreate (idempotent).
+    @Inject lateinit var authCoordinator: AuthCoordinator
 
     // IMPL-AND-20 (Phase 6): post-sign-in token registration (D18) + the first-run
     // sync gate (D14). Hilt-injected singletons (Retrofit/WorkManager-backed).
@@ -62,16 +62,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         observeFoldState()
-
-        val cache = IdTokenCache(applicationContext)
-        val publisher = PhoneTokenPublisher(applicationContext)
-        val repo = GoogleAuthRepository(
-            context = this,
-            cache = cache,
-            webOauthClientId = BuildConfig.WEB_OAUTH_CLIENT_ID,
-            onTokenIssued = { token, _ -> publisher.publish(token) },
-        )
-        authCoordinator = AuthCoordinator(repo, cache)
 
         lifecycleScope.launch { authCoordinator.bootstrap() }
 
@@ -130,6 +120,8 @@ private fun AppRoot(
 ) {
     val state by coordinator.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    // The Activity context — Credential Manager attaches the account picker to it.
+    val context = LocalContext.current
 
     // Returning from the system Add-Account screen — re-probe so a freshly
     // added account flips us from NoAccount to the normal sign-in prompt.
@@ -146,7 +138,7 @@ private fun AppRoot(
         AuthState.Loading -> SignInScreen(state = state, onSignIn = {})
         else -> SignInScreen(
             state = state,
-            onSignIn = { scope.launch { coordinator.interactiveSignIn() } },
+            onSignIn = { scope.launch { coordinator.interactiveSignIn(context) } },
             onAddAccount = {
                 val intent = Intent(Settings.ACTION_ADD_ACCOUNT)
                     .putExtra(Settings.EXTRA_ACCOUNT_TYPES, arrayOf("com.google"))
