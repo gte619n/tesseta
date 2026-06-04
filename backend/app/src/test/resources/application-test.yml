@@ -6,6 +6,9 @@ app:
   auth:
     dev-mode: true
     allowed-audiences: test-audience
+  # AdminEquipmentControllerTest authenticates as this email for admin cases.
+  admin:
+    emails: admin@example.com
   cors:
     allowed-origins: http://localhost:3000
   gcp:

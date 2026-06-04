@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 import { useToast } from '@/components/ui/Toast';
 
 interface Props {
@@ -26,23 +27,6 @@ export function RegenerateImageModal({
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Track whether the mousedown landed on the backdrop so we only close on a
-  // true backdrop click. Without this, a text-selection drag that starts
-  // inside the dialog and releases over the backdrop would close the modal.
-  const downOnBackdropRef = useRef(false);
-
-  function handleBackdropMouseDown(e: React.MouseEvent) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-
-  function handleBackdropClick(e: React.MouseEvent) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) {
-      onClose();
-    }
-  }
-
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
@@ -81,16 +65,10 @@ export function RegenerateImageModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+    <ModalBackdrop
+      onClose={onClose}
+      contentClassName="w-[680px] max-w-[92vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-      <div
-        className="w-[680px] max-w-[92vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         <h2 className="mb-1 text-xl font-semibold text-primary">Regenerate image</h2>
         <p className="mb-4 text-sm text-secondary">
           For <span className="font-medium text-primary">{equipmentName}</span>. Edit the prompt
@@ -124,7 +102,6 @@ export function RegenerateImageModal({
             {isSubmitting ? 'Submitting…' : 'Regenerate'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalBackdrop>
   );
 }

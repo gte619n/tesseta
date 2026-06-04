@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import type { Entry, Meal, Macros, UpdateEntryBody } from "@/lib/types/nutrition";
 import { MEAL_LABELS, MEALS, QUANTITY_STEPS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -92,17 +93,6 @@ export function EditEntryModal({
   });
   const [saving, setSaving] = useState(false);
 
-  // Backdrop close tracking (see web/CLAUDE.md modal pattern)
-  const downOnBackdropRef = useRef(false);
-  function handleBackdropMouseDown(e: { target: unknown; currentTarget: unknown }) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-  function handleBackdropClick(e: { target: unknown; currentTarget: unknown }) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) onClose();
-  }
-
   // Re-scale macros from the baseline when the portion changes (only meaningful
   // for catalog foods that carry a per-100g baseline).
   function recompute(nextGrams: number, nextQty: number) {
@@ -188,16 +178,10 @@ export function EditEntryModal({
   }`;
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+    <ModalBackdrop
+      onClose={onClose}
+      contentClassName="flex max-h-[90vh] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-      <div
-        className="flex max-h-[90vh] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-border-subtle px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -370,7 +354,6 @@ export function EditEntryModal({
             {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalBackdrop>
   );
 }

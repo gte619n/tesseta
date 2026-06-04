@@ -53,14 +53,10 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
     private final Tool tool;
 
     public GeminiWorkoutProgramChatClient(
-        @Value("${app.workout-programs.gemini-api-key:${GEMINI_API_KEY:}}") String apiKey,
+        Client client,
         @Value("${app.workout-programs.gemini-model:gemini-3.1-pro-preview}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY (app.workout-programs.gemini-api-key) is required for the program designer");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
         this.tool = Tool.builder().functionDeclarations(List.of(proposeTool())).build();
     }

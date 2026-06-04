@@ -46,8 +46,6 @@ wearComposeMaterial3 = "1.0.0-alpha28"
 wearComposeFoundation = "1.4.0"
 wearToolingPreview = "1.0.0"
 healthServices = "1.1.0-alpha04"
-wearTiles = "1.4.1"
-wearComplications = "1.2.1"
 playServicesWearable = "18.2.0"
 
 # Auth
@@ -143,8 +141,6 @@ firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 wear-compose-material3 = { module = "androidx.wear.compose:compose-material3", version.ref = "wearComposeMaterial3" }
 wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wearComposeFoundation" }
 wear-tooling-preview = { module = "androidx.wear:wear-tooling-preview", version.ref = "wearToolingPreview" }
-wear-tiles = { module = "androidx.wear.tiles:tiles", version.ref = "wearTiles" }
-wear-complications = { module = "androidx.wear.watchface:watchface-complications-data-source", version.ref = "wearComplications" }
 health-services-client = { module = "androidx.health:health-services-client", version.ref = "healthServices" }
 
 # Auth (IMPL-02): Credential Manager + Google ID. Use the Web client ID as

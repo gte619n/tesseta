@@ -7,7 +7,7 @@ import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.gte619n.healthfitness.core.user.GoogleHealthConnection;
 import com.gte619n.healthfitness.core.user.User;
-import com.google.api.core.ApiFuture;
+import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.firestore.Blob;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -195,14 +194,4 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         );
     }
 
-    private static <T> T await(ApiFuture<T> future) {
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Firestore call interrupted", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Firestore call failed", e.getCause());
-        }
-    }
 }

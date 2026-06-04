@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 import { useToast } from '@/components/ui/Toast';
 import { DEMO_PHASES, DEMO_PHASE_LABEL } from '@/lib/types/exercise';
 import type { DemoPhase } from '@/lib/types/exercise';
@@ -38,19 +39,6 @@ export function RegenerateMediaModal({
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const downOnBackdropRef = useRef(false);
-
-  function handleBackdropMouseDown(e: React.MouseEvent) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-
-  function handleBackdropClick(e: React.MouseEvent) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) {
-      onClose();
-    }
-  }
 
   // Seed the prompt from the selected phase's built default whenever the modal
   // opens or the phase changes.
@@ -96,16 +84,10 @@ export function RegenerateMediaModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+    <ModalBackdrop
+      onClose={onClose}
+      contentClassName="w-[680px] max-w-[92vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-      <div
-        className="w-[680px] max-w-[92vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         <h2 className="mb-1 text-xl font-semibold text-primary">Regenerate demo media</h2>
         <p className="mb-4 text-sm text-secondary">
           For <span className="font-medium text-primary">{exerciseName}</span>. The prompt is
@@ -173,7 +155,6 @@ export function RegenerateMediaModal({
             {isSubmitting ? 'Submitting…' : 'Regenerate'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalBackdrop>
   );
 }

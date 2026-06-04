@@ -77,17 +77,27 @@ and ends OUTSIDE the dialog fires a click on the backdrop and closes the
 modal. The user loses their selection or their in-progress input.
 
 Pattern: track whether the mousedown happened on the backdrop, and only
-close when both mousedown AND mouseup landed there. Reference
-implementations: `components/admin/EditDrugModal.tsx`,
-`components/admin/RegenerateImageModal.tsx`,
-`components/admin/ImageLightbox.tsx`.
+close when both mousedown AND mouseup landed there.
 
-When adding a new modal, copy the `downOnBackdropRef` +
-`handleBackdropMouseDown` + `handleBackdropClick` trio. Mirror the
-`onMouseDown={(e) => e.stopPropagation()}` on the inner content div
-alongside the existing `onClick` stopPropagation. If this pattern starts
-showing up in 6+ places we'll extract a `<ModalBackdrop>` primitive —
-until then, keep the trio inline.
+**Use the `<ModalBackdrop>` primitive** (`components/ui/ModalBackdrop.tsx`)
+— it encapsulates the trio (the `downOnBackdropRef` +
+`handleBackdropMouseDown` + `handleBackdropClick` logic) plus the inner-box
+`onMouseDown`/`onClick` stopPropagation. Pass `onClose`, your dialog as
+`children`, and the box styling via `contentClassName` (and an optional
+`className` to override the default centered/blurred backdrop):
+
+```tsx
+<ModalBackdrop onClose={onClose} contentClassName="w-[560px] …">
+  <h2>…</h2>
+  {/* dialog body */}
+</ModalBackdrop>
+```
+
+Exception: dialogs that need their own ARIA semantics on the box
+(`role="dialog"`/`"alertdialog"`, `aria-modal`, a `ref`) keep the trio
+inline, since the primitive renders a plain content box. See
+`components/ui/ConfirmDialog.tsx` and
+`components/bloodtest/AddReadingButton.tsx`.
 
 Don't replace this with `onMouseUp` alone, and don't rely solely on
 inner-content `e.stopPropagation()` — neither covers the

@@ -18,9 +18,18 @@ import { WeightValue } from "@/components/dashboard/WeightValue";
 import { BodyCompositionPrimaryDelta } from "@/components/dashboard/BodyCompositionPrimaryDelta";
 import { isAdmin } from "@/lib/admin";
 import { apiFetch, apiJson } from "@/lib/api";
-import { fetchDailyMetrics, type DailyMetric } from "@/lib/daily-metrics-api";
+import { fetchDailyMetrics } from "@/lib/daily-metrics-api";
 import { recent, todayHeader, vitals, type Vital } from "@/lib/fixtures/dashboard";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
+import type { Reading } from "@/lib/types/body-composition";
+import { buildVital } from "@/lib/dashboard-vitals";
+import {
+  DASHBOARD_BLOOD_MARKERS,
+  type DashboardMarker,
+  DASHBOARD_BLOOD_LABELS,
+  DEFAULT_REFS,
+  normalizeBloodMarkerName,
+} from "@/lib/blood-markers";
 
 // IMPL-04 wires the Sidebar identity and the BodyCompositionCard to real
 // data. The other cards (StatCard row, BloodPanel, TodayCard, RecentFeed)
@@ -29,17 +38,6 @@ import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 
 const KG_TO_LB = 2.20462;
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-
-type Metric = "WEIGHT_KG" | "BODY_FAT_PERCENT" | "LEAN_MASS_KG" | "BMI";
-
-type Reading = {
-  recordId: string;
-  metric: Metric;
-  value: number;
-  sampleTime: string;
-  sourcePlatform: string | null;
-  recordingMethod: string | null;
-};
 
 type BodyCompositionView = {
   // Latest weight in canonical lb; formatted client-side per unit pref.
@@ -343,9 +341,6 @@ type DailyVitals = {
   steps: Vital;
 };
 
-const FLAT_SPARKLINE = "0,10 6,10 12,10 18,10 24,10 30,10 36,10 42,10 48,10";
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 async function loadDailyMetrics(): Promise<DailyVitals> {
   const rows = await fetchDailyMetrics();
   // Oldest → newest so "latest" is the final element.
@@ -401,110 +396,6 @@ async function loadDailyMetrics(): Promise<DailyVitals> {
   };
 }
 
-type MetricSpec = {
-  field: "restingHeartRate" | "hrvMs" | "sleepMinutes" | "steps";
-  label: string;
-  icon: string;
-  unit?: string;
-  higherIsBetter: boolean;
-  // Optional unit conversion applied to every raw value (e.g. minutes → hours).
-  transform?: (raw: number) => number;
-  format: (value: number) => string;
-  formatDelta: (delta: number) => string;
-  // Fixture to fall back to when there's no data, or null to render a "—" tile.
-  emptyFixture: Vital | null;
-};
-
-function buildVital(rows: DailyMetric[], spec: MetricSpec): Vital {
-  // Series of non-null (transformed) values with their dates, oldest → newest.
-  const points: { date: string; value: number }[] = [];
-  for (const row of rows) {
-    const raw = row[spec.field];
-    if (raw === null) continue;
-    points.push({
-      date: row.date,
-      value: spec.transform ? spec.transform(raw) : raw,
-    });
-  }
-
-  if (points.length === 0) {
-    if (spec.emptyFixture) return spec.emptyFixture;
-    return {
-      label: spec.label,
-      icon: spec.icon,
-      value: "—",
-      ...(spec.unit ? { unit: spec.unit } : {}),
-      sparkline: FLAT_SPARKLINE,
-    };
-  }
-
-  const latest = points[points.length - 1]!;
-  const series = points.map((p) => p.value);
-
-  // Delta = latest minus the mean of values before latest within the prior
-  // 7 days (the 7 days preceding the latest sample's date).
-  const latestTime = new Date(latest.date + "T00:00:00Z").getTime();
-  const priorCutoff = latestTime - 7 * DAY_MS;
-  const prior = points
-    .slice(0, points.length - 1)
-    .filter((p) => {
-      const t = new Date(p.date + "T00:00:00Z").getTime();
-      return t >= priorCutoff && t < latestTime;
-    })
-    .map((p) => p.value);
-
-  let delta: VitalDeltaLocal | undefined;
-  if (prior.length > 0) {
-    const mean = prior.reduce((a, b) => a + b, 0) / prior.length;
-    const diff = latest.value - mean;
-    const direction: "up" | "down" = diff >= 0 ? "up" : "down";
-    // For higher-is-better metrics an increase is good; for lower-is-better
-    // (Resting HR) a decrease is good.
-    const tone: "good" | "alert" = spec.higherIsBetter
-      ? diff >= 0
-        ? "good"
-        : "alert"
-      : diff <= 0
-        ? "good"
-        : "alert";
-    delta = {
-      direction,
-      value: spec.formatDelta(Math.abs(diff)),
-      window: "7d",
-      tone,
-    };
-  }
-
-  return {
-    label: spec.label,
-    icon: spec.icon,
-    value: spec.format(latest.value),
-    ...(spec.unit ? { unit: spec.unit } : {}),
-    ...(delta ? { delta } : {}),
-    sparkline: metricSparkline(series),
-  };
-}
-
-type VitalDeltaLocal = NonNullable<Vital["delta"]>;
-
-// Build a 9-point 48×20 sparkline from up to the last 9 values, min–max
-// normalized. Higher value → lower y (top of the viewBox), mirroring the
-// weight sparkline helper.
-function metricSparkline(series: number[]): string {
-  const tail = series.slice(-9);
-  if (tail.length === 0) return FLAT_SPARKLINE;
-  const min = Math.min(...tail);
-  const max = Math.max(...tail);
-  const range = max - min || 1;
-  const N = tail.length;
-  return tail
-    .map((y, i) => {
-      const x = N === 1 ? 0 : (i * 48) / (N - 1);
-      const yPx = 2 + ((max - y) / range) * 16;
-      return `${x.toFixed(0)},${yPx.toFixed(0)}`;
-    })
-    .join(" ");
-}
 
 function computeLeanMass(
   weights: Reading[],
@@ -728,45 +619,6 @@ type BloodTestReport = {
   labSource: string;
   markers: ExtractedMarker[];
 };
-
-// Markers we show on the dashboard compact panel, in display order.
-// Four high-value markers: Testosterone, LDL, ApoB, HbA1c
-const DASHBOARD_BLOOD_MARKERS = ["TESTOSTERONE", "LDL", "APO_B", "HBA1C"] as const;
-type DashboardMarker = (typeof DASHBOARD_BLOOD_MARKERS)[number];
-
-const DASHBOARD_BLOOD_LABELS: Record<string, string> = {
-  TESTOSTERONE: "Testosterone",
-  LDL: "LDL",
-  APO_B: "ApoB",
-  HBA1C: "HbA1c",
-};
-
-// Default reference ranges for markers extracted from lab reports
-const DEFAULT_REFS: Record<DashboardMarker, { min: number; threshold: number; max: number; orientation: "LOWER_IS_BETTER" | "HIGHER_IS_BETTER" }> = {
-  TESTOSTERONE: { min: 200, threshold: 300, max: 1200, orientation: "HIGHER_IS_BETTER" },
-  LDL: { min: 0, threshold: 100, max: 200, orientation: "LOWER_IS_BETTER" },
-  APO_B: { min: 0, threshold: 90, max: 150, orientation: "LOWER_IS_BETTER" },
-  HBA1C: { min: 4, threshold: 5.7, max: 8, orientation: "LOWER_IS_BETTER" },
-};
-
-// Patterns to match marker names from lab reports
-const BLOOD_MARKER_PATTERNS: { pattern: RegExp; marker: DashboardMarker }[] = [
-  { pattern: /\btestosterone\b/i, marker: "TESTOSTERONE" },
-  { pattern: /\bapob\b|\bapo[\s-]?b\b|\bapolipoprotein[\s-]?b\b/i, marker: "APO_B" },
-  { pattern: /\bldl\b/i, marker: "LDL" },
-  { pattern: /\bhba1c\b|\bhgba1c\b|\bhemoglobin\s*a1c\b|\bglycated\s*hemoglobin\b/i, marker: "HBA1C" },
-  { pattern: /^a1c$/i, marker: "HBA1C" },
-];
-
-function normalizeBloodMarkerName(name: string): DashboardMarker | null {
-  const trimmed = name.trim();
-  for (const { pattern, marker } of BLOOD_MARKER_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      return marker;
-    }
-  }
-  return null;
-}
 
 type LatestBloodValue = {
   value: number;

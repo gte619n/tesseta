@@ -3,7 +3,6 @@ package com.gte619n.healthfitness.integrations.location;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -16,8 +15,8 @@ public class LocationPhotoStorage {
     private final Storage storage;
     private final String bucket;
 
-    public LocationPhotoStorage(@Value("${app.gym.bucket}") String bucket) {
-        this.storage = StorageOptions.getDefaultInstance().getService();
+    public LocationPhotoStorage(Storage storage, @Value("${app.gym.bucket}") String bucket) {
+        this.storage = storage;
         this.bucket = bucket;
     }
 

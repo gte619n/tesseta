@@ -87,14 +87,10 @@ public class DrugLookupService {
     private final ObjectMapper json;
 
     public DrugLookupService(
-        @Value("${app.medications.gemini-api-key:}") String apiKey,
+        Client client,
         @Value("${app.medications.gemini-model}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY is required for drug lookup");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
         this.json = JsonMapper.builder()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

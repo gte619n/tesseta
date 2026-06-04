@@ -9,6 +9,7 @@ import type {
 import { metricMeta } from "@/lib/types/goals";
 import { RangeIndicator } from "@/components/ui/RangeIndicator";
 import { useToast } from "@/components/ui/Toast";
+import { formatDateUpper } from "@/lib/format-date";
 
 // Interactive roadmap timeline for a deep Goal. Server-component page
 // fetches the goal and passes mutation server actions as props (the
@@ -39,12 +40,6 @@ type Props = {
 function isPastDue(iso: string): boolean {
   const t = new Date(`${iso}T00:00:00`).getTime();
   return Date.now() > t;
-}
-
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`)
-    .toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    .toUpperCase();
 }
 
 export function RoadmapTimeline({
@@ -131,7 +126,7 @@ function PhaseRow({
               {phase.title}
             </h3>
             <div className="caps-mono mt-1 text-[10px] tracking-[0.06em] text-tertiary">
-              {formatDate(phase.targetStartDate)} – {formatDate(phase.targetEndDate)}
+              {formatDateUpper(phase.targetStartDate)} – {formatDateUpper(phase.targetEndDate)}
             </div>
           </div>
           <div className="flex items-center gap-2">

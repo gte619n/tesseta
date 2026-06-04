@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.integrations.medication;
 
+import com.google.genai.Client;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,7 +41,8 @@ class DrugImageGenerationIntegrationTest {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("GEMINI_API_KEY environment variable is required for image generation tests");
         }
-        return new DrugImageGenerator(apiKey, "gemini-3.1-flash-image-preview");
+        return new DrugImageGenerator(
+            Client.builder().apiKey(apiKey).build(), "gemini-3.1-flash-image-preview");
     }
 
     // ==================== VISUAL LOOKUP TESTS (NO API KEY NEEDED) ====================

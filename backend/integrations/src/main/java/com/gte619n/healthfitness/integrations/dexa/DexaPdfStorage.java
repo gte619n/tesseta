@@ -3,7 +3,6 @@ package com.gte619n.healthfitness.integrations.dexa;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -19,8 +18,8 @@ public class DexaPdfStorage {
     private final Storage storage;
     private final String bucket;
 
-    public DexaPdfStorage(@Value("${app.dexa.bucket}") String bucket) {
-        this.storage = StorageOptions.getDefaultInstance().getService();
+    public DexaPdfStorage(Storage storage, @Value("${app.dexa.bucket}") String bucket) {
+        this.storage = storage;
         this.bucket = bucket;
     }
 

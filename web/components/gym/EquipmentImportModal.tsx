@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import { useToast } from "@/components/ui/Toast";
 import type {
   ImportPreviewResponse,
@@ -91,23 +92,6 @@ export function EquipmentImportModal({
   const [rowStates, setRowStates] = useState<Record<number, RowState>>({});
   const [result, setResult] = useState<ImportConfirmResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Track whether the mousedown landed on the backdrop so we only close on a
-  // true backdrop click. Without this, a text-selection drag that starts
-  // inside the dialog and releases over the backdrop would close the modal.
-  const downOnBackdropRef = useRef(false);
-
-  function handleBackdropMouseDown(e: React.MouseEvent) {
-    downOnBackdropRef.current = e.target === e.currentTarget;
-  }
-
-  function handleBackdropClick(e: React.MouseEvent) {
-    const downOnBackdrop = downOnBackdropRef.current;
-    downOnBackdropRef.current = false;
-    if (downOnBackdrop && e.target === e.currentTarget) {
-      resetAndClose();
-    }
-  }
-
   if (!isOpen) return null;
 
   function resetAndClose() {
@@ -195,16 +179,10 @@ export function EquipmentImportModal({
     : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-canvas/75 backdrop-blur-sm"
-      onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
+    <ModalBackdrop
+      onClose={resetAndClose}
+      contentClassName="w-[720px] max-w-[95vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-      <div
-        className="w-[720px] max-w-[95vw] max-h-[90vh] overflow-y-auto rounded-lg border border-border-default bg-surface p-6 shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* INPUT STAGE */}
         {stage === "input" && (
           <>
@@ -425,7 +403,6 @@ export function EquipmentImportModal({
             </div>
           </>
         )}
-      </div>
-    </div>
+    </ModalBackdrop>
   );
 }

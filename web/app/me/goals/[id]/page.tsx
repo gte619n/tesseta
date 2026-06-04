@@ -13,6 +13,7 @@ import { DOMAIN_LABEL } from "@/lib/types/goals";
 import { RoadmapTimeline } from "@/components/goals/RoadmapTimeline";
 import { GoalDetailActions } from "@/components/goals/GoalDetailActions";
 import { entityMetadata } from "@/lib/page-metadata";
+import { formatDateUpper } from "@/lib/format-date";
 
 export const generateMetadata = entityMetadata(
   ({ id }: { id: string }) => getGoalDeep(id),
@@ -20,12 +21,6 @@ export const generateMetadata = entityMetadata(
 );
 
 export const dynamic = "force-dynamic";
-
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`)
-    .toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    .toUpperCase();
-}
 
 function isBehindSchedule(targetDate: string, status: string): boolean {
   if (status !== "ACTIVE") return false;
@@ -120,7 +115,7 @@ export default async function GoalDetailPage(props: {
               </p>
             ) : null}
             <div className="caps-mono mt-2 text-[10px] tracking-[0.06em] text-tertiary">
-              Target {formatDate(goal.targetDate)}
+              Target {formatDateUpper(goal.targetDate)}
             </div>
           </div>
 

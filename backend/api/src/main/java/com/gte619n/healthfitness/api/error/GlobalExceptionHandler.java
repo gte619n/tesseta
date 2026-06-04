@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.api.error;
 
 import java.time.Instant;
+import com.gte619n.healthfitness.core.error.FirestoreAccessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -82,13 +83,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
-        String exMessage = ex.getMessage();
-
-        // Check if this is a wrapped Firestore error from persistence layer
-        if (exMessage != null && exMessage.startsWith("Firestore call")) {
-            return handleFirestoreError(ex);
-        }
-
         log.error("Unhandled runtime exception", ex);
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -99,7 +93,8 @@ public class GlobalExceptionHandler {
             ));
     }
 
-    private ResponseEntity<ErrorResponse> handleFirestoreError(RuntimeException ex) {
+    @ExceptionHandler(FirestoreAccessException.class)
+    public ResponseEntity<ErrorResponse> handleFirestoreError(FirestoreAccessException ex) {
         Throwable cause = ex.getCause();
         String causeMessage = cause != null ? cause.getMessage() : "";
 

@@ -72,14 +72,10 @@ public class DexaExtractor {
     private final ObjectMapper json;
 
     public DexaExtractor(
-        @Value("${app.dexa.gemini-api-key:}") String apiKey,
+        Client client,
         @Value("${app.dexa.gemini-model}") String model
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                "GEMINI_API_KEY is required for DEXA extraction");
-        }
-        this.client = Client.builder().apiKey(apiKey).build();
+        this.client = client;
         this.model = model;
         this.json = JsonMapper.builder()
             .addModule(new JavaTimeModule())

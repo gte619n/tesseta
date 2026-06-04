@@ -7,7 +7,7 @@ import com.gte619n.healthfitness.core.medication.Drug;
 import com.gte619n.healthfitness.core.medication.DrugCategory;
 import com.gte619n.healthfitness.core.medication.DrugForm;
 import com.gte619n.healthfitness.core.medication.DrugRepository;
-import com.google.api.core.ApiFuture;
+import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -204,14 +203,4 @@ public class DrugRepositoryImpl implements DrugRepository {
         return body;
     }
 
-    private static <T> T await(ApiFuture<T> future) {
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Firestore call interrupted", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Firestore call failed", e.getCause());
-        }
-    }
 }

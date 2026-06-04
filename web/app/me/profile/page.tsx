@@ -9,13 +9,7 @@ import { signIn } from "@/auth";
 import { apiFetch, apiJson } from "@/lib/api";
 import { HeightForm } from "@/components/profile/HeightForm";
 import { UnitsSection } from "@/components/profile/UnitsSection";
-
-type WhoAmI = {
-  userId: string;
-  email: string | null;
-  displayName: string | null;
-  heightCm: number | null;
-};
+import type { WhoAmI } from "@/lib/types/profile";
 
 type Status = {
   connected: boolean;

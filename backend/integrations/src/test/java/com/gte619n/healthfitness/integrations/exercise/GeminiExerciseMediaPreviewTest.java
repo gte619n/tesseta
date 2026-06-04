@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.core.exercise.ExerciseStatus;
 import com.gte619n.healthfitness.core.exercise.Laterality;
 import com.gte619n.healthfitness.core.exercise.Mechanic;
 import com.gte619n.healthfitness.core.exercise.MovementPattern;
+import com.google.genai.Client;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -51,7 +52,9 @@ class GeminiExerciseMediaPreviewTest {
     @Test
     void previewDemoImages() throws Exception {
         GeminiExerciseMediaService media = new GeminiExerciseMediaService(
-            null, null, System.getenv("GEMINI_API_KEY"), "gemini-3.1-flash-image-preview");
+            null, null,
+            Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(),
+            "gemini-3.1-flash-image-preview");
 
         Path outDir = locate("docs/test_reports/workout_logs").resolve("media_preview");
         Files.createDirectories(outDir);

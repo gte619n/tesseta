@@ -3,7 +3,6 @@ package com.gte619n.healthfitness.integrations.equipment;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,8 +22,8 @@ public class EquipmentImageStorage {
     private final Storage storage;
     private final String bucket;
 
-    public EquipmentImageStorage(@Value("${app.equipment.bucket}") String bucket) {
-        this.storage = StorageOptions.getDefaultInstance().getService();
+    public EquipmentImageStorage(Storage storage, @Value("${app.equipment.bucket}") String bucket) {
+        this.storage = storage;
         this.bucket = bucket;
     }
 

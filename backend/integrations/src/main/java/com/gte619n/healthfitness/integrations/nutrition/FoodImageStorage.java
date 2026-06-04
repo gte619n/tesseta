@@ -4,7 +4,6 @@ import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStore;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoReader;
 import java.util.Optional;
@@ -43,8 +42,8 @@ public class FoodImageStorage implements FoodImageStore, MealPhotoReader {
     private final Storage storage;
     private final String bucket;
 
-    public FoodImageStorage(@Value("${app.nutrition.bucket}") String bucket) {
-        this.storage = StorageOptions.getDefaultInstance().getService();
+    public FoodImageStorage(Storage storage, @Value("${app.nutrition.bucket}") String bucket) {
+        this.storage = storage;
         this.bucket = bucket;
     }
 

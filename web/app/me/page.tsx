@@ -5,12 +5,7 @@ export const metadata: Metadata = {
   title: "Dashboard",
 };
 import { apiJson } from "@/lib/api";
-
-type WhoAmI = {
-  userId: string;
-  email: string | null;
-  displayName: string | null;
-};
+import type { WhoAmI } from "@/lib/types/profile";
 
 export const dynamic = "force-dynamic";
 
