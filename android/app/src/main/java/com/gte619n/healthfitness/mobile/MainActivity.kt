@@ -16,7 +16,6 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
@@ -128,7 +128,7 @@ private fun AppRoot(
     tokenRegistration: TokenRegistration,
     firstSyncGate: FirstSyncGate,
 ) {
-    val state by coordinator.state.collectAsState()
+    val state by coordinator.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     // Returning from the system Add-Account screen — re-probe so a freshly
