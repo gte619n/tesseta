@@ -5,15 +5,20 @@ import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import javax.inject.Inject
+import javax.inject.Singleton
 
 // Owns the AuthState for the activity. Bootstraps silently on launch when
 // the cache says the user has signed in before; otherwise stays SignedOut
 // until interactiveSignIn() is invoked from the SignInScreen.
 //
-// This is the moral equivalent of an AuthViewModel, but lifted out of the
-// ViewModelStore so we don't need to wire Hilt yet (per android/CLAUDE.md).
-// When Hilt lands in a later IMPL the constructor signature stays the same.
-class AuthCoordinator(
+// The moral equivalent of an AuthViewModel, but application-scoped (a Hilt
+// @Singleton) so the AuthState survives MainActivity recreation across
+// configuration changes. Both collaborators are already in the graph:
+// IdTokenCache from NetworkModule and GoogleAuthRepository from
+// SettingsAppModule (the latter wired with the full sign-out side effects).
+@Singleton
+class AuthCoordinator @Inject constructor(
     private val repo: GoogleAuthRepository,
     private val cache: IdTokenCache,
 ) {
@@ -47,9 +52,11 @@ class AuthCoordinator(
         }
     }
 
-    suspend fun interactiveSignIn() {
+    // [activityContext] must be the hosting Activity — Credential Manager needs a
+    // window to show the account picker (see GoogleAuthRepository.interactiveSignIn).
+    suspend fun interactiveSignIn(activityContext: android.content.Context) {
         _state.value = AuthState.Loading
-        _state.value = repo.interactiveSignIn()
+        _state.value = repo.interactiveSignIn(activityContext)
     }
 
     suspend fun signOut() {

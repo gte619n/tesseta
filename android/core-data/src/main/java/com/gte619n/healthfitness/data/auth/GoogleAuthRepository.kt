@@ -34,11 +34,18 @@ class GoogleAuthRepository(
 ) {
     private val manager = CredentialManager.create(context)
 
-    suspend fun interactiveSignIn(): AuthState = runSignIn(filterByAuthorized = false)
+    // Interactive sign-in shows the account picker, which Credential Manager must
+    // attach to a visible window — so the caller passes the *Activity* context
+    // (the application context the repo is constructed with cannot host UI). The
+    // silent refresh path needs no UI and reuses the stored context, so it can run
+    // headless (e.g. TokenAuthenticator on a 401, or the wear refresh service).
+    suspend fun interactiveSignIn(activityContext: Context): AuthState =
+        runSignIn(uiContext = activityContext, filterByAuthorized = false)
 
-    suspend fun silentRefresh(): AuthState = runSignIn(filterByAuthorized = true)
+    suspend fun silentRefresh(): AuthState =
+        runSignIn(uiContext = context, filterByAuthorized = true)
 
-    private suspend fun runSignIn(filterByAuthorized: Boolean): AuthState {
+    private suspend fun runSignIn(uiContext: Context, filterByAuthorized: Boolean): AuthState {
         val option = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(filterByAuthorized)
             .setServerClientId(webOauthClientId)
@@ -47,7 +54,7 @@ class GoogleAuthRepository(
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
 
         return try {
-            val response = manager.getCredential(context, request)
+            val response = manager.getCredential(uiContext, request)
             val cred = response.credential
             if (cred !is CustomCredential ||
                 cred.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
