@@ -1,15 +1,11 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
+    id("healthfitness.android.library")
+    id("healthfitness.android.hilt")
 }
 
 android {
     namespace = "com.gte619n.healthfitness.data"
-    compileSdk = 35
     defaultConfig {
-        minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // IMPL-AND-20: export Room schemas so migrations can be diffed in CI.
@@ -21,13 +17,6 @@ android {
     // migration tests; make them visible to the androidTest source set.
     sourceSets {
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
-    }
-    kotlin {
-        jvmToolchain(21)
     }
 }
 
@@ -64,9 +53,8 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
 
-    // IMPL-12: Hilt — network DI module + repositories.
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+    // IMPL-12: Hilt (hilt-android + hilt-compiler) comes from the
+    // healthfitness.android.hilt convention plugin.
 
     // IMPL-AND-20 (Phase 4): Hilt + WorkManager integration so the sync workers
     // (@HiltWorker) can inject SyncEngine/OutboxRepository.
