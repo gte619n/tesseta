@@ -1,9 +1,8 @@
 package com.gte619n.healthfitness.integrations.nutrition;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.gte619n.healthfitness.core.nutrition.CatalogFood;
 import java.io.BufferedReader;
 import java.util.Optional;
@@ -35,9 +34,7 @@ public class OpenFoodFactsDumpParser {
     private final ObjectMapper json;
 
     public OpenFoodFactsDumpParser() {
-        this.json = JsonMapper.builder()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .build();
+        this.json = JsonSupport.LENIENT;
     }
 
     /**

@@ -1,9 +1,8 @@
 package com.gte619n.healthfitness.integrations.nutrition;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.gte619n.healthfitness.core.nutrition.BarcodeLookup;
 import com.gte619n.healthfitness.core.nutrition.CatalogFood;
 import java.net.URI;
@@ -54,9 +53,7 @@ public class OpenFoodFactsClient implements BarcodeLookup {
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(TIMEOUT)
             .build();
-        this.json = JsonMapper.builder()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .build();
+        this.json = JsonSupport.LENIENT;
     }
 
     @Override

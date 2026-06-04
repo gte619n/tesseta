@@ -57,6 +57,15 @@ SDK in the execution environment and is verified by inspection only.
   `backend/CLAUDE.md`: `core.<feature>` = domain + pure-domain services;
   `api.<feature>` = controllers, DTOs, and the integration-orchestrating service.
   `./gradlew test` green.
+- **Backend — single-module de-dup batch** (unblocked by the collapse, all
+  build-verified): (1) deleted 4 duplicate in-memory test fakes that the module
+  walls had forced (`core.goals.eval` copies "couldn't reach the app-module
+  repos") — the `testsupport` versions are now the single source; (2) collapsed
+  ~14 hand-rolled `ObjectMapper`s into `config.JsonSupport.{WEB,LENIENT}` (the
+  read-only `integrations` parsers proved `NON_NULL`/JavaTime differences were
+  no-ops; `FutureWorkoutsParser`'s one-off SNAKE_CASE mapper kept); (3) extracted
+  the copy-pasted SSE `sendEvent` helper into `config.SseEvents` (unifies the two
+  chat controllers' send-and-error-handle, completing what `SseStreamer` started).
 - **Web:** `proxySseStream`; `send<T>` consolidation; `<ModalBackdrop>` (14
   modals); `<PdfUploadDropzone>`; shared chat stream-consumer + primitives;
   type/date-helper consolidation; `app/page.tsx` blood-markers + daily-vitals

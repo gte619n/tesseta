@@ -1,5 +1,10 @@
 package com.gte619n.healthfitness.core.goals.eval;
 
+import com.gte619n.healthfitness.testsupport.InMemoryGoalRepository;
+import com.gte619n.healthfitness.testsupport.InMemoryPhaseRepository;
+import com.gte619n.healthfitness.testsupport.InMemoryStepRepository;
+import com.gte619n.healthfitness.testsupport.InMemoryUserRepository;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

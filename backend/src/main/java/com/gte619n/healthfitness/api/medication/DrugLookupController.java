@@ -1,9 +1,7 @@
 package com.gte619n.healthfitness.api.medication;
 
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gte619n.healthfitness.api.medication.DrugResponse;
 import com.gte619n.healthfitness.config.SseStreamer;
 import com.gte619n.healthfitness.core.medication.Drug;
@@ -29,10 +27,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class DrugLookupController {
 
     private static final long SSE_TIMEOUT_MS = 120_000L;
-    private static final ObjectMapper JSON = JsonMapper.builder()
-        .addModule(new JavaTimeModule())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-        .build();
+    private static final ObjectMapper JSON = JsonSupport.WEB;
 
     private final DrugCatalogService catalogService;
     private final SseStreamer sseStreamer;

@@ -1,9 +1,8 @@
 package com.gte619n.healthfitness.integrations.medication;
 
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -38,9 +37,7 @@ public class RxNormLookupService {
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(TIMEOUT)
             .build();
-        this.json = JsonMapper.builder()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .build();
+        this.json = JsonSupport.LENIENT;
     }
 
     /**

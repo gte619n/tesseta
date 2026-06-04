@@ -1,9 +1,8 @@
 package com.gte619n.healthfitness.api.goals;
 
+import com.gte619n.healthfitness.config.SseEvents;
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gte619n.healthfitness.api.goals.dto.ChatMessageRequest;
 import com.gte619n.healthfitness.api.goals.dto.ChatThreadResponse;
 import com.gte619n.healthfitness.api.goals.dto.CommitResponse;
@@ -33,7 +32,6 @@ import com.gte619n.healthfitness.core.goals.chat.UserHealthSnapshotService;
 import com.gte619n.healthfitness.core.goals.eval.StepEvaluationService;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.integrations.goals.GoalChatClient;
-import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -80,10 +78,7 @@ public class GoalChatController {
 
     private static final long SSE_TIMEOUT_MS = 120_000L;
 
-    private static final ObjectMapper JSON = JsonMapper.builder()
-        .addModule(new JavaTimeModule())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-        .build();
+    private static final ObjectMapper JSON = JsonSupport.WEB;
 
     private final CurrentUserProvider currentUser;
     private final GoalChatRepository chat;
@@ -172,7 +167,7 @@ public class GoalChatController {
             try {
                 GoalChatClient.StreamResult result = chatClient.streamChat(history, message, healthContext, token -> {
                     assistantText.append(token);
-                    sendEvent(emitter, "token", Map.of("text", token));
+                    SseEvents.send(emitter, JSON, "token", Map.of("text", token));
                 });
 
                 String proposalJson = null;
@@ -181,7 +176,7 @@ public class GoalChatController {
                     validated = validator.validate(result.proposal());
                     GoalProposalDto dto = GoalProposalDto.from(validated);
                     proposalJson = JSON.writeValueAsString(dto);
-                    sendEvent(emitter, "proposal", dto);
+                    SseEvents.send(emitter, JSON, "proposal", dto);
                 }
 
                 // The SSE-streamed assistant text is often thin when a
@@ -201,13 +196,13 @@ public class GoalChatController {
                     contentToPersist,
                     proposalJson, null));
 
-                sendEvent(emitter, "done", Map.of("threadId", threadId));
+                SseEvents.send(emitter, JSON, "done", Map.of("threadId", threadId));
                 emitter.complete();
             } catch (Exception e) {
                 log.error("Goals chat stream failed for user {} (thread {}): {}",
                     userId, threadId, e.toString(), e);
                 String msg = e.getMessage() == null ? "Chat failed" : e.getMessage();
-                sendEvent(emitter, "error", Map.of("error", msg));
+                SseEvents.send(emitter, JSON, "error", Map.of("error", msg));
                 emitter.complete();
             }
         });
@@ -390,15 +385,5 @@ public class GoalChatController {
         String trimmed = firstMessage.strip();
         if (trimmed.length() <= 60) return trimmed;
         return trimmed.substring(0, 57) + "...";
-    }
-
-    private static void sendEvent(SseEmitter emitter, String name, Object data) {
-        try {
-            emitter.send(SseEmitter.event()
-                .name(name)
-                .data(JSON.writeValueAsString(data), MediaType.APPLICATION_JSON));
-        } catch (IOException e) {
-            emitter.completeWithError(e);
-        }
     }
 }

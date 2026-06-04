@@ -1,10 +1,8 @@
 package com.gte619n.healthfitness.integrations.equipment;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
@@ -106,10 +104,7 @@ public class EquipmentParserService implements EquipmentParser {
         }
         this.client = Client.builder().apiKey(apiKey).build();
         this.model = model;
-        this.json = JsonMapper.builder()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .serializationInclusion(JsonInclude.Include.NON_NULL)
-            .build();
+        this.json = JsonSupport.LENIENT;
     }
 
     /**

@@ -1,9 +1,8 @@
 package com.gte619n.healthfitness.api.workoutprogram;
 
+import com.gte619n.healthfitness.config.SseEvents;
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gte619n.healthfitness.config.SseStreamer;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.exercise.Exercise;
@@ -57,10 +56,7 @@ public class WorkoutProgramChatController {
 
     private static final Logger log = LoggerFactory.getLogger(WorkoutProgramChatController.class);
     private static final long SSE_TIMEOUT_MS = 180_000L;
-    private static final ObjectMapper JSON = JsonMapper.builder()
-        .addModule(new JavaTimeModule())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-        .build();
+    private static final ObjectMapper JSON = JsonSupport.WEB;
 
     private final CurrentUserProvider currentUser;
     private final WorkoutProgramChatClient chatClient;
@@ -181,7 +177,7 @@ public class WorkoutProgramChatController {
                 WorkoutProgramChatClient.StreamResult result = chatClient.streamChat(
                     history, message, context, token -> {
                         assistantText.append(token);
-                        sendEvent(emitter, "token", Map.of("text", token));
+                        SseEvents.send(emitter, JSON, "token", Map.of("text", token));
                     });
 
                 String proposalJson = null;
@@ -196,7 +192,7 @@ public class WorkoutProgramChatController {
                     WorkoutProgramDeepResponse deep = assembler.deep(withUser);
                     Map<String, Object> payload = Map.of("program", deep, "issues", issues);
                     proposalJson = JSON.writeValueAsString(payload);
-                    sendEvent(emitter, "proposal", payload);
+                    SseEvents.send(emitter, JSON, "proposal", payload);
                 }
 
                 chat.appendMessage(userId, new WorkoutProgramChatMessage(
@@ -204,12 +200,12 @@ public class WorkoutProgramChatController {
                     result.assistantText() != null ? result.assistantText() : assistantText.toString(),
                     proposalJson, null));
 
-                sendEvent(emitter, "done", Map.of("threadId", threadId));
+                SseEvents.send(emitter, JSON, "done", Map.of("threadId", threadId));
                 emitter.complete();
             } catch (Exception e) {
                 log.error("Workout-program chat failed for user {} (thread {}): {}",
                     userId, threadId, e.toString(), e);
-                sendEvent(emitter, "error", Map.of("error", e.getMessage() == null ? "Chat failed" : e.getMessage()));
+                SseEvents.send(emitter, JSON, "error", Map.of("error", e.getMessage() == null ? "Chat failed" : e.getMessage()));
                 emitter.complete();
             }
         });
@@ -283,13 +279,5 @@ public class WorkoutProgramChatController {
         }
         if (words.length > 6) sb.append('…');
         return sb.isEmpty() ? "Program chat" : sb.toString();
-    }
-
-    private static void sendEvent(SseEmitter emitter, String event, Object data) {
-        try {
-            emitter.send(SseEmitter.event().name(event).data(JSON.writeValueAsString(data), MediaType.APPLICATION_JSON));
-        } catch (Exception e) {
-            // Client likely disconnected; nothing actionable.
-        }
     }
 }

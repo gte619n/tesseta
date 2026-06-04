@@ -1,9 +1,8 @@
 package com.gte619n.healthfitness.integrations.exercise;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
@@ -79,9 +78,7 @@ public class GeminiExerciseMetadataEnricher implements ExerciseMetadataEnricher 
     ) {
         this.client = client;
         this.model = model;
-        this.json = JsonMapper.builder()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .build();
+        this.json = JsonSupport.LENIENT;
     }
 
     @Override

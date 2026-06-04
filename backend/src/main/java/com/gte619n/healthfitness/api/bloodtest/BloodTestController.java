@@ -1,9 +1,7 @@
 package com.gte619n.healthfitness.api.bloodtest;
 
+import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.gte619n.healthfitness.api.bloodtest.BloodTestReportResponse;
 import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.config.SseStreamer;
@@ -51,10 +49,7 @@ public class BloodTestController {
     // active phase the whole time so a longer wait doesn't feel like a hang.
     private static final long SSE_TIMEOUT_MS = 120_000L;
 
-    private static final ObjectMapper JSON = JsonMapper.builder()
-        .addModule(new JavaTimeModule())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-        .build();
+    private static final ObjectMapper JSON = JsonSupport.WEB;
 
     private final CurrentUserProvider currentUser;
     private final BloodTestService service;
