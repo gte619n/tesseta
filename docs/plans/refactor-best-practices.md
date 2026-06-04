@@ -17,6 +17,35 @@ three recurring patterns:
 3. **Docs drifting from reality** — most acute on Android (see the persistence
    note, now reconciled).
 
+## Implementation status (branch `claude/app-refactor-best-practices-7u6gy`)
+
+Worked top-down through the tiers. Every change below is build-verified
+(`./gradlew test`, `tsc --noEmit` + `eslint`) **except** Android, which has no
+SDK in the execution environment and is verified by inspection only.
+
+**Done**
+- **Backend:** Firestore `await`+typed-exception helper; shared Gemini `Client`
+  + GCS `Storage` beans; `google-api-client` catalog entry removed; dead
+  `PlaceholderService` removed; `AdminCheckAspect` → config-driven
+  `@PreAuthorize` (+ aop starter dropped); `GlobalExceptionHandler` test added.
+- **Web:** `proxySseStream`; `send<T>` consolidation; `<ModalBackdrop>` (14
+  modals); `<PdfUploadDropzone>`; shared chat stream-consumer + primitives;
+  type/date-helper consolidation; `app/page.tsx` blood-markers + daily-vitals
+  extracted (977→839).
+- **Android:** docs reconciled; empty `:feature-chat` removed; inert
+  wear-tiles/complications pruned; `MainActivity` lifecycle-aware collection.
+
+**Deliberately not done (with reasons recorded inline below)**
+- Backend #3 (metric-cache collapse) — design trade-off, not a clean win.
+- Backend #5 (app re-layering) — large multi-module move; warrants a dedicated PR.
+- Backend #7 (drop per-repo `firestore-enabled`) — conditional is load-bearing.
+- Backend #8 "dead Goals branches" — none found (read-path-resolvable).
+- Web #6 (remove dashboard fixtures) — a product decision (what to show with no
+  data), not a pure refactor.
+- Android #2/#4/#5/#8 (build-logic plugin, concrete repos, Hilt auth, screen
+  splits) — substantive Kotlin/Gradle changes that need a real build to verify.
+- Backend #6 persistence mapper round-trips — need the Firestore emulator.
+
 ## Cross-cutting themes (appear on 2+ platforms)
 
 | Theme | Backend | Web | Android |
@@ -80,8 +109,12 @@ badly skewed — `api` has **0** tests, `persistence` has **1**.
    is the canonical permitAll probe in `SecurityConfigTest` and has its own
    `HelloEndpointTest`; removing it means repointing the security test at
    `/actuator/health` (whose status depends on health indicators in the test
-   context), so it's a small change with test ripples, not pure dead code. Dead
-   Goals metric branches still pending (needs engine analysis).
+   context), so it's a small change with test ripples, not pure dead code.
+   **"Dead Goals metric branches" — investigated, none found:** every `MetricKey`
+   has a `FirestoreMetricResolver` branch (one per constant). The ones with no
+   `MetricChangedEvent` *writer* (vitals.*, workouts.*) are still resolved on the
+   read path, so goals bound to them evaluate when viewed — functional, not dead.
+   Removing them would drop the ability to set goals on those metrics.
 
 ---
 
