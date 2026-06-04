@@ -3,7 +3,6 @@ springBoot = "3.5.0"
 springDependencyManagement = "1.1.7"
 firestore = "3.30.0"
 googleAuth = "1.30.0"
-googleApiClient = "2.7.0"
 googleKms = "2.55.0"
 googleStorage = "2.59.0"
 googleGenai = "1.53.0"
@@ -26,7 +25,6 @@ spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-aut
 google-cloud-firestore = { module = "com.google.cloud:google-cloud-firestore", version.ref = "firestore" }
 google-cloud-kms = { module = "com.google.cloud:google-cloud-kms", version.ref = "googleKms" }
 google-auth-library = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "googleAuth" }
-google-api-client = { module = "com.google.api-client:google-api-client", version.ref = "googleApiClient" }
 google-cloud-storage = { module = "com.google.cloud:google-cloud-storage", version.ref = "googleStorage" }
 google-genai = { module = "com.google.genai:google-genai", version.ref = "googleGenai" }
 firebase-admin = { module = "com.google.firebase:firebase-admin", version.ref = "firebaseAdmin" }
