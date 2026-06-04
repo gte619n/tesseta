@@ -2,7 +2,7 @@
 
 ## Architecture
 - **Three deployable components**, all in this monorepo:
-  - `backend/` — Spring Boot 3.5 (Java 21), Gradle Kotlin DSL, multi-module
+  - `backend/` — Spring Boot 3.5 (Java 21), Gradle Kotlin DSL, single-module
   - `android/` — Native Android (Kotlin 2.0, Jetpack Compose, Material 3),
     multi-module, includes a Wear OS app
   - `web/` — Next.js 15 App Router (TypeScript strict, Tailwind v4, pnpm)

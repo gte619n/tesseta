@@ -3,8 +3,8 @@
 All endpoints are under `/api`. Everything under `/api/me/**` requires a valid
 Google ID token (see [patterns.md → Auth](patterns.md#auth)); `/api/hello` and
 `/api/webhooks/**` are the exceptions. Controllers live in the backend `api`
-and `app` modules and delegate to services in `core` — they never touch
-repositories directly.
+package (a few feature controllers in app-level packages) and delegate to
+services in `core`; trivial pass-through reads may use a repository directly.
 
 Two transport flags appear inline below:
 - **[SSE]** — streams `text/event-stream` (used for all LLM streaming; see

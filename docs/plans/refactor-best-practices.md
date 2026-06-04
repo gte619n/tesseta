@@ -28,9 +28,26 @@ SDK in the execution environment and is verified by inspection only.
   + GCS `Storage` beans; `google-api-client` catalog entry removed; dead
   `PlaceholderService` removed; `AdminCheckAspect` → config-driven
   `@PreAuthorize` (+ aop starter dropped); `GlobalExceptionHandler` test added;
-  `api`-module `@WebMvcTest` slices added (Backend #6 — `WhoAmI`/`Device`/
-  `BodyComposition` controllers, ×9 tests; the module previously had no
-  bootstrap config, so a minimal `@SpringBootApplication` anchors the slices).
+  `@WebMvcTest` slices added (Backend #6 — `WhoAmI`/`Device`/`BodyComposition`
+  controllers, ×9 tests).
+- **Backend — collapsed the 5-module Gradle build into a single module**
+  (supersedes #5). The `app`/`api`/`core`/`persistence`/`integrations` split was
+  internal-only (nothing is published; Android/web talk to it over HTTP), so its
+  one real payoff was *compile-time* enforcement of the layering — not worth the
+  ceremony for a single non-shared Cloud Run deployable. Now one
+  `build.gradle.kts`, all source under `src/`, package names kept (`…​.api`,
+  `…​.core`, …) so the layering survives as **convention** (no enforcement, by
+  explicit choice). This also dissolves #5's blocker: the integration-dependent
+  feature services that couldn't move to `core` (cycle) no longer need a home
+  decision. Dockerfile/dev.sh/README/CLAUDE.md updated; `./gradlew test` green
+  (377 tests). One latent flake surfaced: collapsing the five per-module test
+  JVMs into one widened a pre-existing MockMvc SSE race (the streaming virtual
+  thread vs. `asyncDispatch`'s Spring Security header writers over the
+  non-thread-safe `MockHttpServletResponse`). Fixed at the root by routing all
+  five SSE controllers through one `SseStreamer` seam (prod: virtual thread —
+  unchanged; tests: synchronous, so the stream finishes before dispatch). Also
+  collapses the duplicated `Thread.startVirtualThread` idiom. Verified
+  deterministic across repeated full-suite runs.
 - **Web:** `proxySseStream`; `send<T>` consolidation; `<ModalBackdrop>` (14
   modals); `<PdfUploadDropzone>`; shared chat stream-consumer + primitives;
   type/date-helper consolidation; `app/page.tsx` blood-markers + daily-vitals
@@ -40,8 +57,11 @@ SDK in the execution environment and is verified by inspection only.
 
 **Deliberately not done (with reasons recorded inline below)**
 - Backend #3 (metric-cache collapse) — design trade-off, not a clean win.
-- Backend #5 (app re-layering) — large multi-module move; warrants a dedicated PR.
-- Backend #7 (drop per-repo `firestore-enabled`) — conditional is load-bearing.
+- ~~Backend #5 (app re-layering)~~ — **superseded:** rather than re-layer across
+  modules, the whole multi-module split was collapsed into one module (see Done).
+- Backend #7 (drop per-repo `firestore-enabled`) — conditional is load-bearing
+  (and now moot as a *module* concern, but the conditional itself still gates the
+  Firestore beans for tests).
 - Backend #8 "dead Goals branches" — none found (read-path-resolvable).
 - Web #6 (remove dashboard fixtures) — a product decision (what to show with no
   data), not a pure refactor.
