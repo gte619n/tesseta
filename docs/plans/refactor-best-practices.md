@@ -56,11 +56,24 @@ badly skewed — `api` has **0** tests, `persistence` has **1**.
    (`...healthfitness.app.*` vs `...healthfitness.*`).
 6. **Backfill tests** `[med]` — `@WebMvcTest` slices + a `GlobalExceptionHandler`
    test in `api`; mapper round-trip tests (emulator) in `persistence`.
-7. **Drop per-repo `@ConditionalOnProperty(firestore-enabled)` from the 31 impls**
-   `[low]` — keep it only on `FirestoreConfig`; the bean gate already controls wiring.
-8. **Delete dead code** `[low]` — `HelloService`/`HelloController`/`/api/hello`
-   (actuator covers liveness), unused `PlaceholderService`, dead Goals metric
-   branches with no writer, and the dangling `google-api-client` catalog entry.
+7. **~~Drop per-repo `@ConditionalOnProperty(firestore-enabled)` from the 31 impls~~**
+   `[don't]` — **investigated: not safe as written.** The impls are
+   component-scanned `@Repository` classes that inject the `Firestore` bean.
+   In tests `firestore-enabled=false` turns off *both* `FirestoreConfig` (so no
+   `Firestore` bean) *and* the per-repo conditional, and `TestPersistenceConfig`
+   supplies in-memory fakes. Removing the per-repo conditional would make the
+   scanned classes instantiate with no `Firestore` to inject → context fails to
+   start. The conditional is load-bearing, not redundant with `FirestoreConfig`'s
+   gate. (Would only be possible by also moving the impls off component-scan to
+   `@Bean` factories — a larger change, not this item.)
+8. **Delete dead code** `[low]` — ✅ `PlaceholderService` (+ its test) removed;
+   the `google-api-client` catalog entry removed. **Not removed:** `HelloService`/
+   `HelloController`/`/api/hello` — despite "actuator covers liveness", `/api/hello`
+   is the canonical permitAll probe in `SecurityConfigTest` and has its own
+   `HelloEndpointTest`; removing it means repointing the security test at
+   `/actuator/health` (whose status depends on health indicators in the test
+   context), so it's a small change with test ripples, not pure dead code. Dead
+   Goals metric branches still pending (needs engine analysis).
 
 ---
 
