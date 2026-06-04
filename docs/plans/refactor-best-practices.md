@@ -48,6 +48,15 @@ SDK in the execution environment and is verified by inspection only.
   unchanged; tests: synchronous, so the stream finishes before dispatch). Also
   collapses the duplicated `Thread.startVirtualThread` idiom. Verified
   deterministic across repeated full-suite runs.
+- **Backend — normalized packages to `<layer>.<feature>`** (completes #5's
+  intent without modules). The codebase was already ~95% `<layer>.<feature>`;
+  this sorted the ~18 stray feature files into their existing homes and deleted
+  the `.app.*` root: controllers/integration-services → `api.<feature>` (`dexa`,
+  `location`, `bloodtest`, `medication`, `googlehealth`), `FutureWorkoutsParser`
+  → `core.workoutimport`, batch jobs → root `jobs`. Convention now documented in
+  `backend/CLAUDE.md`: `core.<feature>` = domain + pure-domain services;
+  `api.<feature>` = controllers, DTOs, and the integration-orchestrating service.
+  `./gradlew test` green.
 - **Web:** `proxySseStream`; `send<T>` consolidation; `<ModalBackdrop>` (14
   modals); `<PdfUploadDropzone>`; shared chat stream-consumer + primitives;
   type/date-helper consolidation; `app/page.tsx` blood-markers + daily-vitals

@@ -1,7 +1,7 @@
 package com.gte619n.healthfitness.admin;
 
 import com.gte619n.healthfitness.api.admin.AdminDrugController.DrugCatalogPort;
-import com.gte619n.healthfitness.app.medication.DrugCatalogService;
+import com.gte619n.healthfitness.api.medication.DrugCatalogService;
 import com.gte619n.healthfitness.core.medication.Drug;
 import com.gte619n.healthfitness.core.medication.DrugCategory;
 import com.gte619n.healthfitness.core.medication.DrugForm;

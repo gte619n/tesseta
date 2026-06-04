@@ -2,7 +2,7 @@ package com.gte619n.healthfitness.jobs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gte619n.healthfitness.app.jobs.ReevaluateSustainedJob;
+import com.gte619n.healthfitness.jobs.ReevaluateSustainedJob;
 import com.gte619n.healthfitness.core.goals.Comparator;
 import com.gte619n.healthfitness.core.goals.Goal;
 import com.gte619n.healthfitness.core.goals.GoalDomain;

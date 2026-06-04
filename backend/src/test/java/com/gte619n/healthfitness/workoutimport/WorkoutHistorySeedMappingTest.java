@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.workoutimport;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gte619n.healthfitness.app.workoutimport.FutureWorkoutsParser;
+import com.gte619n.healthfitness.core.workoutimport.FutureWorkoutsParser;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseRepository;
 import com.gte619n.healthfitness.core.workoutimport.FutureWorkouts;

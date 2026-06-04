@@ -18,15 +18,21 @@ layering is a **convention** (no build/test enforcement — keep it in review):
 ```
 api → core, integrations    persistence → core    integrations → core
 ```
-- `com.gte619n.healthfitness` (root) + `auth`/`config` — boot entrypoint,
-  security, and bean wiring.
-- `core` — plain domain records + services (pulls in `spring-context` for
-  `@Service`/events/`@Cacheable`). Keep **Spring Web** out of it.
-- `api` — controllers and DTOs (may use `integrations` clients). Feature
-  services that orchestrate `integrations` (dexa, bloodtest, …) live here too.
+Packages are **`<layer>.<feature>`** — e.g. `api.goals`, `core.goals`,
+`persistence` (Firestore impls), `integrations.googlehealth`. Put new code in
+its feature sub-package under the right layer; don't reintroduce root-level
+feature packages.
+- `com.gte619n.healthfitness` (root) — boot entrypoint (`HealthFitnessApplication`,
+  `SecurityConfig`), plus `auth`/`config`/`admin`/`push` (cross-cutting infra) and
+  `jobs` (Cloud Run batch entrypoints, `@Profile`-gated `CommandLineRunner`s).
+- `core.<feature>` — plain domain records + **pure-domain** services (pulls in
+  `spring-context` for `@Service`/events/`@Cacheable`). Keep **Spring Web** out.
+- `api.<feature>` — controllers and DTOs, **and** the feature's
+  integration-orchestrating service (the one that calls `integrations` clients;
+  its controller is its only caller). May use `integrations` clients.
 - `persistence` — Firestore repository implementations.
-- `integrations` — Google Health API client + webhook receiver and the Gemini
-  clients.
+- `integrations.<feature>` — Google Health API client + webhook receiver and the
+  Gemini clients.
 
 For the full picture (data model, endpoints, the Goals metric-event engine,
 Gemini/KMS/caching patterns) see [`docs/reference/`](../docs/reference/).
