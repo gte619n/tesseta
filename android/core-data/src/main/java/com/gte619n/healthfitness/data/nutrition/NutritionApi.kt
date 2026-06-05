@@ -2,6 +2,9 @@ package com.gte619n.healthfitness.data.nutrition
 
 import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
+import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
+import com.gte619n.healthfitness.domain.nutrition.DescribeMealRequest
+import com.gte619n.healthfitness.domain.nutrition.DescribedMeal
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
@@ -51,6 +54,19 @@ interface NutritionApi {
     suspend fun addCompositeMeal(
         @Path("date") date: String,
         @Body body: CompositeMealRequest,
+    ): Entry
+
+    // Describe a meal in free text → resolve to a saved meal (a previous match,
+    // or a freshly created+saved one). Nothing is logged yet.
+    @POST("api/nutrition/describe")
+    suspend fun describeMeal(@Body body: DescribeMealRequest): DescribedMeal
+
+    // Log a described meal onto a day — by resolved mealId, or one-shot
+    // description. Returns the composite entry.
+    @POST("api/me/nutrition/{date}/describe-meal")
+    suspend fun logDescribedMeal(
+        @Path("date") date: String,
+        @Body body: DescribeMealLogRequest,
     ): Entry
 
     @PATCH("api/me/nutrition/{date}/entries/{entryId}/ingredients/{index}")

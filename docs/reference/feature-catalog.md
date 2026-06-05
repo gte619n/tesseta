@@ -17,7 +17,7 @@ Legend: ✅ shipped · ◐ partial · ⚠️ fixture/placeholder · ➖ not buil
 | Body composition / DEXA | ✅ | ✅ `/me/body-composition` | ✅ feature-body-composition | DEXA upload via multipart+SSE; editable regions |
 | Medications | ✅ + adherence | ✅ `/me/meds` | ✅ feature-medical | Drug lookup via SSE; dosage periods; adherence |
 | Goals | ✅ metric-event engine + Cloud Run Job | ✅ `/me/goals*` | ✅ feature-goals | AI goal chat (Gemini Pro, SSE) → proposal → commit |
-| Nutrition | ✅ logs + capture | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode; **not** SSE |
+| Nutrition | ✅ logs + capture + describe | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode; describe-a-meal (text → reuse/create `SavedMeal`) backend-only, clients pending; **not** SSE |
 | Gym & equipment | ✅ + bulk import | ✅ `/me/workouts/gyms*` | ✅ feature-workouts | Bulk CSV import preview/confirm; cover-photo upload |
 | Admin (drugs, equipment) | ✅ `/api/admin/**` | ✅ `/admin/**` | ➖ no mobile admin | Email-gated; intentionally web-only |
 | Workout logging | ➖ `Workout` scaffold only | ➖ | ➖ | Deferred — needs a data-model ADR |

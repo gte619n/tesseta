@@ -9,6 +9,8 @@ import {
   updateIngredient,
   deleteEntry,
   searchFoods,
+  describeMeal,
+  logDescribedMeal,
 } from "@/lib/nutrition-api";
 import type {
   Meal,
@@ -16,6 +18,7 @@ import type {
   NutritionDay,
   UpdateEntryBody,
   UpdateIngredientBody,
+  LogDescribedMealBody,
 } from "@/lib/types/nutrition";
 import { MEALS } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
@@ -163,6 +166,20 @@ export default async function NutritionPage(props: {
     return searchFoods(q);
   }
 
+  async function describeMealAction(description: string) {
+    "use server";
+    return describeMeal(description);
+  }
+
+  async function logDescribedMealAction(
+    entryDate: string,
+    body: LogDescribedMealBody,
+  ) {
+    "use server";
+    await logDescribedMeal(entryDate, body);
+    revalidatePath("/me/nutrition");
+  }
+
   const prevDate = addDays(date, -1);
   const nextDate = addDays(date, 1);
   const canGoForward = date < today();
@@ -269,6 +286,8 @@ export default async function NutritionPage(props: {
           updateIngredient={updateIngredientAction}
           deleteEntry={deleteEntryAction}
           searchFoods={searchFoodsAction}
+          describeMeal={describeMealAction}
+          logDescribedMeal={logDescribedMealAction}
         />
       </div>
     </main>

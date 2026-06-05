@@ -2,7 +2,13 @@
 
 import { type ReactNode, useRef, useState, useCallback } from "react";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
-import type { Meal, Macros, ImageStatus } from "@/lib/types/nutrition";
+import type {
+  Meal,
+  Macros,
+  ImageStatus,
+  DescribedMeal,
+  LogDescribedMealBody,
+} from "@/lib/types/nutrition";
 import { MEAL_LABELS, QUANTITY_STEPS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
@@ -38,9 +44,14 @@ type Props = {
     },
   ) => Promise<void>;
   searchFoods: (q: string) => Promise<FoodResult[]>;
+  describeMeal: (description: string) => Promise<DescribedMeal>;
+  logDescribedMeal: (
+    date: string,
+    body: LogDescribedMealBody,
+  ) => Promise<void>;
 };
 
-type Tab = "catalog" | "quick";
+type Tab = "catalog" | "quick" | "describe";
 
 function computeMacros(macrosPer100g: Macros, servingGrams: number, quantity: number): Macros {
   const scale = (servingGrams * quantity) / 100;
@@ -61,6 +72,8 @@ export function AddFoodModal({
   date,
   addEntry,
   searchFoods,
+  describeMeal,
+  logDescribedMeal,
 }: Props) {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("catalog");
@@ -92,6 +105,9 @@ export function AddFoodModal({
           <TabButton active={tab === "catalog"} onClick={() => setTab("catalog")}>
             Search catalog
           </TabButton>
+          <TabButton active={tab === "describe"} onClick={() => setTab("describe")}>
+            Describe a meal
+          </TabButton>
           <TabButton active={tab === "quick"} onClick={() => setTab("quick")}>
             Quick add
           </TabButton>
@@ -105,6 +121,15 @@ export function AddFoodModal({
               date={date}
               addEntry={addEntry}
               searchFoods={searchFoods}
+              onClose={onClose}
+              toast={toast}
+            />
+          ) : tab === "describe" ? (
+            <DescribeTab
+              meal={meal}
+              date={date}
+              describeMeal={describeMeal}
+              logDescribedMeal={logDescribedMeal}
               onClose={onClose}
               toast={toast}
             />
@@ -585,6 +610,211 @@ function QuickAddTab({
           className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? "Saving…" : "Add to log"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Describe a meal tab ───────────────────────────────────────────────
+
+function DescribeTab({
+  meal,
+  date,
+  describeMeal,
+  logDescribedMeal,
+  onClose,
+  toast,
+}: {
+  meal: Meal;
+  date: string;
+  describeMeal: Props["describeMeal"];
+  logDescribedMeal: Props["logDescribedMeal"];
+  onClose: () => void;
+  toast: ReturnType<typeof useToast>;
+}) {
+  const [description, setDescription] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [resolved, setResolved] = useState<DescribedMeal | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleResolve() {
+    const text = description.trim();
+    if (!text) {
+      toast.error("Describe what you ate first");
+      return;
+    }
+    setResolving(true);
+    try {
+      const result = await describeMeal(text);
+      setResolved(result);
+    } catch {
+      toast.error("Couldn't understand that meal — try rephrasing");
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function handleLog() {
+    if (!resolved) return;
+    setSaving(true);
+    try {
+      await logDescribedMeal(date, { mealId: resolved.mealId, meal });
+      toast.success(`${resolved.name} added to ${MEAL_LABELS[meal]}`);
+      onClose();
+    } catch {
+      toast.error("Failed to add meal");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Preview of the resolved meal: matched-vs-new, photo, macros, ingredients.
+  if (resolved) {
+    const m = resolved.macros;
+    return (
+      <div className="flex flex-col gap-4 p-5">
+        <button
+          type="button"
+          onClick={() => setResolved(null)}
+          className="caps-mono inline-flex items-center gap-1 text-[10px] tracking-[0.04em] text-tertiary hover:text-secondary"
+        >
+          <i className="ti ti-arrow-left text-[12px]" aria-hidden />
+          Edit description
+        </button>
+
+        <div className="flex items-start gap-3">
+          <FoodImage imageUrl={resolved.imageUrl} imageStatus={resolved.imageStatus} size={48} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="text-[15px] font-medium text-primary">{resolved.name}</div>
+              <span
+                className={`caps-mono shrink-0 rounded-[3px] px-1.5 py-px text-[8px] tracking-[0.06em] ${
+                  resolved.matched
+                    ? "bg-accent-bg text-accent-dim"
+                    : "bg-canvas-sunken text-tertiary"
+                }`}
+              >
+                {resolved.matched ? "previous meal" : "new meal"}
+              </span>
+            </div>
+            <div className="mt-0.5 text-[12px] text-secondary">
+              {resolved.matched
+                ? "Found a meal you've logged before — reusing its macros & photo."
+                : "Created from your description, with a photo generating now."}
+            </div>
+          </div>
+        </div>
+
+        {/* Macro summary for the whole meal */}
+        <div className="rounded-[10px] bg-canvas-sunken px-4 py-3">
+          <div className="caps-mono mb-2 text-[9px] tracking-[0.08em] text-tertiary">
+            Meal total{resolved.totalGrams ? ` · ${Math.round(resolved.totalGrams)} g` : ""}
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {[
+              { label: "Calories", value: m.caloriesKcal, unit: "kcal" },
+              { label: "Protein", value: m.proteinGrams, unit: "g" },
+              { label: "Carbs", value: m.carbsGrams, unit: "g" },
+              { label: "Fat", value: m.fatGrams, unit: "g" },
+              { label: "Fiber", value: m.fiberGrams, unit: "g" },
+              { label: "Sugar", value: m.sugarGrams, unit: "g" },
+            ].map(({ label, value, unit }) => (
+              <div key={label} className="text-center">
+                <div className="font-mono text-[16px] font-medium tabular-nums text-primary">
+                  {value !== null ? Math.round(value) : "—"}
+                </div>
+                <div className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
+                  {label}
+                  {value !== null ? ` (${unit})` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Ingredient breakdown */}
+        {resolved.ingredients.length > 0 && (
+          <div>
+            <div className="caps-mono mb-1.5 text-[9px] tracking-[0.08em] text-tertiary">
+              {resolved.ingredients.length} ingredient
+              {resolved.ingredients.length === 1 ? "" : "s"}
+            </div>
+            <div className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default">
+              {resolved.ingredients.map((ing, i) => (
+                <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] text-primary">{ing.name}</div>
+                    {ing.servingLabel && (
+                      <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
+                        {ing.servingLabel}
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0 font-mono text-[12px] tabular-nums text-secondary">
+                    {Math.round(ing.macros.caloriesKcal ?? 0)}
+                    <span className="ml-0.5 text-[10px] text-tertiary">kcal</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleLog}
+            disabled={saving}
+            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Adding…" : `Add to ${MEAL_LABELS[meal]}`}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Stage 1: free-text description.
+  return (
+    <div className="flex flex-col gap-4 p-5">
+      <p className="text-[13px] text-secondary">
+        Describe what you ate in plain words. We&rsquo;ll find a meal you&rsquo;ve
+        logged before, or create one with estimated macros and a matching photo.
+      </p>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="e.g. grilled chicken breast with white rice and steamed broccoli"
+        rows={3}
+        className="w-full resize-none rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary placeholder-tertiary focus:outline-none focus:ring-2 focus:ring-accent"
+        autoFocus
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleResolve();
+        }}
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleResolve}
+          disabled={resolving}
+          className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {resolving ? "Finding…" : "Find or create meal"}
         </button>
       </div>
     </div>

@@ -6,5 +6,6 @@ public enum FoodSource {
     OPEN_FOOD_FACTS,
     USER,
     GEMINI_PHOTO,
-    GEMINI_LABEL
+    GEMINI_LABEL,
+    GEMINI_DESCRIPTION
 }

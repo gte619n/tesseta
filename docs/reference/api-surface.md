@@ -72,6 +72,8 @@ Two transport flags appear inline below:
 | `GET·POST /api/me/nutrition`, `GET /today`, `GET·PUT /target`, `GET /{date}` | Daily logs + macro target |
 | `POST·PATCH·DELETE /{date}/entries…` | Food entry CRUD |
 | `POST /api/nutrition/capture/meal` **[multipart]**, `POST /capture/label` **[multipart]** | Gemini meal-photo / label extraction |
+| `POST /api/nutrition/describe` `{description}` | Describe a meal → Gemini itemizes, matches a previously-saved meal (user's own first) or creates+saves a new one (macros + generating photo); returns the resolved `SavedMeal` |
+| `POST /api/me/nutrition/{date}/describe-meal` `{mealId?, description?, meal?}` | Log a described meal onto a day as a composite entry — by resolved `mealId`, or one-shot by `description` |
 | `GET /api/foods/search`, `GET /{foodId}`, `GET /barcode/{code}`, `POST`, `POST /{id}/confirm`, `POST /{id}/image/regenerate` | Food catalog |
 
 ## Gyms / equipment

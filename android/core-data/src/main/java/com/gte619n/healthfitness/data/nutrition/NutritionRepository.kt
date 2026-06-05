@@ -6,6 +6,9 @@ import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
+import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
+import com.gte619n.healthfitness.domain.nutrition.DescribeMealRequest
+import com.gte619n.healthfitness.domain.nutrition.DescribedMeal
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
@@ -138,6 +141,25 @@ class NutritionRepository @Inject constructor(
         // AI image generation (online-only per D17): create on the network, then
         // refresh this date's mirror so the new composite entry renders from Room.
         val entry = api.addCompositeMeal(date, body)
+        fillDay(date)
+        return entry
+    }
+
+    /**
+     * Resolve a free-text description to a saved meal (a previous match, or a
+     * freshly created+saved one). Pure network read — nothing is logged or
+     * mirrored yet; the UI previews it, then logs via [logDescribedMeal].
+     */
+    suspend fun describeMeal(description: String): DescribedMeal =
+        api.describeMeal(DescribeMealRequest(description))
+
+    suspend fun logDescribedMeal(date: String, mealId: String, meal: String): Entry {
+        // Like addCompositeMeal: drives AI image work (online-only per D17), so
+        // create on the network, then refresh this date's mirror to render it.
+        val entry = api.logDescribedMeal(
+            date,
+            DescribeMealLogRequest(mealId = mealId, meal = meal),
+        )
         fillDay(date)
         return entry
     }

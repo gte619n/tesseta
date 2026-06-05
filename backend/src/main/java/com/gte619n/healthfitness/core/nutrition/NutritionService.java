@@ -236,6 +236,29 @@ public class NutritionService {
         return entry;
     }
 
+    /**
+     * Attach an already-generated finished-meal image to an entry (used when a
+     * described meal reuses a {@link SavedMeal} whose studio photo is already
+     * {@code READY} — no regeneration needed). No-op if the entry vanished.
+     */
+    public FoodEntry setEntryMealImage(
+        String userId, LocalDate date, String entryId, String imageUrl, FoodImageStatus status) {
+        requireUser(userId);
+        requireDate(date);
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        FoodEntry updated = new FoodEntry(
+            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            existing.foodId(), existing.foodName(), existing.servingLabel(), existing.servingGrams(),
+            existing.quantity(), existing.macros(), existing.photoRef(), existing.contentHash(),
+            existing.source(), existing.ingredients(),
+            imageUrl != null ? imageUrl : existing.mealImageUrl(),
+            status != null ? status : existing.mealImageStatus(),
+            existing.analysisStatus(), existing.createdAt(), null);
+        entries.save(updated);
+        return updated;
+    }
+
     // ----- Background photo-analysis lifecycle --------------------------
 
     /**

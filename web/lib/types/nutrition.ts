@@ -138,6 +138,39 @@ export type CreateFoodBody = {
   defaultServingIndex: number;
 };
 
+// ── Describe a meal ──────────────────────────────────────────────────
+// One component of a described meal (with its frozen per-100g baseline).
+export type DescribedIngredient = {
+  name: string;
+  servingGrams: number | null;
+  servingLabel: string | null;
+  quantity: number | null;
+  macros: Macros;
+  macrosPer100g: Macros;
+};
+
+// Result of POST /api/nutrition/describe: a resolved meal — either a
+// previously-saved match (`matched`) or a freshly created one — with its
+// macros, ingredient breakdown and studio-photo status.
+export type DescribedMeal = {
+  mealId: string;
+  matched: boolean;
+  name: string;
+  totalGrams: number | null;
+  macros: Macros;
+  imageUrl: string | null;
+  imageStatus: ImageStatus;
+  ingredients: DescribedIngredient[];
+};
+
+// Body for POST /api/me/nutrition/{date}/describe-meal: log a resolved meal by
+// `mealId`, or one-shot by raw `description`.
+export type LogDescribedMealBody = {
+  mealId?: string;
+  description?: string;
+  meal: Meal;
+};
+
 // Display helpers
 export const MEAL_LABELS: Record<Meal, string> = {
   BREAKFAST: "Breakfast",

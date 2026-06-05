@@ -15,6 +15,7 @@ import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetService;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.MealCaptureService;
+import com.gte619n.healthfitness.core.nutrition.MealDescriptionService;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionService;
@@ -56,6 +57,7 @@ public class NutritionController {
     private final SyncWriteContext syncWrite;
     private final SyncChangeNotifier syncNotifier;
     private final MealCaptureService mealCapture;
+    private final MealDescriptionService mealDescription;
 
     public NutritionController(
         CurrentUserProvider currentUser,
@@ -65,7 +67,8 @@ public class NutritionController {
         FoodEntryImageService foodEntryImages,
         SyncWriteContext syncWrite,
         SyncChangeNotifier syncNotifier,
-        MealCaptureService mealCapture
+        MealCaptureService mealCapture,
+        MealDescriptionService mealDescription
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
@@ -75,6 +78,7 @@ public class NutritionController {
         this.syncWrite = syncWrite;
         this.syncNotifier = syncNotifier;
         this.mealCapture = mealCapture;
+        this.mealDescription = mealDescription;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -389,6 +393,39 @@ public class NutritionController {
         return MealType.SNACK;
     }
 
+    /**
+     * Log a described meal onto {@code date}. Either {@code mealId} (a meal
+     * already resolved via {@code POST /api/nutrition/describe}) or a raw
+     * {@code description} (one-shot: resolve then log) must be supplied. The entry
+     * is a composite meal carrying the full ingredient breakdown; its
+     * finished-meal photo is reused from the saved meal when ready, otherwise
+     * generated asynchronously. {@code meal} is optional and defaults to the meal
+     * for the current local hour.
+     */
+    @PostMapping("/{date}/describe-meal")
+    public ResponseEntity<EntryResponse> describeMeal(
+        @PathVariable LocalDate date,
+        @RequestBody DescribeMealRequest body
+    ) {
+        if (body == null
+            || ((body.mealId() == null || body.mealId().isBlank())
+                && (body.description() == null || body.description().isBlank()))) {
+            throw new IllegalArgumentException("mealId or description is required");
+        }
+        String userId = currentUser.get().userId();
+        MealType resolved = body.meal() != null ? body.meal() : mealForHour(LocalTime.now().getHour());
+        try {
+            FoodEntry entry = (body.mealId() != null && !body.mealId().isBlank())
+                ? mealDescription.logResolvedMeal(userId, date, resolved, body.mealId())
+                : mealDescription.logDescribed(userId, date, resolved, body.description());
+            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+            return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY, "meal description analysis is unavailable");
+        }
+    }
+
     /** Re-portion one ingredient of a composite meal and recompute totals. */
     @PatchMapping("/{date}/entries/{entryId}/ingredients/{index}")
     public EntryResponse updateIngredient(
@@ -493,6 +530,17 @@ public class NutritionController {
         Double fiberGrams,
         Double sugarGrams,
         Double caloriesKcal
+    ) {}
+
+    /**
+     * Request for {@code POST /{date}/describe-meal}: supply {@code mealId} to log
+     * a meal already resolved via {@code /api/nutrition/describe}, or
+     * {@code description} to resolve and log in one shot. {@code meal} is optional.
+     */
+    public record DescribeMealRequest(
+        String mealId,
+        String description,
+        MealType meal
     ) {}
 
     public record LogResponse(

@@ -9,6 +9,8 @@ import type {
   UpdateEntryBody,
   UpdateIngredientBody,
   CreateFoodBody,
+  DescribedMeal,
+  LogDescribedMealBody,
 } from "./types/nutrition";
 
 // Server-only HTTP helpers for the Nutrition module (IMPL-13).
@@ -101,4 +103,23 @@ export function updateIngredient(
 /** Create a new catalog food (manual / AI-confirmed). */
 export function createFood(body: CreateFoodBody): Promise<Food> {
   return send<Food>("/api/foods", "POST", body);
+}
+
+// ── Describe a meal ──────────────────────────────────────────────────
+
+/**
+ * Resolve a free-text meal description to a saved meal — a previously-saved
+ * match (user's own first) or a freshly created+saved one with AI macros and a
+ * generating studio photo. Nothing is logged onto a day yet.
+ */
+export function describeMeal(description: string): Promise<DescribedMeal> {
+  return send<DescribedMeal>("/api/nutrition/describe", "POST", { description });
+}
+
+/** Log a described meal onto a day — by resolved `mealId`, or one-shot `description`. */
+export function logDescribedMeal(
+  date: string,
+  body: LogDescribedMealBody,
+): Promise<Entry> {
+  return send<Entry>(`/api/me/nutrition/${date}/describe-meal`, "POST", body);
 }

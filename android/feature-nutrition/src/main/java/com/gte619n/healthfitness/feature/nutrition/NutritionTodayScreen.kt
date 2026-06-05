@@ -97,6 +97,7 @@ fun NutritionTodayRoute(
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
         onAddQuick = viewModel::addQuickEntry,
+        onLogDescribed = viewModel::logDescribedMeal,
         onOpenTarget = onOpenTarget,
         onOpenCapture = onOpenCapture,
         onBack = onBack,
@@ -119,6 +120,7 @@ fun NutritionTodayScreen(
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
     onAddQuick: (Meal, String, Macros) -> Unit,
+    onLogDescribed: (Meal, String) -> Unit,
     onOpenTarget: () -> Unit,
     onOpenCapture: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
@@ -160,6 +162,7 @@ fun NutritionTodayScreen(
             onDismiss = onCloseAddSheet,
             onAddCatalog = onAddCatalog,
             onAddQuick = onAddQuick,
+            onLogDescribed = onLogDescribed,
         )
     }
 
@@ -529,6 +532,7 @@ private fun NutritionTodayPreview() {
             onSaveComposite = { _, _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
+            onLogDescribed = { _, _ -> },
             onOpenTarget = {}, onOpenCapture = {},
         )
     }
