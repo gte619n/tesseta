@@ -13,7 +13,17 @@
 // `account` object for milliseconds, then go to the backend, then are gone.
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import type { JWT } from "next-auth/jwt";
+
+// UAT / local end-to-end only. When UAT_AUTH_ENABLED=1 (set by
+// infra/scripts/uat.sh) a "uat-dev" Credentials provider lets the Selenium
+// suite sign in as an arbitrary test user with NO Google OAuth: it calls the
+// backend's POST /api/auth/dev-login (itself gated by app.auth.dev-login-enabled)
+// and stores the returned backend session token as the session idToken — the
+// exact field the Google path populates — so the rest of the app is unchanged.
+// The provider is simply absent in production builds where the flag is unset.
+const UAT_AUTH_ENABLED = process.env.UAT_AUTH_ENABLED === "1";
 
 const GOOGLE_HEALTH_SCOPE =
   "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly";
@@ -31,11 +41,38 @@ declare module "next-auth/jwt" {
     idToken?: string;
     refreshToken?: string;
     expiresAt?: number;
+    // Set on UAT dev sign-ins so the jwt callback skips Google token rotation
+    // (the idToken is a backend session token, not a Google id_token).
+    uat?: boolean;
     error?: "RefreshAccessTokenError" | "GoogleHealthConnectError";
   }
 }
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+// UAT dev sign-in: exchange a test identity for a real backend session token.
+// Returns null on any failure so signIn() surfaces a normal auth error.
+async function uatDevLogin(
+  userId: string,
+  email: string,
+  name: string,
+): Promise<{ id: string; email: string; name: string; devToken: string } | null> {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) return null;
+  try {
+    const res = await fetch(`${backendUrl.replace(/\/$/, "")}/api/auth/dev-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, email, name }),
+    });
+    if (!res.ok) return null;
+    const { accessToken } = (await res.json()) as { accessToken: string };
+    if (!accessToken) return null;
+    return { id: userId, email, name, devToken: accessToken };
+  } catch {
+    return null;
+  }
+}
 
 async function refreshIdToken(token: JWT): Promise<JWT> {
   if (!token.refreshToken) {
@@ -110,6 +147,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
       },
     }),
+    ...(UAT_AUTH_ENABLED
+      ? [
+          Credentials({
+            id: "uat-dev",
+            name: "UAT Dev",
+            credentials: {
+              userId: { label: "User ID" },
+              email: { label: "Email" },
+              name: { label: "Name" },
+            },
+            authorize: async (creds) => {
+              const userId = String(creds?.userId ?? "").trim();
+              if (!userId) return null;
+              const email = String(creds?.email ?? `${userId}@uat.local`);
+              const name = String(creds?.name ?? userId);
+              return uatDevLogin(userId, email, name);
+            },
+          }),
+        ]
+      : []),
   ],
   session: {
     strategy: "jwt",
@@ -120,7 +177,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/auth/signin",
   },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, user }) {
+      // UAT dev sign-in: the credentials authorize() returned the backend
+      // session token. Store it as idToken (the field apiFetch reads) and mark
+      // the token `uat` so we never try to Google-rotate it below.
+      if (account?.provider === "uat-dev" && user) {
+        return {
+          ...token,
+          idToken: (user as { devToken?: string }).devToken,
+          uat: true,
+          error: undefined,
+        };
+      }
+      // A previously-issued UAT token: return as-is (backend session tokens are
+      // not refreshable via Google; UAT runs are far shorter than their TTL).
+      if (token.uat) {
+        return token;
+      }
       if (account) {
         // If this sign-in granted the Google Health scope, immediately
         // forward the refresh + access tokens to the backend so it can
