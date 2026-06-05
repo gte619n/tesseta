@@ -86,12 +86,17 @@ echo "==> Starting backend on :$BACKEND_PORT (emulator + AI stubs)"
   export ADMIN_EMAILS="admin@uat.local"
   export CORS_ALLOWED_ORIGINS="http://localhost:${WEB_PORT}"
   export APP_UAT_STUBS_ENABLED=true
-  # No Gemini key in UAT → disable every live-AI feature so the context boots.
+  # A dummy, non-empty Gemini key makes GeminiConfig build the shared client
+  # (no network at construction), which lets the medication feature's drug
+  # services wire so the meds CRUD + catalog/custom-entry flows work. We never
+  # make a real Gemini call in UAT — the AI-heavy features below stay disabled,
+  # and the meds flow uses custom entry / catalog, not AI drug lookup.
+  export GEMINI_API_KEY=uat-dummy-gemini-key
+  # AI-heavy features stay off (their endpoints aren't exercised in UAT).
   export APP_GOALS_ENABLED=false
   export APP_WORKOUT_PROGRAMS_ENABLED=false
   export APP_DEXA_ENABLED=false
   export APP_BLOODTEST_ENABLED=false
-  export APP_MEDICATIONS_ENABLED=false
   export APP_NUTRITION_CAPTURE_ENABLED=false
   export APP_NUTRITION_IMAGES_ENABLED=false
   export APP_EXERCISES_MEDIA_ENABLED=false

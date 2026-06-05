@@ -34,9 +34,12 @@ real browser with `UAT_HEADLESS=false`.
 2. **Data** — backend points at the **Firestore emulator** (`FIRESTORE_EMULATOR_HOST`).
    Seed via the real REST API (`UatBackendClient`), wipe between runs via the
    emulator's `DELETE …/documents`. Per-test isolation is by **unique userId**.
-3. **AI** — every Gemini feature is disabled (no key); `UatStubConfig` supplies
-   deterministic stubs for the two chat clients (+ the exercise enricher) so the
-   context boots and chat SSE returns canned text.
+3. **AI** — the AI-heavy features (goals/workout chat, DEXA, blood/nutrition
+   capture, exercise media) are disabled; `UatStubConfig` supplies deterministic
+   stubs for the two chat clients (+ the exercise enricher) so the context boots
+   and chat SSE returns canned text. The medication feature is enabled with a
+   *dummy* Gemini key (the client constructs without a network call) so its CRUD
+   + custom-entry flows work — UAT never makes a real Gemini call.
 
 Same three seams are what a future **Android** instrumented suite reuses: call
 `/api/auth/dev-login`, point at the emulator, hit `10.0.2.2:8080`.
@@ -77,7 +80,7 @@ flows/                # @Test classes — one per feature flow
 | 8 | Body composition | ✅ | no Google Health → "Connect" CTA renders (not an error) |
 | 9 | Blood | ✅ | add manual reading via modal → persisted |
 | 10 | Admin | ✅ | admin reaches equipment catalog; non-admin redirected |
-| 4 | Medications | ⏸ deferred | the meds page core-depends on the drug controller, which is AI-gated **off** in UAT (`app.medications.enabled=false`). Enable it (needs a Gemini key / stub) to cover. |
+| 4 | Medications | ✅ | add a custom medication via the modal → list + backend |
 
 Extending an existing flow (e.g. nutrition entry add/edit/delete, goal step
 toggle, gym edit/delete) follows the same add-testid → page-object → test loop.
