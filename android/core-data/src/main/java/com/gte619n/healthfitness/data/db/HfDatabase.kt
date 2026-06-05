@@ -142,7 +142,16 @@ abstract class HfDatabase : RoomDatabase() {
          */
         fun build(context: Context, keystore: DbKeystore): HfDatabase {
             net.sqlcipher.database.SQLiteDatabase.loadLibs(context)
-            val factory = SupportFactory(keystore.getOrCreatePassphrase())
+            val resolution = keystore.resolvePassphrase()
+            if (resolution.regenerated) {
+                // The previous passphrase was unrecoverable (e.g. the prefs blob was
+                // restored from backup without its non-exportable Keystore key). Any
+                // existing DB file is encrypted under that lost key and cannot be
+                // opened — delete it (and its -wal/-shm/journal sidecars) so Room
+                // recreates a fresh store the sync layer refills from the backend.
+                context.deleteDatabase(DB_NAME)
+            }
+            val factory = SupportFactory(resolution.passphrase)
             return Room.databaseBuilder(context, HfDatabase::class.java, DB_NAME)
                 .openHelperFactory(factory)
                 // schemaVersion bumps (D13) trigger an explicit wipe+resync at the
