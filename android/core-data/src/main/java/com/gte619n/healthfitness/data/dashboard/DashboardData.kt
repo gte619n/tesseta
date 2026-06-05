@@ -279,7 +279,14 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
         if (support.killSwitchOn()) {
             return@withContext BodyCompositionMapper.toWeightSummary(api.bodyComposition())
         }
-        if (dao.observeActive().first().isEmpty()) runCatching { fillFromNetwork() }
+        // Refresh the FULL weight history from the network every load, then serve
+        // from Room. The body-composition mirror is also populated by the sync
+        // engine, but only within its recent (14-day) window — so a fill-on-empty
+        // guard left the dashboard stuck on the handful of recent points and never
+        // showing (or updating) the real trend. /api/me/body-composition returns
+        // the user's full history; refreshInto upserts it idempotently. (Mirrors
+        // DashboardDailyMetricsRepositoryImpl, which refreshes on every call.)
+        runCatching { fillFromNetwork() }
         val now = Instant.now()
         val from = now.minusSeconds(120L * 24 * 3600)
         val rows = dao.pointsInRange(from.toEpochMilli(), now.toEpochMilli())
@@ -293,7 +300,15 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
             com.gte619n.healthfitness.data.db.entity.MirrorTables.BODY_COMPOSITION,
             dtos.map {
                 com.gte619n.healthfitness.data.sync.MirrorRepositorySupport.RefreshRow(
-                    id = it.recordId,
+                    // recordId is the sample timestamp and is NOT unique across
+                    // metrics — a scale reports WEIGHT_KG and BODY_FAT_PERCENT at
+                    // the same instant, so they share a recordId. Keying the mirror
+                    // row by recordId alone made those collide and clobber each
+                    // other (REPLACE), collapsing the whole weight series down to a
+                    // single point. Key by "<metric>__<recordId>" — the same id the
+                    // backend uses (and the sync engine mirrors), so fill + sync
+                    // dedupe instead of fighting.
+                    id = "${it.metric}__${it.recordId}",
                     payloadJson = dtoAdapter.toJson(it),
                     lastUpdate = it.sampleTime.toEpochMilli(),
                 )

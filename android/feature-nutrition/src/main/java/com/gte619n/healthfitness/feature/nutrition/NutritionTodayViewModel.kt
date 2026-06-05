@@ -99,7 +99,16 @@ class NutritionTodayViewModel @Inject constructor(
      *  refresh indicator until it settles. */
     fun onPullRefresh() {
         _state.update { it.copy(isRefreshing = true) }
-        load(_state.value.date)
+        viewModelScope.launch {
+            // Pull-to-refresh is an explicit "get me the latest". Force a network
+            // re-pull (refreshDay) rather than the mirror-gated day(): a logged
+            // meal whose generated image only finalizes server-side AFTER the
+            // settle-poll budget elapses leaves a non-PENDING mirror row that
+            // day() never re-fetches — so its image would never appear no matter
+            // how many times the user pulls to refresh. refreshDay reconciles it.
+            runCatching { repository.refreshDay(_state.value.date.format(ISO_DATE)) }
+            load(_state.value.date)
+        }
     }
 
     fun openAddSheet() = _state.update { it.copy(addSheetOpen = true) }

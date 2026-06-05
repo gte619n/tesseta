@@ -41,7 +41,9 @@ import com.gte619n.healthfitness.mobile.sync.SettingUpScreen
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.theme.Hf
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -55,7 +57,11 @@ class MainActivity : ComponentActivity() {
     // sync gate (D14). Hilt-injected singletons (Retrofit/WorkManager-backed).
     @Inject lateinit var tokenRegistration: TokenRegistration
 
-    @Inject lateinit var firstSyncGate: FirstSyncGate
+    // Lazy on purpose: resolving FirstSyncGate constructs the SQLCipher-backed
+    // HfDatabase (loadLibs + Keystore crypto), which must NOT run on the main
+    // thread during onCreate injection. SignedInRoot resolves it off the main
+    // thread, and only once the user is actually signed in.
+    @Inject lateinit var firstSyncGate: dagger.Lazy<FirstSyncGate>
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,7 +122,7 @@ private fun AppRoot(
     coordinator: AuthCoordinator,
     widthClass: WindowWidthSizeClass,
     tokenRegistration: TokenRegistration,
-    firstSyncGate: FirstSyncGate,
+    firstSyncGate: dagger.Lazy<FirstSyncGate>,
 ) {
     val state by coordinator.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -158,7 +164,7 @@ private fun AppRoot(
 private fun SignedInRoot(
     widthClass: WindowWidthSizeClass,
     tokenRegistration: TokenRegistration,
-    firstSyncGate: FirstSyncGate,
+    firstSyncGate: dagger.Lazy<FirstSyncGate>,
 ) {
     // gateDecided: null until needsFirstSync() resolves; then false (released) or
     // true (blocking initial sync in flight).
@@ -169,16 +175,20 @@ private fun SignedInRoot(
         // off to the side. (HfMessagingService.onNewToken also re-registers.)
         launch { tokenRegistration.register() }
 
+        // Resolve the gate (and thus build the SQLCipher DB: loadLibs + Keystore
+        // crypto) OFF the main thread — never during onCreate injection.
+        val gate = withContext(Dispatchers.IO) { firstSyncGate.get() }
+
         // A fresh sign-in blocks on a brief, bounded initial sync; a returning
         // user (already has a full sync) is released immediately.
-        if (firstSyncGate.needsFirstSync()) {
+        if (gate.needsFirstSync()) {
             gating = true
-            firstSyncGate.runInitialSync()
+            gate.runInitialSync()
         } else {
             gating = false
         }
         // Always schedule the lazy backfill + periodic floor after the gate.
-        firstSyncGate.scheduleBackfill()
+        gate.scheduleBackfill()
         gating = false
     }
 
