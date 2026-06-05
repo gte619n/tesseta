@@ -1,5 +1,11 @@
 package com.gte619n.healthfitness.feature.medical.today
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -138,19 +144,38 @@ fun TodaysDosesCardContent(
                             style = Hf.type.bodySm,
                             color = Hf.colors.textTertiary,
                         )
-                    } else if (showDoses) {
-                        // Render every dose for today; the dashboard hosting
-                        // this card is itself vertically scrollable, so a long
-                        // list stays reachable by scrolling (no inner scroll —
-                        // that would conflict with the parent's vertical scroll).
-                        Spacer(Modifier.height(12.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            state.doses.forEach { dose ->
-                                DoseRow(dose = dose, onToggle = { onToggle(dose) })
+                    } else {
+                        // Roll the list up when the day is complete (and back
+                        // down when re-expanded or a dose is unchecked) rather
+                        // than popping it out instantly. Anchored at the top so
+                        // the card's bottom edge glides up under the header; the
+                        // leading Spacer lives inside the animated content so the
+                        // gap collapses with the rows. The dashboard hosting this
+                        // card is itself vertically scrollable, so a long list
+                        // stays reachable by scrolling (no inner scroll — that
+                        // would conflict with the parent's vertical scroll).
+                        AnimatedVisibility(
+                            visible = showDoses,
+                            enter = expandVertically(
+                                animationSpec = tween(ROLL_MS),
+                                expandFrom = Alignment.Top,
+                            ) + fadeIn(animationSpec = tween(ROLL_MS)),
+                            exit = shrinkVertically(
+                                animationSpec = tween(ROLL_MS),
+                                shrinkTowards = Alignment.Top,
+                            ) + fadeOut(animationSpec = tween(ROLL_MS)),
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(12.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    state.doses.forEach { dose ->
+                                        DoseRow(dose = dose, onToggle = { onToggle(dose) })
+                                    }
+                                }
                             }
                         }
                     }
-                // Collapsed + complete: header-only, nothing rendered below.
+                // Collapsed + complete: header-only, the list above is rolled up.
             }
         }
     }
@@ -214,3 +239,7 @@ private fun DoseRow(dose: TodaysDose, onToggle: () -> Unit) {
         }
     }
 }
+
+// Duration of the dose-list roll up/down. Long enough to read as a smooth
+// collapse, short enough to stay snappy when checking off the last dose.
+private const val ROLL_MS = 250
