@@ -279,7 +279,14 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
         if (support.killSwitchOn()) {
             return@withContext BodyCompositionMapper.toWeightSummary(api.bodyComposition())
         }
-        if (dao.observeActive().first().isEmpty()) runCatching { fillFromNetwork() }
+        // Refresh the FULL weight history from the network every load, then serve
+        // from Room. The body-composition mirror is also populated by the sync
+        // engine, but only within its recent (14-day) window — so a fill-on-empty
+        // guard left the dashboard stuck on the handful of recent points and never
+        // showing (or updating) the real trend. /api/me/body-composition returns
+        // the user's full history; refreshInto upserts it idempotently. (Mirrors
+        // DashboardDailyMetricsRepositoryImpl, which refreshes on every call.)
+        runCatching { fillFromNetwork() }
         val now = Instant.now()
         val from = now.minusSeconds(120L * 24 * 3600)
         val rows = dao.pointsInRange(from.toEpochMilli(), now.toEpochMilli())
