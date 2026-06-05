@@ -42,6 +42,7 @@ fun DrugImage(
                 contentDescription = drug?.name,
                 modifier = Modifier.fillMaxSize(),
                 placeholderColor = Hf.colors.canvasMuted,
+                zoomable = true,
             )
         } else {
             // Form-shaped fallback. We use a single generic medication glyph;

@@ -487,7 +487,7 @@ private fun DragChip(entry: Entry, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 28.dp)
+        FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 28.dp, zoomable = false)
         Spacer(Modifier.width(8.dp))
         Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
     }

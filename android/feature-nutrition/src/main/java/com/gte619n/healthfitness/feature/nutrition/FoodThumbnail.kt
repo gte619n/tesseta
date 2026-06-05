@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.feature.nutrition
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,15 +10,21 @@ import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
+import com.gte619n.healthfitness.ui.image.ImageZoomDialog
 import com.gte619n.healthfitness.ui.theme.Hf
 
 /**
@@ -31,14 +38,28 @@ fun FoodThumbnail(
     imageUrl: String?,
     imageStatus: String,
     size: Dp = 44.dp,
+    zoomable: Boolean = true,
 ) {
     val shape = RoundedCornerShape(6.dp)
     when {
         imageStatus == "READY" && imageUrl != null -> {
+            // Long-press a ready photo to open it full-screen for a closer look.
+            var showZoom by remember(imageUrl) { mutableStateOf(false) }
             SubcomposeAsyncImage(
                 model = imageUrl,
                 contentDescription = null,
-                modifier = Modifier.size(size).clip(shape),
+                modifier = Modifier
+                    .size(size)
+                    .clip(shape)
+                    .then(
+                        if (zoomable) {
+                            Modifier.pointerInput(imageUrl) {
+                                detectTapGestures(onLongPress = { showZoom = true })
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ),
                 contentScale = ContentScale.Crop,
             ) {
                 when (painter.state) {
@@ -48,6 +69,9 @@ fun FoodThumbnail(
                     is AsyncImagePainter.State.Error -> FoodThumbnailFallback(size)
                     else -> SubcomposeAsyncImageContent()
                 }
+            }
+            if (showZoom) {
+                ImageZoomDialog(model = imageUrl, onDismiss = { showZoom = false })
             }
         }
         imageStatus == "PENDING" -> Box(
