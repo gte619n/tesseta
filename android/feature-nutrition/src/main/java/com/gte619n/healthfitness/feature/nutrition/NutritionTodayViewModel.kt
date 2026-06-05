@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.feature.nutrition
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
+import com.gte619n.healthfitness.data.sync.SyncSignals
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
@@ -49,11 +50,14 @@ data class NutritionTodayUiState(
     val editingComposite: Entry? = null,
     /** true while an ingredient portion is being saved. */
     val savingIngredient: Boolean = false,
+    /** true while a user-initiated pull-to-refresh is in flight. */
+    val isRefreshing: Boolean = false,
 )
 
 @HiltViewModel
 class NutritionTodayViewModel @Inject constructor(
     private val repository: NutritionRepository,
+    syncSignals: SyncSignals,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NutritionTodayUiState())
@@ -68,11 +72,35 @@ class NutritionTodayViewModel @Inject constructor(
     // LifecycleResumeEffect, so there's no init load — that keeps the page from
     // double-fetching on open and lets it refresh after a capture pops back.
 
+    init {
+        // A photo meal finalizes on the backend (ANALYZING → READY) well after
+        // capture; the server pushes an FCM sync wakeup when it does. Nutrition
+        // reads over REST (not the mirror), so re-fetch the day on any push whose
+        // hint names nutrition — this lets stragglers that finish after the
+        // settle-poll's budget elapses still appear without a manual nudge. The
+        // collect runs only while the screen is alive; same-date reloads are
+        // quiet, so the refresh is invisible unless something actually changed.
+        viewModelScope.launch {
+            syncSignals.pushes.collect { collections ->
+                if (collections == null || collections.contains("nutrition", ignoreCase = true)) {
+                    refresh()
+                }
+            }
+        }
+    }
+
     fun previousDay() = load(_state.value.date.minusDays(1))
 
     fun nextDay() = load(_state.value.date.plusDays(1))
 
     fun refresh() = load(_state.value.date)
+
+    /** Swipe-down pull-to-refresh: re-fetch the current day, showing the
+     *  refresh indicator until it settles. */
+    fun onPullRefresh() {
+        _state.update { it.copy(isRefreshing = true) }
+        load(_state.value.date)
+    }
 
     fun openAddSheet() = _state.update { it.copy(addSheetOpen = true) }
 
@@ -128,11 +156,15 @@ class NutritionTodayViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val day = repository.day(date.format(ISO_DATE))
-                _state.update { it.copy(loading = false, day = day, error = null) }
+                _state.update { it.copy(loading = false, isRefreshing = false, day = day, error = null) }
                 pollWhileImagesGenerate(date)
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(loading = false, error = e.message ?: "Failed to load nutrition")
+                    it.copy(
+                        loading = false,
+                        isRefreshing = false,
+                        error = e.message ?: "Failed to load nutrition",
+                    )
                 }
             }
         }

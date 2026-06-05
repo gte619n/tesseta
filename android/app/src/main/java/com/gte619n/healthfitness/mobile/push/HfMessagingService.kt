@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.mobile.push
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.gte619n.healthfitness.data.sync.SyncScheduler
+import com.gte619n.healthfitness.data.sync.SyncSignals
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,9 @@ class HfMessagingService : FirebaseMessagingService() {
     lateinit var scheduler: SyncScheduler
 
     @Inject
+    lateinit var syncSignals: SyncSignals
+
+    @Inject
     lateinit var tokenRegistration: TokenRegistration
 
     // Short-lived scope for the fire-and-forget token re-register on rotation.
@@ -48,6 +52,10 @@ class HfMessagingService : FirebaseMessagingService() {
             // every wakeup as "pull the delta" keeps the handler trivial and
             // tolerant of fan-out/delta collection-name mismatches (questions #34).
             scheduler.enqueuePull()
+            // Also fan the wakeup out to any foreground REST-backed screen (e.g.
+            // nutrition), which the mirror pull above doesn't cover. The hint is
+            // forwarded so such a screen can filter to its own collections.
+            syncSignals.onSyncPush(message.data["collections"])
         }
     }
 

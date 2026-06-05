@@ -30,8 +30,10 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -82,6 +84,7 @@ fun NutritionTodayRoute(
     }
     NutritionTodayScreen(
         state = state,
+        onRefresh = viewModel::onPullRefresh,
         onPrevDay = viewModel::previousDay,
         onNextDay = viewModel::nextDay,
         onDeleteEntry = viewModel::deleteEntry,
@@ -103,6 +106,7 @@ fun NutritionTodayRoute(
 @Composable
 fun NutritionTodayScreen(
     state: NutritionTodayUiState,
+    onRefresh: () -> Unit,
     onPrevDay: () -> Unit,
     onNextDay: () -> Unit,
     onDeleteEntry: (String) -> Unit,
@@ -142,6 +146,8 @@ fun NutritionTodayScreen(
             else -> DayContent(
                 day = state.day,
                 pendingEntryIds = state.pendingEntryIds,
+                isRefreshing = state.isRefreshing,
+                onRefresh = onRefresh,
                 onDeleteEntry = onDeleteEntry,
                 onMoveEntry = onMoveEntry,
                 onOpenEditSheet = onOpenEditSheet,
@@ -235,9 +241,12 @@ private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
 private data class MealDragState(val entry: Entry, val pointerWindow: Offset)
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun DayContent(
     day: NutritionDay?,
     pendingEntryIds: Set<String>,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onDeleteEntry: (String) -> Unit,
     onMoveEntry: (String, String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
@@ -259,6 +268,11 @@ private fun DayContent(
             .fillMaxSize()
             .onGloballyPositioned { boxTopInWindow = it.positionInWindow().y },
     ) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
@@ -299,6 +313,7 @@ private fun DayContent(
                 }
             }
             item("tail") { Spacer(Modifier.height(8.dp)) }
+        }
         }
 
         // A chip that follows the finger while dragging, so the in-flight move
@@ -508,6 +523,7 @@ private fun NutritionTodayPreview() {
                     ),
                 ),
             ),
+            onRefresh = {},
             onPrevDay = {}, onNextDay = {}, onDeleteEntry = {}, onMoveEntry = { _, _ -> },
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
             onSaveComposite = { _, _, _ -> },
