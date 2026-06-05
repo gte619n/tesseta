@@ -31,6 +31,14 @@ the `iss` claim.
   `@PreAuthorize("@adminAuthorizer.isAdmin()")` annotation (`@EnableMethodSecurity`
   in `SecurityConfig`); `AdminAuthorizer` checks the caller's email against the
   `app.admin.emails` allow-list (`ADMIN_EMAILS` env).
+  - ⚠️ **Adding a new endpoint? Allow-list its path.** `SecurityConfig`'s
+    `authorizeHttpRequests` ends in `anyRequest().denyAll()`, so any `/api/**`
+    path not matched by an earlier `requestMatchers(...)` rule returns **403**,
+    even with a valid token. Paths under `/api/me/**` are covered automatically;
+    anything outside it (e.g. `/api/foods/**`, `/api/nutrition/capture/**`,
+    `/api/nutrition/describe`) needs its own `.authenticated()` matcher. Add a
+    `SecurityConfigTest` case (unauth → 401, authed → reachable, not 403) when
+    you introduce a new top-level path.
 - **Web** (`web/auth.ts`): Auth.js v5, Google provider only, JWT session
   (no DB), `maxAge` 1 year. The `jwt` callback rotates the Google `id_token`
   when within 60s of expiry; failure sets `error: "RefreshAccessTokenError"`.
