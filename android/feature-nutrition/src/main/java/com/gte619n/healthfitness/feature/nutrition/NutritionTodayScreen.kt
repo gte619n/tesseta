@@ -64,11 +64,12 @@ import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.sync.SyncBadge
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.LocalDate
 
 @Composable
 fun NutritionTodayRoute(
     onOpenTarget: () -> Unit,
-    onOpenCapture: () -> Unit,
+    onOpenCapture: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
     viewModel: NutritionTodayViewModel = hiltViewModel(),
 ) {
@@ -115,7 +116,7 @@ fun NutritionTodayScreen(
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
     onAddQuick: (Meal, String, Macros) -> Unit,
     onOpenTarget: () -> Unit,
-    onOpenCapture: () -> Unit,
+    onOpenCapture: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
     Column(
@@ -129,7 +130,7 @@ fun NutritionTodayScreen(
             onPrevDay = onPrevDay,
             onNextDay = onNextDay,
             onOpenTarget = onOpenTarget,
-            onOpenCapture = onOpenCapture,
+            onOpenCapture = { onOpenCapture(state.date) },
             onOpenAddSheet = onOpenAddSheet,
             onBack = onBack,
         )

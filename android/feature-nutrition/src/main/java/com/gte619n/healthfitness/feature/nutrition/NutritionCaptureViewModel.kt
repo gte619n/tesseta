@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.feature.nutrition
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.nutrition.FoodRepository
@@ -68,6 +69,7 @@ class NutritionCaptureViewModel @Inject constructor(
     private val nutrition: NutritionRepository,
     private val snackbar: SnackbarController,
     connectivity: com.gte619n.healthfitness.data.net.Connectivity,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     // IMPL-AND-20 (Phase 6, D17): meal-photo analysis is an online-only AI flow.
@@ -82,7 +84,12 @@ class NutritionCaptureViewModel @Inject constructor(
     private val _events = Channel<CaptureEvent>(Channel.BUFFERED)
     val events: Flow<CaptureEvent> = _events.receiveAsFlow()
 
-    private val today: String get() = LocalDate.now().format(ISO_DATE)
+    // The day new entries log to. The capture screen is launched with the day
+    // the user is viewing (nav arg "date" — matches Routes.NUTRITION_CAPTURE_ARG_DATE);
+    // when absent (e.g. the dashboard quick-capture) it defaults to today.
+    private val captureDate: String =
+        savedStateHandle.get<String>("date")?.takeIf { it.isNotBlank() }
+            ?: LocalDate.now().format(ISO_DATE)
 
     // The meal is inferred from the time of day at log time — the capture flow
     // never asks the user which meal it is (the web client doesn't either).
@@ -132,7 +139,7 @@ class NutritionCaptureViewModel @Inject constructor(
         val macros = food.macrosPer100g.forPortion(servingGrams, 1.0)
         try {
             nutrition.addEntry(
-                today,
+                captureDate,
                 EntryRequest(
                     meal = currentMeal().wire,
                     foodId = food.foodId,
@@ -191,13 +198,13 @@ class NutritionCaptureViewModel @Inject constructor(
         _state.update { it.copy(stage = CaptureStage.Working, error = null) }
         viewModelScope.launch {
             try {
-                capture.captureMeal(today, currentMeal().wire, jpeg)
+                capture.captureMeal(captureDate, currentMeal().wire, jpeg)
                 // The capture POST creates the ANALYZING entry server-side only.
                 // Pull it into the local mirror now so it renders immediately on
                 // the Today screen and the settle-poll engages; without this the
                 // offline-first day() won't re-fetch a non-empty date and nothing
                 // shows. Best-effort — the entry still syncs later if this fails.
-                runCatching { nutrition.refreshDay(today) }
+                runCatching { nutrition.refreshDay(captureDate) }
                 snackbar.show("Analyzing your photo…")
                 _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
                 _events.send(CaptureEvent.NavigateBack)
@@ -231,7 +238,7 @@ class NutritionCaptureViewModel @Inject constructor(
                         ),
                     ).foodId
                     nutrition.addEntry(
-                        today,
+                        captureDate,
                         EntryRequest(
                             meal = currentMeal().wire,
                             foodId = foodId,
@@ -288,7 +295,7 @@ class NutritionCaptureViewModel @Inject constructor(
                 val label = serving?.label ?: "1 serving"
                 val macros = created.macrosPer100g.forPortion(grams, quantity)
                 nutrition.addEntry(
-                    today,
+                    captureDate,
                     EntryRequest(
                         meal = currentMeal().wire,
                         foodId = created.foodId,
@@ -313,7 +320,7 @@ class NutritionCaptureViewModel @Inject constructor(
         _state.update { it.copy(stage = CaptureStage.Working, error = null) }
         viewModelScope.launch {
             try {
-                nutrition.addEntry(today, body)
+                nutrition.addEntry(captureDate, body)
                 _state.update { it.copy(stage = CaptureStage.Done(doneMessage)) }
             } catch (e: Exception) {
                 _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Save failed") }

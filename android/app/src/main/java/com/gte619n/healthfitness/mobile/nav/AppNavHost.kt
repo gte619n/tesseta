@@ -38,6 +38,7 @@ import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import com.gte619n.healthfitness.feature.workouts.nav.workoutsGraph
 import com.gte619n.healthfitness.mobile.DashboardRoot
 import com.gte619n.healthfitness.mobile.MoreScreen
+import java.time.LocalDate
 
 // App NavHost. The dashboard is the start destination; every parity feature
 // (IMPL-AND-02..06, -12) registers its own nested graph here. Destinations are
@@ -62,6 +63,15 @@ object Routes {
     const val NUTRITION = "nutrition"
     const val NUTRITION_TARGET = "nutrition/target"
     const val NUTRITION_CAPTURE = "nutrition/capture"
+
+    // Capture accepts an optional ?date=YYYY-MM-DD so a meal photo taken while
+    // reviewing another day logs to that day. Absent (e.g. the dashboard quick-
+    // capture, which navigates to the bare NUTRITION_CAPTURE) → the capture
+    // ViewModel defaults to today.
+    const val NUTRITION_CAPTURE_ARG_DATE = "date"
+    const val NUTRITION_CAPTURE_PATTERN = "nutrition/capture?date={date}"
+    fun nutritionCaptureRoute(date: LocalDate? = null): String =
+        if (date == null) NUTRITION_CAPTURE else "nutrition/capture?date=$date"
 }
 
 @Composable
@@ -137,14 +147,23 @@ private fun AppNavHostGraph(
         composable(Routes.NUTRITION) {
             NutritionTodayRoute(
                 onOpenTarget = { navController.navigate(Routes.NUTRITION_TARGET) },
-                onOpenCapture = { navController.navigate(Routes.NUTRITION_CAPTURE) },
+                onOpenCapture = { date -> navController.navigate(Routes.nutritionCaptureRoute(date)) },
                 onBack = { navController.popBackStack() },
             )
         }
         composable(Routes.NUTRITION_TARGET) {
             NutritionTargetRoute(onBack = { navController.popBackStack() })
         }
-        composable(Routes.NUTRITION_CAPTURE) {
+        composable(
+            route = Routes.NUTRITION_CAPTURE_PATTERN,
+            arguments = listOf(
+                navArgument(Routes.NUTRITION_CAPTURE_ARG_DATE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) {
             NutritionCaptureRoute(onBack = { navController.popBackStack() })
         }
 
