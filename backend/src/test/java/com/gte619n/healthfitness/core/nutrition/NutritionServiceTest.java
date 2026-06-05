@@ -75,6 +75,54 @@ class NutritionServiceTest {
         assertTrue(events.stream().allMatch(e -> e.userId().equals(USER)));
     }
 
+    @Test
+    void compositeMealPortion_scalesTheWholeMealTotal() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 20);
+
+        FoodEntry meal = svc.addCompositeMeal(
+            USER, date, MealType.LUNCH, "Salmon & Rice",
+            List.of(ingredient("Salmon", 100.0), ingredient("Rice", 100.0)),
+            EntrySource.PHOTO);
+        assertEquals(200.0, meal.macros().caloriesKcal(), 1e-9);
+        assertEquals(1.0, meal.quantity(), 1e-9);
+
+        // "I ate half" — portion 0.5 halves the whole-meal total.
+        FoodEntry half = svc.updateEntry(
+            USER, date, meal.entryId(), null, null, null, null, 0.5, null);
+        assertEquals(0.5, half.quantity(), 1e-9);
+        assertEquals(100.0, half.macros().caloriesKcal(), 1e-9);
+        assertEquals(100.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+    }
+
+    @Test
+    void editingAnIngredient_preservesTheMealPortion() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 20);
+
+        FoodEntry meal = svc.addCompositeMeal(
+            USER, date, MealType.LUNCH, "Salmon & Rice",
+            List.of(ingredient("Salmon", 100.0), ingredient("Rice", 100.0)),
+            EntrySource.PHOTO);
+        svc.updateEntry(USER, date, meal.entryId(), null, null, null, null, 0.5, null);
+
+        // Double the first ingredient: recipe sum 200+100=300, still × 0.5 portion.
+        FoodEntry edited = svc.updateIngredient(USER, date, meal.entryId(), 0, null, null, 2.0);
+        assertEquals(0.5, edited.quantity(), 1e-9);
+        assertEquals(150.0, edited.macros().caloriesKcal(), 1e-9);
+        assertEquals(150.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+    }
+
+    /** A composite ingredient of {@code 100 g × 1} contributing {@code kcal} calories. */
+    private static CompositeIngredient ingredient(String name, double kcal) {
+        Macros per100g = new Macros(kcal, 0.0, 0.0, 0.0, 0.0, 0.0);
+        return new CompositeIngredient(name, null, per100g, 100.0, "100 g", 1.0, per100g);
+    }
+
     private static MetricChangedPublisher capturingPublisher(List<MetricChangedEvent> sink) {
         return new MetricChangedPublisher(event -> {
             if (event instanceof MetricChangedEvent e) sink.add(e);

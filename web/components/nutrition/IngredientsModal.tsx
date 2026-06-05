@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
-import type {
-  Entry,
-  EntryIngredient,
-  Macros,
-  UpdateEntryBody,
-  UpdateIngredientBody,
+import {
+  QUANTITY_STEPS,
+  type Entry,
+  type EntryIngredient,
+  type Macros,
+  type UpdateEntryBody,
+  type UpdateIngredientBody,
 } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
@@ -38,8 +39,11 @@ function scaleKcal(per100g: Macros | null, grams: number, qty: number): number {
 /**
  * Modal for a composite (photo-logged) meal: the finished-meal image, an
  * editable meal title, and each ingredient with its raw-ingredient image and a
- * quantity multiplier (the portion size itself is fixed). One Save commits the
- * title and all quantity changes together.
+ * quantity multiplier (the portion size itself is fixed). A "portion of meal"
+ * multiplier (the entry's own quantity) scales the whole meal's macros at once —
+ * pick ½ when you split a meal. It's stored per entry, so the same meal logged
+ * twice can have different portions. One Save commits the title, the portion and
+ * any ingredient quantity changes together.
  */
 export function IngredientsModal({
   isOpen,
@@ -55,21 +59,46 @@ export function IngredientsModal({
   const [qtys, setQtys] = useState<string[]>(
     ingredients.map((i) => String(i.quantity ?? 1)),
   );
+  // Whole-meal portion = the entry's own quantity. Persisted per entry, so the
+  // same meal logged twice can carry different portions. Scales the displayed
+  // total; the ingredients keep their full-recipe amounts.
+  const [portion, setPortion] = useState(String(entry.quantity ?? 1));
   const [saving, setSaving] = useState(false);
+
+  const portionFactor = parseFloat(portion) || 1;
+
+  // Full-recipe ingredient total, scaled once by the whole-meal portion.
+  const liveKcal = Math.round(
+    portionFactor *
+      ingredients.reduce(
+        (sum, ing, i) =>
+          sum +
+          scaleKcal(ing.macrosPer100g, num(ing.servingGrams), parseFloat(qtys[i] ?? "") || 1),
+        0,
+      ),
+  );
 
   async function handleSave() {
     setSaving(true);
     try {
-      const nextTitle = title.trim();
-      if (nextTitle && nextTitle !== entry.foodName) {
-        await updateEntry(date, entry.entryId, { foodName: nextTitle });
-      }
+      // Ingredient quantity changes first — each resum preserves the existing
+      // portion — then the entry update applies the (possibly new) portion to
+      // the fresh ingredient totals.
       for (let i = 0; i < ingredients.length; i++) {
         const newQ = parseFloat(qtys[i] ?? "") || 1;
         const oldQ = ingredients[i]?.quantity ?? 1;
         if (newQ > 0 && newQ !== oldQ) {
           await updateIngredient(date, entry.entryId, i, { quantity: newQ });
         }
+      }
+      const body: UpdateEntryBody = {};
+      const nextTitle = title.trim();
+      if (nextTitle && nextTitle !== entry.foodName) body.foodName = nextTitle;
+      if (portionFactor > 0 && portionFactor !== (entry.quantity ?? 1)) {
+        body.quantity = portionFactor;
+      }
+      if (Object.keys(body).length > 0) {
+        await updateEntry(date, entry.entryId, body);
       }
       toast.success("Meal updated");
       onClose();
@@ -96,8 +125,7 @@ export function IngredientsModal({
                 {title.trim() || entry.foodName}
               </h2>
               <div className="mt-1 font-mono text-[12px] tabular-nums text-secondary">
-                {Math.round(num(entry.macros.caloriesKcal))} kcal · {ingredients.length}{" "}
-                ingredients
+                {liveKcal} kcal · {ingredients.length} ingredients
               </div>
             </div>
           </div>
@@ -124,6 +152,43 @@ export function IngredientsModal({
               placeholder="Meal name"
               className="w-full rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
             />
+          </div>
+
+          {/* Portion of the whole meal — scales every ingredient at once */}
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium text-secondary">
+              Portion of meal
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {QUANTITY_STEPS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPortion(String(p))}
+                  className={`caps-mono rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
+                    portionFactor === p
+                      ? "border-accent bg-accent-bg text-accent-dim"
+                      : "border-border-default bg-canvas text-secondary hover:border-border-strong"
+                  }`}
+                >
+                  {p}×
+                </button>
+              ))}
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={portion}
+                onChange={(e) => setPortion(e.target.value)}
+                aria-label="Portion of meal"
+                className="w-20 rounded-md border-[0.5px] border-border-default bg-canvas px-2 py-1.5 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+            {portionFactor !== 1 && (
+              <div className="mt-1.5 font-mono text-[11px] tabular-nums text-tertiary">
+                Counts as {portionFactor}× of the full meal
+              </div>
+            )}
           </div>
 
           {ingredients.map((ing, index) => (

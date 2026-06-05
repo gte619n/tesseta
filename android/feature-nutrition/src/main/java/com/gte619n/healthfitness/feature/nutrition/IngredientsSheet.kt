@@ -38,7 +38,10 @@ import kotlin.math.roundToInt
  * Bottom sheet for a composite (photo-logged) meal: the finished-meal image, an
  * editable meal title, and each ingredient with its raw-ingredient image and a
  * quantity multiplier. The portion size itself isn't editable — only how many of
- * it. One Save commits the title and all quantity changes together.
+ * it. A "portion of meal" multiplier (the entry's own quantity) scales the whole
+ * meal's macros at once — pick ½ when you split a meal. It's stored per entry, so
+ * the same meal logged twice can carry different portions. One Save commits the
+ * title, the portion and any ingredient quantity changes together.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +49,7 @@ fun IngredientsSheet(
     entry: Entry,
     saving: Boolean,
     onDismiss: () -> Unit,
-    onSave: (title: String, quantities: List<Double>) -> Unit,
+    onSave: (title: String, portion: Double, quantities: List<Double>) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val ingredients = entry.ingredients.orEmpty()
@@ -54,6 +57,10 @@ fun IngredientsSheet(
     val quantities = remember(entry.entryId) {
         mutableStateListOf(*ingredients.map { trimAmount(it.quantity ?: 1.0) }.toTypedArray())
     }
+    // Whole-meal portion = the entry's own quantity, persisted per entry. Scales
+    // the displayed total; the ingredients keep their full-recipe amounts.
+    var portion by remember(entry.entryId) { mutableStateOf(entry.quantity) }
+    var portionText by remember(entry.entryId) { mutableStateOf(trimAmount(entry.quantity)) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -67,6 +74,15 @@ fun IngredientsSheet(
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 24.dp),
         ) {
+            // Live total reflects per-ingredient edits and the meal portion: the
+            // full-recipe ingredient sum, scaled once by the whole-meal portion.
+            val recipeKcal = ingredients.foldIndexed(0.0) { index, sum, ing ->
+                val qty = quantities.getOrNull(index)?.toDoubleOrNull() ?: 1.0
+                val preview = ing.macrosPer100g?.forPortion(ing.servingGrams ?: 0.0, qty) ?: ing.macros
+                sum + (preview.caloriesKcal ?: 0.0)
+            }
+            val liveKcal = recipeKcal * portion
+
             // ── Hero: finished-meal image + total calories ────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 76.dp)
@@ -79,8 +95,7 @@ fun IngredientsSheet(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "${(entry.macros.caloriesKcal ?: 0.0).roundToInt()} kcal · " +
-                            "${ingredients.size} ingredients",
+                        "${liveKcal.roundToInt()} kcal · ${ingredients.size} ingredients",
                         style = Hf.type.monoSm,
                         color = Hf.colors.textSecondary,
                     )
@@ -94,6 +109,32 @@ fun IngredientsSheet(
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Meal title") },
                 singleLine = true,
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // ── Portion of the whole meal — scales every ingredient at once ─
+            Text("Portion of meal", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+            Spacer(Modifier.height(5.dp))
+            ChipRow(
+                options = QUANTITY_STEPS,
+                selected = portion,
+                label = { "${trimAmount(it)}×" },
+                onSelect = {
+                    portion = it
+                    portionText = trimAmount(it)
+                },
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = portionText,
+                onValueChange = { text ->
+                    portionText = text
+                    text.toDoubleOrNull()?.takeIf { it > 0 }?.let { portion = it }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Portion (×)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
             Spacer(Modifier.height(16.dp))
 
@@ -118,6 +159,7 @@ fun IngredientsSheet(
                     if (saving) return@PrimaryButton
                     onSave(
                         title,
+                        portion.takeIf { it > 0 } ?: 1.0,
                         quantities.map { it.toDoubleOrNull()?.takeIf { q -> q > 0 } ?: 1.0 },
                     )
                 }

@@ -439,10 +439,9 @@ public class NutritionService {
         List<CompositeIngredient> updated = new ArrayList<>(current);
         updated.set(index, current.get(index).withPortion(servingGrams, servingLabel, quantity));
 
-        Macros total = Macros.zero();
-        for (CompositeIngredient ing : updated) {
-            total = total.plus(ing.macros());
-        }
+        // Preserve the entry's meal portion (entry.quantity) when resumming.
+        double portion = existing.quantity() != null ? existing.quantity() : 1.0;
+        Macros total = compositeTotal(updated, portion);
         FoodEntry entry = new FoodEntry(
             existing.userId(), existing.date(), existing.entryId(), existing.meal(),
             existing.foodId(), existing.foodName(), existing.servingLabel(),
@@ -473,6 +472,15 @@ public class NutritionService {
         requireDate(date);
         FoodEntry existing = entries.findById(userId, date, entryId)
             .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        // For a composite meal, entry.quantity is the whole-meal portion: its
+        // macros are the ingredient sum re-scaled by it, not a client-supplied
+        // snapshot. A plain single-food entry keeps the supplied macros as-is.
+        double newQuantity = quantity != null
+            ? quantity
+            : (existing.quantity() != null ? existing.quantity() : 1.0);
+        Macros newMacros = existing.isComposite()
+            ? compositeTotal(existing.ingredients(), newQuantity)
+            : (macros != null ? macros : existing.macros());
         FoodEntry updated = new FoodEntry(
             existing.userId(),
             existing.date(),
@@ -482,8 +490,8 @@ public class NutritionService {
             foodName != null && !foodName.isBlank() ? foodName : existing.foodName(),
             servingLabel != null ? servingLabel : existing.servingLabel(),
             servingGrams != null ? servingGrams : existing.servingGrams(),
-            quantity != null ? quantity : existing.quantity(),
-            macros != null ? macros : existing.macros(),
+            newQuantity,
+            newMacros,
             existing.photoRef(),
             existing.contentHash(),
             existing.source(),
@@ -504,6 +512,19 @@ public class NutritionService {
         requireDate(date);
         entries.delete(userId, date, entryId);
         recomputeDay(userId, date);
+    }
+
+    /**
+     * A composite meal's total macros: the sum of its ingredient snapshots,
+     * re-scaled by the whole-meal portion ({@code entry.quantity}). Portion 1.0
+     * is the full meal; 0.5 means "I ate half".
+     */
+    private static Macros compositeTotal(List<CompositeIngredient> ingredients, double portion) {
+        Macros total = Macros.zero();
+        for (CompositeIngredient ing : ingredients) {
+            total = total.plus(ing.macros());
+        }
+        return total.scale(portion);
     }
 
     /**

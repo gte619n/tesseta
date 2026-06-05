@@ -128,15 +128,20 @@ class NutritionTodayViewModel @Inject constructor(
      * and re-portion each ingredient whose quantity multiplier changed, then
      * reload and close the sheet.
      */
-    fun saveCompositeMeal(entryId: String, title: String, quantities: List<Double>) {
+    fun saveCompositeMeal(
+        entryId: String,
+        title: String,
+        portion: Double,
+        quantities: List<Double>,
+    ) {
         val date = _state.value.date.format(ISO_DATE)
         val current = _state.value.editingComposite ?: return
         _state.update { it.copy(savingIngredient = true) }
         viewModelScope.launch {
             try {
-                if (title.isNotBlank() && title != current.foodName) {
-                    repository.patchEntry(date, entryId, EntryPatchRequest(foodName = title))
-                }
+                // Ingredient quantity changes first — each resum preserves the
+                // existing portion — then patch the title/portion so the entry's
+                // total reflects the fresh ingredient totals scaled by it.
                 current.ingredients?.forEachIndexed { i, ing ->
                     val newQty = quantities.getOrNull(i) ?: (ing.quantity ?: 1.0)
                     if ((ing.quantity ?: 1.0) != newQty) {
@@ -144,6 +149,14 @@ class NutritionTodayViewModel @Inject constructor(
                             date, entryId, i, UpdateIngredientRequest(quantity = newQty),
                         )
                     }
+                }
+                val newTitle = title.takeIf { it.isNotBlank() && it != current.foodName }
+                val newPortion = portion.takeIf { it != current.quantity }
+                if (newTitle != null || newPortion != null) {
+                    repository.patchEntry(
+                        date, entryId,
+                        EntryPatchRequest(foodName = newTitle, quantity = newPortion),
+                    )
                 }
                 val day = repository.day(date)
                 _state.update {
