@@ -1,18 +1,26 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 
-// Configure admin emails here. In production, this should come from
-// environment variables or a database.
-const ADMIN_EMAILS = [
+// Built-in admin emails, extended by the ADMIN_EMAILS env var (comma-separated)
+// so deploys — and the UAT run (infra/scripts/uat.sh) — can grant admin without
+// a code change. Keep this in sync with the backend's app.admin.emails.
+const BUILT_IN_ADMIN_EMAILS = [
   'admin@example.com',
   'evan.ruff@gmail.com',
-  // Add more admin emails as needed
 ];
+
+function adminEmails(): string[] {
+  const fromEnv = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  return [...BUILT_IN_ADMIN_EMAILS, ...fromEnv];
+}
 
 export async function isAdmin(): Promise<boolean> {
   const session = await auth();
   if (!session?.user?.email) return false;
-  return ADMIN_EMAILS.includes(session.user.email);
+  return adminEmails().includes(session.user.email);
 }
 
 export async function requireAdmin() {
