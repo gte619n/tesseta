@@ -115,7 +115,7 @@ fun NutritionTodayScreen(
     onOpenEditSheet: (Entry) -> Unit,
     onCloseEditSheet: () -> Unit,
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
-    onSaveComposite: (String, String, List<Double>) -> Unit,
+    onSaveComposite: (String, String, Double, List<Double>) -> Unit,
     onOpenAddSheet: () -> Unit,
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
@@ -182,8 +182,8 @@ fun NutritionTodayScreen(
             entry = composite,
             saving = state.savingIngredient,
             onDismiss = onCloseEditSheet,
-            onSave = { title, quantities ->
-                onSaveComposite(composite.entryId, title, quantities)
+            onSave = { title, portion, quantities ->
+                onSaveComposite(composite.entryId, title, portion, quantities)
             },
         )
     }
@@ -459,7 +459,10 @@ private fun EntryRow(
                 when {
                     entry.isAnalyzing -> "Analyzing your photo…"
                     entry.analysisStatus == "FAILED" -> "Couldn’t read photo · delete and retry"
-                    else -> "${formatQuantity(entry.quantity)} × ${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"
+                    else -> {
+                        val qtyPrefix = if (entry.quantity != 1.0) "${formatQuantity(entry.quantity)} × " else ""
+                        "$qtyPrefix${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"
+                    }
                 },
                 style = Hf.type.capsSm,
                 color = Hf.colors.textTertiary,
@@ -529,7 +532,7 @@ private fun NutritionTodayPreview() {
             onRefresh = {},
             onPrevDay = {}, onNextDay = {}, onDeleteEntry = {}, onMoveEntry = { _, _ -> },
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
-            onSaveComposite = { _, _, _ -> },
+            onSaveComposite = { _, _, _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
             onLogDescribed = { _, _ -> },

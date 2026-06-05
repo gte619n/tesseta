@@ -280,7 +280,8 @@ function EntryRow({
             )}
           </div>
           <div className="mt-0.5 caps-mono text-[9px] tracking-[0.04em] text-tertiary">
-            {entry.servingLabel} × {entry.quantity}
+            {entry.servingLabel}
+            {entry.quantity !== 1 && ` × ${entry.quantity}`}
           </div>
         </div>
       </button>
