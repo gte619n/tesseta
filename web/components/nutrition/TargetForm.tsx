@@ -143,6 +143,7 @@ export function TargetForm({ current, setTarget }: Props) {
                 type="number"
                 min="0"
                 step="1"
+                data-testid={`macro-target-${key}`}
                 value={fields[key]}
                 onChange={(e) => handleFieldChange(key, e.target.value)}
                 placeholder={placeholder}
@@ -155,6 +156,7 @@ export function TargetForm({ current, setTarget }: Props) {
         <div className="mt-5 flex justify-end">
           <button
             type="button"
+            data-testid="targets-save"
             onClick={handleSave}
             disabled={saving}
             className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"

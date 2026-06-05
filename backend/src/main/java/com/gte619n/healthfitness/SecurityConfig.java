@@ -130,6 +130,9 @@ public class SecurityConfig {
                 // an opaque refresh token in the body, not a Google JWT, so they
                 // are public; `exchange` requires a valid Google ID token.
                 .requestMatchers("/api/auth/refresh", "/api/auth/logout").permitAll()
+                // UAT/dev-only bootstrap: carries no token (it mints one). The
+                // controller itself 404s unless app.auth.dev-mode is true.
+                .requestMatchers("/api/auth/dev-login").permitAll()
                 .requestMatchers("/api/auth/exchange").authenticated()
                 .requestMatchers("/api/me/**", "/api/me").authenticated()
                 // Equipment catalog endpoints - authenticated users can browse
@@ -164,7 +167,8 @@ public class SecurityConfig {
                     // before the controller runs.
                     if (uri.startsWith("/api/webhooks/")
                         || uri.equals("/api/auth/refresh")
-                        || uri.equals("/api/auth/logout")) {
+                        || uri.equals("/api/auth/logout")
+                        || uri.equals("/api/auth/dev-login")) {
                         return null;
                     }
                     return new DefaultBearerTokenResolver().resolve(request);

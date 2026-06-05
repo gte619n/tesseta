@@ -53,6 +53,7 @@ export function AddReadingButton({ addReading, markers, markerLabels }: Props) {
     <>
       <button
         type="button"
+        data-testid="add-reading-btn"
         onClick={() => setOpen(true)}
         className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse"
       >
@@ -111,6 +112,7 @@ export function AddReadingButton({ addReading, markers, markerLabels }: Props) {
                   </span>
                   <input
                     name="value"
+                    data-testid="reading-value"
                     type="number"
                     step="0.01"
                     required
@@ -153,6 +155,7 @@ export function AddReadingButton({ addReading, markers, markerLabels }: Props) {
                 </button>
                 <button
                   type="submit"
+                  data-testid="add-reading-submit"
                   disabled={isPending}
                   className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse disabled:opacity-50"
                 >

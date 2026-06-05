@@ -300,6 +300,7 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
     <>
       <button
         type="button"
+        data-testid="meds-add-btn"
         onClick={() => setOpen(true)}
         className="cursor-pointer inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse"
       >
@@ -336,6 +337,7 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
                   <div>
                     <input
                       type="text"
+                      data-testid="meds-search-input"
                       placeholder="Search medications..."
                       value={searchQuery}
                       onChange={(e) => {
@@ -423,6 +425,7 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
                         {/* Manual entry option */}
                         <button
                           type="button"
+                          data-testid="meds-manual-btn"
                           onClick={handleCustomEntry}
                           className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium text-secondary hover:text-primary"
                         >
@@ -454,6 +457,7 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
                     </label>
                     <input
                       type="text"
+                      data-testid="meds-custom-name"
                       value={customName}
                       onChange={(e) => setCustomName(e.target.value)}
                       placeholder="e.g., Vitamin D3"
@@ -506,6 +510,7 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
                     <div className="flex gap-2">
                       <input
                         type="number"
+                        data-testid="meds-custom-dose"
                         value={dose}
                         onChange={(e) => setDose(e.target.value)}
                         placeholder="200"
@@ -862,6 +867,7 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
                   </button>
                   <button
                     type="button"
+                    data-testid="meds-custom-submit"
                     onClick={handleCustomSubmit}
                     disabled={isPending}
                     className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse disabled:opacity-50"

@@ -20,6 +20,8 @@ export const config = {
   // gating them here would redirect to sign-in with an /api callbackUrl that
   // 404s after login), plus the sign-in page and static assets.
   matcher: [
-    "/((?!api|auth/signin|_next/static|_next/image|favicon.ico).*)",
+    // Exclude all /auth/* pages (sign-in + the UAT dev sign-in) so they're
+    // reachable while unauthenticated; they handle their own logic.
+    "/((?!api|auth|_next/static|_next/image|favicon.ico).*)",
   ],
 };

@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gte619n.healthfitness.auth.AppAuthProperties;
 import com.gte619n.healthfitness.auth.SessionTokenService;
 import com.gte619n.healthfitness.auth.SessionTokenService.InvalidRefreshTokenException;
 import com.gte619n.healthfitness.auth.SessionTokenService.TokenPair;
@@ -31,6 +32,7 @@ class AuthControllerTest {
     @Autowired MockMvc mvc;
     @MockitoBean SessionTokenService sessions;
     @MockitoBean CurrentUserProvider currentUser;
+    @MockitoBean AppAuthProperties authProps;
 
     private static final TokenPair PAIR = new TokenPair("access-jwt", 1000L, "tid.secret", 2000L);
 
@@ -79,6 +81,30 @@ class AuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"refreshToken\":\"dead\"}"))
             .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void devLoginMintsAPairForTheRequestedIdentityWhenDevModeOn() throws Exception {
+        when(authProps.isDevLoginEnabled()).thenReturn(true);
+        when(sessions.isEnabled()).thenReturn(true);
+        when(sessions.issueFor(any())).thenReturn(PAIR);
+
+        mvc.perform(post("/api/auth/dev-login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\":\"uat-alice\",\"email\":\"alice@uat.local\",\"name\":\"Alice\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken").value("access-jwt"))
+            .andExpect(jsonPath("$.refreshToken").value("tid.secret"));
+    }
+
+    @Test
+    void devLoginIs404WhenDevModeOff() throws Exception {
+        when(authProps.isDevLoginEnabled()).thenReturn(false);
+
+        mvc.perform(post("/api/auth/dev-login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\":\"uat-alice\"}"))
+            .andExpect(status().isNotFound());
     }
 
     @Test

@@ -297,6 +297,7 @@ export function GoalProposalCard({
           ) : null}
           <Field label="Title">
             <input
+              data-testid="goal-title"
               value={draft.title}
               onChange={(e) => patch({ title: e.target.value })}
               placeholder="Lower cardiovascular risk markers into optimal range"
@@ -314,6 +315,7 @@ export function GoalProposalCard({
           <div className="grid grid-cols-2 gap-3">
             <Field label="Domain">
               <select
+                data-testid="goal-domain"
                 value={draft.domain}
                 onChange={(e) => patch({ domain: e.target.value as GoalDomain })}
                 className={`${inputCls} w-full`}
@@ -328,6 +330,7 @@ export function GoalProposalCard({
             <Field label="Target date">
               <input
                 type="date"
+                data-testid="goal-target-date"
                 value={draft.targetDate}
                 onChange={(e) => patch({ targetDate: e.target.value })}
                 className={`${inputCls} w-full`}
@@ -357,6 +360,7 @@ export function GoalProposalCard({
 
           <button
             type="button"
+            data-testid="goal-add-phase"
             onClick={addPhase}
             className="caps-mono w-full cursor-pointer rounded-md border-[0.5px] border-dashed border-border-default px-3 py-2 text-[10px] tracking-[0.06em] text-tertiary hover:border-accent hover:text-secondary"
           >
@@ -376,6 +380,7 @@ export function GoalProposalCard({
         </button>
         <button
           type="button"
+          data-testid="goal-save"
           onClick={handleSave}
           disabled={pending}
           className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse disabled:opacity-60"
@@ -442,6 +447,7 @@ function PhaseEditor({
 
       <div className="mt-2 space-y-2">
         <input
+          data-testid="phase-title"
           value={phase.title}
           onChange={(e) => onChange({ title: e.target.value })}
           placeholder="Phase title"
@@ -457,6 +463,7 @@ function PhaseEditor({
           <Field label="Start">
             <input
               type="date"
+              data-testid="phase-start"
               value={phase.targetStartDate}
               onChange={(e) => onChange({ targetStartDate: e.target.value })}
               className={`${inputCls} w-full`}
@@ -465,6 +472,7 @@ function PhaseEditor({
           <Field label="End">
             <input
               type="date"
+              data-testid="phase-end"
               value={phase.targetEndDate}
               onChange={(e) => onChange({ targetEndDate: e.target.value })}
               className={`${inputCls} w-full`}

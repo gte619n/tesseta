@@ -187,9 +187,12 @@ function normalizeMarkerName(name: string): Marker | null {
 export const dynamic = "force-dynamic";
 
 export default async function BloodPage() {
+  // Manual readings are the core of the page; the uploaded-report subsystem is
+  // independent (and can be unavailable, e.g. when AI extraction is turned off).
+  // Degrade gracefully to "no reports" rather than failing the whole page.
   const [readings, reports] = await Promise.all([
     apiJson<BloodReading[]>("/api/me/blood"),
-    apiJson<BloodTestReport[]>("/api/me/blood/reports"),
+    apiJson<BloodTestReport[]>("/api/me/blood/reports").catch(() => [] as BloodTestReport[]),
   ]);
 
   async function addReading(formData: FormData) {
