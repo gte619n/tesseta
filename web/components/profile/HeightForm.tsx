@@ -78,6 +78,7 @@ export function HeightForm({
           <input
             type="text"
             inputMode="numeric"
+            data-testid="height-cm"
             value={cm}
             onChange={(e) => setCm(e.target.value)}
             className="w-[88px] rounded-md border-[0.5px] border-border-default bg-canvas px-2 py-1.5 font-mono text-[14px] text-primary outline-none focus:border-accent"
@@ -93,6 +94,7 @@ export function HeightForm({
             <input
               type="text"
               inputMode="numeric"
+              data-testid="height-ft"
               value={ft}
               onChange={(e) => setFt(e.target.value)}
               className="w-[68px] rounded-md border-[0.5px] border-border-default bg-canvas px-2 py-1.5 font-mono text-[14px] text-primary outline-none focus:border-accent"
@@ -106,6 +108,7 @@ export function HeightForm({
             <input
               type="text"
               inputMode="numeric"
+              data-testid="height-in"
               value={inches}
               onChange={(e) => setInches(e.target.value)}
               className="w-[68px] rounded-md border-[0.5px] border-border-default bg-canvas px-2 py-1.5 font-mono text-[14px] text-primary outline-none focus:border-accent"
@@ -116,13 +119,16 @@ export function HeightForm({
       )}
       <button
         type="submit"
+        data-testid="height-save"
         disabled={pending}
         className="cursor-pointer rounded-md bg-accent px-4 py-1.5 text-[13px] font-medium text-inverse disabled:opacity-60"
       >
         {pending ? "Saving…" : "Save"}
       </button>
       {showSaved && (
-        <span className="font-mono text-[11px] text-tertiary">Saved</span>
+        <span data-testid="height-saved" className="font-mono text-[11px] text-tertiary">
+          Saved
+        </span>
       )}
       {error && (
         <span className="font-mono text-[11px] text-red-600">{error}</span>

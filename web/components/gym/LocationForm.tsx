@@ -65,6 +65,7 @@ export function LocationForm({ initialData, onSubmit, cancelHref }: Props) {
         </span>
         <input
           type="text"
+          data-testid="gym-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
@@ -119,6 +120,7 @@ export function LocationForm({ initialData, onSubmit, cancelHref }: Props) {
         </button>
         <button
           type="submit"
+          data-testid="gym-save"
           disabled={isPending}
           className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse disabled:opacity-50"
         >
