@@ -1,8 +1,10 @@
 package com.gte619n.healthfitness.api.auth;
 
+import com.gte619n.healthfitness.auth.AppAuthProperties;
 import com.gte619n.healthfitness.auth.SessionTokenService;
 import com.gte619n.healthfitness.auth.SessionTokenService.InvalidRefreshTokenException;
 import com.gte619n.healthfitness.auth.SessionTokenService.TokenPair;
+import com.gte619n.healthfitness.core.auth.CurrentUser;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,10 +29,16 @@ public class AuthController {
 
     private final SessionTokenService sessions;
     private final CurrentUserProvider currentUser;
+    private final AppAuthProperties authProps;
 
-    public AuthController(SessionTokenService sessions, CurrentUserProvider currentUser) {
+    public AuthController(
+        SessionTokenService sessions,
+        CurrentUserProvider currentUser,
+        AppAuthProperties authProps
+    ) {
         this.sessions = sessions;
         this.currentUser = currentUser;
+        this.authProps = authProps;
     }
 
     @PostMapping("/exchange")
@@ -50,6 +58,27 @@ public class AuthController {
         }
     }
 
+    // UAT / local-only: mint a real session token pair for an arbitrary test
+    // identity, with NO Google sign-in. Gated behind app.auth.dev-login-enabled,
+    // which is false in production, so this 404s there. The web dev sign-in
+    // (UAT_AUTH_ENABLED) and future Android instrumented tests both bootstrap
+    // their session through this one endpoint, then send the returned access
+    // token as a normal Bearer — validated by the same sessionDecoder Android
+    // uses in production (UAT runs with dev-mode OFF).
+    @PostMapping("/dev-login")
+    public TokenResponse devLogin(@RequestBody(required = false) DevLoginRequest body) {
+        if (!authProps.isDevLoginEnabled()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "not found");
+        }
+        requireEnabled();
+        String userId = body == null || body.userId() == null || body.userId().isBlank()
+            ? "uat-user" : body.userId();
+        String email = body == null ? null : body.email();
+        String name = body == null ? null : body.name();
+        CurrentUser user = new CurrentUser(userId, email, name, null);
+        return TokenResponse.of(sessions.issueFor(user));
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@RequestBody RefreshRequest body) {
         if (body != null && body.refreshToken() != null) {
@@ -66,6 +95,8 @@ public class AuthController {
     }
 
     public record RefreshRequest(String refreshToken) {}
+
+    public record DevLoginRequest(String userId, String email, String name) {}
 
     public record TokenResponse(
         String accessToken,
