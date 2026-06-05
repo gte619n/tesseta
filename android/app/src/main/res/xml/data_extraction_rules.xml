@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup/transfer rules (Android 12+ / API 31+).
+
+  The SQLCipher passphrase is wrapped under a NON-EXPORTABLE Android Keystore key
+  and persisted in `hf_offline_db_prefs`. Auto-backup can restore that wrapped
+  blob onto a device where the Keystore key was never restored (it can't be),
+  leaving a passphrase that fails its GCM tag check — which used to crash the app
+  at launch (AEADBadTagException out of MainActivity.onCreate). Excluding the
+  prefs blob from backup prevents that mismatch from ever being restored.
+
+  `hf-offline.db` is the encrypted offline mirror (PHI). It is a refillable cache
+  of backend data, so there is nothing to gain by backing it up — and good reason
+  not to ship health data to cloud backups. Excluded from both cloud backup and
+  device-to-device transfer.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="hf_offline_db_prefs.xml" />
+        <exclude domain="database" path="hf-offline.db" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="hf_offline_db_prefs.xml" />
+        <exclude domain="database" path="hf-offline.db" />
+    </device-transfer>
+</data-extraction-rules>

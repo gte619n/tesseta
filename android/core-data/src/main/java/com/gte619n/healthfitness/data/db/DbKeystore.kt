@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -38,19 +39,66 @@ class DbKeystore(
     private val prefsName: String = DEFAULT_PREFS,
 ) {
     /**
-     * Returns the SQLCipher passphrase, generating + persisting it on first use.
-     * Returns a fresh copy each call (so the caller can zero it after use).
+     * The resolved SQLCipher passphrase plus whether it had to be **minted fresh**
+     * because the previously-stored one could not be recovered. When [regenerated]
+     * is true the on-disk DB is encrypted under a now-lost key and is unreadable,
+     * so the caller MUST discard it (see [HfDatabase.build]).
      */
-    fun getOrCreatePassphrase(): ByteArray {
+    class Resolution(val passphrase: ByteArray, val regenerated: Boolean)
+
+    /**
+     * Resolves the SQLCipher passphrase, generating + persisting it on first use
+     * and **self-healing** when the stored blob can't be decrypted.
+     *
+     * The wrapped passphrase lives in plain SharedPreferences while the AES key
+     * that protects it is a non-exportable Keystore key. Those two can drift out
+     * of sync — most commonly when Android/OEM auto-backup restores the prefs onto
+     * a device where the Keystore key was never restored (it can't be), but also
+     * if the key is ever invalidated. The blob then fails its GCM tag check with
+     * [javax.crypto.AEADBadTagException]. Historically that exception escaped all
+     * the way out of `MainActivity.onCreate` (this runs during Hilt injection) and
+     * force-closed the app on every launch. We now treat an undecryptable blob as
+     * "no passphrase yet": drop the stale key + blob and mint a new pair. The old
+     * encrypted DB is unreadable under the new passphrase, so the caller wipes it
+     * and the sync layer refills it from the backend.
+     */
+    fun resolvePassphrase(): Resolution {
         val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         val stored = prefs.getString(PREF_BLOB, null)
         if (stored != null) {
-            return unwrap(secretKey(), Base64.decode(stored, Base64.NO_WRAP))
+            try {
+                return Resolution(unwrap(secretKey(), Base64.decode(stored, Base64.NO_WRAP)), regenerated = false)
+            } catch (e: Exception) {
+                // AEADBadTagException / KeyStoreException / ProviderException / a
+                // malformed blob — any failure to recover the passphrase. Reset
+                // and regenerate rather than crash. Catch broadly on purpose: the
+                // recovery path is always safe, and the alternative is a launch
+                // crash loop.
+                Log.w(TAG, "stored DB passphrase could not be decrypted; resetting key + passphrase", e)
+                deleteKey()
+                prefs.edit().remove(PREF_BLOB).apply()
+            }
         }
         val passphrase = randomPassphrase()
         val blob = wrap(secretKey(), passphrase)
         prefs.edit().putString(PREF_BLOB, Base64.encodeToString(blob, Base64.NO_WRAP)).apply()
-        return passphrase
+        return Resolution(passphrase, regenerated = stored != null)
+    }
+
+    /**
+     * Returns the SQLCipher passphrase, generating + persisting it on first use.
+     * Returns a fresh copy each call (so the caller can zero it after use).
+     * Self-heals an undecryptable blob; see [resolvePassphrase].
+     */
+    fun getOrCreatePassphrase(): ByteArray = resolvePassphrase().passphrase
+
+    /** Drops the Keystore key so the next [secretKey] call mints a fresh one. */
+    private fun deleteKey() {
+        try {
+            KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(keyAlias)
+        } catch (e: Exception) {
+            Log.w(TAG, "could not delete stale Keystore key '$keyAlias'", e)
+        }
     }
 
     /** Loads the existing Keystore key, creating it on first use. */
@@ -74,6 +122,7 @@ class DbKeystore(
     }
 
     companion object {
+        private const val TAG = "DbKeystore"
         const val DEFAULT_KEY_ALIAS = "hf_offline_db_key"
         const val DEFAULT_PREFS = "hf_offline_db_prefs"
         private const val PREF_BLOB = "passphrase_blob"

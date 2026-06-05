@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy auto-backup rules (Android 11 / API <= 30). Mirrors
+  data_extraction_rules.xml: keep the Keystore-wrapped SQLCipher passphrase and
+  the encrypted offline DB out of cloud backup so a restored blob can never
+  outlive its (non-backupable) Keystore key. See that file for the full rationale.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="hf_offline_db_prefs.xml" />
+    <exclude domain="database" path="hf-offline.db" />
+</full-backup-content>

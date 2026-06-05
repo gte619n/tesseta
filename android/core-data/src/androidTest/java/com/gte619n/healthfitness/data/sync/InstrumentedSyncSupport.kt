@@ -24,6 +24,7 @@ import net.sqlcipher.database.SupportFactory
 
 /** Build a real [MirrorStore] over every mirror DAO of [db]. */
 internal fun mirrorStore(db: HfDatabase): MirrorStore = MirrorStore(
+    db = db,
     bodyComposition = db.bodyCompositionDao(),
     bloodReading = db.bloodReadingDao(),
     bloodTestReport = db.bloodTestReportDao(),

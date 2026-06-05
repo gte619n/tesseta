@@ -158,6 +158,35 @@ class HfDatabaseInstrumentedTest {
     }
 
     @Test
+    fun orphanedPassphraseBlob_selfHeals_insteadOfCrashing() = runBlocking {
+        // Reproduces the field crash on Samsung/Android 16 (AEADBadTagException out
+        // of MainActivity.onCreate): the Keystore-wrapped passphrase blob survives
+        // in SharedPreferences (e.g. restored from auto-backup) but the
+        // non-exportable Keystore key that decrypts it is gone. unwrap() then fails
+        // its GCM tag check.
+        db.medicationDao().upsert(row("a", lastUpdate = 100))
+        db.close()
+
+        // Drop ONLY the Keystore key, leaving the prefs blob behind — exactly the
+        // orphaned state that used to crash. (resolvePassphrase has a side effect:
+        // it rewrites the blob, so we must NOT call it before build() or build()
+        // would see a valid blob and skip the wipe. build() is the sole caller in
+        // production; mirror that here.)
+        java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            .deleteEntry(DbKeystore.DEFAULT_KEY_ALIAS)
+
+        // build() must recover end-to-end: catch the AEADBadTagException, rekey,
+        // wipe the unreadable DB, and open cleanly — instead of crashing.
+        val healed = HfDatabase.build(context, DbKeystore(context))
+        // The empty store proves the stale DB was wiped (regenerated path taken);
+        // the pre-orphan row is gone and the fresh store is fully usable.
+        assertTrue(healed.medicationDao().observeActive().first().isEmpty())
+        healed.medicationDao().upsert(row("b", lastUpdate = 200))
+        assertEquals("b", healed.medicationDao().observeActive().first().single().id)
+        healed.close()
+    }
+
+    @Test
     fun dbWipe_deletes_the_database_file() = runBlocking {
         runBlocking { db.medicationDao().upsert(row("a", lastUpdate = 100)) }
         val dbFile: File = context.getDatabasePath(HfDatabase.DB_NAME)
