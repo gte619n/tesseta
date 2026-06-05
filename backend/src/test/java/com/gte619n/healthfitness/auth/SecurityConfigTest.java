@@ -2,8 +2,11 @@ package com.gte619n.healthfitness.auth;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.springframework.http.MediaType;
 
 import com.gte619n.healthfitness.testsupport.TestPersistenceConfig;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,29 @@ class SecurityConfigTest {
            .andExpect(jsonPath("$.email").value("user@example.com"))
            .andExpect(jsonPath("$.displayName").value("Test User"))
            .andExpect(jsonPath("$.photoUrl").value("https://example.com/avatar.jpg"));
+    }
+
+    @Test
+    void describeMealRequiresAuth() throws Exception {
+        mvc.perform(post("/api/nutrition/describe")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"description\":\"a bowl of oatmeal\"}"))
+           .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void describeMealReachableWhenAuthenticated() throws Exception {
+        // Regression: /api/nutrition/describe must be allow-listed, not swept up
+        // by anyRequest().denyAll() (which returned 403). With capture disabled in
+        // tests the analyzer bean is absent, so the controller maps the
+        // unavailable analyzer to 422 — the point is the request reaches the
+        // controller at all (NOT 403 Forbidden).
+        mvc.perform(post("/api/nutrition/describe").with(jwt().jwt(b -> b
+                .subject("108527834729384759201")
+                .claim("email", "user@example.com")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"description\":\"a bowl of oatmeal\"}"))
+           .andExpect(status().isUnprocessableEntity());
     }
 
     @Test
