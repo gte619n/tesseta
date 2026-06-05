@@ -93,7 +93,12 @@ fun PhoneTodayScreen(
                 Spacer(Modifier.height(11.dp))
                 QuickLogTiles(onNavigate = onNavigate)
                 Spacer(Modifier.height(13.dp))
-                RecentFeed(entries = DashboardFallbacks.recentPhone, showViewAll = true, modifier = Modifier.fillMaxWidth())
+                val recentEntries = if (DashboardFlags.showRecentFeedFixtures) {
+                    DashboardFallbacks.recentPhone
+                } else {
+                    (ui.recentActivity as? CardState.Loaded)?.data.orEmpty().toLogEntries(foldable = false)
+                }
+                RecentFeed(entries = recentEntries, showViewAll = true, modifier = Modifier.fillMaxWidth())
             }
             BottomNav(
                 onLogTap = openFoodCapture,

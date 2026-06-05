@@ -9,7 +9,9 @@ import com.gte619n.healthfitness.domain.dashboard.DashboardBloodMarkerRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardBodyCompositionRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardDailyMetricsRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardNutritionRepository
+import com.gte619n.healthfitness.domain.dashboard.DashboardRecentActivityRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardTodaysDosesRepository
+import com.gte619n.healthfitness.domain.dashboard.RecentActivityEntry
 import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
@@ -50,6 +52,7 @@ data class DashboardUiState(
     val blood: CardState<List<BloodMarkerSummary>>,
     val todaysDoses: CardState<List<TodaysDoseSummary>>,
     val nutrition: CardState<NutritionDay>,
+    val recentActivity: CardState<List<RecentActivityEntry>>,
     val user: DashboardUser? = null,
     // Wall-clock time the dashboard cards were last successfully (re)loaded.
     // Null until the first load lands; drives the header's "Updated …" subtitle.
@@ -57,6 +60,7 @@ data class DashboardUiState(
 ) {
     companion object {
         val initial = DashboardUiState(
+            CardState.Loading,
             CardState.Loading,
             CardState.Loading,
             CardState.Loading,
@@ -73,6 +77,7 @@ class DashboardViewModel @Inject constructor(
     private val blood: DashboardBloodMarkerRepository,
     private val doses: DashboardTodaysDosesRepository,
     private val nutrition: DashboardNutritionRepository,
+    private val recent: DashboardRecentActivityRepository,
     private val profile: ProfileRepository,
     unitPrefs: UnitPreferencesRepository,
 ) : ViewModel() {
@@ -112,6 +117,7 @@ class DashboardViewModel @Inject constructor(
                 loadBlood(),
                 loadDoses(),
                 loadNutrition(),
+                loadRecentActivity(),
             ).awaitAll()
             // Stamp when at least one primary card loaded; if everything failed,
             // leave lastRefreshAt untouched so the next resume retries. The
@@ -130,6 +136,7 @@ class DashboardViewModel @Inject constructor(
     fun retryBlood() { loadBlood() }
     fun retryDoses() { loadDoses() }
     fun retryNutrition() { loadNutrition() }
+    fun retryRecentActivity() { loadRecentActivity() }
 
     // Each loader returns a Deferred<Boolean> — true on success — so refresh()
     // can settle the whole batch before deciding whether to stamp the TTL.
@@ -177,6 +184,33 @@ class DashboardViewModel @Inject constructor(
         runCatching { nutrition.loadToday() }
             .onSuccess { d -> _ui.update { it.copy(nutrition = CardState.Loaded(d)) } }
             .onFailure { t -> _ui.update { it.copy(nutrition = CardState.Error("Couldn't load nutrition", t)) } }
+            .isSuccess
+    }
+
+    // Stale-while-revalidate: the recent feed is a server-derived aggregate with
+    // no Room mirror, so it carries its own persisted single-slot cache. Show the
+    // last cached feed instantly (cold start / offline) while a fresh pull runs;
+    // on a failed pull keep the cache on screen and only surface an error when
+    // there's nothing cached at all.
+    private fun loadRecentActivity() = viewModelScope.async {
+        if (_ui.value.recentActivity !is CardState.Loaded) {
+            recent.cachedRecent()?.let { cached ->
+                if (_ui.value.recentActivity !is CardState.Loaded) {
+                    _ui.update { it.copy(recentActivity = CardState.Loaded(cached)) }
+                }
+            }
+        }
+        runCatching { recent.loadRecent() }
+            .onSuccess { d -> _ui.update { it.copy(recentActivity = CardState.Loaded(d)) } }
+            .onFailure { t ->
+                val cached = recent.cachedRecent()
+                _ui.update {
+                    it.copy(
+                        recentActivity = cached?.let { c -> CardState.Loaded(c) }
+                            ?: CardState.Error("Couldn't load activity", t),
+                    )
+                }
+            }
             .isSuccess
     }
 

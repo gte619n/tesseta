@@ -45,6 +45,14 @@ fun RecentFeed(
                 }
             }
             Spacer(Modifier.height(9.dp))
+            if (entries.isEmpty()) {
+                Text(
+                    text = "No recent activity yet",
+                    style = Hf.type.monoSm,
+                    color = Hf.colors.textTertiary,
+                    modifier = Modifier.padding(vertical = 7.dp),
+                )
+            }
             entries.forEachIndexed { i, entry ->
                 Row(
                     modifier = Modifier
