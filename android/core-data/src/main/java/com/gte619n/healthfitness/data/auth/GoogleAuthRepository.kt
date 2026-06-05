@@ -45,17 +45,24 @@ class GoogleAuthRepository(
     // First sign-in / re-auth. Credential Manager needs a visible window, so the
     // caller passes the *Activity* context (the application context the repo is
     // built with cannot host UI).
+    //
+    // The whole body runs under a top-level Throwable guard: this is the app's
+    // sign-in entry point and it is launched from a UI coroutine, so anything
+    // that escapes here (a malformed-credential parse error, a missing runtime
+    // class, an unexpected provider exception) would force-close the app. We
+    // degrade every such failure to AuthState.Failed instead — the SignInScreen
+    // renders the cause, and we also log the full trace under TAG.
     suspend fun interactiveSignIn(activityContext: Context): AuthState {
-        val option = GetGoogleIdOption.Builder()
-            // Show the full account picker (not just previously-authorized
-            // accounts) — this is the deliberate, user-initiated UI moment.
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(webOauthClientId)
-            .setAutoSelectEnabled(false)
-            .build()
-        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-
         val googleIdToken = try {
+            val option = GetGoogleIdOption.Builder()
+                // Show the full account picker (not just previously-authorized
+                // accounts) — this is the deliberate, user-initiated UI moment.
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(webOauthClientId)
+                .setAutoSelectEnabled(false)
+                .build()
+            val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+
             val response = manager.getCredential(activityContext, request)
             val cred = response.credential
             if (cred !is CustomCredential ||
@@ -67,15 +74,21 @@ class GoogleAuthRepository(
             // No Google account on the device — guide the user to add one.
             return AuthState.NoAccount
         } catch (e: GetCredentialException) {
+            android.util.Log.w(TAG, "credential manager sign-in failed", e)
             return AuthState.Failed(e.errorMessage?.toString() ?: e.javaClass.simpleName)
+        } catch (t: Throwable) {
+            // e.g. GoogleIdTokenParsingException, or any provider/runtime error.
+            android.util.Log.e(TAG, "credential acquisition crashed", t)
+            return AuthState.Failed("sign-in error: ${t.javaClass.simpleName}: ${t.message}")
         }
 
         return try {
             val tokens = authApi.exchange("Bearer $googleIdToken")
             persist(tokens)
             signedInFrom(tokens.accessToken)
-        } catch (e: Exception) {
-            AuthState.Failed("token exchange failed: ${e.message ?: e.javaClass.simpleName}")
+        } catch (t: Throwable) {
+            android.util.Log.e(TAG, "token exchange failed", t)
+            AuthState.Failed("token exchange failed: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 
@@ -106,10 +119,13 @@ class GoogleAuthRepository(
             } else {
                 AuthState.Failed("refresh failed: HTTP ${e.code()}")
             }
-        } catch (e: Exception) {
-            // Transient (network) failure — keep the session and report Failed so
-            // the next attempt can retry.
-            AuthState.Failed("refresh failed: ${e.message ?: e.javaClass.simpleName}")
+        } catch (t: Throwable) {
+            // Transient (network) failure or unexpected error — keep the session
+            // and report Failed so the next attempt can retry. Catching Throwable
+            // matters here too: this runs inside the OkHttp authenticator's
+            // runBlocking, where an escaping error would crash that thread.
+            android.util.Log.w(TAG, "silent refresh failed", t)
+            AuthState.Failed("refresh failed: ${t.message ?: t.javaClass.simpleName}")
         }
     }
 
@@ -170,5 +186,9 @@ class GoogleAuthRepository(
         } catch (_: Exception) {
             JSONObject()
         }
+    }
+
+    private companion object {
+        const val TAG = "GoogleAuthRepository"
     }
 }
