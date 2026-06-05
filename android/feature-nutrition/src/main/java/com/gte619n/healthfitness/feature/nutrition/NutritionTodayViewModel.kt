@@ -309,6 +309,25 @@ class NutritionTodayViewModel @Inject constructor(
         submit(body)
     }
 
+    /**
+     * Log a described meal (resolved in the add sheet via the describe flow) onto
+     * the current day. Like the composite-meal path, the server may still be
+     * generating the finished-meal photo, so poll while images settle.
+     */
+    fun logDescribedMeal(meal: Meal, mealId: String) {
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                repository.logDescribedMeal(date, mealId, meal.wire)
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, addSheetOpen = false, error = null) }
+                pollWhileImagesGenerate(_state.value.date)
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Add failed") }
+            }
+        }
+    }
+
     private fun submit(body: EntryRequest) {
         val date = _state.value.date.format(ISO_DATE)
         viewModelScope.launch {

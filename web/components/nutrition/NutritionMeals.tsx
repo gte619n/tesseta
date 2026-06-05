@@ -18,6 +18,8 @@ import type {
   Macros,
   UpdateEntryBody,
   UpdateIngredientBody,
+  DescribedMeal,
+  LogDescribedMealBody,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -63,6 +65,11 @@ type Props = {
       source: string;
     }[]
   >;
+  describeMeal: (description: string) => Promise<DescribedMeal>;
+  logDescribedMeal: (
+    date: string,
+    body: LogDescribedMealBody,
+  ) => Promise<void>;
 };
 
 const ZERO: Macros = {
@@ -104,6 +111,8 @@ export function NutritionMeals({
   updateIngredient,
   deleteEntry,
   searchFoods,
+  describeMeal,
+  logDescribedMeal,
 }: Props) {
   const toast = useToast();
   const [meals, setMeals] = useState(initialMeals);
@@ -185,6 +194,8 @@ export function NutritionMeals({
             updateIngredient={updateIngredient}
             deleteEntry={deleteEntry}
             searchFoods={searchFoods}
+            describeMeal={describeMeal}
+            logDescribedMeal={logDescribedMeal}
             activeId={activeId}
           />
         ))}

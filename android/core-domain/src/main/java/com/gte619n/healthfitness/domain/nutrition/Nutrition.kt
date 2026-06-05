@@ -178,6 +178,46 @@ data class FoodCreateRequest(
     val defaultServingIndex: Int = 0,
 )
 
+// ---- Describe a meal ------------------------------------------------------
+
+/** Body for POST api/nutrition/describe. */
+data class DescribeMealRequest(
+    val description: String,
+)
+
+/** One component of a described meal, with its frozen per-100g baseline. */
+data class DescribedIngredient(
+    val name: String,
+    val servingGrams: Double? = null,
+    val servingLabel: String? = null,
+    val quantity: Double? = null,
+    val macros: Macros,
+    val macrosPer100g: Macros? = null,
+)
+
+/**
+ * POST api/nutrition/describe response: a resolved meal — a previously-saved
+ * match (`matched`) or a freshly created one — with macros, ingredient
+ * breakdown and studio-photo status. Logged onto a day by [mealId].
+ */
+data class DescribedMeal(
+    val mealId: String,
+    val matched: Boolean,
+    val name: String,
+    val totalGrams: Double? = null,
+    val macros: Macros,
+    val imageUrl: String? = null,
+    val imageStatus: String = "NONE",
+    val ingredients: List<DescribedIngredient> = emptyList(),
+)
+
+/** Body for POST api/me/nutrition/{date}/describe-meal (mealId OR description). */
+data class DescribeMealLogRequest(
+    val mealId: String? = null,
+    val description: String? = null,
+    val meal: String? = null,
+)
+
 // ---- Capture (multipart) proposals ---------------------------------------
 
 /** One itemized component of a meal photo (POST capture/meal). */

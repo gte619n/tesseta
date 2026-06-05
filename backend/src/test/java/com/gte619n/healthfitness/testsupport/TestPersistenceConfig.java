@@ -294,6 +294,40 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.nutrition.SavedMealRepository savedMealRepository() {
+        // Real in-memory map so describe-meal resolve/log round-trips in MockMvc
+        // tests (find a previous meal, then log it by id).
+        return new com.gte619n.healthfitness.core.nutrition.SavedMealRepository() {
+            private final java.util.Map<String, com.gte619n.healthfitness.core.nutrition.SavedMeal> store =
+                new java.util.concurrent.ConcurrentHashMap<>();
+
+            @Override public Optional<com.gte619n.healthfitness.core.nutrition.SavedMeal> findById(String mealId) {
+                return Optional.ofNullable(store.get(mealId));
+            }
+
+            @Override public List<com.gte619n.healthfitness.core.nutrition.SavedMeal> searchByNamePrefix(
+                String prefixLower, int limit) {
+                return store.values().stream()
+                    .filter(m -> m.nameLower() != null && m.nameLower().startsWith(prefixLower))
+                    .limit(limit)
+                    .toList();
+            }
+
+            @Override public void save(com.gte619n.healthfitness.core.nutrition.SavedMeal meal) {
+                store.put(meal.mealId(), meal);
+            }
+
+            @Override public List<com.gte619n.healthfitness.core.nutrition.SavedMeal> findByImageStatus(
+                com.gte619n.healthfitness.core.nutrition.FoodImageStatus status, int limit) {
+                return store.values().stream()
+                    .filter(m -> m.imageStatus() == status)
+                    .limit(limit)
+                    .toList();
+            }
+        };
+    }
+
+    @Bean
     MacroTargetRepository macroTargetRepository() {
         return new MacroTargetRepository() {
             @Override public Optional<MacroTarget> findActive(String userId) { return Optional.empty(); }

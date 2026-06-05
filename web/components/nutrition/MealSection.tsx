@@ -9,6 +9,8 @@ import type {
   Macros,
   UpdateEntryBody,
   UpdateIngredientBody,
+  DescribedMeal,
+  LogDescribedMealBody,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS, MEAL_ICONS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -57,6 +59,11 @@ type Props = {
       source: string;
     }[]
   >;
+  describeMeal: (description: string) => Promise<DescribedMeal>;
+  logDescribedMeal: (
+    date: string,
+    body: LogDescribedMealBody,
+  ) => Promise<void>;
   // The entryId currently being dragged (lifted by the DnD context), so this
   // section can suppress its drop highlight when the entry already lives here.
   activeId: string | null;
@@ -70,6 +77,8 @@ export function MealSection({
   updateIngredient,
   deleteEntry,
   searchFoods,
+  describeMeal,
+  logDescribedMeal,
   activeId,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -188,6 +197,8 @@ export function MealSection({
         date={date}
         addEntry={addEntry}
         searchFoods={searchFoods}
+        describeMeal={describeMeal}
+        logDescribedMeal={logDescribedMeal}
       />
 
       {editing && (
