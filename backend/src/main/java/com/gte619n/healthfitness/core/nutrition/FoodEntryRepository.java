@@ -10,6 +10,11 @@ public interface FoodEntryRepository {
 
     Optional<FoodEntry> findById(String userId, LocalDate date, String entryId);
 
+    // Find an entry on this day whose captured photo matches the given SHA-256
+    // content hash, if any. Used to dedupe re-uploads of the same meal photo
+    // before spending another Gemini call — see MealCaptureService.captureMeal.
+    Optional<FoodEntry> findByContentHash(String userId, LocalDate date, String contentHash);
+
     void save(FoodEntry entry);
 
     void delete(String userId, LocalDate date, String entryId);

@@ -114,7 +114,7 @@ public class FoodEntryImageService {
             FoodEntry updated = new FoodEntry(
                 e.userId(), e.date(), e.entryId(), e.meal(), e.foodId(), e.foodName(),
                 e.servingLabel(), e.servingGrams(), e.quantity(), e.macros(), e.photoRef(),
-                e.source(), e.ingredients(),
+                e.contentHash(), e.source(), e.ingredients(),
                 url != null ? url : e.mealImageUrl(), status, e.analysisStatus(),
                 e.createdAt(), Instant.now());
             entries.save(updated);

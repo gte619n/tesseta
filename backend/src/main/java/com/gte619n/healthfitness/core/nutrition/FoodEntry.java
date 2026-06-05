@@ -18,6 +18,13 @@ import java.util.List;
  * freshly captured photo logs a placeholder entry as {@code ANALYZING} and a
  * background task fills it in and flips it to {@code READY}. Entries created any
  * other way are {@code NONE}.
+ *
+ * <p>{@code contentHash} is the SHA-256 hex of the captured photo's original
+ * bytes (null for entries not logged from a photo). It dedupes re-uploads of the
+ * same image so a second capture of an identical photo silently returns the
+ * existing entry instead of spending another Gemini call — see
+ * {@code MealCaptureService.captureMeal} and
+ * {@code FoodEntryRepository.findByContentHash}.
  */
 public record FoodEntry(
     String userId,
@@ -31,6 +38,7 @@ public record FoodEntry(
     Double quantity,
     Macros macros,
     String photoRef,
+    String contentHash,
     EntrySource source,
     List<CompositeIngredient> ingredients,
     String mealImageUrl,

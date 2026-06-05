@@ -276,6 +276,13 @@ public class TestPersistenceConfig {
                 return Optional.ofNullable(store.get(key(userId, date, entryId)));
             }
 
+            @Override public Optional<FoodEntry> findByContentHash(String userId, LocalDate date, String contentHash) {
+                return store.values().stream()
+                    .filter(e -> e.userId().equals(userId) && e.date().equals(date)
+                        && contentHash != null && contentHash.equals(e.contentHash()))
+                    .findFirst();
+            }
+
             @Override public void save(FoodEntry entry) {
                 store.put(key(entry.userId(), entry.date(), entry.entryId()), entry);
             }

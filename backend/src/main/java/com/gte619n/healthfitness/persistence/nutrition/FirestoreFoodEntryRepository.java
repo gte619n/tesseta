@@ -62,6 +62,19 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
     }
 
     @Override
+    public Optional<FoodEntry> findByContentHash(String userId, LocalDate date, String contentHash) {
+        if (contentHash == null || contentHash.isBlank()) return Optional.empty();
+        List<QueryDocumentSnapshot> docs = await(entries(userId, date)
+            .whereEqualTo("contentHash", contentHash)
+            .limit(10)
+            .get()).getDocuments();
+        return docs.stream()
+            .filter(d -> !isArchived(d))
+            .findFirst()
+            .map(d -> toEntry(userId, date, d));
+    }
+
+    @Override
     public void save(FoodEntry entry) {
         DocumentReference docRef = entries(entry.userId(), entry.date()).document(entry.entryId());
         DocumentSnapshot existing = await(docRef.get());
@@ -95,6 +108,7 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
         body.put("quantity", e.quantity());
         body.put("macros", macrosToMap(e.macros()));
         body.put("photoRef", e.photoRef());
+        body.put("contentHash", e.contentHash());
         body.put("source", e.source() != null ? e.source().name() : null);
         body.put("ingredients", ingredientsToList(e.ingredients()));
         body.put("mealImageUrl", e.mealImageUrl());
@@ -123,6 +137,7 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
             snapshot.getDouble("quantity"),
             macrosFromMap(snapshot.get("macros")),
             snapshot.getString("photoRef"),
+            snapshot.getString("contentHash"),
             source != null ? EntrySource.valueOf(source) : null,
             ingredientsFromList(snapshot.get("ingredients")),
             snapshot.getString("mealImageUrl"),

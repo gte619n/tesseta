@@ -166,7 +166,7 @@ public class NutritionService {
         }
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
-            servingGrams, quantity, macros, null, source,
+            servingGrams, quantity, macros, null, null, source,
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
@@ -229,7 +229,7 @@ public class NutritionService {
         }
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, mealName,
-            ingredients.size() + " ingredients", grams, 1.0, total, null, source,
+            ingredients.size() + " ingredients", grams, 1.0, total, null, null, source,
             List.copyOf(ingredients), null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
@@ -247,6 +247,16 @@ public class NutritionService {
      */
     public FoodEntry beginAnalyzingEntry(
         String userId, LocalDate date, MealType meal, String photoRef) {
+        return beginAnalyzingEntry(userId, date, meal, photoRef, null);
+    }
+
+    /**
+     * As {@link #beginAnalyzingEntry(String, LocalDate, MealType, String)} but
+     * stamping the photo's {@code contentHash} so a later re-upload of the same
+     * image can be deduped — see {@link #findActivePhotoByHash}.
+     */
+    public FoodEntry beginAnalyzingEntry(
+        String userId, LocalDate date, MealType meal, String photoRef, String contentHash) {
         requireUser(userId);
         requireDate(date);
         if (meal == null) {
@@ -255,10 +265,27 @@ public class NutritionService {
         String entryId = UUID.randomUUID().toString();
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, "Analyzing photo…",
-            null, null, 1.0, Macros.zero(), photoRef, EntrySource.PHOTO,
+            null, null, 1.0, Macros.zero(), photoRef, contentHash, EntrySource.PHOTO,
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null);
         entries.save(entry);
         return entry;
+    }
+
+    /**
+     * Find a still-relevant photo entry on this day whose captured image matches
+     * {@code contentHash}. {@code FAILED} captures are excluded so a user can
+     * re-upload the same image to retry an analysis that didn't recognize it.
+     * Used by the capture path to silently dedupe re-uploads of the same photo.
+     */
+    public Optional<FoodEntry> findActivePhotoByHash(
+        String userId, LocalDate date, String contentHash) {
+        requireUser(userId);
+        requireDate(date);
+        if (contentHash == null || contentHash.isBlank()) {
+            return Optional.empty();
+        }
+        return entries.findByContentHash(userId, date, contentHash)
+            .filter(e -> e.analysisStatus() != EntryAnalysisStatus.FAILED);
     }
 
     /**
@@ -290,7 +317,7 @@ public class NutritionService {
         FoodEntry updated = new FoodEntry(
             existing.userId(), existing.date(), existing.entryId(), existing.meal(),
             null, mealName, ingredients.size() + " ingredients", grams, 1.0, total,
-            existing.photoRef(), existing.source(), List.copyOf(ingredients),
+            existing.photoRef(), existing.contentHash(), existing.source(), List.copyOf(ingredients),
             existing.mealImageUrl(), existing.mealImageStatus(),
             EntryAnalysisStatus.READY, existing.createdAt(), null);
         entries.save(updated);
@@ -318,7 +345,7 @@ public class NutritionService {
             existing.userId(), existing.date(), existing.entryId(), existing.meal(),
             foodId, foodName, servingLabel, servingGrams,
             quantity != null ? quantity : 1.0, macros, existing.photoRef(),
-            existing.source(), null, null, FoodImageStatus.NONE,
+            existing.contentHash(), existing.source(), null, null, FoodImageStatus.NONE,
             EntryAnalysisStatus.READY, existing.createdAt(), null);
         entries.save(updated);
         recomputeDay(userId, date);
@@ -337,7 +364,7 @@ public class NutritionService {
             FoodEntry failed = new FoodEntry(
                 e.userId(), e.date(), e.entryId(), e.meal(), e.foodId(),
                 "Couldn’t read photo", e.servingLabel(), e.servingGrams(),
-                e.quantity(), e.macros(), e.photoRef(), e.source(), e.ingredients(),
+                e.quantity(), e.macros(), e.photoRef(), e.contentHash(), e.source(), e.ingredients(),
                 e.mealImageUrl(), e.mealImageStatus(), EntryAnalysisStatus.FAILED,
                 e.createdAt(), null);
             entries.save(failed);
@@ -397,7 +424,7 @@ public class NutritionService {
             existing.userId(), existing.date(), existing.entryId(), existing.meal(),
             existing.foodId(), existing.foodName(), existing.servingLabel(),
             existing.servingGrams(), existing.quantity(), total, existing.photoRef(),
-            existing.source(), updated, existing.mealImageUrl(), existing.mealImageStatus(),
+            existing.contentHash(), existing.source(), updated, existing.mealImageUrl(), existing.mealImageStatus(),
             existing.analysisStatus(), existing.createdAt(), null);
         entries.save(entry);
         recomputeDay(userId, date);
@@ -435,6 +462,7 @@ public class NutritionService {
             quantity != null ? quantity : existing.quantity(),
             macros != null ? macros : existing.macros(),
             existing.photoRef(),
+            existing.contentHash(),
             existing.source(),
             existing.ingredients(),
             existing.mealImageUrl(),

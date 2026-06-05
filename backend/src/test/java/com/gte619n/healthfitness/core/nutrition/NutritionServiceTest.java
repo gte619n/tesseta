@@ -104,6 +104,11 @@ class NutritionServiceTest {
         @Override public Optional<FoodEntry> findById(String userId, LocalDate date, String entryId) {
             return Optional.ofNullable(rows.get(key(date, entryId)));
         }
+        @Override public Optional<FoodEntry> findByContentHash(String userId, LocalDate date, String contentHash) {
+            return rows.values().stream()
+                .filter(e -> e.date().equals(date) && contentHash != null && contentHash.equals(e.contentHash()))
+                .findFirst();
+        }
         @Override public void save(FoodEntry entry) { rows.put(key(entry.date(), entry.entryId()), entry); }
         @Override public void delete(String userId, LocalDate date, String entryId) { rows.remove(key(date, entryId)); }
     }

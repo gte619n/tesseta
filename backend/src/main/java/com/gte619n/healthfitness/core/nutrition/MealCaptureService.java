@@ -1,8 +1,12 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import org.springframework.beans.factory.ObjectProvider;
@@ -69,8 +73,19 @@ public class MealCaptureService {
         if (analyzer == null) {
             throw new IllegalStateException("meal photo analysis is not available");
         }
+        // Dedupe re-uploads of the same image. The user logs each photo as its
+        // own capture; if they upload an identical image again we silently return
+        // the entry the first upload created rather than storing the photo a
+        // second time, logging a duplicate placeholder and paying for another
+        // Gemini analysis. Hash the original bytes (pre-normalization) so it's
+        // stable. Failed captures don't dedupe — re-uploading retries them.
+        String contentHash = sha256Hex(imageBytes);
+        Optional<FoodEntry> duplicate = nutrition.findActivePhotoByHash(userId, date, contentHash);
+        if (duplicate.isPresent()) {
+            return duplicate.get();
+        }
         String photoRef = storePhoto(userId, imageBytes, mimeType);
-        FoodEntry placeholder = nutrition.beginAnalyzingEntry(userId, date, meal, photoRef);
+        FoodEntry placeholder = nutrition.beginAnalyzingEntry(userId, date, meal, photoRef, contentHash);
         CompletableFuture.runAsync(() -> analyzeAndFinalize(
             userId, date, placeholder.entryId(), imageBytes, mimeType, photoRef, analyzer));
         return placeholder;
@@ -159,6 +174,16 @@ public class MealCaptureService {
     private String storePhoto(String userId, byte[] imageBytes, String mimeType) {
         MealPhotoStore store = photoStore.getIfAvailable();
         return store == null ? null : store.store(userId, imageBytes, mimeType);
+    }
+
+    /** SHA-256 hex of the raw photo bytes — the dedupe key for re-uploads. */
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is guaranteed by the JDK spec.
+            throw new IllegalStateException(e);
+        }
     }
 
     private static String gramsLabel(double grams) {

@@ -90,6 +90,47 @@ class MealCaptureServiceTest {
         assertNull(done.foodId());
     }
 
+    @Test
+    void sameImageUploadedAgain_isDedupedSilently() {
+        Fixture f = new Fixture(analyzer(new MealAnalysis(
+            "Greek yogurt", true, List.of(
+                new MealItem("Greek yogurt", 170.0,
+                    new Macros(59.0, 10.0, 3.6, 0.4, 0.0, 3.2), 0.9)))));
+
+        FoodEntry first = f.svc.captureMeal(USER, DATE, MealType.SNACK, BYTES, "image/jpeg");
+        FoodEntry again = f.svc.captureMeal(USER, DATE, MealType.SNACK, BYTES, "image/jpeg");
+
+        assertEquals(first.entryId(), again.entryId(),
+            "re-uploading the same image returns the existing entry, not a new one");
+        assertEquals(1, f.entries.findByDate(USER, DATE).size(),
+            "the duplicate upload creates no second entry");
+    }
+
+    @Test
+    void distinctImages_eachLogTheirOwnEntry() {
+        Fixture f = new Fixture(analyzer(new MealAnalysis(
+            "Greek yogurt", true, List.of(
+                new MealItem("Greek yogurt", 170.0,
+                    new Macros(59.0, 10.0, 3.6, 0.4, 0.0, 3.2), 0.9)))));
+
+        f.svc.captureMeal(USER, DATE, MealType.SNACK, "img-a".getBytes(), "image/jpeg");
+        f.svc.captureMeal(USER, DATE, MealType.SNACK, "img-b".getBytes(), "image/jpeg");
+
+        assertEquals(2, f.entries.findByDate(USER, DATE).size(),
+            "separate uploads of different images each log their own entry");
+    }
+
+    @Test
+    void failedPhoto_isNotDeduped_soUserCanRetry() {
+        Fixture f = new Fixture();
+        FoodEntry e = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.LUNCH, "ref://x", "hash-x");
+        assertTrue(f.nutrition.findActivePhotoByHash(USER, DATE, "hash-x").isPresent());
+
+        f.nutrition.markAnalysisFailed(USER, DATE, e.entryId());
+        assertTrue(f.nutrition.findActivePhotoByHash(USER, DATE, "hash-x").isEmpty(),
+            "a failed capture doesn't block re-uploading the same image to retry");
+    }
+
     // ---- fixture + fakes ----
 
     private static final class Fixture {
@@ -100,9 +141,19 @@ class MealCaptureServiceTest {
             new FoodCatalogService(new FakeCatalogRepo(), 1, empty(), empty());
         final FoodEntryImageService images =
             new FoodEntryImageService(entries, empty(), empty(), empty());
-        final MealCaptureService svc =
-            new MealCaptureService(empty(), empty(), catalog, nutrition, images,
+        final MealCaptureService svc;
+
+        Fixture() { this(null); }
+
+        // With an analyzer (and a null photo-store, so photoRef is null) the
+        // full captureMeal path — hash, dedupe, placeholder, async finalize —
+        // can be driven end to end.
+        Fixture(MealPhotoAnalyzer analyzer) {
+            this.svc = new MealCaptureService(
+                analyzer != null ? provider(analyzer) : empty(), empty(),
+                catalog, nutrition, images,
                 new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
+        }
     }
 
     private static MealPhotoAnalyzer analyzer(MealAnalysis analysis) {
@@ -125,6 +176,15 @@ class MealCaptureServiceTest {
         };
     }
 
+    private static <T> ObjectProvider<T> provider(T value) {
+        return new ObjectProvider<>() {
+            @Override public T getObject(Object... args) { return value; }
+            @Override public T getObject() { return value; }
+            @Override public T getIfAvailable() { return value; }
+            @Override public T getIfUnique() { return value; }
+        };
+    }
+
     private static final class InMemNutrition implements NutritionDailyLogRepository {
         private final Map<String, NutritionDailyLog> rows = new ConcurrentHashMap<>();
         @Override public Optional<NutritionDailyLog> findByDate(String userId, LocalDate date) {
@@ -144,6 +204,11 @@ class MealCaptureServiceTest {
         }
         @Override public Optional<FoodEntry> findById(String userId, LocalDate date, String entryId) {
             return Optional.ofNullable(rows.get(key(date, entryId)));
+        }
+        @Override public Optional<FoodEntry> findByContentHash(String userId, LocalDate date, String contentHash) {
+            return rows.values().stream()
+                .filter(e -> e.date().equals(date) && contentHash != null && contentHash.equals(e.contentHash()))
+                .findFirst();
         }
         @Override public void save(FoodEntry entry) { rows.put(key(entry.date(), entry.entryId()), entry); }
         @Override public void delete(String userId, LocalDate date, String entryId) { rows.remove(key(date, entryId)); }
