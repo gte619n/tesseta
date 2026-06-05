@@ -77,7 +77,7 @@ fun PhoneTodayScreen(
                     .padding(horizontal = 18.dp)
                     .padding(top = 6.dp, bottom = 16.dp),
             ) {
-                PhoneHeader(user = ui.user)
+                PhoneHeader(user = ui.user, lastUpdated = ui.lastUpdated)
                 Spacer(Modifier.height(16.dp))
                 PhoneVitalsGrid(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
                 Spacer(Modifier.height(11.dp))
@@ -114,7 +114,7 @@ fun PhoneTodayScreen(
 }
 
 @Composable
-private fun PhoneHeader(user: DashboardUser?) {
+private fun PhoneHeader(user: DashboardUser?, lastUpdated: java.time.Instant?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -128,7 +128,7 @@ private fun PhoneHeader(user: DashboardUser?) {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "${DashboardFallbacks.DATE_WEEKDAY} · ${DashboardFallbacks.DATE_MONTH_DAY} · ${DashboardFallbacks.TIME}",
+                text = lastUpdatedLabel(lastUpdated),
                 style = Hf.type.monoSm.copy(fontSize = 11.sp),
                 color = Hf.colors.textTertiary,
             )
@@ -137,7 +137,7 @@ private fun PhoneHeader(user: DashboardUser?) {
             IconButtonChip(
                 icon = DashboardIcons.Bell,
                 contentDescription = "Notifications",
-                showDot = true,
+                enabled = false,
             )
             AvatarSquare(
                 initials = user?.initials ?: DashboardFallbacks.USER_INITIALS,

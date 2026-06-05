@@ -45,6 +45,7 @@ import com.gte619n.healthfitness.ui.TessetaMark
 import com.gte619n.healthfitness.ui.TessetaMarkVariant
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.Instant
 
 @Composable
 fun FoldableDashboardScreen(
@@ -75,7 +76,7 @@ fun FoldableDashboardScreen(
                     .verticalScroll(rememberScrollState())
                     .windowInsetsPadding(WindowInsets.navigationBars),
             ) {
-                FoldableTopBar()
+                FoldableTopBar(lastUpdated = ui.lastUpdated)
                 Spacer(Modifier.height(18.dp))
                 FoldableVitalsRow(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
                 Spacer(Modifier.height(11.dp))
@@ -225,7 +226,7 @@ private fun FoldableNavIcon(
 }
 
 @Composable
-private fun FoldableTopBar() {
+private fun FoldableTopBar(lastUpdated: Instant?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -239,45 +240,17 @@ private fun FoldableTopBar() {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "${DashboardFallbacks.DATE_WEEKDAY} · ${DashboardFallbacks.DATE_MONTH_DAY} · ${DashboardFallbacks.TIME} · ${DashboardFallbacks.TZ}",
+                text = lastUpdatedLabel(lastUpdated),
                 style = Hf.type.monoSm.copy(fontSize = 11.sp),
                 color = Hf.colors.textTertiary,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(
-                modifier = Modifier
-                    .background(Hf.colors.surface, RoundedCornerShape(7.dp))
-                    .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(7.dp))
-                    .padding(horizontal = 11.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(
-                    imageVector = DashboardIcons.Calendar,
-                    contentDescription = null,
-                    tint = Hf.colors.textTertiary,
-                    modifier = Modifier.size(12.dp),
-                )
-                Text(
-                    text = "90D",
-                    style = Hf.type.monoSm.copy(fontSize = 11.sp),
-                    color = Hf.colors.textSecondary,
-                )
-                Icon(
-                    imageVector = DashboardIcons.ChevronDown,
-                    contentDescription = null,
-                    tint = Hf.colors.textTertiary,
-                    modifier = Modifier.size(11.dp),
-                )
-            }
-            IconButtonChip(
-                icon = DashboardIcons.Bell,
-                contentDescription = "Notifications",
-                showDot = true,
-                size = 32,
-            )
-        }
+        IconButtonChip(
+            icon = DashboardIcons.Bell,
+            contentDescription = "Notifications",
+            enabled = false,
+            size = 32,
+        )
     }
 }
 

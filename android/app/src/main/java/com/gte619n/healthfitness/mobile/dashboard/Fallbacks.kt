@@ -30,6 +30,9 @@ import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.SportsGymnastics
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 // Icons used across the dashboard. The mockups use Tabler glyphs; on Android
 // we mirror them with the closest Material Outlined equivalents. Layout and
@@ -114,12 +117,6 @@ object DashboardFlags {
 // from DashboardViewModel; everything below is fixture-backed placeholder.
 object DashboardFallbacks {
     const val GREETING = "Good morning, Evan"
-    // The header date/time were a hardcoded fixture ("TUE · MAY 20 · 07:42")
-    // that read as a real, current timestamp. Dashed until wired to the clock.
-    const val DATE_WEEKDAY = "—"
-    const val DATE_MONTH_DAY = "—"
-    const val TIME = "—"
-    const val TZ = "—"
     const val USER_NAME = "Evan Glazier"
     const val USER_ROLE = "CEO"
 
@@ -228,4 +225,18 @@ object DashboardFallbacks {
         BottomDest("Trends", DashboardIcons.ChartLine),
         BottomDest("More", DashboardIcons.MoreHoriz),
     )
+}
+
+private val UPDATED_DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
+private val UPDATED_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+
+/**
+ * Header subtitle showing when the dashboard data was last refreshed, rendered
+ * in the device's local time zone and locale, e.g. "Updated Thu, Jun 5 · 7:55 AM".
+ * Returns "Updating…" until the first load lands ([instant] null).
+ */
+fun lastUpdatedLabel(instant: Instant?): String {
+    if (instant == null) return "Updating…"
+    val local = instant.atZone(ZoneId.systemDefault())
+    return "Updated ${UPDATED_DAY_FORMAT.format(local)} · ${UPDATED_TIME_FORMAT.format(local)}"
 }

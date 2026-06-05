@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
 import javax.inject.Inject
 
 // IMPL-AND-01: per-card state envelope so each dashboard card loads, errors,
@@ -50,6 +51,9 @@ data class DashboardUiState(
     val todaysDoses: CardState<List<TodaysDoseSummary>>,
     val nutrition: CardState<NutritionDay>,
     val user: DashboardUser? = null,
+    // Wall-clock time the dashboard cards were last successfully (re)loaded.
+    // Null until the first load lands; drives the header's "Updated …" subtitle.
+    val lastUpdated: Instant? = null,
 ) {
     companion object {
         val initial = DashboardUiState(
@@ -110,8 +114,13 @@ class DashboardViewModel @Inject constructor(
                 loadNutrition(),
             ).awaitAll()
             // Stamp when at least one primary card loaded; if everything failed,
-            // leave lastRefreshAt untouched so the next resume retries.
-            if (results.any { it }) lastRefreshAt = SystemClock.elapsedRealtime()
+            // leave lastRefreshAt untouched so the next resume retries. The
+            // wall-clock stamp feeds the header's "Updated …" line; the monotonic
+            // one gates resume-driven refreshes (SystemClock for TTL).
+            if (results.any { it }) {
+                lastRefreshAt = SystemClock.elapsedRealtime()
+                _ui.update { it.copy(lastUpdated = Instant.now()) }
+            }
         }
         loadUser()
     }

@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.mobile.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -138,12 +140,18 @@ fun IconButtonChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String?,
     showDot: Boolean = false,
+    enabled: Boolean = true,
     size: Int = 34,
     onClick: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
             .size(size.dp)
+            // Disabled chips dim and stop responding to taps (and report a
+            // disabled state to accessibility); enabled chips are real buttons.
+            .alpha(if (enabled) 1f else 0.4f)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled) { onClick() }
             .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
             .background(Hf.colors.surface, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center,
