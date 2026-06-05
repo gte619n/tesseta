@@ -647,9 +647,11 @@ async function loadBloodPanel(): Promise<BloodPanelData | null> {
   let reports: BloodTestReport[] = [];
 
   try {
+    // Reports (AI-extracted uploads) are independent of manual readings and may
+    // be unavailable; don't let that hide the readings we do have.
     [readings, reports] = await Promise.all([
       apiJson<BloodReadingApi[]>("/api/me/blood"),
-      apiJson<BloodTestReport[]>("/api/me/blood/reports"),
+      apiJson<BloodTestReport[]>("/api/me/blood/reports").catch(() => [] as BloodTestReport[]),
     ]);
   } catch {
     return null;
