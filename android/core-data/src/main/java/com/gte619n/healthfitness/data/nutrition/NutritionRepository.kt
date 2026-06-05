@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
 import com.gte619n.healthfitness.domain.nutrition.DescribeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DescribedMeal
 import com.gte619n.healthfitness.domain.nutrition.Entry
+import com.gte619n.healthfitness.domain.nutrition.EntryIngredient
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
@@ -55,9 +56,54 @@ class NutritionRepository @Inject constructor(
 ) {
     private val rowAdapter = moshi.adapter(NutritionEntryRow::class.java)
     private val macrosAdapter = moshi.adapter(Macros::class.java)
+    private val syncDocAdapter = moshi.adapter(NutritionEntrySyncDoc::class.java)
 
     /** Mirror payload for one logged entry: the entry plus the date it belongs to. */
     data class NutritionEntryRow(val date: String, val entry: Entry)
+
+    /**
+     * The OTHER shape a `nutritionEntries` mirror row can take: the raw server
+     * document the generic sync engine writes (every other table stores the flat
+     * doc; only nutrition wraps it in [NutritionEntryRow]). The sync delta is the
+     * persisted Firestore entry, so its image fields are `mealImageUrl`/
+     * `mealImageStatus` — the REST read path renames those to `imageUrl`/
+     * `imageStatus`. Without handling this shape a sync-written row failed to parse
+     * and the entry vanished from the day until a REST `fillDay` rewrote it. We
+     * map it back to a domain [Entry] so a sync delta is usable directly. The
+     * entryId isn't a field on the doc — it's the trailing segment of the mirror
+     * row id (`"<date>/<entryId>"`).
+     */
+    private data class NutritionEntrySyncDoc(
+        val date: String?,
+        val meal: String?,
+        val foodId: String?,
+        val foodName: String?,
+        val servingLabel: String?,
+        val servingGrams: Double?,
+        val quantity: Double?,
+        val macros: Macros?,
+        val source: String?,
+        val ingredients: List<EntryIngredient>?,
+        val mealImageUrl: String?,
+        val mealImageStatus: String?,
+        val analysisStatus: String?,
+    ) {
+        fun toEntry(entryId: String): Entry = Entry(
+            entryId = entryId,
+            meal = meal ?: "",
+            foodId = foodId,
+            foodName = foodName ?: "",
+            servingLabel = servingLabel,
+            servingGrams = servingGrams,
+            quantity = quantity ?: 1.0,
+            macros = macros ?: Macros.EMPTY,
+            source = source ?: "",
+            imageUrl = mealImageUrl,
+            imageStatus = mealImageStatus ?: "NONE",
+            analysisStatus = analysisStatus ?: "NONE",
+            ingredients = ingredients,
+        )
+    }
 
     suspend fun day(date: String): NutritionDay {
         if (support.killSwitchOn()) return api.getDay(date)
@@ -256,9 +302,20 @@ class NutritionRepository @Inject constructor(
             // #40: carry the mirror row's syncState onto the entry for the per-row
             // PENDING/FAILED SyncBadge.
             .mapNotNull { row ->
+                // REST envelope {date, entry} — the shape day()/fillDay write.
                 runCatching { rowAdapter.fromJson(row.payloadJson) }.getOrNull()
                     ?.takeIf { it.date == date }
-                    ?.let { it.entry.copy(syncState = row.syncState) }
+                    ?.let { return@mapNotNull it.entry.copy(syncState = row.syncState) }
+                // Flat server doc — the shape the generic sync engine writes. The
+                // entryId lives in the row id ("<date>/<entryId>"), not the doc.
+                runCatching { syncDocAdapter.fromJson(row.payloadJson) }.getOrNull()
+                    ?.takeIf { it.date == date }
+                    ?.let {
+                        return@mapNotNull it
+                            .toEntry(row.id.substringAfter('/', row.id))
+                            .copy(syncState = row.syncState)
+                    }
+                null
             }
 
     private suspend fun mirroredTarget(): Macros? =

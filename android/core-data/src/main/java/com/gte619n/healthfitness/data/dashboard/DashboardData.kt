@@ -300,7 +300,15 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
             com.gte619n.healthfitness.data.db.entity.MirrorTables.BODY_COMPOSITION,
             dtos.map {
                 com.gte619n.healthfitness.data.sync.MirrorRepositorySupport.RefreshRow(
-                    id = it.recordId,
+                    // recordId is the sample timestamp and is NOT unique across
+                    // metrics — a scale reports WEIGHT_KG and BODY_FAT_PERCENT at
+                    // the same instant, so they share a recordId. Keying the mirror
+                    // row by recordId alone made those collide and clobber each
+                    // other (REPLACE), collapsing the whole weight series down to a
+                    // single point. Key by "<metric>__<recordId>" — the same id the
+                    // backend uses (and the sync engine mirrors), so fill + sync
+                    // dedupe instead of fighting.
+                    id = "${it.metric}__${it.recordId}",
                     payloadJson = dtoAdapter.toJson(it),
                     lastUpdate = it.sampleTime.toEpochMilli(),
                 )
