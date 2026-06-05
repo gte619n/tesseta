@@ -75,6 +75,18 @@ data class DailyMetricPoint(
     val sleepScore: Int?,
 )
 
+// The domain of the dashboard "Recent" feed: the user's latest activity merged
+// across these sources by the backend. UNKNOWN keeps an older client forward-
+// compatible if the backend adds a kind it doesn't recognize yet.
+enum class RecentActivityKind { WORKOUT, WEIGH_IN, SLEEP, FOOD, MEDICATION, UNKNOWN }
+
+data class RecentActivityEntry(
+    val kind: RecentActivityKind,
+    val title: String,
+    val subtitle: String?,
+    val timestamp: Instant,
+)
+
 interface DashboardBodyCompositionRepository {
     suspend fun loadRecent(): WeightSummary? // null = no data
 }
@@ -95,4 +107,12 @@ interface DashboardTodaysDosesRepository {
 interface DashboardNutritionRepository {
     /** Today's logged nutrition: totals + target for the Today card's macro tier. */
     suspend fun loadToday(): NutritionDay
+}
+
+interface DashboardRecentActivityRepository {
+    /** Pull the latest cross-source activity rows, newest-first (server-capped). */
+    suspend fun loadRecent(): List<RecentActivityEntry>
+
+    /** The last feed persisted by [loadRecent], or null if none cached yet. */
+    suspend fun cachedRecent(): List<RecentActivityEntry>?
 }

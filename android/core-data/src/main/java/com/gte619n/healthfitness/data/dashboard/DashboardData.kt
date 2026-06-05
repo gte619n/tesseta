@@ -9,17 +9,27 @@ import com.gte619n.healthfitness.domain.dashboard.DashboardBloodMarkerRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardBodyCompositionRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardDailyMetricsRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardNutritionRepository
+import com.gte619n.healthfitness.domain.dashboard.DashboardRecentActivityRepository
 import com.gte619n.healthfitness.domain.dashboard.DashboardTodaysDosesRepository
 import com.gte619n.healthfitness.domain.dashboard.DoseWindow
 import com.gte619n.healthfitness.domain.dashboard.HistoryPoint
 import com.gte619n.healthfitness.domain.dashboard.MarkerTone
+import com.gte619n.healthfitness.domain.dashboard.RecentActivityEntry
+import com.gte619n.healthfitness.domain.dashboard.RecentActivityKind
 import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
+import android.content.Context
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
@@ -53,6 +63,9 @@ internal interface DashboardApi {
         @Query("from") from: String,
         @Query("to") to: String,
     ): List<DailyMetricDto>
+
+    @GET("api/me/recent-activity")
+    suspend fun recentActivity(@Query("limit") limit: Int = 5): List<RecentActivityDto>
 }
 
 // ---- DTOs (Moshi reflection) ----
@@ -103,6 +116,13 @@ internal data class DailyMetricDto(
     val sleepMinutes: Int?,
     val hrvMs: Int?,
     val sleepScore: Int?,
+)
+
+internal data class RecentActivityDto(
+    val kind: String,
+    val title: String,
+    val subtitle: String?,
+    val timestamp: Instant,
 )
 
 // ---- Mappers ----
@@ -238,6 +258,16 @@ internal fun TodaysDoseDto.toDomain(): TodaysDoseSummary = TodaysDoseSummary(
     unit = unit,
     taken = taken,
     takenAt = takenAt,
+)
+
+internal fun RecentActivityDto.toDomain(): RecentActivityEntry = RecentActivityEntry(
+    // Unknown kinds degrade to UNKNOWN rather than dropping the row, so an older
+    // client still shows new activity types (with a generic icon).
+    kind = runCatching { RecentActivityKind.valueOf(kind.uppercase()) }
+        .getOrDefault(RecentActivityKind.UNKNOWN),
+    title = title,
+    subtitle = subtitle,
+    timestamp = timestamp,
 )
 
 internal object DailyMetricMapper {
@@ -440,6 +470,67 @@ internal class DashboardNutritionRepositoryImpl @Inject constructor(
     }
 }
 
+private val Context.recentActivityStore by preferencesDataStore("hf-recent-activity")
+
+/**
+ * Single-slot persistent cache for the dashboard "Recent" feed.
+ *
+ * The feed is a server-derived aggregate — there's no syncable entity to put in
+ * the Room mirror (no stable id / lastUpdate, and it's read-only), so it lives in
+ * its own small DataStore like the other key/value caches (auth token, unit
+ * prefs, sync flags). It holds only the latest feed so a cold/offline open can
+ * render the last-known activity instantly while a fresh pull runs.
+ *
+ * Cleared on sign-out via [com.gte619n.healthfitness.data.db.DbWipe]'s sibling
+ * hook — this DataStore is NOT the encrypted Room DB, so it needs an explicit
+ * wipe to avoid leaking one account's activity to the next on a shared device.
+ */
+@Singleton
+class RecentActivityCache @Inject constructor(
+    @ApplicationContext private val context: Context,
+    moshi: Moshi,
+) {
+    private val key = stringPreferencesKey("feed")
+    private val adapter = moshi.adapter<List<RecentActivityEntry>>(
+        Types.newParameterizedType(List::class.java, RecentActivityEntry::class.java),
+    )
+
+    /** The last persisted feed, or null if nothing has been cached yet. */
+    suspend fun read(): List<RecentActivityEntry>? {
+        val json = context.recentActivityStore.data.first()[key] ?: return null
+        return runCatching { adapter.fromJson(json) }.getOrNull()
+    }
+
+    suspend fun write(entries: List<RecentActivityEntry>) {
+        context.recentActivityStore.edit { it[key] = adapter.toJson(entries) }
+    }
+
+    suspend fun clear() {
+        context.recentActivityStore.edit { it.remove(key) }
+    }
+}
+
+// The recent feed is a derived cross-source aggregate the backend assembles per
+// request, so there's nothing stable to mirror in Room. Instead it's persisted
+// to a single-slot DataStore ([RecentActivityCache]): every successful pull
+// overwrites the cache, and the ViewModel renders the cached feed instantly on
+// open / when offline while a fresh pull runs (stale-while-revalidate).
+internal class DashboardRecentActivityRepositoryImpl @Inject constructor(
+    private val api: DashboardApi,
+    private val cache: RecentActivityCache,
+    @IoDispatcher private val io: CoroutineDispatcher,
+) : DashboardRecentActivityRepository {
+    override suspend fun loadRecent(): List<RecentActivityEntry> = withContext(io) {
+        val entries = api.recentActivity().map { it.toDomain() }
+        cache.write(entries)
+        entries
+    }
+
+    override suspend fun cachedRecent(): List<RecentActivityEntry>? = withContext(io) {
+        cache.read()
+    }
+}
+
 // ---- Hilt ----
 
 @Module
@@ -459,6 +550,9 @@ internal abstract class DashboardDataModule {
 
     @Binds @Singleton
     abstract fun bindNutrition(impl: DashboardNutritionRepositoryImpl): DashboardNutritionRepository
+
+    @Binds @Singleton
+    abstract fun bindRecentActivity(impl: DashboardRecentActivityRepositoryImpl): DashboardRecentActivityRepository
 
     companion object {
         @Provides @Singleton

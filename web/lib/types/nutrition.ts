@@ -31,6 +31,9 @@ export type Entry = {
   // Present for a composite meal: its components, each with a raw-ingredient
   // image. Null/absent for a plain single-food entry.
   ingredients?: EntryIngredient[] | null;
+  // ISO timestamp of when the entry was first logged (server-stamped). Null for
+  // a not-yet-persisted placeholder (e.g. an in-flight photo capture).
+  createdAt: string | null;
 };
 
 export type EntryIngredient = {

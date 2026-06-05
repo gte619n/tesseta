@@ -110,7 +110,12 @@ fun FoldableDashboardScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(10.dp))
-                RecentFeed(entries = DashboardFallbacks.recentFoldable, showViewAll = false, modifier = Modifier.fillMaxWidth())
+                val recentEntries = if (DashboardFlags.showRecentFeedFixtures) {
+                    DashboardFallbacks.recentFoldable
+                } else {
+                    (ui.recentActivity as? CardState.Loaded)?.data.orEmpty().toLogEntries(foldable = true)
+                }
+                RecentFeed(entries = recentEntries, showViewAll = false, modifier = Modifier.fillMaxWidth())
             }
         }
     }

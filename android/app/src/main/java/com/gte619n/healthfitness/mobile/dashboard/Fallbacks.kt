@@ -106,7 +106,9 @@ data class Vital(
 // region is fully live.
 object DashboardFlags {
     const val showVitalsFixtures = true       // HRV / RHR / Readiness
-    const val showRecentFeedFixtures = true
+    // Recent feed is live (DashboardViewModel.recentActivity ←
+    // GET /api/me/recent-activity). Flip back to true to fall back to fixtures.
+    const val showRecentFeedFixtures = false
     // Today card: calories + macros are live (DashboardViewModel.nutrition).
     // Only the workout line is still fixture-backed.
     const val showTodayCardFixtures = true    // workout line only

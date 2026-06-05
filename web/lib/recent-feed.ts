@@ -1,14 +1,6 @@
 import { apiJson } from "@/lib/api";
-import { fetchDailyMetrics } from "@/lib/daily-metrics-api";
-import { getWorkoutHistory } from "@/lib/workout-program-api";
-import type { ScheduledWorkoutResponse } from "@/lib/types/workout-program";
-import type { Reading } from "@/lib/types/body-composition";
-import type { TodaysDose } from "@/lib/types/medication";
-import { formatDuration, totalLoggedSets } from "@/lib/workout-format";
-import { kgToLb } from "@/lib/units";
 
-// One row in the dashboard's "Recent" activity feed. (Was a fixture type; the
-// feed is now built from real data — see loadRecentFeed.)
+// One row in the dashboard's "Recent" activity feed.
 export type LogEntry = {
   icon: string;
   tone: "activity" | "neutral";
@@ -19,115 +11,54 @@ export type LogEntry = {
   time: string;
 };
 
-type Item = LogEntry & { ts: number };
+// Wire shape of GET /api/me/recent-activity — the backend does the cross-source
+// merge/sort/cap; the client just maps `kind` to an icon/tone and formats the
+// timestamp. Keep in sync with RecentActivityResponse / ActivityKind.
+type ActivityKind = "WORKOUT" | "WEIGH_IN" | "SLEEP" | "FOOD" | "MEDICATION";
+
+type RecentActivity = {
+  kind: ActivityKind;
+  title: string;
+  subtitle: string | null;
+  timestamp: string; // ISO instant
+};
 
 const MAX_ENTRIES = 5;
 
+// kind → how this row is rendered. The feed is uniform across clients; only the
+// icon (Tabler) and tone (green "activity" vs muted "neutral") are web-local.
+const STYLE: Record<ActivityKind, { icon: string; tone: LogEntry["tone"] }> = {
+  WORKOUT: { icon: "barbell", tone: "activity" },
+  WEIGH_IN: { icon: "scale", tone: "neutral" },
+  SLEEP: { icon: "moon", tone: "neutral" },
+  FOOD: { icon: "salad", tone: "activity" },
+  MEDICATION: { icon: "pill", tone: "activity" },
+};
+
 /**
- * Build the dashboard "Recent" feed by merging the user's latest real activity
- * across four sources — completed workouts, weigh-ins, sleep, and medication
- * doses taken today — sorted newest-first. Every source degrades to empty on
- * error, so a partial outage just thins the feed rather than breaking the page.
+ * Load the dashboard "Recent" feed — the user's latest activity across
+ * workouts, weigh-ins, sleep, logged food, and medication doses, newest-first.
+ * The backend aggregates and caps; this just maps each row for display and
+ * degrades to an empty feed on error rather than breaking the page.
  */
 export async function loadRecentFeed(): Promise<LogEntry[]> {
-  const [workouts, readings, metrics, doses] = await Promise.all([
-    safe(getWorkoutHistory()),
-    safe(apiJson<Reading[]>("/api/me/body-composition")),
-    fetchDailyMetrics(), // already returns [] on error
-    safe(apiJson<TodaysDose[]>("/api/me/medications/today")),
-  ]);
-
-  const items: Item[] = [
-    ...workoutItems(workouts),
-    ...weighInItems(readings),
-    ...sleepItems(metrics),
-    ...medItems(doses),
-  ];
-
-  // Item extends LogEntry with an internal `ts` sort key; it's structurally a
-  // LogEntry, so the slice is returned as-is (the extra field is ignored by the
-  // ts-agnostic RecentFeed).
-  items.sort((a, b) => b.ts - a.ts);
-  return items.slice(0, MAX_ENTRIES);
-}
-
-function workoutItems(workouts: ScheduledWorkoutResponse[]): Item[] {
-  return workouts
-    .filter((w) => w.completedAt)
-    .map((w) => {
-      const ts = Date.parse(w.completedAt!);
-      const parts: string[] = [];
-      if (w.durationSeconds) parts.push(formatDuration(w.durationSeconds));
-      const sets = totalLoggedSets(w);
-      if (sets > 0) parts.push(`${sets} sets`);
-      return {
-        icon: "barbell",
-        tone: "activity" as const,
-        title: `${w.dayLabel} completed`,
-        ...(parts.length ? { meta: parts.join(" · ") } : {}),
-        time: relTime(ts),
-        ts,
-      };
-    });
-}
-
-function weighInItems(readings: Reading[]): Item[] {
-  return readings
-    .filter((r) => r.metric === "WEIGHT_KG")
-    .map((r) => {
-      const ts = Date.parse(r.sampleTime);
-      const lb = kgToLb(r.value);
-      return {
-        icon: "scale",
-        tone: "neutral" as const,
-        title: `Weighed in · ${lb.toFixed(1)} lb`,
-        ...(r.sourcePlatform ? { meta: r.sourcePlatform } : {}),
-        time: relTime(ts),
-        ts,
-      };
-    });
-}
-
-function sleepItems(metrics: { date: string; sleepMinutes: number | null; sleepScore: number | null }[]): Item[] {
-  return metrics
-    .filter((m) => m.sleepMinutes !== null)
-    .map((m) => {
-      const ts = Date.parse(`${m.date}T00:00:00`);
-      const mins = m.sleepMinutes!;
-      const h = Math.floor(mins / 60);
-      const min = Math.round(mins % 60);
-      return {
-        icon: "moon",
-        tone: "neutral" as const,
-        title: `Sleep · ${h}h ${min}m`,
-        ...(m.sleepScore !== null ? { meta: `Score ${m.sleepScore}` } : {}),
-        time: relTime(ts),
-        ts,
-      };
-    });
-}
-
-function medItems(doses: TodaysDose[]): Item[] {
-  return doses
-    .filter((d) => d.taken && d.takenAt)
-    .map((d) => {
-      const ts = Date.parse(d.takenAt!);
-      return {
-        icon: "pill",
-        tone: "activity" as const,
-        title: `${d.drugName} · ${d.dose} ${d.unit}`,
-        time: relTime(ts),
-        ts,
-      };
-    });
-}
-
-async function safe<T>(p: Promise<T[]>): Promise<T[]> {
+  let items: RecentActivity[];
   try {
-    return await p;
+    items = await apiJson<RecentActivity[]>(`/api/me/recent-activity?limit=${MAX_ENTRIES}`);
   } catch {
     return [];
   }
+
+  return items.map((a) => {
+    const style = STYLE[a.kind];
+    return {
+      icon: style.icon,
+      tone: style.tone,
+      title: a.title,
+      ...(a.subtitle ? { meta: a.subtitle } : {}),
+      time: relTime(Date.parse(a.timestamp)),
+    };
+  });
 }
 
 // Compact "time ago" label for the right-hand column: now / 12m / 3h / 2d, or a

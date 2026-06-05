@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
 import com.gte619n.healthfitness.core.nutrition.MealType;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -32,7 +33,11 @@ public record EntryResponse(
     String imageUrl,
     FoodImageStatus imageStatus,
     EntryAnalysisStatus analysisStatus,
-    List<IngredientResponse> ingredients
+    List<IngredientResponse> ingredients,
+    // When the entry was first logged (server timestamp). Lets clients order
+    // entries on a cross-source activity timeline; null for a not-yet-persisted
+    // placeholder (e.g. an in-flight photo capture).
+    Instant createdAt
 ) {
     /** Bare mapping with no catalog image (used where the food isn't loaded). */
     public static EntryResponse from(FoodEntry e) {
@@ -69,7 +74,8 @@ public record EntryResponse(
             imageUrl,
             imageStatus != null ? imageStatus : FoodImageStatus.NONE,
             e.analysisStatus() != null ? e.analysisStatus() : EntryAnalysisStatus.NONE,
-            ingredients
+            ingredients,
+            e.createdAt()
         );
     }
 
