@@ -142,8 +142,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/drugs", "/api/drugs/**").authenticated()
                 // Food catalog + barcode lookup operate on the current user
                 .requestMatchers("/api/foods/**", "/api/foods").authenticated()
-                // Nutrition capture (meal/label photo) operates on the current user
-                .requestMatchers("/api/nutrition/capture/**").authenticated()
+                // Nutrition capture (meal/label photo) + describe-a-meal operate
+                // on the current user
+                .requestMatchers("/api/nutrition/capture/**", "/api/nutrition/describe")
+                    .authenticated()
                 .anyRequest().denyAll()
             )
             // Webhook endpoints arrive with `Authorization: Bearer <secret>`
