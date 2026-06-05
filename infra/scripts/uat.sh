@@ -3,10 +3,11 @@ set -euo pipefail
 
 # UAT end-to-end runner (sibling of dev.sh, but credential-free).
 #
+# This is a MANUAL, on-demand suite — it is intentionally NOT wired into CI.
 # Boots the Firestore emulator, the backend (dev-login enabled, AI stubbed, no
 # GCP creds), and the web app (UAT_AUTH_ENABLED), then runs the Selenium suite
 # in uat/. Everything is localhost with fixed local constants — NO `gcloud
-# secrets`, NO Google sign-in, NO Gemini key — so it runs offline / in CI.
+# secrets`, NO Google sign-in, NO real Gemini call — so it runs fully offline.
 #
 # Usage:
 #   bash infra/scripts/uat.sh           # boot stack, run uat/ tests, tear down
