@@ -23,6 +23,8 @@ import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -57,6 +59,7 @@ public class SplitImportedWorkoutBlocksJob implements CommandLineRunner {
     private final ScheduledWorkoutRepository scheduled;
     private final ExerciseRepository exercises;
     private final ObjectProvider<GeminiWorkoutBlockClassifier> classifierProvider;
+    private final ConfigurableApplicationContext context;
     private final String userId;
     private final boolean dryRun;
 
@@ -64,18 +67,34 @@ public class SplitImportedWorkoutBlocksJob implements CommandLineRunner {
         ScheduledWorkoutRepository scheduled,
         ExerciseRepository exercises,
         ObjectProvider<GeminiWorkoutBlockClassifier> classifierProvider,
+        ConfigurableApplicationContext context,
         @Value("${app.workouts.split.user-id:}") String userId,
         @Value("${app.workouts.split.dry-run:true}") boolean dryRun
     ) {
         this.scheduled = scheduled;
         this.exercises = exercises;
         this.classifierProvider = classifierProvider;
+        this.context = context;
         this.userId = userId;
         this.dryRun = dryRun;
     }
 
     @Override
     public void run(String... args) {
+        try {
+            execute();
+        } finally {
+            // The job runs the same image as the web service, so the embedded
+            // servlet container keeps the JVM alive once this runner returns.
+            // Trigger an orderly Spring shutdown on a separate thread (so this
+            // runner returns first) and exit, ending the Cloud Run task.
+            Thread shutdown = new Thread(() -> System.exit(SpringApplication.exit(context)),
+                "split-blocks-shutdown");
+            shutdown.start();
+        }
+    }
+
+    private void execute() {
         if (userId == null || userId.isBlank()) {
             log.log(WARN, "SplitImportedWorkoutBlocksJob: app.workouts.split.user-id is unset — nothing to do");
             return;
