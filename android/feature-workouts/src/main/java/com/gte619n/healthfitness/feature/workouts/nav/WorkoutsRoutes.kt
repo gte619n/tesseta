@@ -11,6 +11,7 @@ import com.gte619n.healthfitness.feature.workouts.GymsListScreen
 import com.gte619n.healthfitness.feature.workouts.NewGymScreen
 import com.gte619n.healthfitness.feature.workouts.program.ProgramDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.ProgramsListRoute
+import com.gte619n.healthfitness.feature.workouts.program.WorkoutDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubScreen
 
 /**
@@ -44,6 +45,16 @@ object WorkoutsRoutes {
     const val PROGRAM_DETAIL = "workouts/programs/{programId}"
 
     fun programDetail(programId: String): String = "workouts/programs/$programId"
+
+    // A single workout (one day within a phase). phaseId disambiguates because
+    // dayId is unique only within its phase's weekly microcycle.
+    const val ARG_PHASE_ID = "phaseId"
+    const val ARG_DAY_ID = "dayId"
+    const val WORKOUT_DETAIL =
+        "workouts/programs/{programId}/phases/{phaseId}/days/{dayId}"
+
+    fun workoutDetail(programId: String, phaseId: String, dayId: String): String =
+        "workouts/programs/$programId/phases/$phaseId/days/$dayId"
 }
 
 fun NavGraphBuilder.workoutsGraph(
@@ -112,6 +123,20 @@ fun NavGraphBuilder.workoutsGraph(
         ProgramDetailRoute(
             onBack = { navController.popBackStack() },
             onOpenGoal = onOpenGoal,
+            onOpenWorkout = { programId, phaseId, dayId ->
+                navController.navigate(WorkoutsRoutes.workoutDetail(programId, phaseId, dayId))
+            },
         )
+    }
+
+    composable(
+        route = WorkoutsRoutes.WORKOUT_DETAIL,
+        arguments = listOf(
+            navArgument(WorkoutsRoutes.ARG_PROGRAM_ID) { type = NavType.StringType },
+            navArgument(WorkoutsRoutes.ARG_PHASE_ID) { type = NavType.StringType },
+            navArgument(WorkoutsRoutes.ARG_DAY_ID) { type = NavType.StringType },
+        ),
+    ) {
+        WorkoutDetailRoute(onBack = { navController.popBackStack() })
     }
 }

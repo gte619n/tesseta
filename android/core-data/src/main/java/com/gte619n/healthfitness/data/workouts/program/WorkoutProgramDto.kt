@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.domain.workouts.program.DemoFrame
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.Intensity
 import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
@@ -36,6 +37,11 @@ data class DeloadModifierDto(
     val intensityDelta: Double? = null,
 )
 
+data class LoggedSetDto(
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+)
+
 data class DemoFrameDto(
     val phase: String,
     val imageUrl: String? = null,
@@ -62,6 +68,7 @@ data class PrescriptionDto(
     val tempo: String? = null,
     val notes: String? = null,
     val deloadModifier: DeloadModifierDto? = null,
+    val loggedSets: List<LoggedSetDto> = emptyList(),
     val exercise: ExerciseSummaryDto? = null,
 )
 
@@ -158,6 +165,8 @@ fun IntensityDto.toDomain(): Intensity =
 fun DeloadModifierDto.toDomain(): DeloadModifier =
     DeloadModifier(setsMultiplier = setsMultiplier, intensityDelta = intensityDelta)
 
+fun LoggedSetDto.toDomain(): LoggedSet = LoggedSet(weightLbs = weightLbs, reps = reps)
+
 fun DemoFrameDto.toDomain(): DemoFrame =
     DemoFrame(phase = phase, imageUrl = imageUrl ?: imageCandidates.firstOrNull())
 
@@ -181,6 +190,7 @@ fun PrescriptionDto.toDomain(): Prescription = Prescription(
     tempo = tempo,
     notes = notes,
     deloadModifier = deloadModifier?.toDomain(),
+    loggedSets = loggedSets.map { it.toDomain() },
     exercise = exercise?.toDomain(),
 )
 

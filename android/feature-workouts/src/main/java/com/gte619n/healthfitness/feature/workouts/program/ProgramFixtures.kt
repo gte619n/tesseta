@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.domain.workouts.program.DemoFrame
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.Intensity
 import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
@@ -65,6 +66,11 @@ internal object ProgramFixtures {
                 tempo = "3-1-1",
                 notes = "Last set AMRAP.",
                 deloadModifier = DeloadModifier(setsMultiplier = 0.6, intensityDelta = -1.0),
+                loggedSets = listOf(
+                    LoggedSet(weightLbs = 185.0, reps = 8),
+                    LoggedSet(weightLbs = 185.0, reps = 8),
+                    LoggedSet(weightLbs = 185.0, reps = 6),
+                ),
                 exercise = squat,
             ),
         ),
