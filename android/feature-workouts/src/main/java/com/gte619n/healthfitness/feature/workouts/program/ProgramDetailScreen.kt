@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.feature.workouts.program
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,10 +24,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -35,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
+import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseMeta
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseSpineNode
@@ -209,6 +216,12 @@ private fun PhaseRow(
     isLast: Boolean,
     onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
 ) {
+    // The phase header is a tappable expander: tapping it reveals the phase's
+    // workout rows (each of which opens the workout detail). Default open for
+    // the first phase and any active phase so content is visible up-front.
+    var expanded by remember(phase.phaseId) {
+        mutableStateOf(isFirst || phase.status == ProgramPhaseStatus.ACTIVE)
+    }
     Row(modifier = Modifier.fillMaxWidth()) {
         PhaseSpineNode(status = phase.status, isFirst = isFirst, isLast = isLast)
         Spacer(Modifier.width(12.dp))
@@ -218,28 +231,51 @@ private fun PhaseRow(
                 .padding(bottom = 18.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
-                Text(
-                    phase.title,
-                    style = Hf.type.headingMd.copy(fontSize = 14.sp),
-                    color = Hf.colors.textPrimary,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        phase.title,
+                        style = Hf.type.headingMd.copy(fontSize = 14.sp),
+                        color = Hf.colors.textPrimary,
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    PhaseMeta(phase)
+                }
                 Spacer(Modifier.width(8.dp))
                 PhaseStatusPill(phase.status)
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = if (expanded) "Collapse phase" else "Expand phase",
+                    tint = Hf.colors.textTertiary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
-            Spacer(Modifier.height(5.dp))
-            PhaseMeta(phase)
-            Spacer(Modifier.height(11.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                phase.days.sortedBy { it.orderIndex }.forEach { day ->
-                    WorkoutDayRow(
-                        day = day,
-                        onOpen = { onOpenWorkout(phase.phaseId, day.dayId) },
-                    )
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.padding(top = 11.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    val days = phase.days.sortedBy { it.orderIndex }
+                    if (days.isEmpty()) {
+                        Text(
+                            "No workouts in this phase yet.",
+                            style = Hf.type.bodySm,
+                            color = Hf.colors.textTertiary,
+                        )
+                    } else {
+                        days.forEach { day ->
+                            WorkoutDayRow(
+                                day = day,
+                                onOpen = { onOpenWorkout(phase.phaseId, day.dayId) },
+                            )
+                        }
+                    }
                 }
             }
         }
