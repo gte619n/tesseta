@@ -33,7 +33,10 @@ import javax.inject.Singleton
  * - [get] serves the mirrored deep doc only when it is a complete assembled tree;
  *   a shallow list row, a raw delta doc, or an absent row triggers a network
  *   fetch that persists the assembled deep for offline. Offline, it falls back to
- *   whatever is cached and only errors when nothing is cached at all.
+ *   whatever is cached and only errors when nothing is cached at all. Either way
+ *   it [backfillDays]: a session-only program (e.g. imported history, whose stored
+ *   phases have empty template days) has its days reconstructed from the cached
+ *   schedule, mirroring the backend assembler so the workouts render offline.
  * - [calendar] serves the `workoutScheduled` mirror filtered to this program
  *   (rows keyed `"<programId>/<scheduledId>"`, matching the sync id) and date
  *   range, filling for the program on a cold miss.
@@ -76,17 +79,19 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
     override suspend fun get(programId: String): Result<WorkoutProgram> =
         withContext(Dispatchers.IO) {
             runCatching {
+                // The server's deep response already backfills session-only phases.
                 if (support.killSwitchOn()) return@runCatching api.get(programId).toDomain()
                 val cached = mirroredDeep(programId)
-                if (cached.isAssembledDeep()) return@runCatching cached!!.toDomain()
-                // Shallow list row, raw delta doc, or absent: fetch the assembled
-                // deep and persist it for offline. Offline → fall back to whatever
-                // we have rather than failing; only surface the error if we have
-                // nothing cached at all.
+                if (cached.isAssembledDeep()) return@runCatching backfillDays(cached!!.toDomain())
+                // Shallow list row, raw delta doc (empty template days / no embedded
+                // exercise summaries), or absent: fetch the assembled deep and
+                // persist it for offline. Offline → fall back to whatever we have,
+                // backfilling session-only phases from the cached schedule; only
+                // surface the error if we have nothing cached at all.
                 try {
-                    refreshDeep(programId).toDomain()
+                    backfillDays(refreshDeep(programId).toDomain())
                 } catch (e: Exception) {
-                    cached?.toDomain() ?: throw e
+                    backfillDays(cached?.toDomain() ?: throw e)
                 }
             }
         }
@@ -147,20 +152,55 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
 
     /**
      * True when a decoded deep doc actually carries the assembled tree — phases
-     * present and every prescription has its embedded exercise summary. Shallow
-     * list rows (no phases) and raw delta docs (phases but `exercise == null`)
-     * return false so callers know to refresh from the network.
+     * present, **every phase has days**, and every prescription has its embedded
+     * exercise summary. Shallow list rows (no phases), raw delta docs (phases but
+     * `exercise == null`), and session-only programs whose stored phases have
+     * empty template days (e.g. imported history — its days live in the schedule)
+     * all return false so callers refresh from the network and/or backfill from
+     * the cached schedule. Note: an empty `days` list must NOT pass vacuously.
      */
     private fun WorkoutProgramDeepDto?.isAssembledDeep(): Boolean {
         val dto = this ?: return false
         if (dto.phases.isEmpty()) return false
         return dto.phases.all { phase ->
-            phase.days.all { day ->
+            phase.days.isNotEmpty() && phase.days.all { day ->
                 day.blocks.all { block ->
                     block.prescriptions.all { it.exercise != null }
                 }
             }
         }
+    }
+
+    /**
+     * Backfill any phase that has no template days from the cached scheduled
+     * sessions for this program — each performed session becomes a day under its
+     * phase, ordered by date. Mirrors the backend assembler so a session-only
+     * program (imported history) shows its workouts offline. A no-op when every
+     * phase already has days or no sessions are cached.
+     */
+    private suspend fun backfillDays(program: WorkoutProgram): WorkoutProgram {
+        if (program.phases.none { it.days.isEmpty() }) return program
+        val byPhase = cachedScheduledFor(program.programId)
+            .filter { it.session != null }
+            .sortedBy { it.date }
+            .groupBy { it.phaseId }
+        if (byPhase.isEmpty()) return program
+        val phases = program.phases.map { phase ->
+            if (phase.days.isNotEmpty()) return@map phase
+            val days = byPhase[phase.phaseId].orEmpty()
+                .mapIndexedNotNull { index, sw -> sw.session?.copy(orderIndex = index) }
+            if (days.isEmpty()) phase else phase.copy(days = days)
+        }
+        return program.copy(phases = phases)
+    }
+
+    /** Decoded scheduled sessions for a program from the mirror (no network). */
+    private suspend fun cachedScheduledFor(programId: String): List<ScheduledWorkout> {
+        val prefix = "$programId/"
+        return scheduledDao.observeActive().first()
+            .filter { it.id.startsWith(prefix) }
+            .mapNotNull { decodeScheduled(it.payloadJson) }
+            .map { it.toDomain() }
     }
 
     /** Fill the scheduled mirror for one program over its whole horizon. */

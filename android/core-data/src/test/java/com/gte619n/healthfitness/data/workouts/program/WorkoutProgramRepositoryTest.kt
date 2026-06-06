@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.db.entity.WorkoutProgramEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import com.gte619n.healthfitness.data.net.DayOfWeekMoshiAdapter
 import com.gte619n.healthfitness.data.net.InstantAdapter
 import com.gte619n.healthfitness.data.net.LocalDateAdapter
@@ -14,6 +15,7 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -41,6 +43,7 @@ class WorkoutProgramRepositoryTest {
 
     private val deepAdapter = moshi.adapter(WorkoutProgramDeepDto::class.java)
     private val listAdapter = moshi.adapter(WorkoutProgramDto::class.java)
+    private val scheduledAdapter = moshi.adapter(ScheduledWorkoutDto::class.java)
 
     private val api: WorkoutProgramApi = mockk()
     private val programDao: WorkoutProgramDao = mockk(relaxed = true)
@@ -55,6 +58,8 @@ class WorkoutProgramRepositoryTest {
     fun setUp() {
         repo = WorkoutProgramRepositoryImpl(api, programDao, scheduledDao, support, moshi)
         coEvery { support.killSwitchOn() } returns false
+        // Default: no cached schedule (backfill is a no-op). Overridden per test.
+        coEvery { scheduledDao.observeActive() } returns flowOf(emptyList())
     }
 
     private fun entity(id: String, json: String) =
@@ -168,5 +173,52 @@ class WorkoutProgramRepositoryTest {
         val result = repo.get("p1")
 
         assertEquals(true, result.isFailure)
+    }
+
+    @Test
+    fun `get backfills session-only phases from the cached schedule offline`() = runBlocking {
+        // Imported-history shape: phases present, but template days are empty —
+        // the workouts live in the schedule.
+        val sessionOnly = WorkoutProgramDeepDto(
+            programId = "p1", title = "Imported", status = "COMPLETED",
+            source = "MANUAL", createdAt = now, updatedAt = now,
+            phases = listOf(PhaseDto(phaseId = "ph1", status = "COMPLETED", days = emptyList())),
+        )
+        coEvery { programDao.getById("p1") } returns entity("p1", deepAdapter.toJson(sessionOnly))
+        coEvery { api.get("p1") } throws IOException("offline")
+
+        val session = ScheduledWorkoutDto(
+            scheduledId = "2026-01-02_s0",
+            date = java.time.LocalDate.parse("2026-01-02"),
+            phaseId = "ph1", dayId = "s0", dayLabel = "Push", status = "COMPLETED",
+            session = WorkoutDayDto(
+                dayId = "s0", label = "Push", dayOfWeek = DayOfWeek.MON,
+                blocks = listOf(
+                    BlockDto(
+                        blockId = "logged", type = "MAIN",
+                        prescriptions = listOf(PrescriptionDto(exerciseId = "ex1", notes = "Bench Press")),
+                    ),
+                ),
+            ),
+        )
+        coEvery { scheduledDao.observeActive() } returns flowOf(
+            listOf(
+                WorkoutScheduledEntity(
+                    "p1/2026-01-02_s0", scheduledAdapter.toJson(session),
+                    now.toEpochMilli(), "COMPLETED", false, "SYNCED",
+                ),
+            ),
+        )
+
+        val program = repo.get("p1").getOrThrow()
+
+        // The empty-day phase is filled from the cached session, so the day and
+        // its logged exercise show up offline.
+        assertEquals(1, program.phases[0].days.size)
+        assertEquals("Push", program.phases[0].days[0].label)
+        assertEquals(
+            "Bench Press",
+            program.phases[0].days[0].blocks[0].prescriptions[0].notes,
+        )
     }
 }
