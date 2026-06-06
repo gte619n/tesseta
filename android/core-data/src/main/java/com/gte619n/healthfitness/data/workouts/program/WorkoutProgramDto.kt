@@ -68,23 +68,30 @@ data class PrescriptionDto(
     val tempo: String? = null,
     val notes: String? = null,
     val deloadModifier: DeloadModifierDto? = null,
-    val loggedSets: List<LoggedSetDto> = emptyList(),
+    // Nullable: the backend sends `"loggedSets": null` for unlogged prescriptions
+    // (Spring MVC emits explicit nulls), which would throw against a non-null List.
+    val loggedSets: List<LoggedSetDto>? = null,
     val exercise: ExerciseSummaryDto? = null,
 )
 
 data class BlockDto(
     val blockId: String,
     val type: String,
-    val title: String = "",
+    // Nullable: Spring MVC serializes explicit nulls, so the wire may carry
+    // `"title": null` (and likewise for the other defaulted strings below).
+    // A non-null Kotlin field would make Moshi throw and fail the whole decode.
+    val title: String? = null,
     val orderIndex: Int = 0,
     val prescriptions: List<PrescriptionDto> = emptyList(),
 )
 
 data class WorkoutDayDto(
     val dayId: String,
-    val label: String = "",
+    val label: String? = null,
     val dayOfWeek: DayOfWeek,
-    val locationId: String = "",
+    // Imported-history session days have a null locationId; the backend emits it
+    // as explicit JSON null, so this MUST be nullable or the decode blows up.
+    val locationId: String? = null,
     val locationName: String? = null,
     val orderIndex: Int = 0,
     val blocks: List<BlockDto> = emptyList(),
@@ -92,7 +99,7 @@ data class WorkoutDayDto(
 
 data class PhaseDto(
     val phaseId: String,
-    val title: String = "",
+    val title: String? = null,
     val focus: String? = null,
     val orderIndex: Int = 0,
     val status: String,
@@ -106,7 +113,7 @@ data class PhaseDto(
 /** Shallow list shape — no phases/days. */
 data class WorkoutProgramDto(
     val programId: String,
-    val title: String = "",
+    val title: String? = null,
     val description: String? = null,
     val goalId: String? = null,
     val status: String,
@@ -123,7 +130,7 @@ data class WorkoutProgramDto(
 /** Deep shape — phases → days → blocks → prescriptions + embedded summaries. */
 data class WorkoutProgramDeepDto(
     val programId: String,
-    val title: String = "",
+    val title: String? = null,
     val description: String? = null,
     val goalId: String? = null,
     val goalTitle: String? = null,
@@ -142,10 +149,10 @@ data class ScheduledWorkoutDto(
     val date: LocalDate,
     val phaseId: String = "",
     val dayId: String = "",
-    val dayLabel: String = "",
+    val dayLabel: String? = null,
     val weekIndexInPhase: Int = 0,
     val isDeload: Boolean = false,
-    val locationId: String = "",
+    val locationId: String? = null,
     val locationName: String? = null,
     val status: String,
     val session: WorkoutDayDto? = null,
@@ -190,23 +197,23 @@ fun PrescriptionDto.toDomain(): Prescription = Prescription(
     tempo = tempo,
     notes = notes,
     deloadModifier = deloadModifier?.toDomain(),
-    loggedSets = loggedSets.map { it.toDomain() },
+    loggedSets = loggedSets.orEmpty().map { it.toDomain() },
     exercise = exercise?.toDomain(),
 )
 
 fun BlockDto.toDomain(): Block = Block(
     blockId = blockId,
     type = parseEnum(type, BlockType.MAIN),
-    title = title,
+    title = title.orEmpty(),
     orderIndex = orderIndex,
     prescriptions = prescriptions.map { it.toDomain() },
 )
 
 fun WorkoutDayDto.toDomain(): WorkoutDay = WorkoutDay(
     dayId = dayId,
-    label = label,
+    label = label.orEmpty(),
     dayOfWeek = dayOfWeek,
-    locationId = locationId,
+    locationId = locationId.orEmpty(),
     locationName = locationName,
     orderIndex = orderIndex,
     blocks = blocks.map { it.toDomain() },
@@ -214,7 +221,7 @@ fun WorkoutDayDto.toDomain(): WorkoutDay = WorkoutDay(
 
 fun PhaseDto.toDomain(): ProgramPhase = ProgramPhase(
     phaseId = phaseId,
-    title = title,
+    title = title.orEmpty(),
     focus = focus,
     orderIndex = orderIndex,
     status = parseEnum(status, ProgramPhaseStatus.LOCKED),
@@ -227,7 +234,7 @@ fun PhaseDto.toDomain(): ProgramPhase = ProgramPhase(
 
 fun WorkoutProgramDto.toDomain(): WorkoutProgram = WorkoutProgram(
     programId = programId,
-    title = title,
+    title = title.orEmpty(),
     description = description,
     goalId = goalId,
     status = parseEnum(status, ProgramStatus.DRAFT),
@@ -245,7 +252,7 @@ fun WorkoutProgramDeepDto.toDomain(): WorkoutProgram {
     val mappedPhases = phases.map { it.toDomain() }
     return WorkoutProgram(
         programId = programId,
-        title = title,
+        title = title.orEmpty(),
         description = description,
         goalId = goalId,
         goalTitle = goalTitle,
@@ -268,10 +275,10 @@ fun ScheduledWorkoutDto.toDomain(): ScheduledWorkout = ScheduledWorkout(
     date = date,
     phaseId = phaseId,
     dayId = dayId,
-    dayLabel = dayLabel,
+    dayLabel = dayLabel.orEmpty(),
     weekIndexInPhase = weekIndexInPhase,
     isDeload = isDeload,
-    locationId = locationId,
+    locationId = locationId.orEmpty(),
     locationName = locationName,
     status = parseEnum(status, ScheduledStatus.PLANNED),
     session = session?.toDomain(),
