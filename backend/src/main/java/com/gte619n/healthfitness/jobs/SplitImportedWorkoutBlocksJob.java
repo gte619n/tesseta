@@ -144,7 +144,7 @@ public class SplitImportedWorkoutBlocksJob implements CommandLineRunner {
                 + "Set app.workouts.split.dry-run=false to persist.");
             return;
         }
-        scheduled.saveAll(updated);
+        scheduled.saveSessions(updated);
         log.log(INFO, "SplitImportedWorkoutBlocksJob: persisted {0} split session(s)", updated.size());
     }
 
