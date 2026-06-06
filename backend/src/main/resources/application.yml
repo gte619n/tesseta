@@ -181,6 +181,17 @@ app:
     enabled: ${WORKOUT_PROGRAMS_ENABLED:true}
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${WORKOUT_PROGRAM_GEMINI_MODEL:gemini-3.1-pro-preview}
+  # One-time job (profile job-split-blocks) that rewrites the imported-history
+  # program's flat sessions into warm-up/main/cool-down blocks. Strength is
+  # placed deterministically; warm-up vs cool-down for mobility uses
+  # gemini-3.5-flash (the approved general-work model). Safe defaults: no
+  # user-id → no-op; dry-run on until explicitly disabled.
+  workouts:
+    split:
+      user-id: ${APP_WORKOUTS_SPLIT_USER_ID:}
+      dry-run: ${APP_WORKOUTS_SPLIT_DRY_RUN:true}
+      gemini-enabled: ${APP_WORKOUTS_SPLIT_GEMINI_ENABLED:true}
+      model: ${APP_WORKOUTS_SPLIT_MODEL:gemini-3.5-flash}
   gym:
     bucket: ${GYM_BUCKET:health-fitness-160-gym-photos}
   medications:
