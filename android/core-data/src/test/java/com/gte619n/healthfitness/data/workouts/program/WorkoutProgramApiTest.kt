@@ -81,6 +81,7 @@ class WorkoutProgramApiTest {
                          "repsMax":10,"durationSeconds":null,
                          "intensity":{"kind":"RPE","value":8.0},"restSeconds":90,"tempo":"3-1-1",
                          "notes":null,"deloadModifier":{"setsMultiplier":0.6,"intensityDelta":-1.0},
+                         "loggedSets":null,
                          "exercise":{"exerciseId":"ex1","name":"Back Squat",
                            "primaryMuscles":["quadriceps"],"formCues":["Brace"],
                            "demoFrames":[{"phase":"START","imageUrl":"https://x/a.jpg",
@@ -94,6 +95,40 @@ class WorkoutProgramApiTest {
         assertEquals("Back Squat", presc.exercise?.name)
         assertEquals("RPE", presc.intensity?.kind)
         assertEquals("/api/me/workout-programs/p1", server.takeRequest().path)
+    }
+
+    @Test
+    fun `deep decode tolerates explicit null fields the backend emits`() = runBlocking {
+        // Spring MVC serializes explicit nulls. Imported-history session days have
+        // a null locationId (and prescriptions carry the name in `notes`, with no
+        // embedded exercise). The decode must not blow up on those nulls.
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {"programId":"imported-history","title":"Future.co Training",
+                 "description":null,"goalId":null,"goalTitle":null,
+                 "status":"COMPLETED","source":"MANUAL","startDate":"2023-03-20",
+                 "trainingDays":[],"createdAt":"2023-03-20T00:00:00Z",
+                 "updatedAt":"2023-03-20T00:00:00Z","completedAt":null,
+                 "phases":[{"phaseId":"Phase_1","title":"Phase 1","focus":null,"orderIndex":0,
+                   "status":"COMPLETED","weeks":4,"deloadWeekIndex":null,
+                   "targetStartDate":"2023-03-20","targetEndDate":"2023-04-17",
+                   "days":[{"dayId":"s0","label":"Push Day","dayOfWeek":"mon","locationId":null,
+                     "locationName":null,"orderIndex":0,
+                     "blocks":[{"blockId":"logged","type":"MAIN","title":"Logged","orderIndex":0,
+                       "prescriptions":[{"exerciseId":"ex1","orderIndex":0,"sets":3,"repsMin":null,
+                         "repsMax":null,"durationSeconds":null,"intensity":null,"restSeconds":null,
+                         "tempo":null,"notes":"Bench Press","deloadModifier":null,
+                         "loggedSets":[{"weightLbs":135.0,"reps":8}],"exercise":null}]}]}]}]}
+                """.trimIndent(),
+            ),
+        )
+        val deep = api.get("imported-history")
+        val day = deep.phases.single().days.single()
+        assertEquals("s0", day.dayId)
+        val presc = day.blocks.single().prescriptions.single()
+        assertEquals("Bench Press", presc.notes)
+        assertEquals(1, presc.loggedSets.orEmpty().size)
     }
 
     @Test
