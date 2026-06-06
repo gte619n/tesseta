@@ -30,6 +30,14 @@ data class DeloadModifier(val setsMultiplier: Double?, val intensityDelta: Doubl
 /** A single START/MID/END demo still for an exercise (IMPL-14). */
 data class DemoFrame(val phase: String, val imageUrl: String?)
 
+/**
+ * One set as actually performed in a completed/imported session — the logged
+ * counterpart to the planned [Prescription]. [weightLbs] is the load lifted
+ * (0 for bodyweight); [reps] is the count, nullable when the source only
+ * tracked weight (e.g. imported history).
+ */
+data class LoggedSet(val weightLbs: Double?, val reps: Int?)
+
 /** Compact, embedded exercise info for rendering a prescription + its demo. */
 data class ExerciseSummary(
     val exerciseId: String,
@@ -51,6 +59,8 @@ data class Prescription(
     val tempo: String?,
     val notes: String?,
     val deloadModifier: DeloadModifier?,
+    /** Actual sets performed; populated only for completed/imported sessions. */
+    val loggedSets: List<LoggedSet> = emptyList(),
     /** Embedded by the backend; null only if the backend omits it. */
     val exercise: ExerciseSummary?,
 )

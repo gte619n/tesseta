@@ -172,4 +172,24 @@ class WorkoutProgramMapperTest {
         assertTrue(domain.isDeload)
         assertEquals(DayOfWeek.MON, domain.session?.dayOfWeek)
     }
+
+    @Test
+    fun `logged sets map through and default to empty`() {
+        val planned = PrescriptionDto(exerciseId = "ex1", sets = 3).toDomain()
+        assertTrue(planned.loggedSets.isEmpty())
+
+        val performed = PrescriptionDto(
+            exerciseId = "ex1",
+            sets = 2,
+            loggedSets = listOf(
+                LoggedSetDto(weightLbs = 135.0, reps = 8),
+                LoggedSetDto(weightLbs = 0.0, reps = null),
+            ),
+        ).toDomain()
+        assertEquals(2, performed.loggedSets.size)
+        assertEquals(135.0, performed.loggedSets[0].weightLbs!!, 0.0)
+        assertEquals(8, performed.loggedSets[0].reps)
+        assertEquals(0.0, performed.loggedSets[1].weightLbs!!, 0.0)
+        assertNull(performed.loggedSets[1].reps)
+    }
 }

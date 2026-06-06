@@ -27,9 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,16 +34,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
-import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseDetailSheet
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseMeta
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseSpineNode
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ProgramStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ThisWeekStrip
-import com.gte619n.healthfitness.feature.workouts.program.ui.WorkoutDayCard
+import com.gte619n.healthfitness.feature.workouts.program.ui.WorkoutDayRow
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
@@ -60,6 +55,7 @@ import com.gte619n.healthfitness.ui.theme.type
 fun ProgramDetailRoute(
     onBack: () -> Unit,
     onOpenGoal: (String) -> Unit,
+    onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
     viewModel: ProgramDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -67,6 +63,7 @@ fun ProgramDetailRoute(
         state = state,
         onBack = onBack,
         onOpenGoal = onOpenGoal,
+        onOpenWorkout = onOpenWorkout,
         onRetry = viewModel::refresh,
     )
 }
@@ -76,10 +73,9 @@ fun ProgramDetailScreen(
     state: ProgramDetailUiState,
     onBack: () -> Unit,
     onOpenGoal: (String) -> Unit,
+    onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
     onRetry: () -> Unit,
 ) {
-    var selectedExercise by remember { mutableStateOf<ExerciseSummary?>(null) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -102,13 +98,11 @@ fun ProgramDetailScreen(
                 program = state.program,
                 thisWeek = state.thisWeek,
                 onOpenGoal = onOpenGoal,
-                onOpenExercise = { selectedExercise = it },
+                onOpenWorkout = { phaseId, dayId ->
+                    onOpenWorkout(state.program.programId, phaseId, dayId)
+                },
             )
         }
-    }
-
-    selectedExercise?.let { exercise ->
-        ExerciseDetailSheet(summary = exercise, onDismiss = { selectedExercise = null })
     }
 }
 
@@ -117,7 +111,7 @@ private fun ProgramBody(
     program: WorkoutProgram,
     thisWeek: List<com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout>,
     onOpenGoal: (String) -> Unit,
-    onOpenExercise: (ExerciseSummary) -> Unit,
+    onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
 ) {
     val phases = program.phases.sortedBy { it.orderIndex }
     LazyColumn(
@@ -174,7 +168,7 @@ private fun ProgramBody(
                     phase = phase,
                     isFirst = index == 0,
                     isLast = index == phases.lastIndex,
-                    onOpenExercise = onOpenExercise,
+                    onOpenWorkout = onOpenWorkout,
                 )
             }
         }
@@ -213,7 +207,7 @@ private fun PhaseRow(
     phase: ProgramPhase,
     isFirst: Boolean,
     isLast: Boolean,
-    onOpenExercise: (ExerciseSummary) -> Unit,
+    onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth()) {
         PhaseSpineNode(status = phase.status, isFirst = isFirst, isLast = isLast)
@@ -242,7 +236,10 @@ private fun PhaseRow(
             Spacer(Modifier.height(11.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 phase.days.sortedBy { it.orderIndex }.forEach { day ->
-                    WorkoutDayCard(day = day, onOpenExercise = onOpenExercise)
+                    WorkoutDayRow(
+                        day = day,
+                        onOpen = { onOpenWorkout(phase.phaseId, day.dayId) },
+                    )
                 }
             }
         }
@@ -261,6 +258,7 @@ private fun ProgramDetailPreview() {
             ),
             onBack = {},
             onOpenGoal = {},
+            onOpenWorkout = { _, _, _ -> },
             onRetry = {},
         )
     }

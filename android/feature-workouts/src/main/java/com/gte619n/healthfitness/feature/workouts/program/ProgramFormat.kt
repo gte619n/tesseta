@@ -2,7 +2,9 @@ package com.gte619n.healthfitness.feature.workouts.program
 
 import com.gte619n.healthfitness.domain.common.DayOfWeek
 import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
@@ -92,3 +94,50 @@ private fun restLabel(seconds: Int): String =
 
 private fun trimNumber(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+
+/**
+ * "135 lb × 8 (×2) · 135 lb × 7" — the actual sets performed, when present.
+ * Returns null when the prescription has no logged sets (a plan-only template).
+ * Consecutive identical sets are collapsed with a "(×N)" multiplier to stay
+ * compact; a zero weight reads as "BW" (bodyweight).
+ */
+fun loggedSetsSummary(p: Prescription): String? {
+    if (p.loggedSets.isEmpty()) return null
+    val formatted = p.loggedSets.map { loggedSetLabel(it) }
+    val parts = mutableListOf<String>()
+    var i = 0
+    while (i < formatted.size) {
+        var j = i + 1
+        while (j < formatted.size && formatted[j] == formatted[i]) j++
+        val count = j - i
+        parts += if (count > 1) "${formatted[i]} (×$count)" else formatted[i]
+        i = j
+    }
+    return parts.joinToString(" · ")
+}
+
+private fun loggedSetLabel(s: LoggedSet): String {
+    val lbs = s.weightLbs
+    val weight = when {
+        lbs == null -> null
+        lbs == 0.0 -> "BW"
+        else -> "${trimNumber(lbs)} lb"
+    }
+    val reps = s.reps?.let { "$it" }
+    return when {
+        weight != null && reps != null -> "$weight × $reps"
+        weight != null -> weight
+        reps != null -> "$reps reps"
+        else -> "—"
+    }
+}
+
+/** Total prescribed exercises across all blocks of a day. */
+fun exerciseCount(day: WorkoutDay): Int = day.blocks.sumOf { it.prescriptions.size }
+
+/** "5 exercises" / "1 exercise" / "No exercises" count label for a day. */
+fun exerciseCountLabel(day: WorkoutDay): String = when (val n = exerciseCount(day)) {
+    0 -> "No exercises"
+    1 -> "1 exercise"
+    else -> "$n exercises"
+}
