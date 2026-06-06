@@ -24,12 +24,16 @@ import javax.inject.Singleton
  * pull; these methods additionally fill on a cold miss so a screen opened before
  * the first full sync still renders.
  *
- * - [list] serves the `workoutPrograms` mirror (the program doc embeds the full
- *   phase/day/block tree, so the summary round-trips).
- * - [get] serves the deep DTO from the same mirror row when present (written by a
- *   prior fetch), else fetches + stores it. The raw delta-pulled doc may not
- *   decode to the deep DTO (the #7 raw-doc-vs-DTO gap shared across the branch);
- *   when it doesn't, the read self-heals from the network while online.
+ * - [list] serves the `workoutPrograms` mirror and, while online, proactively
+ *   upgrades every program to its assembled deep tree (see [cacheDeepForOffline])
+ *   so the detail/workout screens render offline. The delta-pulled doc and the
+ *   shallow list row both lack the assembled tree (no embedded exercise
+ *   summaries / flattened trainingDays — the raw-doc-vs-DTO gap), so a row is
+ *   only trusted once [isAssembledDeep] holds.
+ * - [get] serves the mirrored deep doc only when it is a complete assembled tree;
+ *   a shallow list row, a raw delta doc, or an absent row triggers a network
+ *   fetch that persists the assembled deep for offline. Offline, it falls back to
+ *   whatever is cached and only errors when nothing is cached at all.
  * - [calendar] serves the `workoutScheduled` mirror filtered to this program
  *   (rows keyed `"<programId>/<scheduledId>"`, matching the sync id) and date
  *   range, filling for the program on a cold miss.
@@ -56,6 +60,13 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
                     return@runCatching api.list().map { it.toDomain() }
                 }
                 if (programDao.observeActive().first().isEmpty()) fillPrograms()
+                // Ensure each program's full deep tree (phases → days → blocks →
+                // prescriptions + embedded exercise summaries) is cached, so the
+                // detail/workout screens render offline. The delta-pulled doc and
+                // the shallow list row both lack the assembled tree, so we upgrade
+                // them from the network while online; offline failures are ignored
+                // and the existing row is kept (best-effort).
+                cacheDeepForOffline()
                 programDao.observeActive().first()
                     .mapNotNull { decodeProgram(it.payloadJson) }
                     .map { it.toDomain() }
@@ -66,7 +77,17 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 if (support.killSwitchOn()) return@runCatching api.get(programId).toDomain()
-                mirroredDeep(programId)?.toDomain() ?: refreshDeep(programId).toDomain()
+                val cached = mirroredDeep(programId)
+                if (cached.isAssembledDeep()) return@runCatching cached!!.toDomain()
+                // Shallow list row, raw delta doc, or absent: fetch the assembled
+                // deep and persist it for offline. Offline → fall back to whatever
+                // we have rather than failing; only surface the error if we have
+                // nothing cached at all.
+                try {
+                    refreshDeep(programId).toDomain()
+                } catch (e: Exception) {
+                    cached?.toDomain() ?: throw e
+                }
             }
         }
 
@@ -108,6 +129,39 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
 
     private suspend fun mirroredDeep(programId: String): WorkoutProgramDeepDto? =
         programDao.getById(programId)?.let { decodeDeep(it.payloadJson) }
+
+    /**
+     * Upgrade any mirrored program that is not a complete assembled deep tree
+     * (shallow list row, raw delta doc, or undecodable) by fetching it deep and
+     * storing it. Best-effort: each fetch is independent and a network failure
+     * (e.g. offline) leaves the existing row untouched. Self-limiting — once a
+     * program is cached complete, [isAssembledDeep] is true and it is skipped.
+     */
+    private suspend fun cacheDeepForOffline() {
+        val rows = programDao.observeActive().first()
+        for (row in rows) {
+            if (decodeDeep(row.payloadJson).isAssembledDeep()) continue
+            runCatching { refreshDeep(row.id) }
+        }
+    }
+
+    /**
+     * True when a decoded deep doc actually carries the assembled tree — phases
+     * present and every prescription has its embedded exercise summary. Shallow
+     * list rows (no phases) and raw delta docs (phases but `exercise == null`)
+     * return false so callers know to refresh from the network.
+     */
+    private fun WorkoutProgramDeepDto?.isAssembledDeep(): Boolean {
+        val dto = this ?: return false
+        if (dto.phases.isEmpty()) return false
+        return dto.phases.all { phase ->
+            phase.days.all { day ->
+                day.blocks.all { block ->
+                    block.prescriptions.all { it.exercise != null }
+                }
+            }
+        }
+    }
 
     /** Fill the scheduled mirror for one program over its whole horizon. */
     private suspend fun fillScheduled(programId: String): List<ScheduledWorkoutDto> {
