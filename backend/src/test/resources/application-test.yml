@@ -74,6 +74,11 @@ app:
     # IMPL-15: skip the live GeminiWorkoutProgramChatClient (needs an API key).
     # Chat tests install a fake WorkoutProgramChatClient via @TestConfiguration.
     enabled: false
+  workouts:
+    split:
+      # Skip the live GeminiWorkoutBlockClassifier (needs an API key at
+      # construction). The split job only runs under its own profile.
+      gemini-enabled: false
   equipment:
     # EquipmentParserService.<init> throws if the parser API key is missing,
     # and the unconditional BulkImportService needs an EquipmentParser bean
