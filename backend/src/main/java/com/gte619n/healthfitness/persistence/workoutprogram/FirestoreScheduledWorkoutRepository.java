@@ -77,6 +77,30 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
         }
     }
 
+    @Override
+    public void saveSessions(List<ScheduledWorkout> items) {
+        if (items.isEmpty()) {
+            return;
+        }
+        // Replace the `session` field wholesale via update() — SetOptions.merge()
+        // deep-merges and does NOT replace the nested blocks array, so a merged
+        // write keeps the old blocks. update(field, value) overwrites the whole
+        // session map (new blocks included) while preserving the doc's other
+        // fields (status, syncStatus, completedAt, …).
+        for (int start = 0; start < items.size(); start += MAX_BATCH) {
+            WriteBatch batch = firestore.batch();
+            for (ScheduledWorkout sw : items.subList(start, Math.min(start + MAX_BATCH, items.size()))) {
+                List<Map<String, Object>> days = FirestoreWorkoutProgramRepository.daysToWire(
+                    sw.session() == null ? List.of() : List.of(sw.session()));
+                Object session = days.isEmpty() ? null : days.get(0);
+                batch.update(
+                    collection(sw.userId(), sw.programId()).document(sw.scheduledId()),
+                    "session", session);
+            }
+            await(batch.commit());
+        }
+    }
+
     private static Map<String, Object> toBody(ScheduledWorkout sw) {
         Map<String, Object> body = new HashMap<>();
         body.put("date", sw.date().toString());

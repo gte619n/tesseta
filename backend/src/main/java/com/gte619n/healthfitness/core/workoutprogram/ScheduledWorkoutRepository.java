@@ -47,6 +47,17 @@ public interface ScheduledWorkoutRepository {
         }
     }
 
+    /**
+     * Overwrite just the {@code session} snapshot of existing sessions (e.g. to
+     * re-block a day) without merging. The default delegates to {@link #saveAll};
+     * the Firestore impl must <em>replace</em> the nested session field wholesale,
+     * because {@code SetOptions.merge()} does not replace nested arrays (so a
+     * merged write would leave the old blocks in place). Items must already exist.
+     */
+    default void saveSessions(List<ScheduledWorkout> items) {
+        saveAll(items);
+    }
+
     /** Remove future PLANNED sessions for a program (used before re-materializing). */
     void deletePlannedFrom(String userId, String programId, LocalDate from);
 }
