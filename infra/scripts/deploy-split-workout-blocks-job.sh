@@ -31,15 +31,18 @@ RUNTIME_SA="health-fitness-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 
 USER_ID="${APP_WORKOUTS_SPLIT_USER_ID:?set APP_WORKOUTS_SPLIT_USER_ID to the target Firebase uid}"
 DRY_RUN="${APP_WORKOUTS_SPLIT_DRY_RUN:-true}"
+# Which Firestore database to target. Deployed data lives in "production"; the
+# (default) database is the local/dev one. Override to run against either.
+DB_ID="${FIRESTORE_DATABASE_ID:-production}"
 
 SECRETS="OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest"
 
 # SPRING_PROFILES_ACTIVE=job-split-blocks activates the job. The warm-up/cool-down
 # classifier is on by default (app.workouts.split.gemini-enabled defaults true)
 # and uses the wired GEMINI_API_KEY.
-ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@SPRING_PROFILES_ACTIVE=job-split-blocks@APP_WORKOUTS_SPLIT_USER_ID=${USER_ID}@APP_WORKOUTS_SPLIT_DRY_RUN=${DRY_RUN}"
+ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=${DB_ID}@SPRING_PROFILES_ACTIVE=job-split-blocks@APP_WORKOUTS_SPLIT_USER_ID=${USER_ID}@APP_WORKOUTS_SPLIT_DRY_RUN=${DRY_RUN}"
 
-echo "==> Deploying Cloud Run Job ${JOB_NAME} (user=${USER_ID}, dryRun=${DRY_RUN})"
+echo "==> Deploying Cloud Run Job ${JOB_NAME} (user=${USER_ID}, db=${DB_ID}, dryRun=${DRY_RUN})"
 gcloud run jobs deploy "${JOB_NAME}" \
   --image="${IMAGE}" \
   --region="${REGION}" \
