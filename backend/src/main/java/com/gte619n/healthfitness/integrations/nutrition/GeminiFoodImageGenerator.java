@@ -104,26 +104,34 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
 
     /**
      * Style for a single PACKAGED PRODUCT (a protein shake, a tub of yogurt, an
-     * energy bar). The image must depict the product itself — its food/drink as
-     * served — NOT a flat-lay of its ingredients and NOT a rendering of its
-     * label, name or brand text.
+     * energy bar). The image must depict the EXACT branded product in its real
+     * retail packaging — recognizable as that product — NOT a genericized
+     * stand-in and NOT a flat-lay of its ingredients. (Brand/label visibility is
+     * deliberately allowed here, unlike every other style in this generator.)
      */
     private static final String PACKAGED_PRODUCT_STYLE = """
         PHOTOGRAPHY SPECIFICATIONS:
-        - A SINGLE serving of the product itself, presented appetizingly on a
-          clean white marble surface (e.g. the shake poured in a clean glass, the
-          yogurt in a simple bowl, the bar unwrapped on a plate)
+        - The EXACT branded product in its real retail packaging (bottle, can,
+          carton, tub, pouch, bar wrapper), shown as one unit standing on a clean
+          white marble surface
+        - Reproduce the product's actual container shape, label design, colors
+          and logo faithfully — it must be recognizable as that exact product
+        - Where natural, a single clean serving of the contents may accompany the
+          package (the shake poured in a glass beside the bottle, the yogurt in a
+          small bowl beside the tub)
         - Soft diffused natural lighting from the upper left
         - Gentle shadows for depth and dimension
         - Shallow depth of field (f/2.8 aperture equivalent)
         - 100mm macro lens perspective
         - Centered composition with generous negative space
-        - Premium editorial food-photography aesthetic
+        - Premium editorial product-photography aesthetic
 
         CRITICAL REQUIREMENTS:
         - Photorealistic rendering of the PRODUCT ITSELF — one single product
+        - The real packaging IS the subject: keep its own label and branding;
+          do NOT invent a different design and do NOT strip the branding
+        - No added text or graphics beyond what is on the product's own packaging
         - Do NOT depict a list of ingredients laid out separately
-        - No text, labels, packaging copy, brand names or nutrition panels visible
         - No human hands or body parts
         - No background clutter or props
         """;
@@ -151,6 +159,25 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
           the same dish in our style.
         """;
 
+    /**
+     * Reference-image prompt for a packaged product: the user's capture photo
+     * shows the exact product, so the studio shot must reproduce that same
+     * product — container, label and branding — not a generic equivalent.
+     */
+    private static final String PRODUCT_REFERENCE_PROMPT_TEMPLATE = """
+        The attached image is a real photo of a packaged product a user logged.
+
+        Generate a NEW professional product photograph of the SAME EXACT product —
+        the same brand, container shape, label design and colors shown in the
+        reference — re-staged cleanly in our consistent studio style.
+
+        PRODUCT FROM REFERENCE: %s
+
+        %s
+        - Do NOT copy the reference image pixels — re-stage the same exact
+          product in our studio style.
+        """;
+
     private final Client client;
     private final String model;
 
@@ -176,14 +203,13 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
             String prompt = String.format(RAW_INGREDIENT_PROMPT_TEMPLATE, name, RAW_INGREDIENT_STYLE);
             return execute(prompt, food.name());
         }
-        // Packaged products render as the single product itself (using the
-        // capture photo as a visual reference when available), never as a
-        // breakdown of ingredients or a picture of the label/name.
+        // Packaged products render as the exact branded product itself (using
+        // the capture photo as the visual reference when available), never as a
+        // genericized stand-in or a breakdown of ingredients.
         if (isPackagedProduct(food)) {
-            String name = (food.name() == null || food.name().isBlank())
-                ? "a packaged product" : food.name();
+            String name = productSubject(food);
             if (referencePhoto != null && referencePhoto.length > 0) {
-                String prompt = String.format(REFERENCE_PROMPT_TEMPLATE, name, PACKAGED_PRODUCT_STYLE);
+                String prompt = String.format(PRODUCT_REFERENCE_PROMPT_TEMPLATE, name, PACKAGED_PRODUCT_STYLE);
                 String mime = (referenceMime == null || referenceMime.isBlank()) ? "image/jpeg" : referenceMime;
                 return executeWithReference(prompt, referencePhoto, mime, food.name());
             }
@@ -208,6 +234,18 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
     /** Single packaged products are tagged with the "product" category. */
     private static boolean isPackagedProduct(CatalogFood food) {
         return food.category() != null && food.category().equalsIgnoreCase("product");
+    }
+
+    /** Product subject "<brand> — <name>" when the brand isn't already in the name. */
+    private static String productSubject(CatalogFood food) {
+        String name = (food.name() == null || food.name().isBlank())
+            ? "a packaged product" : food.name();
+        String brand = food.brand();
+        if (brand != null && !brand.isBlank()
+            && !name.toLowerCase().contains(brand.toLowerCase())) {
+            return brand + " — " + name;
+        }
+        return name;
     }
 
     /** Human-readable subject: "<name> (<category>)" when a category exists. */
@@ -237,8 +275,11 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
             log.warn("Food image generation with reference failed for {}: {}", foodName, e.getMessage());
             // Fall back to text-only generation.
             return execute(
-                prompt.replace("The attached image is a real photo of a meal a user logged.",
-                    "Based on the subject description below,"),
+                prompt
+                    .replace("The attached image is a real photo of a meal a user logged.",
+                        "Based on the subject description below,")
+                    .replace("The attached image is a real photo of a packaged product a user logged.",
+                        "Based on the product description below,"),
                 foodName);
         }
     }

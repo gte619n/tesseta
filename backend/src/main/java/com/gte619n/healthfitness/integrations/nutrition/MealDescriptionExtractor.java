@@ -52,9 +52,16 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
         "a chocolate protein shake"). First decide what kind of meal it is:
 
         A) A SINGLE PACKAGED PRODUCT — one branded/packaged good (a shake, a tub of
-           yogurt, an energy bar). Treat it as ONE product:
+           yogurt, an energy bar). Treat it as ONE product and identify the EXACT
+           product when the description names one:
            - set isPackagedProduct = true,
-           - return exactly ONE item whose name is the product itself,
+           - when the description names or implies a specific branded product,
+             set brand to the brand name alone (e.g. "Fairlife") and use the
+             FULL product name including brand, line and flavor/variant (e.g.
+             "Fairlife Core Power Elite 42g, Chocolate"); prefer that product's
+             official nutrition values when you know them,
+           - otherwise return exactly ONE item with a specific generic name and
+             leave brand unset,
            - mealName = that same product name.
 
         B) A PREPARED MEAL — a plate or bowl with distinct components. Treat it as
@@ -186,15 +193,17 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
         return null;
     }
 
-    /** Build the analysis (name + packaged flag + items) from tool args. */
+    /** Build the analysis (name + brand + packaged flag + items) from tool args. */
     static MealPhotoAnalyzer.MealAnalysis toAnalysis(Map<String, Object> args) {
         if (args == null) {
             return new MealPhotoAnalyzer.MealAnalysis(null, false, List.of());
         }
         String mealName = str(args.get("mealName"));
+        String brand = str(args.get("brand"));
         boolean packaged = bool(args.get("isPackagedProduct"));
         return new MealPhotoAnalyzer.MealAnalysis(
             (mealName != null && !mealName.isBlank()) ? mealName : null,
+            (brand != null && !brand.isBlank()) ? brand : null,
             packaged,
             toItems(args));
     }
@@ -294,6 +303,9 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
                 "isPackagedProduct", Schema.builder().type(Type.Known.BOOLEAN)
                     .description("True if the description is a single packaged product rather "
                         + "than a prepared multi-ingredient meal.").build(),
+                "brand", Schema.builder().type(Type.Known.STRING)
+                    .description("For a packaged product: the brand name alone (e.g. 'Fairlife'), "
+                        + "when the description names or implies one. Omit otherwise.").build(),
                 "items", Schema.builder().type(Type.Known.ARRAY).items(item).build()
             ))
             .required("mealName", "isPackagedProduct", "items")

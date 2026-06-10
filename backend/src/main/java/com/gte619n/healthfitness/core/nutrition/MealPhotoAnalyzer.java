@@ -45,16 +45,26 @@ public interface MealPhotoAnalyzer {
     /**
      * Outcome of analyzing a meal/product photo.
      *
-     * @param mealName        short natural name for the dish, or null when unknown
+     * @param mealName        short natural name for the dish, or null when unknown.
+     *                        For a packaged product this is the EXACT product name
+     *                        (brand + product + flavor/variant) when legible.
+     * @param brand           the brand name alone for a packaged product (e.g.
+     *                        "Fairlife"), or null when not a product / not legible
      * @param packagedProduct true when the photo is a single packaged product
      *                        (treat as one food, not a multi-ingredient meal)
      * @param items           the identified components (one for a packaged product)
      */
     record MealAnalysis(
         String mealName,
+        String brand,
         boolean packagedProduct,
         List<MealItem> items
-    ) {}
+    ) {
+        /** Brand-less convenience used by prepared-meal paths and test doubles. */
+        public MealAnalysis(String mealName, boolean packagedProduct, List<MealItem> items) {
+            this(mealName, null, packagedProduct, items);
+        }
+    }
 
     /**
      * A single proposed food component identified on the plate.

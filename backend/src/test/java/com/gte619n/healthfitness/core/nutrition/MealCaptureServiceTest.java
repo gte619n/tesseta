@@ -52,6 +52,46 @@ class MealCaptureServiceTest {
     }
 
     @Test
+    void packagedProduct_carriesExactNameAndBrand_ontoCatalogFood() {
+        Fixture f = new Fixture();
+        FoodEntry placeholder = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.SNACK, "ref://b");
+
+        MealPhotoAnalyzer analyzer = analyzer(new MealAnalysis(
+            "Fairlife Core Power Elite 42g, Chocolate", "Fairlife", true, List.of(
+                new MealItem("Fairlife Core Power Elite 42g, Chocolate", 414.0,
+                    new Macros(56.0, 10.1, 1.9, 1.1, 0.0, 1.2), 0.95))));
+
+        f.svc.analyzeAndFinalize(USER, DATE, placeholder.entryId(), BYTES, "image/jpeg", "ref://b", analyzer);
+
+        FoodEntry done = f.entries.findById(USER, DATE, placeholder.entryId()).orElseThrow();
+        assertEquals("Fairlife Core Power Elite 42g, Chocolate", done.foodName(),
+            "the entry is named for the exact product, not a generic stand-in");
+        CatalogFood food = f.catalog.find(done.foodId()).orElseThrow();
+        assertEquals("Fairlife", food.brand());
+        assertEquals("product", food.category());
+    }
+
+    @Test
+    void repeatCaptureOfSameProduct_reusesTheCatalogFood() {
+        MealAnalysis product = new MealAnalysis(
+            "Fairlife Core Power Elite 42g, Chocolate", "Fairlife", true, List.of(
+                new MealItem("Fairlife Core Power Elite 42g, Chocolate", 414.0,
+                    new Macros(56.0, 10.1, 1.9, 1.1, 0.0, 1.2), 0.95)));
+        Fixture f = new Fixture();
+        MealPhotoAnalyzer analyzer = analyzer(product);
+
+        FoodEntry p1 = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.SNACK, "ref://1");
+        f.svc.analyzeAndFinalize(USER, DATE, p1.entryId(), "img-1".getBytes(), "image/jpeg", "ref://1", analyzer);
+        FoodEntry p2 = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.SNACK, "ref://2");
+        f.svc.analyzeAndFinalize(USER, DATE, p2.entryId(), "img-2".getBytes(), "image/jpeg", "ref://2", analyzer);
+
+        FoodEntry e1 = f.entries.findById(USER, DATE, p1.entryId()).orElseThrow();
+        FoodEntry e2 = f.entries.findById(USER, DATE, p2.entryId()).orElseThrow();
+        assertEquals(e1.foodId(), e2.foodId(),
+            "the second capture of the same exact product reuses the catalog food");
+    }
+
+    @Test
     void preparedMeal_finalizesAsComposite_withNaturalName_andIngredients() {
         Fixture f = new Fixture();
         FoodEntry placeholder = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.DINNER, "ref://2");
@@ -221,7 +261,10 @@ class MealCaptureServiceTest {
             return foods.stream().filter(f -> f.foodId().equals(foodId)).findFirst();
         }
         @Override public List<CatalogFood> searchByNamePrefix(String prefixLower, int limit) {
-            return List.of();
+            return foods.stream()
+                .filter(f -> f.nameLower() != null && f.nameLower().startsWith(prefixLower))
+                .limit(limit)
+                .toList();
         }
         @Override public Optional<CatalogFood> findByBarcode(String code) { return Optional.empty(); }
         @Override public List<CatalogFood> findByImageStatus(FoodImageStatus status, int limit) {
