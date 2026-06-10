@@ -199,6 +199,45 @@ public class NutritionService {
     }
 
     /**
+     * Re-log an existing entry onto another day/meal: a one-tap repeat from the
+     * "recent meals" list. The copy reuses everything already computed — catalog
+     * {@code foodId}s, the frozen macros snapshot, the ingredient breakdown and
+     * the finished-meal image — so no catalog foods are duplicated and no AI
+     * image work re-runs. The source's capture-photo linkage (photoRef/
+     * contentHash) is deliberately not copied; it belongs to the original.
+     */
+    public FoodEntry relogEntry(
+        String userId, LocalDate targetDate, MealType meal,
+        LocalDate sourceDate, String sourceEntryId) {
+        requireUser(userId);
+        requireDate(targetDate);
+        requireDate(sourceDate);
+        if (meal == null) {
+            throw new IllegalArgumentException("meal is required");
+        }
+        FoodEntry source = entries.findById(userId, sourceDate, sourceEntryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + sourceEntryId));
+        if (source.analysisStatus() == EntryAnalysisStatus.ANALYZING
+            || source.analysisStatus() == EntryAnalysisStatus.FAILED) {
+            throw new IllegalArgumentException("cannot re-log an unfinished entry");
+        }
+        boolean hasMealImage = source.mealImageUrl() != null;
+        FoodEntry copy = new FoodEntry(
+            userId, targetDate, UUID.randomUUID().toString(), meal,
+            source.foodId(), source.foodName(), source.servingLabel(), source.servingGrams(),
+            source.quantity(),
+            source.macros() != null ? source.macros().withDerivedCalories() : null,
+            null, null, source.source(),
+            source.ingredients() != null ? withDerivedCalories(source.ingredients()) : null,
+            source.mealImageUrl(),
+            hasMealImage ? FoodImageStatus.READY : FoodImageStatus.NONE,
+            EntryAnalysisStatus.NONE, null, null);
+        entries.save(copy);
+        recomputeDay(userId, targetDate);
+        return copy;
+    }
+
+    /**
      * Log a composite meal (a photo-logged plate) as a single entry carrying its
      * {@code ingredients}. The entry's macros are the sum of the ingredients'
      * portion macros; the finished-meal image is generated separately (the

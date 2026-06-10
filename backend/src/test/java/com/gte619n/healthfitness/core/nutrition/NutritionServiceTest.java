@@ -103,6 +103,34 @@ class NutritionServiceTest {
     }
 
     @Test
+    void relogEntry_copiesEverything_withoutPhotoLinkage() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate monday = LocalDate.of(2026, 5, 18);
+        LocalDate friday = LocalDate.of(2026, 5, 22);
+
+        FoodEntry original = svc.addCompositeMeal(
+            USER, monday, MealType.LUNCH, "Salmon & Rice",
+            List.of(ingredient("Salmon", 100.0), ingredient("Rice", 100.0)),
+            EntrySource.PHOTO);
+        svc.setEntryMealImage(USER, monday, original.entryId(), "http://img/meal.png", FoodImageStatus.READY);
+
+        FoodEntry copy = svc.relogEntry(USER, friday, MealType.DINNER, monday, original.entryId());
+
+        assertEquals("Salmon & Rice", copy.foodName());
+        assertEquals(MealType.DINNER, copy.meal());
+        assertEquals(friday, copy.date());
+        assertEquals(2, copy.ingredients().size());
+        assertEquals(200.0, copy.macros().caloriesKcal(), 1e-9);
+        assertEquals("http://img/meal.png", copy.mealImageUrl(), "the finished-meal image is reused");
+        assertEquals(FoodImageStatus.READY, copy.mealImageStatus());
+        assertTrue(copy.entryId() != null && !copy.entryId().equals(original.entryId()));
+        assertEquals(200.0, svc.findByDate(USER, friday).orElseThrow().caloriesKcal(), 1e-9,
+            "the target day's rollup includes the re-logged entry");
+    }
+
+    @Test
     void compositeMealPortion_scalesTheWholeMealTotal() {
         InMemNutrition rollups = new InMemNutrition();
         InMemEntries entries = new InMemEntries();

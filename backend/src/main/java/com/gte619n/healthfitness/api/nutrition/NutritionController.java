@@ -497,6 +497,29 @@ public class NutritionController {
         return picked.stream().map(e -> toResponse(e, foods)).toList();
     }
 
+    /**
+     * One-tap re-log of a recent entry: copies the source entry onto
+     * {@code date} (defaulting the meal to the current local hour's), reusing
+     * its catalog foods, macros snapshot, ingredients and finished-meal image —
+     * no AI work re-runs.
+     */
+    @PostMapping("/{date}/relog")
+    public ResponseEntity<EntryResponse> relog(
+        @PathVariable LocalDate date,
+        @RequestBody RelogRequest body
+    ) {
+        if (body == null || body.sourceDate() == null
+            || body.sourceEntryId() == null || body.sourceEntryId().isBlank()) {
+            throw new IllegalArgumentException("sourceDate and sourceEntryId are required");
+        }
+        String userId = currentUser.get().userId();
+        MealType resolved = body.meal() != null ? body.meal() : mealForHour(LocalTime.now().getHour());
+        FoodEntry entry = nutrition.relogEntry(
+            userId, date, resolved, body.sourceDate(), body.sourceEntryId());
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
+    }
+
     /** Identity for recent-meals dedupe: foodId when present, else kind + name. */
     private static String recentKey(FoodEntry e) {
         if (e.foodId() != null && !e.foodId().isBlank()) {
@@ -620,6 +643,13 @@ public class NutritionController {
     public record DescribeMealRequest(
         String mealId,
         String description,
+        MealType meal
+    ) {}
+
+    /** Request for {@code POST /{date}/relog}: copy a past entry onto this day. */
+    public record RelogRequest(
+        LocalDate sourceDate,
+        String sourceEntryId,
         MealType meal
     ) {}
 

@@ -160,3 +160,31 @@ Firestore query per day (day-keyed subcollections have no cross-day query
 without a collection-group index); at 14 reads per open of the add sheet
 this is fine for a personal app — revisit with a collection-group index if
 it ever matters.
+
+---
+
+## Part A1 — reminder config (backend)
+
+### A1-1: One settings document instead of fields on Medication/TimeSlot
+**Q:** The spec said `TimeSlot.reminderTime` + `Medication.remindersEnabled`.
+**Decision:** Implemented as a single preferences doc
+(`users/{u}/settings/medicationReminders`) holding the master switch, the
+four window times, AND per-medication overrides `{enabled, times{window→HH:mm}}`
+keyed by medicationId. Rationale: reminder timing is a user preference, not
+part of the medical record — this avoids touching the Medication schema, its
+change-history/audit log, every DTO, and the Android Room mirror payloads.
+The resolution rule is unchanged from the spec: override → user window time →
+built-in default (06:00/12:00/18:00/21:30).
+**Trade-off:** overrides for deleted medications linger in the doc (harmless,
+ignored at resolution time).
+
+### A1-2: Scheduling stays on-device
+The backend stores config only; Android computes alarms from the medication
+mirror + this settings doc. PUT writes fan out under a new
+`medicationReminderSettings` collection tag so other devices replan. Android
+fetches the settings via REST and caches them locally (no new Room mirror
+table needed).
+
+### A1-3: Times on the wire are "HH:mm" strings, windows by enum name
+Matches the existing date-as-ISO-string convention in Firestore docs and
+keeps the DTO trivially JSON-friendly on both clients.
