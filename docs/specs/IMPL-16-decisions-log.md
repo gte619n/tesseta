@@ -116,3 +116,47 @@ preference. The capture flow is the one that produces true product entries.
 Matching an AI-identified product to an Open Food Facts entry (for canonical
 macros/barcode) was considered and deferred — no reliable join key without
 the user scanning the barcode, which the barcode flow already handles.
+
+---
+
+## Parts B1 + E1 — async describe & recent meals (backend)
+
+### B1-1: New endpoint instead of changing the existing one
+**Q:** Make `POST /{date}/describe-meal` async, or add a sibling?
+**Decision:** New `POST /{date}/describe-meal-async`; the synchronous
+endpoint and the two-phase `/api/nutrition/describe` preview endpoint remain
+untouched so the web client keeps working until it migrates and third
+parties/old app builds never break.
+
+### B1-2: Placeholder is named with the user's own text
+The pending row shows the typed description (first 60 chars) rather than
+"Analyzing photo…", and a failed resolution KEEPS that text (the photo path
+still renames to "Couldn't read photo"). The user can see what they asked
+for and retry/delete.
+
+### B1-3: Placeholder source is MANUAL
+Described meals were already logged with `EntrySource.MANUAL` by
+`logResolvedMeal`; the placeholder matches, and `markAnalysisFailed` uses
+source==PHOTO to decide whether to rename. The 5-minute stale-ANALYZING
+sweep covers describe placeholders for free.
+
+### E1-1: Recent meals returns `EntryResponse` objects
+**Q:** Define a new RecentMeal DTO?
+**Decision:** No — `EntryResponse` already carries name, image, macros,
+serving, quantity, full ingredient breakdown (with per-100g baselines),
+date and meal: everything a one-tap re-log needs through the existing
+add-entry/composite-meal endpoints. Less wire surface to maintain.
+
+### E1-2: Dedupe identity
+`foodId` when present (catalog/barcode/product foods); otherwise
+kind-prefixed normalized name (`meal:`/`manual:` + lowercased name) so a
+composite "Chicken bowl" doesn't collide with a manual quick-add of the same
+name. Newest occurrence wins (ordering by `createdAt` desc, nulls last).
+
+### E1-3: Recency beats frequency (per user's interview choice), bounds clamped
+`days` clamps to [1,60], `limit` to [1,50]; defaults 14/20. ANALYZING,
+FAILED and blank-named entries are skipped. Implementation reads one
+Firestore query per day (day-keyed subcollections have no cross-day query
+without a collection-group index); at 14 reads per open of the add sheet
+this is fine for a personal app — revisit with a collection-group index if
+it ever matters.
