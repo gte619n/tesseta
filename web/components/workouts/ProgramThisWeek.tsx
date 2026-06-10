@@ -22,9 +22,13 @@ function formatDayDate(iso: string): string {
 
 export function ProgramThisWeek({
   sessions,
+  today,
   logSession,
 }: {
   sessions: ScheduledWorkoutResponse[];
+  // Today as YYYY-MM-DD, computed by the server page on the same request
+  // clock as the week range. Passed as a prop so SSR and hydration agree.
+  today: string;
   // Server action: completion upsert for one of this program's sessions
   // (ADR-0012 D6 — log today's result / edit actuals, no live logger).
   logSession: (
@@ -53,6 +57,7 @@ export function ProgramThisWeek({
           <SessionRow
             key={s.scheduledId}
             session={s}
+            today={today}
             onOpenExercise={setSheetExercise}
             onLog={setLogTarget}
           />
@@ -74,14 +79,21 @@ export function ProgramThisWeek({
 
 function SessionRow({
   session,
+  today,
   onOpenExercise,
   onLog,
 }: {
   session: ScheduledWorkoutResponse;
+  today: string;
   onOpenExercise: (e: PrescriptionExercise) => void;
   onLog: (s: ScheduledWorkoutResponse) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // IMPL-16 Q4: no "Log result" on sessions dated strictly after today —
+  // the web doesn't invite pre-logging future work (the server stays
+  // permissive, D4). A future row that is already COMPLETED/SKIPPED keeps
+  // its "Edit result" affordance so existing actuals remain correctable.
+  const canLog = session.status !== "PLANNED" || session.date <= today;
   return (
     <div
       className={`rounded-[10px] border-[0.5px] px-4 py-3 ${
@@ -112,13 +124,15 @@ function SessionRow({
             </span>
           </div>
         </button>
-        <button
-          type="button"
-          onClick={() => onLog(session)}
-          className="caps-mono shrink-0 cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-2.5 py-1 text-[10px] tracking-[0.06em] text-secondary hover:text-primary"
-        >
-          {session.status === "PLANNED" ? "Log result" : "Edit result"}
-        </button>
+        {canLog ? (
+          <button
+            type="button"
+            onClick={() => onLog(session)}
+            className="caps-mono shrink-0 cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-2.5 py-1 text-[10px] tracking-[0.06em] text-secondary hover:text-primary"
+          >
+            {session.status === "PLANNED" ? "Log result" : "Edit result"}
+          </button>
+        ) : null}
       </div>
 
       {open ? (

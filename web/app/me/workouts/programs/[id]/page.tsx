@@ -40,6 +40,14 @@ function thisWeekRange(): { from: string; to: string } {
   return { from: fmt(monday), to: fmt(sunday) };
 }
 
+// Today as YYYY-MM-DD on the same request clock as thisWeekRange(), so the
+// "Log result" gating (ADR-0012 / IMPL-16 Q4: no pre-logging future sessions)
+// agrees with which rows count as "this week". Computed server-side per
+// request (the page is force-dynamic) and passed down as a prop — SSR-safe.
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default async function ProgramDetailPage(props: {
   params: Promise<{ id: string }>;
 }) {
@@ -146,7 +154,11 @@ export default async function ProgramDetailPage(props: {
           <h2 className="caps-mono mb-3 text-[10px] tracking-[0.06em] text-tertiary">
             This week
           </h2>
-          <ProgramThisWeek sessions={weekSessions} logSession={logSession} />
+          <ProgramThisWeek
+            sessions={weekSessions}
+            today={todayIso()}
+            logSession={logSession}
+          />
         </section>
 
         {/* Roadmap */}
