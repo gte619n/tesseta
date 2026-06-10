@@ -64,3 +64,55 @@ untouched days keep their original kcal.
 Four backend tests asserted calorie values inconsistent with their own macro
 fixtures (e.g. label kcal 200 vs derived 192). The expectations were updated
 to the derived values — this is precisely the intended behavior change.
+
+---
+
+## Part C — exact packaged products
+
+### C-1: Product name format
+**Q:** Where does the exact identity live — separate brand/name fields or one
+display name?
+**Decision:** The item/entry *name* is the full product name (brand + line +
+flavor/variant, e.g. "Fairlife Core Power Elite 42g, Chocolate"); `brand`
+additionally lands in `CatalogFood.brand` (field already existed). The prompt
+instructs the model to prefer the product's *official nutrition values* when
+it recognizes the exact product.
+**Where:** `MealPhotoExtractor`, `MealDescriptionExtractor` (prompt + tool
+schema + parsing), `MealCaptureService.finalizeProduct`.
+
+### C-2: Unrecognizable brand falls back to specific-generic
+When no brand is legible/recognizable the model is told to use a specific
+generic name ("Chocolate protein shake") and leave brand unset — same as old
+behavior, so the change is strictly additive.
+
+### C-3: Repeat captures reuse the catalog food
+**Q:** Every product capture used to mint a new catalog food + new image.
+**Decision:** `FoodCatalogService.findProduct(name, brand)` matches an
+existing `category="product"` food by case-insensitive exact name (+ brand
+when present) before creating. Reuse also skips a redundant image generation.
+Trade-off: matching is by AI-extracted name, so a small naming variation
+("42g" vs "42 g") still creates a second food — acceptable, self-corrects as
+the model is consistent for identical photos.
+
+### C-4: Brand visibility allowed in generated product images only
+**Q:** The house image style globally forbids text/branding; the user wants
+the exact product depicted.
+**Decision:** The packaged-product style now *requires* faithful reproduction
+of the real container, label and logo, and forbids only *added* text beyond
+the product's own packaging. A new product-specific reference-photo prompt
+("same exact product, re-staged in studio style") replaces the meal-oriented
+reference prompt for products. Ingredient and plated-meal prompts keep the
+no-branding rule.
+**Note for review:** generated images may now include trademarked packaging;
+fine for a personal app, worth revisiting if Tesseta is ever distributed.
+
+### C-5: Described products stay composite-meal shaped
+The describe flow still logs a saved meal with one ingredient rather than a
+single-food product entry (restructuring it was out of scope), but that
+ingredient/meal now carries the exact product name and official-values
+preference. The capture flow is the one that produces true product entries.
+
+### C-6: Barcode/OFF cross-linking deferred
+Matching an AI-identified product to an Open Food Facts entry (for canonical
+macros/barcode) was considered and deferred — no reliable join key without
+the user scanning the barcode, which the barcode flow already handles.

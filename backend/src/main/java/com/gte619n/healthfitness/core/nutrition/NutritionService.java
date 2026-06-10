@@ -120,6 +120,24 @@ public class NutritionService {
     }
 
     /**
+     * All entries logged in the {@code days} days ending at {@code today}
+     * (inclusive). Backs the add-flow's "recent meals" list; the caller
+     * dedupes/orders. Day-keyed subcollections make this one read per day.
+     */
+    public List<FoodEntry> listRecentEntries(String userId, LocalDate today, int days) {
+        requireUser(userId);
+        requireDate(today);
+        if (days < 1) {
+            throw new IllegalArgumentException("days must be >= 1");
+        }
+        List<FoodEntry> out = new ArrayList<>();
+        for (int i = 0; i < days; i++) {
+            out.addAll(entries.findByDate(userId, today.minusDays(i)));
+        }
+        return out;
+    }
+
+    /**
      * Add a food entry to {@code date}. The caller supplies the already-computed
      * {@code macros} snapshot; the service stores it verbatim, generates an
      * {@code entryId}, then recomputes the day rollup.
@@ -288,6 +306,19 @@ public class NutritionService {
      */
     public FoodEntry beginAnalyzingEntry(
         String userId, LocalDate date, MealType meal, String photoRef, String contentHash) {
+        return beginAnalyzingEntry(
+            userId, date, meal, photoRef, contentHash, "Analyzing photo…", EntrySource.PHOTO);
+    }
+
+    /**
+     * Generalized placeholder used by every async-analysis path. The describe
+     * flow passes the user's own description as {@code placeholderName} (so the
+     * pending row reads as what they typed) with {@code MANUAL} source and no
+     * photo; the capture flow passes "Analyzing photo…" + {@code PHOTO}.
+     */
+    public FoodEntry beginAnalyzingEntry(
+        String userId, LocalDate date, MealType meal, String photoRef, String contentHash,
+        String placeholderName, EntrySource source) {
         requireUser(userId);
         requireDate(date);
         if (meal == null) {
@@ -295,8 +326,8 @@ public class NutritionService {
         }
         String entryId = UUID.randomUUID().toString();
         FoodEntry entry = new FoodEntry(
-            userId, date, entryId, meal, null, "Analyzing photo…",
-            null, null, 1.0, Macros.zero(), photoRef, contentHash, EntrySource.PHOTO,
+            userId, date, entryId, meal, null, placeholderName,
+            null, null, 1.0, Macros.zero(), photoRef, contentHash, source,
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null);
         entries.save(entry);
         return entry;
@@ -386,17 +417,20 @@ public class NutritionService {
     }
 
     /**
-     * Mark a placeholder entry's analysis as {@code FAILED} (the photo couldn't
-     * be understood). Keeps the entry so the client can surface the failure and
-     * let the user retry or delete it.
+     * Mark a placeholder entry's analysis as {@code FAILED} (the photo or
+     * description couldn't be understood). Keeps the entry so the client can
+     * surface the failure and let the user retry or delete it. Photo captures
+     * get the explanatory name; a described placeholder keeps the user's own
+     * description as its name.
      */
     public void markAnalysisFailed(String userId, LocalDate date, String entryId) {
         requireUser(userId);
         requireDate(date);
         entries.findById(userId, date, entryId).ifPresent(e -> {
+            String name = e.source() == EntrySource.PHOTO ? "Couldn’t read photo" : e.foodName();
             FoodEntry failed = new FoodEntry(
                 e.userId(), e.date(), e.entryId(), e.meal(), e.foodId(),
-                "Couldn’t read photo", e.servingLabel(), e.servingGrams(),
+                name, e.servingLabel(), e.servingGrams(),
                 e.quantity(), e.macros(), e.photoRef(), e.contentHash(), e.source(), e.ingredients(),
                 e.mealImageUrl(), e.mealImageStatus(), EntryAnalysisStatus.FAILED,
                 e.createdAt(), null);

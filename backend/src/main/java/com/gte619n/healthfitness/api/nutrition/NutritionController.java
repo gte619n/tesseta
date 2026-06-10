@@ -426,6 +426,86 @@ public class NutritionController {
         }
     }
 
+    /**
+     * Fire-and-forget describe (the capture-meal pattern): immediately logs an
+     * {@code ANALYZING} placeholder named with the description and returns it
+     * (202); resolution + finalization run in the background and the client
+     * polls the day view until the entry fills in. {@code meal} is optional and
+     * defaults to the meal for the current local hour.
+     */
+    @PostMapping("/{date}/describe-meal-async")
+    public ResponseEntity<EntryResponse> describeMealAsync(
+        @PathVariable LocalDate date,
+        @RequestBody DescribeMealRequest body
+    ) {
+        if (body == null || body.description() == null || body.description().isBlank()) {
+            throw new IllegalArgumentException("description is required");
+        }
+        String userId = currentUser.get().userId();
+        MealType resolved = body.meal() != null ? body.meal() : mealForHour(LocalTime.now().getHour());
+        try {
+            FoodEntry entry = mealDescription.describeMealAsync(
+                userId, date, resolved, body.description());
+            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY, "meal description analysis is unavailable");
+        }
+    }
+
+    /**
+     * Distinct foods/meals logged in the last {@code days} days (default 14),
+     * deduped by identity — catalog/barcode entries by {@code foodId},
+     * composite/described meals and manual quick-adds by normalized name —
+     * newest first. Backs the add flow's one-tap "recent meals" list; each item
+     * carries the serving/macros/ingredients needed to re-log it via the
+     * existing entry endpoints. Failed and still-analyzing entries are skipped.
+     */
+    @GetMapping("/recent-meals")
+    public List<EntryResponse> recentMeals(
+        @RequestParam(required = false, defaultValue = "14") int days,
+        @RequestParam(required = false, defaultValue = "20") int limit
+    ) {
+        int boundedDays = Math.max(1, Math.min(days, 60));
+        int boundedLimit = Math.max(1, Math.min(limit, 50));
+        String userId = currentUser.get().userId();
+        List<FoodEntry> all = new ArrayList<>(
+            nutrition.listRecentEntries(userId, LocalDate.now(), boundedDays));
+        all.sort(java.util.Comparator.comparing(
+            FoodEntry::createdAt,
+            java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+
+        List<FoodEntry> picked = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (FoodEntry e : all) {
+            if (e.analysisStatus() == com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus.ANALYZING
+                || e.analysisStatus() == com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus.FAILED) {
+                continue;
+            }
+            if (e.foodName() == null || e.foodName().isBlank()) {
+                continue;
+            }
+            if (seen.add(recentKey(e))) {
+                picked.add(e);
+                if (picked.size() >= boundedLimit) {
+                    break;
+                }
+            }
+        }
+        Map<String, CatalogFood> foods = loadFoods(picked);
+        return picked.stream().map(e -> toResponse(e, foods)).toList();
+    }
+
+    /** Identity for recent-meals dedupe: foodId when present, else kind + name. */
+    private static String recentKey(FoodEntry e) {
+        if (e.foodId() != null && !e.foodId().isBlank()) {
+            return "food:" + e.foodId();
+        }
+        String name = e.foodName().strip().toLowerCase();
+        return (e.isComposite() ? "meal:" : "manual:") + name;
+    }
+
     /** Re-portion one ingredient of a composite meal and recompute totals. */
     @PatchMapping("/{date}/entries/{entryId}/ingredients/{index}")
     public EntryResponse updateIngredient(
