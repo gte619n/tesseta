@@ -15,9 +15,9 @@ Legend: ✅ shipped · ◐ partial · ⚠️ fixture/placeholder · ➖ not buil
 | Dashboard | ✅ data endpoints | ✅ `/` Suspense-streamed | ◐ live VM, some fixtures | See "Dashboard" below |
 | Blood | ✅ readings + report extraction | ✅ `/me/blood` | ✅ feature-blood | PDF upload via multipart+SSE |
 | Body composition / DEXA | ✅ | ✅ `/me/body-composition` | ✅ feature-body-composition | DEXA upload via multipart+SSE; editable regions |
-| Medications | ✅ + adherence | ✅ `/me/meds` | ✅ feature-medical | Drug lookup via SSE; dosage periods; adherence |
+| Medications | ✅ + adherence + reminder settings | ✅ `/me/meds` | ✅ feature-medical | Drug lookup via SSE; dosage periods; adherence; dose reminders (IMPL-16) — Android-local alarms + grouped check-off notifications, config at `reminder-settings` |
 | Goals | ✅ metric-event engine + Cloud Run Job | ✅ `/me/goals*` | ✅ feature-goals | AI goal chat (Gemini Pro, SSE) → proposal → commit |
-| Nutrition | ✅ logs + capture + describe | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode; describe-a-meal (text → reuse/create `SavedMeal`) backend-only, clients pending; **not** SSE |
+| Nutrition | ✅ logs + capture + describe + recents/relog | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode (background upload on Android); fire-and-forget describe (202 placeholder) on both clients; unified add surface w/ time-inferred meal chip + one-tap recents; calories always derived from macros (4/4/9); exact branded-product recognition (IMPL-16); **not** SSE |
 | Gym & equipment | ✅ + bulk import | ✅ `/me/workouts/gyms*` | ✅ feature-workouts | Bulk CSV import preview/confirm; cover-photo upload |
 | Admin (drugs, equipment) | ✅ `/api/admin/**` | ✅ `/admin/**` | ➖ no mobile admin | Email-gated; intentionally web-only |
 | Workout logging | ➖ `Workout` scaffold only | ➖ | ➖ | Deferred — needs a data-model ADR |

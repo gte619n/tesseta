@@ -242,3 +242,78 @@ In quick-add and entry-edit, the calories field is replaced by a live
 "computed from macros" readout the moment any macro is typed (4/4/9), but
 when protein/carbs/fat are all blank a manual calories field remains — same
 rule as the backend (D-1).
+
+---
+
+## Parts B/D/E — web client
+
+### WEB-1: Per-meal "Add food" buttons kept
+The user's "don't have the buttons" applied to the modal's meal button row
+(now a tappable chip, pre-set from the section you clicked). The per-section
+Add buttons on the page were kept — on web all four meal sections are always
+visible, so they're navigation, not a meal-question. The chip still allows
+overriding.
+
+### WEB-2: Fire-and-forget UX via toast + revalidate
+Describe/relog close the modal immediately; the server action revalidates
+the page so the ANALYZING placeholder (with a pulsing "processing" badge)
+appears on the next render. Errors surface as toasts after the fact.
+`PendingImageRefresher`'s budget was raised from 60 s to ~3 min and now also
+polls while any entry is ANALYZING (the server fails stale placeholders at
+5 min, so polling longer is pointless).
+
+### WEB-3: ANALYZING rows are not editable, but are deletable
+Clicking a processing row does nothing (nothing to edit yet); the delete
+button still works so a mistaken describe can be removed immediately.
+
+---
+
+## Parts A2/A3 — Android reminders
+
+### A2-1: Single-alarm chain instead of N scheduled alarms
+Only the SOONEST upcoming reminder is armed with AlarmManager; firing posts
+the notification and arms the next. Re-armed on app start, boot,
+timezone/clock change, settings save, and a 12-hour WorkManager safety-net.
+Avoids alarm-count limits and stale-alarm cleanup entirely.
+
+### A2-2: Fire-time re-resolution
+The alarm payload carries only the fire timestamp. At fire time the engine
+re-plans from the medication mirror + cached settings and shows only doses
+still untaken — a dose logged in-app after planning silently drops out, and
+medication edits made since planning are honored.
+
+### A2-3: Notification actions within Android's 3-action cap
+≤3 medications ⇒ one "✓ <name>" action each; >3 ⇒ a single "✓ Take all".
+Each action logs adherence through the existing offline outbox (so check-off
+works without connectivity) and re-posts the notification minus the taken
+meds; it cancels automatically when none remain (the user's auto-clear
+requirement). Notification ids derive from the fire time, so morning and
+evening reminders coexist in the shade (persistent-until-acted-on).
+
+### A2-4: Exact alarms with a windowed fallback
+`setExactAndAllowWhileIdle` when the user grants exact-alarm access
+(Android 12+ special access; a settings banner deep-links to it), otherwise
+a 15-minute windowed alarm — reminders still arrive, just less precisely.
+
+### A2-5: Receivers + engine live in core-data, not app
+The engine needs MedicationRepository/AdherenceRepository (core-data) and
+the receivers need Hilt injection; library-manifest merging makes core-data
+the simplest home (the app module only adds the startup replan hook). The
+notification's pill icon is a core-data drawable.
+
+### A2-6: No FCM-triggered replan (v1)
+Medication changes made on another device reach this one via the existing
+sync pull, but don't immediately replan alarms; the app-open replan and the
+12h worker bound the staleness. Wiring replan into the sync engine was
+deferred to keep the sync path untouched.
+
+### A3-1: One settings screen houses everything
+Window default times AND per-medication mute/custom-slot-times live on a
+single "Dose reminders" screen (bell chip on the medications list) rather
+than spreading per-med settings into the add/edit medication form — matching
+the single-document config model (A1-1).
+
+### A2-7: Tapping the notification opens the app's launcher activity
+No deep link to the medications checklist yet — the nav graph has no
+deep-link plumbing and adding it touched MainActivity scope. Flagged as a
+nice-to-have follow-up.

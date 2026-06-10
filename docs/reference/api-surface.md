@@ -48,6 +48,7 @@ Two transport flags appear inline below:
 | `POST /{id}/dosage`, `POST /{id}/discontinue`, `POST /{id}/reactivate` | Dosage-period change / discontinue / reactivate |
 | `GET /api/me/medications/today` | Today's doses across all meds |
 | `GET·POST /{medId}/adherence`, `DELETE /{date}/{window}` | Adherence logging (POST publishes a metric event) |
+| `GET·PUT /api/me/medications/reminder-settings` | Dose-reminder config (IMPL-16): master switch, default "HH:mm" per `TimeWindow`, per-med overrides (mute / custom slot times). Scheduling is on-device; the backend only stores this doc |
 
 ## Drugs (shared catalog)
 | Method · path | Purpose |
@@ -74,6 +75,9 @@ Two transport flags appear inline below:
 | `POST /api/nutrition/capture/meal` **[multipart]**, `POST /capture/label` **[multipart]** | Gemini meal-photo / label extraction |
 | `POST /api/nutrition/describe` `{description}` | Describe a meal → Gemini itemizes, matches a previously-saved meal (user's own first) or creates+saves a new one (macros + generating photo); returns the resolved `SavedMeal` |
 | `POST /api/me/nutrition/{date}/describe-meal` `{mealId?, description?, meal?}` | Log a described meal onto a day as a composite entry — by resolved `mealId`, or one-shot by `description` |
+| `POST /api/me/nutrition/{date}/describe-meal-async` `{description, meal?}` | Fire-and-forget describe (IMPL-16): returns an `ANALYZING` placeholder (202) named with the description; resolution finalizes it server-side and the day view polls it in |
+| `GET /api/me/nutrition/recent-meals?days&limit` | Distinct foods/meals logged recently (deduped by foodId or kind+name, newest first) — backs the add flow's one-tap recents list |
+| `POST /api/me/nutrition/{date}/relog` `{sourceDate, sourceEntryId, meal?}` | One-tap re-log: server-side copy of a past entry (reuses catalog foods, macros, ingredients and the finished-meal image — no AI rework) |
 | `GET /api/foods/search`, `GET /{foodId}`, `GET /barcode/{code}`, `POST`, `POST /{id}/confirm`, `POST /{id}/image/regenerate` | Food catalog |
 
 ## Gyms / equipment

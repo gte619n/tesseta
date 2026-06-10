@@ -1,5 +1,13 @@
 # IMPL-16: Medication Reminders & Nutrition Entry UX
 
+> **Status: implemented** (all seven sequencing steps, on
+> `feature/ui_ux_improvement`). Implementation deviations and the decisions
+> made along the way are recorded in
+> [IMPL-16-decisions-log.md](IMPL-16-decisions-log.md) — notably A1-1
+> (reminder config is one settings document, not Medication fields), AND-1
+> (a new `relog` endpoint backs one-tap recents), and A2-1 (a single-alarm
+> chain rather than N scheduled alarms).
+
 ## Goal of this spec
 
 Two themes, planned together because they were requested together:
