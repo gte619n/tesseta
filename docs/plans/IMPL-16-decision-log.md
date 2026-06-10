@@ -176,6 +176,22 @@ once when the logger opens (same idiom as the nutrition Capture screen's
 CAMERA request), as the manifest comment promised. Best-effort: a denial is
 non-blocking — the foreground service still runs, there's just no shade entry.
 
+### A12 — Q1 fix: tombstone-inclusive program scan (post-review)
+**Decision:** new `WorkoutProgramRepository.findByUserIncludingArchived(userId)`
+(a named method, not a boolean flag — the only flag idiom in the codebase
+toggles a domain `isActive`, not sync tombstones), used by the weekly
+recompute. The in-memory test repository now models the Firestore soft-delete
+(delete tombstones, save revives) so the behavior is testable; service +
+MockMvc tests pin that a completed session under an archived program still
+counts.
+
+### A13 — Q2(b) fix: per-set numeric validation bounds (post-review)
+**Decision:** reject `weightLbs < 0`, `reps < 0`, `rpe ∉ [0,10]`,
+`restSeconds < 0` inside the existing validate() loop (one flat issue list,
+addressed `block '<id>' / prescription <orderIndex>, set <index>`). All
+boundary values stay legal: weight 0 = bodyweight, reps 0, rest 0, rpe 0/10.
+Fail-fast before save is preserved.
+
 ## Web decisions
 
 ### W1 — Modal save prop returns `Promise<void>`
@@ -210,6 +226,19 @@ derivation.
 `web/` has no unit-test runner (no test script; the only web tests are the
 manual Selenium UAT suite in `uat/`, which needs a running stack). Gates run:
 typecheck, lint, build — all green.
+
+### W7 — Q4 gating clock and scope (post-review)
+"Log result" is hidden on this-week rows dated strictly after today. "Today"
+is the server request clock as a UTC `YYYY-MM-DD` (`new Date().toISOString()
+.slice(0, 10)`), computed in the force-dynamic program-detail page beside
+`thisWeekRange()` and passed to `ProgramThisWeek` as a prop — the same clock
+and format that already decide which rows count as "this week", and the same
+`today` derivation used elsewhere in web (nutrition, goal proposals). Passing
+it as a prop keeps SSR and hydration in agreement (no client-clock conditional
+render). Scope: only PLANNED future rows lose the button; a future row already
+COMPLETED/SKIPPED (permissive server, D4) keeps "Edit result" so existing
+actuals stay correctable. The history list is unaffected: the backend
+`/api/me/workout-history` endpoint returns COMPLETED sessions only.
 
 ## Android decisions
 
@@ -287,25 +316,90 @@ unchecked. Start affordances are suppressed while any draft is in flight
 and cross-prescription rest basis are judgment calls — sanity-check before
 this trains auto-progression.
 
+### N10 — Q3 "restore into logger" recovery for parked completions (post-review)
+Built per the Q3 resolution. Detection: `OutboxDao.observeParked(table,
+sentinel)` → `OutboxRepository.parked(table)`; the session repository combines
+it with the draft table and the current `workoutScheduled` mirror into
+`observeParkedCompletions(): Flow<List<ParkedCompletion>>` (programId,
+scheduledId, status, completedAt, loggedSetCount, orphanedSetCount,
+sessionAvailable, dayLabel). UI: a distinct alert-toned `ParkedSessionBanner`
+("finished workout couldn't sync — restore to review") beside the resume
+banner on the workouts hub and program detail, confirming via the shared
+`ConfirmDialog` and dropping into the existing logger route on success.
+Sub-decisions:
+- **Orphan surfacing = confirmation summary, not in-logger markers.** Wire
+  entries whose `(blockId, orderIndex)` no longer exists in the CURRENT
+  snapshot can never be re-uploaded (unknown keys 400, D2) and would re-park a
+  finish if kept in the draft; restoring them as visible-but-unsendable rows
+  would need a draft schema change. Instead the orphaned-set count is computed
+  reactively against the current snapshot and shown in the restore
+  confirmation ("N logged sets no longer match the plan and won't be
+  restored") — explicitly sanctioned by the Q3 task framing; nothing is
+  dropped silently, and the parked payload is only deleted after the user
+  confirms with that knowledge.
+- **Single owner (N4).** `restoreParked` refuses when a draft for the session
+  already exists, and `observeParkedCompletions` suppresses entries whose
+  session has an in-flight draft (the resume banner owns that surface; the new
+  draft's eventual finish supersedes the parked payload via the outbox
+  entity-chain collapse). On successful restore the parked row(s) are deleted
+  — the draft is the single upload owner again.
+- **Mirror/session gone (delta pull removed or archived it, or the row lost
+  its day snapshot).** There is nothing to restore against (the outbox row
+  carries only the D2 wire body, not the prescriptions), so the banner offers
+  a destructive **Discard** instead: `discardParked` deletes the parked row(s)
+  and reverts the optimistic local completion.
+- **Restored draft shape.** `startedAt = completedAt − durationSeconds`
+  (fallback: earliest per-set `completedAt`, then now); `lastActivityAt = now`
+  so the Decision-4 stale sweep can't instantly re-finalize a days-old
+  restored session; the snapshot is the CURRENT mirror payload with the
+  rejected outcome stripped (status PLANNED, no completedAt/duration/
+  loggedSets).
+- **Optimistic mirror revert.** Restore/discard rewrite the still-dirty mirror
+  row back to the cleared snapshot, SYNCED+clean, so calendars stop showing an
+  outcome the server rejected and the next delta pull reconciles with the
+  server's canonical row; a row a pull already replaced (not dirty) is left
+  untouched.
+- **Known wrinkle:** re-finishing a restored session computes
+  `durationSeconds = now − startedAt` (interactive finish path), which
+  overstates duration when the restore happens days later; the per-set
+  timestamps are preserved, and the web edit path remains the corrective
+  lever.
+
+## Review round 1 resolutions (2026-06-10 interview)
+
+The open questions below were reviewed; outcomes:
+
+- **Q1 aggregates** — RESOLVED: include archived. The weekly recompute must
+  scan completed sessions across ALL programs including tombstoned ones;
+  performed work is history regardless of program state. (Fixed in-branch.)
+- **Q2 minors** — RESOLVED: fix the negative-value validation (b) in-branch;
+  defer the phantom tombstone (a) and DbWiper draft loss (c) as known issues.
+- **Q3 parked uploads** — RESOLVED: build "restore into logger" recovery, in
+  this branch: a parked completion re-materializes as a draft so the user can
+  re-log against the current snapshot and re-finish. (Built — see N10.)
+- **Q4 future rows** — RESOLVED: web hides "Log result" on rows dated after
+  today; the server stays permissive (D4 unchanged).
+- **N7 FGS gate** — RESOLVED: keep HIGH_SAMPLING_RATE_SENSORS install-time;
+  write the Play declaration at submission time (phase-2 Health Connect will
+  justify sensors anyway).
+- **N9 rest derivation** — RESOLVED: keep as built (cross-prescription gap,
+  30-min cap); refine when auto-progression is scoped.
+- Remaining open after this round: Q5 device/E2E verification, and the
+  deferred minors above.
+
 ## Open questions for review
 
-1. **Aggregate scope vs archived programs** — the weekly recompute scans
-   programs from `findByUser`, which excludes tombstoned programs; completed
-   sessions under an archived program drop out of the aggregate on the next
-   recompute. Intended?
-2. **Review minors, logged not fixed** (the review fixer handled all four
-   critical/major findings; these three minors remain):
+1. ~~**Aggregate scope vs archived programs**~~ — RESOLVED round 1: include
+   archived; fixed via A12.
+2. **Review minors** — (b) RESOLVED round 1 via A13. Still deferred:
    a. `FirestoreWorkoutRepository.delete()` on a never-completed session
       fabricates a phantom tombstone doc (cosmetic);
-   b. no per-set numeric validation — negative weight/reps are accepted and
-      would poison weekly tonnage;
    c. `DbWiper`'s schema-version wipe (`clearAllTables`) destroys in-flight
       session drafts (rare: only on schemaVersion bumps).
-3. **Parked outbox uploads** (see A10) — no expiry, and the only recovery is
-   the blind manual retry; restoring a parked completion into the logger is a
-   product call.
-4. **Web offers "Log result" on future-dated this-week rows** — D4's
-   permissive transitions allow it; gate or de-emphasize?
+3. ~~**Parked outbox uploads**~~ — RESOLVED round 1: restore-into-logger
+   built via N10.
+4. ~~**Web offers "Log result" on future-dated rows**~~ — RESOLVED round 1:
+   gated to today-and-earlier via W7.
 5. **Sandbox gaps** — not verifiable here, need a device/emulator + deployed
    stack: Room 3→4 migration instrumented test, sync E2E with the new outbox
    parking, foreground-service behavior on a real device, a UAT flow for
@@ -321,3 +415,30 @@ this trains auto-progression.
    phone's mirror row keeps the client-built snapshot until the next delta
    pull replaces it with the server's canonical row (normal IMPL-AND-20
    behavior, just worth knowing when debugging).
+
+### New items from the round-1 fixes
+
+9. **History vs aggregates on archived programs** — with A12, goal metrics
+   count a tombstoned program's completed sessions, but
+   `/api/me/workout-history` iterates live programs only, so those sessions
+   vanish from the history list while still counting toward `weeklyVolume`.
+   Decide whether history should also read archived programs.
+10. **Restore-path concurrency minors** (review round 2, logged not fixed):
+    the mirror revert in `restoreParked` evaluates its dirty-guard on a row
+    read at the top of the method (a concurrent delta pull in that window
+    could be overwritten); and a hypothetical newer non-parked mutation for
+    the same entity isn't suppressed in the parked banner (unreachable in
+    the current single-chain completion flow).
+11. **Re-finish after restore inflates duration** — finishing a restored
+    session computes `durationSeconds = now − startedAt`, so restoring a
+    days-old rejection and immediately finishing yields a multi-day duration.
+    Per-set timestamps are preserved and the web edit form is the corrective
+    lever; a smarter finish-time heuristic is a possible follow-up.
+12. **Web "today" gate uses the server's UTC date** (consistent with how
+    this-week is computed; Cloud Run runs UTC). Users far west of UTC can log
+    "tomorrow's" session a few hours early. True browser-local gating needs a
+    timezone preference or a hydration-safe client clock — product call.
+13. **Firestore program scan cap** — `findByUserIncludingArchived` inherits
+    the pre-existing `limit(200)`; tombstones accumulate forever, so the cap
+    is now reachable in principle. A tombstone TTL/compaction story is a
+    backend follow-up.
