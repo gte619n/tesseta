@@ -7,6 +7,15 @@ autonomously, for post-hoc review. Companion to
 Format: each entry states the question, the decision, the rationale, and
 where in the code it landed.
 
+> **Review outcome (2026-06-10):** all decisions reviewed with the user and
+> ratified as implemented — including the eight raised explicitly: C-4
+> (branded packaging in generated product images stays), D-1 (explicit zero
+> macros derive to 0 kcal), AND-3 (silent drop after 5 failed upload
+> attempts is acceptable for v1), A2-7 (no notification deep link in v1),
+> A1-1 (reminder config as a settings document), A2-6 (app-open/12h replan
+> staleness acceptable), C-5 (described products stay composite-shaped),
+> WEB-1 (web keeps per-meal Add buttons). No follow-up work requested.
+
 ---
 
 ## Part D — calories derived from macros
