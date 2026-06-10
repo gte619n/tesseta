@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
+import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseDetailSheet
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseMeta
@@ -48,6 +50,7 @@ import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ProgramStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ThisWeekStrip
 import com.gte619n.healthfitness.feature.workouts.program.ui.WorkoutDayCard
+import com.gte619n.healthfitness.feature.workouts.session.ui.ParkedSessionBanner
 import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
@@ -67,12 +70,23 @@ fun ProgramDetailRoute(
     viewModel: ProgramDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // A successful restore re-materialized the draft; drop into the logger.
+    LaunchedEffect(state.restoredSession) {
+        state.restoredSession?.let {
+            viewModel.consumeRestoredSession()
+            onOpenSession(it.programId, it.scheduledId)
+        }
+    }
+
     ProgramDetailScreen(
         state = state,
         onBack = onBack,
         onOpenGoal = onOpenGoal,
         onOpenSession = onOpenSession,
         onRetry = viewModel::refresh,
+        onRestoreParked = viewModel::restoreParked,
+        onDiscardParked = viewModel::discardParked,
     )
 }
 
@@ -83,6 +97,8 @@ fun ProgramDetailScreen(
     onOpenGoal: (String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRetry: () -> Unit,
+    onRestoreParked: (ParkedCompletion) -> Unit = {},
+    onDiscardParked: (ParkedCompletion) -> Unit = {},
 ) {
     var selectedExercise by remember { mutableStateOf<ExerciseSummary?>(null) }
 
@@ -108,10 +124,14 @@ fun ProgramDetailScreen(
                 program = state.program,
                 thisWeek = state.thisWeek,
                 activeDraft = state.activeDraft,
+                parkedCompletion = state.parkedCompletion,
+                parkedError = state.parkedError,
                 today = state.today,
                 onOpenGoal = onOpenGoal,
                 onOpenSession = onOpenSession,
                 onOpenExercise = { selectedExercise = it },
+                onRestoreParked = onRestoreParked,
+                onDiscardParked = onDiscardParked,
             )
         }
     }
@@ -126,10 +146,14 @@ private fun ProgramBody(
     program: WorkoutProgram,
     thisWeek: List<com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout>,
     activeDraft: WorkoutSessionDraft?,
+    parkedCompletion: ParkedCompletion?,
+    parkedError: String?,
     today: LocalDate,
     onOpenGoal: (String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onOpenExercise: (ExerciseSummary) -> Unit,
+    onRestoreParked: (ParkedCompletion) -> Unit,
+    onDiscardParked: (ParkedCompletion) -> Unit,
 ) {
     val phases = program.phases.sortedBy { it.orderIndex }
     LazyColumn(
@@ -146,6 +170,23 @@ private fun ProgramBody(
                             onOpenSession(activeDraft.programId, activeDraft.scheduledId)
                         },
                     )
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        }
+        if (parkedCompletion != null) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                    Spacer(Modifier.height(4.dp))
+                    ParkedSessionBanner(
+                        parked = parkedCompletion,
+                        onRestore = { onRestoreParked(parkedCompletion) },
+                        onDiscard = { onDiscardParked(parkedCompletion) },
+                    )
+                    if (parkedError != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(parkedError, style = Hf.type.bodySm, color = Hf.colors.alert)
+                    }
                     Spacer(Modifier.height(10.dp))
                 }
             }

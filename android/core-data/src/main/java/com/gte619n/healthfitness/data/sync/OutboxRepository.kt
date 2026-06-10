@@ -51,6 +51,30 @@ class OutboxRepository @Inject constructor(
     fun failedCount(): Flow<Int> = outboxDao.observeFailedCount()
 
     /**
+     * Mutations parked on a terminal 4xx for one table, newest first — the
+     * detection seam for feature-level recovery (e.g. restoring a parked
+     * workout-session completion into the logger). A manual [rearmFailed]
+     * makes a row due again, so it drops off this Flow until it re-parks.
+     */
+    fun parked(table: String): Flow<List<OutboxEntity>> =
+        outboxDao.observeParked(table, PARKED_NEXT_ATTEMPT)
+
+    /** One-shot: the parked mutation(s) for one entity, in `seq` order. */
+    suspend fun parkedForEntity(entityId: String): List<OutboxEntity> = withContext(io) {
+        outboxDao.listByEntity(entityId).filter { it.nextAttemptAt == PARKED_NEXT_ATTEMPT }
+    }
+
+    /**
+     * Drop one mutation without replaying it. Only the parked-recovery paths
+     * use this: ownership of the rejected payload moves back to a local draft
+     * (restore) or the user explicitly gives it up (discard) — never call it
+     * for rows the drain still owns.
+     */
+    suspend fun deleteMutation(mutationId: String): Unit = withContext(io) {
+        outboxDao.deleteById(mutationId)
+    }
+
+    /**
      * Queue a local mutation. The caller is expected to have already applied the
      * optimistic local upsert (dirty=true, syncState=PENDING) to the mirror so
      * the UI updates instantly (Phase 5 wires that). Returns the new mutationId.

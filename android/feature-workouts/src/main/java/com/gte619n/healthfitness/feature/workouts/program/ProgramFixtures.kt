@@ -19,6 +19,7 @@ import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.session.DraftStatus
+import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import java.time.Instant
@@ -241,5 +242,21 @@ internal object ProgramFixtures {
                 ),
             ),
         ),
+    )
+
+    /**
+     * A finished session whose completion upload the server terminally
+     * rejected (IMPL-16 A10/Q3) — surfaced as the "couldn't sync — restore to
+     * review" banner.
+     */
+    val parkedCompletion = ParkedCompletion(
+        programId = "p1",
+        scheduledId = scheduledWithSession.scheduledId,
+        status = ScheduledStatus.COMPLETED,
+        completedAt = Instant.parse("2026-06-03T15:00:00Z"),
+        loggedSetCount = 9,
+        orphanedSetCount = 2,
+        sessionAvailable = true,
+        dayLabel = "Upper A",
     )
 }

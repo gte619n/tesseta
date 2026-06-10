@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
@@ -28,6 +29,12 @@ data class ProgramDetailUiState(
     val thisWeek: List<ScheduledWorkout> = emptyList(),
     /** In-progress local session draft for THIS program (resume affordance). */
     val activeDraft: WorkoutSessionDraft? = null,
+    /** Newest parked completion upload for THIS program (IMPL-16 A10/Q3). */
+    val parkedCompletion: ParkedCompletion? = null,
+    /** Restore/discard failure for the parked banner (kept off [error]). */
+    val parkedError: String? = null,
+    /** Set once a restore succeeded; the route opens the logger and consumes it. */
+    val restoredSession: ParkedCompletion? = null,
     /** Device date, fixed by the VM so the "start today" affordance is testable. */
     val today: LocalDate = LocalDate.now(),
     val error: String? = null,
@@ -36,7 +43,7 @@ data class ProgramDetailUiState(
 @HiltViewModel
 class ProgramDetailViewModel @Inject constructor(
     private val repository: WorkoutProgramRepository,
-    sessionRepository: WorkoutSessionRepository,
+    private val sessionRepository: WorkoutSessionRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -62,9 +69,48 @@ class ProgramDetailViewModel @Inject constructor(
                 }
             }
         }
+        // IMPL-16 Q3: surface this program's parked completion uploads so the
+        // detail offers the "couldn't sync — restore to review" recovery.
+        viewModelScope.launch {
+            sessionRepository.observeParkedCompletions().collect { parked ->
+                _state.update { st ->
+                    st.copy(parkedCompletion = parked.firstOrNull { it.programId == programId })
+                }
+            }
+        }
     }
 
     fun refresh() = load()
+
+    /** Re-materialize the parked completion as a draft and open the logger. */
+    fun restoreParked(parked: ParkedCompletion) {
+        viewModelScope.launch {
+            sessionRepository.restoreParked(parked.programId, parked.scheduledId)
+                .onSuccess {
+                    _state.update { it.copy(parkedError = null, restoredSession = parked) }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(parkedError = e.message ?: "Couldn't restore the workout")
+                    }
+                }
+        }
+    }
+
+    /** Give up on a parked completion (offered when the session is gone). */
+    fun discardParked(parked: ParkedCompletion) {
+        viewModelScope.launch {
+            sessionRepository.discardParked(parked.programId, parked.scheduledId)
+                .onSuccess { _state.update { it.copy(parkedError = null) } }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(parkedError = e.message ?: "Couldn't discard the workout")
+                    }
+                }
+        }
+    }
+
+    fun consumeRestoredSession() = _state.update { it.copy(restoredSession = null) }
 
     private fun load() {
         _state.update { it.copy(loading = true, today = today, error = null) }

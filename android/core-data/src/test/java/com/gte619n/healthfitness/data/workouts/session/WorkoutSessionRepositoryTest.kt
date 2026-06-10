@@ -21,6 +21,7 @@ import com.gte619n.healthfitness.data.workouts.program.WorkoutDayDto
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
 import com.gte619n.healthfitness.domain.common.DayOfWeek
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
+import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -28,6 +29,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -57,23 +59,26 @@ class WorkoutSessionRepositoryTest {
     private var drainRequests = 0
     private var now = T0
 
+    private val outboxRepository = OutboxRepository(
+        outboxDao = outboxDao,
+        mirror = mirror,
+        replay = mockk(), // drain never runs in these tests
+        deviceIdProvider = fakeDeviceIdProvider(),
+        io = Dispatchers.Unconfined,
+        clock = { now },
+    )
+
     private val repo = WorkoutSessionRepositoryImpl(
         api = api,
         draftDao = draftDao,
         scheduledDao = scheduledDao,
         support = MirrorRepositorySupport(
             mirror = mirror,
-            outbox = OutboxRepository(
-                outboxDao = outboxDao,
-                mirror = mirror,
-                replay = mockk(), // drain never runs in these tests
-                deviceIdProvider = fakeDeviceIdProvider(),
-                io = Dispatchers.Unconfined,
-                clock = { now },
-            ),
+            outbox = outboxRepository,
             killSwitch = KillSwitchGate { killSwitch },
             drainTrigger = DrainTrigger { drainRequests++ },
         ),
+        outbox = outboxRepository,
         moshi = moshi,
         io = Dispatchers.Unconfined,
         clock = { now },
@@ -374,6 +379,280 @@ class WorkoutSessionRepositoryTest {
         assertNotNull(draftDao.getByKey(PROGRAM_ID, SCHEDULED_ID))
     }
 
+    // ---- IMPL-16 Q3: parked-completion detection + restore-into-logger ----
+
+    /** Park the newest outbox row the way the drain parks a terminal 4xx (A10). */
+    private suspend fun parkLatestMutation() {
+        val row = outboxDao.listAll().last()
+        outboxDao.recordFailure(
+            mutationId = row.mutationId,
+            attempts = 1,
+            nextAttemptAt = OutboxRepository.PARKED_NEXT_ATTEMPT,
+        )
+    }
+
+    /**
+     * In production the optimistic mirror write and [scheduledDao] hit the SAME
+     * Room table; this fixture splits them into two fakes, so restore tests
+     * first reflect the optimistic mirror row back into the dao.
+     */
+    private suspend fun reflectMirrorIntoScheduledDao() {
+        val row = mirror.getRow(MirrorTables.WORKOUT_SCHEDULED, ENTITY_ID)!!
+        scheduledDao.upsert(
+            WorkoutScheduledEntity(
+                id = row.id,
+                payloadJson = row.payloadJson,
+                lastUpdate = row.lastUpdate,
+                status = row.status,
+                dirty = row.dirty,
+                syncState = row.syncState,
+            ),
+        )
+    }
+
+    /** Start, log two timestamped sets, finish 30 min in, and park the upload. */
+    private suspend fun finishAndPark() {
+        mirrorScheduled()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        repo.updateSets(
+            PROGRAM_ID, SCHEDULED_ID, KEY_0,
+            listOf(
+                loggedSet(completedAt = Instant.ofEpochMilli(T0 + 600_000)),
+                loggedSet(completedAt = Instant.ofEpochMilli(T0 + 1_200_000)).copy(reps = 6),
+            ),
+        ).getOrThrow()
+        now = T0 + 1_800_000 // finish 30 min after start
+        repo.finish(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        parkLatestMutation()
+    }
+
+    @Test
+    fun `parked completion surfaces with counts from the wire payload`() = runTest {
+        finishAndPark()
+
+        val parked = repo.observeParkedCompletions().first().single()
+
+        assertEquals(PROGRAM_ID, parked.programId)
+        assertEquals(SCHEDULED_ID, parked.scheduledId)
+        assertEquals(ScheduledStatus.COMPLETED, parked.status)
+        assertEquals(Instant.ofEpochMilli(T0 + 1_800_000), parked.completedAt)
+        assertEquals(2, parked.loggedSetCount)
+        assertEquals(0, parked.orphanedSetCount)
+        assertTrue(parked.sessionAvailable)
+        assertEquals("Lower", parked.dayLabel)
+    }
+
+    @Test
+    fun `mutation merely in backoff is not a parked completion`() = runTest {
+        mirrorScheduled()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        repo.finish(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        val row = outboxDao.listAll().single()
+        outboxDao.recordFailure(row.mutationId, attempts = 1, nextAttemptAt = now + 30_000)
+
+        assertTrue(repo.observeParkedCompletions().first().isEmpty())
+    }
+
+    @Test
+    fun `parked completion is suppressed while a draft is in flight for the session`() = runTest {
+        finishAndPark()
+        // The user started the session again: the new draft owns the session
+        // (N4) and its finish supersedes the parked payload in the chain.
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        assertTrue(repo.observeParkedCompletions().first().isEmpty())
+    }
+
+    @Test
+    fun `orphaned sets are counted against the CURRENT snapshot`() = runTest {
+        finishAndPark()
+        // Re-activation rewrote the plan: block b1 is gone.
+        scheduledDao.upsert(
+            WorkoutScheduledEntity(
+                id = ENTITY_ID,
+                payloadJson = scheduledAdapter.toJson(rewrittenDto()),
+                lastUpdate = T0 + 2_000_000,
+                status = "ACTIVE",
+                dirty = false,
+                syncState = "SYNCED",
+            ),
+        )
+
+        val parked = repo.observeParkedCompletions().first().single()
+
+        assertEquals(2, parked.loggedSetCount)
+        assertEquals(2, parked.orphanedSetCount)
+        assertTrue(parked.sessionAvailable)
+    }
+
+    @Test
+    fun `missing mirror row surfaces as session-unavailable`() = runTest {
+        finishAndPark()
+        scheduledDao.delete(ENTITY_ID)
+
+        val parked = repo.observeParkedCompletions().first().single()
+
+        assertEquals(false, parked.sessionAvailable)
+        assertEquals(2, parked.orphanedSetCount)
+    }
+
+    @Test
+    fun `restore re-materializes the draft and deletes the parked row`() = runTest {
+        finishAndPark()
+        reflectMirrorIntoScheduledDao() // optimistic COMPLETED row, dirty+FAILED-able
+
+        now = T0 + 90_000_000 // much later: the user finally notices the banner
+        val draft = repo.restoreParked(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        // startedAt derives from the wire outcome: completedAt − durationSeconds.
+        assertEquals(Instant.ofEpochMilli(T0), draft.startedAt)
+        // …but the stale window restarts now, so the sweep can't instantly
+        // re-finalize a days-old restored session.
+        assertEquals(Instant.ofEpochMilli(now), draft.lastActivityAt)
+        // Matched sets land on their (blockId, orderIndex) prescription.
+        assertEquals(2, draft.logged.getValue(KEY_0).size)
+        assertEquals(6, draft.logged.getValue(KEY_0)[1].reps)
+        // The draft is the single owner again (N4): the parked row is gone…
+        assertTrue(outboxDao.listAll().isEmpty())
+        assertNotNull(draftDao.getByKey(PROGRAM_ID, SCHEDULED_ID))
+        // …and the optimistic local completion is reverted to a clean planned
+        // row so the next pull reconciles with the server's canonical state.
+        val reverted = scheduledDao.getById(ENTITY_ID)!!
+        assertEquals(false, reverted.dirty)
+        assertEquals("SYNCED", reverted.syncState)
+        val dto = scheduledAdapter.fromJson(reverted.payloadJson)!!
+        assertEquals("PLANNED", dto.status)
+        assertNull(dto.completedAt)
+        assertTrue(dto.session!!.blocks.single().prescriptions.all { it.loggedSets.isEmpty() })
+        // The draft snapshot is the cleared current snapshot too.
+        assertEquals(ScheduledStatus.PLANNED, draft.scheduled.status)
+    }
+
+    @Test
+    fun `restore drops orphaned entries but keeps matched ones`() = runTest {
+        mirrorScheduled()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        repo.updateSets(
+            PROGRAM_ID, SCHEDULED_ID, KEY_0,
+            listOf(loggedSet(completedAt = Instant.ofEpochMilli(T0 + 600_000))),
+        ).getOrThrow()
+        repo.updateSets(
+            PROGRAM_ID, SCHEDULED_ID, KEY_1,
+            listOf(loggedSet(completedAt = Instant.ofEpochMilli(T0 + 900_000))),
+        ).getOrThrow()
+        now = T0 + 1_800_000
+        repo.finish(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        parkLatestMutation()
+        // The rewritten plan kept b1/0 but dropped b1/1.
+        scheduledDao.upsert(
+            WorkoutScheduledEntity(
+                id = ENTITY_ID,
+                payloadJson = scheduledAdapter.toJson(
+                    scheduledDto().let { dto ->
+                        dto.copy(
+                            session = dto.session!!.copy(
+                                blocks = listOf(
+                                    dto.session!!.blocks.single().copy(
+                                        prescriptions = dto.session!!.blocks.single()
+                                            .prescriptions.take(1),
+                                    ),
+                                ),
+                            ),
+                        )
+                    },
+                ),
+                lastUpdate = T0 + 2_000_000,
+                status = "ACTIVE",
+                dirty = false,
+                syncState = "SYNCED",
+            ),
+        )
+
+        val parked = repo.observeParkedCompletions().first().single()
+        assertEquals(1, parked.orphanedSetCount)
+
+        val draft = repo.restoreParked(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        assertEquals(1, draft.logged.getValue(KEY_0).size)
+        assertNull(draft.logged[KEY_1])
+        assertTrue(outboxDao.listAll().isEmpty())
+    }
+
+    @Test
+    fun `restore fails when the session is no longer mirrored and keeps the parked row`() = runTest {
+        finishAndPark()
+        scheduledDao.delete(ENTITY_ID)
+
+        val result = repo.restoreParked(PROGRAM_ID, SCHEDULED_ID)
+
+        assertTrue(result.isFailure)
+        // Nothing was lost: the parked row (and its payload) survive.
+        assertEquals(1, outboxDao.listAll().size)
+        assertNull(draftDao.getByKey(PROGRAM_ID, SCHEDULED_ID))
+    }
+
+    @Test
+    fun `restore refuses to create a second owner beside an in-flight draft`() = runTest {
+        finishAndPark()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        val inFlight = draftDao.getByKey(PROGRAM_ID, SCHEDULED_ID)
+
+        val result = repo.restoreParked(PROGRAM_ID, SCHEDULED_ID)
+
+        assertTrue(result.isFailure)
+        // The existing draft is untouched and the parked row survives.
+        assertEquals(inFlight, draftDao.getByKey(PROGRAM_ID, SCHEDULED_ID))
+        assertEquals(1, outboxDao.listAll().size)
+    }
+
+    @Test
+    fun `restoring a parked SKIPPED outcome yields an empty draft started now`() = runTest {
+        mirrorScheduled()
+        repo.skip(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        parkLatestMutation()
+
+        now = T0 + 5_000_000
+        val draft = repo.restoreParked(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        // No completedAt/duration/set timestamps to derive from ⇒ started now.
+        assertEquals(Instant.ofEpochMilli(now), draft.startedAt)
+        assertEquals(0, draft.totalLoggedSets)
+        assertTrue(outboxDao.listAll().isEmpty())
+    }
+
+    @Test
+    fun `discardParked deletes the row and reverts the optimistic completion`() = runTest {
+        finishAndPark()
+        reflectMirrorIntoScheduledDao()
+
+        repo.discardParked(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        assertTrue(outboxDao.listAll().isEmpty())
+        assertNull(draftDao.getByKey(PROGRAM_ID, SCHEDULED_ID))
+        val reverted = scheduledDao.getById(ENTITY_ID)!!
+        assertEquals(false, reverted.dirty)
+        assertEquals("PLANNED", scheduledAdapter.fromJson(reverted.payloadJson)!!.status)
+        assertTrue(repo.observeParkedCompletions().first().isEmpty())
+    }
+
+    /** The plan rewritten under the upload: block b1 replaced wholesale by b9. */
+    private fun rewrittenDto(): ScheduledWorkoutDto {
+        val dto = scheduledDto()
+        return dto.copy(
+            session = dto.session!!.copy(
+                blocks = listOf(
+                    BlockDto(
+                        blockId = "b9",
+                        type = "MAIN",
+                        prescriptions = listOf(
+                            PrescriptionDto(exerciseId = "ex9", orderIndex = 0, sets = 5),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
     private companion object {
         const val PROGRAM_ID = "prog-1"
         const val SCHEDULED_ID = "2026-06-08_d1"
@@ -381,6 +660,7 @@ class WorkoutSessionRepositoryTest {
         const val T0 = 1_000_000L
         const val STALE = WorkoutSessionRepositoryImpl.STALE_AFTER_MILLIS
         val KEY_0 = PrescriptionKey(blockId = "b1", orderIndex = 0)
+        val KEY_1 = PrescriptionKey(blockId = "b1", orderIndex = 1)
     }
 }
 

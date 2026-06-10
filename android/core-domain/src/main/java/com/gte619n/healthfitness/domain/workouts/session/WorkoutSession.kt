@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.domain.workouts.session
 
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
+import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -48,6 +49,38 @@ data class WorkoutSessionDraft(
 }
 
 /**
+ * A finished/skipped session whose completion upload the server terminally
+ * rejected (IMPL-16 A10): the outbox row was parked instead of retried, so the
+ * outcome exists only on this device. Surfaced so the user can restore it into
+ * the logger ([WorkoutSessionRepository.restoreParked]) and re-finish against
+ * the current plan, instead of being stuck behind the blind manual retry.
+ */
+data class ParkedCompletion(
+    val programId: String,
+    val scheduledId: String,
+    /** The rejected outcome (`COMPLETED` or `SKIPPED`). */
+    val status: ScheduledStatus,
+    val completedAt: Instant?,
+    /** Total sets carried by the parked wire payload. */
+    val loggedSetCount: Int,
+    /**
+     * Sets whose `(blockId, orderIndex)` no longer exists in the CURRENT local
+     * snapshot (the plan was rewritten under the upload). They cannot be
+     * restored — the restore confirmation surfaces this count so nothing is
+     * dropped silently.
+     */
+    val orphanedSetCount: Int,
+    /**
+     * False when the scheduled session is no longer mirrored locally (or lost
+     * its day snapshot) — there is nothing to restore against, so the only
+     * recovery is [WorkoutSessionRepository.discardParked].
+     */
+    val sessionAvailable: Boolean,
+    /** Day label from the current snapshot, when available. */
+    val dayLabel: String?,
+)
+
+/**
  * Draft lifecycle for the phone workout logger (ADR-0012 Decisions 1–4).
  *
  * Start/resume, set updates, and discard are purely local; finish and skip
@@ -91,6 +124,37 @@ interface WorkoutSessionRepository {
 
     /** Throw the draft away locally; nothing reaches the backend. */
     suspend fun discard(programId: String, scheduledId: String): Result<Unit>
+
+    /**
+     * Completion uploads parked on a terminal server rejection (IMPL-16 A10),
+     * newest first. Entries with an in-flight draft for the same session are
+     * suppressed — the draft is the single owner of that session's UI and its
+     * eventual finish supersedes the parked payload in the outbox chain.
+     */
+    fun observeParkedCompletions(): Flow<List<ParkedCompletion>>
+
+    /**
+     * Re-materialize a parked completion as the local draft so the user can
+     * re-log against the CURRENT snapshot and re-finish. Logged sets are
+     * mapped onto the current snapshot by `(blockId, orderIndex)`; orphaned
+     * entries (key no longer in the plan) are dropped — their count was
+     * surfaced on [ParkedCompletion.orphanedSetCount] before confirming.
+     * `startedAt` derives from the parked outcome (`completedAt −
+     * durationSeconds`, falling back to the earliest per-set timestamp, then
+     * now). The parked outbox row is deleted: the draft becomes the single
+     * owner of the upload again (N4). Fails — leaving the parked row intact —
+     * when a draft for the session is already in flight or the session is no
+     * longer mirrored locally.
+     */
+    suspend fun restoreParked(programId: String, scheduledId: String): Result<WorkoutSessionDraft>
+
+    /**
+     * Give up on a parked completion: delete the parked outbox row(s) and
+     * revert the optimistic local completion so the next pull reconciles.
+     * The recovery of last resort when [ParkedCompletion.sessionAvailable]
+     * is false.
+     */
+    suspend fun discardParked(programId: String, scheduledId: String): Result<Unit>
 
     /**
      * ADR-0012 Decision 4 — finalize abandoned drafts. A draft idle for more

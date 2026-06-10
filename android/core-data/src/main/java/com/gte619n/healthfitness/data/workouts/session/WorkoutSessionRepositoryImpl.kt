@@ -3,8 +3,12 @@ package com.gte619n.healthfitness.data.workouts.session
 import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutSessionDraftDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
+import com.gte619n.healthfitness.data.db.entity.SyncRowState
+import com.gte619n.healthfitness.data.db.entity.SyncRowStatus
+import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutSessionDraftEntity
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
+import com.gte619n.healthfitness.data.sync.OutboxRepository
 import com.gte619n.healthfitness.data.workouts.program.ScheduledWorkoutDto
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
 import com.gte619n.healthfitness.data.workouts.program.toDomain
@@ -12,6 +16,7 @@ import com.gte619n.healthfitness.data.workouts.program.toDto
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.session.DraftStatus
+import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
@@ -19,6 +24,7 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -49,6 +55,7 @@ class WorkoutSessionRepositoryImpl(
     private val draftDao: WorkoutSessionDraftDao,
     private val scheduledDao: WorkoutScheduledDao,
     private val support: MirrorRepositorySupport,
+    private val outbox: OutboxRepository,
     moshi: Moshi,
     private val io: CoroutineDispatcher,
     private val clock: () -> Long = { System.currentTimeMillis() },
@@ -157,6 +164,161 @@ class WorkoutSessionRepositoryImpl(
         withContext(io) {
             runCatching { draftDao.delete(programId, scheduledId) }
         }
+
+    // ---- IMPL-16 Q3: "restore into logger" recovery for parked completions ----
+
+    override fun observeParkedCompletions(): Flow<List<ParkedCompletion>> =
+        combine(
+            outbox.parked(MirrorTables.WORKOUT_SCHEDULED),
+            draftDao.observeAll(),
+            scheduledDao.observeActive(),
+        ) { parked, drafts, mirrored ->
+            val draftKeys = drafts.map { it.programId to it.scheduledId }.toSet()
+            val mirrorById = mirrored.associateBy { it.id }
+            parked.mapNotNull { row ->
+                val request = row.payloadJson?.let { decodeRequest(it) }
+                    ?: return@mapNotNull null
+                val programId = row.entityId.substringBefore('/')
+                val scheduledId = row.entityId.substringAfter('/')
+                // Single owner (N4): a draft already in flight for this session
+                // owns its UI — its finish supersedes the parked payload in the
+                // outbox chain, so no recovery affordance is shown beside it.
+                if (programId to scheduledId in draftKeys) return@mapNotNull null
+                val snapshot = mirrorById[row.entityId]?.let { decodeScheduled(it.payloadJson) }
+                val keys = snapshot.prescriptionKeys()
+                ParkedCompletion(
+                    programId = programId,
+                    scheduledId = scheduledId,
+                    status = runCatching { ScheduledStatus.valueOf(request.status) }
+                        .getOrDefault(ScheduledStatus.COMPLETED),
+                    completedAt = request.completedAt,
+                    loggedSetCount = request.logged.sumOf { it.sets.size },
+                    orphanedSetCount = request.logged
+                        .filter { PrescriptionKey(it.blockId, it.orderIndex) !in keys }
+                        .sumOf { it.sets.size },
+                    sessionAvailable = snapshot?.session != null,
+                    dayLabel = snapshot?.dayLabel?.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+
+    override suspend fun restoreParked(
+        programId: String,
+        scheduledId: String,
+    ): Result<WorkoutSessionDraft> = withContext(io) {
+        runCatching {
+            val id = mirrorId(programId, scheduledId)
+            // N4: never create a second upload owner beside an in-flight draft.
+            check(draftDao.getByKey(programId, scheduledId) == null) {
+                "A session draft is already in flight for $id"
+            }
+            val parked = outbox.parkedForEntity(id)
+            val request = parked.lastOrNull()?.payloadJson?.let { decodeRequest(it) }
+                ?: error("No parked completion for $id")
+            val mirrorRow = scheduledDao.getById(id)
+                ?.takeIf { it.status != SyncRowStatus.ARCHIVED.name }
+                ?: error("Scheduled session $id is no longer mirrored locally")
+            val current = decodeScheduled(mirrorRow.payloadJson)?.takeIf { it.session != null }
+                ?: error("Scheduled session $id has no session snapshot to restore against")
+
+            // Map the rejected actuals onto the CURRENT snapshot by
+            // (blockId, orderIndex); orphaned entries cannot be re-uploaded
+            // (the backend 400s unknown keys, D2) and their count was surfaced
+            // on the ParkedCompletion before the user confirmed.
+            val keys = current.prescriptionKeys()
+            val matched = request.logged.filter {
+                PrescriptionKey(it.blockId, it.orderIndex) in keys && it.sets.isNotEmpty()
+            }
+            val now = clock()
+            val startedAt = request.startedAtMillis() ?: now
+            val cleared = current.withOutcomeCleared()
+            val entity = WorkoutSessionDraftEntity(
+                programId = programId,
+                scheduledId = scheduledId,
+                startedAt = startedAt,
+                // The user just acted: a fresh 24h window keeps the stale sweep
+                // from instantly re-finalizing a restored multi-day-old session.
+                lastActivityAt = now,
+                status = DraftStatus.ACTIVE.name,
+                sessionJson = scheduledAdapter.toJson(cleared),
+                loggedJson = loggedAdapter.toJson(matched),
+            )
+            draftDao.upsert(entity)
+            // The draft is the single owner again (N4): the parked row goes away…
+            parked.forEach { outbox.deleteMutation(it.mutationId) }
+            // …and our optimistic local completion is reverted so calendars stop
+            // showing an outcome the server rejected (left SYNCED+clean so the
+            // next pull replaces it with the server's canonical row).
+            revertOptimisticOutcome(mirrorRow)
+            entity.toDomain() ?: error("Restored draft for $id failed to decode")
+        }
+    }
+
+    override suspend fun discardParked(programId: String, scheduledId: String): Result<Unit> =
+        withContext(io) {
+            runCatching {
+                val id = mirrorId(programId, scheduledId)
+                val parked = outbox.parkedForEntity(id)
+                if (parked.isEmpty()) return@runCatching
+                parked.forEach { outbox.deleteMutation(it.mutationId) }
+                scheduledDao.getById(id)?.let { revertOptimisticOutcome(it) }
+                Unit
+            }
+        }
+
+    /**
+     * Undo the optimistic completion [uploadOutcome] wrote, if it is still ours
+     * (dirty). A row a pull already reconciled is the server's truth — leave it.
+     */
+    private suspend fun revertOptimisticOutcome(row: WorkoutScheduledEntity) {
+        if (!row.dirty) return
+        val dto = decodeScheduled(row.payloadJson) ?: return
+        scheduledDao.upsert(
+            row.copy(
+                payloadJson = scheduledAdapter.toJson(dto.withOutcomeCleared()),
+                dirty = false,
+                syncState = SyncRowState.SYNCED.name,
+            ),
+        )
+    }
+
+    /** `completedAt − durationSeconds`, else the earliest per-set timestamp. */
+    private fun CompleteSessionRequest.startedAtMillis(): Long? {
+        completedAt?.let { at ->
+            durationSeconds?.let { return at.toEpochMilli() - it * 1000L }
+        }
+        return logged.asSequence()
+            .flatMap { it.sets }
+            .mapNotNull { it.completedAt }
+            .minOrNull()
+            ?.toEpochMilli()
+    }
+
+    private fun ScheduledWorkoutDto?.prescriptionKeys(): Set<PrescriptionKey> =
+        this?.session?.blocks
+            ?.flatMap { block ->
+                block.prescriptions.map { PrescriptionKey(block.blockId, it.orderIndex) }
+            }
+            ?.toSet()
+            .orEmpty()
+
+    /** Strip a (rejected or restored-over) outcome back to a planned snapshot. */
+    private fun ScheduledWorkoutDto.withOutcomeCleared(): ScheduledWorkoutDto = copy(
+        status = ScheduledStatus.PLANNED.name,
+        completedAt = null,
+        durationSeconds = null,
+        session = session?.let { day ->
+            day.copy(
+                blocks = day.blocks.map { block ->
+                    block.copy(
+                        prescriptions = block.prescriptions.map {
+                            it.copy(loggedSets = emptyList())
+                        },
+                    )
+                },
+            )
+        },
+    )
 
     override suspend fun finalizeStaleDrafts(): Result<WorkoutSessionRepository.StaleDraftResult> =
         withContext(io) {
@@ -288,6 +450,9 @@ class WorkoutSessionRepositoryImpl(
 
     private fun decodeScheduled(json: String): ScheduledWorkoutDto? =
         runCatching { scheduledAdapter.fromJson(json) }.getOrNull()
+
+    private fun decodeRequest(json: String): CompleteSessionRequest? =
+        runCatching { requestAdapter.fromJson(json) }.getOrNull()
 
     private fun decodeLogged(json: String): List<LoggedPrescriptionDto> =
         runCatching { loggedAdapter.fromJson(json) }.getOrNull().orEmpty()

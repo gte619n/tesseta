@@ -95,17 +95,25 @@ internal class FakeKillSwitchSink : KillSwitchSink {
 /** In-memory [OutboxDao] backed by a list. */
 internal class FakeOutboxDao : OutboxDao {
     val store = mutableListOf<OutboxEntity>()
-    private val pending = MutableStateFlow(0)
+
+    /** Bumped on every mutation so the observe Flows re-emit (Room-ish). */
+    private val revision = MutableStateFlow(0)
+    private fun touch() { revision.value++ }
 
     override suspend fun insert(row: OutboxEntity) {
         store.removeAll { it.mutationId == row.mutationId }
         store += row
-        pending.value = store.size
+        touch()
     }
     override suspend fun listDue(now: Long): List<OutboxEntity> =
         store.filter { it.nextAttemptAt <= now }.sortedBy { it.seq }
-    override fun observePendingCount(): Flow<Int> = pending
-    override fun observeFailedCount(): Flow<Int> = pending.map { store.count { row -> row.attempts > 0 } }
+    override fun observePendingCount(): Flow<Int> = revision.map { store.size }
+    override fun observeFailedCount(): Flow<Int> = revision.map { store.count { row -> row.attempts > 0 } }
+    override fun observeParked(table: String, parkedAt: Long): Flow<List<OutboxEntity>> =
+        revision.map {
+            store.filter { it.entityTable == table && it.nextAttemptAt == parkedAt }
+                .sortedByDescending { it.seq }
+        }
     override suspend fun listByEntity(entityId: String): List<OutboxEntity> =
         store.filter { it.entityId == entityId }.sortedBy { it.seq }
     override suspend fun listAll(): List<OutboxEntity> = store.sortedBy { it.seq }
@@ -113,19 +121,21 @@ internal class FakeOutboxDao : OutboxDao {
     override suspend fun recordFailure(mutationId: String, attempts: Int, nextAttemptAt: Long) {
         val i = store.indexOfFirst { it.mutationId == mutationId }
         if (i >= 0) store[i] = store[i].copy(attempts = attempts, nextAttemptAt = nextAttemptAt)
+        touch()
     }
     override suspend fun rearmFailed(now: Long) {
         store.indices.forEach { i ->
             if (store[i].attempts > 0) store[i] = store[i].copy(nextAttemptAt = now)
         }
+        touch()
     }
     override suspend fun deleteById(mutationId: String) {
-        store.removeAll { it.mutationId == mutationId }; pending.value = store.size
+        store.removeAll { it.mutationId == mutationId }; touch()
     }
     override suspend fun deleteByEntity(entityId: String) {
-        store.removeAll { it.entityId == entityId }; pending.value = store.size
+        store.removeAll { it.entityId == entityId }; touch()
     }
-    override suspend fun clear() { store.clear(); pending.value = 0 }
+    override suspend fun clear() { store.clear(); touch() }
 }
 
 /**

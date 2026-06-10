@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
+import com.gte619n.healthfitness.feature.workouts.session.ui.ParkedSessionBanner
 import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.HfCard
@@ -51,12 +54,28 @@ fun WorkoutsHubRoute(
     viewModel: WorkoutsHubViewModel = hiltViewModel(),
 ) {
     val activeDraft by viewModel.activeDraft.collectAsStateWithLifecycle()
+    val parkedCompletion by viewModel.parkedCompletion.collectAsStateWithLifecycle()
+    val parkedError by viewModel.parkedError.collectAsStateWithLifecycle()
+    val restoredSession by viewModel.restoredSession.collectAsStateWithLifecycle()
+
+    // A successful restore re-materialized the draft; drop into the logger.
+    LaunchedEffect(restoredSession) {
+        restoredSession?.let {
+            viewModel.consumeRestoredSession()
+            onResumeSession(it.programId, it.scheduledId)
+        }
+    }
+
     WorkoutsHubScreen(
         onBack = onBack,
         onOpenGyms = onOpenGyms,
         onOpenPrograms = onOpenPrograms,
         activeDraft = activeDraft,
         onResumeSession = { draft -> onResumeSession(draft.programId, draft.scheduledId) },
+        parkedCompletion = parkedCompletion,
+        parkedError = parkedError,
+        onRestoreParked = viewModel::restoreParked,
+        onDiscardParked = viewModel::discardParked,
     )
 }
 
@@ -67,6 +86,10 @@ fun WorkoutsHubScreen(
     onOpenPrograms: () -> Unit,
     activeDraft: WorkoutSessionDraft? = null,
     onResumeSession: (WorkoutSessionDraft) -> Unit = {},
+    parkedCompletion: ParkedCompletion? = null,
+    parkedError: String? = null,
+    onRestoreParked: (ParkedCompletion) -> Unit = {},
+    onDiscardParked: (ParkedCompletion) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -90,6 +113,16 @@ fun WorkoutsHubScreen(
                     draft = activeDraft,
                     onResume = { onResumeSession(activeDraft) },
                 )
+            }
+            if (parkedCompletion != null) {
+                ParkedSessionBanner(
+                    parked = parkedCompletion,
+                    onRestore = { onRestoreParked(parkedCompletion) },
+                    onDiscard = { onDiscardParked(parkedCompletion) },
+                )
+            }
+            if (parkedError != null) {
+                Text(parkedError, style = Hf.type.bodySm, color = Hf.colors.alert)
             }
             HubCard(
                 icon = Icons.Outlined.FitnessCenter,

@@ -38,6 +38,18 @@ interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox WHERE attempts > 0")
     fun observeFailedCount(): Flow<Int>
 
+    /**
+     * Reactive list of mutations parked on a terminal server rejection
+     * (IMPL-16 A10: `nextAttemptAt` pinned to the parked sentinel), newest
+     * first, for one table. Feeds the per-feature recovery surfaces — e.g.
+     * the workout-session "finished workout couldn't sync" restore banner.
+     */
+    @Query(
+        "SELECT * FROM outbox WHERE entityTable = :table AND nextAttemptAt = :parkedAt " +
+            "ORDER BY seq DESC",
+    )
+    fun observeParked(table: String, parkedAt: Long): Flow<List<OutboxEntity>>
+
     /** The mutation chain for one entity, in `seq` order (reducer input, D7). */
     @Query("SELECT * FROM outbox WHERE entityId = :entityId ORDER BY seq ASC")
     suspend fun listByEntity(entityId: String): List<OutboxEntity>
