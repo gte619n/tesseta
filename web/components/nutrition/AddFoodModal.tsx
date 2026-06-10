@@ -1,15 +1,21 @@
 "use client";
 
-import { type ReactNode, useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import type {
   Meal,
   Macros,
   ImageStatus,
-  DescribedMeal,
+  Entry,
   LogDescribedMealBody,
+  RelogBody,
 } from "@/lib/types/nutrition";
-import { MEAL_LABELS, QUANTITY_STEPS } from "@/lib/types/nutrition";
+import {
+  MEAL_LABELS,
+  MEALS,
+  QUANTITY_STEPS,
+  derivedCaloriesKcal,
+} from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
 
@@ -28,8 +34,10 @@ type FoodResult = {
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  meal: Meal;
+  /** The pre-selected meal (the section's, or time-inferred); a tappable chip overrides it. */
+  initialMeal: Meal;
   date: string;
+  recents: Entry[];
   addEntry: (
     date: string,
     body: {
@@ -44,14 +52,9 @@ type Props = {
     },
   ) => Promise<void>;
   searchFoods: (q: string) => Promise<FoodResult[]>;
-  describeMeal: (description: string) => Promise<DescribedMeal>;
-  logDescribedMeal: (
-    date: string,
-    body: LogDescribedMealBody,
-  ) => Promise<void>;
+  describeMealAsync: (date: string, body: LogDescribedMealBody) => Promise<void>;
+  relogEntry: (date: string, body: RelogBody) => Promise<void>;
 };
-
-type Tab = "catalog" | "quick" | "describe";
 
 function computeMacros(macrosPer100g: Macros, servingGrams: number, quantity: number): Macros {
   const scale = (servingGrams * quantity) / 100;
@@ -65,18 +68,32 @@ function computeMacros(macrosPer100g: Macros, servingGrams: number, quantity: nu
   };
 }
 
+/**
+ * Add-food modal — one unified surface (no tabs):
+ *  - the target meal renders as a tappable chip in the header (override picker);
+ *  - one search field with an inline trailing spinner;
+ *  - an empty query shows the RECENT list (one tap re-logs with the same
+ *    portions); a query shows catalog results plus a standing
+ *    "Log “…” as a meal" describe row that closes the modal immediately and
+ *    lets the entry resolve in the background (the 202 placeholder pattern);
+ *  - quick add (manual macros) tucked beneath, with calories derived live
+ *    from the macros (4/4/9) — only a macro-less entry keeps a manual kcal.
+ */
 export function AddFoodModal({
   isOpen,
   onClose,
-  meal,
+  initialMeal,
   date,
+  recents,
   addEntry,
   searchFoods,
-  describeMeal,
-  logDescribedMeal,
+  describeMealAsync,
+  relogEntry,
 }: Props) {
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("catalog");
+  const [meal, setMeal] = useState<Meal>(initialMeal);
+  const [mealPickerOpen, setMealPickerOpen] = useState(false);
+  const [quickMode, setQuickMode] = useState(false);
 
   if (!isOpen) return null;
 
@@ -85,106 +102,105 @@ export function AddFoodModal({
       onClose={onClose}
       contentClassName="flex max-h-[90vh] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b-[0.5px] border-border-subtle px-5 py-4">
+      {/* Header: title + meal chip + close */}
+      <div className="flex items-center justify-between border-b-[0.5px] border-border-subtle px-5 py-4">
+        <div className="flex items-center gap-3">
           <h2 className="m-0 text-[16px] font-medium tracking-[-0.01em] text-primary">
-            Add food · {MEAL_LABELS[meal]}
+            Add food
           </h2>
           <button
             type="button"
-            onClick={onClose}
-            className="cursor-pointer rounded-md p-1 text-tertiary hover:text-primary"
-            aria-label="Close"
+            onClick={() => setMealPickerOpen((v) => !v)}
+            className="caps-mono cursor-pointer rounded-full border-[0.5px] border-border-default bg-canvas px-3 py-1 text-[10px] tracking-[0.06em] text-accent-dim hover:border-border-strong"
+            aria-label="Change meal"
           >
-            <i className="ti ti-x text-[16px]" aria-hidden />
+            → {MEAL_LABELS[meal]} ▾
           </button>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer rounded-md p-1 text-tertiary hover:text-primary"
+          aria-label="Close"
+        >
+          <i className="ti ti-x text-[16px]" aria-hidden />
+        </button>
+      </div>
 
-        {/* Tab switcher */}
-        <div className="flex border-b-[0.5px] border-border-subtle px-5">
-          <TabButton active={tab === "catalog"} onClick={() => setTab("catalog")}>
-            Search catalog
-          </TabButton>
-          <TabButton active={tab === "describe"} onClick={() => setTab("describe")}>
-            Describe a meal
-          </TabButton>
-          <TabButton active={tab === "quick"} onClick={() => setTab("quick")}>
-            Quick add
-          </TabButton>
+      {mealPickerOpen && (
+        <div className="flex gap-1.5 border-b-[0.5px] border-border-subtle px-5 py-3">
+          {MEALS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setMeal(m);
+                setMealPickerOpen(false);
+              }}
+              className={`caps-mono cursor-pointer rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
+                meal === m
+                  ? "border-accent bg-accent-bg text-accent-dim"
+                  : "border-border-default bg-canvas text-secondary hover:border-border-strong"
+              }`}
+            >
+              {MEAL_LABELS[m]}
+            </button>
+          ))}
         </div>
+      )}
 
-        {/* Content */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {tab === "catalog" ? (
-            <CatalogTab
-              meal={meal}
-              date={date}
-              addEntry={addEntry}
-              searchFoods={searchFoods}
-              onClose={onClose}
-              toast={toast}
-            />
-          ) : tab === "describe" ? (
-            <DescribeTab
-              meal={meal}
-              date={date}
-              describeMeal={describeMeal}
-              logDescribedMeal={logDescribedMeal}
-              onClose={onClose}
-              toast={toast}
-            />
-          ) : (
-            <QuickAddTab
-              meal={meal}
-              date={date}
-              addEntry={addEntry}
-              onClose={onClose}
-              toast={toast}
-            />
-          )}
-        </div>
+      {/* Content */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {quickMode ? (
+          <QuickAddPane
+            meal={meal}
+            date={date}
+            addEntry={addEntry}
+            onBack={() => setQuickMode(false)}
+            onClose={onClose}
+            toast={toast}
+          />
+        ) : (
+          <SearchPane
+            meal={meal}
+            date={date}
+            recents={recents}
+            addEntry={addEntry}
+            searchFoods={searchFoods}
+            describeMealAsync={describeMealAsync}
+            relogEntry={relogEntry}
+            onQuickAdd={() => setQuickMode(true)}
+            onClose={onClose}
+            toast={toast}
+          />
+        )}
+      </div>
     </ModalBackdrop>
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`caps-mono border-b-2 px-4 py-2.5 text-[10px] tracking-[0.06em] transition-colors ${
-        active
-          ? "border-accent text-accent-dim"
-          : "border-transparent text-tertiary hover:text-secondary"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
+// ── Unified search / recents / describe pane ─────────────────────────
 
-// ── Catalog tab ───────────────────────────────────────────────────────
-
-function CatalogTab({
+function SearchPane({
   meal,
   date,
+  recents,
   addEntry,
   searchFoods,
+  describeMealAsync,
+  relogEntry,
+  onQuickAdd,
   onClose,
   toast,
 }: {
   meal: Meal;
   date: string;
+  recents: Entry[];
   addEntry: Props["addEntry"];
   searchFoods: Props["searchFoods"];
+  describeMealAsync: Props["describeMealAsync"];
+  relogEntry: Props["relogEntry"];
+  onQuickAdd: () => void;
   onClose: () => void;
   toast: ReturnType<typeof useToast>;
 }) {
@@ -192,9 +208,6 @@ function CatalogTab({
   const [results, setResults] = useState<FoodResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<FoodResult | null>(null);
-  const [servingIdx, setServingIdx] = useState(0);
-  const [quantity, setQuantity] = useState<(typeof QUANTITY_STEPS)[number]>(1);
-  const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearch = useCallback(
@@ -203,6 +216,7 @@ function CatalogTab({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (!q.trim()) {
         setResults([]);
+        setSearching(false);
         return;
       }
       debounceRef.current = setTimeout(async () => {
@@ -220,30 +234,232 @@ function CatalogTab({
     [searchFoods, toast],
   );
 
-  function selectFood(food: FoodResult) {
-    setSelected(food);
-    setServingIdx(food.defaultServingIndex);
-    setQuantity(1);
+  // Fire-and-forget describe: close immediately; the day view shows the
+  // processing placeholder and fills it in (the camera-capture pattern).
+  function handleDescribe() {
+    const text = query.trim();
+    if (!text) return;
+    onClose();
+    toast.info(`Logging “${text}” to ${MEAL_LABELS[meal]}…`);
+    describeMealAsync(date, { description: text, meal }).catch(() => {
+      toast.error("Couldn't start that meal — try again");
+    });
   }
 
-  function clearSelection() {
-    setSelected(null);
+  // One-tap repeat of a recent entry with the same portions.
+  function handleRelog(entry: Entry) {
+    if (!entry.date) return;
+    onClose();
+    relogEntry(date, {
+      sourceDate: entry.date,
+      sourceEntryId: entry.entryId,
+      meal,
+    })
+      .then(() => toast.success(`${entry.foodName} added to ${MEAL_LABELS[meal]}`))
+      .catch(() => toast.error("Failed to add entry"));
   }
 
-  const serving = selected?.servingSizes[servingIdx];
-  const previewMacros =
-    selected && serving
-      ? computeMacros(selected.macrosPer100g, serving.grams, quantity)
-      : null;
+  if (selected) {
+    return (
+      <FoodDetailPane
+        food={selected}
+        meal={meal}
+        date={date}
+        addEntry={addEntry}
+        onBack={() => setSelected(null)}
+        onClose={onClose}
+        toast={toast}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-5">
+      {/* Search input with inline trailing spinner */}
+      <div className="relative">
+        <i
+          className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-tertiary"
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => handleSearch(e.target.value)}
+          placeholder="Search foods or describe a meal…"
+          className="w-full rounded-md border-[0.5px] border-border-default bg-canvas py-2 pl-8 pr-8 text-[13px] text-primary placeholder-tertiary focus:outline-none focus:ring-2 focus:ring-accent"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && query.trim() && results.length === 0 && !searching) {
+              handleDescribe();
+            }
+          }}
+        />
+        {searching && (
+          <i
+            className="ti ti-loader-2 absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[13px] text-tertiary"
+            aria-hidden
+          />
+        )}
+      </div>
+
+      {query.trim() === "" ? (
+        <>
+          <RecentList recents={recents} onRelog={handleRelog} />
+          <button
+            type="button"
+            onClick={onQuickAdd}
+            className="caps-mono cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2.5 text-[10px] tracking-[0.06em] text-accent-dim hover:border-border-strong"
+          >
+            Quick add custom macros
+          </button>
+        </>
+      ) : (
+        <>
+          {!searching && results.length === 0 && (
+            <div className="py-3 text-center text-[13px] text-tertiary">
+              No catalog matches for &ldquo;{query}&rdquo;
+            </div>
+          )}
+          {results.length > 0 && (
+            <div className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default">
+              {results.map((food) => (
+                <button
+                  key={food.foodId}
+                  type="button"
+                  onClick={() => setSelected(food)}
+                  className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left first:rounded-t-[10px] last:rounded-b-[10px] hover:bg-canvas-sunken"
+                >
+                  <FoodImage imageUrl={food.imageUrl} imageStatus={food.imageStatus} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium text-primary">
+                      {food.name}
+                    </div>
+                    {food.brand && (
+                      <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
+                        {food.brand}
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="font-mono text-[12px] tabular-nums text-secondary">
+                      {Math.round(food.macrosPer100g.caloriesKcal ?? 0)}
+                      <span className="ml-0.5 text-[10px] text-tertiary">kcal/100g</span>
+                    </div>
+                    <div className="caps-mono mt-0.5 text-[9px] text-tertiary">
+                      P {Math.round(food.macrosPer100g.proteinGrams ?? 0)}g · C{" "}
+                      {Math.round(food.macrosPer100g.carbsGrams ?? 0)}g · F{" "}
+                      {Math.round(food.macrosPer100g.fatGrams ?? 0)}g
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Describe rides along under the results: anything typed can be
+              logged as a meal, resolved in the background. */}
+          <button
+            type="button"
+            onClick={handleDescribe}
+            className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2.5 text-left text-[13px] text-accent-dim hover:border-border-strong"
+          >
+            <i className="ti ti-sparkles mr-1.5 text-[12px]" aria-hidden />
+            Log &ldquo;{query.trim()}&rdquo; to {MEAL_LABELS[meal]} as a meal
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RecentList({
+  recents,
+  onRelog,
+}: {
+  recents: Entry[];
+  onRelog: (entry: Entry) => void;
+}) {
+  if (recents.length === 0) {
+    return (
+      <div className="py-6 text-center text-[13px] text-tertiary">
+        Foods you log will show up here for one-tap repeats.
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="caps-mono mb-1.5 text-[9px] tracking-[0.08em] text-tertiary">
+        Recent
+      </div>
+      <div className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default">
+        {recents.map((entry) => (
+          <button
+            key={`${entry.date}/${entry.entryId}`}
+            type="button"
+            onClick={() => onRelog(entry)}
+            className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left first:rounded-t-[10px] last:rounded-b-[10px] hover:bg-canvas-sunken"
+          >
+            <FoodImage imageUrl={entry.imageUrl} imageStatus={entry.imageStatus} size={40} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium text-primary">
+                {entry.foodName}
+              </div>
+              {entry.servingLabel && (
+                <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
+                  {entry.servingLabel}
+                  {entry.quantity !== 1 && ` × ${entry.quantity}`}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="font-mono text-[12px] tabular-nums text-secondary">
+                {Math.round(entry.macros.caloriesKcal ?? 0)}
+                <span className="ml-0.5 text-[10px] text-tertiary">kcal</span>
+              </span>
+              <i className="ti ti-plus text-[14px] text-accent-dim" aria-hidden />
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Catalog food detail (serving + quantity) ─────────────────────────
+
+function FoodDetailPane({
+  food,
+  meal,
+  date,
+  addEntry,
+  onBack,
+  onClose,
+  toast,
+}: {
+  food: FoodResult;
+  meal: Meal;
+  date: string;
+  addEntry: Props["addEntry"];
+  onBack: () => void;
+  onClose: () => void;
+  toast: ReturnType<typeof useToast>;
+}) {
+  const [servingIdx, setServingIdx] = useState(food.defaultServingIndex);
+  const [quantity, setQuantity] = useState<(typeof QUANTITY_STEPS)[number]>(1);
+  const [saving, setSaving] = useState(false);
+
+  const serving = food.servingSizes[servingIdx];
+  const previewMacros = serving
+    ? computeMacros(food.macrosPer100g, serving.grams, quantity)
+    : null;
 
   async function handleSave() {
-    if (!selected || !serving) return;
+    if (!serving) return;
     setSaving(true);
     try {
       await addEntry(date, {
         meal,
-        foodId: selected.foodId,
-        foodName: selected.name,
+        foodId: food.foodId,
+        foodName: food.name,
         servingLabel: serving.label,
         servingGrams: serving.grams,
         quantity,
@@ -257,7 +473,7 @@ function CatalogTab({
         },
         source: "CATALOG",
       });
-      toast.success(`${selected.name} added to ${MEAL_LABELS[meal]}`);
+      toast.success(`${food.name} added to ${MEAL_LABELS[meal]}`);
       onClose();
     } catch {
       toast.error("Failed to add entry");
@@ -266,234 +482,150 @@ function CatalogTab({
     }
   }
 
-  if (selected) {
-    const servingSizes = selected.servingSizes;
-    return (
-      <div className="flex flex-col gap-4 p-5">
-        {/* Back button */}
-        <button
-          type="button"
-          onClick={clearSelection}
-          className="caps-mono inline-flex items-center gap-1 text-[10px] tracking-[0.04em] text-tertiary hover:text-secondary"
-        >
-          <i className="ti ti-arrow-left text-[12px]" aria-hidden />
-          Back to results
-        </button>
-
-        {/* Food name + image */}
-        <div className="flex items-start gap-3">
-          <FoodImage imageUrl={selected.imageUrl} imageStatus={selected.imageStatus} size={48} />
-          <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-medium text-primary">{selected.name}</div>
-            {selected.brand && (
-              <div className="mt-0.5 text-[12px] text-secondary">{selected.brand}</div>
-            )}
-            {selected.source === "OPEN_FOOD_FACTS" && (
-              <div className="mt-1 text-[11px] text-tertiary">
-                Nutrition data from Open Food Facts (ODbL)
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Serving size picker */}
-        <div>
-          <label className="mb-1.5 block text-[11px] font-medium text-secondary">
-            Serving size
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {servingSizes.map((s, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setServingIdx(i)}
-                className={`caps-mono rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
-                  servingIdx === i
-                    ? "border-accent bg-accent-bg text-accent-dim"
-                    : "border-border-default bg-canvas text-secondary hover:border-border-strong"
-                }`}
-              >
-                {s.label}
-                <span className="ml-1 text-tertiary">({s.grams}g)</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Quantity */}
-        <div>
-          <label className="mb-1.5 block text-[11px] font-medium text-secondary">
-            Quantity
-          </label>
-          <div className="flex gap-1.5">
-            {QUANTITY_STEPS.map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => setQuantity(q)}
-                className={`caps-mono rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
-                  quantity === q
-                    ? "border-accent bg-accent-bg text-accent-dim"
-                    : "border-border-default bg-canvas text-secondary hover:border-border-strong"
-                }`}
-              >
-                {q}×
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Live macro preview */}
-        {previewMacros && (
-          <div className="rounded-[10px] bg-canvas-sunken px-4 py-3">
-            <div className="caps-mono mb-2 text-[9px] tracking-[0.08em] text-tertiary">
-              Macro preview
-            </div>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-              {[
-                { label: "Calories", value: previewMacros.caloriesKcal, unit: "kcal" },
-                { label: "Protein", value: previewMacros.proteinGrams, unit: "g" },
-                { label: "Carbs", value: previewMacros.carbsGrams, unit: "g" },
-                { label: "Fat", value: previewMacros.fatGrams, unit: "g" },
-                { label: "Fiber", value: previewMacros.fiberGrams, unit: "g" },
-                { label: "Sugar", value: previewMacros.sugarGrams, unit: "g" },
-              ].map(({ label, value, unit }) => (
-                <div key={label} className="text-center">
-                  <div className="font-mono text-[16px] font-medium tabular-nums text-primary">
-                    {value !== null ? Math.round(value) : "—"}
-                  </div>
-                  <div className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
-                    {label}
-                    {value !== null ? ` (${unit})` : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Save */}
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Add to log"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-3 p-5">
-      {/* Search input */}
-      <div className="relative">
-        <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-tertiary" aria-hidden />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search foods…"
-          className="w-full rounded-md border-[0.5px] border-border-default bg-canvas py-2 pl-8 pr-3 text-[13px] text-primary placeholder-tertiary focus:outline-none focus:ring-2 focus:ring-accent"
-          autoFocus
-        />
+    <div className="flex flex-col gap-4 p-5">
+      <button
+        type="button"
+        onClick={onBack}
+        className="caps-mono inline-flex cursor-pointer items-center gap-1 text-[10px] tracking-[0.04em] text-tertiary hover:text-secondary"
+      >
+        <i className="ti ti-arrow-left text-[12px]" aria-hidden />
+        Back to results
+      </button>
+
+      <div className="flex items-start gap-3">
+        <FoodImage imageUrl={food.imageUrl} imageStatus={food.imageStatus} size={48} />
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-medium text-primary">{food.name}</div>
+          {food.brand && (
+            <div className="mt-0.5 text-[12px] text-secondary">{food.brand}</div>
+          )}
+          {food.source === "OPEN_FOOD_FACTS" && (
+            <div className="mt-1 text-[11px] text-tertiary">
+              Nutrition data from Open Food Facts (ODbL)
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Results */}
-      {searching && (
-        <div className="py-6 text-center text-[13px] text-tertiary">
-          Searching…
-        </div>
-      )}
-      {!searching && query && results.length === 0 && (
-        <div className="py-6 text-center text-[13px] text-tertiary">
-          No foods found for &ldquo;{query}&rdquo;
-        </div>
-      )}
-      {!searching && results.length > 0 && (
-        <div className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default">
-          {results.map((food) => (
+      <div>
+        <label className="mb-1.5 block text-[11px] font-medium text-secondary">
+          Serving size
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          {food.servingSizes.map((s, i) => (
             <button
-              key={food.foodId}
+              key={i}
               type="button"
-              onClick={() => selectFood(food)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-canvas-sunken first:rounded-t-[10px] last:rounded-b-[10px]"
+              onClick={() => setServingIdx(i)}
+              className={`caps-mono cursor-pointer rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
+                servingIdx === i
+                  ? "border-accent bg-accent-bg text-accent-dim"
+                  : "border-border-default bg-canvas text-secondary hover:border-border-strong"
+              }`}
             >
-              <FoodImage imageUrl={food.imageUrl} imageStatus={food.imageStatus} size={40} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-primary">
-                  {food.name}
-                </div>
-                {food.brand && (
-                  <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
-                    {food.brand}
-                  </div>
-                )}
-              </div>
-              <div className="shrink-0 text-right">
-                <div className="font-mono text-[12px] tabular-nums text-secondary">
-                  {Math.round(food.macrosPer100g.caloriesKcal ?? 0)}
-                  <span className="ml-0.5 text-[10px] text-tertiary">kcal/100g</span>
-                </div>
-                <div className="caps-mono mt-0.5 text-[9px] text-tertiary">
-                  P {Math.round(food.macrosPer100g.proteinGrams ?? 0)}g · C{" "}
-                  {Math.round(food.macrosPer100g.carbsGrams ?? 0)}g · F{" "}
-                  {Math.round(food.macrosPer100g.fatGrams ?? 0)}g
-                </div>
-              </div>
+              {s.label}
+              <span className="ml-1 text-tertiary">({s.grams}g)</span>
             </button>
           ))}
         </div>
-      )}
-      {!query && (
-        <div className="py-6 text-center text-[13px] text-tertiary">
-          Type to search the food catalog
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-[11px] font-medium text-secondary">
+          Quantity
+        </label>
+        <div className="flex gap-1.5">
+          {QUANTITY_STEPS.map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => setQuantity(q)}
+              className={`caps-mono cursor-pointer rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
+                quantity === q
+                  ? "border-accent bg-accent-bg text-accent-dim"
+                  : "border-border-default bg-canvas text-secondary hover:border-border-strong"
+              }`}
+            >
+              {q}×
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {previewMacros && (
+        <div className="rounded-[10px] bg-canvas-sunken px-4 py-3">
+          <div className="caps-mono mb-2 text-[9px] tracking-[0.08em] text-tertiary">
+            Macro preview
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {[
+              { label: "Calories", value: previewMacros.caloriesKcal, unit: "kcal" },
+              { label: "Protein", value: previewMacros.proteinGrams, unit: "g" },
+              { label: "Carbs", value: previewMacros.carbsGrams, unit: "g" },
+              { label: "Fat", value: previewMacros.fatGrams, unit: "g" },
+              { label: "Fiber", value: previewMacros.fiberGrams, unit: "g" },
+              { label: "Sugar", value: previewMacros.sugarGrams, unit: "g" },
+            ].map(({ label, value, unit }) => (
+              <div key={label} className="text-center">
+                <div className="font-mono text-[16px] font-medium tabular-nums text-primary">
+                  {value !== null ? Math.round(value) : "—"}
+                </div>
+                <div className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
+                  {label}
+                  {value !== null ? ` (${unit})` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Add to log"}
+        </button>
+      </div>
     </div>
   );
 }
 
-// ── Quick add tab ─────────────────────────────────────────────────────
+// ── Quick add (manual macros, derived calories) ──────────────────────
 
-const EMPTY_QUICK: {
-  foodName: string;
-  caloriesKcal: string;
-  proteinGrams: string;
-  carbsGrams: string;
-  fatGrams: string;
-  fiberGrams: string;
-  sugarGrams: string;
-} = {
+const EMPTY_QUICK = {
   foodName: "",
   caloriesKcal: "",
   proteinGrams: "",
   carbsGrams: "",
   fatGrams: "",
-  sugarGrams: "",
   fiberGrams: "",
+  sugarGrams: "",
 };
 
-function QuickAddTab({
+function QuickAddPane({
   meal,
   date,
   addEntry,
+  onBack,
   onClose,
   toast,
 }: {
   meal: Meal;
   date: string;
   addEntry: Props["addEntry"];
+  onBack: () => void;
   onClose: () => void;
   toast: ReturnType<typeof useToast>;
 }) {
@@ -509,13 +641,25 @@ function QuickAddTab({
     return isNaN(n) ? null : n;
   }
 
+  // Calories are derived from the macros (4/4/9, the backend's invariant) the
+  // moment any macro is typed; with no macros the user may enter kcal directly.
+  const hasMacros =
+    fields.proteinGrams.trim() !== "" ||
+    fields.carbsGrams.trim() !== "" ||
+    fields.fatGrams.trim() !== "";
+  const derived = derivedCaloriesKcal(
+    numOr(fields.proteinGrams),
+    numOr(fields.carbsGrams),
+    numOr(fields.fatGrams),
+  );
+
   async function handleSave() {
     if (!fields.foodName.trim()) {
       toast.error("Food name is required");
       return;
     }
     const macros: Macros = {
-      caloriesKcal: numOr(fields.caloriesKcal),
+      caloriesKcal: hasMacros ? derived : numOr(fields.caloriesKcal),
       proteinGrams: numOr(fields.proteinGrams),
       carbsGrams: numOr(fields.carbsGrams),
       fatGrams: numOr(fields.fatGrams),
@@ -545,9 +689,14 @@ function QuickAddTab({
 
   return (
     <div className="flex flex-col gap-4 p-5">
-      <p className="text-[13px] text-secondary">
-        Enter macros directly without searching the catalog.
-      </p>
+      <button
+        type="button"
+        onClick={onBack}
+        className="caps-mono inline-flex cursor-pointer items-center gap-1 text-[10px] tracking-[0.04em] text-tertiary hover:text-secondary"
+      >
+        <i className="ti ti-arrow-left text-[12px]" aria-hidden />
+        Back
+      </button>
 
       <div>
         <label className="mb-1 block text-[11px] font-medium text-secondary">
@@ -563,11 +712,6 @@ function QuickAddTab({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <MacroField
-          label="Calories (kcal)"
-          value={fields.caloriesKcal}
-          onChange={(v) => set("caloriesKcal", v)}
-        />
         <MacroField
           label="Protein (g)"
           value={fields.proteinGrams}
@@ -593,7 +737,23 @@ function QuickAddTab({
           value={fields.sugarGrams}
           onChange={(v) => set("sugarGrams", v)}
         />
+        {!hasMacros && (
+          <MacroField
+            label="Calories (kcal)"
+            value={fields.caloriesKcal}
+            onChange={(v) => set("caloriesKcal", v)}
+          />
+        )}
       </div>
+
+      {hasMacros && (
+        <div className="rounded-[10px] bg-canvas-sunken px-4 py-2.5 font-mono text-[12px] tabular-nums text-secondary">
+          = {Math.round(derived ?? 0)} kcal{" "}
+          <span className="caps-mono text-[9px] tracking-[0.04em] text-tertiary">
+            computed from macros
+          </span>
+        </div>
+      )}
 
       <div className="flex justify-end gap-2">
         <button
@@ -610,211 +770,6 @@ function QuickAddTab({
           className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? "Saving…" : "Add to log"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Describe a meal tab ───────────────────────────────────────────────
-
-function DescribeTab({
-  meal,
-  date,
-  describeMeal,
-  logDescribedMeal,
-  onClose,
-  toast,
-}: {
-  meal: Meal;
-  date: string;
-  describeMeal: Props["describeMeal"];
-  logDescribedMeal: Props["logDescribedMeal"];
-  onClose: () => void;
-  toast: ReturnType<typeof useToast>;
-}) {
-  const [description, setDescription] = useState("");
-  const [resolving, setResolving] = useState(false);
-  const [resolved, setResolved] = useState<DescribedMeal | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  async function handleResolve() {
-    const text = description.trim();
-    if (!text) {
-      toast.error("Describe what you ate first");
-      return;
-    }
-    setResolving(true);
-    try {
-      const result = await describeMeal(text);
-      setResolved(result);
-    } catch {
-      toast.error("Couldn't understand that meal — try rephrasing");
-    } finally {
-      setResolving(false);
-    }
-  }
-
-  async function handleLog() {
-    if (!resolved) return;
-    setSaving(true);
-    try {
-      await logDescribedMeal(date, { mealId: resolved.mealId, meal });
-      toast.success(`${resolved.name} added to ${MEAL_LABELS[meal]}`);
-      onClose();
-    } catch {
-      toast.error("Failed to add meal");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Preview of the resolved meal: matched-vs-new, photo, macros, ingredients.
-  if (resolved) {
-    const m = resolved.macros;
-    return (
-      <div className="flex flex-col gap-4 p-5">
-        <button
-          type="button"
-          onClick={() => setResolved(null)}
-          className="caps-mono inline-flex items-center gap-1 text-[10px] tracking-[0.04em] text-tertiary hover:text-secondary"
-        >
-          <i className="ti ti-arrow-left text-[12px]" aria-hidden />
-          Edit description
-        </button>
-
-        <div className="flex items-start gap-3">
-          <FoodImage imageUrl={resolved.imageUrl} imageStatus={resolved.imageStatus} size={48} />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <div className="text-[15px] font-medium text-primary">{resolved.name}</div>
-              <span
-                className={`caps-mono shrink-0 rounded-[3px] px-1.5 py-px text-[8px] tracking-[0.06em] ${
-                  resolved.matched
-                    ? "bg-accent-bg text-accent-dim"
-                    : "bg-canvas-sunken text-tertiary"
-                }`}
-              >
-                {resolved.matched ? "previous meal" : "new meal"}
-              </span>
-            </div>
-            <div className="mt-0.5 text-[12px] text-secondary">
-              {resolved.matched
-                ? "Found a meal you've logged before — reusing its macros & photo."
-                : "Created from your description, with a photo generating now."}
-            </div>
-          </div>
-        </div>
-
-        {/* Macro summary for the whole meal */}
-        <div className="rounded-[10px] bg-canvas-sunken px-4 py-3">
-          <div className="caps-mono mb-2 text-[9px] tracking-[0.08em] text-tertiary">
-            Meal total{resolved.totalGrams ? ` · ${Math.round(resolved.totalGrams)} g` : ""}
-          </div>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {[
-              { label: "Calories", value: m.caloriesKcal, unit: "kcal" },
-              { label: "Protein", value: m.proteinGrams, unit: "g" },
-              { label: "Carbs", value: m.carbsGrams, unit: "g" },
-              { label: "Fat", value: m.fatGrams, unit: "g" },
-              { label: "Fiber", value: m.fiberGrams, unit: "g" },
-              { label: "Sugar", value: m.sugarGrams, unit: "g" },
-            ].map(({ label, value, unit }) => (
-              <div key={label} className="text-center">
-                <div className="font-mono text-[16px] font-medium tabular-nums text-primary">
-                  {value !== null ? Math.round(value) : "—"}
-                </div>
-                <div className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
-                  {label}
-                  {value !== null ? ` (${unit})` : ""}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Ingredient breakdown */}
-        {resolved.ingredients.length > 0 && (
-          <div>
-            <div className="caps-mono mb-1.5 text-[9px] tracking-[0.08em] text-tertiary">
-              {resolved.ingredients.length} ingredient
-              {resolved.ingredients.length === 1 ? "" : "s"}
-            </div>
-            <div className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default">
-              {resolved.ingredients.map((ing, i) => (
-                <div key={i} className="flex items-center justify-between px-4 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] text-primary">{ing.name}</div>
-                    {ing.servingLabel && (
-                      <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
-                        {ing.servingLabel}
-                      </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 font-mono text-[12px] tabular-nums text-secondary">
-                    {Math.round(ing.macros.caloriesKcal ?? 0)}
-                    <span className="ml-0.5 text-[10px] text-tertiary">kcal</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleLog}
-            disabled={saving}
-            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Adding…" : `Add to ${MEAL_LABELS[meal]}`}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Stage 1: free-text description.
-  return (
-    <div className="flex flex-col gap-4 p-5">
-      <p className="text-[13px] text-secondary">
-        Describe what you ate in plain words. We&rsquo;ll find a meal you&rsquo;ve
-        logged before, or create one with estimated macros and a matching photo.
-      </p>
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="e.g. grilled chicken breast with white rice and steamed broccoli"
-        rows={3}
-        className="w-full resize-none rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary placeholder-tertiary focus:outline-none focus:ring-2 focus:ring-accent"
-        autoFocus
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleResolve();
-        }}
-      />
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleResolve}
-          disabled={resolving}
-          className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {resolving ? "Finding…" : "Find or create meal"}
         </button>
       </div>
     </div>

@@ -14,6 +14,8 @@ export type Meal = "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK";
 
 export type EntrySource = "MANUAL" | "CATALOG" | "BARCODE" | "LABEL" | "PHOTO";
 
+export type AnalysisStatus = "NONE" | "ANALYZING" | "READY" | "FAILED";
+
 export type Entry = {
   entryId: string;
   meal: Meal;
@@ -28,9 +30,15 @@ export type Entry = {
   // For a composite (photo-logged) meal this is the finished-meal image.
   imageUrl: string | null;
   imageStatus: ImageStatus;
+  // Background AI-analysis lifecycle: ANALYZING while a captured photo or an
+  // async-described meal is still resolving server-side, then READY/FAILED.
+  analysisStatus?: AnalysisStatus;
   // Present for a composite meal: its components, each with a raw-ingredient
   // image. Null/absent for a plain single-food entry.
   ingredients?: EntryIngredient[] | null;
+  // The day the entry was logged on (ISO yyyy-MM-dd). Populated by reads that
+  // span days (recent-meals), where it identifies the source for a re-log.
+  date?: string;
   // ISO timestamp of when the entry was first logged (server-stamped). Null for
   // a not-yet-persisted placeholder (e.g. an in-flight photo capture).
   createdAt: string | null;
@@ -174,6 +182,13 @@ export type LogDescribedMealBody = {
   meal: Meal;
 };
 
+// Body for POST /api/me/nutrition/{date}/relog: one-tap copy of a past entry.
+export type RelogBody = {
+  sourceDate: string;
+  sourceEntryId: string;
+  meal: Meal;
+};
+
 // Display helpers
 export const MEAL_LABELS: Record<Meal, string> = {
   BREAKFAST: "Breakfast",
@@ -193,3 +208,28 @@ export const MEALS: Meal[] = ["BREAKFAST", "LUNCH", "DINNER", "SNACK"];
 
 export const QUANTITY_STEPS = [0.5, 1, 1.5, 2] as const;
 export type QuantityStep = (typeof QUANTITY_STEPS)[number];
+
+/**
+ * Infer the meal from the local hour of day (same windows as Android/backend):
+ * breakfast 04–10, lunch 11–15, dinner 16–21, snack otherwise.
+ */
+export function mealForHour(hour: number): Meal {
+  if (hour >= 4 && hour <= 10) return "BREAKFAST";
+  if (hour >= 11 && hour <= 15) return "LUNCH";
+  if (hour >= 16 && hour <= 21) return "DINNER";
+  return "SNACK";
+}
+
+/**
+ * Calories derived from macros under Atwater 4/4/9 — the invariant the backend
+ * enforces on every write, so forms can show the value live as the user types.
+ * Null when no macro is present at all (calories-only entries stay enterable).
+ */
+export function derivedCaloriesKcal(
+  proteinGrams: number | null,
+  carbsGrams: number | null,
+  fatGrams: number | null,
+): number | null {
+  if (proteinGrams === null && carbsGrams === null && fatGrams === null) return null;
+  return (proteinGrams ?? 0) * 4 + (carbsGrams ?? 0) * 4 + (fatGrams ?? 0) * 9;
+}

@@ -188,3 +188,57 @@ table needed).
 ### A1-3: Times on the wire are "HH:mm" strings, windows by enum name
 Matches the existing date-as-ISO-string convention in Firestore docs and
 keeps the DTO trivially JSON-friendly on both clients.
+
+---
+
+## Parts B/D/E — Android client
+
+### AND-1: Re-log goes through a new server-side copy endpoint
+**Q:** Re-logging a recent composite meal via the existing composite-meal
+endpoint would re-create one catalog food per ingredient and re-run image
+generation on every repeat.
+**Decision:** Added `POST /api/me/nutrition/{date}/relog`
+`{sourceDate, sourceEntryId, meal}` — the server copies the source entry
+(foodIds, frozen macros, ingredients, finished-meal image) with no AI work.
+The recent-meals response therefore needed each entry to carry its `date`
+(added as a nullable field on the wire model).
+
+### AND-2: Synthetic "Uploading photo…" rows live in memory, not the mirror
+**Q:** Where does the optimistic row live while a capture photo uploads in
+the background? Writing it to the Room mirror would either replay through
+the outbox (wrong — the upload worker creates the server entry) or be pruned
+by the next server reconcile.
+**Decision:** A singleton in-memory `PendingCaptureStore` feeds synthetic
+ANALYZING rows into the Today page (presentation-only merge; totals
+untouched; rows are guarded from edit/delete/drag). The JPEG itself is
+parked in a cache file and uploaded by a WorkManager worker (network
+constraint, exponential backoff, 5 attempts, survives process death). After
+process death the synthetic row is gone but the upload still completes and
+the entry appears on the next refresh.
+
+### AND-3: Terminal upload failure drops the row silently
+After 5 failed attempts the worker deletes the parked photo and clears the
+synthetic row — no notification. Rationale: the capture screen already
+requires connectivity to shoot, so terminal failures are rare; a stuck
+forever-"uploading" row is worse. Flagged for review — a retry affordance
+could be added later.
+
+### AND-4: Describe placeholder still does one quick POST before the sheet closes
+"Fire-and-forget" waits only for the 202 (placeholder creation), not for
+resolution. The sheet closes immediately after; a network error surfaces as
+the day-screen error banner. Offline describing is not supported (AI flows
+are online-only per the existing D17 decision).
+
+### AND-5: Search and describe share one text field
+Short queries search the catalog (debounced, inline trailing spinner — the
+old layout-shifting centered spinner block is gone); beneath the results a
+standing "✨ Log “…” as a meal" row describes whatever was typed. The
+separate Describe tab/preview UI was deleted. Recents render as the
+default empty-query content with one-tap re-log; quick add stays as a row
+beneath.
+
+### AND-6: Calories-only entries keep a manual kcal field
+In quick-add and entry-edit, the calories field is replaced by a live
+"computed from macros" readout the moment any macro is typed (4/4/9), but
+when protein/carbs/fat are all blank a manual calories field remains — same
+rule as the backend (D-1).

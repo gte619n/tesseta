@@ -4,13 +4,14 @@ import { revalidatePath } from "next/cache";
 import {
   getDay,
   getTarget,
+  getRecentMeals,
   addEntry,
   updateEntry,
   updateIngredient,
   deleteEntry,
   searchFoods,
-  describeMeal,
-  logDescribedMeal,
+  describeMealAsync,
+  relogEntry,
 } from "@/lib/nutrition-api";
 import type {
   Meal,
@@ -19,6 +20,7 @@ import type {
   UpdateEntryBody,
   UpdateIngredientBody,
   LogDescribedMealBody,
+  RelogBody,
 } from "@/lib/types/nutrition";
 import { MEALS } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
@@ -104,10 +106,12 @@ export default async function NutritionPage(props: {
   const date = parseDate(rawDate);
   const isToday = date === today();
 
-  // Pre-fetch server-side
-  const [dayResult, target] = await Promise.all([
+  // Pre-fetch server-side (recents back the add modal's one-tap list; a
+  // failure just leaves the list empty — search/describe still work).
+  const [dayResult, target, recents] = await Promise.all([
     getDay(date).catch(() => null),
     getTarget(),
+    getRecentMeals().catch(() => []),
   ]);
 
   const day = dayResult
@@ -166,30 +170,35 @@ export default async function NutritionPage(props: {
     return searchFoods(q);
   }
 
-  async function describeMealAction(description: string) {
-    "use server";
-    return describeMeal(description);
-  }
-
-  async function logDescribedMealAction(
+  async function describeMealAsyncAction(
     entryDate: string,
     body: LogDescribedMealBody,
   ) {
     "use server";
-    await logDescribedMeal(entryDate, body);
+    await describeMealAsync(entryDate, body);
+    revalidatePath("/me/nutrition");
+  }
+
+  async function relogAction(entryDate: string, body: RelogBody) {
+    "use server";
+    await relogEntry(entryDate, body);
     revalidatePath("/me/nutrition");
   }
 
   const prevDate = addDays(date, -1);
   const nextDate = addDays(date, 1);
   const canGoForward = date < today();
-  const hasGeneratingImage = day.meals.some((m) =>
-    m.entries.some((e) => e.imageStatus === "PENDING"),
+  // Keep refreshing while anything is still settling server-side: a generating
+  // image OR an async capture/describe still ANALYZING.
+  const hasSettlingEntry = day.meals.some((m) =>
+    m.entries.some(
+      (e) => e.imageStatus === "PENDING" || e.analysisStatus === "ANALYZING",
+    ),
   );
 
   return (
     <main className="min-h-screen bg-canvas p-8">
-      <PendingImageRefresher active={hasGeneratingImage} />
+      <PendingImageRefresher active={hasSettlingEntry} />
       <div className="mx-auto max-w-[920px] space-y-6">
         <Link
           href="/"
@@ -286,8 +295,9 @@ export default async function NutritionPage(props: {
           updateIngredient={updateIngredientAction}
           deleteEntry={deleteEntryAction}
           searchFoods={searchFoodsAction}
-          describeMeal={describeMealAction}
-          logDescribedMeal={logDescribedMealAction}
+          describeMealAsync={describeMealAsyncAction}
+          relogEntry={relogAction}
+          recents={recents}
         />
       </div>
     </main>

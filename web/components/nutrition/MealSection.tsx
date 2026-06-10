@@ -9,8 +9,8 @@ import type {
   Macros,
   UpdateEntryBody,
   UpdateIngredientBody,
-  DescribedMeal,
   LogDescribedMealBody,
+  RelogBody,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS, MEAL_ICONS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -59,11 +59,12 @@ type Props = {
       source: string;
     }[]
   >;
-  describeMeal: (description: string) => Promise<DescribedMeal>;
-  logDescribedMeal: (
+  describeMealAsync: (
     date: string,
     body: LogDescribedMealBody,
   ) => Promise<void>;
+  relogEntry: (date: string, body: RelogBody) => Promise<void>;
+  recents: Entry[];
   // The entryId currently being dragged (lifted by the DnD context), so this
   // section can suppress its drop highlight when the entry already lives here.
   activeId: string | null;
@@ -77,8 +78,9 @@ export function MealSection({
   updateIngredient,
   deleteEntry,
   searchFoods,
-  describeMeal,
-  logDescribedMeal,
+  describeMealAsync,
+  relogEntry,
+  recents,
   activeId,
 }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -88,8 +90,10 @@ export function MealSection({
   const confirm = useConfirm();
 
   // A composite (photo-logged) meal opens the ingredients modal; everything
-  // else opens the single-food edit modal.
+  // else opens the single-food edit modal. A still-analyzing placeholder has
+  // nothing to edit yet.
   function openEntry(entry: Entry) {
+    if (entry.analysisStatus === "ANALYZING") return;
     if (entry.ingredients && entry.ingredients.length > 0) {
       setEditingComposite(entry);
     } else {
@@ -193,12 +197,13 @@ export function MealSection({
       <AddFoodModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        meal={group.meal}
+        initialMeal={group.meal}
         date={date}
+        recents={recents}
         addEntry={addEntry}
         searchFoods={searchFoods}
-        describeMeal={describeMeal}
-        logDescribedMeal={logDescribedMeal}
+        describeMealAsync={describeMealAsync}
+        relogEntry={relogEntry}
       />
 
       {editing && (
@@ -273,7 +278,18 @@ function EntryRow({
             <span className="truncate text-[13px] font-medium text-primary group-hover:text-accent-dim">
               {entry.foodName}
             </span>
-            {entry.source === "MANUAL" && (
+            {entry.analysisStatus === "ANALYZING" && (
+              <span className="caps-mono shrink-0 animate-pulse rounded-[3px] bg-accent-bg px-1.5 py-px text-[8px] tracking-[0.06em] text-accent-dim">
+                <i className="ti ti-loader-2 mr-0.5 inline-block animate-spin text-[8px]" aria-hidden />
+                processing
+              </span>
+            )}
+            {entry.analysisStatus === "FAILED" && (
+              <span className="caps-mono shrink-0 rounded-[3px] bg-canvas-sunken px-1.5 py-px text-[8px] tracking-[0.06em] text-alert">
+                couldn&rsquo;t process
+              </span>
+            )}
+            {entry.source === "MANUAL" && entry.analysisStatus !== "ANALYZING" && (
               <span className="caps-mono shrink-0 rounded-[3px] bg-canvas-sunken px-1 py-px text-[8px] tracking-[0.06em] text-tertiary">
                 quick add
               </span>

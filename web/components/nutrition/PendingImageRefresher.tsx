@@ -20,7 +20,10 @@ export function PendingImageRefresher({ active }: { active: boolean }) {
       return;
     }
     const id = setInterval(() => {
-      if (attempts.current >= 20) {
+      // ~3 min budget: async photo/describe analysis can take a couple of
+      // minutes before the ANALYZING placeholder finalizes (the server fails
+      // stale placeholders at 5 min, so polling longer is wasted).
+      if (attempts.current >= 60) {
         clearInterval(id);
         return;
       }
