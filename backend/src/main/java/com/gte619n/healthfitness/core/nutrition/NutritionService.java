@@ -63,8 +63,10 @@ public class NutritionService {
 
     /**
      * Upsert the nutrition log for {@code date}. Any existing row for
-     * that day is replaced. {@code caloriesKcal} is optional — when
-     * null, the calories metric is derived from macros at read time.
+     * that day is replaced. Calories are derived from the macros
+     * (4/4/9) whenever any macro is present, so the stored day can never
+     * disagree with its own macro totals; a calories-only log keeps the
+     * supplied value.
      */
     public NutritionDailyLog logDay(
         String userId,
@@ -82,8 +84,12 @@ public class NutritionService {
         if (date == null) {
             throw new IllegalArgumentException("date is required");
         }
+        Macros derived = new Macros(
+            caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams)
+            .withDerivedCalories();
         NutritionDailyLog log = new NutritionDailyLog(
-            userId, date, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams, caloriesKcal, null, null);
+            userId, date, derived.proteinGrams(), derived.carbsGrams(), derived.fatGrams(),
+            derived.fiberGrams(), derived.sugarGrams(), derived.caloriesKcal(), null, null);
         repository.save(log);
         // Publish after the save so a failed save never fires events.
         metricChangedPublisher.publishAll(userId, NUTRITION_KEYS);
@@ -166,7 +172,8 @@ public class NutritionService {
         }
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
-            servingGrams, quantity, macros, null, null, source,
+            servingGrams, quantity, macros != null ? macros.withDerivedCalories() : null,
+            null, null, source,
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
@@ -216,6 +223,7 @@ public class NutritionService {
         if (ingredients == null || ingredients.isEmpty()) {
             throw new IllegalArgumentException("a composite meal needs at least one ingredient");
         }
+        ingredients = withDerivedCalories(ingredients);
         Macros total = Macros.zero();
         double grams = 0.0;
         for (CompositeIngredient ing : ingredients) {
@@ -329,6 +337,7 @@ public class NutritionService {
         }
         FoodEntry existing = entries.findById(userId, date, entryId)
             .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        ingredients = withDerivedCalories(ingredients);
         Macros total = Macros.zero();
         double grams = 0.0;
         for (CompositeIngredient ing : ingredients) {
@@ -367,7 +376,8 @@ public class NutritionService {
         FoodEntry updated = new FoodEntry(
             existing.userId(), existing.date(), existing.entryId(), existing.meal(),
             foodId, foodName, servingLabel, servingGrams,
-            quantity != null ? quantity : 1.0, macros, existing.photoRef(),
+            quantity != null ? quantity : 1.0,
+            macros != null ? macros.withDerivedCalories() : null, existing.photoRef(),
             existing.contentHash(), existing.source(), null, null, FoodImageStatus.NONE,
             EntryAnalysisStatus.READY, existing.createdAt(), null);
         entries.save(updated);
@@ -438,6 +448,7 @@ public class NutritionService {
         }
         List<CompositeIngredient> updated = new ArrayList<>(current);
         updated.set(index, current.get(index).withPortion(servingGrams, servingLabel, quantity));
+        updated = withDerivedCalories(updated);
 
         // Preserve the entry's meal portion (entry.quantity) when resumming.
         double portion = existing.quantity() != null ? existing.quantity() : 1.0;
@@ -480,7 +491,7 @@ public class NutritionService {
             : (existing.quantity() != null ? existing.quantity() : 1.0);
         Macros newMacros = existing.isComposite()
             ? compositeTotal(existing.ingredients(), newQuantity)
-            : (macros != null ? macros : existing.macros());
+            : (macros != null ? macros.withDerivedCalories() : existing.macros());
         FoodEntry updated = new FoodEntry(
             existing.userId(),
             existing.date(),
@@ -524,7 +535,28 @@ public class NutritionService {
         for (CompositeIngredient ing : ingredients) {
             total = total.plus(ing.macros());
         }
-        return total.scale(portion);
+        return total.scale(portion).withDerivedCalories();
+    }
+
+    /**
+     * Normalize every ingredient so both its per-100g baseline and its portion
+     * snapshot carry macro-derived calories. Entries written before derivation
+     * existed pass through here on edit, healing legacy values.
+     */
+    private static List<CompositeIngredient> withDerivedCalories(
+        List<CompositeIngredient> ingredients) {
+        List<CompositeIngredient> out = new ArrayList<>(ingredients.size());
+        for (CompositeIngredient ing : ingredients) {
+            out.add(new CompositeIngredient(
+                ing.name(),
+                ing.foodId(),
+                ing.macrosPer100g() != null ? ing.macrosPer100g().withDerivedCalories() : null,
+                ing.servingGrams(),
+                ing.servingLabel(),
+                ing.quantity(),
+                ing.macros() != null ? ing.macros().withDerivedCalories() : null));
+        }
+        return out;
     }
 
     /**

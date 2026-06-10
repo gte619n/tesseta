@@ -37,7 +37,34 @@ class NutritionServiceTest {
         assertEquals(150.0, found.get().proteinGrams(), 1e-9);
         assertEquals(200.0, found.get().carbsGrams(), 1e-9);
         assertEquals(60.0, found.get().fatGrams(), 1e-9);
-        assertEquals(2000.0, found.get().caloriesKcal(), 1e-9);
+        // Calories are derived from the macros (4/4/9), not the supplied 2000.
+        assertEquals(150.0 * 4 + 200.0 * 4 + 60.0 * 9, found.get().caloriesKcal(), 1e-9);
+    }
+
+    @Test
+    void logDay_withoutAnyMacros_keepsSuppliedCalories() {
+        InMemNutrition repo = new InMemNutrition();
+        NutritionService svc = new NutritionService(repo, new InMemEntries(), capturingPublisher(new ArrayList<>()));
+
+        LocalDate date = LocalDate.of(2026, 5, 21);
+        svc.logDay(USER, date, null, null, null, null, null, 350.0);
+
+        assertEquals(350.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+    }
+
+    @Test
+    void addEntry_derivesCaloriesFromMacros() {
+        InMemNutrition rollups = new InMemNutrition();
+        NutritionService svc = new NutritionService(rollups, new InMemEntries(), capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 22);
+
+        FoodEntry entry = svc.addEntry(
+            USER, date, MealType.SNACK, null, "Protein shake", "1 bottle", 414.0, 1.0,
+            new Macros(999.0, 42.0, 8.0, 4.5, 0.0, 5.0), EntrySource.MANUAL);
+
+        assertEquals(42.0 * 4 + 8.0 * 4 + 4.5 * 9, entry.macros().caloriesKcal(), 1e-9);
+        assertEquals(entry.macros().caloriesKcal(),
+            svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
     }
 
     @Test
@@ -117,9 +144,13 @@ class NutritionServiceTest {
         assertEquals(150.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
     }
 
-    /** A composite ingredient of {@code 100 g × 1} contributing {@code kcal} calories. */
+    /**
+     * A composite ingredient of {@code 100 g × 1} contributing {@code kcal}
+     * calories — expressed as protein ({@code kcal/4} g) so the macros are
+     * physically consistent with the calories under 4/4/9 derivation.
+     */
     private static CompositeIngredient ingredient(String name, double kcal) {
-        Macros per100g = new Macros(kcal, 0.0, 0.0, 0.0, 0.0, 0.0);
+        Macros per100g = new Macros(kcal, kcal / 4.0, 0.0, 0.0, 0.0, 0.0);
         return new CompositeIngredient(name, null, per100g, 100.0, "100 g", 1.0, per100g);
     }
 

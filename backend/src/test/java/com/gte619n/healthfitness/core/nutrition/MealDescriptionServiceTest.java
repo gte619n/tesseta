@@ -92,7 +92,8 @@ class MealDescriptionServiceTest {
         FoodEntry stored = f.entries.findById(USER, DATE, entry.entryId()).orElseThrow();
         assertTrue(stored.isComposite());
         assertEquals(2, stored.ingredients().size(), "full ingredient breakdown is preserved");
-        assertEquals(451.0, stored.macros().caloriesKcal(), 1e-6);
+        // Calories derived from the summed macros: 42.4·4 + 7·4 + 26.4·9 = 435.2.
+        assertEquals(42.4 * 4 + 7.0 * 4 + 26.4 * 9, stored.macros().caloriesKcal(), 1e-6);
         assertEquals("http://img/meal-2.png", stored.mealImageUrl(),
             "a READY saved-meal photo is reused, not regenerated");
         assertEquals(FoodImageStatus.READY, stored.mealImageStatus());

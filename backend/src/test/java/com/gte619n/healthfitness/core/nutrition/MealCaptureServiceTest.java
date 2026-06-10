@@ -47,8 +47,8 @@ class MealCaptureServiceTest {
         assertEquals("Greek yogurt", done.foodName());
         assertFalse(done.isComposite(), "a packaged product is a single food, not composite");
         assertNotNull(done.foodId(), "a catalog food backs the product image");
-        // 170 g of 59 kcal/100 g ≈ 100.3 kcal
-        assertEquals(100.3, done.macros().caloriesKcal(), 1e-6);
+        // 170 g at derived 58 kcal/100 g (10·4 + 3.6·4 + 0.4·9) = 98.6 kcal
+        assertEquals((10.0 * 4 + 3.6 * 4 + 0.4 * 9) * 1.7, done.macros().caloriesKcal(), 1e-6);
     }
 
     @Test
@@ -72,8 +72,9 @@ class MealCaptureServiceTest {
         assertTrue(done.isComposite());
         assertEquals(2, done.ingredients().size());
         assertEquals("Grilled salmon", done.ingredients().get(0).name());
-        // total = 200 g salmon (416 kcal) + 100 g broccoli (35 kcal)
-        assertEquals(451.0, done.macros().caloriesKcal(), 1e-6);
+        // total = 200 g salmon (derived 197 kcal/100 g) + 100 g broccoli (derived 41.2)
+        assertEquals((20.0 * 4 + 13.0 * 9) * 2.0 + (2.4 * 4 + 7.0 * 4 + 0.4 * 9),
+            done.macros().caloriesKcal(), 1e-6);
     }
 
     @Test

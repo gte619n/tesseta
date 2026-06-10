@@ -158,7 +158,7 @@ public class FoodCatalogService {
             brand,
             barcode,
             category,
-            macrosPer100g,
+            macrosPer100g != null ? macrosPer100g.withDerivedCalories() : null,
             servingSizes != null ? servingSizes : List.of(),
             defaultServingIndex,
             source != null ? source : FoodSource.USER,

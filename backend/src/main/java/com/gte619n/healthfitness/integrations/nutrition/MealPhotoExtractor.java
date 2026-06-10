@@ -182,6 +182,8 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
     private static Macros macros(Object raw) {
         if (!(raw instanceof Map<?, ?> mm)) return null;
         Map<String, Object> m = (Map<String, Object>) mm;
+        // The model's kcal estimate can drift from its own macro estimates;
+        // derive calories so they are always consistent (4/4/9).
         return new Macros(
             dbl(m.get("caloriesKcal")),
             dbl(m.get("proteinGrams")),
@@ -189,7 +191,7 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
             dbl(m.get("fatGrams")),
             dbl(m.get("fiberGrams")),
             dbl(m.get("sugarGrams"))
-        );
+        ).withDerivedCalories();
     }
 
     private static String str(Object o) {
