@@ -29,6 +29,7 @@ import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
+import com.gte619n.healthfitness.domain.nutrition.derivedCaloriesKcal
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
@@ -59,18 +60,29 @@ fun EditEntrySheet(
     var servingGrams by remember(entry.entryId) { mutableStateOf(trimDouble(entry.servingGrams ?: 0.0)) }
     var quantity by remember(entry.entryId) { mutableStateOf(entry.quantity) }
     var quantityText by remember(entry.entryId) { mutableStateOf(trimDouble(entry.quantity)) }
-    var kcal by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.caloriesKcal)) }
+    var manualKcal by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.caloriesKcal)) }
     var protein by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.proteinGrams)) }
     var carbs by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.carbsGrams)) }
     var fat by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.fatGrams)) }
     var fiber by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.fiberGrams)) }
     var sugar by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.sugarGrams)) }
 
+    // Calories follow the macros (4/4/9, the backend's invariant) whenever any
+    // macro is present; only a macro-less (calories-only) entry keeps a manually
+    // editable calories field.
+    val hasMacros = protein.isNotBlank() || carbs.isNotBlank() || fat.isNotBlank()
+    val derivedKcal = derivedCaloriesKcal(
+        protein.toDoubleOrNull(),
+        carbs.toDoubleOrNull(),
+        fat.toDoubleOrNull(),
+    )
+    val kcal = if (hasMacros) macroStr(derivedKcal) else manualKcal
+
     fun rescale(gramsStr: String, qty: Double) {
         val grams = gramsStr.toDoubleOrNull() ?: return
         if (grams <= 0.0) return
         val scaled = per100g.forPortion(grams, qty)
-        kcal = macroStr(scaled.caloriesKcal)
+        manualKcal = macroStr(scaled.caloriesKcal)
         protein = macroStr(scaled.proteinGrams)
         carbs = macroStr(scaled.carbsGrams)
         fat = macroStr(scaled.fatGrams)
@@ -187,9 +199,18 @@ fun EditEntrySheet(
             )
             Spacer(Modifier.height(16.dp))
 
-            // ── Macros: calories full-width, then two-up rows ─────────────
+            // ── Macros: calories derived from them (4/4/9), then two-up rows ──
             Text("Macros", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            EditNumberField("Calories (kcal)", kcal, Modifier.fillMaxWidth()) { kcal = it }
+            if (hasMacros) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Calories: ${derivedKcal?.roundToInt() ?: 0} kcal — computed from macros",
+                    style = Hf.type.monoSm,
+                    color = Hf.colors.textSecondary,
+                )
+            } else {
+                EditNumberField("Calories (kcal)", manualKcal, Modifier.fillMaxWidth()) { manualKcal = it }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 EditNumberField("Protein (g)", protein, Modifier.weight(1f)) { protein = it }
                 EditNumberField("Carbs (g)", carbs, Modifier.weight(1f)) { carbs = it }
