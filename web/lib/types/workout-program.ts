@@ -33,11 +33,16 @@ export type PrescriptionExercise = {
 };
 
 // One set as actually performed. Populated on completed-session snapshots
-// (history import); null/absent on plan templates. Reps are null in the
-// imported export — only the weight was recorded.
+// (history import + the IMPL-16 logger); null/absent on plan templates. Reps
+// are null in the imported export — only the weight was recorded. RPE, rest,
+// and the per-set timestamp are full actuals from live logging (ADR-0012
+// Decision 2) — always nullable, never required.
 export type LoggedSet = {
   weightLbs: number | null;
   reps: number | null;
+  rpe: number | null;
+  restSeconds: number | null;
+  completedAt: string | null;
 };
 
 export type Prescription = {
@@ -136,6 +141,10 @@ export type WorkoutHistorySummary = {
 export type ScheduledWorkoutResponse = {
   scheduledId: string;
   date: string;
+  // Owning program. `scheduledId` is only unique within a program (IMPL-16 D1),
+  // so cross-program reads (Workout History) need this to address the
+  // completion upsert. Optional: program-scoped responses may omit it.
+  programId?: string | null;
   phaseId: string;
   dayId: string;
   dayLabel: string;
@@ -148,6 +157,35 @@ export type ScheduledWorkoutResponse = {
   // Performed-session metadata (history import). Null for PLANNED sessions.
   completedAt: string | null;
   durationSeconds: number | null;
+};
+
+// ── Session completion (IMPL-16 D2) ──────────────────────────────────
+//
+// PUT /api/me/workout-programs/{programId}/sessions/{scheduledId} — the
+// idempotent "log result / edit actuals" upsert from ADR-0012. Prescriptions
+// have no id, so logged sets key by (blockId, orderIndex) against the session
+// snapshot; unknown keys are a 400. Repeat PUTs replace actuals and re-run the
+// backend fan-out.
+
+export type LoggedSetInput = {
+  weightLbs: number | null;
+  reps: number | null;
+  rpe: number | null;
+  restSeconds: number | null;
+  completedAt: string | null;
+};
+
+export type LoggedPrescriptionInput = {
+  blockId: string;
+  orderIndex: number;
+  sets: LoggedSetInput[];
+};
+
+export type CompleteSessionRequest = {
+  status: "COMPLETED" | "SKIPPED";
+  completedAt: string | null; // ISO instant; required when COMPLETED
+  durationSeconds: number | null; // required when COMPLETED
+  logged: LoggedPrescriptionInput[]; // SKIPPED clears actuals (send [])
 };
 
 // ── Create / update request shapes (mirror backend records) ──────────

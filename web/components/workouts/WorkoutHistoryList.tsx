@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   ScheduledWorkoutResponse,
   PrescriptionExercise,
+  CompleteSessionRequest,
 } from "@/lib/types/workout-program";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
+import { LogSessionModal } from "./LogSessionModal";
 import { BLOCK_TYPE_LABEL } from "@/lib/types/exercise";
 import {
   formatDuration,
@@ -36,10 +39,23 @@ function formatClock(completedAt: string | null): string | null {
 
 export function WorkoutHistoryList({
   sessions,
+  logSession,
 }: {
   sessions: ScheduledWorkoutResponse[];
+  // Server action: completion upsert addressed by program + scheduled id —
+  // the after-the-fact "edit actuals" path (ADR-0012 D6). Rows without a
+  // programId (older backend responses) simply don't offer the edit.
+  logSession: (
+    programId: string,
+    scheduledId: string,
+    input: CompleteSessionRequest,
+  ) => Promise<void>;
 }) {
+  const router = useRouter();
   const [sheetExercise, setSheetExercise] = useState<PrescriptionExercise | null>(
+    null,
+  );
+  const [editTarget, setEditTarget] = useState<ScheduledWorkoutResponse | null>(
     null,
   );
 
@@ -59,12 +75,24 @@ export function WorkoutHistoryList({
             key={`${s.phaseId}-${s.scheduledId}`}
             session={s}
             onOpenExercise={setSheetExercise}
+            onEdit={s.programId ? setEditTarget : null}
           />
         ))}
       </div>
       <ExerciseDetailSheet
         exercise={sheetExercise}
         onClose={() => setSheetExercise(null)}
+      />
+      <LogSessionModal
+        session={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => {
+          setEditTarget(null);
+          router.refresh();
+        }}
+        save={(input) =>
+          logSession(editTarget!.programId!, editTarget!.scheduledId, input)
+        }
       />
     </>
   );
@@ -73,9 +101,11 @@ export function WorkoutHistoryList({
 function HistoryRow({
   session,
   onOpenExercise,
+  onEdit,
 }: {
   session: ScheduledWorkoutResponse;
   onOpenExercise: (e: PrescriptionExercise) => void;
+  onEdit: ((s: ScheduledWorkoutResponse) => void) | null;
 }) {
   const [open, setOpen] = useState(false);
   const setCount = totalLoggedSets(session);
@@ -83,32 +113,43 @@ function HistoryRow({
 
   return (
     <div className="rounded-[10px] border-[0.5px] border-border-default bg-canvas px-4 py-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <div className="min-w-0">
-          <span className="text-[14px] font-medium text-primary">
-            {session.dayLabel}
-          </span>
-          <div className="caps-mono mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] tracking-[0.06em] text-tertiary">
-            <span>{formatWhen(session)}</span>
-            {clock ? <span>· {clock}</span> : null}
-            {session.durationSeconds != null ? (
-              <span>· {formatDuration(session.durationSeconds)}</span>
-            ) : null}
-            {setCount > 0 ? (
-              <span>
-                · {setCount} set{setCount === 1 ? "" : "s"}
-              </span>
-            ) : null}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+        >
+          <div className="min-w-0">
+            <span className="text-[14px] font-medium text-primary">
+              {session.dayLabel}
+            </span>
+            <div className="caps-mono mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] tracking-[0.06em] text-tertiary">
+              <span>{formatWhen(session)}</span>
+              {clock ? <span>· {clock}</span> : null}
+              {session.durationSeconds != null ? (
+                <span>· {formatDuration(session.durationSeconds)}</span>
+              ) : null}
+              {setCount > 0 ? (
+                <span>
+                  · {setCount} set{setCount === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
           </div>
-        </div>
-        <span className="caps-mono shrink-0 text-[10px] tracking-[0.06em] text-tertiary">
-          {open ? "−" : "+"}
-        </span>
-      </button>
+          <span className="caps-mono shrink-0 text-[10px] tracking-[0.06em] text-tertiary">
+            {open ? "−" : "+"}
+          </span>
+        </button>
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={() => onEdit(session)}
+            className="caps-mono shrink-0 cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-2.5 py-1 text-[10px] tracking-[0.06em] text-secondary hover:text-primary"
+          >
+            Edit
+          </button>
+        ) : null}
+      </div>
 
       {open ? (
         <div className="mt-3 space-y-2 border-t-[0.5px] border-border-subtle pt-3">

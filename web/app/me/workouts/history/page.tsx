@@ -1,7 +1,11 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { getWorkoutHistory } from "@/lib/workout-program-api";
-import type { ScheduledWorkoutResponse } from "@/lib/types/workout-program";
+import { revalidatePath } from "next/cache";
+import { getWorkoutHistory, completeSession } from "@/lib/workout-program-api";
+import type {
+  ScheduledWorkoutResponse,
+  CompleteSessionRequest,
+} from "@/lib/types/workout-program";
 import { WorkoutHistoryList } from "@/components/workouts/WorkoutHistoryList";
 import { pageMetadata } from "@/lib/page-metadata";
 
@@ -15,6 +19,20 @@ export default async function WorkoutHistoryPage() {
     sessions = await getWorkoutHistory();
   } catch {
     sessions = [];
+  }
+
+  // Edit a past session's actuals — the same idempotent completion upsert the
+  // logger uses (ADR-0012 / IMPL-16 D6); the backend re-runs the fan-out.
+  async function logSession(
+    programId: string,
+    scheduledId: string,
+    input: CompleteSessionRequest,
+  ) {
+    "use server";
+    await completeSession(programId, scheduledId, input);
+    revalidatePath("/me/workouts/history");
+    revalidatePath("/me/workouts");
+    revalidatePath(`/me/workouts/programs/${programId}`);
   }
 
   return (
@@ -38,7 +56,7 @@ export default async function WorkoutHistoryPage() {
         </header>
 
         <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
-          <WorkoutHistoryList sessions={sessions} />
+          <WorkoutHistoryList sessions={sessions} logSession={logSession} />
         </section>
       </div>
     </main>

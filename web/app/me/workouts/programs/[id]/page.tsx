@@ -9,8 +9,12 @@ import {
   activateProgram,
   deleteProgram,
   updateProgram,
+  completeSession,
 } from "@/lib/workout-program-api";
-import type { ScheduledWorkoutResponse } from "@/lib/types/workout-program";
+import type {
+  ScheduledWorkoutResponse,
+  CompleteSessionRequest,
+} from "@/lib/types/workout-program";
 import { ProgramRoadmap } from "@/components/workouts/ProgramRoadmap";
 import { ProgramThisWeek } from "@/components/workouts/ProgramThisWeek";
 import { ProgramDetailActions } from "@/components/workouts/ProgramDetailActions";
@@ -81,6 +85,19 @@ export default async function ProgramDetailPage(props: {
     revalidatePath("/me/workouts/programs");
   }
 
+  // Completion upsert for one of this week's sessions (ADR-0012 / IMPL-16 D6).
+  // History and the hub counts read the same records, so revalidate them too.
+  async function logSession(
+    scheduledId: string,
+    input: CompleteSessionRequest,
+  ) {
+    "use server";
+    await completeSession(id, scheduledId, input);
+    revalidatePath(detailPath);
+    revalidatePath("/me/workouts/history");
+    revalidatePath("/me/workouts");
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[860px] space-y-6">
@@ -129,7 +146,7 @@ export default async function ProgramDetailPage(props: {
           <h2 className="caps-mono mb-3 text-[10px] tracking-[0.06em] text-tertiary">
             This week
           </h2>
-          <ProgramThisWeek sessions={weekSessions} />
+          <ProgramThisWeek sessions={weekSessions} logSession={logSession} />
         </section>
 
         {/* Roadmap */}

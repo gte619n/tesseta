@@ -6,6 +6,7 @@ import type {
   WorkoutHistorySummary,
   CreateProgramRequest,
   UpdateProgramRequest,
+  CompleteSessionRequest,
   WorkoutProgramChatThread,
   WorkoutProgramChatMessage,
 } from "./types/workout-program";
@@ -87,6 +88,21 @@ export function activateProgram(
   return send<ScheduledWorkoutResponse[]>(
     `/api/me/workout-programs/${programId}/activate`,
     "POST",
+  );
+}
+
+// Idempotent completion upsert (ADR-0012 / IMPL-16 D1–D2): mark a scheduled
+// session COMPLETED or SKIPPED and replace its logged actuals. Repeat PUTs
+// are safe — the backend re-runs the Workout/aggregate fan-out each time.
+export function completeSession(
+  programId: string,
+  scheduledId: string,
+  input: CompleteSessionRequest,
+): Promise<ScheduledWorkoutResponse> {
+  return send<ScheduledWorkoutResponse>(
+    `/api/me/workout-programs/${programId}/sessions/${scheduledId}`,
+    "PUT",
+    input,
   );
 }
 
