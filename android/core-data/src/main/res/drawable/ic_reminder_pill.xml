@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome capsule/pill glyph for the medication-reminder notification. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4.22,11.29l7.07,-7.07c2.05,-2.05 5.37,-2.05 7.42,0
+            2.05,2.05 2.05,5.37 0,7.42l-7.07,7.07c-2.05,2.05 -5.37,2.05 -7.42,0
+            -2.05,-2.05 -2.05,-5.37 0,-7.42zM12.71,17.29l3.18,-3.18 -5.3,-5.3
+            -3.18,3.18c-1.27,1.27 -1.27,3.32 0,4.59l0.71,0.71c1.27,1.27 3.32,1.27
+            4.59,0z" />
+</vector>
