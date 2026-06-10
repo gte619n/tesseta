@@ -6,6 +6,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 public record ScheduledWorkoutResponse(
+    // Owning program. scheduledId is only unique within a program (IMPL-16 D1),
+    // so cross-program reads (Workout History) need this to address the
+    // completion upsert.
+    String programId,
     String scheduledId,
     LocalDate date,
     String phaseId,

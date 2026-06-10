@@ -233,6 +233,14 @@ public class TestPersistenceConfig {
         return new InMemoryWeeklyWorkoutAggregateRepository();
     }
 
+    // ADR-0012: the Firestore-backed workout repo is gated off with the rest
+    // of persistence; the completion fan-out and the workouts.count metric
+    // need a real in-memory store so logged sessions round-trip in tests.
+    @Bean
+    com.gte619n.healthfitness.core.workout.WorkoutRepository workoutRepository() {
+        return new com.gte619n.healthfitness.testsupport.workout.InMemoryWorkoutRepository();
+    }
+
     // ---- empty no-op stubs to satisfy app context wiring ----
 
     // IMPL-13 nutrition repos: the FoodCatalogService / FoodController and the

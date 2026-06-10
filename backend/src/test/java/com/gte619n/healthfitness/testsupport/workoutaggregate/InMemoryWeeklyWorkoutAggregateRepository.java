@@ -46,4 +46,8 @@ public class InMemoryWeeklyWorkoutAggregateRepository implements WeeklyWorkoutAg
         );
         byUser.get(aggregate.userId()).put(aggregate.weekStart().toString(), stored);
     }
+
+    public void clear() {
+        byUser.clear();
+    }
 }

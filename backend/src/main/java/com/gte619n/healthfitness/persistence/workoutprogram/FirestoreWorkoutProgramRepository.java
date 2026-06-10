@@ -201,6 +201,9 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                             Map<String, Object> sm = new HashMap<>();
                             sm.put("weightLbs", s.weightLbs());
                             sm.put("reps", s.reps());
+                            sm.put("rpe", s.rpe());
+                            sm.put("restSeconds", s.restSeconds());
+                            sm.put("completedAt", s.completedAt() == null ? null : s.completedAt().toString());
                             ls.add(sm);
                         }
                         rm.put("loggedSets", ls);
@@ -360,9 +363,13 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
         for (Object o : list) {
             if (!(o instanceof Map<?, ?> m)) continue;
             Object w = m.get("weightLbs");
+            Object rpe = m.get("rpe");
             out.add(new LoggedSet(
                 w instanceof Number n ? n.doubleValue() : null,
-                intOrNull(m.get("reps"))));
+                intOrNull(m.get("reps")),
+                rpe instanceof Number n2 ? n2.doubleValue() : null,
+                intOrNull(m.get("restSeconds")),
+                parseInstant(str(m.get("completedAt")))));
         }
         return out;
     }

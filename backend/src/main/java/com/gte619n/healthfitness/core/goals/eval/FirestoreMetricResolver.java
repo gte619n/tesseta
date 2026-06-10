@@ -52,9 +52,11 @@ import org.springframework.stereotype.Service;
  *       {@code DailyMetricRepository} Firestore impl throws
  *       {@code UnsupportedOperationException} for both reads and
  *       writes. We catch and degrade to unavailable.</li>
- *   <li>{@code workouts.weeklyVolume} — repo exists but no producer
- *       writes aggregates; reads return empty.</li>
  * </ul>
+ *
+ * <p>The {@code workouts.count} / {@code workouts.weeklyVolume} metrics are
+ * live as of ADR-0012: the workout-session completion fan-out writes
+ * {@code Workout} records and recomputes {@code WeeklyWorkoutAggregate}s.
  *
  * <p>The {@code nutrition.*Avg7d} metrics (protein/carbs/fat/calories)
  * are <strong>live</strong>: {@code NutritionService} writes
@@ -194,7 +196,7 @@ public class FirestoreMetricResolver implements MetricResolver {
                     .filter(w -> w.startTime() != null && !w.startTime().isBefore(from))
                     .count();
             } catch (UnsupportedOperationException e) {
-                // Persistence stub today — see class javadoc.
+                // Defensive degradation (the live repo landed with ADR-0012).
                 return 0L;
             }
         }
