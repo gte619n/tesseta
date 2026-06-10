@@ -185,6 +185,83 @@ class WorkoutSessionLogControllerTest {
     }
 
     @Test
+    void outOfRangeSetActualsAreBadRequest() throws Exception {
+        seedPlannedSession();
+        putSession(new LogSessionRequest(ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0,
+                List.of(new LoggedSet(-135.0, -8, 10.5, -90, null))))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value(
+                "weightLbs must not be negative at block 'b1' / prescription 0, set 0.; "
+                    + "reps must not be negative at block 'b1' / prescription 0, set 0.; "
+                    + "rpe must be between 0 and 10 at block 'b1' / prescription 0, set 0.; "
+                    + "restSeconds must not be negative at block 'b1' / prescription 0, set 0."));
+
+        // Nothing was upserted or fanned out.
+        assertEquals(ScheduledStatus.PLANNED,
+            scheduled.findById(TEST_USER, "p1", SCHEDULED_ID).orElseThrow().status());
+        assertEquals(true, workouts.findByUser(TEST_USER).isEmpty());
+    }
+
+    @Test
+    void boundaryActualsAreAccepted() throws Exception {
+        seedPlannedSession();
+        // 0 weight (bodyweight), 0 reps/rest, and the RPE endpoints 0 and 10
+        // are all legal values.
+        putSession(new LogSessionRequest(ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0, List.of(
+                new LoggedSet(0.0, 0, 0.0, 0, null),
+                new LoggedSet(0.0, 12, 10.0, 60, null))))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.session.blocks[0].prescriptions[0].loggedSets.length()").value(2))
+            .andExpect(jsonPath("$.session.blocks[0].prescriptions[0].loggedSets[0].weightLbs").value(0.0))
+            .andExpect(jsonPath("$.session.blocks[0].prescriptions[0].loggedSets[0].rpe").value(0.0))
+            .andExpect(jsonPath("$.session.blocks[0].prescriptions[0].loggedSets[1].rpe").value(10.0));
+
+        // Zero-weight sets count toward the session but contribute no tonnage.
+        WeeklyWorkoutAggregate agg = aggregates.findByWeekStart(TEST_USER, WEEK_START).orElseThrow();
+        assertEquals(1, agg.sessionCount());
+        assertEquals(0.0, agg.totalTonnage(), 1e-9);
+    }
+
+    @Test
+    void aggregateKeepsSessionsUnderTombstonedPrograms() throws Exception {
+        // Complete a session under p1, tombstone p1, then trigger a recompute
+        // of the same week from p2: p1's performed work is history and must
+        // keep counting (review round 1, Q1).
+        seedPlannedSession();
+        putSession(new LogSessionRequest(ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0,
+                List.of(new LoggedSet(135.0, 8, null, null, null))))))
+            .andExpect(status().isOk());
+        programs.delete(TEST_USER, "p1");
+
+        LocalDate fridayDate = DATE.plusDays(2); // same ISO week
+        String p2ScheduledId = fridayDate + "_d1";
+        programs.save(new WorkoutProgram(TEST_USER, "p2", "Other Block", null, null,
+            ProgramStatus.ACTIVE, ProgramSource.MANUAL, null, null, null, List.of(), null, null, null));
+        WorkoutDay day = new WorkoutDay("d1", "Upper", DayOfWeek.FRI, "gym-1", 0, List.of(
+            new Block("b1", BlockType.MAIN, "Main", 0, List.of(rx("ohp", 0)))));
+        scheduled.save(new ScheduledWorkout(
+            TEST_USER, "p2", p2ScheduledId, fridayDate, "ph1", "d1", "Upper",
+            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null));
+
+        mvc.perform(put("/api/me/workout-programs/p2/sessions/" + p2ScheduledId)
+                .header("X-Dev-User", TEST_USER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                    new LogSessionRequest(ScheduledStatus.COMPLETED, FINISHED, 3600,
+                        List.of(new LoggedPrescription("b1", 0,
+                            List.of(new LoggedSet(100.0, 5, null, null, null))))))))
+            .andExpect(status().isOk());
+
+        WeeklyWorkoutAggregate agg = aggregates.findByWeekStart(TEST_USER, WEEK_START).orElseThrow();
+        assertEquals(2, agg.sessionCount());
+        assertEquals(135.0 * 8 + 100.0 * 5, agg.totalTonnage(), 1e-9);
+    }
+
+    @Test
     void completedWithoutCompletedAtIsBadRequest() throws Exception {
         seedPlannedSession();
         putSession(new LogSessionRequest(ScheduledStatus.COMPLETED, null, 3600,

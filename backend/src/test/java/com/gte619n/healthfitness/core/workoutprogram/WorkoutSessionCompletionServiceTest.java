@@ -247,6 +247,82 @@ class WorkoutSessionCompletionServiceTest {
         assertEquals(100.0 * 10 + 200.0 * 5, agg.totalTonnage(), 1e-9);
     }
 
+    @Test
+    void aggregateRecomputeKeepsSessionsUnderTombstonedPrograms() {
+        // Performed work is history regardless of program state (ADR-0012):
+        // a completed session under a since-deleted program must keep counting
+        // when a recompute is triggered from another program.
+        ScheduledWorkout a = seedPlanned("p1");
+        ScheduledWorkout b = seedPlanned("p2", DATE.plusDays(2)); // Friday, same week
+        service.complete(USER, "p1", a.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0, List.of(new LoggedSet(100.0, 10, null, null, null)))));
+
+        programs.delete(USER, "p1"); // soft-delete tombstone
+
+        service.complete(USER, "p2", b.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0, List.of(new LoggedSet(200.0, 5, null, null, null)))));
+
+        WeeklyWorkoutAggregate agg = aggregates.findByWeekStart(USER, WEEK_START).orElseThrow();
+        assertEquals(2, agg.sessionCount());
+        assertEquals(100.0 * 10 + 200.0 * 5, agg.totalTonnage(), 1e-9);
+    }
+
+    @Test
+    void outOfRangeSetActualsAreRejected_oneIssuePerField() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        InvalidSessionLogException ex = assertThrows(InvalidSessionLogException.class,
+            () -> service.complete(USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+                List.of(new LoggedPrescription("b1", 0, List.of(
+                    new LoggedSet(135.0, 8, null, null, null),          // fine
+                    new LoggedSet(-135.0, -8, 10.5, -90, null))))));    // all four bad
+
+        assertEquals(List.of(
+            "weightLbs must not be negative at block 'b1' / prescription 0, set 1.",
+            "reps must not be negative at block 'b1' / prescription 0, set 1.",
+            "rpe must be between 0 and 10 at block 'b1' / prescription 0, set 1.",
+            "restSeconds must not be negative at block 'b1' / prescription 0, set 1."),
+            ex.issues());
+        // Nothing was upserted or fanned out.
+        assertEquals(ScheduledStatus.PLANNED,
+            scheduled.findById(USER, "p1", sw.scheduledId()).orElseThrow().status());
+        assertTrue(workouts.findByUser(USER).isEmpty());
+        assertTrue(aggregates.findByWeekStart(USER, WEEK_START).isEmpty());
+    }
+
+    @Test
+    void negativeRpeIsRejected() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        InvalidSessionLogException ex = assertThrows(InvalidSessionLogException.class,
+            () -> service.complete(USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+                List.of(new LoggedPrescription("b1", 0, List.of(
+                    new LoggedSet(135.0, 8, -0.5, null, null))))));
+
+        assertEquals(List.of("rpe must be between 0 and 10 at block 'b1' / prescription 0, set 0."),
+            ex.issues());
+    }
+
+    @Test
+    void boundaryActualsAreLegal_zeroWeightZeroRepsAndFullRpeScale() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        // 0 weight is bodyweight, 0 reps and 0 rest are inert, RPE spans 0–10
+        // inclusive — none of these may reject.
+        ScheduledWorkout updated = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0, List.of(
+                new LoggedSet(0.0, 0, 0.0, 0, null),
+                new LoggedSet(0.0, 12, 10.0, 60, null)))));
+
+        assertEquals(ScheduledStatus.COMPLETED, updated.status());
+        assertEquals(2, prescription(updated, 0).loggedSets().size());
+        // Zero-weight sets still count toward the session, contributing 0 tonnage.
+        WeeklyWorkoutAggregate agg = aggregates.findByWeekStart(USER, WEEK_START).orElseThrow();
+        assertEquals(1, agg.sessionCount());
+        assertEquals(0.0, agg.totalTonnage(), 1e-9);
+    }
+
     // ---- fixtures ----
 
     private ScheduledWorkout seedPlanned(String programId) {

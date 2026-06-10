@@ -92,7 +92,8 @@ public class WorkoutSessionCompletionService {
      *
      * @throws IllegalArgumentException when the session doesn't exist
      * @throws InvalidSessionLogException when the request is invalid
-     *         (bad status, missing COMPLETED fields, unknown logged keys)
+     *         (bad status, missing COMPLETED fields, unknown logged keys,
+     *         out-of-range per-set actuals)
      */
     public ScheduledWorkout complete(
         String userId,
@@ -186,8 +187,36 @@ public class WorkoutSessionCompletionService {
             if (!seen.add(key(e.blockId(), e.orderIndex()))) {
                 issues.add("Duplicate logged entry for " + where + ".");
             }
+            validateSets(issues, where, e.sets());
         }
         return issues;
+    }
+
+    /**
+     * Per-set numeric sanity: bad actuals would poison weekly tonnage, so they
+     * are rejected (one issue per offending field, addressed down to the set).
+     * Boundaries are deliberate: 0 weight is legal (bodyweight), 0 reps is
+     * legal, and RPE spans the full 0–10 scale inclusive.
+     */
+    private static void validateSets(List<String> issues, String where, List<LoggedSet> sets) {
+        if (sets == null) return;
+        for (int i = 0; i < sets.size(); i++) {
+            LoggedSet set = sets.get(i);
+            if (set == null) continue;
+            String at = " at " + where + ", set " + i + ".";
+            if (set.weightLbs() != null && set.weightLbs() < 0) {
+                issues.add("weightLbs must not be negative" + at);
+            }
+            if (set.reps() != null && set.reps() < 0) {
+                issues.add("reps must not be negative" + at);
+            }
+            if (set.rpe() != null && (set.rpe() < 0 || set.rpe() > 10)) {
+                issues.add("rpe must be between 0 and 10" + at);
+            }
+            if (set.restSeconds() != null && set.restSeconds() < 0) {
+                issues.add("restSeconds must not be negative" + at);
+            }
+        }
     }
 
     private static Set<String> prescriptionKeys(WorkoutDay session) {
@@ -229,9 +258,11 @@ public class WorkoutSessionCompletionService {
 
     /**
      * Recompute the ISO week's (Monday-start) aggregate from scratch by
-     * scanning the user's COMPLETED sessions across all programs in that week.
-     * A full recompute (vs. incrementing) is what makes the repeat-PUT and
-     * un-complete paths converge.
+     * scanning the user's COMPLETED sessions across all programs in that week
+     * — including soft-deleted (tombstoned) programs, because performed work
+     * is history regardless of program state (ADR-0012). A full recompute
+     * (vs. incrementing) is what makes the repeat-PUT and un-complete paths
+     * converge.
      */
     private void recomputeWeek(String userId, LocalDate sessionDate) {
         if (sessionDate == null) return;
@@ -239,7 +270,7 @@ public class WorkoutSessionCompletionService {
         LocalDate weekEnd = weekStart.plusDays(6);
         int sessionCount = 0;
         double totalTonnage = 0.0;
-        for (WorkoutProgram p : programs.findByUser(userId)) {
+        for (WorkoutProgram p : programs.findByUserIncludingArchived(userId)) {
             for (ScheduledWorkout sw : scheduled.findByProgram(userId, p.programId(), weekStart, weekEnd)) {
                 if (sw.status() != ScheduledStatus.COMPLETED) continue;
                 sessionCount++;

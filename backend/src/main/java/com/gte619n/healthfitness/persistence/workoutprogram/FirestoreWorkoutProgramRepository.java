@@ -73,6 +73,15 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
     }
 
     @Override
+    public List<WorkoutProgram> findByUserIncludingArchived(String userId) {
+        // Same scan without the tombstone filter: completed sessions under a
+        // soft-deleted program are still history (ADR-0012), so the weekly
+        // aggregate recompute reads programs in every sync state.
+        List<QueryDocumentSnapshot> docs = await(collection(userId).limit(200).get()).getDocuments();
+        return docs.stream().map(d -> toProgram(userId, d)).toList();
+    }
+
+    @Override
     public void save(WorkoutProgram program) {
         DocumentReference ref = collection(program.userId()).document(program.programId());
         boolean isNew = !await(ref.get()).exists();
