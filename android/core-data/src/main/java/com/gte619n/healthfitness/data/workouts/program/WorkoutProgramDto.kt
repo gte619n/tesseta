@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.domain.workouts.program.DemoFrame
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.Intensity
 import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
@@ -50,6 +51,19 @@ data class ExerciseSummaryDto(
     val demoFrames: List<DemoFrameDto> = emptyList(),
 )
 
+/**
+ * One performed set's full actuals (ADR-0012 Decision 2 / IMPL-16 D3). Every
+ * field is nullable so imported-history rows (weight-only) stay valid and the
+ * logger keeps everything beyond weight/reps skippable.
+ */
+data class LoggedSetDto(
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+    val rpe: Double? = null,
+    val restSeconds: Int? = null,
+    val completedAt: Instant? = null,
+)
+
 data class PrescriptionDto(
     val exerciseId: String,
     val orderIndex: Int = 0,
@@ -63,6 +77,7 @@ data class PrescriptionDto(
     val notes: String? = null,
     val deloadModifier: DeloadModifierDto? = null,
     val exercise: ExerciseSummaryDto? = null,
+    val loggedSets: List<LoggedSetDto> = emptyList(),
 )
 
 data class BlockDto(
@@ -142,6 +157,8 @@ data class ScheduledWorkoutDto(
     val locationName: String? = null,
     val status: String,
     val session: WorkoutDayDto? = null,
+    val completedAt: Instant? = null,
+    val durationSeconds: Int? = null,
 )
 
 // ---- Enum parsing with safe fallback ----
@@ -150,7 +167,9 @@ private inline fun <reified T : Enum<T>> parseEnum(raw: String?, fallback: T): T
     raw?.let { value -> enumValues<T>().firstOrNull { it.name.equals(value, ignoreCase = true) } }
         ?: fallback
 
-// ---- Mappers (DTO → domain). Read-only, so no toDto direction. ----
+// ---- Mappers (DTO → domain). The read surface needs no toDto direction;
+// ---- LoggedSet maps both ways because the session logger builds the
+// ---- completion-request wire shape from domain sets (ADR-0012). ----
 
 fun IntensityDto.toDomain(): Intensity =
     Intensity(kind = parseEnum(kind, IntensityKind.NONE), value = value)
@@ -169,6 +188,22 @@ fun ExerciseSummaryDto.toDomain(): ExerciseSummary = ExerciseSummary(
     demoFrames = demoFrames.map { it.toDomain() },
 )
 
+fun LoggedSetDto.toDomain(): LoggedSet = LoggedSet(
+    weightLbs = weightLbs,
+    reps = reps,
+    rpe = rpe,
+    restSeconds = restSeconds,
+    completedAt = completedAt,
+)
+
+fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
+    weightLbs = weightLbs,
+    reps = reps,
+    rpe = rpe,
+    restSeconds = restSeconds,
+    completedAt = completedAt,
+)
+
 fun PrescriptionDto.toDomain(): Prescription = Prescription(
     exerciseId = exerciseId,
     orderIndex = orderIndex,
@@ -182,6 +217,7 @@ fun PrescriptionDto.toDomain(): Prescription = Prescription(
     notes = notes,
     deloadModifier = deloadModifier?.toDomain(),
     exercise = exercise?.toDomain(),
+    loggedSets = loggedSets.map { it.toDomain() },
 )
 
 fun BlockDto.toDomain(): Block = Block(
@@ -265,4 +301,6 @@ fun ScheduledWorkoutDto.toDomain(): ScheduledWorkout = ScheduledWorkout(
     locationName = locationName,
     status = parseEnum(status, ScheduledStatus.PLANNED),
     session = session?.toDomain(),
+    completedAt = completedAt,
+    durationSeconds = durationSeconds,
 )

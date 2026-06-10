@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">tesseta</string>
+
+    <!-- ADR-0012 D6: WorkoutSessionService ongoing-notification channel. -->
+    <string name="workout_session_channel_name">Active workout</string>
+    <string name="workout_session_channel_description">Timer and progress for the workout session in progress</string>
+    <string name="workout_session_notification_title">Workout in progress</string>
 </resources>

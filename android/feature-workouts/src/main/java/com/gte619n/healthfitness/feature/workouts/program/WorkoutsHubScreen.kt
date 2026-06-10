@@ -20,12 +20,17 @@ import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
+import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
@@ -34,13 +39,34 @@ import com.gte619n.healthfitness.ui.theme.type
 
 /**
  * Workouts hub (IMPL-AND-15). The Workouts destination is a hub with two cards
- * — Gyms (IMPL-AND-06) and Programs (read-only). Pure navigation, no ViewModel.
+ * — Gyms (IMPL-AND-06) and Programs (read-only). ADR-0012 adds a resume banner
+ * when a local session draft is in flight (the only state the hub carries).
  */
+@Composable
+fun WorkoutsHubRoute(
+    onBack: () -> Unit,
+    onOpenGyms: () -> Unit,
+    onOpenPrograms: () -> Unit,
+    onResumeSession: (programId: String, scheduledId: String) -> Unit,
+    viewModel: WorkoutsHubViewModel = hiltViewModel(),
+) {
+    val activeDraft by viewModel.activeDraft.collectAsStateWithLifecycle()
+    WorkoutsHubScreen(
+        onBack = onBack,
+        onOpenGyms = onOpenGyms,
+        onOpenPrograms = onOpenPrograms,
+        activeDraft = activeDraft,
+        onResumeSession = { draft -> onResumeSession(draft.programId, draft.scheduledId) },
+    )
+}
+
 @Composable
 fun WorkoutsHubScreen(
     onBack: () -> Unit,
     onOpenGyms: () -> Unit,
     onOpenPrograms: () -> Unit,
+    activeDraft: WorkoutSessionDraft? = null,
+    onResumeSession: (WorkoutSessionDraft) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -59,6 +85,12 @@ fun WorkoutsHubScreen(
                 .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (activeDraft != null) {
+                ResumeSessionBanner(
+                    draft = activeDraft,
+                    onResume = { onResumeSession(activeDraft) },
+                )
+            }
             HubCard(
                 icon = Icons.Outlined.FitnessCenter,
                 title = "Gyms",

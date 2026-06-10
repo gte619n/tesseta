@@ -21,7 +21,11 @@ import kotlin.math.min
  * the survivors in `seq` order, attaching the idempotency + origin-device headers
  * via [OutboxReplayClient]. On success the mirror row flips to SYNCED+clean and
  * adopts the server `lastUpdate`; on failure the row goes FAILED with exponential
- * backoff on `nextAttemptAt`.
+ * backoff on `nextAttemptAt`. A **terminal 4xx** (a deterministic server
+ * rejection — see [OutboxReplayHttpException.isTerminal]) is parked instead:
+ * the row and its payload are kept (no silent data loss) and stay in the FAILED
+ * count, but only the manual retry lever ([rearmFailed], D11) re-attempts it —
+ * automatic drains skip it rather than re-sending a doomed payload forever.
  *
  * Drain is invoked after every local write and on connectivity-regained (the
  * WorkManager [OutboxDrainWorker]); it is idempotent and safe to call concurrently
@@ -122,13 +126,16 @@ class OutboxRepository @Inject constructor(
                     mirror.markSynced(mutation.entityTable, mutation.entityId, serverLastUpdate)
                 }
                 sent++
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
                 // Failure: back off the originating chain and flag the row FAILED.
+                // A terminal 4xx would fail identically on every retry, so park
+                // it out of the automatic drain instead (manual retry re-arms it).
                 val attempts = mutation.attempts + 1
+                val terminal = t is OutboxReplayHttpException && t.isTerminal
                 outboxDao.recordFailure(
                     mutationId = mutation.mutationId,
                     attempts = attempts,
-                    nextAttemptAt = now + backoffMillis(attempts),
+                    nextAttemptAt = if (terminal) PARKED_NEXT_ATTEMPT else now + backoffMillis(attempts),
                 )
                 mirror.markFailed(mutation.entityTable, mutation.entityId)
                 failed++
@@ -150,9 +157,23 @@ class OutboxRepository @Inject constructor(
         DrainResult(sent = sent, failed = failed, collapsed = collapsed)
     }
 
+    /**
+     * Manual retry (D11): make every failed row — exponential backoff or parked
+     * on a terminal 4xx — due immediately, so the next [drain] re-attempts it.
+     */
+    suspend fun rearmFailed(): Unit = withContext(io) {
+        outboxDao.rearmFailed(clock())
+    }
+
     companion object {
         const val BASE_BACKOFF_MILLIS = 30_000L // 30s
         const val MAX_BACKOFF_MILLIS = 6L * 60 * 60 * 1000 // 6h ceiling (D10 floor)
+
+        /**
+         * `nextAttemptAt` sentinel for terminally-rejected mutations: never due
+         * for an automatic drain, only a manual [rearmFailed] revives them.
+         */
+        const val PARKED_NEXT_ATTEMPT = Long.MAX_VALUE
 
         /** Exponential backoff: 30s, 60s, 120s, … capped at 6h. */
         fun backoffMillis(attempts: Int): Long {

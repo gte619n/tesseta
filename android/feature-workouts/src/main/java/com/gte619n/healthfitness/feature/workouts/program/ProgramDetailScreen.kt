@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseDetailSheet
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseMeta
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseSpineNode
@@ -47,6 +48,7 @@ import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ProgramStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ThisWeekStrip
 import com.gte619n.healthfitness.feature.workouts.program.ui.WorkoutDayCard
+import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
@@ -55,11 +57,13 @@ import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.LocalDate
 
 @Composable
 fun ProgramDetailRoute(
     onBack: () -> Unit,
     onOpenGoal: (String) -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
     viewModel: ProgramDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -67,6 +71,7 @@ fun ProgramDetailRoute(
         state = state,
         onBack = onBack,
         onOpenGoal = onOpenGoal,
+        onOpenSession = onOpenSession,
         onRetry = viewModel::refresh,
     )
 }
@@ -76,6 +81,7 @@ fun ProgramDetailScreen(
     state: ProgramDetailUiState,
     onBack: () -> Unit,
     onOpenGoal: (String) -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRetry: () -> Unit,
 ) {
     var selectedExercise by remember { mutableStateOf<ExerciseSummary?>(null) }
@@ -101,7 +107,10 @@ fun ProgramDetailScreen(
             state.program != null -> ProgramBody(
                 program = state.program,
                 thisWeek = state.thisWeek,
+                activeDraft = state.activeDraft,
+                today = state.today,
                 onOpenGoal = onOpenGoal,
+                onOpenSession = onOpenSession,
                 onOpenExercise = { selectedExercise = it },
             )
         }
@@ -116,7 +125,10 @@ fun ProgramDetailScreen(
 private fun ProgramBody(
     program: WorkoutProgram,
     thisWeek: List<com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout>,
+    activeDraft: WorkoutSessionDraft?,
+    today: LocalDate,
     onOpenGoal: (String) -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onOpenExercise: (ExerciseSummary) -> Unit,
 ) {
     val phases = program.phases.sortedBy { it.orderIndex }
@@ -124,6 +136,20 @@ private fun ProgramBody(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
+        if (activeDraft != null) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                    Spacer(Modifier.height(4.dp))
+                    ResumeSessionBanner(
+                        draft = activeDraft,
+                        onResume = {
+                            onOpenSession(activeDraft.programId, activeDraft.scheduledId)
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        }
         item {
             Column(modifier = Modifier.padding(horizontal = 18.dp)) {
                 Spacer(Modifier.height(4.dp))
@@ -155,7 +181,16 @@ private fun ProgramBody(
                         SectionTitle(text = "This week")
                     }
                     Spacer(Modifier.height(10.dp))
-                    ThisWeekStrip(scheduled = thisWeek)
+                    ThisWeekStrip(
+                        scheduled = thisWeek,
+                        today = today,
+                        // One session at a time: hide Start while a draft is in
+                        // flight (the resume banner is the way back in).
+                        canStart = activeDraft == null,
+                        onStartSession = { session ->
+                            onOpenSession(program.programId, session.scheduledId)
+                        },
+                    )
                     Spacer(Modifier.height(20.dp))
                 }
             }
@@ -258,9 +293,11 @@ private fun ProgramDetailPreview() {
                 loading = false,
                 program = ProgramFixtures.deepProgram,
                 thisWeek = ProgramFixtures.thisWeek,
+                today = LocalDate.parse("2026-06-03"),
             ),
             onBack = {},
             onOpenGoal = {},
+            onOpenSession = { _, _ -> },
             onRetry = {},
         )
     }

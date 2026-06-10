@@ -114,6 +114,11 @@ internal class FakeOutboxDao : OutboxDao {
         val i = store.indexOfFirst { it.mutationId == mutationId }
         if (i >= 0) store[i] = store[i].copy(attempts = attempts, nextAttemptAt = nextAttemptAt)
     }
+    override suspend fun rearmFailed(now: Long) {
+        store.indices.forEach { i ->
+            if (store[i].attempts > 0) store[i] = store[i].copy(nextAttemptAt = now)
+        }
+    }
     override suspend fun deleteById(mutationId: String) {
         store.removeAll { it.mutationId == mutationId }; pending.value = store.size
     }

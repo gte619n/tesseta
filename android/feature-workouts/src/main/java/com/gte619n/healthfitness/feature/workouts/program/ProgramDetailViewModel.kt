@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -24,12 +26,17 @@ data class ProgramDetailUiState(
     val program: WorkoutProgram? = null,
     /** Current-week scheduled sessions; date range derived from the device. */
     val thisWeek: List<ScheduledWorkout> = emptyList(),
+    /** In-progress local session draft for THIS program (resume affordance). */
+    val activeDraft: WorkoutSessionDraft? = null,
+    /** Device date, fixed by the VM so the "start today" affordance is testable. */
+    val today: LocalDate = LocalDate.now(),
     val error: String? = null,
 )
 
 @HiltViewModel
 class ProgramDetailViewModel @Inject constructor(
     private val repository: WorkoutProgramRepository,
+    sessionRepository: WorkoutSessionRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -46,12 +53,21 @@ class ProgramDetailViewModel @Inject constructor(
 
     init {
         load()
+        // ADR-0012: surface this program's in-flight local draft so the detail
+        // shows a Resume banner (and hides Start while one is active).
+        viewModelScope.launch {
+            sessionRepository.observeDrafts().collect { drafts ->
+                _state.update { st ->
+                    st.copy(activeDraft = drafts.firstOrNull { it.programId == programId })
+                }
+            }
+        }
     }
 
     fun refresh() = load()
 
     private fun load() {
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(loading = true, today = today, error = null) }
         viewModelScope.launch {
             // The "this week" range is derived from the device date; the
             // weekIndexInPhase / isDeload fields come from the backend

@@ -73,9 +73,15 @@ class SyncStatusViewModel @Inject constructor(
             initialValue = syncUiStateOf(online = true, pendingCount = 0, failedCount = 0, syncing = false),
         )
 
-    /** Manual retry (D11): re-drain the outbox (FAILED rows are retried). */
+    /**
+     * Manual retry (D11): re-arm every FAILED row — mid-backoff or parked on a
+     * terminal 4xx — then re-drain the outbox.
+     */
     fun retry() {
-        scheduler.enqueueDrain()
+        viewModelScope.launch {
+            runCatching { outbox.rearmFailed() }
+            scheduler.enqueueDrain()
+        }
         updatedElsewhere.update { false }
     }
 

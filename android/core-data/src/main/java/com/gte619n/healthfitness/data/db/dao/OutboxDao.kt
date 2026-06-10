@@ -52,6 +52,13 @@ interface OutboxDao {
     @Query("UPDATE outbox SET attempts = :attempts, nextAttemptAt = :nextAttemptAt WHERE mutationId = :mutationId")
     suspend fun recordFailure(mutationId: String, attempts: Int, nextAttemptAt: Long)
 
+    /**
+     * Manual retry (D11): pull every failed row — mid-backoff or parked on a
+     * terminal 4xx — back to due-now so the next drain re-attempts it.
+     */
+    @Query("UPDATE outbox SET nextAttemptAt = :now WHERE attempts > 0")
+    suspend fun rearmFailed(now: Long)
+
     @Query("DELETE FROM outbox WHERE mutationId = :mutationId")
     suspend fun deleteById(mutationId: String)
 

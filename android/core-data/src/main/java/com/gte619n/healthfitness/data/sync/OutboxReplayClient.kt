@@ -30,8 +30,9 @@ import javax.inject.Singleton
 interface OutboxReplayClient {
     /**
      * @return the server-confirmed `lastUpdate` (epoch millis) for the row on
-     *         success. Throws on any non-2xx / transport failure so the drain
-     *         loop applies backoff.
+     *         success. Throws [OutboxReplayHttpException] on a non-2xx response
+     *         (and anything else on transport failure) so the drain loop can
+     *         back off — or park the row when the rejection is terminal.
      */
     suspend fun replay(
         table: String,
@@ -41,6 +42,24 @@ interface OutboxReplayClient {
         mutationId: String,
         originDeviceId: String,
     ): Long
+}
+
+/**
+ * A non-2xx replay response. [isTerminal] marks deterministic client rejections
+ * — replaying the identical payload can only produce the identical 4xx (e.g.
+ * the IMPL-16 completion upsert 400/404 after a concurrent program rewrite
+ * deleted the scheduled session or its block ids), so the drain loop parks the
+ * row instead of retrying forever.
+ */
+class OutboxReplayHttpException(val code: Int, message: String) : RuntimeException(message) {
+    val isTerminal: Boolean
+        get() = code in 400..499 && code !in RETRYABLE_CLIENT_CODES
+
+    companion object {
+        // 401 can recover after a token refresh / re-login, 408/425 are
+        // transport timing, and 429 clears once rate limiting lifts.
+        private val RETRYABLE_CLIENT_CODES = setOf(401, 408, 425, 429)
+    }
 }
 
 /**
@@ -99,7 +118,10 @@ class RestOutboxReplayClient @Inject constructor(
 
         client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) {
-                error("Outbox replay failed: HTTP ${resp.code} for $method $url")
+                throw OutboxReplayHttpException(
+                    code = resp.code,
+                    message = "Outbox replay failed: HTTP ${resp.code} for $method $url",
+                )
             }
             val text = resp.body?.string().orEmpty()
             return extractLastUpdate(text)

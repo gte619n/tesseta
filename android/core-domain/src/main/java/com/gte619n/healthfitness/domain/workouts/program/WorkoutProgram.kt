@@ -9,7 +9,9 @@ import java.time.LocalDate
 // WorkoutProgramDeepResponse, PhaseResponse, WorkoutDayResponse, BlockResponse,
 // PrescriptionResponse, ScheduledWorkoutResponse) — adapted to typed
 // LocalDate/Instant/DayOfWeek via the core-data Moshi adapters. No proposal /
-// chat / logging types: the phone is a viewer in v1.
+// chat types. ADR-0012 adds the performed-session actuals ([LoggedSet],
+// `ScheduledWorkout.completedAt`/`durationSeconds`); the live-logging draft
+// types live in `domain.workouts.session`.
 
 enum class ProgramStatus { DRAFT, ACTIVE, COMPLETED, ARCHIVED }
 
@@ -39,6 +41,19 @@ data class ExerciseSummary(
     val demoFrames: List<DemoFrame>,
 )
 
+/**
+ * One performed set's full actuals (ADR-0012 Decision 2 / IMPL-16 D3). Every
+ * field is nullable: imported-history rows are weight-only (reps null) and the
+ * logger keeps everything beyond weight/reps skippable.
+ */
+data class LoggedSet(
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+    val rpe: Double? = null,
+    val restSeconds: Int? = null,
+    val completedAt: Instant? = null,
+)
+
 data class Prescription(
     val exerciseId: String,
     val orderIndex: Int,
@@ -53,6 +68,8 @@ data class Prescription(
     val deloadModifier: DeloadModifier?,
     /** Embedded by the backend; null only if the backend omits it. */
     val exercise: ExerciseSummary?,
+    /** Performed actuals (ADR-0012); empty until the session is logged. */
+    val loggedSets: List<LoggedSet> = emptyList(),
 )
 
 data class Block(
@@ -131,6 +148,9 @@ data class ScheduledWorkout(
     val status: ScheduledStatus,
     /** A full day object (same shape as a deep day); present on the calendar. */
     val session: WorkoutDay? = null,
+    /** Outcome fields (ADR-0012); set once the session is COMPLETED. */
+    val completedAt: Instant? = null,
+    val durationSeconds: Int? = null,
 )
 
 /**

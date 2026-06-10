@@ -2,11 +2,15 @@ package com.gte619n.healthfitness.feature.workouts.program
 
 import androidx.lifecycle.SavedStateHandle
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -22,14 +26,21 @@ class ProgramDetailViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repo: WorkoutProgramRepository = mockk()
+    private val sessionRepo: WorkoutSessionRepository = mockk()
+    private val drafts = MutableStateFlow<List<WorkoutSessionDraft>>(emptyList())
     private val handle = SavedStateHandle(mapOf(WorkoutsRoutes.ARG_PROGRAM_ID to "p1"))
+
+    private fun vm(): ProgramDetailViewModel {
+        every { sessionRepo.observeDrafts() } returns drafts
+        return ProgramDetailViewModel(repo, sessionRepo, handle)
+    }
 
     @Test
     fun `deep load populates program and parallel calendar populates this week`() = runTest {
         coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
         coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
 
-        val vm = ProgramDetailViewModel(repo, handle)
+        val vm = vm()
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -48,7 +59,7 @@ class ProgramDetailViewModelTest {
         coEvery { repo.get("p1") } returns Result.failure(RuntimeException("nope"))
         coEvery { repo.calendar(any(), any(), any()) } returns Result.success(emptyList())
 
-        val vm = ProgramDetailViewModel(repo, handle)
+        val vm = vm()
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -62,12 +73,32 @@ class ProgramDetailViewModelTest {
         coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
         coEvery { repo.calendar(any(), any(), any()) } returns Result.failure(RuntimeException("x"))
 
-        val vm = ProgramDetailViewModel(repo, handle)
+        val vm = vm()
         advanceUntilIdle()
 
         val state = vm.state.value
         assertNotNull(state.program)
         assertEquals(emptyList<Any>(), state.thisWeek)
         assertNull(state.error)
+    }
+
+    @Test
+    fun `in-flight draft for this program surfaces as activeDraft`() = runTest {
+        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
+        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        drafts.value = listOf(
+            ProgramFixtures.activeDraft.copy(programId = "other"),
+            ProgramFixtures.activeDraft,
+        )
+
+        val vm = vm()
+        advanceUntilIdle()
+
+        assertEquals(ProgramFixtures.activeDraft, vm.state.value.activeDraft)
+
+        // Banner disappears when the draft is finished/skipped/discarded.
+        drafts.value = emptyList()
+        advanceUntilIdle()
+        assertNull(vm.state.value.activeDraft)
     }
 }

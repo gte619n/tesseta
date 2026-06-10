@@ -15,8 +15,12 @@ import com.gte619n.healthfitness.domain.workouts.program.ProgramSource
 import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
+import com.gte619n.healthfitness.domain.workouts.session.DraftStatus
+import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import java.time.Instant
 import java.time.LocalDate
 
@@ -207,6 +211,35 @@ internal object ProgramFixtures {
             locationId = "g1",
             locationName = "Home Gym",
             status = ScheduledStatus.PLANNED,
+        ),
+    )
+
+    // ADR-0012 (IMPL-AND-16) session-logger fixtures.
+
+    /** A PLANNED scheduled session carrying its full day (deep calendar shape). */
+    val scheduledWithSession: ScheduledWorkout = thisWeek[1].copy(session = day)
+
+    /**
+     * An in-progress local draft over [scheduledWithSession] with the first
+     * squat set already checked off.
+     */
+    val activeDraft = WorkoutSessionDraft(
+        programId = "p1",
+        scheduledId = scheduledWithSession.scheduledId,
+        startedAt = Instant.parse("2026-06-03T14:00:00Z"),
+        lastActivityAt = Instant.parse("2026-06-03T14:05:00Z"),
+        status = DraftStatus.ACTIVE,
+        scheduled = scheduledWithSession,
+        logged = mapOf(
+            PrescriptionKey("b-main", 0) to listOf(
+                LoggedSet(
+                    weightLbs = 135.0,
+                    reps = 8,
+                    rpe = 8.0,
+                    restSeconds = null,
+                    completedAt = Instant.parse("2026-06-03T14:05:00Z"),
+                ),
+            ),
         ),
     )
 }
