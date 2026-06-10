@@ -68,8 +68,9 @@ class NutritionLabelExtractorTest {
         assertThat(label.brand()).isEqualTo("Chobani");
         assertThat(label.servingSizeGrams()).isEqualTo(50.0);
         assertThat(label.servingsPerContainer()).isEqualTo(4.0);
-        // 50 g serving => doubled to per-100g
-        assertThat(label.macrosPer100g().caloriesKcal()).isEqualTo(400.0);
+        // Calories are derived from the macros (10·4 + 20·4 + 8·9 = 192 per
+        // serving), not the printed 200; 50 g serving => doubled to per-100g.
+        assertThat(label.macrosPer100g().caloriesKcal()).isEqualTo(384.0);
         assertThat(label.macrosPer100g().proteinGrams()).isEqualTo(20.0);
     }
 

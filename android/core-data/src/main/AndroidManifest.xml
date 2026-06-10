@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- IMPL-16 Part A: medication dose reminders are scheduled on-device.
+         POST_NOTIFICATIONS is requested at runtime from the reminder settings
+         screen; SCHEDULE_EXACT_ALARM is the user-grantable special access for
+         exact dose times (a windowed alarm is the fallback when revoked). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application>
+
+        <!-- Fires at each planned reminder time (the alarm chain). -->
+        <receiver
+            android:name=".reminders.ReminderAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Handles the notification's "Took it" / "Take all" actions. -->
+        <receiver
+            android:name=".reminders.ReminderActionReceiver"
+            android:exported="false" />
+
+        <!-- Re-arms the alarm chain after reboot / timezone / clock changes.
+             Exported: these are protected system broadcasts only the OS sends. -->
+        <receiver
+            android:name=".reminders.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

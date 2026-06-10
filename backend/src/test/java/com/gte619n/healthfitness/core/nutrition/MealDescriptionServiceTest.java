@@ -92,7 +92,8 @@ class MealDescriptionServiceTest {
         FoodEntry stored = f.entries.findById(USER, DATE, entry.entryId()).orElseThrow();
         assertTrue(stored.isComposite());
         assertEquals(2, stored.ingredients().size(), "full ingredient breakdown is preserved");
-        assertEquals(451.0, stored.macros().caloriesKcal(), 1e-6);
+        // Calories derived from the summed macros: 42.4·4 + 7·4 + 26.4·9 = 435.2.
+        assertEquals(42.4 * 4 + 7.0 * 4 + 26.4 * 9, stored.macros().caloriesKcal(), 1e-6);
         assertEquals("http://img/meal-2.png", stored.mealImageUrl(),
             "a READY saved-meal photo is reused, not regenerated");
         assertEquals(FoodImageStatus.READY, stored.mealImageStatus());
@@ -112,6 +113,71 @@ class MealDescriptionServiceTest {
         assertEquals("Oatmeal", stored.foodName());
         assertNotNull(stored.ingredients());
         assertEquals(1, f.meals.all().size(), "the one-shot path also saves the meal for reuse");
+    }
+
+    @Test
+    void describeAsync_logsPlaceholderImmediately_thenFinalizesComposite() {
+        Fixture f = new Fixture(analyzer(
+            new MealAnalysis("Oatmeal", false, List.of(
+                new MealItem("Oatmeal", 250.0,
+                    new Macros(68.0, 2.4, 12.0, 1.4, 1.7, 0.5), 0.9))),
+            Optional.empty()));
+
+        FoodEntry placeholder = f.nutrition.beginAnalyzingEntry(
+            USER, DATE, MealType.BREAKFAST, null, null, "a bowl of oatmeal", EntrySource.MANUAL);
+        assertTrue(placeholder.isAnalyzing());
+        assertEquals("a bowl of oatmeal", placeholder.foodName(),
+            "the pending row reads as what the user typed");
+
+        f.svc.resolveAndFinalize(USER, DATE, placeholder.entryId(), "a bowl of oatmeal");
+
+        FoodEntry done = f.entries.findById(USER, DATE, placeholder.entryId()).orElseThrow();
+        assertEquals(EntryAnalysisStatus.READY, done.analysisStatus());
+        assertEquals("Oatmeal", done.foodName());
+        assertTrue(done.isComposite());
+        assertEquals(1, f.meals.all().size(), "the async path also saves the meal for reuse");
+    }
+
+    @Test
+    void describeAsync_unidentifiableDescription_marksFailed_keepingTheDescription() {
+        Fixture f = new Fixture(analyzer(
+            new MealAnalysis(null, false, List.of()), Optional.empty()));
+
+        FoodEntry placeholder = f.nutrition.beginAnalyzingEntry(
+            USER, DATE, MealType.LUNCH, null, null, "asdfghjkl", EntrySource.MANUAL);
+        f.svc.resolveAndFinalize(USER, DATE, placeholder.entryId(), "asdfghjkl");
+
+        FoodEntry done = f.entries.findById(USER, DATE, placeholder.entryId()).orElseThrow();
+        assertEquals(EntryAnalysisStatus.FAILED, done.analysisStatus());
+        assertEquals("asdfghjkl", done.foodName(),
+            "a described placeholder keeps the user's text on failure (not 'Couldn’t read photo')");
+    }
+
+    @Test
+    void describeAsync_matchedMeal_reusesItsReadyPhoto() {
+        SavedMeal saved = new SavedMeal(
+            "meal-9", "Oatmeal", "oatmeal", USER,
+            List.of(new CompositeIngredient("Oatmeal", null,
+                new Macros(68.0, 2.4, 12.0, 1.4, 1.7, 0.5), 250.0, "250 g", 1.0,
+                new Macros(170.0, 6.0, 30.0, 3.5, 4.25, 1.25))),
+            250.0, new Macros(170.0, 6.0, 30.0, 3.5, 4.25, 1.25),
+            FoodSource.GEMINI_DESCRIPTION, "http://img/meal-9.png", FoodImageStatus.READY, null, null);
+        Fixture f = new Fixture(analyzer(
+            new MealAnalysis("Oatmeal", false, List.of(
+                new MealItem("Oatmeal", 250.0,
+                    new Macros(68.0, 2.4, 12.0, 1.4, 1.7, 0.5), 0.9))),
+            Optional.of("meal-9")));
+        f.meals.save(saved);
+
+        FoodEntry placeholder = f.nutrition.beginAnalyzingEntry(
+            USER, DATE, MealType.BREAKFAST, null, null, "oatmeal", EntrySource.MANUAL);
+        f.svc.resolveAndFinalize(USER, DATE, placeholder.entryId(), "oatmeal");
+
+        FoodEntry done = f.entries.findById(USER, DATE, placeholder.entryId()).orElseThrow();
+        assertEquals(EntryAnalysisStatus.READY, done.analysisStatus());
+        assertEquals("http://img/meal-9.png", done.mealImageUrl(),
+            "a matched meal's READY photo is attached, not regenerated");
+        assertEquals(1, f.meals.all().size(), "no duplicate meal is created on a match");
     }
 
     // ---- fixture + fakes ----

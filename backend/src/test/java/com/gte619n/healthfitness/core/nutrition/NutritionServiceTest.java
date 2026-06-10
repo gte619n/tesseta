@@ -37,7 +37,34 @@ class NutritionServiceTest {
         assertEquals(150.0, found.get().proteinGrams(), 1e-9);
         assertEquals(200.0, found.get().carbsGrams(), 1e-9);
         assertEquals(60.0, found.get().fatGrams(), 1e-9);
-        assertEquals(2000.0, found.get().caloriesKcal(), 1e-9);
+        // Calories are derived from the macros (4/4/9), not the supplied 2000.
+        assertEquals(150.0 * 4 + 200.0 * 4 + 60.0 * 9, found.get().caloriesKcal(), 1e-9);
+    }
+
+    @Test
+    void logDay_withoutAnyMacros_keepsSuppliedCalories() {
+        InMemNutrition repo = new InMemNutrition();
+        NutritionService svc = new NutritionService(repo, new InMemEntries(), capturingPublisher(new ArrayList<>()));
+
+        LocalDate date = LocalDate.of(2026, 5, 21);
+        svc.logDay(USER, date, null, null, null, null, null, 350.0);
+
+        assertEquals(350.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+    }
+
+    @Test
+    void addEntry_derivesCaloriesFromMacros() {
+        InMemNutrition rollups = new InMemNutrition();
+        NutritionService svc = new NutritionService(rollups, new InMemEntries(), capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 22);
+
+        FoodEntry entry = svc.addEntry(
+            USER, date, MealType.SNACK, null, "Protein shake", "1 bottle", 414.0, 1.0,
+            new Macros(999.0, 42.0, 8.0, 4.5, 0.0, 5.0), EntrySource.MANUAL);
+
+        assertEquals(42.0 * 4 + 8.0 * 4 + 4.5 * 9, entry.macros().caloriesKcal(), 1e-9);
+        assertEquals(entry.macros().caloriesKcal(),
+            svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
     }
 
     @Test
@@ -73,6 +100,34 @@ class NutritionServiceTest {
         assertTrue(keys.contains(MetricKey.NUTRITION_SUGAR_AVG_7D.key()));
         assertTrue(keys.contains(MetricKey.NUTRITION_TARGET_MET_DAYS.key()));
         assertTrue(events.stream().allMatch(e -> e.userId().equals(USER)));
+    }
+
+    @Test
+    void relogEntry_copiesEverything_withoutPhotoLinkage() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate monday = LocalDate.of(2026, 5, 18);
+        LocalDate friday = LocalDate.of(2026, 5, 22);
+
+        FoodEntry original = svc.addCompositeMeal(
+            USER, monday, MealType.LUNCH, "Salmon & Rice",
+            List.of(ingredient("Salmon", 100.0), ingredient("Rice", 100.0)),
+            EntrySource.PHOTO);
+        svc.setEntryMealImage(USER, monday, original.entryId(), "http://img/meal.png", FoodImageStatus.READY);
+
+        FoodEntry copy = svc.relogEntry(USER, friday, MealType.DINNER, monday, original.entryId());
+
+        assertEquals("Salmon & Rice", copy.foodName());
+        assertEquals(MealType.DINNER, copy.meal());
+        assertEquals(friday, copy.date());
+        assertEquals(2, copy.ingredients().size());
+        assertEquals(200.0, copy.macros().caloriesKcal(), 1e-9);
+        assertEquals("http://img/meal.png", copy.mealImageUrl(), "the finished-meal image is reused");
+        assertEquals(FoodImageStatus.READY, copy.mealImageStatus());
+        assertTrue(copy.entryId() != null && !copy.entryId().equals(original.entryId()));
+        assertEquals(200.0, svc.findByDate(USER, friday).orElseThrow().caloriesKcal(), 1e-9,
+            "the target day's rollup includes the re-logged entry");
     }
 
     @Test
@@ -117,9 +172,13 @@ class NutritionServiceTest {
         assertEquals(150.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
     }
 
-    /** A composite ingredient of {@code 100 g × 1} contributing {@code kcal} calories. */
+    /**
+     * A composite ingredient of {@code 100 g × 1} contributing {@code kcal}
+     * calories — expressed as protein ({@code kcal/4} g) so the macros are
+     * physically consistent with the calories under 4/4/9 derivation.
+     */
     private static CompositeIngredient ingredient(String name, double kcal) {
-        Macros per100g = new Macros(kcal, 0.0, 0.0, 0.0, 0.0, 0.0);
+        Macros per100g = new Macros(kcal, kcal / 4.0, 0.0, 0.0, 0.0, 0.0);
         return new CompositeIngredient(name, null, per100g, 100.0, "100 g", 1.0, per100g);
     }
 

@@ -82,6 +82,26 @@ class MealPhotoExtractorTest {
     }
 
     @Test
+    void toAnalysis_extractsBrand_forPackagedProduct_blankBrandBecomesNull() {
+        Map<String, Object> args = orderedMap(
+            "mealName", "Fairlife Core Power Elite 42g, Chocolate",
+            "isPackagedProduct", true,
+            "brand", "Fairlife",
+            "items", List.of(orderedMap(
+                "name", "Fairlife Core Power Elite 42g, Chocolate",
+                "estimatedPortionGrams", 414.0)));
+
+        MealAnalysis analysis = MealPhotoExtractor.toAnalysis(args);
+        assertThat(analysis.brand()).isEqualTo("Fairlife");
+
+        args.put("brand", "  ");
+        assertThat(MealPhotoExtractor.toAnalysis(args).brand()).isNull();
+
+        args.remove("brand");
+        assertThat(MealPhotoExtractor.toAnalysis(args).brand()).isNull();
+    }
+
+    @Test
     void toItems_emptyOrMissing_returnsEmptyList() {
         assertThat(MealPhotoExtractor.toItems(Map.of())).isEmpty();
         assertThat(MealPhotoExtractor.toItems(null)).isEmpty();

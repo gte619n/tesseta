@@ -133,16 +133,19 @@ public class MealCaptureService {
         String userId, LocalDate date, String entryId,
         MealPhotoAnalyzer.MealAnalysis analysis, MealPhotoAnalyzer.MealItem item, String photoRef) {
         String name = firstNonBlank(analysis.mealName(), item.name(), "Product");
+        String brand = analysis.brand();
         double grams = item.estimatedPortionGrams() != null && item.estimatedPortionGrams() > 0
             ? item.estimatedPortionGrams() : 100.0;
         Macros per100g = item.macrosPer100g();
         Macros portion = per100g != null ? per100g.scale(grams / 100.0) : Macros.zero();
         String label = gramsLabel(grams);
-        // "product" category makes the generator render the product itself; the
-        // capture photo rides along as a visual reference.
-        CatalogFood food = catalog.create(
-            userId, name, null, null, "product", per100g,
-            List.of(new ServingSize(label, grams)), 0, FoodSource.GEMINI_PHOTO, photoRef);
+        // Repeat captures of the same exact product reuse the existing catalog
+        // food (and its studio image). Otherwise create one: the "product"
+        // category makes the generator render the exact branded product itself,
+        // with the capture photo riding along as the visual reference.
+        CatalogFood food = catalog.findProduct(name, brand).orElseGet(() -> catalog.create(
+            userId, name, brand, null, "product", per100g,
+            List.of(new ServingSize(label, grams)), 0, FoodSource.GEMINI_PHOTO, photoRef));
         nutrition.finalizeSingleFood(
             userId, date, entryId, food.foodId(), name, label, grams, 1.0, portion);
     }

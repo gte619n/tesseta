@@ -18,8 +18,8 @@ import type {
   Macros,
   UpdateEntryBody,
   UpdateIngredientBody,
-  DescribedMeal,
   LogDescribedMealBody,
+  RelogBody,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -65,11 +65,12 @@ type Props = {
       source: string;
     }[]
   >;
-  describeMeal: (description: string) => Promise<DescribedMeal>;
-  logDescribedMeal: (
+  describeMealAsync: (
     date: string,
     body: LogDescribedMealBody,
   ) => Promise<void>;
+  relogEntry: (date: string, body: RelogBody) => Promise<void>;
+  recents: Entry[];
 };
 
 const ZERO: Macros = {
@@ -111,8 +112,9 @@ export function NutritionMeals({
   updateIngredient,
   deleteEntry,
   searchFoods,
-  describeMeal,
-  logDescribedMeal,
+  describeMealAsync,
+  relogEntry,
+  recents,
 }: Props) {
   const toast = useToast();
   const [meals, setMeals] = useState(initialMeals);
@@ -194,8 +196,9 @@ export function NutritionMeals({
             updateIngredient={updateIngredient}
             deleteEntry={deleteEntry}
             searchFoods={searchFoods}
-            describeMeal={describeMeal}
-            logDescribedMeal={logDescribedMeal}
+            describeMealAsync={describeMealAsync}
+            relogEntry={relogEntry}
+            recents={recents}
             activeId={activeId}
           />
         ))}

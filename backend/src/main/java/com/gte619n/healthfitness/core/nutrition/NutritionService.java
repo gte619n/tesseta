@@ -63,8 +63,10 @@ public class NutritionService {
 
     /**
      * Upsert the nutrition log for {@code date}. Any existing row for
-     * that day is replaced. {@code caloriesKcal} is optional — when
-     * null, the calories metric is derived from macros at read time.
+     * that day is replaced. Calories are derived from the macros
+     * (4/4/9) whenever any macro is present, so the stored day can never
+     * disagree with its own macro totals; a calories-only log keeps the
+     * supplied value.
      */
     public NutritionDailyLog logDay(
         String userId,
@@ -82,8 +84,12 @@ public class NutritionService {
         if (date == null) {
             throw new IllegalArgumentException("date is required");
         }
+        Macros derived = new Macros(
+            caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams)
+            .withDerivedCalories();
         NutritionDailyLog log = new NutritionDailyLog(
-            userId, date, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams, caloriesKcal, null, null);
+            userId, date, derived.proteinGrams(), derived.carbsGrams(), derived.fatGrams(),
+            derived.fiberGrams(), derived.sugarGrams(), derived.caloriesKcal(), null, null);
         repository.save(log);
         // Publish after the save so a failed save never fires events.
         metricChangedPublisher.publishAll(userId, NUTRITION_KEYS);
@@ -111,6 +117,24 @@ public class NutritionService {
         requireUser(userId);
         requireDate(date);
         return entries.findById(userId, date, entryId);
+    }
+
+    /**
+     * All entries logged in the {@code days} days ending at {@code today}
+     * (inclusive). Backs the add-flow's "recent meals" list; the caller
+     * dedupes/orders. Day-keyed subcollections make this one read per day.
+     */
+    public List<FoodEntry> listRecentEntries(String userId, LocalDate today, int days) {
+        requireUser(userId);
+        requireDate(today);
+        if (days < 1) {
+            throw new IllegalArgumentException("days must be >= 1");
+        }
+        List<FoodEntry> out = new ArrayList<>();
+        for (int i = 0; i < days; i++) {
+            out.addAll(entries.findByDate(userId, today.minusDays(i)));
+        }
+        return out;
     }
 
     /**
@@ -166,11 +190,51 @@ public class NutritionService {
         }
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
-            servingGrams, quantity, macros, null, null, source,
+            servingGrams, quantity, macros != null ? macros.withDerivedCalories() : null,
+            null, null, source,
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
+    }
+
+    /**
+     * Re-log an existing entry onto another day/meal: a one-tap repeat from the
+     * "recent meals" list. The copy reuses everything already computed — catalog
+     * {@code foodId}s, the frozen macros snapshot, the ingredient breakdown and
+     * the finished-meal image — so no catalog foods are duplicated and no AI
+     * image work re-runs. The source's capture-photo linkage (photoRef/
+     * contentHash) is deliberately not copied; it belongs to the original.
+     */
+    public FoodEntry relogEntry(
+        String userId, LocalDate targetDate, MealType meal,
+        LocalDate sourceDate, String sourceEntryId) {
+        requireUser(userId);
+        requireDate(targetDate);
+        requireDate(sourceDate);
+        if (meal == null) {
+            throw new IllegalArgumentException("meal is required");
+        }
+        FoodEntry source = entries.findById(userId, sourceDate, sourceEntryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + sourceEntryId));
+        if (source.analysisStatus() == EntryAnalysisStatus.ANALYZING
+            || source.analysisStatus() == EntryAnalysisStatus.FAILED) {
+            throw new IllegalArgumentException("cannot re-log an unfinished entry");
+        }
+        boolean hasMealImage = source.mealImageUrl() != null;
+        FoodEntry copy = new FoodEntry(
+            userId, targetDate, UUID.randomUUID().toString(), meal,
+            source.foodId(), source.foodName(), source.servingLabel(), source.servingGrams(),
+            source.quantity(),
+            source.macros() != null ? source.macros().withDerivedCalories() : null,
+            null, null, source.source(),
+            source.ingredients() != null ? withDerivedCalories(source.ingredients()) : null,
+            source.mealImageUrl(),
+            hasMealImage ? FoodImageStatus.READY : FoodImageStatus.NONE,
+            EntryAnalysisStatus.NONE, null, null);
+        entries.save(copy);
+        recomputeDay(userId, targetDate);
+        return copy;
     }
 
     /**
@@ -216,6 +280,7 @@ public class NutritionService {
         if (ingredients == null || ingredients.isEmpty()) {
             throw new IllegalArgumentException("a composite meal needs at least one ingredient");
         }
+        ingredients = withDerivedCalories(ingredients);
         Macros total = Macros.zero();
         double grams = 0.0;
         for (CompositeIngredient ing : ingredients) {
@@ -280,6 +345,19 @@ public class NutritionService {
      */
     public FoodEntry beginAnalyzingEntry(
         String userId, LocalDate date, MealType meal, String photoRef, String contentHash) {
+        return beginAnalyzingEntry(
+            userId, date, meal, photoRef, contentHash, "Analyzing photo…", EntrySource.PHOTO);
+    }
+
+    /**
+     * Generalized placeholder used by every async-analysis path. The describe
+     * flow passes the user's own description as {@code placeholderName} (so the
+     * pending row reads as what they typed) with {@code MANUAL} source and no
+     * photo; the capture flow passes "Analyzing photo…" + {@code PHOTO}.
+     */
+    public FoodEntry beginAnalyzingEntry(
+        String userId, LocalDate date, MealType meal, String photoRef, String contentHash,
+        String placeholderName, EntrySource source) {
         requireUser(userId);
         requireDate(date);
         if (meal == null) {
@@ -287,8 +365,8 @@ public class NutritionService {
         }
         String entryId = UUID.randomUUID().toString();
         FoodEntry entry = new FoodEntry(
-            userId, date, entryId, meal, null, "Analyzing photo…",
-            null, null, 1.0, Macros.zero(), photoRef, contentHash, EntrySource.PHOTO,
+            userId, date, entryId, meal, null, placeholderName,
+            null, null, 1.0, Macros.zero(), photoRef, contentHash, source,
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null);
         entries.save(entry);
         return entry;
@@ -329,6 +407,7 @@ public class NutritionService {
         }
         FoodEntry existing = entries.findById(userId, date, entryId)
             .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        ingredients = withDerivedCalories(ingredients);
         Macros total = Macros.zero();
         double grams = 0.0;
         for (CompositeIngredient ing : ingredients) {
@@ -367,7 +446,8 @@ public class NutritionService {
         FoodEntry updated = new FoodEntry(
             existing.userId(), existing.date(), existing.entryId(), existing.meal(),
             foodId, foodName, servingLabel, servingGrams,
-            quantity != null ? quantity : 1.0, macros, existing.photoRef(),
+            quantity != null ? quantity : 1.0,
+            macros != null ? macros.withDerivedCalories() : null, existing.photoRef(),
             existing.contentHash(), existing.source(), null, null, FoodImageStatus.NONE,
             EntryAnalysisStatus.READY, existing.createdAt(), null);
         entries.save(updated);
@@ -376,17 +456,20 @@ public class NutritionService {
     }
 
     /**
-     * Mark a placeholder entry's analysis as {@code FAILED} (the photo couldn't
-     * be understood). Keeps the entry so the client can surface the failure and
-     * let the user retry or delete it.
+     * Mark a placeholder entry's analysis as {@code FAILED} (the photo or
+     * description couldn't be understood). Keeps the entry so the client can
+     * surface the failure and let the user retry or delete it. Photo captures
+     * get the explanatory name; a described placeholder keeps the user's own
+     * description as its name.
      */
     public void markAnalysisFailed(String userId, LocalDate date, String entryId) {
         requireUser(userId);
         requireDate(date);
         entries.findById(userId, date, entryId).ifPresent(e -> {
+            String name = e.source() == EntrySource.PHOTO ? "Couldn’t read photo" : e.foodName();
             FoodEntry failed = new FoodEntry(
                 e.userId(), e.date(), e.entryId(), e.meal(), e.foodId(),
-                "Couldn’t read photo", e.servingLabel(), e.servingGrams(),
+                name, e.servingLabel(), e.servingGrams(),
                 e.quantity(), e.macros(), e.photoRef(), e.contentHash(), e.source(), e.ingredients(),
                 e.mealImageUrl(), e.mealImageStatus(), EntryAnalysisStatus.FAILED,
                 e.createdAt(), null);
@@ -438,6 +521,7 @@ public class NutritionService {
         }
         List<CompositeIngredient> updated = new ArrayList<>(current);
         updated.set(index, current.get(index).withPortion(servingGrams, servingLabel, quantity));
+        updated = withDerivedCalories(updated);
 
         // Preserve the entry's meal portion (entry.quantity) when resumming.
         double portion = existing.quantity() != null ? existing.quantity() : 1.0;
@@ -480,7 +564,7 @@ public class NutritionService {
             : (existing.quantity() != null ? existing.quantity() : 1.0);
         Macros newMacros = existing.isComposite()
             ? compositeTotal(existing.ingredients(), newQuantity)
-            : (macros != null ? macros : existing.macros());
+            : (macros != null ? macros.withDerivedCalories() : existing.macros());
         FoodEntry updated = new FoodEntry(
             existing.userId(),
             existing.date(),
@@ -524,7 +608,28 @@ public class NutritionService {
         for (CompositeIngredient ing : ingredients) {
             total = total.plus(ing.macros());
         }
-        return total.scale(portion);
+        return total.scale(portion).withDerivedCalories();
+    }
+
+    /**
+     * Normalize every ingredient so both its per-100g baseline and its portion
+     * snapshot carry macro-derived calories. Entries written before derivation
+     * existed pass through here on edit, healing legacy values.
+     */
+    private static List<CompositeIngredient> withDerivedCalories(
+        List<CompositeIngredient> ingredients) {
+        List<CompositeIngredient> out = new ArrayList<>(ingredients.size());
+        for (CompositeIngredient ing : ingredients) {
+            out.add(new CompositeIngredient(
+                ing.name(),
+                ing.foodId(),
+                ing.macrosPer100g() != null ? ing.macrosPer100g().withDerivedCalories() : null,
+                ing.servingGrams(),
+                ing.servingLabel(),
+                ing.quantity(),
+                ing.macros() != null ? ing.macros().withDerivedCalories() : null));
+        }
+        return out;
     }
 
     /**

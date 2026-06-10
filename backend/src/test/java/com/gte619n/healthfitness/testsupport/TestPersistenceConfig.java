@@ -383,6 +383,20 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.medication.ReminderSettingsRepository reminderSettingsRepository() {
+        return new com.gte619n.healthfitness.core.medication.ReminderSettingsRepository() {
+            private final java.util.Map<String, com.gte619n.healthfitness.core.medication.ReminderSettings> rows =
+                new java.util.concurrent.ConcurrentHashMap<>();
+            @Override public Optional<com.gte619n.healthfitness.core.medication.ReminderSettings> find(String userId) {
+                return Optional.ofNullable(rows.get(userId));
+            }
+            @Override public void save(com.gte619n.healthfitness.core.medication.ReminderSettings settings) {
+                rows.put(settings.userId(), settings);
+            }
+        };
+    }
+
+    @Bean
     MedicationHistoryRepository medicationHistoryRepository() {
         return new MedicationHistoryRepository() {
             @Override public List<MedicationHistory> findByMedication(String userId, String medicationId) { return List.of(); }

@@ -11,6 +11,7 @@ import type {
   CreateFoodBody,
   DescribedMeal,
   LogDescribedMealBody,
+  RelogBody,
 } from "./types/nutrition";
 
 // Server-only HTTP helpers for the Nutrition module (IMPL-13).
@@ -122,4 +123,32 @@ export function logDescribedMeal(
   body: LogDescribedMealBody,
 ): Promise<Entry> {
   return send<Entry>(`/api/me/nutrition/${date}/describe-meal`, "POST", body);
+}
+
+/**
+ * Fire-and-forget describe: the backend logs an ANALYZING placeholder named
+ * with the description and returns it immediately (202); resolution runs
+ * server-side and the day view polls it in.
+ */
+export function describeMealAsync(
+  date: string,
+  body: LogDescribedMealBody,
+): Promise<Entry> {
+  return send<Entry>(`/api/me/nutrition/${date}/describe-meal-async`, "POST", body);
+}
+
+/**
+ * Distinct foods/meals logged in the last `days` days, deduped, newest first —
+ * the add-flow's one-tap "recent meals" list. Each row carries `date` + ids
+ * needed to re-log it via {@link relogEntry}.
+ */
+export function getRecentMeals(days = 14, limit = 20): Promise<Entry[]> {
+  return apiJson<Entry[]>(
+    `/api/me/nutrition/recent-meals?days=${days}&limit=${limit}`,
+  );
+}
+
+/** One-tap re-log: server-side copy of a past entry onto `date` (no AI rework). */
+export function relogEntry(date: string, body: RelogBody): Promise<Entry> {
+  return send<Entry>(`/api/me/nutrition/${date}/relog`, "POST", body);
 }

@@ -46,4 +46,26 @@ public record Macros(
             nz(sugarGrams) * factor
         );
     }
+
+    /** Atwater factors (kcal per gram). Carbs include fiber, per US label convention. */
+    public static final double KCAL_PER_GRAM_PROTEIN = 4.0;
+    public static final double KCAL_PER_GRAM_CARBS = 4.0;
+    public static final double KCAL_PER_GRAM_FAT = 9.0;
+
+    /**
+     * Returns a copy whose calories are derived from the macros
+     * (4·protein + 4·carbs + 9·fat), so calories and macros can never
+     * disagree. When protein, carbs and fat are ALL null the supplied
+     * calories are kept as-is — a calories-only quick add (e.g. a drink the
+     * user only knows the kcal of) stays loggable.
+     */
+    public Macros withDerivedCalories() {
+        if (proteinGrams == null && carbsGrams == null && fatGrams == null) {
+            return this;
+        }
+        double derived = nz(proteinGrams) * KCAL_PER_GRAM_PROTEIN
+            + nz(carbsGrams) * KCAL_PER_GRAM_CARBS
+            + nz(fatGrams) * KCAL_PER_GRAM_FAT;
+        return new Macros(derived, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams);
+    }
 }

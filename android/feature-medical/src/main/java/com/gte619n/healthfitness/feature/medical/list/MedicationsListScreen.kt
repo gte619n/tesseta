@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -46,6 +47,7 @@ import com.gte619n.healthfitness.ui.theme.type
 fun MedicationsListScreen(
     onAdd: () -> Unit,
     onMedicationClick: (medicationId: String) -> Unit,
+    onOpenReminders: () -> Unit = {},
     onBack: (() -> Unit)? = null,
     viewModel: MedicationsViewModel = hiltViewModel(),
 ) {
@@ -68,7 +70,7 @@ fun MedicationsListScreen(
                 subtitle = "Your current and past medications",
                 onBack = onBack,
             )
-            TabRow(active = tab, onTabChange = viewModel::setTab)
+            TabRow(active = tab, onTabChange = viewModel::setTab, onOpenReminders = onOpenReminders)
             Spacer(Modifier.height(4.dp))
 
             when (val s = state) {
@@ -116,12 +118,17 @@ fun MedicationsListScreen(
 }
 
 @Composable
-private fun TabRow(active: MedicationsTab, onTabChange: (MedicationsTab) -> Unit) {
+private fun TabRow(
+    active: MedicationsTab,
+    onTabChange: (MedicationsTab) -> Unit,
+    onOpenReminders: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         MedicationsTab.entries.forEach { entry ->
             val isActive = entry == active
@@ -145,6 +152,22 @@ private fun TabRow(active: MedicationsTab, onTabChange: (MedicationsTab) -> Unit
                     color = if (isActive) Hf.colors.accentDim else Hf.colors.textSecondary,
                 )
             }
+        }
+        Spacer(Modifier.weight(1f))
+        // Dose-reminder settings (IMPL-16 Part A).
+        Box(
+            modifier = Modifier
+                .background(Hf.colors.surface, RoundedCornerShape(7.dp))
+                .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(7.dp))
+                .clickable { onOpenReminders() }
+                .padding(6.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Notifications,
+                contentDescription = "Dose reminders",
+                tint = Hf.colors.textSecondary,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

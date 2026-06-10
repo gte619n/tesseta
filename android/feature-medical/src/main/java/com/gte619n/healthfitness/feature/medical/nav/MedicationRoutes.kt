@@ -8,6 +8,7 @@ import androidx.navigation.navArgument
 import com.gte619n.healthfitness.feature.medical.add.AddMedicationScreen
 import com.gte619n.healthfitness.feature.medical.detail.MedicationDetailScreen
 import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
+import com.gte619n.healthfitness.feature.medical.reminders.ReminderSettingsScreen
 
 /**
  * String-based Navigation-Compose routes for the medications feature. Mirrors
@@ -16,6 +17,7 @@ import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
 object MedicationRoutes {
     const val LIST = "medications"
     const val ADD = "medications/add"
+    const val REMINDERS = "medications/reminders"
 
     /** Build a concrete detail route for [id]. */
     fun detail(id: String): String = "medications/$id"
@@ -36,6 +38,7 @@ fun NavGraphBuilder.medicationsGraph(navController: NavHostController) {
         MedicationsListScreen(
             onAdd = { navController.navigate(MedicationRoutes.ADD) },
             onMedicationClick = { id -> navController.navigate(MedicationRoutes.detail(id)) },
+            onOpenReminders = { navController.navigate(MedicationRoutes.REMINDERS) },
             onBack = { navController.popBackStack() },
         )
     }
@@ -43,6 +46,15 @@ fun NavGraphBuilder.medicationsGraph(navController: NavHostController) {
     composable(MedicationRoutes.ADD) {
         AddMedicationScreen(
             onDone = { navController.popBackStack() },
+            onBack = { navController.popBackStack() },
+        )
+    }
+
+    // Exact-string route: Navigation-Compose prefers it over the
+    // `{medicationId}` pattern, so "medications/reminders" never falls into
+    // the detail destination.
+    composable(MedicationRoutes.REMINDERS) {
+        ReminderSettingsScreen(
             onBack = { navController.popBackStack() },
         )
     }

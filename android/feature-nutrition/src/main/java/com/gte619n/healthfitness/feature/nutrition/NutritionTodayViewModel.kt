@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.feature.nutrition
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
+import com.gte619n.healthfitness.data.nutrition.PendingCaptureStore
 import com.gte619n.healthfitness.data.sync.SyncSignals
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
@@ -52,11 +53,19 @@ data class NutritionTodayUiState(
     val savingIngredient: Boolean = false,
     /** true while a user-initiated pull-to-refresh is in flight. */
     val isRefreshing: Boolean = false,
+    /**
+     * Capture photos still uploading in the background (B2 instant capture).
+     * The screen renders one synthetic "Uploading photo…" row per item, in the
+     * meal group the capture targeted, until the server's ANALYZING placeholder
+     * replaces it.
+     */
+    val pendingCaptures: List<PendingCaptureStore.PendingCapture> = emptyList(),
 )
 
 @HiltViewModel
 class NutritionTodayViewModel @Inject constructor(
     private val repository: NutritionRepository,
+    pendingCaptures: PendingCaptureStore,
     syncSignals: SyncSignals,
 ) : ViewModel() {
 
@@ -85,6 +94,19 @@ class NutritionTodayViewModel @Inject constructor(
                 if (collections == null || collections.contains("nutrition", ignoreCase = true)) {
                     refresh()
                 }
+            }
+        }
+        // Mirror the in-flight capture uploads into state. When an upload
+        // completes (the list shrinks) the worker has already pulled the
+        // server's ANALYZING placeholder into the mirror — re-load so the
+        // synthetic row swaps for the real one and the settle-poll engages.
+        viewModelScope.launch {
+            var previous = emptyList<PendingCaptureStore.PendingCapture>()
+            pendingCaptures.pending.collect { captures ->
+                val completed = previous.size > captures.size
+                previous = captures
+                _state.update { it.copy(pendingCaptures = captures) }
+                if (completed) refresh()
             }
         }
     }
@@ -116,9 +138,13 @@ class NutritionTodayViewModel @Inject constructor(
     fun closeAddSheet() = _state.update { it.copy(addSheetOpen = false) }
 
     // A composite (photo-logged) meal opens the ingredients sheet; everything
-    // else opens the single-food edit sheet.
-    fun openEditSheet(entry: Entry) = _state.update {
-        if (entry.isComposite) it.copy(editingComposite = entry) else it.copy(editingEntry = entry)
+    // else opens the single-food edit sheet. Synthetic uploading rows have no
+    // server entry yet — nothing to edit.
+    fun openEditSheet(entry: Entry) {
+        if (entry.entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        _state.update {
+            if (entry.isComposite) it.copy(editingComposite = entry) else it.copy(editingEntry = entry)
+        }
     }
 
     fun closeEditSheet() = _state.update { it.copy(editingEntry = null, editingComposite = null) }
@@ -232,6 +258,7 @@ class NutritionTodayViewModel @Inject constructor(
     }
 
     fun deleteEntry(entryId: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
         val date = _state.value.date.format(ISO_DATE)
         _state.update { it.copy(pendingEntryIds = it.pendingEntryIds + entryId) }
         viewModelScope.launch {
@@ -258,6 +285,7 @@ class NutritionTodayViewModel @Inject constructor(
      * re-sum), PATCHes the entry's meal, then reloads. A failure reverts.
      */
     fun moveEntry(entryId: String, targetMeal: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
         val current = _state.value.day ?: return
         val source = current.meals.firstOrNull { g -> g.entries.any { it.entryId == entryId } } ?: return
         if (source.meal == targetMeal) return
@@ -332,18 +360,41 @@ class NutritionTodayViewModel @Inject constructor(
     }
 
     /**
-     * Log a described meal (resolved in the add sheet via the describe flow) onto
-     * the current day. Like the composite-meal path, the server may still be
-     * generating the finished-meal photo, so poll while images settle.
+     * Fire-and-forget describe: the sheet closes immediately, the server logs an
+     * ANALYZING placeholder named with the description, and the settle-poll
+     * fills it in (the camera-capture pattern). The only wait is the quick 202.
      */
-    fun logDescribedMeal(meal: Meal, mealId: String) {
+    fun describeMealAsync(meal: Meal, description: String) {
+        val text = description.trim()
+        if (text.isBlank()) return
         val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(addSheetOpen = false) }
         viewModelScope.launch {
             try {
-                repository.logDescribedMeal(date, mealId, meal.wire)
+                repository.describeMealAsync(date, text, meal.wire)
                 val day = repository.day(date)
-                _state.update { it.copy(day = day, addSheetOpen = false, error = null) }
+                _state.update { it.copy(day = day, error = null) }
                 pollWhileImagesGenerate(_state.value.date)
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Describe failed") }
+            }
+        }
+    }
+
+    /**
+     * One-tap re-log of a recent entry (same portions) onto the current day's
+     * [meal]. Server-side copy — catalog foods and images are reused, so the
+     * row lands complete with no AI wait.
+     */
+    fun relogRecent(meal: Meal, entry: Entry) {
+        val sourceDate = entry.date ?: return
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(addSheetOpen = false) }
+        viewModelScope.launch {
+            try {
+                repository.relog(date, sourceDate, entry.entryId, meal.wire)
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, error = null) }
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Add failed") }
             }
@@ -363,6 +414,44 @@ class NutritionTodayViewModel @Inject constructor(
             }
         }
     }
+}
+
+/** Id prefix of the synthetic rows shown while a capture photo uploads. */
+const val PENDING_CAPTURE_PREFIX = "pending-capture-"
+
+/**
+ * Merge the in-flight capture uploads into the day for display: one synthetic
+ * "Uploading photo…" row (ANALYZING, zero macros) per capture targeting [date],
+ * appended to its target meal group. Pure presentation — totals are untouched
+ * (an uploading photo contributes nothing yet, same as a server placeholder).
+ */
+fun NutritionDay?.withPendingCaptures(
+    captures: List<PendingCaptureStore.PendingCapture>,
+    date: LocalDate,
+): NutritionDay? {
+    val forDate = captures.filter { it.date == date.format(ISO_DATE) }
+    if (forDate.isEmpty()) return this
+    val base = this ?: NutritionDay(date = date.format(ISO_DATE), totals = Macros.EMPTY)
+    var meals = base.meals
+    forDate.forEach { capture ->
+        val synthetic = Entry(
+            entryId = PENDING_CAPTURE_PREFIX + capture.id,
+            meal = capture.mealWire,
+            foodName = "Uploading photo…",
+            quantity = 1.0,
+            macros = Macros.EMPTY,
+            source = "PHOTO",
+            analysisStatus = "ANALYZING",
+        )
+        meals = if (meals.any { it.meal == capture.mealWire }) {
+            meals.map { g ->
+                if (g.meal == capture.mealWire) g.copy(entries = g.entries + synthetic) else g
+            }
+        } else {
+            meals + MealGroup(meal = capture.mealWire, subtotal = Macros.EMPTY, entries = listOf(synthetic))
+        }
+    }
+    return base.copy(meals = meals)
 }
 
 /**

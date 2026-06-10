@@ -67,6 +67,7 @@ class NutritionCaptureViewModel @Inject constructor(
     private val foods: FoodRepository,
     private val capture: NutritionCaptureRepository,
     private val nutrition: NutritionRepository,
+    private val captureUploader: com.gte619n.healthfitness.data.nutrition.CaptureUploader,
     private val snackbar: SnackbarController,
     connectivity: com.gte619n.healthfitness.data.net.Connectivity,
     savedStateHandle: SavedStateHandle,
@@ -188,30 +189,18 @@ class NutritionCaptureViewModel @Inject constructor(
     // ---- Photo: meal ----------------------------------------------------
 
     /**
-     * Capture a meal/product photo and hand it to the backend to analyze and log
-     * asynchronously, then pop straight back to the nutrition page. The entry
-     * appears there immediately as "Analyzing photo…" and fills itself in (name,
-     * macros, ingredients, image) as the background analysis completes — the day
-     * view polls for it. The (slow) analysis no longer blocks this screen.
+     * Capture a meal/product photo and pop straight back to the nutrition page —
+     * before the upload even starts. The JPEG is parked in a cache file and a
+     * WorkManager worker uploads it in the background (surviving process death
+     * and retrying across connectivity blips); the Today page shows a synthetic
+     * "Uploading photo…" row from [PendingCaptureStore] until the server's
+     * ANALYZING placeholder lands, then the existing settle-poll fills it in.
      */
     fun analyzeMeal(jpeg: ByteArray) {
-        _state.update { it.copy(stage = CaptureStage.Working, error = null) }
-        viewModelScope.launch {
-            try {
-                capture.captureMeal(captureDate, currentMeal().wire, jpeg)
-                // The capture POST creates the ANALYZING entry server-side only.
-                // Pull it into the local mirror now so it renders immediately on
-                // the Today screen and the settle-poll engages; without this the
-                // offline-first day() won't re-fetch a non-empty date and nothing
-                // shows. Best-effort — the entry still syncs later if this fails.
-                runCatching { nutrition.refreshDay(captureDate) }
-                snackbar.show("Analyzing your photo…")
-                _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
-                _events.send(CaptureEvent.NavigateBack)
-            } catch (e: Exception) {
-                _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Capture failed") }
-            }
-        }
+        captureUploader.enqueue(captureDate, currentMeal().wire, jpeg)
+        snackbar.show("Analyzing your photo…")
+        _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
+        viewModelScope.launch { _events.send(CaptureEvent.NavigateBack) }
     }
 
     /**

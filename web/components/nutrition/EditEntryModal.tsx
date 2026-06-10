@@ -3,7 +3,12 @@
 import { useMemo, useState } from "react";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import type { Entry, Meal, Macros, UpdateEntryBody } from "@/lib/types/nutrition";
-import { MEAL_LABELS, MEALS, QUANTITY_STEPS } from "@/lib/types/nutrition";
+import {
+  MEAL_LABELS,
+  MEALS,
+  QUANTITY_STEPS,
+  derivedCaloriesKcal,
+} from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
 
@@ -19,8 +24,10 @@ type Props = {
   ) => Promise<void>;
 };
 
+// Calories are NOT an editable field: they derive from the macros (4/4/9,
+// the backend's invariant). Only a macro-less calories-only entry keeps a
+// manual kcal input (rendered separately below).
 const MACRO_FIELDS: { key: keyof Macros; label: string }[] = [
-  { key: "caloriesKcal", label: "Calories (kcal)" },
   { key: "proteinGrams", label: "Protein (g)" },
   { key: "carbsGrams", label: "Carbs (g)" },
   { key: "fatGrams", label: "Fat (g)" },
@@ -135,6 +142,19 @@ export function EditEntryModal({
     setMacros((prev) => ({ ...prev, [key]: v }));
   }
 
+  // Calories follow the macros (4/4/9) whenever any macro is present; only a
+  // macro-less (calories-only) entry keeps the manual kcal field.
+  const hasMacros =
+    macros.proteinGrams.trim() !== "" ||
+    macros.carbsGrams.trim() !== "" ||
+    macros.fatGrams.trim() !== "";
+  const derivedKcal = derivedCaloriesKcal(
+    numOr(macros.proteinGrams),
+    numOr(macros.carbsGrams),
+    numOr(macros.fatGrams),
+  );
+  const effectiveKcal = hasMacros ? derivedKcal : numOr(macros.caloriesKcal);
+
   if (!isOpen) return null;
 
   async function handleSave() {
@@ -150,7 +170,7 @@ export function EditEntryModal({
       servingGrams: grams,
       quantity,
       macros: {
-        caloriesKcal: numOr(macros.caloriesKcal),
+        caloriesKcal: effectiveKcal,
         proteinGrams: numOr(macros.proteinGrams),
         carbsGrams: numOr(macros.carbsGrams),
         fatGrams: numOr(macros.fatGrams),
@@ -172,9 +192,8 @@ export function EditEntryModal({
 
   // Live amount readout that tracks serving grams × quantity and calories.
   const effectiveGrams = Math.round((numOr(servingGrams) ?? 0) * quantity);
-  const liveKcal = numOr(macros.caloriesKcal);
   const amountLabel = `${effectiveGrams} g${
-    liveKcal !== null ? ` · ${Math.round(liveKcal)} kcal` : ""
+    effectiveKcal !== null ? ` · ${Math.round(effectiveKcal)} kcal` : ""
   }`;
 
   return (
@@ -310,7 +329,7 @@ export function EditEntryModal({
             </div>
           </div>
 
-          {/* Macros */}
+          {/* Macros — calories derive from them (4/4/9) */}
           <div>
             <label className="mb-1.5 block text-[11px] font-medium text-secondary">
               Macros
@@ -332,7 +351,28 @@ export function EditEntryModal({
                   />
                 </div>
               ))}
+              {!hasMacros && (
+                <div>
+                  <label className="mb-1 block text-[10px] text-tertiary">
+                    Calories (kcal)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={macros.caloriesKcal}
+                    onChange={(e) => setMacroField("caloriesKcal", e.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-2 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              )}
             </div>
+            {hasMacros && (
+              <div className="mt-2 font-mono text-[11px] tabular-nums text-tertiary">
+                Calories: {Math.round(derivedKcal ?? 0)} kcal — computed from macros
+              </div>
+            )}
           </div>
         </div>
 

@@ -50,12 +50,21 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
 
         A) A SINGLE PACKAGED PRODUCT — a branded, packaged good shown as one unit
            (a bottle, can, carton, tub, pouch, bar or wrapper), e.g. a protein
-           shake, a tub of yogurt, an energy bar. Treat it as ONE product:
+           shake, a tub of yogurt, an energy bar. Treat it as ONE product and
+           identify the EXACT product, not a generic stand-in:
            - set isPackagedProduct = true,
-           - return exactly ONE item whose name is the product itself (e.g.
-             "Greek yogurt", "Chocolate protein shake") — NOT a list of its
-             ingredients and NOT the brand/label text,
-           - mealName = that same product name.
+           - read the packaging: set brand to the brand name alone (e.g.
+             "Fairlife", "Chobani") when it is legible or you recognize the
+             product, otherwise leave brand unset,
+           - return exactly ONE item whose name is the FULL specific product
+             name including brand, product line and flavor/variant/size when
+             visible (e.g. "Fairlife Core Power Elite 42g, Chocolate" — NOT
+             "Chocolate protein shake") — NOT a list of its ingredients. Only
+             when no brand is identifiable fall back to a specific generic
+             name (e.g. "Chocolate protein shake"),
+           - prefer the product's official nutrition values when you know this
+             exact product; otherwise estimate from the packaging,
+           - mealName = that same exact product name.
 
         B) A PREPARED MEAL — a plate or bowl of food with distinct components.
            Treat it as a multi-ingredient meal:
@@ -145,15 +154,17 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
         return null;
     }
 
-    /** Build the full analysis (name + packaged flag + items) from tool args. */
+    /** Build the full analysis (name + brand + packaged flag + items) from tool args. */
     static MealAnalysis toAnalysis(Map<String, Object> args) {
         if (args == null) {
             return new MealAnalysis(null, false, List.of());
         }
         String mealName = str(args.get("mealName"));
+        String brand = str(args.get("brand"));
         boolean packaged = bool(args.get("isPackagedProduct"));
         return new MealAnalysis(
             (mealName != null && !mealName.isBlank()) ? mealName : null,
+            (brand != null && !brand.isBlank()) ? brand : null,
             packaged,
             toItems(args));
     }
@@ -182,6 +193,8 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
     private static Macros macros(Object raw) {
         if (!(raw instanceof Map<?, ?> mm)) return null;
         Map<String, Object> m = (Map<String, Object>) mm;
+        // The model's kcal estimate can drift from its own macro estimates;
+        // derive calories so they are always consistent (4/4/9).
         return new Macros(
             dbl(m.get("caloriesKcal")),
             dbl(m.get("proteinGrams")),
@@ -189,7 +202,7 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
             dbl(m.get("fatGrams")),
             dbl(m.get("fiberGrams")),
             dbl(m.get("sugarGrams"))
-        );
+        ).withDerivedCalories();
     }
 
     private static String str(Object o) {
@@ -251,6 +264,9 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
                 "isPackagedProduct", Schema.builder().type(Type.Known.BOOLEAN)
                     .description("True if the photo is a single packaged product (bottle, tub, "
                         + "can, bar, wrapper) rather than a prepared multi-ingredient meal.").build(),
+                "brand", Schema.builder().type(Type.Known.STRING)
+                    .description("For a packaged product: the brand name alone (e.g. 'Fairlife'), "
+                        + "when legible or recognized. Omit otherwise.").build(),
                 "items", Schema.builder().type(Type.Known.ARRAY).items(item).build()
             ))
             .required("mealName", "isPackagedProduct", "items")

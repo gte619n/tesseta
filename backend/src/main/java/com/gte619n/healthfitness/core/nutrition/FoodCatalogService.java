@@ -113,6 +113,23 @@ public class FoodCatalogService {
         );
     }
 
+    /**
+     * Find an existing packaged-product food by exact name (and brand when
+     * given), so repeat captures of the same product reuse one catalog food —
+     * and its already-generated studio image — instead of minting duplicates.
+     */
+    public Optional<CatalogFood> findProduct(String name, String brand) {
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        return repository.searchByNamePrefix(name.toLowerCase(), SEARCH_LIMIT).stream()
+            .filter(f -> "product".equalsIgnoreCase(f.category()))
+            .filter(f -> f.name() != null && f.name().equalsIgnoreCase(name))
+            .filter(f -> brand == null
+                || (f.brand() != null && f.brand().equalsIgnoreCase(brand)))
+            .findFirst();
+    }
+
     /** Create a manual / AI-derived catalog food. Starts {@code UNVERIFIED}. */
     public CatalogFood create(
         String createdByUserId,
@@ -158,7 +175,7 @@ public class FoodCatalogService {
             brand,
             barcode,
             category,
-            macrosPer100g,
+            macrosPer100g != null ? macrosPer100g.withDerivedCalories() : null,
             servingSizes != null ? servingSizes : List.of(),
             defaultServingIndex,
             source != null ? source : FoodSource.USER,

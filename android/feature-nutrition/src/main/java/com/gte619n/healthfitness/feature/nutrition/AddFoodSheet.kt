@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,17 +33,29 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
+import com.gte619n.healthfitness.domain.nutrition.derivedCaloriesKcal
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.LocalTime
+import kotlin.math.roundToInt
 
 /**
- * Add-food bottom sheet. Two paths: catalog search → pick → serving/qty, or a
- * "Quick add" of ad-hoc macros. Saving is delegated to the caller (the Today
- * ViewModel owns the date/entry write).
+ * Add-food bottom sheet — one unified surface (no tabs):
+ *  - the target meal is auto-inferred from the time of day, shown as a small
+ *    tappable chip ("→ Lunch") that expands the meal picker to override;
+ *  - one search field (inline trailing spinner while searching);
+ *  - with an empty query the content is the RECENT list — one tap re-logs a
+ *    recent food/meal with its previous portions;
+ *  - with a query: catalog results, plus a standing "Log “…” as a meal" row
+ *    that fires the fire-and-forget describe (the sheet closes immediately and
+ *    the day shows the processing placeholder);
+ *  - quick add (manual macros) tucked beneath; its calories are derived live
+ *    from the macros (4/4/9) and not directly editable once a macro is typed.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,16 +63,17 @@ fun AddFoodSheet(
     onDismiss: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
     onAddQuick: (Meal, String, Macros) -> Unit,
-    onLogDescribed: (Meal, String) -> Unit,
+    onDescribeAsync: (Meal, String) -> Unit,
+    onRelogRecent: (Meal, Entry) -> Unit,
     viewModel: AddFoodViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var picked by remember { mutableStateOf<Food?>(null) }
-    var meal by remember { mutableStateOf(Meal.BREAKFAST) }
+    var meal by remember { mutableStateOf(Meal.forHour(LocalTime.now().hour)) }
+    var mealPickerOpen by remember { mutableStateOf(false) }
     var quickMode by remember { mutableStateOf(false) }
-    var describeMode by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -72,24 +86,28 @@ fun AddFoodSheet(
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 24.dp),
         ) {
-            Text("Add food", style = Hf.type.headingLg, color = Hf.colors.textPrimary)
-            Spacer(Modifier.height(10.dp))
-            MealPicker(selected = meal, onSelect = { meal = it })
-            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Add food", style = Hf.type.headingLg, color = Hf.colors.textPrimary)
+                MealChip(meal = meal, onClick = { mealPickerOpen = !mealPickerOpen })
+            }
+            if (mealPickerOpen) {
+                Spacer(Modifier.height(10.dp))
+                MealPicker(
+                    selected = meal,
+                    onSelect = {
+                        meal = it
+                        mealPickerOpen = false
+                    },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
 
             val selected = picked
             when {
-                describeMode -> DescribeForm(
-                    state = state,
-                    meal = meal,
-                    onDescribe = viewModel::describe,
-                    onEditDescription = viewModel::clearDescribed,
-                    onLog = { mealId -> onLogDescribed(meal, mealId) },
-                    onCancel = {
-                        viewModel.clearDescribed()
-                        describeMode = false
-                    },
-                )
                 quickMode -> QuickAddForm(
                     onCancel = { quickMode = false },
                     onSave = { name, macros -> onAddQuick(meal, name, macros) },
@@ -101,43 +119,88 @@ fun AddFoodSheet(
                 )
                 else -> SearchPane(
                     state = state,
+                    meal = meal,
                     onQueryChange = viewModel::onQueryChange,
                     onPick = { picked = it },
+                    onRelogRecent = { onRelogRecent(meal, it) },
+                    onDescribe = { onDescribeAsync(meal, it) },
                     onQuickAdd = { quickMode = true },
-                    onDescribe = { describeMode = true },
                 )
             }
         }
     }
 }
 
+/** "→ Lunch" — the auto-detected target meal; tap to override. */
+@Composable
+private fun MealChip(meal: Meal, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text("→ ${meal.label} ▾", style = Hf.type.bodyMd, color = Hf.colors.accentDim)
+    }
+}
+
 @Composable
 private fun SearchPane(
     state: AddFoodUiState,
+    meal: Meal,
     onQueryChange: (String) -> Unit,
     onPick: (Food) -> Unit,
+    onRelogRecent: (Entry) -> Unit,
+    onDescribe: (String) -> Unit,
     onQuickAdd: () -> Unit,
-    onDescribe: () -> Unit,
 ) {
     OutlinedTextField(
         value = state.query,
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Search foods…", style = Hf.type.bodyMd) },
+        placeholder = { Text("Search foods or describe a meal…", style = Hf.type.bodyMd) },
         singleLine = true,
+        trailingIcon = if (state.searching) {
+            {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = Hf.colors.accent,
+                    strokeWidth = 2.dp,
+                )
+            }
+        } else {
+            null
+        },
     )
     Spacer(Modifier.height(10.dp))
-    when {
-        state.searching -> Box(
-            Modifier.fillMaxWidth().padding(20.dp),
+
+    if (state.query.isBlank()) {
+        RecentList(
+            recents = state.recents,
+            loading = state.recentsLoading,
+            onRelog = onRelogRecent,
+        )
+        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
+                .clickable { onQuickAdd() }
+                .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center,
-        ) { CircularProgressIndicator(color = Hf.colors.accent) }
+        ) {
+            Text("Quick add custom macros", style = Hf.type.bodyMd, color = Hf.colors.accentDim)
+        }
+        return
+    }
+
+    when {
         state.error != null -> Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
-        state.query.isNotBlank() && state.results.isEmpty() -> Text(
-            "No matches.", style = Hf.type.bodyMd, color = Hf.colors.textTertiary,
+        !state.searching && state.results.isEmpty() -> Text(
+            "No catalog matches.", style = Hf.type.bodyMd, color = Hf.colors.textTertiary,
         )
         else -> LazyColumn(
-            modifier = Modifier.heightIn(max = 320.dp),
+            modifier = Modifier.heightIn(max = 280.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.results, key = { it.foodId }) { food ->
@@ -146,148 +209,83 @@ private fun SearchPane(
         }
     }
     Spacer(Modifier.height(12.dp))
+    // The describe action rides along under the results: anything typed can be
+    // logged as a described meal — the sheet closes immediately and the entry
+    // resolves in the background (the camera-capture pattern).
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
-            .clickable { onDescribe() }
-            .padding(vertical = 12.dp),
+            .clickable { onDescribe(state.query) }
+            .padding(vertical = 12.dp, horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text("Describe a meal", style = Hf.type.bodyMd, color = Hf.colors.accentDim)
-    }
-    Spacer(Modifier.height(8.dp))
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
-            .clickable { onQuickAdd() }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("Quick add custom macros", style = Hf.type.bodyMd, color = Hf.colors.accentDim)
+        Text(
+            "✨ Log “${state.query.trim()}” to ${meal.label} as a meal",
+            style = Hf.type.bodyMd,
+            color = Hf.colors.accentDim,
+            maxLines = 1,
+        )
     }
 }
 
-/**
- * Describe-a-meal flow. Stage 1: a free-text field → resolve to a saved meal
- * (a previous match, or a freshly created one). Stage 2: preview the resolved
- * meal (matched/new, macros, ingredients, photo) → log it onto the day.
- */
 @Composable
-private fun DescribeForm(
-    state: AddFoodUiState,
-    meal: Meal,
-    onDescribe: (String) -> Unit,
-    onEditDescription: () -> Unit,
-    onLog: (String) -> Unit,
-    onCancel: () -> Unit,
+private fun RecentList(
+    recents: List<Entry>,
+    loading: Boolean,
+    onRelog: (Entry) -> Unit,
 ) {
-    var description by remember { mutableStateOf("") }
-    val resolved = state.described
-
-    if (resolved != null) {
-        Column {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                FoodThumbnail(
-                    imageUrl = resolved.imageUrl,
-                    imageStatus = resolved.imageStatus,
-                    size = 52.dp,
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(resolved.name, style = Hf.type.headingMd, color = Hf.colors.textPrimary)
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        if (resolved.matched) "Previous meal — reusing its macros & photo"
-                        else "New meal — photo generating now",
-                        style = Hf.type.bodySm,
-                        color = Hf.colors.textTertiary,
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "${formatKcal(resolved.macros.caloriesKcal)} · " +
-                    "P ${formatGrams(resolved.macros.proteinGrams)} · " +
-                    "C ${formatGrams(resolved.macros.carbsGrams)} · " +
-                    "F ${formatGrams(resolved.macros.fatGrams)}",
-                style = Hf.type.monoSm,
-                color = Hf.colors.textSecondary,
+    Text("RECENT", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+    Spacer(Modifier.height(8.dp))
+    when {
+        loading -> Box(
+            Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = Hf.colors.accent,
+                strokeWidth = 2.dp,
             )
-            if (resolved.ingredients.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 240.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(resolved.ingredients, key = { it.name }) { ing ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(ing.name, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
-                            Text(
-                                formatKcal(ing.macros.caloriesKcal),
-                                style = Hf.type.monoSm,
-                                color = Hf.colors.textTertiary,
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("Edit", Modifier.weight(1f), onEditDescription)
-                PrimaryButton("Add to ${meal.label}", Modifier.weight(1f)) {
-                    onLog(resolved.mealId)
-                }
+        }
+        recents.isEmpty() -> Text(
+            "Foods you log will show up here for one-tap repeats.",
+            style = Hf.type.bodySm,
+            color = Hf.colors.textTertiary,
+        )
+        else -> LazyColumn(
+            modifier = Modifier.heightIn(max = 340.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(recents, key = { "${it.date}/${it.entryId}" }) { entry ->
+                RecentRow(entry = entry, onClick = { onRelog(entry) })
             }
         }
-        return
     }
+}
 
-    Column {
-        Text(
-            "Describe what you ate — we'll find a meal you've logged before, or " +
-                "create one with estimated macros and a matching photo.",
-            style = Hf.type.bodyMd,
-            color = Hf.colors.textSecondary,
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = description,
-            onValueChange = { description = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("e.g. grilled chicken with rice and broccoli") },
-            minLines = 2,
-        )
-        if (state.describeError != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(state.describeError, style = Hf.type.bodyMd, color = Hf.colors.alert)
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SecondaryButton("Cancel", Modifier.weight(1f), onCancel)
-            if (state.describing) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(Hf.colors.accent, RoundedCornerShape(8.dp))
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.height(16.dp),
-                        color = Hf.colors.textInverse,
-                        strokeWidth = 2.dp,
-                    )
-                }
-            } else {
-                PrimaryButton("Find or create", Modifier.weight(1f)) { onDescribe(description) }
+@Composable
+private fun RecentRow(entry: Entry, onClick: () -> Unit) {
+    HfCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 44.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(entry.foodName, style = Hf.type.headingSm, color = Hf.colors.textPrimary)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    buildString {
+                        append(formatKcal(entry.macros.caloriesKcal))
+                        entry.servingLabel?.takeIf { it.isNotBlank() }?.let { append(" · $it") }
+                    },
+                    style = Hf.type.monoSm,
+                    color = Hf.colors.textSecondary,
+                )
             }
+            Text("+", style = Hf.type.headingMd, color = Hf.colors.accentDim)
         }
     }
 }
@@ -363,10 +361,20 @@ private fun FoodDetail(
 @Composable
 private fun QuickAddForm(onCancel: () -> Unit, onSave: (String, Macros) -> Unit) {
     var name by remember { mutableStateOf("") }
-    var kcal by remember { mutableStateOf("") }
+    var manualKcal by remember { mutableStateOf("") }
     var protein by remember { mutableStateOf("") }
     var carbs by remember { mutableStateOf("") }
     var fat by remember { mutableStateOf("") }
+
+    // Calories are derived from the macros (4/4/9, matching the backend) the
+    // moment any macro is typed; with no macros at all the user may enter
+    // calories directly (a calories-only quick add stays possible).
+    val derived = derivedCaloriesKcal(
+        protein.toDoubleOrNull(),
+        carbs.toDoubleOrNull(),
+        fat.toDoubleOrNull(),
+    )
+    val hasMacros = protein.isNotBlank() || carbs.isNotBlank() || fat.isNotBlank()
 
     Column {
         OutlinedTextField(
@@ -377,10 +385,19 @@ private fun QuickAddForm(onCancel: () -> Unit, onSave: (String, Macros) -> Unit)
             singleLine = true,
         )
         Spacer(Modifier.height(8.dp))
-        NumberField("Calories (kcal)", kcal) { kcal = it }
         NumberField("Protein (g)", protein) { protein = it }
         NumberField("Carbs (g)", carbs) { carbs = it }
         NumberField("Fat (g)", fat) { fat = it }
+        if (hasMacros) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "= ${derived?.roundToInt() ?: 0} kcal (computed from macros)",
+                style = Hf.type.monoSm,
+                color = Hf.colors.textSecondary,
+            )
+        } else {
+            NumberField("Calories (kcal) — or enter macros above", manualKcal) { manualKcal = it }
+        }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SecondaryButton("Cancel", Modifier.weight(1f), onCancel)
@@ -388,7 +405,7 @@ private fun QuickAddForm(onCancel: () -> Unit, onSave: (String, Macros) -> Unit)
                 onSave(
                     name.ifBlank { "Custom food" },
                     Macros(
-                        caloriesKcal = kcal.toDoubleOrNull(),
+                        caloriesKcal = if (hasMacros) derived else manualKcal.toDoubleOrNull(),
                         proteinGrams = protein.toDoubleOrNull(),
                         carbsGrams = carbs.toDoubleOrNull(),
                         fatGrams = fat.toDoubleOrNull(),

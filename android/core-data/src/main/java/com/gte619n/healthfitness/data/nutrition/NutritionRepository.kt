@@ -17,6 +17,7 @@ import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
+import com.gte619n.healthfitness.domain.nutrition.RelogRequest
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
@@ -206,6 +207,37 @@ class NutritionRepository @Inject constructor(
             date,
             DescribeMealLogRequest(mealId = mealId, meal = meal),
         )
+        fillDay(date)
+        return entry
+    }
+
+    /**
+     * Fire-and-forget describe: the server logs an ANALYZING placeholder named
+     * with the description and resolves it in the background (the camera
+     * pattern). The quick 202 POST is the only wait; the mirror refresh pulls
+     * the placeholder so the day renders it immediately and the settle-poll
+     * takes over. Online-only (AI flow, D17).
+     */
+    suspend fun describeMealAsync(date: String, description: String, meal: String): Entry {
+        val entry = api.describeMealAsync(
+            date,
+            DescribeMealLogRequest(description = description, meal = meal),
+        )
+        fillDay(date)
+        return entry
+    }
+
+    /** Recent distinct foods/meals for the add-flow's one-tap list. Live read. */
+    suspend fun recentMeals(days: Int = 14, limit: Int = 20): List<Entry> =
+        api.recentMeals(days, limit)
+
+    /**
+     * One-tap re-log of a recent entry onto [date]. Server-side copy (reuses
+     * catalog foods + images — no AI rework), then refresh the date's mirror so
+     * the new row renders from Room.
+     */
+    suspend fun relog(date: String, sourceDate: String, sourceEntryId: String, meal: String): Entry {
+        val entry = api.relog(date, RelogRequest(sourceDate, sourceEntryId, meal))
         fillDay(date)
         return entry
     }

@@ -126,6 +126,8 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
         Object raw = args.get("macrosPerServing");
         if (raw instanceof Map<?, ?> mm) {
             Map<String, Object> m = (Map<String, Object>) mm;
+            // Printed labels round, so the panel's kcal rarely matches its own
+            // macros exactly; derive calories (4/4/9) for internal consistency.
             perServing = new Macros(
                 dbl(m.get("caloriesKcal")),
                 dbl(m.get("proteinGrams")),
@@ -133,7 +135,7 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
                 dbl(m.get("fatGrams")),
                 dbl(m.get("fiberGrams")),
                 dbl(m.get("sugarGrams"))
-            );
+            ).withDerivedCalories();
         }
         return new LabelExtraction(
             str(args.get("productName")),

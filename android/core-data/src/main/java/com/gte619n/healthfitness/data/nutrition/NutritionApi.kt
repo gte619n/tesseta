@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
+import com.gte619n.healthfitness.domain.nutrition.RelogRequest
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import retrofit2.Response
 import retrofit2.http.Body
@@ -67,6 +68,31 @@ interface NutritionApi {
     suspend fun logDescribedMeal(
         @Path("date") date: String,
         @Body body: DescribeMealLogRequest,
+    ): Entry
+
+    // Fire-and-forget describe: returns the ANALYZING placeholder immediately
+    // (202); resolution runs server-side and the day view polls it in.
+    @POST("api/me/nutrition/{date}/describe-meal-async")
+    suspend fun describeMealAsync(
+        @Path("date") date: String,
+        @Body body: DescribeMealLogRequest,
+    ): Entry
+
+    // Distinct foods/meals logged recently, deduped, newest first — the
+    // add-flow's one-tap "recent meals" list. Each row carries `date`, the id
+    // of its source entry and everything needed to re-log it.
+    @GET("api/me/nutrition/recent-meals")
+    suspend fun recentMeals(
+        @Query("days") days: Int,
+        @Query("limit") limit: Int,
+    ): List<Entry>
+
+    // One-tap re-log of a recent entry: server-side copy onto the target day,
+    // reusing catalog foods, macros and the finished-meal image (no AI rework).
+    @POST("api/me/nutrition/{date}/relog")
+    suspend fun relog(
+        @Path("date") date: String,
+        @Body body: RelogRequest,
     ): Entry
 
     @PATCH("api/me/nutrition/{date}/entries/{entryId}/ingredients/{index}")

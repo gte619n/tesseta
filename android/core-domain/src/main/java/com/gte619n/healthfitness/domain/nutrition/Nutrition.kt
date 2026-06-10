@@ -73,6 +73,12 @@ data class Entry(
      * Defaulted so existing constructions are unaffected.
      */
     val syncState: String? = null,
+    /**
+     * The day this entry was logged on (ISO yyyy-MM-dd). Only populated by
+     * reads that span days — the recent-meals list, where it identifies the
+     * source entry for a one-tap re-log. Null on day-view reads.
+     */
+    val date: String? = null,
 ) {
     val isComposite: Boolean get() = !ingredients.isNullOrEmpty()
 
@@ -218,6 +224,13 @@ data class DescribeMealLogRequest(
     val meal: String? = null,
 )
 
+/** Body for POST api/me/nutrition/{date}/relog (copy a past entry onto a day). */
+data class RelogRequest(
+    val sourceDate: String,
+    val sourceEntryId: String,
+    val meal: String? = null,
+)
+
 // ---- Capture (multipart) proposals ---------------------------------------
 
 /** One itemized component of a meal photo (POST capture/meal). */
@@ -278,6 +291,20 @@ enum class Meal(val wire: String, val label: String) {
         }
     }
 }
+
+/**
+ * Calories derived from macros under Atwater 4/4/9 — the same invariant the
+ * backend enforces on every write, so the UI can show the value live as the
+ * user types. Null when no macro is present at all (a calories-only entry
+ * stays manually enterable).
+ */
+fun derivedCaloriesKcal(
+    proteinGrams: Double?,
+    carbsGrams: Double?,
+    fatGrams: Double?,
+): Double? =
+    if (proteinGrams == null && carbsGrams == null && fatGrams == null) null
+    else (proteinGrams ?: 0.0) * 4 + (carbsGrams ?: 0.0) * 4 + (fatGrams ?: 0.0) * 9
 
 /**
  * Compute the macro snapshot for a portion:

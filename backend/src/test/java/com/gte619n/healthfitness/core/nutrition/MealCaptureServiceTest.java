@@ -47,8 +47,48 @@ class MealCaptureServiceTest {
         assertEquals("Greek yogurt", done.foodName());
         assertFalse(done.isComposite(), "a packaged product is a single food, not composite");
         assertNotNull(done.foodId(), "a catalog food backs the product image");
-        // 170 g of 59 kcal/100 g ≈ 100.3 kcal
-        assertEquals(100.3, done.macros().caloriesKcal(), 1e-6);
+        // 170 g at derived 58 kcal/100 g (10·4 + 3.6·4 + 0.4·9) = 98.6 kcal
+        assertEquals((10.0 * 4 + 3.6 * 4 + 0.4 * 9) * 1.7, done.macros().caloriesKcal(), 1e-6);
+    }
+
+    @Test
+    void packagedProduct_carriesExactNameAndBrand_ontoCatalogFood() {
+        Fixture f = new Fixture();
+        FoodEntry placeholder = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.SNACK, "ref://b");
+
+        MealPhotoAnalyzer analyzer = analyzer(new MealAnalysis(
+            "Fairlife Core Power Elite 42g, Chocolate", "Fairlife", true, List.of(
+                new MealItem("Fairlife Core Power Elite 42g, Chocolate", 414.0,
+                    new Macros(56.0, 10.1, 1.9, 1.1, 0.0, 1.2), 0.95))));
+
+        f.svc.analyzeAndFinalize(USER, DATE, placeholder.entryId(), BYTES, "image/jpeg", "ref://b", analyzer);
+
+        FoodEntry done = f.entries.findById(USER, DATE, placeholder.entryId()).orElseThrow();
+        assertEquals("Fairlife Core Power Elite 42g, Chocolate", done.foodName(),
+            "the entry is named for the exact product, not a generic stand-in");
+        CatalogFood food = f.catalog.find(done.foodId()).orElseThrow();
+        assertEquals("Fairlife", food.brand());
+        assertEquals("product", food.category());
+    }
+
+    @Test
+    void repeatCaptureOfSameProduct_reusesTheCatalogFood() {
+        MealAnalysis product = new MealAnalysis(
+            "Fairlife Core Power Elite 42g, Chocolate", "Fairlife", true, List.of(
+                new MealItem("Fairlife Core Power Elite 42g, Chocolate", 414.0,
+                    new Macros(56.0, 10.1, 1.9, 1.1, 0.0, 1.2), 0.95)));
+        Fixture f = new Fixture();
+        MealPhotoAnalyzer analyzer = analyzer(product);
+
+        FoodEntry p1 = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.SNACK, "ref://1");
+        f.svc.analyzeAndFinalize(USER, DATE, p1.entryId(), "img-1".getBytes(), "image/jpeg", "ref://1", analyzer);
+        FoodEntry p2 = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.SNACK, "ref://2");
+        f.svc.analyzeAndFinalize(USER, DATE, p2.entryId(), "img-2".getBytes(), "image/jpeg", "ref://2", analyzer);
+
+        FoodEntry e1 = f.entries.findById(USER, DATE, p1.entryId()).orElseThrow();
+        FoodEntry e2 = f.entries.findById(USER, DATE, p2.entryId()).orElseThrow();
+        assertEquals(e1.foodId(), e2.foodId(),
+            "the second capture of the same exact product reuses the catalog food");
     }
 
     @Test
@@ -72,8 +112,9 @@ class MealCaptureServiceTest {
         assertTrue(done.isComposite());
         assertEquals(2, done.ingredients().size());
         assertEquals("Grilled salmon", done.ingredients().get(0).name());
-        // total = 200 g salmon (416 kcal) + 100 g broccoli (35 kcal)
-        assertEquals(451.0, done.macros().caloriesKcal(), 1e-6);
+        // total = 200 g salmon (derived 197 kcal/100 g) + 100 g broccoli (derived 41.2)
+        assertEquals((20.0 * 4 + 13.0 * 9) * 2.0 + (2.4 * 4 + 7.0 * 4 + 0.4 * 9),
+            done.macros().caloriesKcal(), 1e-6);
     }
 
     @Test
@@ -220,7 +261,10 @@ class MealCaptureServiceTest {
             return foods.stream().filter(f -> f.foodId().equals(foodId)).findFirst();
         }
         @Override public List<CatalogFood> searchByNamePrefix(String prefixLower, int limit) {
-            return List.of();
+            return foods.stream()
+                .filter(f -> f.nameLower() != null && f.nameLower().startsWith(prefixLower))
+                .limit(limit)
+                .toList();
         }
         @Override public Optional<CatalogFood> findByBarcode(String code) { return Optional.empty(); }
         @Override public List<CatalogFood> findByImageStatus(FoodImageStatus status, int limit) {

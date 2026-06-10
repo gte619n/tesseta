@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -130,6 +131,63 @@ public class MealDescriptionService {
     public FoodEntry logDescribed(String userId, LocalDate date, MealType meal, String description) {
         MealResolution resolution = resolve(userId, description);
         return logResolvedMeal(userId, date, meal, resolution.mealId());
+    }
+
+    /**
+     * Fire-and-forget describe (the camera-capture pattern): immediately log an
+     * {@code ANALYZING} placeholder named with the user's own description and
+     * return it, then resolve + finalize off the request thread. The clients
+     * poll the day view, so the placeholder fills in (or flips {@code FAILED})
+     * without the user waiting on the Gemini round-trip.
+     */
+    public FoodEntry describeMealAsync(
+        String userId, LocalDate date, MealType meal, String description) {
+        requireUser(userId);
+        if (description == null || description.isBlank()) {
+            throw new IllegalArgumentException("description is required");
+        }
+        if (analyzer.getIfAvailable() == null) {
+            throw new IllegalStateException("meal description analysis is not available");
+        }
+        FoodEntry placeholder = nutrition.beginAnalyzingEntry(
+            userId, date, meal, null, null,
+            placeholderName(description), EntrySource.MANUAL);
+        CompletableFuture.runAsync(
+            () -> resolveAndFinalize(userId, date, placeholder.entryId(), description));
+        return placeholder;
+    }
+
+    /**
+     * Resolve the description and fill the placeholder in. Package-private and
+     * synchronous so tests can drive it without the async hop. Never throws — a
+     * failure marks the entry {@code FAILED}.
+     */
+    void resolveAndFinalize(String userId, LocalDate date, String entryId, String description) {
+        try {
+            MealResolution resolution = resolve(userId, description);
+            FoodEntry entry = nutrition.finalizeCompositeMeal(
+                userId, date, entryId, resolution.name(), resolution.ingredients());
+            if (resolution.imageStatus() == FoodImageStatus.READY && resolution.imageUrl() != null) {
+                nutrition.setEntryMealImage(
+                    userId, date, entry.entryId(), resolution.imageUrl(), FoodImageStatus.READY);
+            } else {
+                foodEntryImages.enqueueGeneration(
+                    userId, date, entry.entryId(), resolution.name(), null);
+            }
+        } catch (RuntimeException e) {
+            nutrition.markAnalysisFailed(userId, date, entryId);
+        } finally {
+            // The placeholder transitioned (READY/FAILED) — wake the user's
+            // devices. origin=null: the resolution ran server-side, so even the
+            // describing device should refresh.
+            syncNotifier.changed(userId, null, "nutritionDays/entries");
+        }
+    }
+
+    /** First ~60 chars of the description, single-line, as the pending row's name. */
+    private static String placeholderName(String description) {
+        String oneLine = description.strip().replaceAll("\\s+", " ");
+        return oneLine.length() <= 60 ? oneLine : oneLine.substring(0, 57) + "…";
     }
 
     // ---- internals ----

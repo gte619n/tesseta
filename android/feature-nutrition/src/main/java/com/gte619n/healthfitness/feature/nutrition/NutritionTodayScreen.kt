@@ -97,7 +97,8 @@ fun NutritionTodayRoute(
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
         onAddQuick = viewModel::addQuickEntry,
-        onLogDescribed = viewModel::logDescribedMeal,
+        onDescribeAsync = viewModel::describeMealAsync,
+        onRelogRecent = viewModel::relogRecent,
         onOpenTarget = onOpenTarget,
         onOpenCapture = onOpenCapture,
         onBack = onBack,
@@ -120,7 +121,8 @@ fun NutritionTodayScreen(
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
     onAddQuick: (Meal, String, Macros) -> Unit,
-    onLogDescribed: (Meal, String) -> Unit,
+    onDescribeAsync: (Meal, String) -> Unit,
+    onRelogRecent: (Meal, Entry) -> Unit,
     onOpenTarget: () -> Unit,
     onOpenCapture: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
@@ -146,7 +148,7 @@ fun NutritionTodayScreen(
                 Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
             }
             else -> DayContent(
-                day = state.day,
+                day = state.day.withPendingCaptures(state.pendingCaptures, state.date),
                 pendingEntryIds = state.pendingEntryIds,
                 isRefreshing = state.isRefreshing,
                 onRefresh = onRefresh,
@@ -162,7 +164,8 @@ fun NutritionTodayScreen(
             onDismiss = onCloseAddSheet,
             onAddCatalog = onAddCatalog,
             onAddQuick = onAddQuick,
-            onLogDescribed = onLogDescribed,
+            onDescribeAsync = onDescribeAsync,
+            onRelogRecent = onRelogRecent,
         )
     }
 
@@ -535,7 +538,7 @@ private fun NutritionTodayPreview() {
             onSaveComposite = { _, _, _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
-            onLogDescribed = { _, _ -> },
+            onDescribeAsync = { _, _ -> }, onRelogRecent = { _, _ -> },
             onOpenTarget = {}, onOpenCapture = {},
         )
     }
