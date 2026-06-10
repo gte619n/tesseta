@@ -38,7 +38,7 @@ import org.springframework.stereotype.Component;
 /**
  * Gemini-backed program designer. Designs a Program → Phase → Day → Block →
  * Prescription structure via the {@code propose_workout_program} tool call,
- * using the Pro model (ADR-0007). The per-request context (health snapshot +
+ * using the Pro model (ADR-0013). The per-request context (health snapshot +
  * per-gym executable-exercise allow-lists) is appended to the system prompt so
  * the model only prescribes executable exercises.
  */

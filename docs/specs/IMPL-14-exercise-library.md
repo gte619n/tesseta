@@ -26,7 +26,7 @@ mirroring how `IMPL-AND-12` followed `IMPL-12`).
 | Equipment binding | Exercise references the existing global Equipment catalog by id; a gym executes an exercise iff it has the required equipment |
 | Equipment alternatives | Each requirement is an "any-of" group (e.g. *barbell OR smith machine*); all groups must be satisfied |
 | Demo media (v1) | Phase **stills** (2–3 per exercise) via `gemini-3.1-flash-image-preview`, using the exercise treatment in [`docs/photography-prompts.md`](../photography-prompts.md) |
-| Demo media (future) | A nullable `videoUrl` is reserved on the model for true video (Google Veo) — deferred, and gated behind its own ADR (see ADR-0007 "Revisit when") |
+| Demo media (future) | A nullable `videoUrl` is reserved on the model for true video (Google Veo) — deferred, and gated behind its own ADR (see ADR-0013 "Revisit when") |
 | Human review | Generated media is never auto-published: it lands `NEEDS_REVIEW` and an admin must approve it (anatomical-correctness gate from the photography guide) |
 | Media model | `gemini-3.1-flash-image-preview` (the project image model — no new model, no ADR needed) |
 | Parser model | `gemini-3.5-flash` for any text parsing (catalog seed / bulk import), per the flash-only convention |
@@ -350,7 +350,7 @@ to function.
 ## Out of scope for IMPL-14
 
 - True video demos (Veo). `videoUrl` is reserved on the model but always null;
-  introducing a video model requires its own ADR (ADR-0007 "Revisit when").
+  introducing a video model requires its own ADR (ADR-0013 "Revisit when").
 - Android exercise UI (future `IMPL-AND-14`).
 - A `gemini-3.5-flash` bulk-import pipeline (a later plan doc, like IMPL-GYM-002).
 - User-submitted exercises / community contributions (admin-authored only in v1).

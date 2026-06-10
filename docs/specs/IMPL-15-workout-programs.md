@@ -38,7 +38,7 @@ Backend + web in this spec. Android deferred to a future `IMPL-AND-15`.
 | Schedule input | User specifies training **days of week** and the **gym (Location)** for each day; the gym drives the equipment constraint |
 | Equipment constraint | **Hard.** A day's exercises must all be executable at that day's gym (`ExerciseAvailabilityService` from IMPL-14). Generator is shown only the allowed set; validator rejects violations |
 | Block types | WARMUP, MOBILITY, CARDIO, MAIN, ACCESSORY, CORE, COOLDOWN, STRETCH — the user composes which blocks a day has |
-| Planner model | `gemini-3.1-pro-preview` via tool calling (see [ADR-0007](../decisions/ADR-0007-workout-program-design-gemini-pro.md)) |
+| Planner model | `gemini-3.1-pro-preview` via tool calling (see [ADR-0013](../decisions/ADR-0013-workout-program-design-gemini-pro.md)) |
 | Proposal UX | Editable proposal card streamed over SSE, edited in place, committed — exactly like Goals' `<GoalProposalCard>` |
 | Goal linkage | A program may link to a Goal (`goalId`); its sessions feed the existing `workouts.count` / `workouts.weeklyVolume` Goal metrics |
 | Materialization | Activating a program writes dated `ScheduledWorkout`s across the phase weeks for the calendar view |
@@ -419,7 +419,7 @@ app:
   workout-programs:
     enabled: ${WORKOUT_PROGRAMS_ENABLED:true}
     gemini-api-key: ${GEMINI_API_KEY:}
-    # Second deliberate exception to flash-only — see ADR-0007. Own env var,
+    # Second deliberate exception to flash-only — see ADR-0013. Own env var,
     # independent of GEMINI_MODEL and GOALS_GEMINI_MODEL.
     gemini-model: ${WORKOUT_PROGRAM_GEMINI_MODEL:gemini-3.1-pro-preview}
 ```
@@ -493,7 +493,7 @@ to goal: …" line on the program detail.
    endpoint.
 4. CRUD + activate + calendar controllers.
 5. `integrations/workoutprogram`: `GeminiWorkoutProgramChatClient` (Pro tool
-   calling, per-day allow-list in the prompt) + config + ADR-0007.
+   calling, per-day allow-list in the prompt) + config + ADR-0013.
 6. Web: programs list + detail (roadmap + calendar), manual editor.
 7. Web: assistant-ui designer chat + `<WorkoutProgramProposalCard>` with
    gym-scoped exercise pickers and inline validation.

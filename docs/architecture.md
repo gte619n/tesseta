@@ -95,7 +95,7 @@ Durable detail lives in [`docs/reference/`](reference/):
 
 ## Decisions & plans
 
-- Architecture Decision Records: [`docs/decisions/`](decisions/) (ADR-0001…0006).
+- Architecture Decision Records: [`docs/decisions/`](decisions/).
 - Forward-looking work not yet built: [`docs/plans/`](plans/) — the
   android↔web parity roadmap (Phases 7–9: workout logging, Wear surfaces,
   sleep/push/dark-mode) and the bulk-equipment-import plan.

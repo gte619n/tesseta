@@ -1,4 +1,4 @@
-# ADR-0007: Workout program design uses gemini-3.1-pro-preview (second exception to the flash-only rule)
+# ADR-0013: Workout program design uses gemini-3.1-pro-preview (second exception to the flash-only rule)
 
 - Status: Accepted
 - Date: 2026-06-01
