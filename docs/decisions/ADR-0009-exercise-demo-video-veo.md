@@ -9,7 +9,7 @@ The project convention (root `CLAUDE.md`, "AI Models") runs all general AI work
 on **`gemini-3.5-flash`**, reserves **`gemini-3.1-flash-image-preview`** for
 image generation, and disallows any other model without an ADR.
 [ADR-0005](ADR-0005-goals-chat-gemini-pro.md) carved out Goals chat
-(`gemini-3.1-pro-preview`) and [ADR-0007](ADR-0007-workout-program-design-gemini-pro.md)
+(`gemini-3.1-pro-preview`) and [ADR-0013](ADR-0013-workout-program-design-gemini-pro.md)
 workout-program design. This record is the third exception.
 
 [IMPL-15](../specs/IMPL-15-workout-programs.md) / [ADR-0008](ADR-0008-workout-history-import.md)
