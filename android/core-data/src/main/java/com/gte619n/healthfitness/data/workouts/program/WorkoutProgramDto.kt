@@ -9,6 +9,7 @@ import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.Intensity
 import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
@@ -35,6 +36,15 @@ data class IntensityDto(
 data class DeloadModifierDto(
     val setsMultiplier: Double? = null,
     val intensityDelta: Double? = null,
+)
+
+/** IMPL-18: per-phase / program-level calorie + macro guidance (display-only). */
+data class NutritionGuidanceDto(
+    val kcal: Int? = null,
+    val proteinG: Int? = null,
+    val carbsG: Int? = null,
+    val fatG: Int? = null,
+    val note: String? = null,
 )
 
 data class DemoFrameDto(
@@ -80,6 +90,9 @@ data class PrescriptionDto(
     // Nullable: the backend sends `"loggedSets": null` for unlogged prescriptions
     // (Spring MVC emits explicit nulls), which would throw against a non-null List.
     val loggedSets: List<LoggedSetDto>? = null,
+    // IMPL-18: concrete prescribed load + its "why" basis (additive, nullable).
+    val targetWeightLbs: Double? = null,
+    val loadBasis: String? = null,
 )
 
 data class BlockDto(
@@ -116,6 +129,8 @@ data class PhaseDto(
     val targetStartDate: LocalDate? = null,
     val targetEndDate: LocalDate? = null,
     val days: List<WorkoutDayDto> = emptyList(),
+    // IMPL-18: per-phase nutrition guidance (additive, nullable).
+    val nutritionGuidance: NutritionGuidanceDto? = null,
 )
 
 /** Shallow list shape — no phases/days. */
@@ -137,7 +152,9 @@ data class WorkoutProgramDto(
 
 /** Deep shape — phases → days → blocks → prescriptions + embedded summaries. */
 data class WorkoutProgramDeepDto(
-    val programId: String,
+    // Nullable: a not-yet-committed proposal (the `proposal` SSE `program`) has no
+    // id — the backend serializes `programId: null`. Committed reads always set it.
+    val programId: String? = null,
     val title: String? = null,
     val description: String? = null,
     val goalId: String? = null,
@@ -147,9 +164,14 @@ data class WorkoutProgramDeepDto(
     val startDate: LocalDate? = null,
     val trainingDays: List<DayOfWeek> = emptyList(),
     val phases: List<PhaseDto> = emptyList(),
-    val createdAt: Instant,
-    val updatedAt: Instant,
+    // Nullable: a not-yet-committed proposal (the `proposal` SSE `program`) has
+    // no timestamps — the backend serializes them as null. Committed reads carry
+    // them. Defaulted so both shapes decode.
+    val createdAt: Instant? = null,
+    val updatedAt: Instant? = null,
     val completedAt: Instant? = null,
+    // IMPL-18: program-level nutrition fallback (additive, nullable).
+    val nutritionGuidance: NutritionGuidanceDto? = null,
 )
 
 data class ScheduledWorkoutDto(
@@ -183,6 +205,22 @@ fun IntensityDto.toDomain(): Intensity =
 
 fun DeloadModifierDto.toDomain(): DeloadModifier =
     DeloadModifier(setsMultiplier = setsMultiplier, intensityDelta = intensityDelta)
+
+fun NutritionGuidanceDto.toDomain(): NutritionGuidance = NutritionGuidance(
+    kcal = kcal,
+    proteinG = proteinG,
+    carbsG = carbsG,
+    fatG = fatG,
+    note = note,
+)
+
+fun NutritionGuidance.toDto(): NutritionGuidanceDto = NutritionGuidanceDto(
+    kcal = kcal,
+    proteinG = proteinG,
+    carbsG = carbsG,
+    fatG = fatG,
+    note = note,
+)
 
 fun DemoFrameDto.toDomain(): DemoFrame =
     DemoFrame(phase = phase, imageUrl = imageUrl ?: imageCandidates.firstOrNull())
@@ -225,6 +263,8 @@ fun PrescriptionDto.toDomain(): Prescription = Prescription(
     deloadModifier = deloadModifier?.toDomain(),
     exercise = exercise?.toDomain(),
     loggedSets = loggedSets.orEmpty().map { it.toDomain() },
+    targetWeightLbs = targetWeightLbs,
+    loadBasis = loadBasis,
 )
 
 fun BlockDto.toDomain(): Block = Block(
@@ -256,6 +296,7 @@ fun PhaseDto.toDomain(): ProgramPhase = ProgramPhase(
     targetStartDate = targetStartDate,
     targetEndDate = targetEndDate,
     days = days.map { it.toDomain() },
+    nutritionGuidance = nutritionGuidance?.toDomain(),
 )
 
 fun WorkoutProgramDto.toDomain(): WorkoutProgram = WorkoutProgram(
@@ -277,7 +318,7 @@ fun WorkoutProgramDto.toDomain(): WorkoutProgram = WorkoutProgram(
 fun WorkoutProgramDeepDto.toDomain(): WorkoutProgram {
     val mappedPhases = phases.map { it.toDomain() }
     return WorkoutProgram(
-        programId = programId,
+        programId = programId.orEmpty(),
         title = title.orEmpty(),
         description = description,
         goalId = goalId,
@@ -286,13 +327,14 @@ fun WorkoutProgramDeepDto.toDomain(): WorkoutProgram {
         source = parseEnum(source, ProgramSource.MANUAL),
         startDate = startDate,
         trainingDays = trainingDays,
-        createdAt = createdAt,
-        updatedAt = updatedAt,
+        createdAt = createdAt ?: Instant.EPOCH,
+        updatedAt = updatedAt ?: Instant.EPOCH,
         completedAt = completedAt,
         totalWeeks = mappedPhases.sumOf { it.weeks },
         phaseCount = mappedPhases.size,
         completedPhaseCount = mappedPhases.count { it.status == ProgramPhaseStatus.COMPLETED },
         phases = mappedPhases,
+        nutritionGuidance = nutritionGuidance?.toDomain(),
     )
 }
 

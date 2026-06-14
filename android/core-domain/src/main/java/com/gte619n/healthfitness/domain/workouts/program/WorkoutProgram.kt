@@ -29,6 +29,24 @@ data class Intensity(val kind: IntensityKind, val value: Double?)
 
 data class DeloadModifier(val setsMultiplier: Double?, val intensityDelta: Double?)
 
+/**
+ * Non-binding per-phase (or program-level fallback) calorie/macro guidance
+ * written alongside a designed program (IMPL-18 S3/R4). Display-only — the user
+ * still logs food in the nutrition module. All fields nullable.
+ */
+data class NutritionGuidance(
+    val kcal: Int? = null,
+    val proteinG: Int? = null,
+    val carbsG: Int? = null,
+    val fatG: Int? = null,
+    val note: String? = null,
+) {
+    /** True when every field is empty — treat as "no guidance" and omit from the UI. */
+    val isEmpty: Boolean
+        get() = kcal == null && proteinG == null && carbsG == null && fatG == null &&
+            note.isNullOrBlank()
+}
+
 /** A single START/MID/END demo still for an exercise (IMPL-14). */
 data class DemoFrame(val phase: String, val imageUrl: String?)
 
@@ -73,6 +91,10 @@ data class Prescription(
      * sessions, empty until the session is logged.
      */
     val loggedSets: List<LoggedSet> = emptyList(),
+    /** IMPL-18: concrete history-grounded prescribed load; null → fall back to [intensity]. */
+    val targetWeightLbs: Double? = null,
+    /** IMPL-18: short "why" for the prescribed load (e1RM / last done / ramp), shown on tap (R6). */
+    val loadBasis: String? = null,
 )
 
 data class Block(
@@ -106,6 +128,8 @@ data class ProgramPhase(
     val targetEndDate: LocalDate?,
     /** Empty in the shallow list response. */
     val days: List<WorkoutDay> = emptyList(),
+    /** IMPL-18: per-phase calorie/macro guidance (display-only); null = none. */
+    val nutritionGuidance: NutritionGuidance? = null,
 )
 
 data class WorkoutProgram(
@@ -128,6 +152,8 @@ data class WorkoutProgram(
     val completedPhaseCount: Int = 0,
     /** Empty in the shallow list; populated on the deep response. */
     val phases: List<ProgramPhase> = emptyList(),
+    /** IMPL-18: program-level nutrition fallback when phases carry none; null = none. */
+    val nutritionGuidance: NutritionGuidance? = null,
 ) {
     /** "completed of total" phase pair for progress rendering. */
     val phaseProgress: Pair<Int, Int>

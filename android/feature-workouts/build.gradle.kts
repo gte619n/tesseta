@@ -12,6 +12,9 @@ dependencies {
     implementation(project(":core-domain"))
     implementation(project(":core-ui"))
     implementation(project(":core-data"))
+    implementation(project(":core-chat"))
+
+    implementation(libs.moshi)
 
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -30,4 +33,6 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Designer-chat VM test parses a proposal JSON with the reflective Moshi.
+    testImplementation(libs.moshi.kotlin)
 }

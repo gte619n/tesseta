@@ -229,9 +229,11 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
     )
 
     private fun WorkoutProgramDeepDto.toRefreshRow() = MirrorRepositorySupport.RefreshRow(
-        id = programId,
+        id = programId.orEmpty(),
         payloadJson = deepAdapter.toJson(this),
-        lastUpdate = updatedAt.toEpochMilli(),
+        // updatedAt is nullable post-IMPL-18 (proposals carry none); committed
+        // reads always set it, so fall back to now only defensively.
+        lastUpdate = updatedAt?.toEpochMilli() ?: System.currentTimeMillis(),
     )
 
     private fun ScheduledWorkoutDto.toRefreshRow(programId: String) =

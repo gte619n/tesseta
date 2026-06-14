@@ -13,6 +13,7 @@ import com.gte619n.healthfitness.feature.workouts.program.ProgramDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.ProgramsListRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubRoute
+import com.gte619n.healthfitness.feature.workouts.program.chat.WorkoutDesignerRoute
 import com.gte619n.healthfitness.feature.workouts.session.WorkoutSessionRoute
 
 /**
@@ -39,6 +40,9 @@ object WorkoutsRoutes {
 
     fun gymDetail(locationId: String): String = "workouts/gyms/$locationId"
     fun editGym(locationId: String): String = "workouts/gyms/$locationId/edit"
+
+    // Conversational program designer chat (IMPL-AND-18).
+    const val CHAT = "workouts/chat"
 
     // Programs (IMPL-AND-15, read-only).
     const val PROGRAMS = "workouts/programs"
@@ -76,8 +80,22 @@ fun NavGraphBuilder.workoutsGraph(
             onBack = { navController.popBackStack() },
             onOpenGyms = { navController.navigate(WorkoutsRoutes.GYMS) },
             onOpenPrograms = { navController.navigate(WorkoutsRoutes.PROGRAMS) },
+            onDesignProgram = { navController.navigate(WorkoutsRoutes.CHAT) },
             onResumeSession = { programId, scheduledId ->
                 navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
+        )
+    }
+
+    composable(WorkoutsRoutes.CHAT) {
+        WorkoutDesignerRoute(
+            onBack = { navController.popBackStack() },
+            onOpenProgram = { programId ->
+                // On commit success land on the new program detail, dropping the
+                // chat from the back stack so Back returns to the hub/programs.
+                navController.navigate(WorkoutsRoutes.programDetail(programId)) {
+                    popUpTo(WorkoutsRoutes.CHAT) { inclusive = true }
+                }
             },
         )
     }
@@ -126,6 +144,7 @@ fun NavGraphBuilder.workoutsGraph(
         ProgramsListRoute(
             onBack = { navController.popBackStack() },
             onOpenProgram = { id -> navController.navigate(WorkoutsRoutes.programDetail(id)) },
+            onDesignProgram = { navController.navigate(WorkoutsRoutes.CHAT) },
         )
     }
 
