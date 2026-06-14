@@ -26,6 +26,9 @@ import org.springframework.context.annotation.Configuration;
  *   <li>{@value #USER_HEALTH_SNAPSHOT} — the per-user chat health snapshot
  *       (rebuilds all ~24 metric reads); ~60s TTL so a chat burst reuses
  *       one build.</li>
+ *   <li>{@value #EXERCISE_DIGEST} — the per-user IMPL-18 exercise-performance
+ *       scan (every COMPLETED session's logged sets); ~60s TTL so a designer
+ *       chat burst reuses one scan.</li>
  * </ul>
  *
  * <p>TTLs are deliberately short. Reference data (drugs) tolerates a few
@@ -41,6 +44,7 @@ public class CacheConfig {
     public static final String DRUG_CATALOG = "drugCatalog";
     public static final String USER_BY_ID = "userById";
     public static final String USER_HEALTH_SNAPSHOT = "userHealthSnapshot";
+    public static final String EXERCISE_DIGEST = "exerciseDigest";
 
     @Bean
     public CacheManager cacheManager() {
@@ -54,7 +58,10 @@ public class CacheConfig {
             caffeineCache(USER_BY_ID, Duration.ofMinutes(5), 5_000),
             // Health snapshot is the expensive one (~24 metric reads). Keep
             // it brief so live metric writes surface within a minute.
-            caffeineCache(USER_HEALTH_SNAPSHOT, Duration.ofSeconds(60), 5_000)
+            caffeineCache(USER_HEALTH_SNAPSHOT, Duration.ofSeconds(60), 5_000),
+            // Per-user exercise-performance scan (IMPL-18). Same brief TTL so a
+            // freshly completed session surfaces within a minute.
+            caffeineCache(EXERCISE_DIGEST, Duration.ofSeconds(60), 5_000)
         ));
         return manager;
     }

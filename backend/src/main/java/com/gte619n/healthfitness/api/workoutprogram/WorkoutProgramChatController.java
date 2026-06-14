@@ -7,12 +7,18 @@ import com.gte619n.healthfitness.config.SseStreamer;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseAvailabilityService;
+import com.gte619n.healthfitness.core.exercise.ExerciseService;
 import com.gte619n.healthfitness.core.goals.chat.ChatRole;
 import com.gte619n.healthfitness.core.goals.chat.UserHealthSnapshotService;
 import com.gte619n.healthfitness.core.location.DayOfWeek;
+import com.gte619n.healthfitness.core.trt.TrtAdvisorContextService;
+import com.gte619n.healthfitness.core.workoutprogram.ExerciseDigest;
+import com.gte619n.healthfitness.core.workoutprogram.ExercisePerformanceDigestService;
+import com.gte619n.healthfitness.core.workoutprogram.ExerciseSetLog;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSchedule;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSource;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
+import com.gte619n.healthfitness.core.workoutprogram.TrainingScienceScaffold;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramValidator;
@@ -22,6 +28,7 @@ import com.gte619n.healthfitness.core.workoutprogram.chat.WorkoutProgramChatThre
 import com.gte619n.healthfitness.integrations.workoutprogram.WorkoutProgramChatClient;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +70,10 @@ public class WorkoutProgramChatController {
     private final WorkoutProgramChatRepository chat;
     private final UserHealthSnapshotService snapshots;
     private final ExerciseAvailabilityService availability;
+    private final ExerciseService exercises;
+    private final ExercisePerformanceDigestService digests;
+    private final TrainingScienceScaffold science;
+    private final TrtAdvisorContextService trt;
     private final WorkoutProgramService service;
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
@@ -74,6 +85,10 @@ public class WorkoutProgramChatController {
         WorkoutProgramChatRepository chat,
         UserHealthSnapshotService snapshots,
         ExerciseAvailabilityService availability,
+        ExerciseService exercises,
+        ExercisePerformanceDigestService digests,
+        TrainingScienceScaffold science,
+        TrtAdvisorContextService trt,
         WorkoutProgramService service,
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
@@ -84,6 +99,10 @@ public class WorkoutProgramChatController {
         this.chat = chat;
         this.snapshots = snapshots;
         this.availability = availability;
+        this.exercises = exercises;
+        this.digests = digests;
+        this.science = science;
+        this.trt = trt;
         this.service = service;
         this.validator = validator;
         this.assembler = assembler;
@@ -118,6 +137,16 @@ public class WorkoutProgramChatController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat thread not found");
         }
         return chat.listMessages(userId, threadId).stream().map(MessageResponse::from).toList();
+    }
+
+    /**
+     * The user's TRT monitoring panel for the designer's labs surface
+     * (ADR-0015): current markers vs range with trend, plus any danger flags.
+     */
+    @GetMapping("/trt-context")
+    public com.gte619n.healthfitness.core.trt.TrtContext trtContext() {
+        String userId = currentUser.get().userId();
+        return trt.build(userId);
     }
 
     @DeleteMapping("/threads/{threadId}")
@@ -178,7 +207,7 @@ public class WorkoutProgramChatController {
                     history, message, context, token -> {
                         assistantText.append(token);
                         SseEvents.send(emitter, JSON, "token", Map.of("text", token));
-                    });
+                    }, toolResolver(userId));
 
                 String proposalJson = null;
                 if (result.proposal() != null) {
@@ -187,10 +216,13 @@ public class WorkoutProgramChatController {
                     // is grounded in the user's chosen gyms.
                     WorkoutProgram withUser = new WorkoutProgram(
                         userId, null, p.title(), p.description(), goalId, ProgramStatus.DRAFT,
-                        p.source(), p.startDate(), schedule, p.phaseOrder(), p.phases(), null, null, null);
+                        p.source(), p.startDate(), schedule, p.phaseOrder(), p.phases(), null, null, null,
+                        p.nutritionGuidance());
                     List<String> issues = validator.validate(userId, withUser);
+                    List<String> warnings = validator.warnings(userId, withUser);
                     WorkoutProgramDeepResponse deep = assembler.deep(withUser);
-                    Map<String, Object> payload = Map.of("program", deep, "issues", issues);
+                    Map<String, Object> payload = Map.of(
+                        "program", deep, "issues", issues, "warnings", warnings);
                     proposalJson = JSON.writeValueAsString(payload);
                     SseEvents.send(emitter, JSON, "proposal", payload);
                 }
@@ -224,7 +256,8 @@ public class WorkoutProgramChatController {
         ProgramSource source = body.source() != null ? body.source() : ProgramSource.AI_ASSISTED;
         WorkoutProgram input = new WorkoutProgram(
             userId, null, body.title(), body.description(), goalId, ProgramStatus.DRAFT,
-            source, body.startDate(), schedule, null, body.phases(), null, null, null);
+            source, body.startDate(), schedule, null, body.phases(), null, null, null,
+            body.nutritionGuidance());
         List<String> issues = validator.validate(userId, input);
         if (!issues.isEmpty()) {
             return ResponseEntity.unprocessableEntity().body(Map.of("issues", issues));
@@ -266,7 +299,135 @@ public class WorkoutProgramChatController {
                     .append(" ").append(e.suitableBlockTypes()).append('\n');
             }
         }
+
+        // IMPL-18: history digest for the candidate exercises, the science
+        // scaffold, and the (ADR-0015) TRT context.
+        sb.append('\n').append(renderDigest(userId, executableByGym));
+        sb.append('\n').append(science.render());
+        try {
+            String trtContext = trt.renderForPrompt(userId);
+            if (trtContext != null && !trtContext.isBlank()) {
+                sb.append('\n').append(trtContext);
+            }
+        } catch (Exception e) {
+            log.warn("TRT context unavailable for {}: {}", userId, e.getMessage());
+        }
         return sb.toString();
+    }
+
+    /**
+     * Compact per-exercise performance digest for the prompt (IMPL-18 S2/R3):
+     * the exercises the user has actually trained, capped to the most recently
+     * performed ~20 to bound tokens. The model drills deeper via
+     * {@code get_exercise_history}.
+     */
+    private String renderDigest(String userId, Map<String, List<Exercise>> executableByGym) {
+        Map<String, ExerciseDigest> all;
+        try {
+            all = digests.digestAll(userId);
+        } catch (Exception e) {
+            log.warn("Exercise digest unavailable for {}: {}", userId, e.getMessage());
+            return "";
+        }
+        if (all.isEmpty()) {
+            return "EXERCISE PERFORMANCE DIGEST: no logged history yet — prescribe by RPE/%1RM.\n";
+        }
+        Map<String, String> names = new java.util.HashMap<>();
+        executableByGym.values().forEach(list ->
+            list.forEach(e -> names.put(e.exerciseId(), e.name())));
+        List<ExerciseDigest> top = all.values().stream()
+            .sorted(Comparator.comparing(
+                ExerciseDigest::lastPerformed, Comparator.nullsLast(Comparator.reverseOrder())))
+            .limit(20)
+            .toList();
+        // Fill any missing names in one batch.
+        List<String> missing = top.stream().map(ExerciseDigest::exerciseId)
+            .filter(id -> !names.containsKey(id)).toList();
+        if (!missing.isEmpty()) {
+            for (Exercise e : exercises.findByIds(missing)) names.put(e.exerciseId(), e.name());
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("EXERCISE PERFORMANCE DIGEST (what the user has actually lifted — "
+            + "use to set concrete loads, discounted for staleness/ease-in):\n");
+        for (ExerciseDigest d : top) {
+            String name = names.getOrDefault(d.exerciseId(), d.exerciseId());
+            sb.append("  ").append(d.exerciseId()).append(" (").append(name).append("): ");
+            if (d.estimated1Rm() != null) {
+                sb.append("e1RM ~").append(Math.round(d.estimated1Rm())).append(" lb");
+                if (d.lowConfidence()) sb.append(" (low-confidence, weight-only)");
+            } else {
+                sb.append("no usable 1RM");
+            }
+            if (d.bestRecentWeightLbs() != null) {
+                sb.append(", best ").append(Math.round(d.bestRecentWeightLbs())).append(" lb");
+                if (d.bestRecentReps() != null) sb.append("x").append(d.bestRecentReps());
+            }
+            if (d.weeksSinceLast() != null) sb.append(", last ").append(d.weeksSinceLast()).append("w ago");
+            if (d.typicalRpe() != null) sb.append(", typ RPE ").append(d.typicalRpe());
+            if (d.trailing4wkSets() != null) {
+                sb.append(", ").append(d.trailing4wkSets()).append(" sets/4wk");
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** Binds the model's read-only data tools to the current user's services. */
+    private WorkoutProgramChatClient.ToolResolver toolResolver(String userId) {
+        return (toolName, args) -> {
+            if (GeminiToolNames.EXERCISE_HISTORY.equals(toolName)) {
+                String exerciseId = asString(args.get("exerciseId"));
+                String exerciseName = asString(args.get("exerciseName"));
+                int limit = asInt(args.get("limit"), 5);
+                if (exerciseId == null && exerciseName != null) {
+                    exerciseId = exercises.listPublished(exerciseName, null, null, null).stream()
+                        .findFirst().map(Exercise::exerciseId).orElse(null);
+                }
+                if (exerciseId == null) {
+                    return Map.of("error", "no matching exercise", "sets", List.of());
+                }
+                List<Map<String, Object>> sets = new ArrayList<>();
+                for (ExerciseSetLog s : digests.history(userId, exerciseId, limit)) {
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("date", s.date() == null ? null : s.date().toString());
+                    m.put("weightLbs", s.weightLbs());
+                    m.put("reps", s.reps());
+                    m.put("rpe", s.rpe());
+                    sets.add(m);
+                }
+                return Map.of("exerciseId", exerciseId, "sets", sets);
+            }
+            if (GeminiToolNames.LAB_HISTORY.equals(toolName)) {
+                String marker = asString(args.get("markerName"));
+                if (marker == null) return Map.of("error", "markerName required", "points", List.of());
+                List<Map<String, Object>> points = new ArrayList<>();
+                trt.markerHistory(userId, marker).forEach(p -> {
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("date", p.date() == null ? null : p.date().toString());
+                    m.put("value", p.value());
+                    m.put("unit", p.unit());
+                    m.put("refLow", p.refLow());
+                    m.put("refHigh", p.refHigh());
+                    points.add(m);
+                });
+                return Map.of("marker", marker, "points", points);
+            }
+            return Map.of("error", "unknown tool: " + toolName);
+        };
+    }
+
+    private static String asString(Object o) { return o == null ? null : o.toString(); }
+
+    private static int asInt(Object o, int def) {
+        if (o instanceof Number n) return n.intValue();
+        if (o == null) return def;
+        try { return (int) Math.round(Double.parseDouble(o.toString())); } catch (NumberFormatException e) { return def; }
+    }
+
+    /** Tool names mirrored from the Gemini client so the resolver can dispatch. */
+    private static final class GeminiToolNames {
+        static final String EXERCISE_HISTORY = "get_exercise_history";
+        static final String LAB_HISTORY = "get_lab_history";
     }
 
     private static String deriveTitle(String message) {

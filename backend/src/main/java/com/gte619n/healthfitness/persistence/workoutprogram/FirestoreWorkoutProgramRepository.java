@@ -111,6 +111,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
         body.put("schedule", scheduleToWire(p.schedule()));
         body.put("phaseOrder", p.phaseOrder() == null ? List.of() : p.phaseOrder());
         body.put("phases", phasesToWire(p.phases()));
+        body.put("nutritionGuidance", nutritionToWire(p.nutritionGuidance()));
         body.put("completedAt", p.completedAt() == null ? null : p.completedAt().toString());
         body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("updatedAt", serverTimestamp());
@@ -148,6 +149,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
             m.put("targetStartDate", p.targetStartDate() == null ? null : p.targetStartDate().toString());
             m.put("targetEndDate", p.targetEndDate() == null ? null : p.targetEndDate().toString());
             m.put("completedAt", p.completedAt() == null ? null : p.completedAt().toString());
+            m.put("nutritionGuidance", nutritionToWire(p.nutritionGuidance()));
             m.put("days", daysToWire(p.days()));
             out.add(m);
         }
@@ -198,6 +200,8 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                     rm.put("restSeconds", rx.restSeconds());
                     rm.put("tempo", rx.tempo());
                     rm.put("notes", rx.notes());
+                    rm.put("targetWeightLbs", rx.targetWeightLbs());
+                    rm.put("loadBasis", rx.loadBasis());
                     if (rx.deloadModifier() != null) {
                         Map<String, Object> dm = new HashMap<>();
                         dm.put("setsMultiplier", rx.deloadModifier().setsMultiplier());
@@ -243,7 +247,8 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
             phasesFromWire(s.get("phases")),
             toInstant(s.get("createdAt")),
             toInstant(s.get("updatedAt")),
-            parseInstant(s.getString("completedAt"))
+            parseInstant(s.getString("completedAt")),
+            nutritionFromWire(s.get("nutritionGuidance"))
         );
     }
 
@@ -284,7 +289,8 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                 parseDate(str(pm.get("targetStartDate"))),
                 parseDate(str(pm.get("targetEndDate"))),
                 parseInstant(str(pm.get("completedAt"))),
-                daysFromWire(pm.get("days"))
+                daysFromWire(pm.get("days")),
+                nutritionFromWire(pm.get("nutritionGuidance"))
             ));
         }
         return out;
@@ -360,10 +366,37 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                 str(rm.get("tempo")),
                 str(rm.get("notes")),
                 deload,
-                loggedSetsFromWire(rm.get("loggedSets"))
+                loggedSetsFromWire(rm.get("loggedSets")),
+                rm.get("targetWeightLbs") instanceof Number tw ? tw.doubleValue() : null,
+                str(rm.get("loadBasis"))
             ));
         }
         return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object nutritionToWire(
+        com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance g) {
+        if (g == null || g.isEmpty()) return null;
+        Map<String, Object> m = new HashMap<>();
+        m.put("kcal", g.kcal());
+        m.put("proteinG", g.proteinG());
+        m.put("carbsG", g.carbsG());
+        m.put("fatG", g.fatG());
+        m.put("note", g.note());
+        return m;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance nutritionFromWire(Object raw) {
+        if (!(raw instanceof Map<?, ?> m)) return null;
+        Map<String, Object> nm = (Map<String, Object>) m;
+        return new com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance(
+            intOrNull(nm.get("kcal")),
+            intOrNull(nm.get("proteinG")),
+            intOrNull(nm.get("carbsG")),
+            intOrNull(nm.get("fatG")),
+            str(nm.get("note")));
     }
 
     private static List<LoggedSet> loggedSetsFromWire(Object raw) {

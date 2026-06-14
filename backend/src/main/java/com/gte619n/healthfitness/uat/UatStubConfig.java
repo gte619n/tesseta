@@ -44,7 +44,7 @@ public class UatStubConfig {
     @Bean
     @ConditionalOnMissingBean(WorkoutProgramChatClient.class)
     WorkoutProgramChatClient uatWorkoutProgramChatClient() {
-        return (history, userMessage, context, onToken) -> {
+        return (history, userMessage, context, onToken, tools) -> {
             String reply = "UAT stub: workout program assistant reply.";
             for (String word : reply.split(" ")) {
                 onToken.accept(word + " ");

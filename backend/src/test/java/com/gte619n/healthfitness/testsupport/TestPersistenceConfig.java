@@ -213,7 +213,7 @@ public class TestPersistenceConfig {
     // proposal (chat tests can install a richer fake).
     @Bean
     com.gte619n.healthfitness.integrations.workoutprogram.WorkoutProgramChatClient workoutProgramChatClient() {
-        return (history, userMessage, context, onToken) -> {
+        return (history, userMessage, context, onToken, tools) -> {
             String reply = "Let me design that program.";
             for (String word : reply.split(" ")) {
                 onToken.accept(word + " ");
