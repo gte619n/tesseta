@@ -1,5 +1,16 @@
 # IMPL-18 — History-grounded conversational program designer: implementation decision log
 
+> **Review outcome (2026-06-14):** all decisions below reviewed with the user and
+> ratified as implemented. Eight reviewed explicitly: **D4** (keep `loadBasis` as a
+> dedicated field), **D6** (two-tier issues-block / warnings-advisory as built),
+> **D7** (weight>e1RM hard block with 5% slack), **D8** (accept the MEV/MAV/MRV
+> defaults — they only warn), TRT danger thresholds (accepted as encoded), the
+> curated TRT KB (accept the seeded Endocrine-Society/AUA KB as owner-maintained),
+> the ~20-exercise per-turn digest budget (kept), and the Android `warnings`
+> parity gap → **closed now** (Android proposal card renders the advisory
+> warnings; hard issues now red/alert, soft warnings amber/warn, matching web).
+> No further changes requested.
+
 Working log of decisions made while implementing
 [IMPL-18](../specs/IMPL-18-conversational-program-designer.md),
 [ADR-0014](../decisions/ADR-0014-designer-medical-context-scope.md), and

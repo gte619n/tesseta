@@ -73,6 +73,8 @@ data class WorkoutDesignerUiState(
     val editors: Map<String, ProgramProposalEdit> = emptyMap(),
     /** Per-message validator issues to flag on the card (re-seeded on a 422 commit). */
     val proposalIssues: Map<String, List<String>> = emptyMap(),
+    /** Per-message soft advisories (volume/deload/ramp) — shown, never block (R1). */
+    val proposalWarnings: Map<String, List<String>> = emptyMap(),
     val savingMessageIds: Set<String> = emptySet(),
     /** message id -> created programId, once committed (collapses the card). */
     val committedProgramIds: Map<String, String> = emptyMap(),
@@ -218,6 +220,7 @@ class WorkoutDesignerViewModel @Inject constructor(
                     val proposal = ProgramProposal(
                         program = deep.toDomain(),
                         issues = parsed.issues,
+                        warnings = parsed.warnings,
                     )
                     updateAssistant(assistantId) {
                         it.copy(toolResult = proposal, toolResultId = assistantId)
@@ -226,6 +229,7 @@ class WorkoutDesignerViewModel @Inject constructor(
                         it.copy(
                             editors = it.editors + (assistantId to ProgramProposalEdit.from(proposal.program)),
                             proposalIssues = it.proposalIssues + (assistantId to proposal.issues),
+                            proposalWarnings = it.proposalWarnings + (assistantId to proposal.warnings),
                         )
                     }
                 }
@@ -255,6 +259,8 @@ class WorkoutDesignerViewModel @Inject constructor(
     fun editorFor(messageId: String): ProgramProposalEdit? = _state.value.editors[messageId]
 
     fun issuesFor(messageId: String): List<String> = _state.value.proposalIssues[messageId].orEmpty()
+
+    fun warningsFor(messageId: String): List<String> = _state.value.proposalWarnings[messageId].orEmpty()
 
     // --- Commit ---
 
@@ -309,6 +315,7 @@ class WorkoutDesignerViewModel @Inject constructor(
             it.copy(
                 editors = it.editors - messageId,
                 proposalIssues = it.proposalIssues - messageId,
+                proposalWarnings = it.proposalWarnings - messageId,
                 messages = it.messages.map { m ->
                     if (m is ChatMessage.Assistant && m.id == messageId) {
                         m.copy(toolResult = null, toolResultId = null)
@@ -345,6 +352,7 @@ class WorkoutDesignerViewModel @Inject constructor(
                         messages = if (wasActive) emptyList() else s.messages,
                         editors = if (wasActive) emptyMap() else s.editors,
                         proposalIssues = if (wasActive) emptyMap() else s.proposalIssues,
+                        proposalWarnings = if (wasActive) emptyMap() else s.proposalWarnings,
                         savingMessageIds = if (wasActive) emptySet() else s.savingMessageIds,
                         committedProgramIds = if (wasActive) emptyMap() else s.committedProgramIds,
                     )

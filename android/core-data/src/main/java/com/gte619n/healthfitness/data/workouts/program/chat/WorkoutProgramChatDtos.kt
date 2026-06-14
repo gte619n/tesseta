@@ -42,10 +42,11 @@ data class ScheduleDto(
     }
 }
 
-/** The `proposal` SSE event `data`: `{ program: <deep>, issues: [] }`. */
+/** The `proposal` SSE event `data`: `{ program: <deep>, issues: [], warnings: [] }`. */
 data class ProgramProposalDto(
     val program: WorkoutProgramDeepDto? = null,
     val issues: List<String> = emptyList(),
+    val warnings: List<String> = emptyList(),
 )
 
 /** Mirrors backend ThreadResponse (only the fields the client surfaces). */

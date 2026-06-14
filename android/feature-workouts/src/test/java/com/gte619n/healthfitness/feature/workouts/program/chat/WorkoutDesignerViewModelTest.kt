@@ -106,7 +106,8 @@ class WorkoutDesignerViewModelTest {
             ],
             "nutritionGuidance": { "kcal": 2600, "proteinG": 180, "note": "Slight surplus." }
           },
-          "issues": ["Week-2 volume is near MRV for chest."]
+          "issues": ["Week-2 volume is near MRV for chest."],
+          "warnings": ["Phase 'Build' jumps weekly volume 40% over the previous phase."]
         }
     """.trimIndent()
 
@@ -160,8 +161,12 @@ class WorkoutDesignerViewModelTest {
         val rx = editor.phases.single().days.single().blocks.single().prescriptions.single()
         assertEquals("185", rx.targetWeightLbs.value)
         assertEquals("e1RM 225 x 80%, -10% layoff", rx.loadBasis)
-        // Validator issues are flagged for the card.
+        // Validator issues (hard) and warnings (soft advisories) are both flagged.
         assertEquals(listOf("Week-2 volume is near MRV for chest."), vm.issuesFor(assistant.id))
+        assertEquals(
+            listOf("Phase 'Build' jumps weekly volume 40% over the previous phase."),
+            vm.warningsFor(assistant.id),
+        )
     }
 
     @Test

@@ -82,6 +82,7 @@ fun WorkoutDesignerRoute(
         onDeleteThread = viewModel::deleteThread,
         editorFor = viewModel::editorFor,
         issuesFor = viewModel::issuesFor,
+        warningsFor = viewModel::warningsFor,
     )
 }
 
@@ -99,6 +100,7 @@ fun WorkoutDesignerScreen(
     onDeleteThread: (threadId: String) -> Unit,
     editorFor: (String) -> ProgramProposalEdit?,
     issuesFor: (String) -> List<String>,
+    warningsFor: (String) -> List<String>,
     online: Boolean = true,
 ) {
     var threadsOpen by remember { mutableStateOf(false) }
@@ -165,6 +167,7 @@ fun WorkoutDesignerScreen(
                         ProgramProposalCard(
                             edit = editor,
                             issues = issuesFor(message.id),
+                            warnings = warningsFor(message.id),
                             committedProgramId = state.committedProgramIds[message.id],
                             saving = message.id in state.savingMessageIds,
                             onSave = { onSave(message.id) },

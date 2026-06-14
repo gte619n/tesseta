@@ -54,6 +54,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 fun ProgramProposalCard(
     edit: ProgramProposalEdit,
     issues: List<String>,
+    warnings: List<String>,
     committedProgramId: String?,
     saving: Boolean,
     onSave: () -> Unit,
@@ -73,6 +74,11 @@ fun ProgramProposalCard(
 
             if (issues.isNotEmpty()) {
                 IssuesBanner(issues)
+                Spacer(Modifier.height(8.dp))
+            }
+
+            if (warnings.isNotEmpty()) {
+                WarningsBanner(warnings)
                 Spacer(Modifier.height(8.dp))
             }
 
@@ -268,8 +274,25 @@ private fun NutritionStrip(guidance: NutritionGuidance, label: String) {
     }
 }
 
+/** Hard blockers (impossible loads/equipment) — red; these stop a commit. */
 @Composable
 private fun IssuesBanner(issues: List<String>) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Hf.colors.alertBg, RoundedCornerShape(7.dp))
+            .padding(horizontal = 9.dp, vertical = 7.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            CapsLabel("Needs fixing", color = Hf.colors.alert, size = 9)
+            issues.forEach { Text("• $it", style = Hf.type.bodySm, color = Hf.colors.alert) }
+        }
+    }
+}
+
+/** Soft advisories (volume/deload/ramp) — amber; you can save anyway (R1). */
+@Composable
+private fun WarningsBanner(warnings: List<String>) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -277,8 +300,8 @@ private fun IssuesBanner(issues: List<String>) {
             .padding(horizontal = 9.dp, vertical = 7.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            CapsLabel("Needs review", color = Hf.colors.warn, size = 9)
-            issues.forEach { Text("• $it", style = Hf.type.bodySm, color = Hf.colors.warn) }
+            CapsLabel("Advisory — you can save anyway", color = Hf.colors.warn, size = 9)
+            warnings.forEach { Text("• $it", style = Hf.type.bodySm, color = Hf.colors.warn) }
         }
     }
 }
