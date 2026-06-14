@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,12 +44,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
+import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseMeta
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseSpineNode
 import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ProgramStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ThisWeekStrip
 import com.gte619n.healthfitness.feature.workouts.program.ui.WorkoutDayRow
+import com.gte619n.healthfitness.feature.workouts.session.ui.ParkedSessionBanner
+import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
@@ -57,21 +62,35 @@ import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.LocalDate
 
 @Composable
 fun ProgramDetailRoute(
     onBack: () -> Unit,
     onOpenGoal: (String) -> Unit,
     onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
     viewModel: ProgramDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // A successful restore re-materialized the draft; drop into the logger.
+    LaunchedEffect(state.restoredSession) {
+        state.restoredSession?.let {
+            viewModel.consumeRestoredSession()
+            onOpenSession(it.programId, it.scheduledId)
+        }
+    }
+
     ProgramDetailScreen(
         state = state,
         onBack = onBack,
         onOpenGoal = onOpenGoal,
         onOpenWorkout = onOpenWorkout,
+        onOpenSession = onOpenSession,
         onRetry = viewModel::refresh,
+        onRestoreParked = viewModel::restoreParked,
+        onDiscardParked = viewModel::discardParked,
     )
 }
 
@@ -81,7 +100,10 @@ fun ProgramDetailScreen(
     onBack: () -> Unit,
     onOpenGoal: (String) -> Unit,
     onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRetry: () -> Unit,
+    onRestoreParked: (ParkedCompletion) -> Unit = {},
+    onDiscardParked: (ParkedCompletion) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -104,10 +126,17 @@ fun ProgramDetailScreen(
             state.program != null -> ProgramBody(
                 program = state.program,
                 thisWeek = state.thisWeek,
+                activeDraft = state.activeDraft,
+                parkedCompletion = state.parkedCompletion,
+                parkedError = state.parkedError,
+                today = state.today,
                 onOpenGoal = onOpenGoal,
                 onOpenWorkout = { phaseId, dayId ->
                     onOpenWorkout(state.program.programId, phaseId, dayId)
                 },
+                onOpenSession = onOpenSession,
+                onRestoreParked = onRestoreParked,
+                onDiscardParked = onDiscardParked,
             )
         }
     }
@@ -117,14 +146,52 @@ fun ProgramDetailScreen(
 private fun ProgramBody(
     program: WorkoutProgram,
     thisWeek: List<com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout>,
+    activeDraft: WorkoutSessionDraft?,
+    parkedCompletion: ParkedCompletion?,
+    parkedError: String?,
+    today: LocalDate,
     onOpenGoal: (String) -> Unit,
     onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
+    onRestoreParked: (ParkedCompletion) -> Unit,
+    onDiscardParked: (ParkedCompletion) -> Unit,
 ) {
     val phases = program.phases.sortedBy { it.orderIndex }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
+        if (activeDraft != null) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                    Spacer(Modifier.height(4.dp))
+                    ResumeSessionBanner(
+                        draft = activeDraft,
+                        onResume = {
+                            onOpenSession(activeDraft.programId, activeDraft.scheduledId)
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        }
+        if (parkedCompletion != null) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                    Spacer(Modifier.height(4.dp))
+                    ParkedSessionBanner(
+                        parked = parkedCompletion,
+                        onRestore = { onRestoreParked(parkedCompletion) },
+                        onDiscard = { onDiscardParked(parkedCompletion) },
+                    )
+                    if (parkedError != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(parkedError, style = Hf.type.bodySm, color = Hf.colors.alert)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        }
         item {
             Column(modifier = Modifier.padding(horizontal = 18.dp)) {
                 Spacer(Modifier.height(4.dp))
@@ -156,7 +223,16 @@ private fun ProgramBody(
                         SectionTitle(text = "This week")
                     }
                     Spacer(Modifier.height(10.dp))
-                    ThisWeekStrip(scheduled = thisWeek)
+                    ThisWeekStrip(
+                        scheduled = thisWeek,
+                        today = today,
+                        // One session at a time: hide Start while a draft is in
+                        // flight (the resume banner is the way back in).
+                        canStart = activeDraft == null,
+                        onStartSession = { session ->
+                            onOpenSession(program.programId, session.scheduledId)
+                        },
+                    )
                     Spacer(Modifier.height(20.dp))
                 }
             }
@@ -291,10 +367,12 @@ private fun ProgramDetailPreview() {
                 loading = false,
                 program = ProgramFixtures.deepProgram,
                 thisWeek = ProgramFixtures.thisWeek,
+                today = LocalDate.parse("2026-06-03"),
             ),
             onBack = {},
             onOpenGoal = {},
             onOpenWorkout = { _, _, _ -> },
+            onOpenSession = { _, _ -> },
             onRetry = {},
         )
     }

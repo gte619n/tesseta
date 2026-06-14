@@ -14,6 +14,21 @@
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     -->
 
+    <!-- ADR-0012 D6: WorkoutSessionService, foregroundServiceType="health".
+         API 34+ additionally gates the health type on the app either declaring
+         HIGH_SAMPLING_RATE_SENSORS or holding the ACTIVITY_RECOGNITION /
+         BODY_SENSORS runtime grant; HIGH_SAMPLING_RATE_SENSORS is a normal
+         install-time permission, so it satisfies the gate without prompting
+         the user for sensor access the manual logger doesn't use. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+
+    <!-- API 33+ runtime permission for the session notification in the shade.
+         The foreground service runs (and the FGS Task-Manager entry shows)
+         without the grant; the logger UI requests it when starting a session. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".HealthFitnessApp"
         android:label="@string/app_name"
@@ -86,11 +101,12 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Foreground service for active workout sessions. Wired up in IMPL-XX.
+        <!-- ADR-0012 D6 (IMPL-AND-17): foreground service for active workout
+             sessions — owns the ongoing timer notification while a local draft
+             exists; stops itself when the draft is finished/skipped/discarded. -->
         <service
             android:name=".workouts.WorkoutSessionService"
             android:foregroundServiceType="health"
             android:exported="false" />
-        -->
     </application>
 </manifest>

@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.workouts.program.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,35 +23,58 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
+import com.gte619n.healthfitness.feature.workouts.R
 import com.gte619n.healthfitness.feature.workouts.program.scheduledDateLabel
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.LocalDate
 
 /**
  * Horizontal strip of the current week's scheduled sessions: date, day label,
  * gym, a deload tint, and a status dot. `isDeload` / status come from the
  * backend ScheduledWorkout (authoritative — the client never recomputes).
+ *
+ * ADR-0012 (IMPL-AND-17): today's still-PLANNED session gets a "Start workout"
+ * affordance ([today] + [onStartSession]), suppressed via [canStart] while a
+ * local draft is already in flight.
  */
 @Composable
-fun ThisWeekStrip(scheduled: List<ScheduledWorkout>) {
+fun ThisWeekStrip(
+    scheduled: List<ScheduledWorkout>,
+    today: LocalDate? = null,
+    canStart: Boolean = true,
+    onStartSession: ((ScheduledWorkout) -> Unit)? = null,
+) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         items(scheduled, key = { it.scheduledId }) { session ->
-            ScheduledCard(session)
+            val startable = canStart &&
+                onStartSession != null &&
+                session.status == ScheduledStatus.PLANNED &&
+                session.date == today
+            ScheduledCard(
+                session = session,
+                onStart = if (startable) {
+                    { onStartSession?.invoke(session) }
+                } else {
+                    null
+                },
+            )
         }
     }
 }
 
 @Composable
-private fun ScheduledCard(session: ScheduledWorkout) {
+private fun ScheduledCard(session: ScheduledWorkout, onStart: (() -> Unit)?) {
     val bg = if (session.isDeload) Hf.colors.warnBg else Hf.colors.surface
     Column(
         modifier = Modifier
@@ -80,6 +104,23 @@ private fun ScheduledCard(session: ScheduledWorkout) {
         if (session.isDeload) {
             Spacer(Modifier.height(6.dp))
             DeloadBadge()
+        }
+        if (onStart != null) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Hf.colors.accent, RoundedCornerShape(6.dp))
+                    .clickable { onStart() }
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    stringResource(R.string.workout_session_start).uppercase(),
+                    style = Hf.type.capsMd,
+                    color = Hf.colors.textInverse,
+                )
+            }
         }
     }
 }

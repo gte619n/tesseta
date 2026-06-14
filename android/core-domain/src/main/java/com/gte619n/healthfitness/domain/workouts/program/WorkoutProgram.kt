@@ -9,7 +9,9 @@ import java.time.LocalDate
 // WorkoutProgramDeepResponse, PhaseResponse, WorkoutDayResponse, BlockResponse,
 // PrescriptionResponse, ScheduledWorkoutResponse) — adapted to typed
 // LocalDate/Instant/DayOfWeek via the core-data Moshi adapters. No proposal /
-// chat / logging types: the phone is a viewer in v1.
+// chat types. ADR-0012 adds the performed-session actuals ([LoggedSet],
+// `ScheduledWorkout.completedAt`/`durationSeconds`); the live-logging draft
+// types live in `domain.workouts.session`.
 
 enum class ProgramStatus { DRAFT, ACTIVE, COMPLETED, ARCHIVED }
 
@@ -30,14 +32,6 @@ data class DeloadModifier(val setsMultiplier: Double?, val intensityDelta: Doubl
 /** A single START/MID/END demo still for an exercise (IMPL-14). */
 data class DemoFrame(val phase: String, val imageUrl: String?)
 
-/**
- * One set as actually performed in a completed/imported session — the logged
- * counterpart to the planned [Prescription]. [weightLbs] is the load lifted
- * (0 for bodyweight); [reps] is the count, nullable when the source only
- * tracked weight (e.g. imported history).
- */
-data class LoggedSet(val weightLbs: Double?, val reps: Int?)
-
 /** Compact, embedded exercise info for rendering a prescription + its demo. */
 data class ExerciseSummary(
     val exerciseId: String,
@@ -45,6 +39,19 @@ data class ExerciseSummary(
     val primaryMuscles: List<String>,
     val formCues: List<String>,
     val demoFrames: List<DemoFrame>,
+)
+
+/**
+ * One performed set's full actuals (ADR-0012 Decision 2 / IMPL-17 D3). Every
+ * field is nullable: imported-history rows are weight-only (reps null) and the
+ * logger keeps everything beyond weight/reps skippable.
+ */
+data class LoggedSet(
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+    val rpe: Double? = null,
+    val restSeconds: Int? = null,
+    val completedAt: Instant? = null,
 )
 
 data class Prescription(
@@ -59,10 +66,13 @@ data class Prescription(
     val tempo: String?,
     val notes: String?,
     val deloadModifier: DeloadModifier?,
-    /** Actual sets performed; populated only for completed/imported sessions. */
-    val loggedSets: List<LoggedSet> = emptyList(),
     /** Embedded by the backend; null only if the backend omits it. */
     val exercise: ExerciseSummary?,
+    /**
+     * Actual sets performed (ADR-0012); populated only for completed/imported
+     * sessions, empty until the session is logged.
+     */
+    val loggedSets: List<LoggedSet> = emptyList(),
 )
 
 data class Block(
@@ -141,6 +151,9 @@ data class ScheduledWorkout(
     val status: ScheduledStatus,
     /** A full day object (same shape as a deep day); present on the calendar. */
     val session: WorkoutDay? = null,
+    /** Outcome fields (ADR-0012); set once the session is COMPLETED. */
+    val completedAt: Instant? = null,
+    val durationSeconds: Int? = null,
 )
 
 /**

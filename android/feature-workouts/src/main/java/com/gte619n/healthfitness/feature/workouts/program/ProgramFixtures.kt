@@ -18,6 +18,10 @@ import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
+import com.gte619n.healthfitness.domain.workouts.session.DraftStatus
+import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
+import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import java.time.Instant
 import java.time.LocalDate
 
@@ -214,5 +218,50 @@ internal object ProgramFixtures {
             locationName = "Home Gym",
             status = ScheduledStatus.PLANNED,
         ),
+    )
+
+    // ADR-0012 (IMPL-AND-17) session-logger fixtures.
+
+    /** A PLANNED scheduled session carrying its full day (deep calendar shape). */
+    val scheduledWithSession: ScheduledWorkout = thisWeek[1].copy(session = day)
+
+    /**
+     * An in-progress local draft over [scheduledWithSession] with the first
+     * squat set already checked off.
+     */
+    val activeDraft = WorkoutSessionDraft(
+        programId = "p1",
+        scheduledId = scheduledWithSession.scheduledId,
+        startedAt = Instant.parse("2026-06-03T14:00:00Z"),
+        lastActivityAt = Instant.parse("2026-06-03T14:05:00Z"),
+        status = DraftStatus.ACTIVE,
+        scheduled = scheduledWithSession,
+        logged = mapOf(
+            PrescriptionKey("b-main", 0) to listOf(
+                LoggedSet(
+                    weightLbs = 135.0,
+                    reps = 8,
+                    rpe = 8.0,
+                    restSeconds = null,
+                    completedAt = Instant.parse("2026-06-03T14:05:00Z"),
+                ),
+            ),
+        ),
+    )
+
+    /**
+     * A finished session whose completion upload the server terminally
+     * rejected (IMPL-17 A10/Q3) — surfaced as the "couldn't sync — restore to
+     * review" banner.
+     */
+    val parkedCompletion = ParkedCompletion(
+        programId = "p1",
+        scheduledId = scheduledWithSession.scheduledId,
+        status = ScheduledStatus.COMPLETED,
+        completedAt = Instant.parse("2026-06-03T15:00:00Z"),
+        loggedSetCount = 9,
+        orphanedSetCount = 2,
+        sessionAvailable = true,
+        dayLabel = "Upper A",
     )
 }

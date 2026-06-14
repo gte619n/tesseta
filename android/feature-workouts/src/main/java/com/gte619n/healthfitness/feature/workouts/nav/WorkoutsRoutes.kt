@@ -12,7 +12,8 @@ import com.gte619n.healthfitness.feature.workouts.NewGymScreen
 import com.gte619n.healthfitness.feature.workouts.program.ProgramDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.ProgramsListRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutDetailRoute
-import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubScreen
+import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubRoute
+import com.gte619n.healthfitness.feature.workouts.session.WorkoutSessionRoute
 
 /**
  * String-based Navigation-Compose routes for the workouts area. The Workouts
@@ -55,6 +56,15 @@ object WorkoutsRoutes {
 
     fun workoutDetail(programId: String, phaseId: String, dayId: String): String =
         "workouts/programs/$programId/phases/$phaseId/days/$dayId"
+
+    // Active session logger (ADR-0012 / IMPL-AND-17). Keyed by the same
+    // (programId, scheduledId) pair as the local draft, so start and resume are
+    // the same destination — the ViewModel's start() resumes an in-flight draft.
+    const val ARG_SCHEDULED_ID = "scheduledId"
+    const val SESSION = "workouts/programs/{programId}/sessions/{scheduledId}"
+
+    fun session(programId: String, scheduledId: String): String =
+        "workouts/programs/$programId/sessions/$scheduledId"
 }
 
 fun NavGraphBuilder.workoutsGraph(
@@ -62,10 +72,13 @@ fun NavGraphBuilder.workoutsGraph(
     onOpenGoal: (String) -> Unit = {},
 ) {
     composable(WorkoutsRoutes.HUB) {
-        WorkoutsHubScreen(
+        WorkoutsHubRoute(
             onBack = { navController.popBackStack() },
             onOpenGyms = { navController.navigate(WorkoutsRoutes.GYMS) },
             onOpenPrograms = { navController.navigate(WorkoutsRoutes.PROGRAMS) },
+            onResumeSession = { programId, scheduledId ->
+                navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
         )
     }
 
@@ -126,6 +139,9 @@ fun NavGraphBuilder.workoutsGraph(
             onOpenWorkout = { programId, phaseId, dayId ->
                 navController.navigate(WorkoutsRoutes.workoutDetail(programId, phaseId, dayId))
             },
+            onOpenSession = { programId, scheduledId ->
+                navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
         )
     }
 
@@ -138,5 +154,15 @@ fun NavGraphBuilder.workoutsGraph(
         ),
     ) {
         WorkoutDetailRoute(onBack = { navController.popBackStack() })
+    }
+
+    composable(
+        route = WorkoutsRoutes.SESSION,
+        arguments = listOf(
+            navArgument(WorkoutsRoutes.ARG_PROGRAM_ID) { type = NavType.StringType },
+            navArgument(WorkoutsRoutes.ARG_SCHEDULED_ID) { type = NavType.StringType },
+        ),
+    ) {
+        WorkoutSessionRoute(onClose = { navController.popBackStack() })
     }
 }

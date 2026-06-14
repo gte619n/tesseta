@@ -21,7 +21,11 @@ import kotlin.math.min
  * the survivors in `seq` order, attaching the idempotency + origin-device headers
  * via [OutboxReplayClient]. On success the mirror row flips to SYNCED+clean and
  * adopts the server `lastUpdate`; on failure the row goes FAILED with exponential
- * backoff on `nextAttemptAt`.
+ * backoff on `nextAttemptAt`. A **terminal 4xx** (a deterministic server
+ * rejection — see [OutboxReplayHttpException.isTerminal]) is parked instead:
+ * the row and its payload are kept (no silent data loss) and stay in the FAILED
+ * count, but only the manual retry lever ([rearmFailed], D11) re-attempts it —
+ * automatic drains skip it rather than re-sending a doomed payload forever.
  *
  * Drain is invoked after every local write and on connectivity-regained (the
  * WorkManager [OutboxDrainWorker]); it is idempotent and safe to call concurrently
@@ -45,6 +49,30 @@ class OutboxRepository @Inject constructor(
      * retry re-drains them and a success clears the row.
      */
     fun failedCount(): Flow<Int> = outboxDao.observeFailedCount()
+
+    /**
+     * Mutations parked on a terminal 4xx for one table, newest first — the
+     * detection seam for feature-level recovery (e.g. restoring a parked
+     * workout-session completion into the logger). A manual [rearmFailed]
+     * makes a row due again, so it drops off this Flow until it re-parks.
+     */
+    fun parked(table: String): Flow<List<OutboxEntity>> =
+        outboxDao.observeParked(table, PARKED_NEXT_ATTEMPT)
+
+    /** One-shot: the parked mutation(s) for one entity, in `seq` order. */
+    suspend fun parkedForEntity(entityId: String): List<OutboxEntity> = withContext(io) {
+        outboxDao.listByEntity(entityId).filter { it.nextAttemptAt == PARKED_NEXT_ATTEMPT }
+    }
+
+    /**
+     * Drop one mutation without replaying it. Only the parked-recovery paths
+     * use this: ownership of the rejected payload moves back to a local draft
+     * (restore) or the user explicitly gives it up (discard) — never call it
+     * for rows the drain still owns.
+     */
+    suspend fun deleteMutation(mutationId: String): Unit = withContext(io) {
+        outboxDao.deleteById(mutationId)
+    }
 
     /**
      * Queue a local mutation. The caller is expected to have already applied the
@@ -122,13 +150,16 @@ class OutboxRepository @Inject constructor(
                     mirror.markSynced(mutation.entityTable, mutation.entityId, serverLastUpdate)
                 }
                 sent++
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
                 // Failure: back off the originating chain and flag the row FAILED.
+                // A terminal 4xx would fail identically on every retry, so park
+                // it out of the automatic drain instead (manual retry re-arms it).
                 val attempts = mutation.attempts + 1
+                val terminal = t is OutboxReplayHttpException && t.isTerminal
                 outboxDao.recordFailure(
                     mutationId = mutation.mutationId,
                     attempts = attempts,
-                    nextAttemptAt = now + backoffMillis(attempts),
+                    nextAttemptAt = if (terminal) PARKED_NEXT_ATTEMPT else now + backoffMillis(attempts),
                 )
                 mirror.markFailed(mutation.entityTable, mutation.entityId)
                 failed++
@@ -150,9 +181,23 @@ class OutboxRepository @Inject constructor(
         DrainResult(sent = sent, failed = failed, collapsed = collapsed)
     }
 
+    /**
+     * Manual retry (D11): make every failed row — exponential backoff or parked
+     * on a terminal 4xx — due immediately, so the next [drain] re-attempts it.
+     */
+    suspend fun rearmFailed(): Unit = withContext(io) {
+        outboxDao.rearmFailed(clock())
+    }
+
     companion object {
         const val BASE_BACKOFF_MILLIS = 30_000L // 30s
         const val MAX_BACKOFF_MILLIS = 6L * 60 * 60 * 1000 // 6h ceiling (D10 floor)
+
+        /**
+         * `nextAttemptAt` sentinel for terminally-rejected mutations: never due
+         * for an automatic drain, only a manual [rearmFailed] revives them.
+         */
+        const val PARKED_NEXT_ATTEMPT = Long.MAX_VALUE
 
         /** Exponential backoff: 30s, 60s, 120s, … capped at 6h. */
         fun backoffMillis(attempts: Int): Long {

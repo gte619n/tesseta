@@ -30,6 +30,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import com.gte619n.healthfitness.data.auth.AuthState
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionBootstrap
 import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
 import com.gte619n.healthfitness.mobile.auth.SignInScreen
 import com.gte619n.healthfitness.mobile.dashboard.FoldableDashboardScreen
@@ -38,6 +39,7 @@ import com.gte619n.healthfitness.mobile.nav.AppNavHost
 import com.gte619n.healthfitness.mobile.push.TokenRegistration
 import com.gte619n.healthfitness.mobile.sync.FirstSyncGate
 import com.gte619n.healthfitness.mobile.sync.SettingUpScreen
+import com.gte619n.healthfitness.mobile.workouts.WorkoutSessionForegroundLauncher
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.theme.Hf
 import dagger.hilt.android.AndroidEntryPoint
@@ -63,6 +65,15 @@ class MainActivity : ComponentActivity() {
     // thread, and only once the user is actually signed in.
     @Inject lateinit var firstSyncGate: dagger.Lazy<FirstSyncGate>
 
+    // ADR-0012 Decision 4: stale workout-draft sweep on app open + periodic
+    // worker registration. Lazy for the same SQLCipher-off-main-thread reason.
+    @Inject lateinit var sessionBootstrap: dagger.Lazy<WorkoutSessionBootstrap>
+
+    // ADR-0012 Decision 6: keeps the WorkoutSessionService foreground timer
+    // alive whenever a local draft session exists (including rehydration after
+    // process death). Lazy for the same SQLCipher-off-main-thread reason.
+    @Inject lateinit var sessionLauncher: dagger.Lazy<WorkoutSessionForegroundLauncher>
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +94,8 @@ class MainActivity : ComponentActivity() {
                         widthClass = windowSize.widthSizeClass,
                         tokenRegistration = tokenRegistration,
                         firstSyncGate = firstSyncGate,
+                        sessionBootstrap = sessionBootstrap,
+                        sessionLauncher = sessionLauncher,
                     )
                 }
             }
@@ -123,6 +136,8 @@ private fun AppRoot(
     widthClass: WindowWidthSizeClass,
     tokenRegistration: TokenRegistration,
     firstSyncGate: dagger.Lazy<FirstSyncGate>,
+    sessionBootstrap: dagger.Lazy<WorkoutSessionBootstrap>,
+    sessionLauncher: dagger.Lazy<WorkoutSessionForegroundLauncher>,
 ) {
     val state by coordinator.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -140,6 +155,8 @@ private fun AppRoot(
             widthClass = widthClass,
             tokenRegistration = tokenRegistration,
             firstSyncGate = firstSyncGate,
+            sessionBootstrap = sessionBootstrap,
+            sessionLauncher = sessionLauncher,
         )
         AuthState.Loading -> SignInScreen(state = state, onSignIn = {})
         else -> SignInScreen(
@@ -165,6 +182,8 @@ private fun SignedInRoot(
     widthClass: WindowWidthSizeClass,
     tokenRegistration: TokenRegistration,
     firstSyncGate: dagger.Lazy<FirstSyncGate>,
+    sessionBootstrap: dagger.Lazy<WorkoutSessionBootstrap>,
+    sessionLauncher: dagger.Lazy<WorkoutSessionForegroundLauncher>,
 ) {
     // gateDecided: null until needsFirstSync() resolves; then false (released) or
     // true (blocking initial sync in flight).
@@ -174,6 +193,12 @@ private fun SignedInRoot(
         // FCM token registration is best-effort and must NOT block the UI; run it
         // off to the side. (HfMessagingService.onNewToken also re-registers.)
         launch { tokenRegistration.register() }
+
+        // ADR-0012 Decision 6: for the whole signed-in lifetime, start the
+        // workout foreground service whenever a local draft exists (the service
+        // stops itself when the draft goes away). On IO — resolving the launcher's
+        // repository opens the SQLCipher store.
+        launch(Dispatchers.IO) { runCatching { sessionLauncher.get().run() } }
 
         // Resolve the gate (and thus build the SQLCipher DB: loadLibs + Keystore
         // crypto) OFF the main thread — never during onCreate injection.
@@ -190,6 +215,13 @@ private fun SignedInRoot(
         // Always schedule the lazy backfill + periodic floor after the gate.
         gate.scheduleBackfill()
         gating = false
+
+        // ADR-0012 Decision 4: after the UI is released, finalize/discard any
+        // stale workout drafts and register the periodic sweep. Off the main
+        // thread — this touches the SQLCipher store.
+        withContext(Dispatchers.IO) {
+            runCatching { sessionBootstrap.get().onAppStart() }
+        }
     }
 
     if (gating != false) {
