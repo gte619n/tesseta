@@ -10,6 +10,7 @@ import type {
   WorkoutProgramChatThread,
   WorkoutProgramChatMessage,
 } from "./types/workout-program";
+import type { TrtContext } from "./types/trt";
 
 // Server-only HTTP helpers for Workout Programs (IMPL-15). Do not import from
 // client components — apiFetch reads server env + the Auth.js session. The SSE
@@ -131,6 +132,16 @@ export function deleteProgramChatThread(threadId: string): Promise<void> {
     `/api/me/workout-programs/chat/threads/${threadId}`,
     "DELETE",
   );
+}
+
+// ── TRT / monitoring panel (IMPL-18 / ADR-0015) ──────────────────────
+//
+// The user's relevant labs (latest + trend, ref ranges, status) and any
+// danger-flags for the TRT decision-support surface in the designer chat. Read
+// server-side and passed to the chat component; the browser can also hit the
+// app/api proxy route for an on-mount fetch.
+export function getTrtContext(): Promise<TrtContext> {
+  return apiJson<TrtContext>("/api/me/workout-programs/chat/trt-context");
 }
 
 // ── Chat commit ──────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import {
   listProgramChatThreads,
   getProgramChatMessages,
   deleteProgramChatThread,
+  getTrtContext,
 } from "@/lib/workout-program-api";
 import { draftToCreateRequest } from "@/lib/workout-program-chat";
 import { getLocations } from "@/lib/gym-api";
@@ -23,6 +24,7 @@ import type {
   WorkoutProgramChatMessage,
   WorkoutProgramChatSchedule,
 } from "@/lib/types/workout-program";
+import type { TrtContext } from "@/lib/types/trt";
 import type { ExerciseResponse } from "@/lib/types/exercise";
 import { pageMetadata } from "@/lib/page-metadata";
 
@@ -95,6 +97,18 @@ export default async function ProgramChatPage() {
     revalidatePath("/me/workouts/programs/chat");
   }
 
+  // TRT / monitoring-panel context for the designer chat (IMPL-18 / ADR-0015).
+  // Loaded on mount by the chat component (server-action-as-prop). Returns an
+  // empty context on failure so the panel quietly hides.
+  async function loadTrtContext(): Promise<TrtContext> {
+    "use server";
+    try {
+      return await getTrtContext();
+    } catch {
+      return { onTrt: false, markers: [], dangerFlags: [] };
+    }
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[1040px] space-y-6">
@@ -124,6 +138,7 @@ export default async function ProgramChatPage() {
           loadMessages={loadMessages}
           loadExercises={loadExercises}
           deleteThread={deleteThread}
+          loadTrtContext={loadTrtContext}
         />
       </div>
     </main>

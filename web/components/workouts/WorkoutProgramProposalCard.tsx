@@ -5,6 +5,8 @@ import type {
   WorkoutProgramChatSchedule,
   IntensityKind,
   WeekDay,
+  Intensity,
+  NutritionGuidance,
 } from "@/lib/types/workout-program";
 import { WEEK_DAY_LABEL, WEEK_DAYS } from "@/lib/types/workout-program";
 import type { BlockType, ExerciseResponse } from "@/lib/types/exercise";
@@ -167,6 +169,93 @@ const INTENSITY_LABEL: Record<IntensityKind, string> = {
   PERCENT_1RM: "% 1RM",
 };
 
+// Compact human-readable load summary for a prescription's collapsed row.
+// Prefers the concrete prescribed weight (IMPL-18 S5); falls back to the
+// intensity (RPE / %1RM) when no weight is grounded; null when nothing to show.
+function formatLoad(
+  targetWeightLbs: number | null,
+  intensity: Intensity,
+): string | null {
+  if (targetWeightLbs != null) {
+    const w = Number.isInteger(targetWeightLbs)
+      ? `${targetWeightLbs}`
+      : targetWeightLbs.toFixed(1);
+    return `${w} lb`;
+  }
+  if (intensity.kind === "RPE" && intensity.value != null) {
+    return `RPE ${intensity.value}`;
+  }
+  if (intensity.kind === "PERCENT_1RM" && intensity.value != null) {
+    return `${intensity.value}% 1RM`;
+  }
+  return null;
+}
+
+// Compact rep/set summary, e.g. "3×8–10" or "4×5" or "3 sets".
+function formatSetsReps(
+  sets: number | null,
+  repsMin: number | null,
+  repsMax: number | null,
+): string | null {
+  const reps =
+    repsMin != null && repsMax != null
+      ? repsMin === repsMax
+        ? `${repsMin}`
+        : `${repsMin}–${repsMax}`
+      : repsMin != null
+        ? `${repsMin}`
+        : repsMax != null
+          ? `${repsMax}`
+          : null;
+  if (sets != null && reps) return `${sets}×${reps}`;
+  if (sets != null) return `${sets} set${sets === 1 ? "" : "s"}`;
+  if (reps) return `${reps} reps`;
+  return null;
+}
+
+// A quiet, display-only nutrition strip rendered under a phase header. Uses the
+// phase guidance, falling back to the program-level guidance (IMPL-18 R4).
+function NutritionStrip({
+  guidance,
+}: {
+  guidance: NutritionGuidance | null;
+}) {
+  if (!guidance) return null;
+  const macros: { label: string; value: number | null }[] = [
+    { label: "kcal", value: guidance.kcal },
+    { label: "P", value: guidance.proteinG },
+    { label: "C", value: guidance.carbsG },
+    { label: "F", value: guidance.fatG },
+  ];
+  const shown = macros.filter((m) => m.value != null);
+  if (shown.length === 0 && !guidance.note) return null;
+  return (
+    <div className="mt-2 rounded-md bg-canvas-muted px-3 py-2">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
+          Nutrition
+        </span>
+        {shown.map((m) => (
+          <span key={m.label} className="flex items-baseline gap-1">
+            <span className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
+              {m.label}
+            </span>
+            <span className="text-[12px] tabular-nums text-secondary">
+              {m.value}
+              {m.label === "kcal" ? "" : "g"}
+            </span>
+          </span>
+        ))}
+      </div>
+      {guidance.note ? (
+        <p className="mt-1 text-[11px] leading-[1.4] text-tertiary">
+          {guidance.note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function WorkoutProgramProposalCard({
   initialValue,
   schedule,
@@ -187,6 +276,7 @@ export function WorkoutProgramProposalCard({
   }, [initialValue]);
 
   const issues = draft.issues;
+  const warnings = draft.warnings;
 
   // ── Phase ops ──────────────────────────────────────────────────────
   function patchPhase(pi: number, patch: Partial<PhaseDraft>) {
@@ -503,6 +593,19 @@ export function WorkoutProgramProposalCard({
           </div>
         ) : null}
 
+        {warnings.length > 0 ? (
+          <div className="rounded-md bg-warn-bg px-3 py-2">
+            <p className="caps-mono text-[9px] tracking-[0.06em] text-warn">
+              {warnings.length} advisory{warnings.length === 1 ? "" : " notes"} — you can save anyway
+            </p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 font-mono text-[11px] text-warn">
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <label className="block">
           <FieldLabel>Title</FieldLabel>
           <TextInput
@@ -528,6 +631,7 @@ export function WorkoutProgramProposalCard({
             <PhaseEditor
               key={phase.key}
               phase={phase}
+              programNutrition={draft.nutritionGuidance}
               gyms={gyms}
               schedule={schedule}
               loadExercises={loadExercises}
@@ -586,6 +690,7 @@ export function WorkoutProgramProposalCard({
 
 function PhaseEditor({
   phase,
+  programNutrition,
   gyms,
   schedule,
   loadExercises,
@@ -608,6 +713,8 @@ function PhaseEditor({
   onMoveRx,
 }: {
   phase: PhaseDraft;
+  // Program-level fallback used when the phase has no nutrition guidance.
+  programNutrition: NutritionGuidance | null;
   gyms: GymOption[];
   schedule: WorkoutProgramChatSchedule | null;
   loadExercises: LoadExercisesAction;
@@ -683,6 +790,8 @@ function PhaseEditor({
           removeLabel="Remove phase"
         />
       </div>
+
+      <NutritionStrip guidance={phase.nutritionGuidance ?? programNutrition} />
 
       <div className="mt-3 space-y-2">
         {phase.days.map((day, di) => (
@@ -959,7 +1068,11 @@ function PrescriptionEditor({
   onMove: (dir: -1 | 1) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const flagged = !!rx.validationError;
+
+  const load = formatLoad(rx.targetWeightLbs, rx.intensity);
+  const setsReps = formatSetsReps(rx.sets, rx.repsMin, rx.repsMax);
 
   return (
     <div
@@ -994,6 +1107,35 @@ function PrescriptionEditor({
           {flagged ? (
             <p className="mt-0.5 font-mono text-[10px] text-alert">
               {rx.validationError}
+            </p>
+          ) : null}
+          {load || setsReps ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {load ? (
+                <span className="text-[12px] font-medium tabular-nums text-primary">
+                  {load}
+                </span>
+              ) : null}
+              {setsReps ? (
+                <span className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">
+                  {setsReps}
+                </span>
+              ) : null}
+              {rx.loadBasis ? (
+                <button
+                  type="button"
+                  onClick={() => setWhyOpen((v) => !v)}
+                  aria-expanded={whyOpen}
+                  className="caps-mono cursor-pointer rounded px-1 py-0.5 text-[8px] tracking-[0.06em] text-tertiary hover:bg-canvas-muted hover:text-secondary"
+                >
+                  {whyOpen ? "Why ▲" : "Why ▼"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {whyOpen && rx.loadBasis ? (
+            <p className="mt-1 rounded bg-canvas-muted px-2 py-1 font-mono text-[10px] leading-[1.4] text-secondary">
+              {rx.loadBasis}
             </p>
           ) : null}
         </div>
@@ -1041,6 +1183,14 @@ function PrescriptionEditor({
             <NumberInput
               value={rx.durationSeconds}
               onChange={(v) => onPatch({ durationSeconds: v })}
+            />
+          </label>
+          <label className="block">
+            <FieldLabel>Weight (lb)</FieldLabel>
+            <NumberInput
+              value={rx.targetWeightLbs}
+              onChange={(v) => onPatch({ targetWeightLbs: v })}
+              placeholder="—"
             />
           </label>
           <label className="block">

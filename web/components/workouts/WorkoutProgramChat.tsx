@@ -20,6 +20,8 @@ import {
   type GymOption,
   type LoadExercisesAction,
 } from "@/components/workouts/WorkoutProgramProposalCard";
+import { TrtPanel } from "@/components/workouts/TrtPanel";
+import type { TrtContext } from "@/lib/types/trt";
 import {
   proposalToDraft,
   type ProgramProposalDraft,
@@ -51,6 +53,8 @@ export type LoadThreadMessagesAction = (
 
 export type DeleteThreadAction = (threadId: string) => Promise<void>;
 
+export type LoadTrtContextAction = () => Promise<TrtContext>;
+
 export type GoalOption = { goalId: string; title: string };
 
 type Props = {
@@ -61,6 +65,7 @@ type Props = {
   loadMessages: LoadThreadMessagesAction;
   loadExercises: LoadExercisesAction;
   deleteThread: DeleteThreadAction;
+  loadTrtContext: LoadTrtContextAction;
 };
 
 type ProposalState = {
@@ -104,6 +109,7 @@ export function WorkoutProgramChat({
   loadMessages,
   loadExercises,
   deleteThread,
+  loadTrtContext,
 }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -213,7 +219,7 @@ export function WorkoutProgramChat({
                 const parsed = JSON.parse(data) as WorkoutProgramProposalPayload;
                 patchMessage(assistantId, {
                   proposal: {
-                    draft: proposalToDraft(parsed.program, parsed.issues ?? []),
+                    draft: proposalToDraft(parsed.program, parsed.issues ?? [], parsed.warnings ?? []),
                   },
                 });
               } catch {
@@ -334,7 +340,7 @@ export function WorkoutProgramChat({
             const payload = parseProposalJson(h.proposalJson);
             if (payload) {
               proposal = {
-                draft: proposalToDraft(payload.program, payload.issues ?? []),
+                draft: proposalToDraft(payload.program, payload.issues ?? [], payload.warnings ?? []),
               };
             }
           }
@@ -493,6 +499,10 @@ export function WorkoutProgramChat({
       {!setupDone ? (
         <SetupForm gyms={gyms} goals={goals} onSubmit={handleSetupSubmit} />
       ) : (
+        <div className="space-y-4">
+        {/* TRT / monitoring panel + danger banner (IMPL-18 / ADR-0015). Only
+            renders when the user is on TRT or has relevant labs. */}
+        <TrtPanel loadTrtContext={loadTrtContext} />
         <section className="flex h-[calc(100vh-240px)] min-h-[480px] max-h-[860px] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface">
           {scheduleDisplay ? (
             <div className="shrink-0 border-b-[0.5px] border-border-subtle px-5 py-2">
@@ -537,6 +547,7 @@ export function WorkoutProgramChat({
             placeholder="Refine the program…"
           />
         </section>
+        </div>
       )}
     </div>
   );
