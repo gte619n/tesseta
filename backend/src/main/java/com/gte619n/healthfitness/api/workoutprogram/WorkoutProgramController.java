@@ -8,6 +8,8 @@ import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramValidator;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutSessionCompletionService;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutSessionCompletionService.InvalidSessionLogException;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,6 +34,7 @@ public class WorkoutProgramController {
     private final CurrentUserProvider currentUser;
     private final WorkoutProgramService service;
     private final WorkoutScheduleService schedule;
+    private final WorkoutSessionCompletionService completion;
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
     private final SyncChangeNotifier syncNotifier;
@@ -39,6 +43,7 @@ public class WorkoutProgramController {
         CurrentUserProvider currentUser,
         WorkoutProgramService service,
         WorkoutScheduleService schedule,
+        WorkoutSessionCompletionService completion,
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
         SyncChangeNotifier syncNotifier
@@ -46,6 +51,7 @@ public class WorkoutProgramController {
         this.currentUser = currentUser;
         this.service = service;
         this.schedule = schedule;
+        this.completion = completion;
         this.validator = validator;
         this.assembler = assembler;
         this.syncNotifier = syncNotifier;
@@ -128,6 +134,36 @@ public class WorkoutProgramController {
         List<ScheduledWorkout> scheduled = schedule.activate(userId, programId);
         syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
         return assembler.scheduled(userId, scheduled);
+    }
+
+    /**
+     * ADR-0012 completion upsert: record a session's outcome (COMPLETED or
+     * SKIPPED) with full per-set actuals. Idempotent — outbox retries and
+     * after-the-fact edits replay the same PUT and re-run the fan-out.
+     */
+    @PutMapping("/{programId}/sessions/{scheduledId}")
+    public ScheduledWorkoutResponse logSession(
+        @PathVariable String programId,
+        @PathVariable String scheduledId,
+        @RequestBody LogSessionRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        ScheduledWorkout updated;
+        try {
+            updated = completion.complete(userId, programId, scheduledId,
+                body.status(), body.completedAt(), body.durationSeconds(), body.logged());
+        } catch (IllegalArgumentException e) {
+            // The core service signals a missing session this way (no Spring Web there).
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (InvalidSessionLogException e) {
+            // Flat issue list (same shape as the validator) so clients flag fields inline.
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        syncNotifier.changed(userId, null, "workoutPrograms/scheduled");
+        return assembler.scheduled(userId, List.of(updated)).get(0);
     }
 
     @GetMapping("/{programId}/calendar")

@@ -9,6 +9,18 @@ public interface ScheduledWorkoutRepository {
     void save(ScheduledWorkout scheduled);
 
     /**
+     * Precise lookup of one session by id. The default scans
+     * {@link #findByProgram}; Firestore-backed impls override with a direct
+     * document read.
+     */
+    default Optional<ScheduledWorkout> findById(String userId, String programId, String scheduledId) {
+        for (ScheduledWorkout sw : findByProgram(userId, programId, LocalDate.MIN, LocalDate.MAX)) {
+            if (sw.scheduledId().equals(scheduledId)) return Optional.of(sw);
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Count sessions in a program with the given status. The default scans
      * {@link #findByProgram}; Firestore-backed impls override with a count
      * aggregation that reads no documents.

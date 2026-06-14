@@ -57,6 +57,7 @@ class WorkoutScheduleServiceTest {
             return Optional.ofNullable(store.get(userId + "/" + programId));
         }
         @Override public List<WorkoutProgram> findByUser(String userId) { return List.copyOf(store.values()); }
+        @Override public List<WorkoutProgram> findByUserIncludingArchived(String userId) { return List.copyOf(store.values()); }
         @Override public void save(WorkoutProgram p) { store.put(p.userId() + "/" + p.programId(), p); }
         @Override public void delete(String userId, String programId) { store.remove(userId + "/" + programId); }
     }

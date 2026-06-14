@@ -120,7 +120,7 @@ public class WorkoutProgramAssembler {
         for (ScheduledWorkout sw : items) {
             DayResponse session = sw.session() == null ? null : dayResponse(sw.session(), summaries, gymNames);
             out.add(new ScheduledWorkoutResponse(
-                sw.scheduledId(), sw.date(), sw.phaseId(), sw.dayId(), sw.dayLabel(),
+                sw.programId(), sw.scheduledId(), sw.date(), sw.phaseId(), sw.dayId(), sw.dayLabel(),
                 sw.weekIndexInPhase(), sw.isDeload(), sw.locationId(),
                 gymNames.get(sw.locationId()), sw.status(), session,
                 sw.completedAt(), sw.durationSeconds()));

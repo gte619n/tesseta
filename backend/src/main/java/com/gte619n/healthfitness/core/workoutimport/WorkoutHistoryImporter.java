@@ -278,7 +278,9 @@ public class WorkoutHistoryImporter {
                     List<LoggedSet> logged = new ArrayList<>();
                     if (se.sets() != null) {
                         for (FutureWorkouts.PerformedSet ps : se.sets()) {
-                            logged.add(new LoggedSet(sanitizeWeight(ps.weightLbs()), ps.reps()));
+                            // Imported rows carry weight/reps only; the ADR-0012
+                            // actuals (rpe/rest/per-set time) stay null.
+                            logged.add(new LoggedSet(sanitizeWeight(ps.weightLbs()), ps.reps(), null, null, null));
                         }
                     }
                     rxs.add(new Prescription(
