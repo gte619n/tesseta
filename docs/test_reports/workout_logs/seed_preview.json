@@ -33,8 +33,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-10T11:22:27.579488Z",
-    "updatedAt" : "2026-06-10T11:22:27.579488Z",
+    "createdAt" : "2026-06-14T15:35:45.884076Z",
+    "updatedAt" : "2026-06-14T15:35:45.884076Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "3f6ec27f-bbb2-479a-98d3-1aa0242f5511",
@@ -61,8 +61,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-10T11:22:27.579498Z",
-    "updatedAt" : "2026-06-10T11:22:27.579498Z",
+    "createdAt" : "2026-06-14T15:35:45.884088Z",
+    "updatedAt" : "2026-06-14T15:35:45.884088Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "d09748b1-5876-42a9-a927-62a96aa772e8",
@@ -86,8 +86,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-10T11:22:27.579517Z",
-    "updatedAt" : "2026-06-10T11:22:27.579517Z",
+    "createdAt" : "2026-06-14T15:35:45.884108Z",
+    "updatedAt" : "2026-06-14T15:35:45.884108Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "eb06d263-ab43-4352-9346-f32c8df5739b",
@@ -114,8 +114,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-10T11:22:27.579523Z",
-    "updatedAt" : "2026-06-10T11:22:27.579523Z",
+    "createdAt" : "2026-06-14T15:35:45.884113Z",
+    "updatedAt" : "2026-06-14T15:35:45.884113Z",
     "aliasOfExerciseId" : null
   }, {
     "exerciseId" : "c37ea438-db56-46be-b13e-eb95f32b62bb",
@@ -142,8 +142,8 @@
     "mediaStatus" : "NONE",
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-10T11:22:27.579528Z",
-    "updatedAt" : "2026-06-10T11:22:27.579528Z",
+    "createdAt" : "2026-06-14T15:35:45.884118Z",
+    "updatedAt" : "2026-06-14T15:35:45.884118Z",
     "aliasOfExerciseId" : null
   } ],
   "program" : {
@@ -398,8 +398,8 @@
       "completedAt" : "2025-11-24T23:59:59Z",
       "days" : [ ]
     } ],
-    "createdAt" : "2026-06-10T11:22:27.583306Z",
-    "updatedAt" : "2026-06-10T11:22:27.583306Z",
+    "createdAt" : "2026-06-14T15:35:45.887742Z",
+    "updatedAt" : "2026-06-14T15:35:45.887742Z",
     "completedAt" : "2025-11-24T23:59:59Z"
   },
   "sampleCompletedSessions" : [ {
@@ -439,7 +439,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 95.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "54288b7b-c448-46a2-9f94-3a4b47ecde31",
@@ -455,7 +458,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "d0054637-df9b-4e7d-b8bd-8093c283c270",
@@ -471,7 +477,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
@@ -487,7 +496,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "786db4f8-8fde-4ca0-be70-82934a80f155",
@@ -503,7 +515,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "93d916b8-8750-4f12-9f10-803dc9efe6ae",
@@ -519,7 +534,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e9546ffc-5031-4c0c-a0cb-cd63dc52e12d",
@@ -535,7 +553,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "89c98826-ac42-4663-b10d-64be20bb6543",
@@ -551,7 +572,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 45.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "03f65864-4560-483c-9e4d-ee1433a1d14e",
@@ -567,7 +591,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "1c1f7c50-7520-4619-973b-1d095982a380",
@@ -583,7 +610,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "9cfe83f9-cb9b-472b-b74f-332856f2c1a8",
@@ -599,7 +629,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "4d7afa2f-79f4-4d43-961d-2d8d2cf876ba",
@@ -615,7 +648,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "dffcf3af-c380-41c5-b087-919aec2b12df",
@@ -631,7 +667,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
@@ -647,7 +686,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 55.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "dfd49808-4a70-4748-a77b-6815500972e3",
@@ -663,7 +705,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "daadfbf8-d95e-4b53-8fe0-b47c8aabce7b",
@@ -679,7 +724,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -695,7 +743,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
@@ -711,7 +762,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -755,7 +809,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "9a1239ad-cc33-4626-9bb7-bb1f2ca0d3ae",
@@ -771,7 +828,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f879a9ca-ea05-4cbc-a18e-e406aa90d599",
@@ -787,7 +847,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5cd90771-08ab-4acc-b161-ea795bdec1bc",
@@ -803,7 +866,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e87da512-33dc-49bd-a082-7587fde6ffbd",
@@ -819,7 +885,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ef61b187-337d-4e16-96c0-0f8d07376454",
@@ -835,7 +904,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e5596e87-b454-4cec-a7ff-3b9eb597a538",
@@ -851,7 +923,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5cd90771-08ab-4acc-b161-ea795bdec1bc",
@@ -867,7 +942,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 40.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f879a9ca-ea05-4cbc-a18e-e406aa90d599",
@@ -883,7 +961,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 5.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2b9c81c5-b4cf-4217-85a2-376b56e5b022",
@@ -899,7 +980,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5e3cfc49-c849-4101-9403-7b680d7ba284",
@@ -915,7 +999,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 5.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
@@ -931,7 +1018,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ba78112e-a5fe-4bed-9d1b-00d823a06fe1",
@@ -947,7 +1037,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b05297e7-07f6-4957-82ff-22285f4c8818",
@@ -963,7 +1056,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5e3cfc49-c849-4101-9403-7b680d7ba284",
@@ -979,7 +1075,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5cd90771-08ab-4acc-b161-ea795bdec1bc",
@@ -995,7 +1094,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
@@ -1011,7 +1113,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b05297e7-07f6-4957-82ff-22285f4c8818",
@@ -1027,7 +1132,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 35.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "20583950-3905-423e-af8c-14fd1a63a5da",
@@ -1043,7 +1151,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3a031511-d397-45e8-a2e5-477d50b1ee69",
@@ -1059,7 +1170,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -1075,7 +1189,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "83e92e57-1a5b-4519-abba-bf0ce4d94c5f",
@@ -1091,7 +1208,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "1bdacc5b-0498-440c-95ae-a0b7a9724eaa",
@@ -1107,7 +1227,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e5596e87-b454-4cec-a7ff-3b9eb597a538",
@@ -1123,7 +1246,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "671bf70b-f00f-46a4-b18e-58f74ba55915",
@@ -1139,7 +1265,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e87da512-33dc-49bd-a082-7587fde6ffbd",
@@ -1155,7 +1284,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5431d3c4-c5ca-40cb-a715-90042bdfd554",
@@ -1171,7 +1303,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -1215,7 +1350,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
@@ -1231,13 +1369,22 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 110.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           }, {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           }, {
             "weightLbs" : 90.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "503b7c88-7ddd-4774-bebb-dc64ac835c3f",
@@ -1253,10 +1400,16 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           }, {
             "weightLbs" : 60.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -1272,7 +1425,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ef996e99-c19f-4983-a41b-4dabdbebdc37",
@@ -1288,7 +1444,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5ead766c-4ce8-4dc1-a508-eb77ff1ebcef",
@@ -1304,7 +1463,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
@@ -1320,7 +1482,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 60.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "fb1be931-102c-4b6e-be9f-4dca9c060dd3",
@@ -1336,7 +1501,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
@@ -1352,7 +1520,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 100.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "bb384570-684c-4e6a-8c00-b94db65c039f",
@@ -1368,7 +1539,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "9e5b2641-3d88-4559-913e-e2e5a1601f3e",
@@ -1384,7 +1558,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ed1a2edb-3442-4fcd-aba4-43aa367a9ddc",
@@ -1400,7 +1577,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
@@ -1416,7 +1596,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 70.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "dffcf3af-c380-41c5-b087-919aec2b12df",
@@ -1432,7 +1615,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f38690c4-7e4a-41c7-8a84-115b1f9457f8",
@@ -1448,7 +1634,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "65eb01f8-d9b8-43cc-82b5-8ba53b1b9414",
@@ -1464,7 +1653,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "fb1be931-102c-4b6e-be9f-4dca9c060dd3",
@@ -1480,7 +1672,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 45.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -1524,7 +1719,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "bd3bc8b0-66c7-4e15-8f5d-b466ce5ddb4f",
@@ -1540,7 +1738,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "83e92e57-1a5b-4519-abba-bf0ce4d94c5f",
@@ -1556,7 +1757,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "140901b2-8a40-497d-8194-707724b8962b",
@@ -1572,7 +1776,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3ae9fbbf-6053-404e-afc6-8ddb99e65ac9",
@@ -1588,7 +1795,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3a031511-d397-45e8-a2e5-477d50b1ee69",
@@ -1604,7 +1814,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "28fe2395-16e1-49a9-8b69-3524d682861b",
@@ -1620,7 +1833,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "a523440b-0969-4a10-9eda-2793d9010510",
@@ -1636,7 +1852,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "671bf70b-f00f-46a4-b18e-58f74ba55915",
@@ -1652,7 +1871,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "75771082-dadf-46ee-8fd6-156c289b31ef",
@@ -1668,7 +1890,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3a3ac9ca-e095-4db8-a91f-8172cf4ad2b9",
@@ -1684,7 +1909,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ef61b187-337d-4e16-96c0-0f8d07376454",
@@ -1700,7 +1928,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "c5d323da-ef62-4651-915f-ab94bab1361d",
@@ -1716,7 +1947,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -1732,7 +1966,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2ac69cba-389b-45c1-8e23-d257dbc2fe69",
@@ -1748,7 +1985,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2b9c81c5-b4cf-4217-85a2-376b56e5b022",
@@ -1764,7 +2004,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "c87cdc44-76b5-4203-bc45-4f37b095d069",
@@ -1780,7 +2023,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -1824,7 +2070,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
@@ -1840,7 +2089,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "1634640b-a0c2-49d2-9434-5c487bcdf257",
@@ -1856,7 +2108,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5a57e138-6991-4fb0-ae11-9b105d114497",
@@ -1872,7 +2127,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "1370bfdf-3c14-4e48-8e41-3ab830cba681",
@@ -1888,7 +2146,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "33c1dc82-75e2-414d-9e8d-b0338bae8346",
@@ -1904,7 +2165,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "c87cdc44-76b5-4203-bc45-4f37b095d069",
@@ -1920,7 +2184,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 35.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -1936,7 +2203,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
@@ -1952,7 +2222,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
@@ -1968,7 +2241,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e5925814-dc30-4d6d-af76-c16c30d6311e",
@@ -1984,7 +2260,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
@@ -2000,7 +2279,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 35.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "77d3fd1d-575d-43e9-99b2-29621e2a4830",
@@ -2016,7 +2298,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "0d2666d4-1943-405d-89f3-9eb2ba11b443",
@@ -2032,7 +2317,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "cc787db8-bc30-4a2a-9177-5f6b36db7203",
@@ -2048,7 +2336,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5d14721f-5fba-4d0e-89cc-94350cee64d2",
@@ -2064,7 +2355,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3f9705dc-d38a-4a8d-86bb-fbbea4505345",
@@ -2080,7 +2374,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -2124,7 +2421,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b40f6452-8cc0-4822-a1f0-0bcc263a91b0",
@@ -2140,7 +2440,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "c068ee2c-2ccd-4719-83f5-6bb2e0235f27",
@@ -2156,7 +2459,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e2541f2c-9877-457e-be33-44c91cb1c1dd",
@@ -2172,7 +2478,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5431d3c4-c5ca-40cb-a715-90042bdfd554",
@@ -2188,7 +2497,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "14916c5a-abd2-4a4e-aa9f-0d802f514ec6",
@@ -2204,7 +2516,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "d7f5bbfe-09cf-4465-a3fe-5a54a68da3e6",
@@ -2220,7 +2535,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
@@ -2236,7 +2554,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2c3d77ca-3664-46b3-b87a-0dec3eaa8dd6",
@@ -2252,7 +2573,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "dfd49808-4a70-4748-a77b-6815500972e3",
@@ -2268,7 +2592,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "9b00e02a-5844-4495-ad1b-e474eebd9f56",
@@ -2284,7 +2611,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
@@ -2300,7 +2630,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f0a369d7-86d7-41be-9434-dbe58e67e8a6",
@@ -2316,7 +2649,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "facaa34d-1851-4e1c-a6c4-391ca5fa7afb",
@@ -2332,7 +2668,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5790aff5-982b-469e-8bda-5785e71ef3a6",
@@ -2348,7 +2687,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "4f93d69d-9b48-4ec5-926c-a0655b309fc0",
@@ -2364,7 +2706,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "d6eab315-01de-4239-9e06-7674c096a230",
@@ -2380,7 +2725,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -2424,7 +2772,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "67f30dd3-308d-4cf3-902b-cd7e6c9d439e",
@@ -2440,7 +2791,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ef61b187-337d-4e16-96c0-0f8d07376454",
@@ -2456,7 +2810,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3b617364-bfa2-4405-9949-dc7b3c92ae58",
@@ -2472,7 +2829,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "30cd322c-f9db-498e-86c0-5a8de628a304",
@@ -2488,7 +2848,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2ac69cba-389b-45c1-8e23-d257dbc2fe69",
@@ -2504,7 +2867,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 8.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ccb196c8-c2e9-44cd-b500-4343df9218a9",
@@ -2520,7 +2886,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "cc787db8-bc30-4a2a-9177-5f6b36db7203",
@@ -2536,7 +2905,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3268258a-bfff-4d57-86ad-82b8629bffd3",
@@ -2552,7 +2924,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "a523440b-0969-4a10-9eda-2793d9010510",
@@ -2568,7 +2943,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
@@ -2584,7 +2962,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "75771082-dadf-46ee-8fd6-156c289b31ef",
@@ -2600,7 +2981,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 3.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2f5a6ef6-c3eb-4590-8ea9-70f299f3bc0e",
@@ -2616,7 +3000,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "855ee508-32e8-495a-a3c0-9e448c09be06",
@@ -2632,7 +3019,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f39376cf-da3d-4f3a-a265-62f5a21884ca",
@@ -2648,7 +3038,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "1cd8e669-9ae9-4ea4-8d8c-2fcbf844d849",
@@ -2664,7 +3057,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f879a9ca-ea05-4cbc-a18e-e406aa90d599",
@@ -2680,7 +3076,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "945f7973-aab1-47cb-910c-20ac1099fc19",
@@ -2696,7 +3095,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -2712,7 +3114,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3a3ac9ca-e095-4db8-a91f-8172cf4ad2b9",
@@ -2728,7 +3133,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
@@ -2744,7 +3152,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "43da8fe2-88ec-4366-b289-e240f9d68ab6",
@@ -2760,7 +3171,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "0d2666d4-1943-405d-89f3-9eb2ba11b443",
@@ -2776,7 +3190,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "671bf70b-f00f-46a4-b18e-58f74ba55915",
@@ -2792,7 +3209,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3fc27ef1-0f22-4b53-986c-7580f7e38ae9",
@@ -2808,7 +3228,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -2852,7 +3275,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3224a217-e574-4e97-84f8-b2d0ebb300fc",
@@ -2868,7 +3294,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2f16d4ad-e98e-4778-9909-5d6126af16bd",
@@ -2884,7 +3313,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f3947c6a-300c-41ba-94f1-b2ee9221b102",
@@ -2900,7 +3332,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b1c7d139-80cf-45c3-b4e5-b192de9c7abb",
@@ -2916,7 +3351,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5b5f3d16-a9c9-4184-b0a8-e6eed41ef9d6",
@@ -2932,7 +3370,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "54288b7b-c448-46a2-9f94-3a4b47ecde31",
@@ -2948,7 +3389,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "945f7973-aab1-47cb-910c-20ac1099fc19",
@@ -2964,7 +3408,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b9b4be0e-629d-4465-9c1e-aedc249c64c4",
@@ -2980,7 +3427,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3f9705dc-d38a-4a8d-86bb-fbbea4505345",
@@ -2996,7 +3446,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3a5ae87a-7fe7-4e89-a416-132f34370400",
@@ -3012,7 +3465,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "cba50beb-a97f-4c2d-bb1a-8baebbba81dd",
@@ -3028,7 +3484,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "03f65864-4560-483c-9e4d-ee1433a1d14e",
@@ -3044,7 +3503,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5d6caaa0-4f57-4fd9-9673-234ed48b740d",
@@ -3060,7 +3522,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "c37ea438-db56-46be-b13e-eb95f32b62bb",
@@ -3076,7 +3541,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e2955067-2b2d-43dd-bc14-a41859efea34",
@@ -3092,7 +3560,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "ccb196c8-c2e9-44cd-b500-4343df9218a9",
@@ -3108,7 +3579,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "9d74b163-8f6d-46e3-9bf9-731631131cc0",
@@ -3124,7 +3598,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -3140,7 +3617,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "86e1be04-88af-49bf-87fb-57dcde24319d",
@@ -3156,7 +3636,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 30.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -3200,7 +3683,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3f9705dc-d38a-4a8d-86bb-fbbea4505345",
@@ -3216,7 +3702,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
@@ -3232,7 +3721,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5a57e138-6991-4fb0-ae11-9b105d114497",
@@ -3248,7 +3740,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
@@ -3264,7 +3759,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3fc27ef1-0f22-4b53-986c-7580f7e38ae9",
@@ -3280,7 +3778,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
@@ -3296,7 +3797,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "8b8f1e5e-d520-4875-8e81-de5106dd92e0",
@@ -3312,7 +3816,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5d14721f-5fba-4d0e-89cc-94350cee64d2",
@@ -3328,7 +3835,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
@@ -3344,7 +3854,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 35.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "33c1dc82-75e2-414d-9e8d-b0338bae8346",
@@ -3360,7 +3873,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -3376,7 +3892,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "c87cdc44-76b5-4203-bc45-4f37b095d069",
@@ -3392,7 +3911,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 35.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "cc787db8-bc30-4a2a-9177-5f6b36db7203",
@@ -3408,7 +3930,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "77d3fd1d-575d-43e9-99b2-29621e2a4830",
@@ -3424,7 +3949,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 25.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "1634640b-a0c2-49d2-9434-5c487bcdf257",
@@ -3440,7 +3968,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "1370bfdf-3c14-4e48-8e41-3ab830cba681",
@@ -3456,7 +3987,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "0d2666d4-1943-405d-89f3-9eb2ba11b443",
@@ -3472,7 +4006,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3b617364-bfa2-4405-9949-dc7b3c92ae58",
@@ -3488,7 +4025,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "3268258a-bfff-4d57-86ad-82b8629bffd3",
@@ -3504,7 +4044,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]
@@ -3548,7 +4091,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "5790aff5-982b-469e-8bda-5785e71ef3a6",
@@ -3564,7 +4110,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
@@ -3580,7 +4129,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "facaa34d-1851-4e1c-a6c4-391ca5fa7afb",
@@ -3596,7 +4148,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 10.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "2c3d77ca-3664-46b3-b87a-0dec3eaa8dd6",
@@ -3612,7 +4167,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "e2541f2c-9877-457e-be33-44c91cb1c1dd",
@@ -3628,7 +4186,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
@@ -3644,7 +4205,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 20.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "dfd49808-4a70-4748-a77b-6815500972e3",
@@ -3660,7 +4224,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "d6eab315-01de-4239-9e06-7674c096a230",
@@ -3676,7 +4243,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "4f93d69d-9b48-4ec5-926c-a0655b309fc0",
@@ -3692,7 +4262,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "f0a369d7-86d7-41be-9434-dbe58e67e8a6",
@@ -3708,7 +4281,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
@@ -3724,7 +4300,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 40.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
@@ -3740,7 +4319,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 0.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "b40f6452-8cc0-4822-a1f0-0bcc263a91b0",
@@ -3756,7 +4338,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 15.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
@@ -3772,7 +4357,10 @@
           "deloadModifier" : null,
           "loggedSets" : [ {
             "weightLbs" : 35.0,
-            "reps" : null
+            "reps" : null,
+            "rpe" : null,
+            "restSeconds" : null,
+            "completedAt" : null
           } ]
         } ]
       } ]

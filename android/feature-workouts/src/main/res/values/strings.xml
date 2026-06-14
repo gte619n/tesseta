@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ADR-0012 phone workout logger (IMPL-AND-17). -->
+<resources>
+    <string name="workout_session_title">Workout</string>
+    <string name="workout_session_start">Start workout</string>
+    <string name="workout_session_resume">Resume</string>
+    <string name="workout_session_in_progress">Workout in progress</string>
+    <string name="workout_session_elapsed">Elapsed %1$s</string>
+    <string name="workout_session_set_header">Set</string>
+    <string name="workout_session_weight_header">lb</string>
+    <string name="workout_session_reps_header">Reps</string>
+    <string name="workout_session_rpe_header">RPE</string>
+    <string name="workout_session_set_pending">Tap the circle to log</string>
+    <string name="workout_session_add_set">Add set</string>
+    <string name="workout_session_check_set">Log set %1$d</string>
+    <string name="workout_session_uncheck_set">Remove set %1$d</string>
+    <string name="workout_session_rest_remaining">Rest · %1$s</string>
+    <string name="workout_session_rest_skip">Skip rest</string>
+    <string name="workout_session_empty_title">No exercises in this session</string>
+    <string name="workout_session_empty_description">This scheduled day has no prescriptions to log.</string>
+    <string name="workout_session_finish">Finish</string>
+    <string name="workout_session_finish_title">Finish workout?</string>
+    <string name="workout_session_finish_confirm">Complete workout</string>
+    <string name="workout_session_summary_elapsed">Elapsed</string>
+    <string name="workout_session_summary_sets">Sets logged</string>
+    <string name="workout_session_summary_exercises">Exercises</string>
+    <string name="workout_session_skip">Skip session</string>
+    <string name="workout_session_skip_title">Skip this session?</string>
+    <string name="workout_session_skip_message">The session will be marked skipped and no sets are saved.</string>
+    <string name="workout_session_discard">Discard</string>
+    <string name="workout_session_discard_title">Discard draft?</string>
+    <string name="workout_session_discard_message">Your logged sets will be thrown away and nothing is uploaded. The session stays planned.</string>
+    <string name="workout_session_cancel">Cancel</string>
+    <string name="workout_session_parked_title">Finished workout couldn\'t sync</string>
+    <string name="workout_session_parked_restore">Restore</string>
+    <string name="workout_session_parked_discard">Discard</string>
+    <string name="workout_session_parked_gone">Session no longer in your plan</string>
+    <string name="workout_session_parked_restore_title">Restore this workout?</string>
+    <string name="workout_session_parked_restore_message">The server rejected the upload. Restore the workout into the logger to review it against the current plan and finish it again.</string>
+    <string name="workout_session_parked_discard_title">Discard this workout?</string>
+    <string name="workout_session_parked_discard_message">The scheduled session no longer exists on this device, so the workout can\'t be restored. Discarding permanently deletes its logged sets.</string>
+    <plurals name="workout_session_parked_orphans">
+        <item quantity="one">%1$d logged set no longer matches the plan and won\'t be restored.</item>
+        <item quantity="other">%1$d logged sets no longer match the plan and won\'t be restored.</item>
+    </plurals>
+    <plurals name="workout_session_sets_logged">
+        <item quantity="one">%1$d set logged</item>
+        <item quantity="other">%1$d sets logged</item>
+    </plurals>
+</resources>

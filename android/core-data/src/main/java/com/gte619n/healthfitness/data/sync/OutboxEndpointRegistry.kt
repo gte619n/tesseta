@@ -179,6 +179,26 @@ object OutboxEndpointRegistry {
     }
 
     /**
+     * Workout-session completion (ADR-0012 / IMPL-17 D1). The only mutation a
+     * client makes against `workoutScheduled` is the session outcome upsert —
+     * `PUT api/me/workout-programs/{programId}/sessions/{scheduledId}` — and
+     * the mirror row id is already the composite `"<programId>/<scheduledId>"`
+     * (the IMPL-AND-20 sync id). Every op maps to the idempotent PUT: the
+     * server upserts the outcome, so a replayed/retried delivery is a no-op
+     * rewrite (D2), and there is no DELETE wire shape.
+     */
+    private val workoutSessions = EndpointSpec { base, _, entityId ->
+        val (programId, scheduledId) = splitComposite(entityId)
+        val url = base.newBuilder()
+            .addPathSegments("api/me/workout-programs")
+            .addPathSegment(programId)
+            .addPathSegment("sessions")
+            .addPathSegment(scheduledId)
+            .build()
+        Resolved("PUT", url)
+    }
+
+    /**
      * Per-table endpoint specs. Tables NOT listed fall back to [defaultSpec]
      * (`api/me/<table>`), which preserves the Phase 4 generic behavior and keeps
      * the existing MockWebServer drain test (`/api/me/medications`) green.
@@ -196,6 +216,7 @@ object OutboxEndpointRegistry {
         put(MirrorTables.GOAL_STEPS, goalSteps)
         put(MirrorTables.MEDICATION_ADHERENCE, medicationAdherence)
         put(MirrorTables.USER_PROFILE, profile)
+        put(MirrorTables.WORKOUT_SCHEDULED, workoutSessions)
     }
 
     private fun OutboxOp.httpMethod(): String = when (this) {

@@ -102,6 +102,26 @@ class MirrorRepositorySupport @Inject constructor(
         drainTrigger.requestDrain()
     }
 
+    /**
+     * Optimistic UPDATE whose replayed wire body differs from the mirrored read
+     * payload. The workout-session completion (ADR-0012) needs this split: the
+     * mirror keeps the `ScheduledWorkoutDto` the calendar screens decode, while
+     * the outbox carries the IMPL-17 D2 completion request the PUT endpoint
+     * expects. Everything else (PENDING row, enqueue, drain kick) matches
+     * [updateLocal].
+     */
+    suspend fun updateLocalWithWire(
+        table: String,
+        id: String,
+        payloadJson: String,
+        wirePayloadJson: String,
+        lastUpdate: Long,
+    ) {
+        mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
+        outbox.enqueue(OutboxOp.UPDATE, table, id, wirePayloadJson)
+        drainTrigger.requestDrain()
+    }
+
     /** Optimistic DELETE: tombstone the mirror row, enqueue, drain. */
     suspend fun deleteLocal(table: String, id: String, lastUpdate: Long) {
         mirror.markArchived(table, id, lastUpdate)

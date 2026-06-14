@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.gte619n.healthfitness.data.db.dao.BloodReadingDao
 import com.gte619n.healthfitness.data.db.dao.BloodTestReportDao
 import com.gte619n.healthfitness.data.db.dao.BodyCompositionDao
@@ -29,6 +31,7 @@ import com.gte619n.healthfitness.data.db.dao.UserProfileDao
 import com.gte619n.healthfitness.data.db.dao.WeeklyWorkoutAggregateDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
+import com.gte619n.healthfitness.data.db.dao.WorkoutSessionDraftDao
 import com.gte619n.healthfitness.data.db.entity.BloodReadingEntity
 import com.gte619n.healthfitness.data.db.entity.BloodTestReportEntity
 import com.gte619n.healthfitness.data.db.entity.BodyCompositionEntity
@@ -54,6 +57,7 @@ import com.gte619n.healthfitness.data.db.entity.UserProfileEntity
 import com.gte619n.healthfitness.data.db.entity.WeeklyWorkoutAggregateEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutProgramEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
+import com.gte619n.healthfitness.data.db.entity.WorkoutSessionDraftEntity
 import net.sqlcipher.database.SupportFactory
 
 /**
@@ -96,12 +100,17 @@ import net.sqlcipher.database.SupportFactory
         WorkoutProgramEntity::class,
         WorkoutScheduledEntity::class,
         UserProfileEntity::class,
+        // device-local (non-mirror) tables
+        WorkoutSessionDraftEntity::class,
     ],
     // v3: bumped to force a destructive wipe + full resync so rows pulled before
     // the delta-doc id injection (which lacked their document id) are re-fetched
     // cleanly. The auth token lives in DataStore, not Room, so this doesn't sign
     // the user out.
-    version = 3,
+    // v4: adds the workoutSessionDrafts table (ADR-0012 phone workout logger) —
+    // additive MIGRATION_3_4, no wipe (a draft is the ONLY copy of an
+    // in-progress session, so destructive fallback must never be its upgrade path).
+    version = 4,
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {
@@ -132,8 +141,32 @@ abstract class HfDatabase : RoomDatabase() {
     abstract fun workoutScheduledDao(): WorkoutScheduledDao
     abstract fun userProfileDao(): UserProfileDao
 
+    abstract fun workoutSessionDraftDao(): WorkoutSessionDraftDao
+
     companion object {
         const val DB_NAME = "hf-offline.db"
+
+        /**
+         * v3 → v4: add the workoutSessionDrafts table (ADR-0012). Additive —
+         * must match the exported schema 4.json exactly so Room's identity-hash
+         * validation passes.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `workoutSessionDrafts` (" +
+                        "`programId` TEXT NOT NULL, `scheduledId` TEXT NOT NULL, " +
+                        "`startedAt` INTEGER NOT NULL, `lastActivityAt` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, `sessionJson` TEXT NOT NULL, " +
+                        "`loggedJson` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`programId`, `scheduledId`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_workoutSessionDrafts_lastActivityAt` " +
+                        "ON `workoutSessionDrafts` (`lastActivityAt`)",
+                )
+            }
+        }
 
         /**
          * Builds the encrypted database. Loads the SQLCipher native libs, fetches
@@ -154,9 +187,12 @@ abstract class HfDatabase : RoomDatabase() {
             val factory = SupportFactory(resolution.passphrase)
             return Room.databaseBuilder(context, HfDatabase::class.java, DB_NAME)
                 .openHelperFactory(factory)
-                // schemaVersion bumps (D13) trigger an explicit wipe+resync at the
-                // sync layer, not a Room migration; fall back destructively so a
-                // mismatched on-disk schema can never wedge the app.
+                // Known upgrades run additive migrations (the drafts table holds
+                // device-only data that a wipe would destroy)…
+                .addMigrations(MIGRATION_3_4)
+                // …while schemaVersion bumps (D13) trigger an explicit wipe+resync
+                // at the sync layer, not a Room migration; fall back destructively
+                // so a mismatched on-disk schema can never wedge the app.
                 .fallbackToDestructiveMigration()
                 .build()
         }

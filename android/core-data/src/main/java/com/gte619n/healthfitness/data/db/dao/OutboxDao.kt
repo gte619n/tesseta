@@ -38,6 +38,18 @@ interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox WHERE attempts > 0")
     fun observeFailedCount(): Flow<Int>
 
+    /**
+     * Reactive list of mutations parked on a terminal server rejection
+     * (IMPL-17 A10: `nextAttemptAt` pinned to the parked sentinel), newest
+     * first, for one table. Feeds the per-feature recovery surfaces — e.g.
+     * the workout-session "finished workout couldn't sync" restore banner.
+     */
+    @Query(
+        "SELECT * FROM outbox WHERE entityTable = :table AND nextAttemptAt = :parkedAt " +
+            "ORDER BY seq DESC",
+    )
+    fun observeParked(table: String, parkedAt: Long): Flow<List<OutboxEntity>>
+
     /** The mutation chain for one entity, in `seq` order (reducer input, D7). */
     @Query("SELECT * FROM outbox WHERE entityId = :entityId ORDER BY seq ASC")
     suspend fun listByEntity(entityId: String): List<OutboxEntity>
@@ -51,6 +63,13 @@ interface OutboxDao {
 
     @Query("UPDATE outbox SET attempts = :attempts, nextAttemptAt = :nextAttemptAt WHERE mutationId = :mutationId")
     suspend fun recordFailure(mutationId: String, attempts: Int, nextAttemptAt: Long)
+
+    /**
+     * Manual retry (D11): pull every failed row — mid-backoff or parked on a
+     * terminal 4xx — back to due-now so the next drain re-attempts it.
+     */
+    @Query("UPDATE outbox SET nextAttemptAt = :now WHERE attempts > 0")
+    suspend fun rearmFailed(now: Long)
 
     @Query("DELETE FROM outbox WHERE mutationId = :mutationId")
     suspend fun deleteById(mutationId: String)

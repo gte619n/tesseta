@@ -22,9 +22,9 @@ import javax.inject.Inject
  * [SyncScheduler.enqueuePull], which performs the actual REST delta pull.
  *
  * Notifications: these are data-only messages with no user-facing notification, so
- * we deliberately do NOT request `POST_NOTIFICATIONS` and never post a
- * notification — the only effect is a background sync. (If a future feature posts
- * a visible notification, add the runtime permission then.)
+ * this service never posts one — the only effect is a background sync. (The
+ * `POST_NOTIFICATIONS` runtime permission is requested by the workout logger for
+ * the ADR-0012 session notification, not for push.)
  *
  * [onNewToken] re-registers the rotated token so the backend always fans out to a
  * live token.

@@ -623,12 +623,14 @@ class FirestoreMetricResolverTest {
         }
         @Override public List<Workout> findByUser(String u) { return Collections.unmodifiableList(rows); }
         @Override public void save(Workout w) { rows.add(w); }
+        @Override public void delete(String u, String id) { rows.removeIf(w -> w.workoutId().equals(id)); }
     }
 
     private static final class ThrowingWorkouts implements WorkoutRepository {
         @Override public Optional<Workout> findById(String u, String id) { throw new UnsupportedOperationException("stub"); }
         @Override public List<Workout> findByUser(String u) { throw new UnsupportedOperationException("stub"); }
         @Override public void save(Workout w) { throw new UnsupportedOperationException("stub"); }
+        @Override public void delete(String u, String id) { throw new UnsupportedOperationException("stub"); }
     }
 
     private static final class InMemWeeklyAggregates implements WeeklyWorkoutAggregateRepository {

@@ -73,6 +73,15 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
     }
 
     @Override
+    public List<WorkoutProgram> findByUserIncludingArchived(String userId) {
+        // Same scan without the tombstone filter: completed sessions under a
+        // soft-deleted program are still history (ADR-0012), so the weekly
+        // aggregate recompute reads programs in every sync state.
+        List<QueryDocumentSnapshot> docs = await(collection(userId).limit(200).get()).getDocuments();
+        return docs.stream().map(d -> toProgram(userId, d)).toList();
+    }
+
+    @Override
     public void save(WorkoutProgram program) {
         DocumentReference ref = collection(program.userId()).document(program.programId());
         boolean isNew = !await(ref.get()).exists();
@@ -201,6 +210,9 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                             Map<String, Object> sm = new HashMap<>();
                             sm.put("weightLbs", s.weightLbs());
                             sm.put("reps", s.reps());
+                            sm.put("rpe", s.rpe());
+                            sm.put("restSeconds", s.restSeconds());
+                            sm.put("completedAt", s.completedAt() == null ? null : s.completedAt().toString());
                             ls.add(sm);
                         }
                         rm.put("loggedSets", ls);
@@ -360,9 +372,13 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
         for (Object o : list) {
             if (!(o instanceof Map<?, ?> m)) continue;
             Object w = m.get("weightLbs");
+            Object rpe = m.get("rpe");
             out.add(new LoggedSet(
                 w instanceof Number n ? n.doubleValue() : null,
-                intOrNull(m.get("reps"))));
+                intOrNull(m.get("reps")),
+                rpe instanceof Number n2 ? n2.doubleValue() : null,
+                intOrNull(m.get("restSeconds")),
+                parseInstant(str(m.get("completedAt")))));
         }
         return out;
     }

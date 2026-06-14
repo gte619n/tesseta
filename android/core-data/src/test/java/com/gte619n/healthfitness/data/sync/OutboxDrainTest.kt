@@ -166,6 +166,74 @@ class OutboxDrainTest {
     }
 
     @Test
+    fun `terminal 4xx parks the mutation instead of retrying forever`() = runTest {
+        // A deterministic server rejection (e.g. the IMPL-17 completion upsert
+        // 400/404 after a concurrent program rewrite) replays identically every
+        // time — the row must leave the automatic drain, but stay queued (with
+        // its payload) and FAILED-flagged rather than being dropped.
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("med-4", """{"id":"med-4"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "med-4", """{"id":"med-4"}""")
+
+        server.enqueue(MockResponse().setResponseCode(400))
+
+        val result = repo.drain()
+
+        assertEquals(0, result.sent)
+        assertEquals(1, result.failed)
+        assertEquals("FAILED", mirror.getRow(MirrorTables.MEDICATIONS, "med-4")!!.syncState)
+
+        val parked = outboxDao.listByEntity("med-4").single()
+        assertEquals(1, parked.attempts)
+        assertEquals(OutboxRepository.PARKED_NEXT_ATTEMPT, parked.nextAttemptAt)
+
+        // Even far past any backoff ceiling, an automatic drain skips the row.
+        now += 10 * OutboxRepository.MAX_BACKOFF_MILLIS
+        repo.drain()
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `manual rearm makes a parked mutation due and a retry can succeed`() = runTest {
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("med-5", """{"id":"med-5"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "med-5", """{"id":"med-5"}""")
+        server.enqueue(MockResponse().setResponseCode(404))
+        repo.drain()
+        assertEquals(OutboxRepository.PARKED_NEXT_ATTEMPT, outboxDao.listByEntity("med-5").single().nextAttemptAt)
+
+        // The D11 "changes failed — retry" lever: re-arm, then drain again.
+        repo.rearmFailed()
+        server.enqueue(
+            MockResponse().setBody("""{"id":"med-5","lastUpdate":"2026-06-02T18:00:00Z"}"""),
+        )
+        val retried = repo.drain()
+
+        assertEquals(1, retried.sent)
+        assertEquals("SYNCED", mirror.getRow(MirrorTables.MEDICATIONS, "med-5")!!.syncState)
+        assertTrue(outboxDao.listByEntity("med-5").isEmpty())
+    }
+
+    @Test
+    fun `rate-limit 429 backs off rather than parking`() = runTest {
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("med-6", """{"id":"med-6"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "med-6", """{"id":"med-6"}""")
+
+        server.enqueue(MockResponse().setResponseCode(429))
+        repo.drain()
+
+        val queued = outboxDao.listByEntity("med-6").single()
+        assertEquals(now + OutboxRepository.BASE_BACKOFF_MILLIS, queued.nextAttemptAt)
+    }
+
+    @Test
     fun `backoff is exponential and capped`() {
         assertEquals(30_000L, OutboxRepository.backoffMillis(1))
         assertEquals(60_000L, OutboxRepository.backoffMillis(2))

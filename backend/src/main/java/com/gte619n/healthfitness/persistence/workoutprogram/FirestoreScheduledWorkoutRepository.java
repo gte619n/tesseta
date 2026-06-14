@@ -56,6 +56,12 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
     }
 
     @Override
+    public Optional<ScheduledWorkout> findById(String userId, String programId, String scheduledId) {
+        DocumentSnapshot snap = await(collection(userId, programId).document(scheduledId).get());
+        return snap.exists() ? Optional.of(toScheduled(userId, programId, snap)) : Optional.empty();
+    }
+
+    @Override
     public void save(ScheduledWorkout sw) {
         await(collection(sw.userId(), sw.programId()).document(sw.scheduledId())
             .set(toBody(sw), SetOptions.merge()));

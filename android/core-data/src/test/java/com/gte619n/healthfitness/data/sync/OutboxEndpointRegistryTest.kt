@@ -171,6 +171,27 @@ class OutboxEndpointRegistryTest {
     }
 
     @Test
+    fun `workout session completion is a put nested under the program`() {
+        // ADR-0012 D1: composite id "<programId>/<scheduledId>" → the
+        // idempotent completion upsert beside the program/calendar routes.
+        val r = resolve(MirrorTables.WORKOUT_SCHEDULED, OutboxOp.UPDATE, "prog-1/2026-06-08_d2")
+        assertEquals("PUT", r.method)
+        assertEquals(
+            "https://api.example.com/api/me/workout-programs/prog-1/sessions/2026-06-08_d2",
+            r.url.toString(),
+        )
+    }
+
+    @Test
+    fun `workout session maps every op to the same idempotent put`() {
+        // There is no CREATE/DELETE wire shape for a session outcome (D2).
+        for (op in OutboxOp.entries) {
+            val r = resolve(MirrorTables.WORKOUT_SCHEDULED, op, "prog-1/2026-06-08_d2")
+            assertEquals("PUT", r.method)
+        }
+    }
+
+    @Test
     fun `nutrition target is a singleton put with no id segment`() {
         val r = resolve(MirrorTables.NUTRITION_TARGETS, OutboxOp.UPDATE, "ignored-id")
         assertEquals("PUT", r.method)
