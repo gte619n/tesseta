@@ -9,8 +9,12 @@ import {
   activateProgram,
   deleteProgram,
   updateProgram,
+  completeSession,
 } from "@/lib/workout-program-api";
-import type { ScheduledWorkoutResponse } from "@/lib/types/workout-program";
+import type {
+  ScheduledWorkoutResponse,
+  CompleteSessionRequest,
+} from "@/lib/types/workout-program";
 import { ProgramRoadmap } from "@/components/workouts/ProgramRoadmap";
 import { ProgramThisWeek } from "@/components/workouts/ProgramThisWeek";
 import { ProgramDetailActions } from "@/components/workouts/ProgramDetailActions";
@@ -34,6 +38,14 @@ function thisWeekRange(): { from: string; to: string } {
   sunday.setDate(monday.getDate() + 6);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { from: fmt(monday), to: fmt(sunday) };
+}
+
+// Today as YYYY-MM-DD on the same request clock as thisWeekRange(), so the
+// "Log result" gating (ADR-0012 / IMPL-17 Q4: no pre-logging future sessions)
+// agrees with which rows count as "this week". Computed server-side per
+// request (the page is force-dynamic) and passed down as a prop — SSR-safe.
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export default async function ProgramDetailPage(props: {
@@ -79,6 +91,19 @@ export default async function ProgramDetailPage(props: {
     await updateProgram(id, { title, description });
     revalidatePath(detailPath);
     revalidatePath("/me/workouts/programs");
+  }
+
+  // Completion upsert for one of this week's sessions (ADR-0012 / IMPL-17 D6).
+  // History and the hub counts read the same records, so revalidate them too.
+  async function logSession(
+    scheduledId: string,
+    input: CompleteSessionRequest,
+  ) {
+    "use server";
+    await completeSession(id, scheduledId, input);
+    revalidatePath(detailPath);
+    revalidatePath("/me/workouts/history");
+    revalidatePath("/me/workouts");
   }
 
   return (
@@ -129,7 +154,11 @@ export default async function ProgramDetailPage(props: {
           <h2 className="caps-mono mb-3 text-[10px] tracking-[0.06em] text-tertiary">
             This week
           </h2>
-          <ProgramThisWeek sessions={weekSessions} />
+          <ProgramThisWeek
+            sessions={weekSessions}
+            today={todayIso()}
+            logSession={logSession}
+          />
         </section>
 
         {/* Roadmap */}
