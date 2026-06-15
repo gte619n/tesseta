@@ -96,7 +96,10 @@ data class PrescriptionDto(
 )
 
 data class BlockDto(
-    val blockId: String,
+    // Nullable: a pre-commit chat PROPOSAL has no ids yet (the backend assigns
+    // them on commit), so the wire carries `"blockId": null`. A non-null field
+    // makes Moshi throw and silently drops the whole proposal.
+    val blockId: String? = null,
     val type: String,
     // Nullable: Spring MVC serializes explicit nulls, so the wire may carry
     // `"title": null` (and likewise for the other defaulted strings below).
@@ -107,7 +110,8 @@ data class BlockDto(
 )
 
 data class WorkoutDayDto(
-    val dayId: String,
+    // Nullable for the same reason as BlockDto.blockId (pre-commit proposals).
+    val dayId: String? = null,
     val label: String? = null,
     val dayOfWeek: DayOfWeek,
     // Imported-history session days have a null locationId; the backend emits it
@@ -119,7 +123,8 @@ data class WorkoutDayDto(
 )
 
 data class PhaseDto(
-    val phaseId: String,
+    // Nullable for the same reason as BlockDto.blockId (pre-commit proposals).
+    val phaseId: String? = null,
     val title: String? = null,
     val focus: String? = null,
     val orderIndex: Int = 0,
@@ -268,7 +273,7 @@ fun PrescriptionDto.toDomain(): Prescription = Prescription(
 )
 
 fun BlockDto.toDomain(): Block = Block(
-    blockId = blockId,
+    blockId = blockId.orEmpty(),
     type = parseEnum(type, BlockType.MAIN),
     title = title.orEmpty(),
     orderIndex = orderIndex,
@@ -276,7 +281,7 @@ fun BlockDto.toDomain(): Block = Block(
 )
 
 fun WorkoutDayDto.toDomain(): WorkoutDay = WorkoutDay(
-    dayId = dayId,
+    dayId = dayId.orEmpty(),
     label = label.orEmpty(),
     dayOfWeek = dayOfWeek,
     locationId = locationId.orEmpty(),
@@ -286,7 +291,7 @@ fun WorkoutDayDto.toDomain(): WorkoutDay = WorkoutDay(
 )
 
 fun PhaseDto.toDomain(): ProgramPhase = ProgramPhase(
-    phaseId = phaseId,
+    phaseId = phaseId.orEmpty(),
     title = title.orEmpty(),
     focus = focus,
     orderIndex = orderIndex,
