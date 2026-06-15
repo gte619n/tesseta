@@ -2,14 +2,16 @@ import { revalidatePath } from 'next/cache';
 import {
   getAdminExerciseReview,
   approveExerciseMedia,
-  getDemoPrompt,
   regenerateMedia,
+  regeneratePlan,
+  savePlan,
+  approvePlan,
   uploadFrame,
   selectFrame,
   deleteFrame,
 } from '@/lib/exercise-admin-api';
 import { AdminExerciseReview } from '@/components/admin/AdminExerciseReview';
-import type { DemoPhase } from '@/lib/types/exercise';
+import type { FrameSpec } from '@/lib/types/exercise';
 import { pageMetadata } from '@/lib/page-metadata';
 
 export const metadata = pageMetadata('Exercise Review');
@@ -28,42 +30,55 @@ export default async function AdminExerciseReviewPage() {
     revalidatePath(REVIEW_PATH);
   }
 
-  async function getDemoPromptAction(exerciseId: string, phase: DemoPhase) {
+  async function regeneratePlanAction(exerciseId: string, promptOverride?: string) {
     'use server';
-    return getDemoPrompt(exerciseId, phase);
+    await regeneratePlan(exerciseId, promptOverride ?? null);
+    revalidatePath(REVIEW_PATH);
+  }
+
+  async function savePlanAction(exerciseId: string, frames: FrameSpec[]) {
+    'use server';
+    await savePlan(exerciseId, frames);
+    revalidatePath(REVIEW_PATH);
+  }
+
+  async function approvePlanAction(exerciseId: string) {
+    'use server';
+    await approvePlan(exerciseId);
+    revalidatePath(REVIEW_PATH);
   }
 
   async function regenerateMediaAction(
     exerciseId: string,
-    promptOverride: string,
-    phase: DemoPhase | null,
+    promptOverride: string | null,
+    key: string | null,
   ) {
     'use server';
-    await regenerateMedia(exerciseId, { promptOverride, phase });
+    await regenerateMedia(exerciseId, { promptOverride, key });
     revalidatePath(REVIEW_PATH);
   }
 
-  async function regeneratePhaseAction(exerciseId: string, phase: DemoPhase) {
+  async function regenerateFrameAction(exerciseId: string, key: string) {
     'use server';
-    await regenerateMedia(exerciseId, { phase });
+    await regenerateMedia(exerciseId, { key });
     revalidatePath(REVIEW_PATH);
   }
 
-  async function uploadFrameAction(exerciseId: string, phase: DemoPhase, file: File) {
+  async function uploadFrameAction(exerciseId: string, key: string, file: File) {
     'use server';
-    await uploadFrame(exerciseId, phase, file);
+    await uploadFrame(exerciseId, key, file);
     revalidatePath(REVIEW_PATH);
   }
 
-  async function selectFrameAction(exerciseId: string, phase: DemoPhase, imageUrl: string) {
+  async function selectFrameAction(exerciseId: string, key: string, imageUrl: string) {
     'use server';
-    await selectFrame(exerciseId, phase, imageUrl);
+    await selectFrame(exerciseId, key, imageUrl);
     revalidatePath(REVIEW_PATH);
   }
 
-  async function deleteFrameAction(exerciseId: string, phase: DemoPhase, imageUrl: string) {
+  async function deleteFrameAction(exerciseId: string, key: string, imageUrl: string) {
     'use server';
-    await deleteFrame(exerciseId, phase, imageUrl);
+    await deleteFrame(exerciseId, key, imageUrl);
     revalidatePath(REVIEW_PATH);
   }
 
@@ -79,9 +94,11 @@ export default async function AdminExerciseReviewPage() {
       <AdminExerciseReview
         review={review}
         approveMedia={approveMediaAction}
-        getDemoPrompt={getDemoPromptAction}
+        regeneratePlan={regeneratePlanAction}
+        savePlan={savePlanAction}
+        approvePlan={approvePlanAction}
         regenerateMedia={regenerateMediaAction}
-        regeneratePhase={regeneratePhaseAction}
+        regenerateFrame={regenerateFrameAction}
         uploadFrame={uploadFrameAction}
         selectFrame={selectFrameAction}
         deleteFrame={deleteFrameAction}

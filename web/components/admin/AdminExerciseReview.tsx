@@ -5,23 +5,43 @@ import { useRouter } from 'next/navigation';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { ExerciseDemoFrames } from './ExerciseDemoFrames';
-import { RegenerateMediaModal } from './RegenerateMediaModal';
+import { RegenerateMediaModal, type RegenTarget } from './RegenerateMediaModal';
 import { MediaStatusPill } from './ExercisePills';
-import type { ExerciseResponse, DemoPhase } from '@/lib/types/exercise';
+import type { ExerciseResponse, FrameSpec, DemoFrame } from '@/lib/types/exercise';
 import { MOVEMENT_PATTERN_LABEL } from '@/lib/types/exercise';
 
+// IMPL-19: all admin demo-frame actions are keyed to the plan (not phase).
 export interface ExerciseAdminActions {
   approveMedia: (exerciseId: string) => Promise<void>;
-  getDemoPrompt: (exerciseId: string, phase: DemoPhase) => Promise<string>;
+  // Plan editor.
+  regeneratePlan: (exerciseId: string, promptOverride?: string) => Promise<void>;
+  savePlan: (exerciseId: string, frames: FrameSpec[]) => Promise<void>;
+  approvePlan: (exerciseId: string) => Promise<void>;
+  // Media. key == null ⇒ all frames.
   regenerateMedia: (
     exerciseId: string,
-    promptOverride: string,
-    phase: DemoPhase | null,
+    promptOverride: string | null,
+    key: string | null,
   ) => Promise<void>;
-  regeneratePhase: (exerciseId: string, phase: DemoPhase) => Promise<void>;
-  uploadFrame: (exerciseId: string, phase: DemoPhase, file: File) => Promise<void>;
-  selectFrame: (exerciseId: string, phase: DemoPhase, imageUrl: string) => Promise<void>;
-  deleteFrame: (exerciseId: string, phase: DemoPhase, imageUrl: string) => Promise<void>;
+  regenerateFrame: (exerciseId: string, key: string) => Promise<void>;
+  uploadFrame: (exerciseId: string, key: string, file: File) => Promise<void>;
+  selectFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
+  deleteFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
+}
+
+// Build the modal's frame targets from the plan (preferred) or legacy frames.
+export function regenTargets(
+  demoPlan: FrameSpec[] | null,
+  frames: DemoFrame[],
+): RegenTarget[] {
+  if (demoPlan && demoPlan.length > 0) {
+    return [...demoPlan]
+      .sort((a, b) => a.order - b.order)
+      .map((s) => ({ key: s.key, label: s.label || s.key }));
+  }
+  return [...frames]
+    .sort((a, b) => a.order - b.order)
+    .map((f) => ({ key: f.key, label: f.label || f.key }));
 }
 
 interface Props extends ExerciseAdminActions {
@@ -31,9 +51,11 @@ interface Props extends ExerciseAdminActions {
 export function AdminExerciseReview({
   review,
   approveMedia,
-  getDemoPrompt,
+  regeneratePlan,
+  savePlan,
+  approvePlan,
   regenerateMedia,
-  regeneratePhase,
+  regenerateFrame,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -58,9 +80,11 @@ export function AdminExerciseReview({
           key={ex.exerciseId}
           exercise={ex}
           approveMedia={approveMedia}
-          getDemoPrompt={getDemoPrompt}
+          regeneratePlan={regeneratePlan}
+          savePlan={savePlan}
+          approvePlan={approvePlan}
           regenerateMedia={regenerateMedia}
-          regeneratePhase={regeneratePhase}
+          regenerateFrame={regenerateFrame}
           uploadFrame={uploadFrame}
           selectFrame={selectFrame}
           deleteFrame={deleteFrame}
@@ -73,9 +97,11 @@ export function AdminExerciseReview({
 function ReviewCard({
   exercise,
   approveMedia,
-  getDemoPrompt,
+  regeneratePlan,
+  savePlan,
+  approvePlan,
   regenerateMedia,
-  regeneratePhase,
+  regenerateFrame,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -144,22 +170,36 @@ function ReviewCard({
         <ExerciseDemoFrames
           exerciseId={exercise.exerciseId}
           exerciseName={exercise.name}
+          demoPlan={exercise.demoPlan}
+          planStatus={exercise.planStatus}
           frames={exercise.demoFrames}
           mediaStatus={exercise.mediaStatus}
-          regeneratePhase={async (id, phase) => {
-            await regeneratePhase(id, phase);
+          regeneratePlan={async (id, override) => {
+            await regeneratePlan(id, override);
             router.refresh();
           }}
-          uploadFrame={async (id, phase, file) => {
-            await uploadFrame(id, phase, file);
+          savePlan={async (id, frames) => {
+            await savePlan(id, frames);
             router.refresh();
           }}
-          selectFrame={async (id, phase, url) => {
-            await selectFrame(id, phase, url);
+          approvePlan={async (id) => {
+            await approvePlan(id);
             router.refresh();
           }}
-          deleteFrame={async (id, phase, url) => {
-            await deleteFrame(id, phase, url);
+          regenerateFrame={async (id, key) => {
+            await regenerateFrame(id, key);
+            router.refresh();
+          }}
+          uploadFrame={async (id, key, file) => {
+            await uploadFrame(id, key, file);
+            router.refresh();
+          }}
+          selectFrame={async (id, key, url) => {
+            await selectFrame(id, key, url);
+            router.refresh();
+          }}
+          deleteFrame={async (id, key, url) => {
+            await deleteFrame(id, key, url);
             router.refresh();
           }}
         />
@@ -179,13 +219,13 @@ function ReviewCard({
       <RegenerateMediaModal
         exerciseId={exercise.exerciseId}
         exerciseName={exercise.name}
+        targets={regenTargets(exercise.demoPlan, exercise.demoFrames)}
         isOpen={isRegenOpen}
         onClose={() => setIsRegenOpen(false)}
         onStarted={() => {
           setIsRegenOpen(false);
           router.refresh();
         }}
-        getPrompt={getDemoPrompt}
         regenerate={regenerateMedia}
       />
     </>

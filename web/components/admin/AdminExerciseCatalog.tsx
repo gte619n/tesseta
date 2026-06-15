@@ -14,7 +14,7 @@ import type {
 } from '@/lib/types/exercise';
 import { MOVEMENT_PATTERN_LABEL } from '@/lib/types/exercise';
 import type { Equipment } from '@/lib/types/gym';
-import type { ExerciseAdminActions } from './AdminExerciseReview';
+import { regenTargets, type ExerciseAdminActions } from './AdminExerciseReview';
 
 interface Props extends ExerciseAdminActions {
   catalog: ExerciseResponse[];
@@ -35,9 +35,11 @@ export function AdminExerciseCatalog({
   archive,
   merge,
   approveMedia,
-  getDemoPrompt,
+  regeneratePlan,
+  savePlan,
+  approvePlan,
   regenerateMedia,
-  regeneratePhase,
+  regenerateFrame,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -92,9 +94,11 @@ export function AdminExerciseCatalog({
               publish={publish}
               archive={archive}
               merge={merge}
-              getDemoPrompt={getDemoPrompt}
+              regeneratePlan={regeneratePlan}
+              savePlan={savePlan}
+              approvePlan={approvePlan}
               regenerateMedia={regenerateMedia}
-              regeneratePhase={regeneratePhase}
+              regenerateFrame={regenerateFrame}
               uploadFrame={uploadFrame}
               selectFrame={selectFrame}
               deleteFrame={deleteFrame}
@@ -139,9 +143,11 @@ function CatalogRow({
   publish,
   archive,
   merge,
-  getDemoPrompt,
+  regeneratePlan,
+  savePlan,
+  approvePlan,
   regenerateMedia,
-  regeneratePhase,
+  regenerateFrame,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -154,9 +160,11 @@ function CatalogRow({
   | 'publish'
   | 'archive'
   | 'merge'
-  | 'getDemoPrompt'
+  | 'regeneratePlan'
+  | 'savePlan'
+  | 'approvePlan'
   | 'regenerateMedia'
-  | 'regeneratePhase'
+  | 'regenerateFrame'
   | 'uploadFrame'
   | 'selectFrame'
   | 'deleteFrame'
@@ -328,22 +336,36 @@ function CatalogRow({
             <ExerciseDemoFrames
               exerciseId={exercise.exerciseId}
               exerciseName={exercise.name}
+              demoPlan={exercise.demoPlan}
+              planStatus={exercise.planStatus}
               frames={exercise.demoFrames}
               mediaStatus={exercise.mediaStatus}
-              regeneratePhase={async (id, phase) => {
-                await regeneratePhase(id, phase);
+              regeneratePlan={async (id, override) => {
+                await regeneratePlan(id, override);
                 router.refresh();
               }}
-              uploadFrame={async (id, phase, file) => {
-                await uploadFrame(id, phase, file);
+              savePlan={async (id, frames) => {
+                await savePlan(id, frames);
                 router.refresh();
               }}
-              selectFrame={async (id, phase, url) => {
-                await selectFrame(id, phase, url);
+              approvePlan={async (id) => {
+                await approvePlan(id);
                 router.refresh();
               }}
-              deleteFrame={async (id, phase, url) => {
-                await deleteFrame(id, phase, url);
+              regenerateFrame={async (id, key) => {
+                await regenerateFrame(id, key);
+                router.refresh();
+              }}
+              uploadFrame={async (id, key, file) => {
+                await uploadFrame(id, key, file);
+                router.refresh();
+              }}
+              selectFrame={async (id, key, url) => {
+                await selectFrame(id, key, url);
+                router.refresh();
+              }}
+              deleteFrame={async (id, key, url) => {
+                await deleteFrame(id, key, url);
                 router.refresh();
               }}
             />
@@ -354,13 +376,13 @@ function CatalogRow({
       <RegenerateMediaModal
         exerciseId={exercise.exerciseId}
         exerciseName={exercise.name}
+        targets={regenTargets(exercise.demoPlan, exercise.demoFrames)}
         isOpen={isRegenOpen}
         onClose={() => setIsRegenOpen(false)}
         onStarted={() => {
           setIsRegenOpen(false);
           router.refresh();
         }}
-        getPrompt={getDemoPrompt}
         regenerate={regenerateMedia}
       />
     </>

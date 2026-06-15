@@ -6,8 +6,10 @@ import {
   publishExercise,
   archiveExercise,
   approveExerciseMedia,
-  getDemoPrompt,
   regenerateMedia,
+  regeneratePlan,
+  savePlan,
+  approvePlan,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -15,7 +17,7 @@ import {
   searchEquipment as searchEquipmentApi,
 } from '@/lib/exercise-admin-api';
 import { AdminExerciseCatalog } from '@/components/admin/AdminExerciseCatalog';
-import type { ExerciseEditableFields, DemoPhase } from '@/lib/types/exercise';
+import type { ExerciseEditableFields, FrameSpec } from '@/lib/types/exercise';
 import type { Equipment } from '@/lib/types/gym';
 import { pageMetadata } from '@/lib/page-metadata';
 
@@ -75,42 +77,55 @@ export default async function AdminExerciseCatalogPage() {
     revalidatePath(CATALOG_PATH);
   }
 
-  async function getDemoPromptAction(exerciseId: string, phase: DemoPhase) {
+  async function regeneratePlanAction(exerciseId: string, promptOverride?: string) {
     'use server';
-    return getDemoPrompt(exerciseId, phase);
+    await regeneratePlan(exerciseId, promptOverride ?? null);
+    revalidatePath(CATALOG_PATH);
+  }
+
+  async function savePlanAction(exerciseId: string, frames: FrameSpec[]) {
+    'use server';
+    await savePlan(exerciseId, frames);
+    revalidatePath(CATALOG_PATH);
+  }
+
+  async function approvePlanAction(exerciseId: string) {
+    'use server';
+    await approvePlan(exerciseId);
+    revalidatePath(CATALOG_PATH);
   }
 
   async function regenerateMediaAction(
     exerciseId: string,
-    promptOverride: string,
-    phase: DemoPhase | null,
+    promptOverride: string | null,
+    key: string | null,
   ) {
     'use server';
-    await regenerateMedia(exerciseId, { promptOverride, phase });
+    await regenerateMedia(exerciseId, { promptOverride, key });
     revalidatePath(CATALOG_PATH);
   }
 
-  async function regeneratePhaseAction(exerciseId: string, phase: DemoPhase) {
+  async function regenerateFrameAction(exerciseId: string, key: string) {
     'use server';
-    await regenerateMedia(exerciseId, { phase });
+    await regenerateMedia(exerciseId, { key });
     revalidatePath(CATALOG_PATH);
   }
 
-  async function uploadFrameAction(exerciseId: string, phase: DemoPhase, file: File) {
+  async function uploadFrameAction(exerciseId: string, key: string, file: File) {
     'use server';
-    await uploadFrame(exerciseId, phase, file);
+    await uploadFrame(exerciseId, key, file);
     revalidatePath(CATALOG_PATH);
   }
 
-  async function selectFrameAction(exerciseId: string, phase: DemoPhase, imageUrl: string) {
+  async function selectFrameAction(exerciseId: string, key: string, imageUrl: string) {
     'use server';
-    await selectFrame(exerciseId, phase, imageUrl);
+    await selectFrame(exerciseId, key, imageUrl);
     revalidatePath(CATALOG_PATH);
   }
 
-  async function deleteFrameAction(exerciseId: string, phase: DemoPhase, imageUrl: string) {
+  async function deleteFrameAction(exerciseId: string, key: string, imageUrl: string) {
     'use server';
-    await deleteFrame(exerciseId, phase, imageUrl);
+    await deleteFrame(exerciseId, key, imageUrl);
     revalidatePath(CATALOG_PATH);
   }
 
@@ -132,9 +147,11 @@ export default async function AdminExerciseCatalogPage() {
         archive={archiveAction}
         merge={mergeAction}
         approveMedia={approveMediaAction}
-        getDemoPrompt={getDemoPromptAction}
+        regeneratePlan={regeneratePlanAction}
+        savePlan={savePlanAction}
+        approvePlan={approvePlanAction}
         regenerateMedia={regenerateMediaAction}
-        regeneratePhase={regeneratePhaseAction}
+        regenerateFrame={regenerateFrameAction}
         uploadFrame={uploadFrameAction}
         selectFrame={selectFrameAction}
         deleteFrame={deleteFrameAction}
