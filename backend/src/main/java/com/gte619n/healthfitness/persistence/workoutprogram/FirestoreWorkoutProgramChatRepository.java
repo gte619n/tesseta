@@ -61,6 +61,7 @@ public class FirestoreWorkoutProgramChatRepository implements WorkoutProgramChat
         Map<String, Object> body = new HashMap<>();
         body.put("title", thread.title());
         body.put("goalId", thread.goalId());
+        body.put("programId", thread.programId());
         body.put("schedule", scheduleToWire(thread.schedule()));
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
@@ -161,7 +162,7 @@ public class FirestoreWorkoutProgramChatRepository implements WorkoutProgramChat
         }
         return new WorkoutProgramChatThread(
             userId, s.getId(), s.getString("title"), schedule, s.getString("goalId"),
-            toInstant(s.get("createdAt")), toInstant(s.get("updatedAt")));
+            toInstant(s.get("createdAt")), toInstant(s.get("updatedAt")), s.getString("programId"));
     }
 
 }

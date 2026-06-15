@@ -19,14 +19,20 @@ import com.gte619n.healthfitness.core.workoutprogram.ProgramSchedule;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSource;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
 import com.gte619n.healthfitness.core.workoutprogram.TrainingScienceScaffold;
+import com.gte619n.healthfitness.core.workoutprogram.Block;
+import com.gte619n.healthfitness.core.workoutprogram.Prescription;
+import com.gte619n.healthfitness.core.workoutprogram.ProgramPhase;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutDay;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramValidator;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService;
 import com.gte619n.healthfitness.core.workoutprogram.chat.WorkoutProgramChatMessage;
 import com.gte619n.healthfitness.core.workoutprogram.chat.WorkoutProgramChatRepository;
 import com.gte619n.healthfitness.core.workoutprogram.chat.WorkoutProgramChatThread;
 import com.gte619n.healthfitness.integrations.workoutprogram.WorkoutProgramChatClient;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -75,6 +81,7 @@ public class WorkoutProgramChatController {
     private final TrainingScienceScaffold science;
     private final TrtAdvisorContextService trt;
     private final WorkoutProgramService service;
+    private final WorkoutScheduleService scheduleService;
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
     private final SseStreamer sseStreamer;
@@ -90,6 +97,7 @@ public class WorkoutProgramChatController {
         TrainingScienceScaffold science,
         TrtAdvisorContextService trt,
         WorkoutProgramService service,
+        WorkoutScheduleService scheduleService,
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
         SseStreamer sseStreamer
@@ -104,17 +112,25 @@ public class WorkoutProgramChatController {
         this.science = science;
         this.trt = trt;
         this.service = service;
+        this.scheduleService = scheduleService;
         this.validator = validator;
         this.assembler = assembler;
         this.sseStreamer = sseStreamer;
     }
 
-    /** The pre-chat form selections, sent on the FIRST message to open a thread. */
-    public record ChatRequest(String threadId, String message, ProgramSchedule schedule, String goalId) {}
+    /**
+     * The pre-chat form selections, sent on the FIRST message to open a thread.
+     * {@code programId} (IMPL-18b) opens the chat in edit mode against an
+     * already-active program; when set, the schedule/goal are seeded from that
+     * program and the form schedule is ignored.
+     */
+    public record ChatRequest(String threadId, String message, ProgramSchedule schedule,
+                              String goalId, String programId) {}
     public record ThreadResponse(String threadId, String title, ProgramSchedule schedule, String goalId,
-                                 Instant createdAt, Instant updatedAt) {
+                                 String programId, Instant createdAt, Instant updatedAt) {
         static ThreadResponse from(WorkoutProgramChatThread t) {
-            return new ThreadResponse(t.threadId(), t.title(), t.schedule(), t.goalId(), t.createdAt(), t.updatedAt());
+            return new ThreadResponse(t.threadId(), t.title(), t.schedule(), t.goalId(),
+                t.programId(), t.createdAt(), t.updatedAt());
         }
     }
     public record MessageResponse(String messageId, String role, String content, String proposalJson, Instant createdAt) {
@@ -174,6 +190,17 @@ public class WorkoutProgramChatController {
         if (body.threadId() != null && !body.threadId().isBlank()) {
             thread = chat.findThread(userId, body.threadId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat thread not found"));
+        } else if (body.programId() != null && !body.programId().isBlank()) {
+            // IMPL-18b edit mode: bind the thread to an existing active program;
+            // the schedule + goal come from that program (the form is ignored).
+            WorkoutProgram existing = service.findById(userId, body.programId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Program not found"));
+            String threadId = UUID.randomUUID().toString();
+            WorkoutProgramChatThread created = new WorkoutProgramChatThread(
+                userId, threadId, deriveTitle(message), existing.schedule(), existing.goalId(),
+                null, null, existing.programId());
+            chat.createThread(created);
+            thread = created;
         } else {
             if (body.schedule() == null || body.schedule().dayLocations() == null
                 || body.schedule().dayLocations().isEmpty()) {
@@ -194,10 +221,11 @@ public class WorkoutProgramChatController {
         chat.appendMessage(userId, new WorkoutProgramChatMessage(
             thread.threadId(), UUID.randomUUID().toString(), ChatRole.USER, message, null, null));
 
-        final String context = buildContext(userId, thread.schedule());
+        final String context = buildContext(userId, thread);
         final ProgramSchedule schedule = thread.schedule();
         final String goalId = thread.goalId();
         final String threadId = thread.threadId();
+        final String editProgramId = thread.programId();
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
         sseStreamer.stream(() -> {
@@ -213,10 +241,20 @@ public class WorkoutProgramChatController {
                 if (result.proposal() != null) {
                     WorkoutProgram p = result.proposal();
                     // Stamp userId + the form's schedule/goal so the proposal
-                    // is grounded in the user's chosen gyms.
+                    // is grounded in the user's chosen gyms. In edit mode
+                    // (IMPL-18b) carry the existing programId/status/startDate so
+                    // the preview reflects the program being revised in place and
+                    // the anchored timeline is preserved.
+                    WorkoutProgram existing = editProgramId == null ? null
+                        : service.findById(userId, editProgramId).orElse(null);
                     WorkoutProgram withUser = new WorkoutProgram(
-                        userId, null, p.title(), p.description(), goalId, ProgramStatus.DRAFT,
-                        p.source(), p.startDate(), schedule, p.phaseOrder(), p.phases(), null, null, null,
+                        userId,
+                        existing != null ? existing.programId() : null,
+                        p.title(), p.description(), goalId,
+                        existing != null ? existing.status() : ProgramStatus.DRAFT,
+                        p.source(),
+                        existing != null ? existing.startDate() : p.startDate(),
+                        schedule, p.phaseOrder(), p.phases(), null, null, null,
                         p.nutritionGuidance());
                     List<String> issues = validator.validate(userId, withUser);
                     List<String> warnings = validator.warnings(userId, withUser);
@@ -254,6 +292,33 @@ public class WorkoutProgramChatController {
         ProgramSchedule schedule = body.schedule() != null ? body.schedule() : thread.schedule();
         String goalId = body.goalId() != null ? body.goalId() : thread.goalId();
         ProgramSource source = body.source() != null ? body.source() : ProgramSource.AI_ASSISTED;
+
+        // IMPL-18b: a program-bound thread edits that program IN PLACE and
+        // re-materializes its FORWARD schedule, never rewriting completed
+        // sessions. A normal thread creates a new draft.
+        if (thread.programId() != null) {
+            WorkoutProgram existing = service.findById(userId, thread.programId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Program not found"));
+            // Validate the edited tree under the existing program's identity
+            // (status + startDate kept so the timeline anchor is preserved).
+            WorkoutProgram candidate = new WorkoutProgram(
+                userId, existing.programId(), body.title(), body.description(), goalId,
+                existing.status(), existing.source(), existing.startDate(), schedule,
+                null, body.phases(), existing.createdAt(), null, existing.completedAt(),
+                body.nutritionGuidance());
+            List<String> issues = validator.validate(userId, candidate);
+            if (!issues.isEmpty()) {
+                return ResponseEntity.unprocessableEntity().body(Map.of("issues", issues));
+            }
+            // startDate=null keeps the anchor; status=null keeps ACTIVE/COMPLETED.
+            service.update(userId, existing.programId(), body.title(), body.description(),
+                goalId, schedule, null, null, body.phases());
+            scheduleService.activate(userId, existing.programId());
+            WorkoutProgram updated = service.findById(userId, existing.programId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Program not found"));
+            return ResponseEntity.ok(assembler.deep(updated));
+        }
+
         WorkoutProgram input = new WorkoutProgram(
             userId, null, body.title(), body.description(), goalId, ProgramStatus.DRAFT,
             source, body.startDate(), schedule, null, body.phases(), null, null, null,
@@ -267,8 +332,14 @@ public class WorkoutProgramChatController {
     }
 
     /** Health snapshot + STRICTLY per-gym allow-lists, scoped to the form's gyms. */
-    private String buildContext(String userId, ProgramSchedule schedule) {
+    private String buildContext(String userId, WorkoutProgramChatThread thread) {
+        ProgramSchedule schedule = thread.schedule();
         StringBuilder sb = new StringBuilder();
+        // IMPL-18b: when editing an active program, lead with what it currently
+        // is and which weeks are frozen, so the model revises forward in place.
+        if (thread.programId() != null) {
+            sb.append(renderExistingProgram(userId, thread.programId())).append("\n\n");
+        }
         try {
             String snapshot = snapshots.buildSnapshot(userId);
             if (snapshot != null && !snapshot.isBlank()) {
@@ -311,6 +382,69 @@ public class WorkoutProgramChatController {
             }
         } catch (Exception e) {
             log.warn("TRT context unavailable for {}: {}", userId, e.getMessage());
+        }
+        return sb.toString();
+    }
+
+    /**
+     * IMPL-18b edit-mode context: the program the user is revising, its current
+     * phase/day/exercise structure, and the FREEZE boundary — weeks before today
+     * are completed and immutable, so the model must only change things from
+     * today forward and keep elapsed weeks intact (the timeline stays anchored to
+     * the original start date).
+     */
+    private String renderExistingProgram(String userId, String programId) {
+        WorkoutProgram p = service.findById(userId, programId).orElse(null);
+        if (p == null) {
+            return "";
+        }
+        LocalDate today = LocalDate.now();
+        LocalDate start = p.startDate();
+        StringBuilder sb = new StringBuilder();
+        sb.append("EDITING AN ACTIVE PROGRAM (revise it in place — do NOT start over):\n");
+        sb.append("  title: ").append(p.title()).append('\n');
+        if (start != null) {
+            long weeksIn = Math.max(0, java.time.temporal.ChronoUnit.WEEKS.between(start, today));
+            sb.append("  started: ").append(start)
+              .append(" (today is ").append(today)
+              .append(", ~week ").append(weeksIn + 1).append(" of the program)\n");
+        }
+        int done = scheduleService.completedCount(userId, programId);
+        sb.append("  completed sessions so far: ").append(done);
+        scheduleService.lastCompletedDate(userId, programId)
+            .ifPresent(d -> sb.append(" (most recent ").append(d).append(')'));
+        sb.append('\n');
+        sb.append("  FREEZE RULE: every session dated before ").append(today)
+          .append(" is DONE and immutable. Only propose changes from ").append(today)
+          .append(" onward; keep already-elapsed weeks/phases unchanged so dates stay anchored.\n");
+        sb.append("  CURRENT STRUCTURE:\n");
+        for (ProgramPhase phase : p.phases()) {
+            sb.append("  - phase \"").append(phase.title()).append("\" — ")
+              .append(phase.weeks()).append(" wk");
+            if (phase.deloadWeekIndex() != null) sb.append(", deload wk ").append(phase.deloadWeekIndex());
+            sb.append('\n');
+            for (WorkoutDay day : phase.days()) {
+                sb.append("      ").append(day.dayOfWeek()).append(' ').append(day.label())
+                  .append(" @ ").append(day.locationId()).append(": ");
+                List<String> items = new ArrayList<>();
+                for (Block b : day.blocks()) {
+                    for (Prescription rx : b.prescriptions()) {
+                        StringBuilder one = new StringBuilder(rx.exerciseId());
+                        if (rx.sets() != null) {
+                            one.append(' ').append(rx.sets()).append('x');
+                            if (rx.repsMin() != null) one.append(rx.repsMin());
+                            if (rx.repsMax() != null && !rx.repsMax().equals(rx.repsMin())) {
+                                one.append('-').append(rx.repsMax());
+                            }
+                        }
+                        if (rx.targetWeightLbs() != null) {
+                            one.append(" @").append(Math.round(rx.targetWeightLbs())).append("lb");
+                        }
+                        items.add(one.toString());
+                    }
+                }
+                sb.append(String.join(", ", items)).append('\n');
+            }
         }
         return sb.toString();
     }
