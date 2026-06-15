@@ -54,6 +54,24 @@ class SyncUiStateTest {
     }
 
     @Test
+    fun `detail surfaces only in the FAILED state (Workstream B)`() {
+        val failed = syncUiStateOf(
+            online = true, pendingCount = 1, failedCount = 1, syncing = false,
+            detail = "HTTP 422: Dose exceeds safe maximum",
+        )
+        assertEquals(SyncIndicatorKind.FAILED, failed.kind)
+        assertEquals("HTTP 422: Dose exceeds safe maximum", failed.detail)
+
+        // A stale detail must not leak into a non-failed state.
+        val pending = syncUiStateOf(
+            online = true, pendingCount = 1, failedCount = 0, syncing = false,
+            detail = "HTTP 422: stale",
+        )
+        assertEquals(SyncIndicatorKind.PENDING, pending.kind)
+        assertNull(pending.detail)
+    }
+
+    @Test
     fun `badge maps pending and failed, ignores synced and unknown`() {
         assertEquals(BadgeSpec.PENDING, badgeSpecOf("PENDING"))
         assertEquals(BadgeSpec.FAILED, badgeSpecOf("FAILED"))

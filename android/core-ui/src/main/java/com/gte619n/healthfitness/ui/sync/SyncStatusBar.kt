@@ -139,6 +139,9 @@ data class SyncUiState(
     val kind: SyncIndicatorKind,
     val pendingCount: Int = 0,
     val updatedElsewhere: Boolean = false,
+    /** The most recent failure reason (Workstream B), shown on the FAILED banner
+     *  so the user sees *why* instead of a generic "Some changes didn't sync". */
+    val detail: String? = null,
 )
 
 /**
@@ -156,6 +159,7 @@ fun syncUiStateOf(
     failedCount: Int,
     syncing: Boolean,
     updatedElsewhere: Boolean = false,
+    detail: String? = null,
 ): SyncUiState {
     val kind = when {
         !online -> SyncIndicatorKind.OFFLINE
@@ -164,14 +168,20 @@ fun syncUiStateOf(
         pendingCount > 0 -> SyncIndicatorKind.PENDING
         else -> SyncIndicatorKind.IDLE
     }
-    return SyncUiState(kind = kind, pendingCount = pendingCount, updatedElsewhere = updatedElsewhere)
+    // The detail line is only meaningful for the FAILED state; ignore it otherwise.
+    return SyncUiState(
+        kind = kind,
+        pendingCount = pendingCount,
+        updatedElsewhere = updatedElsewhere,
+        detail = detail?.takeIf { kind == SyncIndicatorKind.FAILED && it.isNotBlank() },
+    )
 }
 
 private fun SyncUiState.message(): String = when (kind) {
     SyncIndicatorKind.OFFLINE ->
         if (pendingCount > 0) "Offline — $pendingCount change${plural(pendingCount)} will sync when reconnected"
         else "Offline — showing saved data"
-    SyncIndicatorKind.FAILED -> "Some changes didn't sync"
+    SyncIndicatorKind.FAILED -> detail?.let { "Some changes didn't sync — $it" } ?: "Some changes didn't sync"
     SyncIndicatorKind.SYNCING -> "Syncing…"
     SyncIndicatorKind.PENDING -> "$pendingCount change${plural(pendingCount)} waiting to sync"
     SyncIndicatorKind.IDLE -> if (updatedElsewhere) "Updated elsewhere" else "All changes synced"

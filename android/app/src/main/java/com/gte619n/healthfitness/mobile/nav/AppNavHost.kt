@@ -59,6 +59,7 @@ object Routes {
     const val SETTINGS = SettingsRoutes.SETTINGS
 
     const val MORE = "more"
+    const val SYNC_LOG = "debug/sync-log"
 
     const val NUTRITION = "nutrition"
     const val NUTRITION_TARGET = "nutrition/target"
@@ -172,6 +173,13 @@ private fun AppNavHostGraph(
         composable(Routes.MORE) {
             MoreScreen(
                 onNavigate = { route -> navController.navigate(route) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        // IMPL-STAB (Workstream B): debug-only window into recorded sync failures.
+        composable(Routes.SYNC_LOG) {
+            com.gte619n.healthfitness.mobile.sync.SyncLogScreen(
                 onBack = { navController.popBackStack() },
             )
         }

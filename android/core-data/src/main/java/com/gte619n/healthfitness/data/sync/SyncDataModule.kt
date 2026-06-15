@@ -53,9 +53,10 @@ object SyncDataModule {
         mirror: MirrorOps,
         replay: OutboxReplayClient,
         deviceIdProvider: DeviceIdProvider,
+        diagnostics: SyncDiagnostics,
         @IoDispatcher io: CoroutineDispatcher,
     ): OutboxRepository =
-        OutboxRepository(outboxDao, mirror, replay, deviceIdProvider, io)
+        OutboxRepository(outboxDao, mirror, replay, deviceIdProvider, diagnostics, io)
 }
 
 /** Interface→implementation bindings for the testable sync seams. */

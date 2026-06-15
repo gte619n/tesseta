@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.gte619n.healthfitness.mobile.BuildConfig
 import com.gte619n.healthfitness.mobile.dashboard.DashboardIcons
 import com.gte619n.healthfitness.mobile.nav.Routes
 import com.gte619n.healthfitness.ui.components.HfCard
@@ -73,9 +74,16 @@ fun MoreScreen(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 16.dp),
         ) {
+            // The debug Sync log row is dev-only (Workstream B) — keep it out of
+            // release builds so it doesn't read as a user feature.
+            val rows = if (BuildConfig.DEBUG) {
+                MoreRows + MoreItem("Sync log", DashboardIcons.Settings, Routes.SYNC_LOG)
+            } else {
+                MoreRows
+            }
             HfCard(transparent = true, modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    MoreRows.forEachIndexed { index, item ->
+                    rows.forEachIndexed { index, item ->
                         if (index > 0) {
                             Spacer(
                                 modifier = Modifier

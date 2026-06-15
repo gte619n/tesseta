@@ -52,3 +52,6 @@ tmp/
 .playwright-mcp/
 .worktrees/
 web/package-lock.json
+
+# Background-agent worktrees (Agent tool isolation)
+.claude/worktrees/
