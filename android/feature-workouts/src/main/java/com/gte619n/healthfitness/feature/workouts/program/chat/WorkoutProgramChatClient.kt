@@ -43,6 +43,7 @@ class WorkoutProgramChatClient @Inject constructor(
         message: String,
         schedule: ScheduleDto?,
         goalId: String?,
+        programId: String? = null,
     ): Flow<ChatStreamEvent> {
         val body = ProgramChatRequest(
             threadId = threadId,
@@ -51,6 +52,8 @@ class WorkoutProgramChatClient @Inject constructor(
             // a thread and ignores it on later turns.
             schedule = if (threadId == null) schedule else null,
             goalId = if (threadId == null) goalId else null,
+            // IMPL-18b: bind a NEW thread to an active program for in-place editing.
+            programId = if (threadId == null) programId else null,
         )
         val json = requestAdapter.toJson(body)
         return sse.streamJsonPost("api/me/workout-programs/chat", json).map { dispatch(it) }

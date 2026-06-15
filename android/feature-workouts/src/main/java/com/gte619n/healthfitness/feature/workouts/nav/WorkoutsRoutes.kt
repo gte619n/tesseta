@@ -41,8 +41,12 @@ object WorkoutsRoutes {
     fun gymDetail(locationId: String): String = "workouts/gyms/$locationId"
     fun editGym(locationId: String): String = "workouts/gyms/$locationId/edit"
 
-    // Conversational program designer chat (IMPL-AND-18).
+    // Conversational program designer chat (IMPL-AND-18). The optional
+    // ?programId=… opens it in IMPL-18b edit mode against an active program.
     const val CHAT = "workouts/chat"
+    const val CHAT_ROUTE = "workouts/chat?programId={programId}"
+
+    fun chatEdit(programId: String): String = "workouts/chat?programId=$programId"
 
     // Programs (IMPL-AND-15, read-only).
     const val PROGRAMS = "workouts/programs"
@@ -87,14 +91,24 @@ fun NavGraphBuilder.workoutsGraph(
         )
     }
 
-    composable(WorkoutsRoutes.CHAT) {
+    composable(
+        route = WorkoutsRoutes.CHAT_ROUTE,
+        arguments = listOf(
+            navArgument(WorkoutsRoutes.ARG_PROGRAM_ID) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+        ),
+    ) {
         WorkoutDesignerRoute(
             onBack = { navController.popBackStack() },
             onOpenProgram = { programId ->
-                // On commit success land on the new program detail, dropping the
+                // On commit success land on the program detail, dropping the
                 // chat from the back stack so Back returns to the hub/programs.
+                // (Edit mode lands back on the same program it just updated.)
                 navController.navigate(WorkoutsRoutes.programDetail(programId)) {
-                    popUpTo(WorkoutsRoutes.CHAT) { inclusive = true }
+                    popUpTo(WorkoutsRoutes.CHAT_ROUTE) { inclusive = true }
                 }
             },
         )
@@ -160,6 +174,9 @@ fun NavGraphBuilder.workoutsGraph(
             },
             onOpenSession = { programId, scheduledId ->
                 navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
+            onRefineWithAi = { programId ->
+                navController.navigate(WorkoutsRoutes.chatEdit(programId))
             },
         )
     }

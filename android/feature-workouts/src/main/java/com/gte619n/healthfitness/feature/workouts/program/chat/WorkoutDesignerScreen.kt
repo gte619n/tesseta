@@ -114,8 +114,12 @@ fun WorkoutDesignerScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize().background(Hf.colors.canvas)) {
             HfScreenHeader(
-                title = "Design a program",
-                subtitle = "Plan a periodized program with the coach",
+                title = if (state.editMode) "Refine your program" else "Design a program",
+                subtitle = if (state.editMode) {
+                    "Revise it from today forward with the coach"
+                } else {
+                    "Plan a periodized program with the coach"
+                },
                 onBack = onBack,
                 trailing = {
                     val threadCount = state.threads.size
@@ -173,6 +177,7 @@ fun WorkoutDesignerScreen(
                             onSave = { onSave(message.id) },
                             onDiscard = { onDiscard(message.id) },
                             onOpenProgram = onOpenProgram,
+                            editMode = state.editMode,
                         )
                     }
                 }

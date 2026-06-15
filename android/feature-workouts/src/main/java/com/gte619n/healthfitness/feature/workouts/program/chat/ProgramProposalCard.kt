@@ -61,9 +61,16 @@ fun ProgramProposalCard(
     onDiscard: () -> Unit,
     onOpenProgram: (String) -> Unit,
     modifier: Modifier = Modifier,
+    // IMPL-18b: editing an active program in place (vs designing a new one).
+    editMode: Boolean = false,
 ) {
     if (committedProgramId != null) {
-        ProgramCreatedCard(programId = committedProgramId, onOpenProgram = onOpenProgram, modifier = modifier)
+        ProgramCreatedCard(
+            programId = committedProgramId,
+            onOpenProgram = onOpenProgram,
+            editMode = editMode,
+            modifier = modifier,
+        )
         return
     }
 
@@ -113,6 +120,15 @@ fun ProgramProposalCard(
                 Spacer(Modifier.height(10.dp))
             }
 
+            if (editMode) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Updates apply from today forward — already-completed sessions are preserved.",
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textTertiary,
+                )
+            }
+
             Spacer(Modifier.height(2.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -136,7 +152,12 @@ fun ProgramProposalCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        if (saving) "Creating…" else "Create program",
+                        when {
+                            saving && editMode -> "Updating…"
+                            saving -> "Creating…"
+                            editMode -> "Update program"
+                            else -> "Create program"
+                        },
                         style = Hf.type.bodyMd,
                         color = Hf.colors.textInverse,
                     )
@@ -307,7 +328,12 @@ private fun WarningsBanner(warnings: List<String>) {
 }
 
 @Composable
-private fun ProgramCreatedCard(programId: String, onOpenProgram: (String) -> Unit, modifier: Modifier) {
+private fun ProgramCreatedCard(
+    programId: String,
+    onOpenProgram: (String) -> Unit,
+    editMode: Boolean,
+    modifier: Modifier,
+) {
     HfCard(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
@@ -321,8 +347,17 @@ private fun ProgramCreatedCard(programId: String, onOpenProgram: (String) -> Uni
                 modifier = Modifier.size(20.dp),
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text("Program created", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
-                Text("Saved to your programs.", style = Hf.type.bodySm, color = Hf.colors.textTertiary)
+                Text(
+                    if (editMode) "Program updated" else "Program created",
+                    style = Hf.type.headingMd,
+                    color = Hf.colors.textPrimary,
+                )
+                Text(
+                    if (editMode) "Your changes apply from today forward."
+                    else "Saved to your programs.",
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textTertiary,
+                )
             }
             Box(
                 modifier = Modifier

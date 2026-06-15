@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.feature.workouts.program.chat
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.core.chat.ChatMessage
@@ -17,6 +18,7 @@ import com.gte619n.healthfitness.data.workouts.program.toDomain
 import com.gte619n.healthfitness.data.workouts.trt.TrtContextRepository
 import com.gte619n.healthfitness.domain.common.DayOfWeek
 import com.gte619n.healthfitness.domain.workouts.program.ProgramProposal
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.domain.workouts.trt.TrtContext
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -65,6 +67,12 @@ data class WorkoutDesignerUiState(
     val setup: DesignerSetupState = DesignerSetupState(),
     /** True once the thread is opened (first send) — flips the form for the chat. */
     val started: Boolean = false,
+    /**
+     * IMPL-18b: editing an already-active program in place. Skips the setup form
+     * (schedule/goal come from the program) and relabels the commit affordance;
+     * committing updates the program forward instead of creating a draft.
+     */
+    val editMode: Boolean = false,
     val messages: List<ChatMessage> = emptyList(),
     val streaming: Boolean = false,
     val threadId: String? = null,
@@ -91,9 +99,15 @@ class WorkoutDesignerViewModel @Inject constructor(
     private val locationRepository: LocationRepository,
     private val goalsRepository: GoalsRepository,
     private val trtRepository: TrtContextRepository,
+    private val programRepository: WorkoutProgramRepository,
     connectivity: Connectivity,
+    savedStateHandle: SavedStateHandle,
     moshi: Moshi,
 ) : ViewModel() {
+
+    // IMPL-18b: present when the chat was opened to edit an active program;
+    // sent on the first turn to bind the thread, and drives edit-mode UI.
+    private val editProgramId: String? = savedStateHandle["programId"]
 
     // Online-only SSE AI flow (D17): the screen disables the composer + shows
     // "needs connection" when offline.
@@ -108,6 +122,33 @@ class WorkoutDesignerViewModel @Inject constructor(
         loadSetup()
         refreshThreads()
         loadTrt()
+        if (editProgramId != null) loadProgramForEdit(editProgramId)
+    }
+
+    /**
+     * IMPL-18b: seed the setup (training days + gym per day + goal) from the
+     * program being edited and jump straight into the chat (no setup form). The
+     * schedule is fixed by the program; the user just describes their revisions.
+     */
+    private fun loadProgramForEdit(programId: String) {
+        viewModelScope.launch {
+            val program = programRepository.get(programId).getOrNull() ?: return@launch
+            val dayLocations = LinkedHashMap<DayOfWeek, String>()
+            program.phases.flatMap { it.days }.forEach { day ->
+                dayLocations.putIfAbsent(day.dayOfWeek, day.locationId)
+            }
+            _state.update { s ->
+                s.copy(
+                    started = true,
+                    editMode = true,
+                    setup = s.setup.copy(
+                        trainingDays = program.trainingDays.toSet(),
+                        dayLocations = dayLocations,
+                        goalId = program.goalId,
+                    ),
+                )
+            }
+        }
     }
 
     // --- Setup form ---
@@ -194,9 +235,10 @@ class WorkoutDesignerViewModel @Inject constructor(
             null
         }
         val goalId = if (threadId == null) s.setup.goalId else null
+        val programId = if (threadId == null) editProgramId else null
 
         viewModelScope.launch {
-            chatClient.stream(threadId, message, schedule, goalId)
+            chatClient.stream(threadId, message, schedule, goalId, programId)
                 .catch { e ->
                     finishStream(assistantId)
                     _state.update { it.copy(error = e.message ?: "Chat failed") }

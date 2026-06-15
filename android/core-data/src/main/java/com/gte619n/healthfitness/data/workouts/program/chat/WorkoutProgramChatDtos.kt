@@ -15,12 +15,15 @@ import java.time.LocalDate
 /**
  * Body of `POST api/me/workout-programs/chat`. [schedule] + [goalId] ride only
  * on the FIRST message (threadId null); later turns send just threadId+message.
+ * [programId] (IMPL-18b) also rides on the first turn to bind the thread to an
+ * active program for in-place editing; null in the design-a-new-program flow.
  */
 data class ProgramChatRequest(
     val threadId: String?,
     val message: String,
     val schedule: ScheduleDto?,
     val goalId: String?,
+    val programId: String? = null,
 )
 
 /**
