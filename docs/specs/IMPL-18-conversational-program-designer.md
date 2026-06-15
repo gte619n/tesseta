@@ -247,7 +247,9 @@ with their prescriber, and the data + citations make it verifiable.
 ## Out of scope (→ IMPL-18b / later)
 
 - Conversationally editing an **already-active** program (live re-materialization
-  without rewriting completed sessions) — S4.
+  without rewriting completed sessions) — S4. **→ implemented in
+  [IMPL-18b](IMPL-18b-conversational-active-program-editing.md)
+  ([ADR-0016](../decisions/ADR-0016-active-program-in-place-edit.md)).**
 - Writing into the **nutrition module's** stored macro targets — S3 (display-only
   here).
 - Auto-progression that rewrites future weeks from logged performance (the

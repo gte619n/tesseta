@@ -74,8 +74,8 @@ Two transport flags appear inline below:
 | `POST /{id}/activate`, `GET /{id}/calendar?from&to` | Materialize + read dated `ScheduledWorkout`s |
 | `POST·PATCH·DELETE /{id}/phases…`, `/days…`, `PUT …/order` | Phase / day CRUD + reorder |
 | `PUT /{id}/sessions/{scheduledId}` | Log/complete a session (actuals fan-out, IMPL-17) |
-| `POST /api/me/workout-programs/chat` **[SSE]** | Gemini-Pro history-grounded designer chat. Tools: `propose_workout_program` (terminal) + read-only `get_exercise_history` / `get_lab_history` (mid-stream round-trips, IMPL-18). Proposal event = `{program, issues, warnings}` (issues block commit; warnings are advisory, R1) |
-| `POST /chat/{threadId}/commit`, `GET /chat/threads`, `GET /chat/{id}`, `DELETE /chat/threads/{id}` | Commit proposal / thread management |
+| `POST /api/me/workout-programs/chat` **[SSE]** | Gemini-Pro history-grounded designer chat. Tools: `propose_workout_program` (terminal) + read-only `get_exercise_history` / `get_lab_history` (mid-stream round-trips, IMPL-18). Proposal event = `{program, issues, warnings}` (issues block commit; warnings are advisory, R1). Optional `programId` on the first turn binds the thread to an active program for **in-place editing** (IMPL-18b) |
+| `POST /chat/{threadId}/commit`, `GET /chat/threads`, `GET /chat/{id}`, `DELETE /chat/threads/{id}` | Commit proposal / thread management. A program-bound thread (IMPL-18b) updates that program in place + re-materializes forward (**200**); an unbound thread creates a new draft (**201**) |
 | `GET /api/me/workout-programs/chat/trt-context` | TRT monitoring panel for the designer's labs surface (ADR-0015): `{onTrt, markers[], dangerFlags[]}` |
 
 ## Nutrition
