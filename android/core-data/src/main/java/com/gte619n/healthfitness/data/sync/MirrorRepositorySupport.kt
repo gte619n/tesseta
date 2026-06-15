@@ -44,6 +44,10 @@ class MirrorRepositorySupport @Inject constructor(
     private val outbox: OutboxRepository,
     private val killSwitch: KillSwitchGate,
     private val drainTrigger: DrainTrigger,
+    // Defaulted so the many JVM tests that construct this directly need no change;
+    // Hilt injects the shared singleton in production (same pattern as
+    // OutboxRepository's clock seam).
+    private val localWriteBus: LocalWriteBus = LocalWriteBus(),
 ) {
 
     /** True ⇒ Room is NOT the source of truth; callers must read live network. */
@@ -92,6 +96,7 @@ class MirrorRepositorySupport @Inject constructor(
     suspend fun createLocal(table: String, id: String, payloadJson: String, lastUpdate: Long) {
         mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
         outbox.enqueue(OutboxOp.CREATE, table, id, payloadJson)
+        localWriteBus.signal(table)
         drainTrigger.requestDrain()
     }
 
@@ -99,6 +104,7 @@ class MirrorRepositorySupport @Inject constructor(
     suspend fun updateLocal(table: String, id: String, payloadJson: String, lastUpdate: Long) {
         mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
         outbox.enqueue(OutboxOp.UPDATE, table, id, payloadJson)
+        localWriteBus.signal(table)
         drainTrigger.requestDrain()
     }
 
@@ -119,6 +125,7 @@ class MirrorRepositorySupport @Inject constructor(
     ) {
         mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
         outbox.enqueue(OutboxOp.UPDATE, table, id, wirePayloadJson)
+        localWriteBus.signal(table)
         drainTrigger.requestDrain()
     }
 
@@ -126,6 +133,7 @@ class MirrorRepositorySupport @Inject constructor(
     suspend fun deleteLocal(table: String, id: String, lastUpdate: Long) {
         mirror.markArchived(table, id, lastUpdate)
         outbox.enqueue(OutboxOp.DELETE, table, id, null)
+        localWriteBus.signal(table)
         drainTrigger.requestDrain()
     }
 
