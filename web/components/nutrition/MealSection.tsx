@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type {
   MealGroup,
@@ -48,6 +48,7 @@ type Props = {
     body: UpdateIngredientBody,
   ) => Promise<void>;
   deleteEntry: (date: string, entryId: string) => Promise<void>;
+  regenerateImage: (date: string, entryId: string) => Promise<void>;
   searchFoods: (q: string) => Promise<
     {
       foodId: string;
@@ -77,6 +78,7 @@ export function MealSection({
   updateEntry,
   updateIngredient,
   deleteEntry,
+  regenerateImage,
   searchFoods,
   describeMealAsync,
   relogEntry,
@@ -114,6 +116,15 @@ export function MealSection({
       toast.success("Entry removed");
     } catch {
       toast.error("Failed to remove entry");
+    }
+  }
+
+  async function handleRetryImage(entry: Entry) {
+    try {
+      await regenerateImage(date, entry.entryId);
+      toast.info("Regenerating image…");
+    } catch {
+      toast.error("Couldn't retry the image");
     }
   }
 
@@ -172,6 +183,7 @@ export function MealSection({
               entry={entry}
               onEdit={() => openEntry(entry)}
               onDelete={() => handleDelete(entry)}
+              onRetryImage={() => handleRetryImage(entry)}
             />
           ))}
         </div>
@@ -234,16 +246,19 @@ function EntryRow({
   entry,
   onEdit,
   onDelete,
+  onRetryImage,
 }: {
   entry: Entry;
   onEdit: () => void;
   onDelete: () => Promise<void>;
+  onRetryImage: () => Promise<void>;
 }) {
   // Drag handle moves the entry between meals. Only the grip carries the drag
   // listeners so the row's edit / delete clicks keep working.
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: entry.entryId,
   });
+  const [retrying, startRetry] = useTransition();
   return (
     <div
       ref={setNodeRef}
@@ -313,6 +328,22 @@ function EntryRow({
             kcal
           </span>
         </span>
+        {entry.imageStatus === "FAILED" && (
+          // Image generation failed — offer a retry. Kept always-visible (not
+          // hover-gated like edit/delete) since it flags a recoverable error.
+          <button
+            type="button"
+            onClick={() => startRetry(() => onRetryImage())}
+            disabled={retrying}
+            className="cursor-pointer rounded p-1 text-accent hover:text-accent-dim disabled:opacity-50"
+            aria-label={`Retry image for ${entry.foodName}`}
+          >
+            <i
+              className={`ti ti-refresh text-[13px] ${retrying ? "animate-spin" : ""}`}
+              aria-hidden
+            />
+          </button>
+        )}
         <button
           type="button"
           onClick={onEdit}
