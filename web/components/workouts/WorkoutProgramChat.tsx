@@ -425,7 +425,17 @@ export function WorkoutProgramChat({
       });
       return;
     }
-    const result = await commit(tid, draft, scheduleRef.current);
+    let result: CommitProgramActionResult;
+    try {
+      result = await commit(tid, draft, scheduleRef.current);
+    } catch (e) {
+      // An unexpected failure (not a 422 validation result) — surface it instead
+      // of failing silently, and keep the card open so the user can retry.
+      toast.error("Couldn't save program", {
+        description: e instanceof Error ? e.message : "Something went wrong. Try again.",
+      });
+      throw e;
+    }
     if (result.ok) {
       toast.success(editing ? "Program updated" : "Program created");
       setMessages((prev) =>

@@ -563,7 +563,7 @@ export function WorkoutProgramProposalCard({
   }
 
   function handleSave() {
-    if (!draft.title.trim()) {
+    if (!(draft.title ?? "").trim()) {
       toast.error("Can't save yet", { description: "The program needs a title." });
       return;
     }
@@ -806,7 +806,7 @@ function PhaseEditor({
 
       <NutritionStrip guidance={phase.nutritionGuidance ?? programNutrition} />
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-3">
         {phase.days.map((day, di) => (
           <DayEditor
             key={day.key}
@@ -898,14 +898,23 @@ function DayEditor({
   }
 
   return (
-    <div className="rounded-md border-[0.5px] border-border-subtle bg-surface px-3 py-2">
-      <div className="flex items-start gap-2">
+    <div className="overflow-hidden rounded-lg border border-border-default bg-surface">
+      {/* Day header — a tinted bar with a weekday chip so each day reads as its
+          own bounded section, distinct from the exercise blocks nested below. */}
+      <div className="flex items-start gap-2 border-b-[0.5px] border-border-subtle bg-canvas-muted px-3 py-2.5">
         <div className="min-w-0 flex-1 space-y-1.5">
-          <TextInput
-            value={day.label}
-            onChange={(v) => onPatch({ label: v })}
-            placeholder="Day label (e.g. Upper A)"
-          />
+          <div className="flex items-center gap-2">
+            <span className="caps-mono shrink-0 rounded bg-accent-bg px-1.5 py-1 text-[9px] font-medium tracking-[0.06em] text-accent-dim">
+              {WEEK_DAY_LABEL[day.dayOfWeek]}
+            </span>
+            <div className="min-w-0 flex-1">
+              <TextInput
+                value={day.label}
+                onChange={(v) => onPatch({ label: v })}
+                placeholder="Day label (e.g. Upper A)"
+              />
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={day.dayOfWeek}
@@ -944,7 +953,8 @@ function DayEditor({
         />
       </div>
 
-      <div className="mt-2 space-y-2">
+      {/* Day body — exercise blocks, clearly nested inside the day card. */}
+      <div className="space-y-2.5 px-3 py-3">
         {day.blocks.map((block, bi) => (
           <BlockEditor
             key={block.key}
@@ -1004,7 +1014,7 @@ function BlockEditor({
   onMoveRx: (ri: number, dir: -1 | 1) => void;
 }) {
   return (
-    <div className="rounded border-[0.5px] border-border-subtle bg-canvas px-2.5 py-2">
+    <div className="border-l-2 border-border-default pl-3">
       <div className="flex items-center gap-2">
         <select
           value={block.type}

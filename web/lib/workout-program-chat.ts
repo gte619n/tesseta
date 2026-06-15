@@ -233,18 +233,20 @@ export function draftToCreateRequest(
             deloadModifier: p.deloadModifier,
           }),
         );
-        return { type: block.type, title: block.title.trim(), prescriptions };
+        // Titles/labels can stream back null (e.g. an untitled accessory block);
+        // coalesce before trimming so commit doesn't throw on a null .trim().
+        return { type: block.type, title: (block.title ?? "").trim(), prescriptions };
       });
       return {
-        label: day.label.trim(),
+        label: (day.label ?? "").trim(),
         dayOfWeek: day.dayOfWeek,
         locationId: day.locationId,
         blocks,
       };
     });
     return {
-      title: phase.title.trim(),
-      focus: phase.focus.trim(),
+      title: (phase.title ?? "").trim(),
+      focus: (phase.focus ?? "").trim(),
       weeks: phase.weeks,
       deloadWeekIndex: phase.deloadWeekIndex,
       days,
@@ -253,8 +255,8 @@ export function draftToCreateRequest(
   });
 
   return {
-    title: draft.title.trim(),
-    description: draft.description.trim(),
+    title: (draft.title ?? "").trim(),
+    description: (draft.description ?? "").trim(),
     goalId: draft.goalId,
     schedule: deriveSchedule(draft, threadSchedule),
     startDate: draft.startDate,
