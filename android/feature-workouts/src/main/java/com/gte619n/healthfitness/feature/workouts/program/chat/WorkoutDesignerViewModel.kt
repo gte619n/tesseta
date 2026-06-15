@@ -101,7 +101,7 @@ class WorkoutDesignerViewModel @Inject constructor(
     private val trtRepository: TrtContextRepository,
     private val programRepository: WorkoutProgramRepository,
     connectivity: Connectivity,
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     moshi: Moshi,
 ) : ViewModel() {
 
@@ -122,7 +122,13 @@ class WorkoutDesignerViewModel @Inject constructor(
         loadSetup()
         refreshThreads()
         loadTrt()
-        if (editProgramId != null) loadProgramForEdit(editProgramId)
+        // Restore the in-flight conversation after the ViewModel/Activity was
+        // recreated (app switch with "don't keep activities", process death, low
+        // memory). Edit mode takes precedence; otherwise reopen the last thread.
+        when {
+            editProgramId != null -> loadProgramForEdit(editProgramId)
+            else -> savedStateHandle.get<String>(KEY_ACTIVE_THREAD)?.let { openThread(it) }
+        }
     }
 
     /**
@@ -256,7 +262,15 @@ class WorkoutDesignerViewModel @Inject constructor(
                 }
             }
             is ChatStreamEvent.Proposal -> {
-                val parsed = runCatching { proposalAdapter.fromJson(event.json) }.getOrNull()
+                val parsedResult = runCatching { proposalAdapter.fromJson(event.json) }
+                // Surface a malformed/unparseable proposal instead of silently
+                // dropping the card (the failure mode where the chat shows the
+                // explanation but no editable program).
+                parsedResult.exceptionOrNull()?.let {
+                    android.util.Log.w("WorkoutDesigner", "proposal parse failed: ${it.message}", it)
+                    _state.update { s -> s.copy(error = "Couldn't read the proposed program. Try asking again.") }
+                }
+                val parsed = parsedResult.getOrNull()
                 val deep = parsed?.program
                 if (deep != null) {
                     val proposal = ProgramProposal(
@@ -279,6 +293,9 @@ class WorkoutDesignerViewModel @Inject constructor(
             is ChatStreamEvent.Error -> _state.update { it.copy(error = event.message) }
             is ChatStreamEvent.Done -> {
                 _state.update { it.copy(threadId = event.threadId ?: it.threadId) }
+                // Remember the active thread so it can be rehydrated if the VM is
+                // later recreated; the turns are persisted server-side.
+                (event.threadId ?: _state.value.threadId)?.let { savedStateHandle[KEY_ACTIVE_THREAD] = it }
                 finishStream(assistantId)
                 refreshThreads()
             }
@@ -378,6 +395,59 @@ class WorkoutDesignerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Reopen a thread — from the conversations panel, or auto-restored after the
+     * VM was recreated — by reloading its persisted turns from the backend. Only
+     * the latest proposal renders an editable card; earlier ones collapse to text
+     * (mirrors the web designer's switchThread).
+     */
+    fun openThread(threadId: String) {
+        viewModelScope.launch {
+            val msgs = runCatching { chatRepository.listMessages(threadId) }.getOrNull() ?: return@launch
+            val chatMessages = mutableListOf<ChatMessage>()
+            val editors = mutableMapOf<String, ProgramProposalEdit>()
+            val issues = mutableMapOf<String, List<String>>()
+            val warnings = mutableMapOf<String, List<String>>()
+            val latestProposalIdx = msgs.indexOfLast { it.role == "ASSISTANT" && !it.proposalJson.isNullOrBlank() }
+            msgs.forEachIndexed { idx, m ->
+                if (m.role == "USER") {
+                    chatMessages += ChatMessage.User(m.messageId, m.content.orEmpty())
+                } else {
+                    var proposal: ProgramProposal? = null
+                    if (idx == latestProposalIdx && !m.proposalJson.isNullOrBlank()) {
+                        val parsed = runCatching { proposalAdapter.fromJson(m.proposalJson!!) }.getOrNull()
+                        val deep = parsed?.program
+                        if (deep != null) {
+                            proposal = ProgramProposal(deep.toDomain(), parsed.issues, parsed.warnings)
+                            editors[m.messageId] = ProgramProposalEdit.from(proposal.program)
+                            issues[m.messageId] = parsed.issues
+                            warnings[m.messageId] = parsed.warnings
+                        }
+                    }
+                    chatMessages += ChatMessage.Assistant(
+                        id = m.messageId,
+                        text = m.content.orEmpty(),
+                        streaming = false,
+                        toolResult = proposal,
+                        toolResultId = if (proposal != null) m.messageId else null,
+                    )
+                }
+            }
+            savedStateHandle[KEY_ACTIVE_THREAD] = threadId
+            _state.update {
+                it.copy(
+                    started = true,
+                    threadId = threadId,
+                    messages = chatMessages,
+                    editors = editors,
+                    proposalIssues = issues,
+                    proposalWarnings = warnings,
+                    error = null,
+                )
+            }
+        }
+    }
+
     fun deleteThread(threadId: String) {
         if (threadId in _state.value.deletingThreadIds) return
         _state.update { it.copy(deletingThreadIds = it.deletingThreadIds + threadId, error = null) }
@@ -385,6 +455,8 @@ class WorkoutDesignerViewModel @Inject constructor(
             try {
                 chatRepository.deleteThread(threadId)
                 val wasActive = _state.value.threadId == threadId
+                // Don't auto-restore a thread the user just deleted.
+                if (wasActive) savedStateHandle[KEY_ACTIVE_THREAD] = null
                 _state.update { s ->
                     s.copy(
                         deletingThreadIds = s.deletingThreadIds - threadId,
@@ -409,5 +481,11 @@ class WorkoutDesignerViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private companion object {
+        // SavedStateHandle key for the active thread, so the conversation survives
+        // ViewModel/Activity recreation (the turns themselves live server-side).
+        const val KEY_ACTIVE_THREAD = "activeThreadId"
     }
 }

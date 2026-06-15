@@ -80,6 +80,7 @@ fun WorkoutDesignerRoute(
         onDiscard = viewModel::discard,
         onOpenProgram = onOpenProgram,
         onDeleteThread = viewModel::deleteThread,
+        onSelectThread = viewModel::openThread,
         editorFor = viewModel::editorFor,
         issuesFor = viewModel::issuesFor,
         warningsFor = viewModel::warningsFor,
@@ -98,6 +99,7 @@ fun WorkoutDesignerScreen(
     onDiscard: (messageId: String) -> Unit,
     onOpenProgram: (String) -> Unit,
     onDeleteThread: (threadId: String) -> Unit,
+    onSelectThread: (threadId: String) -> Unit,
     editorFor: (String) -> ProgramProposalEdit?,
     issuesFor: (String) -> List<String>,
     warningsFor: (String) -> List<String>,
@@ -195,6 +197,7 @@ fun WorkoutDesignerScreen(
                 activeThreadId = state.threadId,
                 deletingThreadIds = state.deletingThreadIds,
                 onClose = { threadsOpen = false },
+                onSelect = { onSelectThread(it); threadsOpen = false },
                 onDeleteRequest = { confirmDeleteId = it },
             )
         }
@@ -295,7 +298,11 @@ private fun DesignerSetupForm(
                     }
                 }
 
-                if (setup.trainingDays.isNotEmpty() && setup.gyms.size > 1) {
+                // Show the per-day gym picker whenever days are chosen and at
+                // least one gym exists. (Previously gated on >1 gym, which hid it
+                // entirely for single-gym users so the selection never appeared —
+                // the web setup form always shows it.)
+                if (setup.trainingDays.isNotEmpty() && setup.gyms.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     CapsLabel("Gym per day", color = Hf.colors.textSecondary)
                     Spacer(Modifier.height(6.dp))
@@ -468,6 +475,7 @@ private fun ThreadsPanel(
     activeThreadId: String?,
     deletingThreadIds: Set<String>,
     onClose: () -> Unit,
+    onSelect: (String) -> Unit,
     onDeleteRequest: (String) -> Unit,
 ) {
     Column(
@@ -502,6 +510,7 @@ private fun ThreadsPanel(
                         thread = thread,
                         isActive = thread.threadId == activeThreadId,
                         isDeleting = thread.threadId in deletingThreadIds,
+                        onSelect = onSelect,
                         onDeleteRequest = onDeleteRequest,
                     )
                     Box(
@@ -522,12 +531,14 @@ private fun ThreadRow(
     thread: ProgramChatThreadResponse,
     isActive: Boolean,
     isDeleting: Boolean,
+    onSelect: (String) -> Unit,
     onDeleteRequest: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (isActive) Hf.colors.accentBg else Hf.colors.surface)
+            .clickable(enabled = !isDeleting) { onSelect(thread.threadId) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),

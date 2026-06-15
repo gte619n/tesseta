@@ -63,6 +63,10 @@ class WorkoutProgramChatRepository @Inject constructor(
 
     suspend fun listThreads(): List<ProgramChatThreadResponse> = api.listThreads()
 
+    /** Persisted turns of a thread (oldest-first) for rehydrating a reopened chat. */
+    suspend fun listMessages(threadId: String): List<ProgramChatMessageResponse> =
+        api.messages(threadId)
+
     /** Delete a thread; ignores 404 (already gone is success enough). */
     suspend fun deleteThread(threadId: String) {
         val response = api.deleteThread(threadId)

@@ -58,8 +58,22 @@ data class ProgramChatThreadResponse(
     val title: String? = null,
     val schedule: ScheduleDto? = null,
     val goalId: String? = null,
+    val programId: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
+)
+
+/**
+ * Mirrors backend MessageResponse — a persisted turn in the thread. [proposalJson]
+ * is the same `{ program, issues, warnings }` payload the SSE `proposal` event
+ * carries, so the same adapter parses it when rehydrating a reopened thread.
+ */
+data class ProgramChatMessageResponse(
+    val messageId: String,
+    val role: String? = null,
+    val content: String? = null,
+    val proposalJson: String? = null,
+    val createdAt: String? = null,
 )
 
 // ---- Commit (CreateProgramRequest) — the core domain shape the backend's

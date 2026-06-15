@@ -32,6 +32,11 @@ interface WorkoutProgramChatApi {
     @GET("api/me/workout-programs/chat/threads")
     suspend fun listThreads(): List<ProgramChatThreadResponse>
 
+    /** Persisted turns of a thread, oldest-first — used to rehydrate a reopened
+     *  (or process-death-recreated) conversation. */
+    @GET("api/me/workout-programs/chat/{threadId}")
+    suspend fun messages(@Path("threadId") threadId: String): List<ProgramChatMessageResponse>
+
     /** 204 on success, 404 if the thread is unknown / belongs to another user. */
     @DELETE("api/me/workout-programs/chat/threads/{threadId}")
     suspend fun deleteThread(@Path("threadId") threadId: String): Response<Unit>
