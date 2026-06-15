@@ -183,6 +183,15 @@ data class ScheduledWorkout(
 )
 
 /**
+ * Activation failed validation (HTTP 422): the backend returned the actionable
+ * issue list (same shape as the designer's commit 422). Carried as a typed
+ * failure so the UI can surface the specific issues inline instead of a generic
+ * "couldn't activate" (IMPL-STAB G1). [issues] is never empty.
+ */
+class ProgramActivationInvalidException(val issues: List<String>) :
+    Exception(issues.joinToString("; "))
+
+/**
  * Read-only repository for workout programs. Mirrors the IMPL-15 read surface;
  * no mutation, no chat, no logging in v1.
  */
@@ -206,4 +215,16 @@ interface WorkoutProgramRepository {
      * sessions. Online-only.
      */
     suspend fun activate(programId: String): Result<List<ScheduledWorkout>>
+
+    /**
+     * Edit a program's metadata (title/description) via PATCH and refresh the
+     * mirror so the detail reflects it without waiting for a sync. Structural
+     * edits go through the conversational designer, not this. Online-only
+     * (IMPL-STAB G4). Returns the updated deep program.
+     */
+    suspend fun updateDetails(
+        programId: String,
+        title: String,
+        description: String?,
+    ): Result<WorkoutProgram>
 }
