@@ -57,6 +57,17 @@ export type LoadTrtContextAction = () => Promise<TrtContext>;
 
 export type GoalOption = { goalId: string; title: string };
 
+// IMPL-18b: when present, the chat opens in "edit an active program" mode —
+// the setup form is skipped (schedule + goal come from the program), the first
+// turn binds the thread to this programId, and committing updates the program
+// in place (forward re-materialization) instead of creating a new draft.
+export type EditProgramContext = {
+  programId: string;
+  title: string;
+  schedule: WorkoutProgramChatSchedule;
+  goalId: string | null;
+};
+
 type Props = {
   initialThreads: WorkoutProgramChatThread[];
   gyms: GymOption[];
@@ -66,6 +77,7 @@ type Props = {
   loadExercises: LoadExercisesAction;
   deleteThread: DeleteThreadAction;
   loadTrtContext: LoadTrtContextAction;
+  editProgram?: EditProgramContext;
 };
 
 type ProposalState = {
@@ -110,6 +122,7 @@ export function WorkoutProgramChat({
   loadExercises,
   deleteThread,
   loadTrtContext,
+  editProgram,
 }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -139,6 +152,25 @@ export function WorkoutProgramChat({
   goalIdRef.current = goalId;
   // Tracks whether the next /chat POST is the first turn of a new thread.
   const firstTurnRef = useRef(false);
+  // IMPL-18b: the active program being edited (sent on the first turn to bind
+  // the thread). Null in the design-a-new-program flow.
+  const editProgramIdRef = useRef<string | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  // Edit mode: skip the setup form and seed schedule/goal from the program;
+  // the user lands straight in the chat to describe their revisions.
+  useEffect(() => {
+    if (!editProgram) return;
+    editProgramIdRef.current = editProgram.programId;
+    setSchedule(editProgram.schedule);
+    scheduleRef.current = editProgram.schedule;
+    setGoalId(editProgram.goalId);
+    goalIdRef.current = editProgram.goalId;
+    setSetupDone(true);
+    setEditing(true);
+    firstTurnRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editProgram?.programId]);
 
   const gymName = useCallback(
     (id: string | undefined) =>
@@ -196,6 +228,8 @@ export function WorkoutProgramChat({
                   message: trimmed,
                   schedule: scheduleRef.current,
                   goalId: goalIdRef.current,
+                  // IMPL-18b: bind the new thread to the program being edited.
+                  programId: editProgramIdRef.current,
                 }
               : { threadId: threadIdRef.current, message: trimmed },
           ),
@@ -276,7 +310,7 @@ export function WorkoutProgramChat({
     [streaming, threads, patchMessage, toast],
   );
 
-  // Begin a fresh setup form (back to step 1).
+  // Begin a fresh setup form (back to step 1, design-new — drops any edit binding).
   function startNew() {
     abortRef.current?.abort();
     setThreadId(null);
@@ -285,6 +319,8 @@ export function WorkoutProgramChat({
     setGoalId(null);
     setSetupDone(false);
     firstTurnRef.current = false;
+    editProgramIdRef.current = null;
+    setEditing(false);
     setMessages([]);
     setInput("");
     setStreaming(false);
@@ -321,6 +357,8 @@ export function WorkoutProgramChat({
     goalIdRef.current = t.goalId;
     setSetupDone(true);
     firstTurnRef.current = false;
+    editProgramIdRef.current = null;
+    setEditing(false);
     setInput("");
     setMessages([]);
     setLoadingThread(true);
@@ -389,7 +427,7 @@ export function WorkoutProgramChat({
     }
     const result = await commit(tid, draft, scheduleRef.current);
     if (result.ok) {
-      toast.success("Program created");
+      toast.success(editing ? "Program updated" : "Program created");
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId && m.proposal
@@ -531,6 +569,7 @@ export function WorkoutProgramChat({
                   message={m}
                   schedule={schedule}
                   gyms={gyms}
+                  editMode={editing}
                   loadExercises={loadExercises}
                   onCommit={(draft) => handleCommit(m.id, draft)}
                   onDiscard={() => discardProposal(m.id)}
@@ -748,6 +787,7 @@ function MessageRow({
   message,
   schedule,
   gyms,
+  editMode,
   loadExercises,
   onCommit,
   onDiscard,
@@ -755,6 +795,7 @@ function MessageRow({
   message: ChatMessage;
   schedule: WorkoutProgramChatSchedule | null;
   gyms: GymOption[];
+  editMode: boolean;
   loadExercises: LoadExercisesAction;
   onCommit: (draft: ProgramProposalDraft) => Promise<void>;
   onDiscard: () => void;
@@ -790,13 +831,17 @@ function MessageRow({
 
       {proposal && !proposal.discarded ? (
         proposal.committedProgramId ? (
-          <CommittedConfirmation programId={proposal.committedProgramId} />
+          <CommittedConfirmation
+            programId={proposal.committedProgramId}
+            editMode={editMode}
+          />
         ) : (
           <div className="w-full max-w-[680px]">
             <WorkoutProgramProposalCard
               initialValue={proposal.draft}
               schedule={schedule}
               gyms={gyms}
+              editMode={editMode}
               loadExercises={loadExercises}
               onSave={onCommit}
               onDiscard={onDiscard}
@@ -808,13 +853,19 @@ function MessageRow({
   );
 }
 
-function CommittedConfirmation({ programId }: { programId: string }) {
+function CommittedConfirmation({
+  programId,
+  editMode,
+}: {
+  programId: string;
+  editMode: boolean;
+}) {
   return (
     <div className="flex w-full max-w-[680px] items-center justify-between rounded-[12px] border-[0.5px] border-accent/40 bg-accent-bg px-4 py-3">
       <div className="flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
         <span className="text-[13px] font-medium text-accent-dim">
-          Program created
+          {editMode ? "Program updated" : "Program created"}
         </span>
       </div>
       <Link

@@ -45,6 +45,9 @@ type Props = {
   onDiscard?: () => void;
   heading?: string;
   saveLabel?: string;
+  // IMPL-18b: editing an already-active program in place. Relabels the commit
+  // action and notes that completed sessions are preserved.
+  editMode?: boolean;
 };
 
 // ── Small primitives ─────────────────────────────────────────────────
@@ -264,8 +267,11 @@ export function WorkoutProgramProposalCard({
   onSave,
   onDiscard,
   heading = "Proposed program",
-  saveLabel = "Save program",
+  saveLabel,
+  editMode = false,
 }: Props) {
+  const resolvedSaveLabel =
+    saveLabel ?? (editMode ? "Update program" : "Save program");
   const toast = useToast();
   const [draft, setDraft] = useState<ProgramProposalDraft>(initialValue);
   const [pending, startTransition] = useTransition();
@@ -664,23 +670,30 @@ export function WorkoutProgramProposalCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border-subtle px-5 py-3">
-        <button
-          type="button"
-          onClick={onDiscard}
-          disabled={pending}
-          className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary disabled:opacity-60"
-        >
-          Discard
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={pending}
-          className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse disabled:opacity-60"
-        >
-          {pending ? "Saving…" : saveLabel}
-        </button>
+      <div className="flex items-center justify-between gap-2 border-t-[0.5px] border-border-subtle px-5 py-3">
+        <p className="m-0 text-[11px] leading-[1.4] text-tertiary">
+          {editMode
+            ? "Updates apply from today forward — already-completed sessions are preserved."
+            : ""}
+        </p>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onDiscard}
+            disabled={pending}
+            className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary disabled:opacity-60"
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={pending}
+            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse disabled:opacity-60"
+          >
+            {pending ? "Saving…" : resolvedSaveLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

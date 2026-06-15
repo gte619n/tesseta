@@ -140,6 +140,7 @@ export default async function ProgramDetailPage(props: {
           </div>
 
           <ProgramDetailActions
+            programId={program.programId}
             programTitle={program.title}
             programDescription={program.description ?? ""}
             status={program.status}
