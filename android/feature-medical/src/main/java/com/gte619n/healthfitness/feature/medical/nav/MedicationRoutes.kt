@@ -5,6 +5,7 @@ import androidx.navigation.NavType
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.gte619n.healthfitness.feature.medical.add.AddMedicationScreen
 import com.gte619n.healthfitness.feature.medical.detail.MedicationDetailScreen
 import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
@@ -26,6 +27,13 @@ object MedicationRoutes {
     const val DETAIL = "medications/{medicationId}"
 
     const val ARG_MEDICATION_ID = "medicationId"
+
+    /**
+     * IMPL-STAB Workstream F (item 4): deep-link URI a reminder notification taps
+     * into, landing on the medications dose checklist instead of app home. The
+     * matching `<intent-filter>` lives on `MainActivity`.
+     */
+    const val DEEP_LINK_DOSE_CHECKLIST = "healthfitness://medications/today"
 }
 
 /**
@@ -34,7 +42,10 @@ object MedicationRoutes {
  * [navController]. The detail/add routes share the same back-stack as the list.
  */
 fun NavGraphBuilder.medicationsGraph(navController: NavHostController) {
-    composable(MedicationRoutes.LIST) {
+    composable(
+        route = MedicationRoutes.LIST,
+        deepLinks = listOf(navDeepLink { uriPattern = MedicationRoutes.DEEP_LINK_DOSE_CHECKLIST }),
+    ) {
         MedicationsListScreen(
             onAdd = { navController.navigate(MedicationRoutes.ADD) },
             onMedicationClick = { id -> navController.navigate(MedicationRoutes.detail(id)) },
