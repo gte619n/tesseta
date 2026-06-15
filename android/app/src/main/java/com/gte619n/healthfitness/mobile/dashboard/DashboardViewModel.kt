@@ -18,13 +18,16 @@ import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import com.gte619n.healthfitness.data.profile.ProfileRepository
+import com.gte619n.healthfitness.data.sync.LocalWriteBus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -79,6 +82,7 @@ class DashboardViewModel @Inject constructor(
     private val nutrition: DashboardNutritionRepository,
     private val recent: DashboardRecentActivityRepository,
     private val profile: ProfileRepository,
+    localWriteBus: LocalWriteBus,
     unitPrefs: UnitPreferencesRepository,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(DashboardUiState.initial)
@@ -94,7 +98,25 @@ class DashboardViewModel @Inject constructor(
     // on every ON_RESUME when the user simply navigates back to the dashboard.
     private var lastRefreshAt: Long = 0L
 
-    init { refresh() }
+    init {
+        refresh()
+        // Workstream D: a local write anywhere (dose logged, weight added, meal
+        // captured…) should immediately re-fetch the non-reactive cards — the
+        // recent-activity feed and the not-yet-mirrored reads — rather than
+        // waiting for the next resume/TTL. Mirror-backed cards already update
+        // reactively from the optimistic write; this closes the gap for the rest.
+        // Debounced so a burst of writes (e.g. a multi-set log) coalesces.
+        observeLocalWrites(localWriteBus)
+    }
+
+    @OptIn(FlowPreview::class)
+    private fun observeLocalWrites(localWriteBus: LocalWriteBus) {
+        viewModelScope.launch {
+            localWriteBus.writes
+                .debounce(250)
+                .collect { refresh(force = true) }
+        }
+    }
 
     /**
      * Reloads every dashboard card. On resume this fires on every navigation

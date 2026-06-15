@@ -4,13 +4,16 @@ import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
+import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,6 +58,21 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
     private val listAdapter = moshi.adapter(WorkoutProgramDto::class.java)
     private val deepAdapter = moshi.adapter(WorkoutProgramDeepDto::class.java)
     private val scheduledAdapter = moshi.adapter(ScheduledWorkoutDto::class.java)
+    private val issuesAdapter = moshi.adapter<Map<String, List<String>>>(
+        Types.newParameterizedType(
+            Map::class.java,
+            String::class.java,
+            Types.newParameterizedType(List::class.java, String::class.java),
+        ),
+    )
+
+    /** Parse the `{ issues: [] }` body of a 422 activate response, or null. */
+    private fun activationIssues(e: HttpException): List<String>? {
+        if (e.code() != 422) return null
+        val raw = e.response()?.errorBody()?.string() ?: return null
+        val issues = runCatching { issuesAdapter.fromJson(raw)?.get("issues") }.getOrNull()
+        return issues?.takeIf { it.isNotEmpty() }
+    }
 
     override suspend fun list(): Result<List<WorkoutProgram>> =
         withContext(Dispatchers.IO) {
@@ -127,7 +145,16 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
     override suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val sessions = api.activate(programId)
+                val sessions = try {
+                    api.activate(programId)
+                } catch (e: HttpException) {
+                    // 422 → the backend re-validated and returned { issues: [] }
+                    // (same shape as the commit 422). Surface the actionable list
+                    // so the detail screen can show the specific problems inline
+                    // instead of a generic "couldn't activate" (IMPL-STAB G1).
+                    activationIssues(e)?.let { throw ProgramActivationInvalidException(it) }
+                    throw e
+                }
                 // Refresh the mirror so the detail/list reflect ACTIVE status and
                 // the materialized "this week" sessions without waiting for a sync.
                 runCatching { refreshDeep(programId) }
@@ -138,6 +165,24 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
                     )
                 }
                 sessions.map { it.toDomain() }
+            }
+        }
+
+    override suspend fun updateDetails(
+        programId: String,
+        title: String,
+        description: String?,
+    ): Result<WorkoutProgram> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val dto = api.updateDetails(
+                    programId,
+                    UpdateProgramDetailsRequest(title = title, description = description),
+                )
+                // Store the updated deep tree so the detail/list reflect the new
+                // title/description without waiting for a sync.
+                support.refreshInto(MirrorTables.WORKOUT_PROGRAMS, listOf(dto.toRefreshRow()))
+                dto.toDomain()
             }
         }
 

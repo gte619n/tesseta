@@ -184,6 +184,18 @@ class NutritionRepository @Inject constructor(
         )
     }
 
+    /**
+     * IMPL-STAB (Workstream E): retry image generation for an entry whose image
+     * FAILED. The backend flips it to PENDING and regenerates async; refresh the
+     * day so the row shows the generating state and the settle-poll swaps in the
+     * finished image. Online-only (like composite-meal generation).
+     */
+    suspend fun regenerateEntryImage(date: String, entryId: String): Entry {
+        val entry = api.regenerateEntryImage(date, entryId)
+        fillDay(date)
+        return entry
+    }
+
     suspend fun addCompositeMeal(date: String, body: CompositeMealRequest): Entry {
         // AI image generation (online-only per D17): create on the network, then
         // refresh this date's mirror so the new composite entry renders from Room.

@@ -37,6 +37,7 @@ class OutboxRepository @Inject constructor(
     private val mirror: MirrorOps,
     private val replay: OutboxReplayClient,
     private val deviceIdProvider: DeviceIdProvider,
+    private val diagnostics: SyncDiagnostics,
     @IoDispatcher private val io: CoroutineDispatcher,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
@@ -155,13 +156,27 @@ class OutboxRepository @Inject constructor(
                 // A terminal 4xx would fail identically on every retry, so park
                 // it out of the automatic drain instead (manual retry re-arms it).
                 val attempts = mutation.attempts + 1
-                val terminal = t is OutboxReplayHttpException && t.isTerminal
+                val httpError = t as? OutboxReplayHttpException
+                val terminal = httpError != null && httpError.isTerminal
                 outboxDao.recordFailure(
                     mutationId = mutation.mutationId,
                     attempts = attempts,
                     nextAttemptAt = if (terminal) PARKED_NEXT_ATTEMPT else now + backoffMillis(attempts),
                 )
                 mirror.markFailed(mutation.entityTable, mutation.entityId)
+                // Record the reason instead of swallowing it (Workstream B). The
+                // server's own message (when present) is the most useful detail.
+                diagnostics.record(
+                    source = "outbox-drain",
+                    message = httpError?.serverMessage?.takeIf { it.isNotBlank() }
+                        ?: t.message
+                        ?: t.javaClass.simpleName,
+                    table = mutation.entityTable,
+                    entityId = mutation.entityId,
+                    httpCode = httpError?.code,
+                    terminal = terminal,
+                    cause = t,
+                )
                 failed++
             }
         }
@@ -177,6 +192,11 @@ class OutboxRepository @Inject constructor(
             mirror.delete(table, entityId)
             collapsed++
         }
+
+        // A drain that pushed work without any failures means the queue is
+        // healthy again — drop the surfaced banner detail (the row counts still
+        // drive the indicator kind).
+        if (failed == 0 && (sent > 0 || collapsed > 0)) diagnostics.clearLastError()
 
         DrainResult(sent = sent, failed = failed, collapsed = collapsed)
     }

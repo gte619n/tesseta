@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.feature.workouts.program
 
 import androidx.lifecycle.SavedStateHandle
+import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
@@ -143,6 +144,61 @@ class ProgramDetailViewModelTest {
 
         vm.consumeRestoredSession()
         assertNull(vm.state.value.restoredSession)
+    }
+
+    @Test
+    fun `activation 422 surfaces the issue list inline, not a generic error`() = runTest {
+        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
+        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        val issues = listOf("Day 'Lower' has no gym assigned.", "Program has no training days to schedule.")
+        coEvery { repo.activate("p1") } returns
+            Result.failure(ProgramActivationInvalidException(issues))
+
+        val vm = vm()
+        advanceUntilIdle()
+        vm.activate()
+        advanceUntilIdle()
+
+        assertEquals(issues, vm.state.value.activationIssues)
+        assertNull(vm.state.value.error)
+        assertEquals(false, vm.state.value.loading)
+
+        vm.dismissActivationIssues()
+        assertEquals(emptyList<String>(), vm.state.value.activationIssues)
+    }
+
+    @Test
+    fun `non-422 activation failure surfaces a generic error`() = runTest {
+        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
+        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        coEvery { repo.activate("p1") } returns Result.failure(RuntimeException("offline"))
+
+        val vm = vm()
+        advanceUntilIdle()
+        vm.activate()
+        advanceUntilIdle()
+
+        assertEquals("offline", vm.state.value.error)
+        assertEquals(emptyList<String>(), vm.state.value.activationIssues)
+    }
+
+    @Test
+    fun `saveEdit patches details and closes the sheet on success`() = runTest {
+        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
+        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        val updated = ProgramFixtures.deepProgram.copy(title = "New title", description = "New desc")
+        coEvery { repo.updateDetails("p1", "New title", "New desc") } returns Result.success(updated)
+
+        val vm = vm()
+        advanceUntilIdle()
+        vm.startEdit()
+        assertEquals(true, vm.state.value.editing)
+        vm.saveEdit("New title", "New desc")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.state.value.editing)
+        assertEquals(false, vm.state.value.savingEdit)
+        assertEquals("New title", vm.state.value.program?.title)
     }
 
     @Test

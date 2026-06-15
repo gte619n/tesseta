@@ -45,11 +45,14 @@ import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.FrequencyType
 import com.gte619n.healthfitness.domain.medications.Medication
 import com.gte619n.healthfitness.domain.medications.TimeSlot
+import com.gte619n.healthfitness.domain.medications.TimeWindow
 import com.gte619n.healthfitness.feature.medical.components.DrugImage
 import com.gte619n.healthfitness.feature.medical.components.DrugLookupProgress
 import com.gte619n.healthfitness.feature.medical.components.FrequencySelector
 import com.gte619n.healthfitness.feature.medical.components.TimeSlotEditor
 import com.gte619n.healthfitness.feature.medical.components.categoryLabel
+import com.gte619n.healthfitness.feature.medical.reminders.InlineReminderConfig
+import com.gte619n.healthfitness.feature.medical.reminders.InlineReminderControls
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.sync.OfflineNotice
@@ -95,15 +98,17 @@ fun AddMedicationScreen(
                 customForm = null,
                 isSubmitting = state.isSubmitting,
                 error = state.error,
+                globalWindowTimes = state.globalWindowTimes,
                 onBack = viewModel::backToSearch,
-                onSubmit = { req -> viewModel.submit(req, onDone) },
+                onSubmit = { req, reminder -> viewModel.submit(req, reminder, onDone) },
             )
             AddMedicationUiState.Step.CUSTOM -> CustomEntryForm(
                 initialName = state.query,
                 isSubmitting = state.isSubmitting,
                 error = state.error,
+                globalWindowTimes = state.globalWindowTimes,
                 onBack = viewModel::backToSearch,
-                onSubmit = { req -> viewModel.submit(req, onDone) },
+                onSubmit = { req, reminder -> viewModel.submit(req, reminder, onDone) },
             )
         }
     }
@@ -237,8 +242,9 @@ private fun DoseForm(
     customForm: DrugForm?,
     isSubmitting: Boolean,
     error: String?,
+    globalWindowTimes: Map<TimeWindow, String>,
     onBack: () -> Unit,
-    onSubmit: (CreateMedicationRequest) -> Unit,
+    onSubmit: (CreateMedicationRequest, InlineReminderConfig) -> Unit,
 ) {
     var dose by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf(drug?.defaultUnit ?: "mg") }
@@ -246,6 +252,7 @@ private fun DoseForm(
     var slots by remember { mutableStateOf(emptyList<TimeSlot>()) }
     var prescribedBy by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var reminder by remember { mutableStateOf(InlineReminderConfig()) }
 
     Column(
         modifier = Modifier
@@ -282,6 +289,18 @@ private fun DoseForm(
         )
         Spacer(Modifier.height(16.dp))
 
+        // IMPL-STAB Workstream F (item 5): inline reminder controls. PRN ("as
+        // needed") meds never schedule a reminder, so the controls are hidden.
+        if (frequency.type != FrequencyType.PRN) {
+            InlineReminderControls(
+                config = reminder,
+                slotWindows = slots.map { it.window },
+                globalWindowTimes = globalWindowTimes,
+                onChange = { reminder = it },
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+
         LabeledField(label = "Prescribed by") {
             HfTextField(value = prescribedBy, onValueChange = { prescribedBy = it }, placeholder = "Optional")
         }
@@ -315,6 +334,7 @@ private fun DoseForm(
                             prescribedBy = prescribedBy.ifBlank { null },
                             notes = notes.ifBlank { null },
                         ),
+                        if (frequency.type == FrequencyType.PRN) InlineReminderConfig() else reminder,
                     )
                 },
             )
@@ -328,8 +348,9 @@ private fun CustomEntryForm(
     initialName: String,
     isSubmitting: Boolean,
     error: String?,
+    globalWindowTimes: Map<TimeWindow, String>,
     onBack: () -> Unit,
-    onSubmit: (CreateMedicationRequest) -> Unit,
+    onSubmit: (CreateMedicationRequest, InlineReminderConfig) -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var category by remember { mutableStateOf(DrugCategory.SUPPLEMENT) }
@@ -340,6 +361,7 @@ private fun CustomEntryForm(
     var slots by remember { mutableStateOf(emptyList<TimeSlot>()) }
     var prescribedBy by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var reminder by remember { mutableStateOf(InlineReminderConfig()) }
 
     Column(
         modifier = Modifier
@@ -390,6 +412,17 @@ private fun CustomEntryForm(
         )
         Spacer(Modifier.height(16.dp))
 
+        // IMPL-STAB Workstream F (item 5): inline reminder controls (PRN excluded).
+        if (frequency.type != FrequencyType.PRN) {
+            InlineReminderControls(
+                config = reminder,
+                slotWindows = slots.map { it.window },
+                globalWindowTimes = globalWindowTimes,
+                onChange = { reminder = it },
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+
         LabeledField(label = "Prescribed by") {
             HfTextField(value = prescribedBy, onValueChange = { prescribedBy = it }, placeholder = "Optional")
         }
@@ -424,6 +457,7 @@ private fun CustomEntryForm(
                             prescribedBy = prescribedBy.ifBlank { null },
                             notes = notes.ifBlank { null },
                         ),
+                        if (frequency.type == FrequencyType.PRN) InlineReminderConfig() else reminder,
                     )
                 },
             )

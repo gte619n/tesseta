@@ -98,6 +98,7 @@ class SyncE2ETest {
             mirror = mirror,
             replay = replay,
             deviceIdProvider = deviceId,
+            diagnostics = com.gte619n.healthfitness.data.sync.SyncDiagnostics(),
             io = Dispatchers.IO,
             clock = { System.currentTimeMillis() },
         )

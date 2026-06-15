@@ -257,6 +257,25 @@ class NutritionTodayViewModel @Inject constructor(
         }
     }
 
+    /**
+     * IMPL-STAB (Workstream E): retry a failed food-image generation. Optimistically
+     * flip the row to PENDING so it shows the spinner immediately, ask the backend
+     * to regenerate, then let the settle-poll swap in the finished image.
+     */
+    fun regenerateEntryImage(entryId: String) {
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                repository.regenerateEntryImage(date, entryId)
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, error = null) }
+                pollWhileImagesGenerate(_state.value.date)
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Couldn't retry the image") }
+            }
+        }
+    }
+
     fun deleteEntry(entryId: String) {
         if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
         val date = _state.value.date.format(ISO_DATE)

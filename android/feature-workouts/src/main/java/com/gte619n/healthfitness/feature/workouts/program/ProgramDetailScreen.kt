@@ -25,9 +25,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.HistoryEdu
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -96,6 +101,11 @@ fun ProgramDetailRoute(
         onRetry = viewModel::refresh,
         onRestoreParked = viewModel::restoreParked,
         onDiscardParked = viewModel::discardParked,
+        onStartEdit = viewModel::startEdit,
+        onCancelEdit = viewModel::cancelEdit,
+        onSaveEdit = viewModel::saveEdit,
+        onOpenPastSessions = viewModel::openPastSessions,
+        onDismissPastSessions = viewModel::dismissPastSessions,
     )
 }
 
@@ -111,6 +121,11 @@ fun ProgramDetailScreen(
     onRetry: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit = {},
     onDiscardParked: (ParkedCompletion) -> Unit = {},
+    onStartEdit: () -> Unit = {},
+    onCancelEdit: () -> Unit = {},
+    onSaveEdit: (title: String, description: String?) -> Unit = { _, _ -> },
+    onOpenPastSessions: () -> Unit = {},
+    onDismissPastSessions: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -122,6 +137,22 @@ fun ProgramDetailScreen(
             title = state.program?.title ?: "Program",
             subtitle = "Your periodized plan",
             onBack = onBack,
+            // IMPL-STAB G4: an edit affordance for title/description.
+            trailing = if (state.program != null) {
+                {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = "Edit program",
+                        tint = Hf.colors.textSecondary,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clickable { onStartEdit() }
+                            .padding(8.dp),
+                    )
+                }
+            } else {
+                null
+            },
         )
         when {
             state.loading -> LoadingState(Modifier.fillMaxSize())
@@ -133,6 +164,8 @@ fun ProgramDetailScreen(
             state.program != null -> ProgramBody(
                 program = state.program,
                 thisWeek = state.thisWeek,
+                hasPastSessions = state.pastSessions.isNotEmpty(),
+                activationIssues = state.activationIssues,
                 activeDraft = state.activeDraft,
                 parkedCompletion = state.parkedCompletion,
                 parkedError = state.parkedError,
@@ -144,10 +177,33 @@ fun ProgramDetailScreen(
                 onOpenSession = onOpenSession,
                 onRefineWithAi = { onRefineWithAi(state.program.programId) },
                 onActivate = onActivate,
+                onLogPastSession = onOpenPastSessions,
                 onRestoreParked = onRestoreParked,
                 onDiscardParked = onDiscardParked,
             )
         }
+    }
+
+    if (state.editing && state.program != null) {
+        EditProgramSheet(
+            initialTitle = state.program.title,
+            initialDescription = state.program.description.orEmpty(),
+            saving = state.savingEdit,
+            error = state.error,
+            onSave = onSaveEdit,
+            onDismiss = onCancelEdit,
+        )
+    }
+
+    if (state.showPastSessions) {
+        PastSessionsSheet(
+            sessions = state.pastSessions,
+            onPick = { scheduledId ->
+                onDismissPastSessions()
+                state.program?.let { onOpenSession(it.programId, scheduledId) }
+            },
+            onDismiss = onDismissPastSessions,
+        )
     }
 }
 
@@ -155,6 +211,8 @@ fun ProgramDetailScreen(
 private fun ProgramBody(
     program: WorkoutProgram,
     thisWeek: List<com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout>,
+    hasPastSessions: Boolean,
+    activationIssues: List<String>,
     activeDraft: WorkoutSessionDraft?,
     parkedCompletion: ParkedCompletion?,
     parkedError: String?,
@@ -164,6 +222,7 @@ private fun ProgramBody(
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRefineWithAi: () -> Unit,
     onActivate: () -> Unit,
+    onLogPastSession: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit,
     onDiscardParked: (ParkedCompletion) -> Unit,
 ) {
@@ -235,10 +294,25 @@ private fun ProgramBody(
                     Spacer(Modifier.height(12.dp))
                     ActivateButton(label = "Re-materialize sessions", onClick = onActivate)
                 }
-                // IMPL-18b: refine an active program in place via the designer chat.
-                if (program.status == ProgramStatus.ACTIVE) {
+                // IMPL-STAB G1: a 422 activation carries the actionable issue list
+                // — surface it inline instead of a generic failure.
+                if (activationIssues.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
-                    RefineWithAiRow(onClick = onRefineWithAi)
+                    ActivationIssues(activationIssues)
+                }
+                // IMPL-STAB G3: logging used to be reachable only from "This week".
+                // Offer a "log a past session" entry whenever earlier materialized
+                // sessions exist, so missed/back-dated sessions are loggable too.
+                if (hasPastSessions) {
+                    Spacer(Modifier.height(12.dp))
+                    LogPastSessionRow(onClick = onLogPastSession)
+                }
+                // IMPL-18b / IMPL-STAB G5: refine via the designer chat — for ACTIVE
+                // programs (edit-in-place) AND DRAFT programs (revise before/at
+                // activation; the commit re-activates them forward).
+                if (program.status == ProgramStatus.ACTIVE || program.status == ProgramStatus.DRAFT) {
+                    Spacer(Modifier.height(12.dp))
+                    RefineWithAiRow(status = program.status, onClick = onRefineWithAi)
                 }
                 Spacer(Modifier.height(18.dp))
             }
@@ -328,7 +402,7 @@ private fun ActivateButton(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RefineWithAiRow(onClick: () -> Unit) {
+private fun RefineWithAiRow(status: ProgramStatus, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -352,7 +426,13 @@ private fun RefineWithAiRow(onClick: () -> Unit) {
                 color = Hf.colors.accentDim,
             )
             Text(
-                "Revise from today forward — completed sessions are kept.",
+                // A DRAFT hasn't started, so there's nothing to "keep"; an ACTIVE
+                // program freezes completed sessions and revises forward (18b).
+                if (status == ProgramStatus.DRAFT) {
+                    "Describe changes — the assistant revises this draft."
+                } else {
+                    "Revise from today forward — completed sessions are kept."
+                },
                 style = Hf.type.bodySm,
                 color = Hf.colors.textTertiary,
             )
@@ -363,6 +443,191 @@ private fun RefineWithAiRow(onClick: () -> Unit) {
             tint = Hf.colors.accent,
             modifier = Modifier.size(16.dp),
         )
+    }
+}
+
+/** IMPL-STAB G1 — the validator issues from a failed activation, shown inline. */
+@Composable
+private fun ActivationIssues(issues: List<String>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, Hf.colors.alert.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+            .background(Hf.colors.alertBg, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "Can't activate yet — fix these first:",
+            style = Hf.type.bodyMd.copy(fontSize = 13.sp),
+            color = Hf.colors.alert,
+        )
+        issues.forEach { issue ->
+            Text(
+                "• $issue",
+                style = Hf.type.bodySm,
+                color = Hf.colors.textSecondary,
+            )
+        }
+    }
+}
+
+/** IMPL-STAB G3 — entry point into the past-session picker. */
+@Composable
+private fun LogPastSessionRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            Icons.Outlined.HistoryEdu,
+            contentDescription = null,
+            tint = Hf.colors.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Log a past session",
+                style = Hf.type.bodyMd.copy(fontSize = 13.sp),
+                color = Hf.colors.textPrimary,
+            )
+            Text(
+                "Record an earlier or missed workout.",
+                style = Hf.type.bodySm,
+                color = Hf.colors.textTertiary,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Outlined.ArrowForward,
+            contentDescription = "Log a past session",
+            tint = Hf.colors.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+/** IMPL-STAB G4 — edit the program's title/description (web parity). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditProgramSheet(
+    initialTitle: String,
+    initialDescription: String,
+    saving: Boolean,
+    error: String?,
+    onSave: (title: String, description: String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var title by remember { mutableStateOf(initialTitle) }
+    var description by remember { mutableStateOf(initialDescription) }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Hf.colors.canvas) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Edit program", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Title") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Description (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (error != null) {
+                Text(error, style = Hf.type.bodySm, color = Hf.colors.alert)
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Hf.colors.accent, RoundedCornerShape(10.dp))
+                    .clickable(enabled = !saving) {
+                        onSave(title, description)
+                    }
+                    .padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (saving) "Saving…" else "Save changes",
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textInverse,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * IMPL-STAB G3 — pick an earlier materialized session to log. The backend only
+ * logs against an existing scheduled session, so this lists the program's past
+ * sessions (date + label + status); tapping one opens the session logger.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PastSessionsSheet(
+    sessions: List<com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout>,
+    onPick: (scheduledId: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Hf.colors.canvas) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Log a past session", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+            if (sessions.isEmpty()) {
+                Text(
+                    "No earlier sessions to log.",
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textTertiary,
+                )
+            } else {
+                sessions.forEach { session ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
+                            .clickable { onPick(session.scheduledId) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                session.dayLabel,
+                                style = Hf.type.bodyMd.copy(fontSize = 13.sp),
+                                color = Hf.colors.textPrimary,
+                            )
+                            CapsLabel(
+                                "${session.date} · ${session.status.name.lowercase()}",
+                                color = Hf.colors.textTertiary,
+                            )
+                        }
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowForward,
+                            contentDescription = "Log ${session.dayLabel}",
+                            tint = Hf.colors.textSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

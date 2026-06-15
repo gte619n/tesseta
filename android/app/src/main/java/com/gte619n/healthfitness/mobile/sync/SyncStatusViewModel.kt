@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.net.Connectivity
 import com.gte619n.healthfitness.data.sync.OutboxRepository
+import com.gte619n.healthfitness.data.sync.SyncDiagnostics
 import com.gte619n.healthfitness.data.sync.SyncEngine
 import com.gte619n.healthfitness.data.sync.SyncScheduler
 import com.gte619n.healthfitness.ui.sync.SyncUiState
@@ -38,6 +39,7 @@ class SyncStatusViewModel @Inject constructor(
     private val outbox: OutboxRepository,
     private val syncEngine: SyncEngine,
     private val scheduler: SyncScheduler,
+    private val diagnostics: SyncDiagnostics,
     connectivity: Connectivity,
 ) : ViewModel() {
 
@@ -57,7 +59,8 @@ class SyncStatusViewModel @Inject constructor(
             outbox.pendingCount(),
             outbox.failedCount(),
             updatedElsewhere,
-        ) { online, pending, failed, updated ->
+            diagnostics.lastError,
+        ) { online, pending, failed, updated, lastError ->
             syncUiStateOf(
                 online = online,
                 // Pending = queued rows that have not yet failed; the FAILED state
@@ -66,6 +69,7 @@ class SyncStatusViewModel @Inject constructor(
                 failedCount = failed,
                 syncing = false,
                 updatedElsewhere = updated && pending == 0,
+                detail = lastError?.shortReason(),
             )
         }.stateIn(
             scope = viewModelScope,
@@ -79,8 +83,15 @@ class SyncStatusViewModel @Inject constructor(
      */
     fun retry() {
         viewModelScope.launch {
+            // Re-arm, then drain inline so a connected device gets immediate
+            // feedback (success clears the banner) instead of relying solely on
+            // the WorkManager enqueue, which silently no-ops while offline. The
+            // enqueue stays as the offline/connectivity-regained fallback.
             runCatching { outbox.rearmFailed() }
+                .onFailure { diagnostics.record("retry", it.message ?: it.javaClass.simpleName, cause = it) }
             scheduler.enqueueDrain()
+            runCatching { outbox.drain() }
+                .onFailure { diagnostics.record("retry-drain", it.message ?: it.javaClass.simpleName, cause = it) }
         }
         updatedElsewhere.update { false }
     }

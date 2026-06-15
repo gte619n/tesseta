@@ -3,7 +3,10 @@ package com.gte619n.healthfitness.feature.medical
 import com.gte619n.healthfitness.data.medications.AdherenceRepository
 import com.gte619n.healthfitness.data.medications.DrugRepository
 import com.gte619n.healthfitness.data.medications.MedicationRepository
+import com.gte619n.healthfitness.data.reminders.ReminderEngine
+import com.gte619n.healthfitness.data.reminders.ReminderSettingsRepository
 import com.gte619n.healthfitness.domain.medications.Drug
+import com.gte619n.healthfitness.domain.medications.ReminderSettings
 import com.gte619n.healthfitness.domain.medications.DrugCategory
 import com.gte619n.healthfitness.domain.medications.DrugForm
 import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
@@ -96,6 +99,19 @@ internal fun fakeMedicationRepository(
     coEvery { repo.todaysDoses() } returns doses
     return repo
 }
+
+internal fun fakeReminderSettingsRepository(
+    settings: ReminderSettings = ReminderSettings(),
+): ReminderSettingsRepository {
+    val repo = mockk<ReminderSettingsRepository>()
+    coEvery { repo.get() } returns settings
+    coEvery { repo.getCached() } returns settings
+    coEvery { repo.set(any()) } answers { firstArg() }
+    return repo
+}
+
+/** Relaxed mock — the engine's replan is fire-and-forget in these tests. */
+internal fun fakeReminderEngine(): ReminderEngine = mockk(relaxed = true)
 
 internal fun fakeAdherenceRepository(failOnLog: Boolean = false): AdherenceRepository {
     val repo = mockk<AdherenceRepository>()

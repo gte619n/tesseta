@@ -44,11 +44,22 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboardHidden|keyboard|navigation|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- IMPL-STAB Workstream F (item 4): medication reminder notifications
+                 deep-link to the dose checklist (healthfitness://medications/today)
+                 instead of opening app home. Matched by the medications LIST
+                 destination's navDeepLink in AppNavHost. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="healthfitness" android:host="medications" />
             </intent-filter>
         </activity>
 

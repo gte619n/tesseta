@@ -49,6 +49,16 @@ public class WorkoutProgramValidator {
             issues.add("Program has no phases.");
             return issues;
         }
+        // A program whose phases carry no training days materializes zero
+        // sessions on activation — a silent empty "This week". Block it here so
+        // the activate/commit 422 path explains why (IMPL-STAB G2). Each phase's
+        // days are its weekly microcycle; if none has any, nothing is schedulable.
+        boolean anySchedulableDay = program.phases().stream()
+            .anyMatch(phase -> phase.days() != null && !phase.days().isEmpty());
+        if (!anySchedulableDay) {
+            issues.add("Program has no training days to schedule — add at least one workout day before activating.");
+            return issues;
+        }
         Map<String, ExerciseDigest> digestByExercise = safeDigest(userId);
         for (ProgramPhase phase : program.phases()) {
             if (phase.deloadWeekIndex() != null

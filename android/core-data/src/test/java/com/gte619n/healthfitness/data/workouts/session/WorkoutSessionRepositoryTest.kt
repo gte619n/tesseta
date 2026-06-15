@@ -64,6 +64,7 @@ class WorkoutSessionRepositoryTest {
         mirror = mirror,
         replay = mockk(), // drain never runs in these tests
         deviceIdProvider = fakeDeviceIdProvider(),
+        diagnostics = com.gte619n.healthfitness.data.sync.SyncDiagnostics(),
         io = Dispatchers.Unconfined,
         clock = { now },
     )

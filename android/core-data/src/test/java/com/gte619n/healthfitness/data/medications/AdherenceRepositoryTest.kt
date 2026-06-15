@@ -42,6 +42,7 @@ class AdherenceRepositoryTest {
             mirror = mirror,
             replay = io.mockk.mockk(relaxed = true),
             deviceIdProvider = fakeDeviceIdProvider("device-A"),
+            diagnostics = com.gte619n.healthfitness.data.sync.SyncDiagnostics(),
             io = Dispatchers.Unconfined,
             clock = { 1_000L },
         )

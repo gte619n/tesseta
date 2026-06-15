@@ -51,6 +51,9 @@ import com.gte619n.healthfitness.feature.medical.components.DiscontinueDialog
 import com.gte619n.healthfitness.feature.medical.components.FrequencySelector
 import com.gte619n.healthfitness.feature.medical.components.DrugImage
 import com.gte619n.healthfitness.feature.medical.components.categoryLabel
+import com.gte619n.healthfitness.feature.medical.reminders.InlineReminderConfig
+import com.gte619n.healthfitness.feature.medical.reminders.InlineReminderControls
+import com.gte619n.healthfitness.feature.medical.reminders.ReminderPermissionWarning
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfCard
@@ -71,6 +74,7 @@ fun MedicationDetailScreen(
     viewModel: MedicationDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val reminder by viewModel.reminder.collectAsStateWithLifecycle()
     val deleted by viewModel.deleted.collectAsStateWithLifecycle()
 
     LaunchedEffect(deleted) {
@@ -90,6 +94,9 @@ fun MedicationDetailScreen(
             is MedicationDetailUiState.Ready -> DetailContent(
                 detail = s.detail,
                 actionInFlight = s.actionInFlight,
+                reminder = reminder,
+                onReminderChange = viewModel::onReminderChange,
+                onSaveReminder = viewModel::saveReminder,
                 onChangeDose = viewModel::changeDose,
                 onEditStartDate = viewModel::editStartDate,
                 onEditSchedule = viewModel::updateSchedule,
@@ -105,6 +112,9 @@ fun MedicationDetailScreen(
 private fun DetailContent(
     detail: MedicationDetail,
     actionInFlight: Boolean,
+    reminder: MedicationReminderUiState,
+    onReminderChange: (InlineReminderConfig) -> Unit,
+    onSaveReminder: () -> Unit,
     onChangeDose: (dose: Double, unit: String?, startDate: LocalDate?, notes: String?) -> Unit,
     onEditStartDate: (LocalDate) -> Unit,
     onEditSchedule: (FrequencyConfig) -> Unit,
@@ -191,6 +201,37 @@ private fun DetailContent(
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 med.correlatedMarkers.forEach { Pill(text = it, tone = HfTone.Neutral) }
+            }
+        }
+
+        // Reminders (IMPL-STAB Workstream F item 5): inline per-med toggle +
+        // per-slot "Remind at…" override, persisted to the shared settings doc.
+        // ACTIVE, non-PRN meds only — PRN never schedules.
+        if (med.status == MedicationStatus.ACTIVE &&
+            med.frequency.type != com.gte619n.healthfitness.domain.medications.FrequencyType.PRN
+        ) {
+            Spacer(Modifier.height(20.dp))
+            ReminderPermissionWarning()
+            InlineReminderControls(
+                config = reminder.config,
+                slotWindows = med.timeSlots.map { it.window },
+                globalWindowTimes = reminder.globalWindowTimes,
+                onChange = onReminderChange,
+            )
+            Spacer(Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Hf.colors.accent, RoundedCornerShape(8.dp))
+                    .clickable(enabled = !reminder.saving) { onSaveReminder() }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (reminder.saving) "Saving…" else "Save reminders",
+                    style = Hf.type.capsSm,
+                    color = Hf.colors.textInverse,
+                )
             }
         }
 
