@@ -95,7 +95,15 @@ cat >"$TMP_CONFIG" <<JSON
 }
 JSON
 
-deploy_args=(deploy --only firestore:indexes --project "$PROJECT_ID" --config "$TMP_CONFIG")
+# Target the named database via `firestore:<database>`, NOT `firestore:indexes`.
+# With the named-database array config form, firebase-tools (>=15) parses the
+# `:<x>` suffix of --only as a *database target name*, so `--only firestore:indexes`
+# looks for a database literally named "indexes", finds none, and silently
+# deploys nothing — then crashes in deployIndexes with
+# "Cannot read properties of undefined (reading 'map')". `firestore:<database>`
+# selects this database's config; since TMP_CONFIG declares only `indexes` (no
+# `rules`), only indexes are deployed.
+deploy_args=(deploy --only "firestore:${DATABASE}" --project "$PROJECT_ID" --config "$TMP_CONFIG")
 [[ "$FORCE" -eq 1 ]] && deploy_args+=(--force)
 
 echo "==> Running: firebase ${deploy_args[*]}"
