@@ -199,4 +199,11 @@ interface WorkoutProgramRepository {
         from: LocalDate,
         to: LocalDate,
     ): Result<List<ScheduledWorkout>>
+
+    /**
+     * Activate a program (materialize sessions + mark ACTIVE) and refresh the
+     * local mirror so the detail/list reflect it. Returns the materialized
+     * sessions. Online-only.
+     */
+    suspend fun activate(programId: String): Result<List<ScheduledWorkout>>
 }

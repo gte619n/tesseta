@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.data.workouts.program
 import com.gte619n.healthfitness.data.workouts.session.CompleteSessionRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -26,6 +27,14 @@ interface WorkoutProgramApi {
         @Query("from") from: String, // ISO LocalDate (yyyy-MM-dd)
         @Query("to") to: String,
     ): List<ScheduledWorkoutDto>
+
+    /**
+     * Activate a program: the backend materializes its phases into dated
+     * sessions (forward-only) and marks it ACTIVE. Returns the materialized
+     * sessions. Online-only, like the chat commit.
+     */
+    @POST("api/me/workout-programs/{id}/activate")
+    suspend fun activate(@Path("id") id: String): List<ScheduledWorkoutDto>
 
     /**
      * ADR-0012 / IMPL-17 D1+D2 — idempotent completion upsert for one

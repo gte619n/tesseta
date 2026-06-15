@@ -62,7 +62,12 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
                 if (support.killSwitchOn()) {
                     return@runCatching api.list().map { it.toDomain() }
                 }
-                if (programDao.observeActive().first().isEmpty()) fillPrograms()
+                // Refresh from the backend when online so freshly created/committed
+                // programs (which the mirror hasn't delta-pulled yet) show up
+                // immediately; offline, keep whatever the mirror has. Previously
+                // this only filled when the mirror was empty, so a just-committed
+                // program never appeared until the next sync.
+                runCatching { fillPrograms() }
                 // Ensure each program's full deep tree (phases → days → blocks →
                 // prescriptions + embedded exercise summaries) is cached, so the
                 // detail/workout screens render offline. The delta-pulled doc and
@@ -116,6 +121,23 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
                     .filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
                     .sortedBy { it.date }
                     .map { it.toDomain() }
+            }
+        }
+
+    override suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val sessions = api.activate(programId)
+                // Refresh the mirror so the detail/list reflect ACTIVE status and
+                // the materialized "this week" sessions without waiting for a sync.
+                runCatching { refreshDeep(programId) }
+                runCatching {
+                    support.refreshInto(
+                        MirrorTables.WORKOUT_SCHEDULED,
+                        sessions.map { it.toRefreshRow(programId) },
+                    )
+                }
+                sessions.map { it.toDomain() }
             }
         }
 

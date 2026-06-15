@@ -92,6 +92,7 @@ fun ProgramDetailRoute(
         onOpenWorkout = onOpenWorkout,
         onOpenSession = onOpenSession,
         onRefineWithAi = onRefineWithAi,
+        onActivate = viewModel::activate,
         onRetry = viewModel::refresh,
         onRestoreParked = viewModel::restoreParked,
         onDiscardParked = viewModel::discardParked,
@@ -106,6 +107,7 @@ fun ProgramDetailScreen(
     onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRefineWithAi: (programId: String) -> Unit = {},
+    onActivate: () -> Unit = {},
     onRetry: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit = {},
     onDiscardParked: (ParkedCompletion) -> Unit = {},
@@ -141,6 +143,7 @@ fun ProgramDetailScreen(
                 },
                 onOpenSession = onOpenSession,
                 onRefineWithAi = { onRefineWithAi(state.program.programId) },
+                onActivate = onActivate,
                 onRestoreParked = onRestoreParked,
                 onDiscardParked = onDiscardParked,
             )
@@ -160,6 +163,7 @@ private fun ProgramBody(
     onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRefineWithAi: () -> Unit,
+    onActivate: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit,
     onDiscardParked: (ParkedCompletion) -> Unit,
 ) {
@@ -218,6 +222,18 @@ private fun ProgramBody(
                         title = program.goalTitle,
                         onClick = { onOpenGoal(program.goalId!!) },
                     )
+                }
+                // A DRAFT program has no materialized sessions yet — activating
+                // it materializes the schedule and marks it ACTIVE, which is what
+                // makes a workout runnable from the "This week" strip below.
+                if (program.status == ProgramStatus.DRAFT) {
+                    Spacer(Modifier.height(12.dp))
+                    ActivateButton(label = "Activate program", onClick = onActivate)
+                } else if (program.status == ProgramStatus.ACTIVE && thisWeek.isEmpty()) {
+                    // Active but nothing scheduled this week — let the user
+                    // re-materialize (e.g. after an edit) to refill the schedule.
+                    Spacer(Modifier.height(12.dp))
+                    ActivateButton(label = "Re-materialize sessions", onClick = onActivate)
                 }
                 // IMPL-18b: refine an active program in place via the designer chat.
                 if (program.status == ProgramStatus.ACTIVE) {
@@ -294,6 +310,20 @@ private fun GoalLinkRow(title: String?, onClick: () -> Unit) {
             tint = Hf.colors.accent,
             modifier = Modifier.size(16.dp),
         )
+    }
+}
+
+@Composable
+private fun ActivateButton(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Hf.colors.accent, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = Hf.type.bodyMd, color = Hf.colors.textInverse)
     }
 }
 

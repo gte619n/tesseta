@@ -82,6 +82,24 @@ class ProgramDetailViewModel @Inject constructor(
 
     fun refresh() = load()
 
+    /**
+     * Activate (or re-activate) this program: the backend materializes its
+     * sessions and marks it ACTIVE, then we reload so the status + "this week"
+     * strip populate (which is what makes a workout runnable).
+     */
+    fun activate() {
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null) }
+            repository.activate(programId)
+                .onSuccess { load() }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(loading = false, error = e.message ?: "Couldn't activate the program")
+                    }
+                }
+        }
+    }
+
     /** Re-materialize the parked completion as a draft and open the logger. */
     fun restoreParked(parked: ParkedCompletion) {
         viewModelScope.launch {
