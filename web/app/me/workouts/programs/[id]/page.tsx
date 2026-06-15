@@ -73,10 +73,15 @@ export default async function ProgramDetailPage(props: {
     weekSessions = [];
   }
 
-  async function activate() {
+  async function activate(): Promise<{ ok: boolean; issues?: string[] }> {
     "use server";
-    await activateProgram(id);
-    revalidatePath(detailPath);
+    const result = await activateProgram(id);
+    if (result.ok) {
+      revalidatePath(detailPath);
+      return { ok: true };
+    }
+    // 422 — surface the validator's actionable issues inline (IMPL-STAB G1).
+    return { ok: false, issues: result.issues };
   }
 
   async function archive() {

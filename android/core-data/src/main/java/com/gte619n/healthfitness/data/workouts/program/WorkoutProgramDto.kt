@@ -28,6 +28,16 @@ import java.time.LocalDate
 // those adapters; enums are parsed with safe fallback in the mapper so an
 // unknown server value degrades rather than crashes the whole parse.
 
+/**
+ * IMPL-STAB G4 — metadata-only program edit body (PATCH). Maps onto the
+ * backend's UpdateProgramRequest; only [title]/[description] are sent so the
+ * server leaves everything else (phases, schedule, status) unchanged.
+ */
+data class UpdateProgramDetailsRequest(
+    val title: String,
+    val description: String?,
+)
+
 data class IntensityDto(
     val kind: String,
     val value: Double? = null,

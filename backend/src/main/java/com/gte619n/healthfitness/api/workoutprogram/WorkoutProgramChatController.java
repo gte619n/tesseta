@@ -120,9 +120,9 @@ public class WorkoutProgramChatController {
 
     /**
      * The pre-chat form selections, sent on the FIRST message to open a thread.
-     * {@code programId} (IMPL-18b) opens the chat in edit mode against an
-     * already-active program; when set, the schedule/goal are seeded from that
-     * program and the form schedule is ignored.
+     * {@code programId} (IMPL-18b / IMPL-STAB G5) opens the chat in edit mode
+     * against an existing program (DRAFT or ACTIVE); when set, the schedule/goal
+     * are seeded from that program and the form schedule is ignored.
      */
     public record ChatRequest(String threadId, String message, ProgramSchedule schedule,
                               String goalId, String programId) {}
@@ -191,8 +191,9 @@ public class WorkoutProgramChatController {
             thread = chat.findThread(userId, body.threadId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chat thread not found"));
         } else if (body.programId() != null && !body.programId().isBlank()) {
-            // IMPL-18b edit mode: bind the thread to an existing active program;
-            // the schedule + goal come from that program (the form is ignored).
+            // IMPL-18b / IMPL-STAB G5 edit mode: bind the thread to an existing
+            // program (DRAFT or ACTIVE); the schedule + goal come from that
+            // program (the form is ignored).
             WorkoutProgram existing = service.findById(userId, body.programId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Program not found"));
             String threadId = UUID.randomUUID().toString();
@@ -387,11 +388,13 @@ public class WorkoutProgramChatController {
     }
 
     /**
-     * IMPL-18b edit-mode context: the program the user is revising, its current
-     * phase/day/exercise structure, and the FREEZE boundary — weeks before today
-     * are completed and immutable, so the model must only change things from
-     * today forward and keep elapsed weeks intact (the timeline stays anchored to
-     * the original start date).
+     * IMPL-18b / IMPL-STAB G5 edit-mode context: the program the user is
+     * revising and its current phase/day/exercise structure. For an
+     * already-running program (started, with completed sessions) it leads with
+     * the FREEZE boundary — weeks before today are immutable, so the model
+     * changes things from today forward and keeps elapsed weeks intact (the
+     * timeline stays anchored). For a DRAFT (not yet started, nothing completed)
+     * there is nothing to freeze, so the model may restructure freely.
      */
     private String renderExistingProgram(String userId, String programId) {
         WorkoutProgram p = service.findById(userId, programId).orElse(null);
@@ -400,8 +403,17 @@ public class WorkoutProgramChatController {
         }
         LocalDate today = LocalDate.now();
         LocalDate start = p.startDate();
+        int done = scheduleService.completedCount(userId, programId);
+        // "In progress" = it has actually begun (started in the past or has
+        // logged sessions). A DRAFT is editable with no freeze constraint.
+        boolean inProgress = done > 0 || (start != null && !start.isAfter(today));
         StringBuilder sb = new StringBuilder();
-        sb.append("EDITING AN ACTIVE PROGRAM (revise it in place — do NOT start over):\n");
+        if (inProgress) {
+            sb.append("EDITING AN IN-PROGRESS PROGRAM (revise it in place — do NOT start over):\n");
+        } else {
+            sb.append("EDITING A DRAFT PROGRAM (revise it in place — do NOT start over; "
+                + "you may restructure it freely since nothing has been performed yet):\n");
+        }
         sb.append("  title: ").append(p.title()).append('\n');
         if (start != null) {
             long weeksIn = Math.max(0, java.time.temporal.ChronoUnit.WEEKS.between(start, today));
@@ -409,14 +421,15 @@ public class WorkoutProgramChatController {
               .append(" (today is ").append(today)
               .append(", ~week ").append(weeksIn + 1).append(" of the program)\n");
         }
-        int done = scheduleService.completedCount(userId, programId);
         sb.append("  completed sessions so far: ").append(done);
         scheduleService.lastCompletedDate(userId, programId)
             .ifPresent(d -> sb.append(" (most recent ").append(d).append(')'));
         sb.append('\n');
-        sb.append("  FREEZE RULE: every session dated before ").append(today)
-          .append(" is DONE and immutable. Only propose changes from ").append(today)
-          .append(" onward; keep already-elapsed weeks/phases unchanged so dates stay anchored.\n");
+        if (inProgress) {
+            sb.append("  FREEZE RULE: every session dated before ").append(today)
+              .append(" is DONE and immutable. Only propose changes from ").append(today)
+              .append(" onward; keep already-elapsed weeks/phases unchanged so dates stay anchored.\n");
+        }
         sb.append("  CURRENT STRUCTURE:\n");
         for (ProgramPhase phase : p.phases()) {
             sb.append("  - phase \"").append(phase.title()).append("\" — ")

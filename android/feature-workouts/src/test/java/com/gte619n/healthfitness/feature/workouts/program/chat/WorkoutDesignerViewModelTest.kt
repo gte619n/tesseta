@@ -10,9 +10,11 @@ import com.gte619n.healthfitness.data.workouts.LocationRepository
 import com.gte619n.healthfitness.data.workouts.program.chat.ProgramCommitResult
 import com.gte619n.healthfitness.data.workouts.program.chat.ScheduleDto
 import com.gte619n.healthfitness.data.workouts.program.chat.WorkoutProgramChatRepository
+import androidx.lifecycle.SavedStateHandle
 import com.gte619n.healthfitness.data.workouts.trt.TrtContextRepository
 import com.gte619n.healthfitness.domain.common.DayOfWeek
 import com.gte619n.healthfitness.domain.workouts.Location
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -50,6 +52,7 @@ class WorkoutDesignerViewModelTest {
     private val locationRepo = mockk<LocationRepository>()
     private val goalsRepo = mockk<GoalsRepository>(relaxed = true)
     private val trtRepo = mockk<TrtContextRepository>()
+    private val programRepo = mockk<WorkoutProgramRepository>(relaxed = true)
     private val connectivity = mockk<Connectivity>()
 
     /** A deep-program proposal JSON with the IMPL-18 additive fields populated. */
@@ -124,7 +127,9 @@ class WorkoutDesignerViewModelTest {
             locationRepository = locationRepo,
             goalsRepository = goalsRepo,
             trtRepository = trtRepo,
+            programRepository = programRepo,
             connectivity = connectivity,
+            savedStateHandle = SavedStateHandle(),
             moshi = moshi,
         )
     }

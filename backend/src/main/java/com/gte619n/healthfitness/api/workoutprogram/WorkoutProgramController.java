@@ -123,17 +123,20 @@ public class WorkoutProgramController {
     }
 
     @PostMapping("/{programId}/activate")
-    public List<ScheduledWorkoutResponse> activate(@PathVariable String programId) {
+    public ResponseEntity<?> activate(@PathVariable String programId) {
         String userId = currentUser.get().userId();
         WorkoutProgram p = service.findById(userId, programId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         List<String> issues = validator.validate(userId, p);
         if (!issues.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, String.join("; ", issues));
+            // Return the flat issue list as { issues: [...] } — the same shape as
+            // the designer commit 422 — so clients can surface the specific,
+            // actionable problems inline rather than a generic failure (IMPL-STAB G1).
+            return ResponseEntity.unprocessableEntity().body(java.util.Map.of("issues", issues));
         }
         List<ScheduledWorkout> scheduled = schedule.activate(userId, programId);
         syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
-        return assembler.scheduled(userId, scheduled);
+        return ResponseEntity.ok(assembler.scheduled(userId, scheduled));
     }
 
     /**
