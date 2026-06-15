@@ -83,13 +83,31 @@ export function validateProgram(programId: string): Promise<string[]> {
   return send<string[]>(`/api/me/workout-programs/${programId}/validate`, "POST");
 }
 
-export function activateProgram(
+// Activate result: 200 materializes sessions; 422 returns the validator's
+// actionable issue list ({ issues: [] }, same shape as the designer commit) so
+// the UI can surface the specific problems inline (IMPL-STAB G1).
+export type ActivateProgramResult =
+  | { ok: true; sessions: ScheduledWorkoutResponse[] }
+  | { ok: false; issues: string[] };
+
+export async function activateProgram(
   programId: string,
-): Promise<ScheduledWorkoutResponse[]> {
-  return send<ScheduledWorkoutResponse[]>(
+): Promise<ActivateProgramResult> {
+  const res = await apiFetch(
     `/api/me/workout-programs/${programId}/activate`,
-    "POST",
+    { method: "POST" },
   );
+  if (res.ok) {
+    const sessions = (await res.json()) as ScheduledWorkoutResponse[];
+    return { ok: true, sessions };
+  }
+  if (res.status === 422) {
+    const body = (await res.json().catch(() => ({ issues: [] }))) as {
+      issues?: string[];
+    };
+    return { ok: false, issues: body.issues ?? [] };
+  }
+  throw new BackendError(`activate returned ${res.status}`, res.status);
 }
 
 // Idempotent completion upsert (ADR-0012 / IMPL-17 D1–D2): mark a scheduled

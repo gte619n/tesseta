@@ -11,7 +11,9 @@ type Props = {
   programTitle: string;
   programDescription: string;
   status: string;
-  activate: () => Promise<void>;
+  // 422 returns the validator's actionable issues so we can surface them inline
+  // rather than a generic toast (IMPL-STAB G1).
+  activate: () => Promise<{ ok: boolean; issues?: string[] }>;
   archive: () => Promise<void>;
   update: (title: string, description: string) => Promise<void>;
 };
@@ -34,11 +36,21 @@ export function ProgramDetailActions({
   function onActivate() {
     startTransition(async () => {
       try {
-        await activate();
-        toast.success("Program activated", {
-          description: "Scheduled sessions have been materialized.",
-        });
-        router.refresh();
+        const result = await activate();
+        if (result.ok) {
+          toast.success("Program activated", {
+            description: "Scheduled sessions have been materialized.",
+          });
+          router.refresh();
+        } else {
+          // Surface the specific validator issues so the user knows what to fix.
+          const issues = result.issues ?? [];
+          toast.error("Can't activate yet", {
+            description: issues.length
+              ? issues.join(" ")
+              : "Fix the program's issues and try again.",
+          });
+        }
       } catch {
         toast.error("Couldn't activate program", { description: "Try again." });
       }
@@ -74,7 +86,9 @@ export function ProgramDetailActions({
       >
         Edit
       </button>
-      {status === "ACTIVE" ? (
+      {status === "ACTIVE" || status === "DRAFT" ? (
+        // IMPL-18b (ACTIVE: edit in place) + IMPL-STAB G5 (DRAFT: revise before
+        // activating; the commit re-activates the draft forward).
         <button
           type="button"
           onClick={() =>
