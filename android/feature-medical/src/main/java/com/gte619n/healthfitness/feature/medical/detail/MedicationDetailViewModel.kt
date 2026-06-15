@@ -3,12 +3,18 @@ package com.gte619n.healthfitness.feature.medical.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.data.reminders.ReminderEngine
+import com.gte619n.healthfitness.data.reminders.ReminderSettingsRepository
 import com.gte619n.healthfitness.domain.medications.ChangeDoseRequest
 import com.gte619n.healthfitness.domain.medications.DiscontinueReason
 import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.MedicationDetail
 import com.gte619n.healthfitness.data.medications.MedicationRepository
+import com.gte619n.healthfitness.domain.medications.MedicationReminderOverride
+import com.gte619n.healthfitness.domain.medications.ReminderSettings
+import com.gte619n.healthfitness.domain.medications.TimeWindow
 import com.gte619n.healthfitness.domain.medications.UpdateMedicationRequest
+import com.gte619n.healthfitness.feature.medical.reminders.InlineReminderConfig
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,10 +34,23 @@ sealed interface MedicationDetailUiState {
     data class Error(val message: String) : MedicationDetailUiState
 }
 
+/**
+ * Inline reminder edit state for the detail/edit screen (IMPL-STAB Workstream F
+ * item 5): the editable per-med override plus the global defaults to show as the
+ * fallback time. [saving] gates the save affordance.
+ */
+data class MedicationReminderUiState(
+    val config: InlineReminderConfig = InlineReminderConfig(),
+    val globalWindowTimes: Map<TimeWindow, String> = ReminderSettings.DEFAULT_WINDOW_TIMES,
+    val saving: Boolean = false,
+)
+
 @HiltViewModel
 class MedicationDetailViewModel @Inject constructor(
     savedState: SavedStateHandle,
     private val medications: MedicationRepository,
+    private val reminderSettings: ReminderSettingsRepository,
+    private val reminderEngine: ReminderEngine,
     private val snackbar: SnackbarController,
 ) : ViewModel() {
 
@@ -42,12 +61,16 @@ class MedicationDetailViewModel @Inject constructor(
     private val _state = MutableStateFlow<MedicationDetailUiState>(MedicationDetailUiState.Loading)
     val state: StateFlow<MedicationDetailUiState> = _state.asStateFlow()
 
+    private val _reminder = MutableStateFlow(MedicationReminderUiState())
+    val reminder: StateFlow<MedicationReminderUiState> = _reminder.asStateFlow()
+
     /** Emitted true after a successful delete so the screen can pop back. */
     private val _deleted = MutableStateFlow(false)
     val deleted: StateFlow<Boolean> = _deleted.asStateFlow()
 
     init {
         refresh()
+        loadReminder()
     }
 
     fun refresh() {
@@ -59,6 +82,60 @@ class MedicationDetailViewModel @Inject constructor(
                     _state.value =
                         MedicationDetailUiState.Error(it.message ?: "Could not load medication")
                 }
+        }
+    }
+
+    /** Load this med's current reminder override + global defaults into edit state. */
+    private fun loadReminder() {
+        viewModelScope.launch {
+            runCatching { reminderSettings.get() }
+                .onSuccess { s ->
+                    val override = s.perMedication[medicationId] ?: MedicationReminderOverride()
+                    _reminder.update {
+                        it.copy(
+                            config = InlineReminderConfig(
+                                enabled = override.enabled,
+                                times = override.times,
+                            ),
+                            globalWindowTimes = s.windowTimes,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun onReminderChange(config: InlineReminderConfig) =
+        _reminder.update { it.copy(config = config) }
+
+    /**
+     * Persist the edited reminder override onto the shared settings doc and
+     * re-plan. A default config (enabled, no custom times) clears any existing
+     * override so the doc stays minimal.
+     */
+    fun saveReminder() {
+        val cfg = _reminder.value.config
+        _reminder.update { it.copy(saving = true) }
+        viewModelScope.launch {
+            runCatching {
+                val current = reminderSettings.get()
+                val isDefault = cfg.enabled && cfg.times.isEmpty()
+                val perMed = if (isDefault) {
+                    current.perMedication - medicationId
+                } else {
+                    current.perMedication + (
+                        medicationId to MedicationReminderOverride(
+                            enabled = cfg.enabled, times = cfg.times,
+                        )
+                    )
+                }
+                reminderSettings.set(current.copy(perMedication = perMed))
+            }.onSuccess {
+                runCatching { reminderEngine.replan() }
+                snackbar.show("Reminders updated")
+            }.onFailure {
+                snackbar.showError(it.message ?: "Couldn't update reminders")
+            }
+            _reminder.update { it.copy(saving = false) }
         }
     }
 

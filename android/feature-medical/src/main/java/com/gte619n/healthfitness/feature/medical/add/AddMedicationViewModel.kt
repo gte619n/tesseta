@@ -3,12 +3,18 @@ package com.gte619n.healthfitness.feature.medical.add
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.net.Connectivity
+import com.gte619n.healthfitness.data.reminders.ReminderEngine
+import com.gte619n.healthfitness.data.reminders.ReminderSettingsRepository
 import com.gte619n.healthfitness.domain.medications.CreateMedicationRequest
 import com.gte619n.healthfitness.domain.medications.Drug
 import com.gte619n.healthfitness.domain.medications.DrugLookupEvent
 import com.gte619n.healthfitness.data.medications.DrugRepository
 import com.gte619n.healthfitness.domain.medications.Medication
 import com.gte619n.healthfitness.data.medications.MedicationRepository
+import com.gte619n.healthfitness.domain.medications.MedicationReminderOverride
+import com.gte619n.healthfitness.domain.medications.ReminderSettings
+import com.gte619n.healthfitness.domain.medications.TimeWindow
+import com.gte619n.healthfitness.feature.medical.reminders.InlineReminderConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,6 +35,11 @@ data class AddMedicationUiState(
     val isLooking: Boolean = false,
     val isSubmitting: Boolean = false,
     val error: String? = null,
+    /**
+     * Global default window times, for the inline reminder controls' fallback
+     * display (IMPL-STAB Workstream F item 5). Loaded from cached settings.
+     */
+    val globalWindowTimes: Map<TimeWindow, String> = ReminderSettings.DEFAULT_WINDOW_TIMES,
 ) {
     enum class Step { SEARCH, FORM, CUSTOM }
 }
@@ -37,6 +48,8 @@ data class AddMedicationUiState(
 class AddMedicationViewModel @Inject constructor(
     private val drugs: DrugRepository,
     private val medications: MedicationRepository,
+    private val reminderSettings: ReminderSettingsRepository,
+    private val reminderEngine: ReminderEngine,
     connectivity: Connectivity,
 ) : ViewModel() {
 
@@ -53,6 +66,7 @@ class AddMedicationViewModel @Inject constructor(
 
     init {
         loadCatalog()
+        loadReminderDefaults()
     }
 
     private fun loadCatalog() {
@@ -60,6 +74,14 @@ class AddMedicationViewModel @Inject constructor(
             runCatching { drugs.catalog() }
                 .onSuccess { catalog -> _state.update { it.copy(catalog = catalog) } }
             // Catalog failure is non-fatal; SSE lookup still works.
+        }
+    }
+
+    /** Cached-only read of the global window times for the inline picker default. */
+    private fun loadReminderDefaults() {
+        viewModelScope.launch {
+            runCatching { reminderSettings.getCached() }
+                .onSuccess { s -> _state.update { it.copy(globalWindowTimes = s.windowTimes) } }
         }
     }
 
@@ -159,12 +181,17 @@ class AddMedicationViewModel @Inject constructor(
         }
     }
 
-    fun submit(request: CreateMedicationRequest, onDone: (Medication) -> Unit) {
+    fun submit(
+        request: CreateMedicationRequest,
+        reminder: InlineReminderConfig = InlineReminderConfig(),
+        onDone: (Medication) -> Unit,
+    ) {
         if (_state.value.isSubmitting) return
         _state.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             runCatching { medications.create(request) }
                 .onSuccess { created ->
+                    persistReminderOverride(created.medicationId, reminder)
                     _state.update { it.copy(isSubmitting = false) }
                     onDone(created)
                 }
@@ -174,5 +201,36 @@ class AddMedicationViewModel @Inject constructor(
                     }
                 }
         }
+    }
+
+    /**
+     * Persist the inline reminder config onto the shared [ReminderSettings] doc
+     * (IMPL-STAB Workstream F item 5), keyed by the new medication id. Only a
+     * non-default override (muted, or any pinned time) is stored, so an "all
+     * defaults" med keeps the settings doc minimal. Best-effort + offline-safe:
+     * the medication is already created, so a failed settings write (e.g.
+     * offline) must not surface as a save error — the med still reminds at the
+     * global default. Always re-plan so the alarm chain picks up the new med.
+     */
+    private suspend fun persistReminderOverride(
+        medicationId: String,
+        reminder: InlineReminderConfig,
+    ) {
+        val isDefault = reminder.enabled && reminder.times.isEmpty()
+        if (!isDefault) {
+            runCatching {
+                val current = reminderSettings.getCached()
+                val merged = current.copy(
+                    perMedication = current.perMedication + (
+                        medicationId to MedicationReminderOverride(
+                            enabled = reminder.enabled,
+                            times = reminder.times,
+                        )
+                    ),
+                )
+                reminderSettings.set(merged)
+            }
+        }
+        runCatching { reminderEngine.replan() }
     }
 }
