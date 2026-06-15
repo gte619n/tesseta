@@ -51,6 +51,51 @@ class WorkoutScheduleServiceTest {
         assertEquals(ProgramStatus.ACTIVE, programs.findById("u1", created.programId()).orElseThrow().status());
     }
 
+    @Test
+    void reactivatePreservesCompletedSessionsAndRewritesOnlyFuturePlanned() {
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Squat", 0, List.of())));
+        ProgramPhase phase = new ProgramPhase(null, "Accumulation", "Hypertrophy", 0, null,
+            4, null, null, null, null, List.of(mon));
+        // Started two weeks ago: week 1 is in the past, weeks 3-4 are ahead.
+        LocalDate start = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .minusWeeks(2);
+        WorkoutProgram input = new WorkoutProgram("u1", null, "Test", null, null, ProgramStatus.DRAFT,
+            ProgramSource.MANUAL, start, null, null, List.of(phase), null, null, null);
+        WorkoutProgram created = programService.create(input);
+        String pid = created.programId();
+
+        // A week-1 session that was performed in the past (manually materialized
+        // when the program first started, then logged COMPLETED).
+        ScheduledWorkout done = new ScheduledWorkout("u1", pid, start + "_wd_done",
+            start, created.phases().get(0).phaseId(), "wd_done", "Lower", 1, false, "home",
+            ScheduledStatus.COMPLETED, mon, java.time.Instant.now(), 3600);
+        scheduled.save(done);
+
+        // First activation materializes the remaining (future) weeks.
+        scheduleService.activate("u1", pid);
+        long futurePlanned = scheduled.findByProgram("u1", pid, LocalDate.now(), LocalDate.now().plusYears(1))
+            .stream().filter(s -> s.status() == ScheduledStatus.PLANNED).count();
+        assertTrue(futurePlanned > 0, "expected future PLANNED sessions after activate");
+
+        // Re-activate (what an IMPL-18b edit-commit triggers).
+        scheduleService.activate("u1", pid);
+
+        // The completed past session is untouched, and still the only COMPLETED one.
+        ScheduledWorkout still = scheduled.findById("u1", pid, start + "_wd_done").orElseThrow();
+        assertEquals(ScheduledStatus.COMPLETED, still.status());
+        assertEquals(1, scheduleService.completedCount("u1", pid));
+        // No PLANNED session was created on a past date (the freeze boundary holds).
+        assertTrue(scheduled.findByProgram("u1", pid, LocalDate.MIN, LocalDate.now().minusDays(1))
+            .stream().noneMatch(s -> s.status() == ScheduledStatus.PLANNED));
+    }
+
     static class FakeProgramRepo implements WorkoutProgramRepository {
         final Map<String, WorkoutProgram> store = new ConcurrentHashMap<>();
         @Override public Optional<WorkoutProgram> findById(String userId, String programId) {

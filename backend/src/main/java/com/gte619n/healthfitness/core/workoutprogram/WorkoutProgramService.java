@@ -52,7 +52,8 @@ public class WorkoutProgramService {
             phases,
             now,
             now,
-            null
+            null,
+            input.nutritionGuidance()
         );
         programs.save(program);
         return program;
@@ -87,7 +88,8 @@ public class WorkoutProgramService {
             newPhases,
             e.createdAt(),
             Instant.now(),
-            e.completedAt()
+            e.completedAt(),
+            e.nutritionGuidance()
         );
         programs.save(updated);
         return updated;
@@ -99,7 +101,8 @@ public class WorkoutProgramService {
             e.userId(), e.programId(), e.title(), e.description(), e.goalId(), status,
             e.source(), e.startDate(), e.schedule(), e.phaseOrder(), e.phases(),
             e.createdAt(), Instant.now(),
-            status == ProgramStatus.COMPLETED ? Instant.now() : e.completedAt()
+            status == ProgramStatus.COMPLETED ? Instant.now() : e.completedAt(),
+            e.nutritionGuidance()
         );
         programs.save(updated);
         return updated;
@@ -133,7 +136,7 @@ public class WorkoutProgramService {
             cursor = phaseEnd.plusDays(1);
             out.add(new ProgramPhase(
                 phaseId, p.title(), p.focus(), i, status, weeks, p.deloadWeekIndex(),
-                phaseStart, phaseEnd, p.completedAt(), normalizeDays(p.days())
+                phaseStart, phaseEnd, p.completedAt(), normalizeDays(p.days()), p.nutritionGuidance()
             ));
         }
         return out;
@@ -176,7 +179,7 @@ public class WorkoutProgramService {
             Prescription p = ps.get(i);
             out.add(new Prescription(p.exerciseId(), i, p.sets(), p.repsMin(), p.repsMax(),
                 p.durationSeconds(), p.intensity(), p.restSeconds(), p.tempo(), p.notes(),
-                p.deloadModifier(), p.loggedSets()));
+                p.deloadModifier(), p.loggedSets(), p.targetWeightLbs(), p.loadBasis()));
         }
         return out;
     }

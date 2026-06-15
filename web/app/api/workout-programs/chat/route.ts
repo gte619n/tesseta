@@ -25,6 +25,8 @@ export async function POST(request: Request) {
         message?: string;
         schedule?: ChatSchedule | null;
         goalId?: string | null;
+        // IMPL-18b: bind a new thread to an active program for in-place editing.
+        programId?: string | null;
       }
     | null;
 
@@ -40,6 +42,7 @@ export async function POST(request: Request) {
       message: body.message,
       schedule: body.schedule ?? null,
       goalId: body.goalId ?? null,
+      programId: body.programId ?? null,
     }),
   });
 }

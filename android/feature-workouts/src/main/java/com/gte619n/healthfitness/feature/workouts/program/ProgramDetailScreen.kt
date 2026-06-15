@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Icon
@@ -43,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
+import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
@@ -70,6 +72,7 @@ fun ProgramDetailRoute(
     onOpenGoal: (String) -> Unit,
     onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
+    onRefineWithAi: (programId: String) -> Unit = {},
     viewModel: ProgramDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -88,6 +91,8 @@ fun ProgramDetailRoute(
         onOpenGoal = onOpenGoal,
         onOpenWorkout = onOpenWorkout,
         onOpenSession = onOpenSession,
+        onRefineWithAi = onRefineWithAi,
+        onActivate = viewModel::activate,
         onRetry = viewModel::refresh,
         onRestoreParked = viewModel::restoreParked,
         onDiscardParked = viewModel::discardParked,
@@ -101,6 +106,8 @@ fun ProgramDetailScreen(
     onOpenGoal: (String) -> Unit,
     onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
+    onRefineWithAi: (programId: String) -> Unit = {},
+    onActivate: () -> Unit = {},
     onRetry: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit = {},
     onDiscardParked: (ParkedCompletion) -> Unit = {},
@@ -135,6 +142,8 @@ fun ProgramDetailScreen(
                     onOpenWorkout(state.program.programId, phaseId, dayId)
                 },
                 onOpenSession = onOpenSession,
+                onRefineWithAi = { onRefineWithAi(state.program.programId) },
+                onActivate = onActivate,
                 onRestoreParked = onRestoreParked,
                 onDiscardParked = onDiscardParked,
             )
@@ -153,6 +162,8 @@ private fun ProgramBody(
     onOpenGoal: (String) -> Unit,
     onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
+    onRefineWithAi: () -> Unit,
+    onActivate: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit,
     onDiscardParked: (ParkedCompletion) -> Unit,
 ) {
@@ -211,6 +222,23 @@ private fun ProgramBody(
                         title = program.goalTitle,
                         onClick = { onOpenGoal(program.goalId!!) },
                     )
+                }
+                // A DRAFT program has no materialized sessions yet — activating
+                // it materializes the schedule and marks it ACTIVE, which is what
+                // makes a workout runnable from the "This week" strip below.
+                if (program.status == ProgramStatus.DRAFT) {
+                    Spacer(Modifier.height(12.dp))
+                    ActivateButton(label = "Activate program", onClick = onActivate)
+                } else if (program.status == ProgramStatus.ACTIVE && thisWeek.isEmpty()) {
+                    // Active but nothing scheduled this week — let the user
+                    // re-materialize (e.g. after an edit) to refill the schedule.
+                    Spacer(Modifier.height(12.dp))
+                    ActivateButton(label = "Re-materialize sessions", onClick = onActivate)
+                }
+                // IMPL-18b: refine an active program in place via the designer chat.
+                if (program.status == ProgramStatus.ACTIVE) {
+                    Spacer(Modifier.height(12.dp))
+                    RefineWithAiRow(onClick = onRefineWithAi)
                 }
                 Spacer(Modifier.height(18.dp))
             }
@@ -279,6 +307,59 @@ private fun GoalLinkRow(title: String?, onClick: () -> Unit) {
         Icon(
             Icons.AutoMirrored.Outlined.ArrowForward,
             contentDescription = "Open goal",
+            tint = Hf.colors.accent,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun ActivateButton(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Hf.colors.accent, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = Hf.type.bodyMd, color = Hf.colors.textInverse)
+    }
+}
+
+@Composable
+private fun RefineWithAiRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, Hf.colors.accent.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+            .background(Hf.colors.accentBg, RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            Icons.Outlined.AutoAwesome,
+            contentDescription = null,
+            tint = Hf.colors.accent,
+            modifier = Modifier.size(16.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Refine with AI",
+                style = Hf.type.bodyMd.copy(fontSize = 13.sp),
+                color = Hf.colors.accentDim,
+            )
+            Text(
+                "Revise from today forward — completed sessions are kept.",
+                style = Hf.type.bodySm,
+                color = Hf.colors.textTertiary,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Outlined.ArrowForward,
+            contentDescription = "Refine program with AI",
             tint = Hf.colors.accent,
             modifier = Modifier.size(16.dp),
         )

@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.api.workoutprogram;
 
+import com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramPhase;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSchedule;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSource;
@@ -13,5 +14,6 @@ public record CreateProgramRequest(
     ProgramSchedule schedule,
     LocalDate startDate,
     ProgramSource source,
-    List<ProgramPhase> phases
+    List<ProgramPhase> phases,
+    NutritionGuidance nutritionGuidance  // IMPL-18: program-level fallback; phases may also carry their own
 ) {}

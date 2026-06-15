@@ -20,5 +20,19 @@ public record ProgramPhase(
     LocalDate targetStartDate,
     LocalDate targetEndDate,
     Instant completedAt,
-    List<WorkoutDay> days
-) {}
+    List<WorkoutDay> days,
+    NutritionGuidance nutritionGuidance  // IMPL-18: per-phase calorie/macro guidance (display-only); null = none
+) {
+    /**
+     * Pre-IMPL-18 canonical signature; delegates with no nutrition guidance so
+     * existing callers compile unchanged (IMPL-18 D2).
+     */
+    public ProgramPhase(
+        String phaseId, String title, String focus, int orderIndex, ProgramPhaseStatus status,
+        int weeks, Integer deloadWeekIndex, LocalDate targetStartDate, LocalDate targetEndDate,
+        Instant completedAt, List<WorkoutDay> days
+    ) {
+        this(phaseId, title, focus, orderIndex, status, weeks, deloadWeekIndex,
+            targetStartDate, targetEndDate, completedAt, days, null);
+    }
+}

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.Icon
@@ -51,6 +52,7 @@ fun WorkoutsHubRoute(
     onOpenGyms: () -> Unit,
     onOpenPrograms: () -> Unit,
     onResumeSession: (programId: String, scheduledId: String) -> Unit,
+    onDesignProgram: () -> Unit = {},
     viewModel: WorkoutsHubViewModel = hiltViewModel(),
 ) {
     val activeDraft by viewModel.activeDraft.collectAsStateWithLifecycle()
@@ -70,6 +72,7 @@ fun WorkoutsHubRoute(
         onBack = onBack,
         onOpenGyms = onOpenGyms,
         onOpenPrograms = onOpenPrograms,
+        onDesignProgram = onDesignProgram,
         activeDraft = activeDraft,
         onResumeSession = { draft -> onResumeSession(draft.programId, draft.scheduledId) },
         parkedCompletion = parkedCompletion,
@@ -84,6 +87,7 @@ fun WorkoutsHubScreen(
     onBack: () -> Unit,
     onOpenGyms: () -> Unit,
     onOpenPrograms: () -> Unit,
+    onDesignProgram: () -> Unit = {},
     activeDraft: WorkoutSessionDraft? = null,
     onResumeSession: (WorkoutSessionDraft) -> Unit = {},
     parkedCompletion: ParkedCompletion? = null,
@@ -135,6 +139,12 @@ fun WorkoutsHubScreen(
                 title = "Programs",
                 description = "Your periodized training programs.",
                 onClick = onOpenPrograms,
+            )
+            HubCard(
+                icon = Icons.Outlined.AutoAwesome,
+                title = "Design a program",
+                description = "Plan a periodized program with the AI coach.",
+                onClick = onDesignProgram,
             )
         }
     }

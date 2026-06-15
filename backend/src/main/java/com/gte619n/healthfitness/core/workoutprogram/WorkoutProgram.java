@@ -24,5 +24,20 @@ public record WorkoutProgram(
     List<ProgramPhase> phases,      // empty in shallow list responses
     Instant createdAt,
     Instant updatedAt,
-    Instant completedAt
-) {}
+    Instant completedAt,
+    NutritionGuidance nutritionGuidance  // IMPL-18: program-level nutrition fallback when phases carry none; null = none
+) {
+    /**
+     * Pre-IMPL-18 canonical signature; delegates with no program-level nutrition
+     * guidance so existing callers compile unchanged (IMPL-18 D2).
+     */
+    public WorkoutProgram(
+        String userId, String programId, String title, String description, String goalId,
+        ProgramStatus status, ProgramSource source, LocalDate startDate, ProgramSchedule schedule,
+        List<String> phaseOrder, List<ProgramPhase> phases, Instant createdAt, Instant updatedAt,
+        Instant completedAt
+    ) {
+        this(userId, programId, title, description, goalId, status, source, startDate, schedule,
+            phaseOrder, phases, createdAt, updatedAt, completedAt, null);
+    }
+}

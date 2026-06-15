@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.location.DayOfWeek;
 import com.gte619n.healthfitness.core.workoutprogram.DeloadModifier;
 import com.gte619n.healthfitness.core.workoutprogram.Intensity;
 import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
+import com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramPhaseStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramSource;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
@@ -26,7 +27,8 @@ public record WorkoutProgramDeepResponse(
     List<PhaseResponse> phases,
     Instant createdAt,
     Instant updatedAt,
-    Instant completedAt
+    Instant completedAt,
+    NutritionGuidance nutritionGuidance  // IMPL-18: program-level fallback when a phase carries none
 ) {
     public record PhaseResponse(
         String phaseId,
@@ -38,7 +40,8 @@ public record WorkoutProgramDeepResponse(
         Integer deloadWeekIndex,
         LocalDate targetStartDate,
         LocalDate targetEndDate,
-        List<DayResponse> days
+        List<DayResponse> days,
+        NutritionGuidance nutritionGuidance  // IMPL-18: per-phase calorie/macro guidance (display-only)
     ) {}
 
     public record DayResponse(
@@ -72,6 +75,8 @@ public record WorkoutProgramDeepResponse(
         String notes,
         DeloadModifier deloadModifier,
         List<LoggedSet> loggedSets,
-        ExerciseSummary exercise
+        ExerciseSummary exercise,
+        Double targetWeightLbs,  // IMPL-18: concrete prescribed load; null → use intensity
+        String loadBasis         // IMPL-18: short "why" for the load (e1RM / last done / ramp), shown on tap
     ) {}
 }

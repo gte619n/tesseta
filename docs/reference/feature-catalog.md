@@ -20,7 +20,9 @@ Legend: ✅ shipped · ◐ partial · ⚠️ fixture/placeholder · ➖ not buil
 | Nutrition | ✅ logs + capture + describe + recents/relog | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode (background upload on Android); fire-and-forget describe (202 placeholder) on both clients; unified add surface w/ time-inferred meal chip + one-tap recents; calories always derived from macros (4/4/9); exact branded-product recognition (IMPL-16); **not** SSE |
 | Gym & equipment | ✅ + bulk import | ✅ `/me/workouts/gyms*` | ✅ feature-workouts | Bulk CSV import preview/confirm; cover-photo upload |
 | Admin (drugs, equipment) | ✅ `/api/admin/**` | ✅ `/admin/**` | ➖ no mobile admin | Email-gated; intentionally web-only |
-| Workout logging | ➖ `Workout` scaffold only | ➖ | ➖ | Deferred — needs a data-model ADR |
+| Workout programs | ✅ programs + materialized sessions | ✅ `/me/workouts/programs*` | ✅ feature-workouts | Periodized program model (IMPL-15) |
+| Workout logging | ✅ session completion + actuals fan-out (IMPL-17) | ✅ log-result modal | ✅ active logger + foreground service | LoggedSets feed weekly aggregates + goal metrics (ADR-0012) |
+| Program designer (AI) | ✅ history-grounded Gemini-Pro chat (IMPL-18) | ✅ weights + "why" + nutrition strip + TRT panel | ✅ IMPL-AND-18 chat | Grounded in logged/imported history (e1RM, ease-in), volume/ramp/deload guardrails, per-phase nutrition, grounded TRT decision-support (ADR-0015) folded into the chat |
 | Wear OS surfaces | n/a | n/a | ➖ sign-in only | Tiles/complications/Health Services deferred |
 
 ## Dashboard (the one partial)

@@ -13,6 +13,7 @@ import com.gte619n.healthfitness.feature.workouts.program.ProgramDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.ProgramsListRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubRoute
+import com.gte619n.healthfitness.feature.workouts.program.chat.WorkoutDesignerRoute
 import com.gte619n.healthfitness.feature.workouts.session.WorkoutSessionRoute
 
 /**
@@ -39,6 +40,13 @@ object WorkoutsRoutes {
 
     fun gymDetail(locationId: String): String = "workouts/gyms/$locationId"
     fun editGym(locationId: String): String = "workouts/gyms/$locationId/edit"
+
+    // Conversational program designer chat (IMPL-AND-18). The optional
+    // ?programId=… opens it in IMPL-18b edit mode against an active program.
+    const val CHAT = "workouts/chat"
+    const val CHAT_ROUTE = "workouts/chat?programId={programId}"
+
+    fun chatEdit(programId: String): String = "workouts/chat?programId=$programId"
 
     // Programs (IMPL-AND-15, read-only).
     const val PROGRAMS = "workouts/programs"
@@ -76,8 +84,32 @@ fun NavGraphBuilder.workoutsGraph(
             onBack = { navController.popBackStack() },
             onOpenGyms = { navController.navigate(WorkoutsRoutes.GYMS) },
             onOpenPrograms = { navController.navigate(WorkoutsRoutes.PROGRAMS) },
+            onDesignProgram = { navController.navigate(WorkoutsRoutes.CHAT) },
             onResumeSession = { programId, scheduledId ->
                 navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
+        )
+    }
+
+    composable(
+        route = WorkoutsRoutes.CHAT_ROUTE,
+        arguments = listOf(
+            navArgument(WorkoutsRoutes.ARG_PROGRAM_ID) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            },
+        ),
+    ) {
+        WorkoutDesignerRoute(
+            onBack = { navController.popBackStack() },
+            onOpenProgram = { programId ->
+                // On commit success land on the program detail, dropping the
+                // chat from the back stack so Back returns to the hub/programs.
+                // (Edit mode lands back on the same program it just updated.)
+                navController.navigate(WorkoutsRoutes.programDetail(programId)) {
+                    popUpTo(WorkoutsRoutes.CHAT_ROUTE) { inclusive = true }
+                }
             },
         )
     }
@@ -126,6 +158,7 @@ fun NavGraphBuilder.workoutsGraph(
         ProgramsListRoute(
             onBack = { navController.popBackStack() },
             onOpenProgram = { id -> navController.navigate(WorkoutsRoutes.programDetail(id)) },
+            onDesignProgram = { navController.navigate(WorkoutsRoutes.CHAT) },
         )
     }
 
@@ -141,6 +174,9 @@ fun NavGraphBuilder.workoutsGraph(
             },
             onOpenSession = { programId, scheduledId ->
                 navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
+            onRefineWithAi = { programId ->
+                navController.navigate(WorkoutsRoutes.chatEdit(programId))
             },
         )
     }

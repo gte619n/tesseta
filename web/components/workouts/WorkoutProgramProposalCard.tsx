@@ -5,6 +5,8 @@ import type {
   WorkoutProgramChatSchedule,
   IntensityKind,
   WeekDay,
+  Intensity,
+  NutritionGuidance,
 } from "@/lib/types/workout-program";
 import { WEEK_DAY_LABEL, WEEK_DAYS } from "@/lib/types/workout-program";
 import type { BlockType, ExerciseResponse } from "@/lib/types/exercise";
@@ -43,6 +45,9 @@ type Props = {
   onDiscard?: () => void;
   heading?: string;
   saveLabel?: string;
+  // IMPL-18b: editing an already-active program in place. Relabels the commit
+  // action and notes that completed sessions are preserved.
+  editMode?: boolean;
 };
 
 // ── Small primitives ─────────────────────────────────────────────────
@@ -167,6 +172,93 @@ const INTENSITY_LABEL: Record<IntensityKind, string> = {
   PERCENT_1RM: "% 1RM",
 };
 
+// Compact human-readable load summary for a prescription's collapsed row.
+// Prefers the concrete prescribed weight (IMPL-18 S5); falls back to the
+// intensity (RPE / %1RM) when no weight is grounded; null when nothing to show.
+function formatLoad(
+  targetWeightLbs: number | null,
+  intensity: Intensity,
+): string | null {
+  if (targetWeightLbs != null) {
+    const w = Number.isInteger(targetWeightLbs)
+      ? `${targetWeightLbs}`
+      : targetWeightLbs.toFixed(1);
+    return `${w} lb`;
+  }
+  if (intensity.kind === "RPE" && intensity.value != null) {
+    return `RPE ${intensity.value}`;
+  }
+  if (intensity.kind === "PERCENT_1RM" && intensity.value != null) {
+    return `${intensity.value}% 1RM`;
+  }
+  return null;
+}
+
+// Compact rep/set summary, e.g. "3×8–10" or "4×5" or "3 sets".
+function formatSetsReps(
+  sets: number | null,
+  repsMin: number | null,
+  repsMax: number | null,
+): string | null {
+  const reps =
+    repsMin != null && repsMax != null
+      ? repsMin === repsMax
+        ? `${repsMin}`
+        : `${repsMin}–${repsMax}`
+      : repsMin != null
+        ? `${repsMin}`
+        : repsMax != null
+          ? `${repsMax}`
+          : null;
+  if (sets != null && reps) return `${sets}×${reps}`;
+  if (sets != null) return `${sets} set${sets === 1 ? "" : "s"}`;
+  if (reps) return `${reps} reps`;
+  return null;
+}
+
+// A quiet, display-only nutrition strip rendered under a phase header. Uses the
+// phase guidance, falling back to the program-level guidance (IMPL-18 R4).
+function NutritionStrip({
+  guidance,
+}: {
+  guidance: NutritionGuidance | null;
+}) {
+  if (!guidance) return null;
+  const macros: { label: string; value: number | null }[] = [
+    { label: "kcal", value: guidance.kcal },
+    { label: "P", value: guidance.proteinG },
+    { label: "C", value: guidance.carbsG },
+    { label: "F", value: guidance.fatG },
+  ];
+  const shown = macros.filter((m) => m.value != null);
+  if (shown.length === 0 && !guidance.note) return null;
+  return (
+    <div className="mt-2 rounded-md bg-canvas-muted px-3 py-2">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
+          Nutrition
+        </span>
+        {shown.map((m) => (
+          <span key={m.label} className="flex items-baseline gap-1">
+            <span className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
+              {m.label}
+            </span>
+            <span className="text-[12px] tabular-nums text-secondary">
+              {m.value}
+              {m.label === "kcal" ? "" : "g"}
+            </span>
+          </span>
+        ))}
+      </div>
+      {guidance.note ? (
+        <p className="mt-1 text-[11px] leading-[1.4] text-tertiary">
+          {guidance.note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function WorkoutProgramProposalCard({
   initialValue,
   schedule,
@@ -175,8 +267,11 @@ export function WorkoutProgramProposalCard({
   onSave,
   onDiscard,
   heading = "Proposed program",
-  saveLabel = "Save program",
+  saveLabel,
+  editMode = false,
 }: Props) {
+  const resolvedSaveLabel =
+    saveLabel ?? (editMode ? "Update program" : "Save program");
   const toast = useToast();
   const [draft, setDraft] = useState<ProgramProposalDraft>(initialValue);
   const [pending, startTransition] = useTransition();
@@ -187,6 +282,7 @@ export function WorkoutProgramProposalCard({
   }, [initialValue]);
 
   const issues = draft.issues;
+  const warnings = draft.warnings;
 
   // ── Phase ops ──────────────────────────────────────────────────────
   function patchPhase(pi: number, patch: Partial<PhaseDraft>) {
@@ -467,7 +563,7 @@ export function WorkoutProgramProposalCard({
   }
 
   function handleSave() {
-    if (!draft.title.trim()) {
+    if (!(draft.title ?? "").trim()) {
       toast.error("Can't save yet", { description: "The program needs a title." });
       return;
     }
@@ -503,6 +599,19 @@ export function WorkoutProgramProposalCard({
           </div>
         ) : null}
 
+        {warnings.length > 0 ? (
+          <div className="rounded-md bg-warn-bg px-3 py-2">
+            <p className="caps-mono text-[9px] tracking-[0.06em] text-warn">
+              {warnings.length} advisory{warnings.length === 1 ? "" : " notes"} — you can save anyway
+            </p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 font-mono text-[11px] text-warn">
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <label className="block">
           <FieldLabel>Title</FieldLabel>
           <TextInput
@@ -528,6 +637,7 @@ export function WorkoutProgramProposalCard({
             <PhaseEditor
               key={phase.key}
               phase={phase}
+              programNutrition={draft.nutritionGuidance}
               gyms={gyms}
               schedule={schedule}
               loadExercises={loadExercises}
@@ -560,23 +670,30 @@ export function WorkoutProgramProposalCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t-[0.5px] border-border-subtle px-5 py-3">
-        <button
-          type="button"
-          onClick={onDiscard}
-          disabled={pending}
-          className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary disabled:opacity-60"
-        >
-          Discard
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={pending}
-          className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse disabled:opacity-60"
-        >
-          {pending ? "Saving…" : saveLabel}
-        </button>
+      <div className="flex items-center justify-between gap-2 border-t-[0.5px] border-border-subtle px-5 py-3">
+        <p className="m-0 text-[11px] leading-[1.4] text-tertiary">
+          {editMode
+            ? "Updates apply from today forward — already-completed sessions are preserved."
+            : ""}
+        </p>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onDiscard}
+            disabled={pending}
+            className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[12px] font-medium text-primary disabled:opacity-60"
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={pending}
+            className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-inverse disabled:opacity-60"
+          >
+            {pending ? "Saving…" : resolvedSaveLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -586,6 +703,7 @@ export function WorkoutProgramProposalCard({
 
 function PhaseEditor({
   phase,
+  programNutrition,
   gyms,
   schedule,
   loadExercises,
@@ -608,6 +726,8 @@ function PhaseEditor({
   onMoveRx,
 }: {
   phase: PhaseDraft;
+  // Program-level fallback used when the phase has no nutrition guidance.
+  programNutrition: NutritionGuidance | null;
   gyms: GymOption[];
   schedule: WorkoutProgramChatSchedule | null;
   loadExercises: LoadExercisesAction;
@@ -684,7 +804,9 @@ function PhaseEditor({
         />
       </div>
 
-      <div className="mt-3 space-y-2">
+      <NutritionStrip guidance={phase.nutritionGuidance ?? programNutrition} />
+
+      <div className="mt-3 space-y-3">
         {phase.days.map((day, di) => (
           <DayEditor
             key={day.key}
@@ -776,14 +898,23 @@ function DayEditor({
   }
 
   return (
-    <div className="rounded-md border-[0.5px] border-border-subtle bg-surface px-3 py-2">
-      <div className="flex items-start gap-2">
+    <div className="overflow-hidden rounded-lg border border-border-default bg-surface">
+      {/* Day header — a tinted bar with a weekday chip so each day reads as its
+          own bounded section, distinct from the exercise blocks nested below. */}
+      <div className="flex items-start gap-2 border-b-[0.5px] border-border-subtle bg-canvas-muted px-3 py-2.5">
         <div className="min-w-0 flex-1 space-y-1.5">
-          <TextInput
-            value={day.label}
-            onChange={(v) => onPatch({ label: v })}
-            placeholder="Day label (e.g. Upper A)"
-          />
+          <div className="flex items-center gap-2">
+            <span className="caps-mono shrink-0 rounded bg-accent-bg px-1.5 py-1 text-[9px] font-medium tracking-[0.06em] text-accent-dim">
+              {WEEK_DAY_LABEL[day.dayOfWeek]}
+            </span>
+            <div className="min-w-0 flex-1">
+              <TextInput
+                value={day.label}
+                onChange={(v) => onPatch({ label: v })}
+                placeholder="Day label (e.g. Upper A)"
+              />
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={day.dayOfWeek}
@@ -822,7 +953,8 @@ function DayEditor({
         />
       </div>
 
-      <div className="mt-2 space-y-2">
+      {/* Day body — exercise blocks, clearly nested inside the day card. */}
+      <div className="space-y-2.5 px-3 py-3">
         {day.blocks.map((block, bi) => (
           <BlockEditor
             key={block.key}
@@ -882,7 +1014,7 @@ function BlockEditor({
   onMoveRx: (ri: number, dir: -1 | 1) => void;
 }) {
   return (
-    <div className="rounded border-[0.5px] border-border-subtle bg-canvas px-2.5 py-2">
+    <div className="border-l-2 border-border-default pl-3">
       <div className="flex items-center gap-2">
         <select
           value={block.type}
@@ -959,7 +1091,11 @@ function PrescriptionEditor({
   onMove: (dir: -1 | 1) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
   const flagged = !!rx.validationError;
+
+  const load = formatLoad(rx.targetWeightLbs, rx.intensity);
+  const setsReps = formatSetsReps(rx.sets, rx.repsMin, rx.repsMax);
 
   return (
     <div
@@ -994,6 +1130,35 @@ function PrescriptionEditor({
           {flagged ? (
             <p className="mt-0.5 font-mono text-[10px] text-alert">
               {rx.validationError}
+            </p>
+          ) : null}
+          {load || setsReps ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {load ? (
+                <span className="text-[12px] font-medium tabular-nums text-primary">
+                  {load}
+                </span>
+              ) : null}
+              {setsReps ? (
+                <span className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">
+                  {setsReps}
+                </span>
+              ) : null}
+              {rx.loadBasis ? (
+                <button
+                  type="button"
+                  onClick={() => setWhyOpen((v) => !v)}
+                  aria-expanded={whyOpen}
+                  className="caps-mono cursor-pointer rounded px-1 py-0.5 text-[8px] tracking-[0.06em] text-tertiary hover:bg-canvas-muted hover:text-secondary"
+                >
+                  {whyOpen ? "Why ▲" : "Why ▼"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {whyOpen && rx.loadBasis ? (
+            <p className="mt-1 rounded bg-canvas-muted px-2 py-1 font-mono text-[10px] leading-[1.4] text-secondary">
+              {rx.loadBasis}
             </p>
           ) : null}
         </div>
@@ -1041,6 +1206,14 @@ function PrescriptionEditor({
             <NumberInput
               value={rx.durationSeconds}
               onChange={(v) => onPatch({ durationSeconds: v })}
+            />
+          </label>
+          <label className="block">
+            <FieldLabel>Weight (lb)</FieldLabel>
+            <NumberInput
+              value={rx.targetWeightLbs}
+              onChange={(v) => onPatch({ targetWeightLbs: v })}
+              placeholder="—"
             />
           </label>
           <label className="block">

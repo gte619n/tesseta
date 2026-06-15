@@ -87,10 +87,14 @@ fun ChatThread(
     }
 
     Column(
+        // The window resizes for the IME, so imePadding() would double-count and
+        // float the composer a full keyboard-height too high. We only need to
+        // clear the navigation bar so the composer/send button sit just above the
+        // keyboard (open) or the nav bar (closed).
         modifier = modifier
             .fillMaxSize()
             .background(Hf.colors.canvas)
-            .imePadding(),
+            .navigationBarsPadding(),
     ) {
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (messages.isEmpty()) {
@@ -139,7 +143,7 @@ private fun UserMessage(text: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Box(
             modifier = Modifier
-                .widthIn(max = 300.dp)
+                .widthIn(max = 460.dp)
                 .background(Hf.colors.accent, RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp))
                 .padding(horizontal = 13.dp, vertical = 9.dp),
         ) {
@@ -158,7 +162,7 @@ private fun AssistantMessage(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                 Box(
                     modifier = Modifier
-                        .widthIn(max = 320.dp)
+                        .widthIn(max = 560.dp)
                         .background(Hf.colors.surface, RoundedCornerShape(14.dp, 14.dp, 14.dp, 4.dp))
                         .padding(horizontal = 13.dp, vertical = 9.dp),
                 ) {

@@ -55,6 +55,19 @@ android {
                 ?: System.getenv("BACKEND_BASE_URL")
                 ?: "https://health-fitness-backend-mbysudfbja-uc.a.run.app"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
+
+        // ABI filtering: a real phone only needs ARM. The x86/x86_64 libs add
+        // ~40 MB of dead weight to the (universal) debug APK and are only useful
+        // for Intel-host emulators. Default to ARM-only; pass -PincludeX86 to add
+        // the x86 ABIs when you're specifically building for such an emulator.
+        // (Apple-Silicon emulators run arm64, so they don't need this either.)
+        ndk {
+            abiFilters.clear()
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            if (providers.gradleProperty("includeX86").isPresent) {
+                abiFilters += listOf("x86", "x86_64")
+            }
+        }
     }
 
     // IMPL-02: pin debug signing to the checked-in keystore at android/debug.keystore

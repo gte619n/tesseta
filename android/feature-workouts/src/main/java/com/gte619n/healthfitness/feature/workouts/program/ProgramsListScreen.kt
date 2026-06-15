@@ -1,17 +1,24 @@
 package com.gte619n.healthfitness.feature.workouts.program
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -29,6 +36,7 @@ import com.gte619n.healthfitness.ui.theme.Hf
 fun ProgramsListRoute(
     onBack: () -> Unit,
     onOpenProgram: (String) -> Unit,
+    onDesignProgram: () -> Unit = {},
     viewModel: ProgramsListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -36,6 +44,7 @@ fun ProgramsListRoute(
         state = state,
         onBack = onBack,
         onOpenProgram = onOpenProgram,
+        onDesignProgram = onDesignProgram,
         onRetry = viewModel::refresh,
     )
 }
@@ -46,6 +55,7 @@ fun ProgramsListScreen(
     onBack: () -> Unit,
     onOpenProgram: (String) -> Unit,
     onRetry: () -> Unit,
+    onDesignProgram: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -57,6 +67,21 @@ fun ProgramsListScreen(
             title = "Programs",
             subtitle = "Your training roadmap",
             onBack = onBack,
+            trailing = {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clickable { onDesignProgram() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = "Design a program",
+                        tint = Hf.colors.accent,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            },
         )
         when {
             state.loading -> LoadingState(Modifier.fillMaxSize())
@@ -67,7 +92,7 @@ fun ProgramsListScreen(
             )
             state.programs.isEmpty() -> EmptyState(
                 title = "No programs yet",
-                description = "Programs are created on the web. They'll appear here once you have one.",
+                description = "Tap the sparkle to design one with the AI coach, or create one on the web.",
                 modifier = Modifier.fillMaxSize(),
             )
             else -> LazyColumn(

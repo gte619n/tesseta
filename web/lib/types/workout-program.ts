@@ -22,6 +22,17 @@ export type DeloadModifier = {
   intensityDelta: number | null;
 };
 
+// Per-phase (or program-level fallback) calorie/macro guidance written
+// alongside the plan (IMPL-18 S3 / R4). Display-only — the nutrition module
+// stays the source of truth for actual logging. All fields nullable.
+export type NutritionGuidance = {
+  kcal: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  note: string | null;
+};
+
 // Compact, read-only exercise summary embedded on deep/calendar responses so
 // clients render a session without an N+1 fetch per prescription.
 export type PrescriptionExercise = {
@@ -53,6 +64,12 @@ export type Prescription = {
   repsMax: number | null;
   durationSeconds: number | null;
   intensity: Intensity | null;
+  // Concrete prescribed load when the user's history supports it (IMPL-18 S5);
+  // null → fall back to `intensity` (RPE/%1RM). In pounds.
+  targetWeightLbs: number | null;
+  // Human-readable basis for the prescribed weight, surfaced on the "why"
+  // affordance (R6), e.g. "e1RM 205 from 185×5 ~8wk ago, −10% ease-in".
+  loadBasis: string | null;
   restSeconds: number | null;
   tempo: string | null;
   notes: string | null;
@@ -93,6 +110,9 @@ export type Phase = {
   targetStartDate: string;
   targetEndDate: string;
   days: WorkoutDay[];
+  // Per-phase nutrition target (IMPL-18 S3). Falls back to the program-level
+  // `nutritionGuidance` when null.
+  nutritionGuidance: NutritionGuidance | null;
 };
 
 // Shallow list response.
@@ -124,6 +144,9 @@ export type WorkoutProgramDeepResponse = {
   startDate: string;
   trainingDays: WeekDay[];
   phases: Phase[];
+  // Program-level nutrition fallback used when a phase has no guidance of its
+  // own (IMPL-18 R4 — one-line program summary).
+  nutritionGuidance: NutritionGuidance | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -197,6 +220,8 @@ export type PrescriptionInput = {
   repsMax: number | null;
   durationSeconds: number | null;
   intensity: Intensity | null;
+  targetWeightLbs: number | null;
+  loadBasis: string | null;
   restSeconds: number | null;
   tempo: string | null;
   notes: string | null;
@@ -222,6 +247,7 @@ export type PhaseInput = {
   weeks: number;
   deloadWeekIndex: number | null;
   days: DayInput[];
+  nutritionGuidance: NutritionGuidance | null;
 };
 
 export type ScheduleInput = {
@@ -237,6 +263,7 @@ export type CreateProgramRequest = {
   startDate: string;
   source: ProgramSource;
   phases: PhaseInput[];
+  nutritionGuidance: NutritionGuidance | null;
 };
 
 export type UpdateProgramRequest = Partial<{
@@ -285,6 +312,9 @@ export type WorkoutProgramChatMessage = {
 export type WorkoutProgramProposalPayload = {
   program: WorkoutProgramDeepResponse;
   issues: string[];
+  // IMPL-18: soft, override-able advisories (volume past MRV, missing deload,
+  // steep ramp). Unlike `issues` these do not block a commit (R1).
+  warnings?: string[];
 };
 
 export const WEEK_DAYS: WeekDay[] = [

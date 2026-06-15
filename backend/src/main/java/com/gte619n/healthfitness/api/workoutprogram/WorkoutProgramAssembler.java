@@ -91,13 +91,14 @@ public class WorkoutProgramAssembler {
             }
             phases.add(new PhaseResponse(
                 ph.phaseId(), ph.title(), ph.focus(), ph.orderIndex(), ph.status(),
-                ph.weeks(), ph.deloadWeekIndex(), ph.targetStartDate(), ph.targetEndDate(), days));
+                ph.weeks(), ph.deloadWeekIndex(), ph.targetStartDate(), ph.targetEndDate(), days,
+                ph.nutritionGuidance()));
         }
         return new WorkoutProgramDeepResponse(
             p.programId(), p.title(), p.description(), p.goalId(), goalTitle, p.status(), p.source(),
             p.startDate(),
             p.schedule() == null ? List.of() : p.schedule().trainingDays(),
-            phases, p.createdAt(), p.updatedAt(), p.completedAt());
+            phases, p.createdAt(), p.updatedAt(), p.completedAt(), p.nutritionGuidance());
     }
 
     private static List<WorkoutDay> sessionDays(List<ScheduledWorkout> sessions) {
@@ -136,7 +137,8 @@ public class WorkoutProgramAssembler {
                 rxs.add(new PrescriptionResponse(
                     rx.exerciseId(), rx.orderIndex(), rx.sets(), rx.repsMin(), rx.repsMax(),
                     rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(), rx.notes(),
-                    rx.deloadModifier(), rx.loggedSets(), summaries.get(rx.exerciseId())));
+                    rx.deloadModifier(), rx.loggedSets(), summaries.get(rx.exerciseId()),
+                    rx.targetWeightLbs(), rx.loadBasis()));
             }
             blocks.add(new BlockResponse(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
         }

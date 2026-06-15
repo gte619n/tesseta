@@ -297,7 +297,7 @@ class WorkoutSessionRepositoryImpl(
     private fun ScheduledWorkoutDto?.prescriptionKeys(): Set<PrescriptionKey> =
         this?.session?.blocks
             ?.flatMap { block ->
-                block.prescriptions.map { PrescriptionKey(block.blockId, it.orderIndex) }
+                block.prescriptions.map { PrescriptionKey(block.blockId.orEmpty(), it.orderIndex) }
             }
             ?.toSet()
             .orEmpty()

@@ -23,5 +23,21 @@ public record Prescription(
     String tempo,
     String notes,
     DeloadModifier deloadModifier,
-    List<LoggedSet> loggedSets
-) {}
+    List<LoggedSet> loggedSets,
+    Double targetWeightLbs,         // IMPL-18: concrete history-grounded load; null → fall back to intensity (RPE/%1RM)
+    String loadBasis                // IMPL-18: short "why" for the prescribed load (e1RM, last done, ramp discount)
+) {
+    /**
+     * Pre-IMPL-18 canonical signature. Delegates with the history-grounded load
+     * fields null so existing callers (importer, splitter, completion service,
+     * tests) compile unchanged (IMPL-18 D2).
+     */
+    public Prescription(
+        String exerciseId, int orderIndex, Integer sets, Integer repsMin, Integer repsMax,
+        Integer durationSeconds, Intensity intensity, Integer restSeconds, String tempo,
+        String notes, DeloadModifier deloadModifier, List<LoggedSet> loggedSets
+    ) {
+        this(exerciseId, orderIndex, sets, repsMin, repsMax, durationSeconds, intensity,
+            restSeconds, tempo, notes, deloadModifier, loggedSets, null, null);
+    }
+}

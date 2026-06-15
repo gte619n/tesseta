@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ProgramEditModal } from "./ProgramEditModal";
 
 type Props = {
+  programId: string;
   programTitle: string;
   programDescription: string;
   status: string;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function ProgramDetailActions({
+  programId,
   programTitle,
   programDescription,
   status,
@@ -72,6 +74,20 @@ export function ProgramDetailActions({
       >
         Edit
       </button>
+      {status === "ACTIVE" ? (
+        <button
+          type="button"
+          onClick={() =>
+            router.push(
+              `/me/workouts/programs/chat?programId=${encodeURIComponent(programId)}`,
+            )
+          }
+          disabled={pending}
+          className="caps-mono cursor-pointer rounded-md border-[0.5px] border-accent/40 bg-accent-bg px-3 py-1.5 text-[10px] tracking-[0.06em] text-accent-dim hover:opacity-90 disabled:opacity-60"
+        >
+          Refine with AI
+        </button>
+      ) : null}
       {status === "DRAFT" || status === "ACTIVE" ? (
         <button
           type="button"

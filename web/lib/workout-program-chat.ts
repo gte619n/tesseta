@@ -17,6 +17,7 @@ import type {
   DeloadModifier,
   PrescriptionExercise,
   WorkoutProgramChatSchedule,
+  NutritionGuidance,
 } from "./types/workout-program";
 import type { BlockType } from "./types/exercise";
 
@@ -43,6 +44,10 @@ export type PrescriptionDraft = {
   repsMax: number | null;
   durationSeconds: number | null;
   intensity: Intensity;
+  // Concrete prescribed load (IMPL-18); null → fall back to `intensity`.
+  targetWeightLbs: number | null;
+  // History basis for the weight, surfaced on the "why" affordance. Read-only.
+  loadBasis: string | null;
   restSeconds: number | null;
   tempo: string | null;
   notes: string | null;
@@ -74,6 +79,9 @@ export type PhaseDraft = {
   weeks: number;
   deloadWeekIndex: number | null;
   days: DayDraft[];
+  // Per-phase nutrition target (IMPL-18). Display-only in the card, but carried
+  // through so commit round-trips it.
+  nutritionGuidance: NutritionGuidance | null;
 };
 
 export type ProgramProposalDraft = {
@@ -83,8 +91,13 @@ export type ProgramProposalDraft = {
   startDate: string;
   source: WorkoutProgramDeepResponse["source"];
   phases: PhaseDraft[];
+  // Program-level nutrition fallback (IMPL-18). Display-only; round-tripped.
+  nutritionGuidance: NutritionGuidance | null;
   // Validator notes that aren't tied to a specific prescription.
   issues: string[];
+  // IMPL-18: soft, override-able advisories (volume/deload/ramp) — shown but
+  // never block a commit (R1).
+  warnings: string[];
 };
 
 // ── Deep proposal → editable draft ───────────────────────────────────
@@ -97,6 +110,7 @@ function emptyIntensity(i: Intensity | null): Intensity {
 export function proposalToDraft(
   program: WorkoutProgramDeepResponse,
   issues: string[],
+  warnings: string[] = [],
 ): ProgramProposalDraft {
   const phases: PhaseDraft[] = program.phases.map((phase) => {
     const days: DayDraft[] = phase.days.map((day) => {
@@ -111,6 +125,8 @@ export function proposalToDraft(
             repsMax: p.repsMax,
             durationSeconds: p.durationSeconds,
             intensity: emptyIntensity(p.intensity),
+            targetWeightLbs: p.targetWeightLbs,
+            loadBasis: p.loadBasis,
             restSeconds: p.restSeconds,
             tempo: p.tempo,
             notes: p.notes,
@@ -141,6 +157,7 @@ export function proposalToDraft(
       weeks: phase.weeks,
       deloadWeekIndex: phase.deloadWeekIndex,
       days,
+      nutritionGuidance: phase.nutritionGuidance ?? null,
     };
   });
 
@@ -151,7 +168,9 @@ export function proposalToDraft(
     startDate: program.startDate,
     source: program.source ?? "AI_GENERATED",
     phases,
+    nutritionGuidance: program.nutritionGuidance ?? null,
     issues,
+    warnings,
   };
 }
 
@@ -206,38 +225,44 @@ export function draftToCreateRequest(
               p.intensity.kind === "NONE" && p.intensity.value == null
                 ? null
                 : p.intensity,
+            targetWeightLbs: p.targetWeightLbs,
+            loadBasis: p.loadBasis,
             restSeconds: p.restSeconds,
             tempo: p.tempo && p.tempo.trim() ? p.tempo.trim() : null,
             notes: p.notes && p.notes.trim() ? p.notes.trim() : null,
             deloadModifier: p.deloadModifier,
           }),
         );
-        return { type: block.type, title: block.title.trim(), prescriptions };
+        // Titles/labels can stream back null (e.g. an untitled accessory block);
+        // coalesce before trimming so commit doesn't throw on a null .trim().
+        return { type: block.type, title: (block.title ?? "").trim(), prescriptions };
       });
       return {
-        label: day.label.trim(),
+        label: (day.label ?? "").trim(),
         dayOfWeek: day.dayOfWeek,
         locationId: day.locationId,
         blocks,
       };
     });
     return {
-      title: phase.title.trim(),
-      focus: phase.focus.trim(),
+      title: (phase.title ?? "").trim(),
+      focus: (phase.focus ?? "").trim(),
       weeks: phase.weeks,
       deloadWeekIndex: phase.deloadWeekIndex,
       days,
+      nutritionGuidance: phase.nutritionGuidance,
     };
   });
 
   return {
-    title: draft.title.trim(),
-    description: draft.description.trim(),
+    title: (draft.title ?? "").trim(),
+    description: (draft.description ?? "").trim(),
     goalId: draft.goalId,
     schedule: deriveSchedule(draft, threadSchedule),
     startDate: draft.startDate,
     source: draft.source ?? "AI_GENERATED",
     phases,
+    nutritionGuidance: draft.nutritionGuidance,
   };
 }
 
@@ -253,6 +278,8 @@ export function newPrescription(): PrescriptionDraft {
     repsMax: 10,
     durationSeconds: null,
     intensity: { kind: "NONE", value: null },
+    targetWeightLbs: null,
+    loadBasis: null,
     restSeconds: 90,
     tempo: null,
     notes: null,
@@ -288,5 +315,6 @@ export function newPhase(): PhaseDraft {
     weeks: 4,
     deloadWeekIndex: null,
     days: [],
+    nutritionGuidance: null,
   };
 }
