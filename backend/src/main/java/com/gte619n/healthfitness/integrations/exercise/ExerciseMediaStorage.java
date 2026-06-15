@@ -27,14 +27,29 @@ public class ExerciseMediaStorage {
         this.bucket = bucket;
     }
 
-    /** Generated frames are always webp. */
+    /** Generated frames are always webp (legacy phase-keyed object name). */
     public String upload(String exerciseId, DemoPhase phase, byte[] bytes) {
         return upload(exerciseId, phase, bytes, "image/webp");
     }
 
     public String upload(String exerciseId, DemoPhase phase, byte[] bytes, String contentType) {
+        return uploadKeyed(exerciseId, phase.name(), bytes, contentType);
+    }
+
+    /** Generated frames are always webp (plan-key-keyed object name, IMPL-19). */
+    public String upload(String exerciseId, String key, byte[] bytes) {
+        return uploadKeyed(exerciseId, key, bytes, "image/webp");
+    }
+
+    /** Store bytes for an arbitrary plan {@code key} (IMPL-19). */
+    public String upload(String exerciseId, String key, byte[] bytes, String contentType) {
+        return uploadKeyed(exerciseId, key, bytes, contentType);
+    }
+
+    private String uploadKeyed(String exerciseId, String key, byte[] bytes, String contentType) {
         String ext = extensionFor(contentType);
-        String objectName = "exercises/" + exerciseId + "/" + phase.name() + "_"
+        String safeKey = sanitizeKey(key);
+        String objectName = "exercises/" + exerciseId + "/" + safeKey + "_"
             + System.currentTimeMillis() + "." + ext;
         BlobInfo info = BlobInfo.newBuilder(BlobId.of(bucket, objectName))
             .setContentType(contentType)
@@ -42,6 +57,14 @@ public class ExerciseMediaStorage {
             .build();
         storage.create(info, bytes);
         return "https://storage.googleapis.com/" + bucket + "/" + objectName;
+    }
+
+    private static String sanitizeKey(String key) {
+        if (key == null || key.isBlank()) {
+            return "frame";
+        }
+        String s = key.trim().toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
+        return s.isBlank() ? "frame" : s;
     }
 
     public void deleteByUrl(String url) {

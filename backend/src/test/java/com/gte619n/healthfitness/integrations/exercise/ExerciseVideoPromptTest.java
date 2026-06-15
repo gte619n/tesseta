@@ -23,7 +23,8 @@ class ExerciseVideoPromptTest {
             Laterality.BILATERAL, Mechanic.COMPOUND, null,
             List.of("Hold the dumbbell at your chest", "Push your knees out"),
             List.of(), List.of(), null, false,
-            List.of(), null, null, ExerciseMediaStatus.NONE, ExerciseStatus.PUBLISHED,
+            List.of(), null, null, ExerciseMediaStatus.NONE,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, now, now, null);
     }
 
@@ -35,7 +36,8 @@ class ExerciseVideoPromptTest {
             Laterality.BILATERAL, Mechanic.COMPOUND, null,
             List.of("Lower the bar to mid-chest"),
             List.of(), List.of(), null, false,
-            List.of(), null, null, ExerciseMediaStatus.NONE, ExerciseStatus.PUBLISHED,
+            List.of(), null, null, ExerciseMediaStatus.NONE,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, now, now, null);
     }
 

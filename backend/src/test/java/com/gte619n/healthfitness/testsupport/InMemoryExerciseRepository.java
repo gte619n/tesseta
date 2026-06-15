@@ -55,6 +55,14 @@ public class InMemoryExerciseRepository implements ExerciseRepository {
     }
 
     @Override
+    public List<Exercise> findByPlanStatus(ExerciseMediaStatus planStatus) {
+        return store.values().stream()
+            .filter(e -> e.planStatus() == planStatus)
+            .filter(e -> e.aliasOfExerciseId() == null)
+            .toList();
+    }
+
+    @Override
     public void save(Exercise exercise) {
         store.put(exercise.exerciseId(), exercise);
     }

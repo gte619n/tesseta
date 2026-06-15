@@ -34,6 +34,11 @@ public record Exercise(
     String videoUrl,                        // RESERVED for future Veo; null in v1
     String demoPromptOverride,              // nullable; null = use built default
     ExerciseMediaStatus mediaStatus,
+    // IMPL-19: the model-derived, admin-reviewed frame plan + its review status,
+    // and the public-library reference used for grounding (all additive)
+    List<FrameSpec> demoPlan,               // nullable; null = legacy START/MID/END pattern
+    ExerciseMediaStatus planStatus,         // defaults to NONE
+    ExerciseReference reference,            // nullable
     // catalog lifecycle
     ExerciseStatus status,
     String contributorId,                   // nullable

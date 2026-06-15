@@ -52,9 +52,9 @@ class GeminiExerciseMediaPreviewTest {
     @Test
     void previewDemoImages() throws Exception {
         GeminiExerciseMediaService media = new GeminiExerciseMediaService(
-            null, null,
+            null, null, new GroundingImageResolver(false),
             Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(),
-            "gemini-3.1-flash-image-preview");
+            "gemini-3.1-flash-image-preview", false);
 
         Path outDir = locate("docs/test_reports/workout_logs").resolve("media_preview");
         Files.createDirectories(outDir);
@@ -70,7 +70,7 @@ class GeminiExerciseMediaPreviewTest {
             }
             Exercise exercise = exerciseFor(s);
             for (DemoPhase phase : DemoPhase.values()) {
-                byte[] bytes = media.callGemini(media.buildPrompt(exercise, phase, null), exercise.exerciseId());
+                byte[] bytes = media.callGemini(media.buildPrompt(exercise, phase, null), null, exercise.exerciseId());
                 if (bytes == null || bytes.length == 0) {
                     System.out.println("FAILED: no bytes for " + s.name() + " " + phase);
                     continue;
@@ -90,7 +90,8 @@ class GeminiExerciseMediaPreviewTest {
             slug(s.name()), s.name(), s.name().toLowerCase(), List.of(),
             s.pattern(), List.of(), List.of(), s.laterality(), Mechanic.COMPOUND,
             null, s.cues(), List.of(), List.of(), null, false,
-            List.of(), null, null, ExerciseMediaStatus.NONE, ExerciseStatus.PUBLISHED,
+            List.of(), null, null, ExerciseMediaStatus.NONE,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, now, now, null);
     }
 

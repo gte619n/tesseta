@@ -5,7 +5,9 @@ import com.gte619n.healthfitness.core.exercise.DemoFrame;
 import com.gte619n.healthfitness.core.exercise.EquipmentRequirement;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaStatus;
+import com.gte619n.healthfitness.core.exercise.ExerciseReference;
 import com.gte619n.healthfitness.core.exercise.ExerciseStatus;
+import com.gte619n.healthfitness.core.exercise.FrameSpec;
 import com.gte619n.healthfitness.core.exercise.Laterality;
 import com.gte619n.healthfitness.core.exercise.Mechanic;
 import com.gte619n.healthfitness.core.exercise.MovementPattern;
@@ -29,6 +31,9 @@ public record ExerciseResponse(
     RepRange defaultRepRange,
     boolean isTimed,
     List<DemoFrame> demoFrames,
+    List<FrameSpec> demoPlan,
+    ExerciseMediaStatus planStatus,
+    ExerciseReference reference,
     String videoUrl,
     String demoPromptOverride,
     ExerciseMediaStatus mediaStatus,
@@ -54,6 +59,9 @@ public record ExerciseResponse(
             e.defaultRepRange(),
             e.isTimed(),
             e.demoFrames(),
+            e.demoPlan(),
+            e.planStatus(),
+            e.reference(),
             e.videoUrl(),
             e.demoPromptOverride(),
             e.mediaStatus(),

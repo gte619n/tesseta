@@ -83,6 +83,9 @@ public class ExerciseService {
             null,
             edit.demoPromptOverride(),
             ExerciseMediaStatus.NONE,
+            null,
+            ExerciseMediaStatus.NONE,
+            null,
             ExerciseStatus.DRAFT,
             contributorId,
             now,
@@ -117,6 +120,9 @@ public class ExerciseService {
             e.videoUrl(),
             edit.demoPromptOverride() != null ? edit.demoPromptOverride() : e.demoPromptOverride(),
             e.mediaStatus(),
+            e.demoPlan(),
+            e.planStatus(),
+            e.reference(),
             e.status(),
             e.contributorId(),
             e.createdAt(),
@@ -148,44 +154,104 @@ public class ExerciseService {
         return withMediaStatus(require(exerciseId), status);
     }
 
+    // ---- frame plan CRUD (IMPL-19) ----
+
+    /** Current frame plan (the reviewable {@code demoPlan}); empty if none. */
+    public List<FrameSpec> getPlan(String exerciseId) {
+        List<FrameSpec> plan = require(exerciseId).demoPlan();
+        return plan == null ? List.of() : plan;
+    }
+
+    /**
+     * Replace the frame plan and mark it {@code NEEDS_REVIEW}. Used by the
+     * planner (after a generation run) and by admin plan edits.
+     */
+    public Exercise savePlan(String exerciseId, List<FrameSpec> frames) {
+        Exercise e = require(exerciseId);
+        return withPlan(e, frames == null ? List.of() : List.copyOf(frames), ExerciseMediaStatus.NEEDS_REVIEW);
+    }
+
+    /** Approve the frame plan: {@code NEEDS_REVIEW} → {@code APPROVED}. */
+    public Exercise approvePlan(String exerciseId) {
+        Exercise e = require(exerciseId);
+        if (e.planStatus() != ExerciseMediaStatus.NEEDS_REVIEW) {
+            throw new IllegalStateException("Can only approve a plan that is awaiting review");
+        }
+        return withPlan(e, e.demoPlan(), ExerciseMediaStatus.APPROVED);
+    }
+
+    /** Set the plan status (used by the planner: PENDING before, FAILED on error). */
+    public Exercise updatePlanStatus(String exerciseId, ExerciseMediaStatus status) {
+        Exercise e = require(exerciseId);
+        return withPlan(e, e.demoPlan(), status);
+    }
+
+    // ---- frame media bookkeeping ----
+
     /**
      * Append a freshly generated/uploaded url to a phase's candidates and make
      * it the active frame. Other phases untouched. Does not change
      * {@code mediaStatus} — the caller sets NEEDS_REVIEW once all phases land.
+     *
+     * <p>Legacy phase-based entry point (kept for the unchanged media service):
+     * derives the plan {@code key} from the phase.
      */
     public Exercise recordFrame(String exerciseId, DemoPhase phase, String url) {
+        return recordFrame(exerciseId, DemoFrame.keyForPhase(phase),
+            "", "", phaseOrder(phase), url);
+    }
+
+    /**
+     * Key-based frame record (IMPL-19): append {@code url} to the frame's
+     * candidates and make it active, carrying the spec's {@code label}/
+     * {@code caption}/{@code order}.
+     */
+    public Exercise recordFrame(String exerciseId, String key, String label, String caption, int order, String url) {
         Exercise e = require(exerciseId);
-        List<DemoFrame> frames = upsertFrame(e.demoFrames(), phase, url, /*makeActive=*/true);
+        List<DemoFrame> frames = upsertFrame(e.demoFrames(), key, label, caption, order, url);
         return withFrames(e, frames);
     }
 
-    /** Select an existing candidate as the active frame for a phase. */
+    /** Select an existing candidate as the active frame for a phase (legacy). */
     public Exercise selectFrame(String exerciseId, DemoPhase phase, String imageUrl) {
+        return selectFrame(exerciseId, DemoFrame.keyForPhase(phase), imageUrl);
+    }
+
+    /** Select an existing candidate as the active frame for a plan key. */
+    public Exercise selectFrame(String exerciseId, String key, String imageUrl) {
         Exercise e = require(exerciseId);
-        DemoFrame existing = frameFor(e.demoFrames(), phase);
+        DemoFrame existing = frameFor(e.demoFrames(), key);
         if (existing == null || existing.imageCandidates() == null
             || !existing.imageCandidates().contains(imageUrl)) {
-            throw new IllegalArgumentException("Image is not a candidate for this phase");
+            throw new IllegalArgumentException("Image is not a candidate for this frame");
         }
         List<DemoFrame> frames = replaceFrame(e.demoFrames(),
-            new DemoFrame(phase, imageUrl, existing.imageCandidates()));
+            new DemoFrame(existing.key(), existing.label(), existing.caption(), existing.order(),
+                imageUrl, existing.imageCandidates(), existing.phase()));
         return withFrames(e, frames);
     }
 
-    /** Remove a candidate from a phase; if it was active, fall back to first remaining. */
+    /** Remove a candidate from a phase; if it was active, fall back (legacy). */
     public Exercise removeFrameCandidate(String exerciseId, DemoPhase phase, String imageUrl) {
+        return removeFrameCandidate(exerciseId, DemoFrame.keyForPhase(phase), imageUrl);
+    }
+
+    /** Remove a candidate from a plan key; if it was active, fall back to first remaining. */
+    public Exercise removeFrameCandidate(String exerciseId, String key, String imageUrl) {
         Exercise e = require(exerciseId);
-        DemoFrame existing = frameFor(e.demoFrames(), phase);
+        DemoFrame existing = frameFor(e.demoFrames(), key);
         if (existing == null || existing.imageCandidates() == null
             || !existing.imageCandidates().contains(imageUrl)) {
-            throw new IllegalArgumentException("Image is not a candidate for this phase");
+            throw new IllegalArgumentException("Image is not a candidate for this frame");
         }
         List<String> remaining = new ArrayList<>(existing.imageCandidates());
         remaining.remove(imageUrl);
         String active = imageUrl.equals(existing.imageUrl())
             ? (remaining.isEmpty() ? null : remaining.get(0))
             : existing.imageUrl();
-        List<DemoFrame> frames = replaceFrame(e.demoFrames(), new DemoFrame(phase, active, remaining));
+        List<DemoFrame> frames = replaceFrame(e.demoFrames(),
+            new DemoFrame(existing.key(), existing.label(), existing.caption(), existing.order(),
+                active, remaining, existing.phase()));
         return withFrames(e, frames);
     }
 
@@ -213,7 +279,8 @@ public class ExerciseService {
             source.laterality(), source.mechanic(), source.description(), source.formCues(),
             source.requiredEquipment(), source.suitableBlockTypes(), source.defaultRepRange(),
             source.isTimed(), source.demoFrames(), source.videoUrl(), source.demoPromptOverride(),
-            source.mediaStatus(), ExerciseStatus.ARCHIVED, source.contributorId(),
+            source.mediaStatus(), source.demoPlan(), source.planStatus(), source.reference(),
+            ExerciseStatus.ARCHIVED, source.contributorId(),
             source.createdAt(), Instant.now(), targetId
         );
         exercises.save(merged);
@@ -233,7 +300,8 @@ public class ExerciseService {
             e.primaryMuscles(), e.secondaryMuscles(), e.laterality(), e.mechanic(),
             e.description(), e.formCues(), e.requiredEquipment(), e.suitableBlockTypes(),
             e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
-            e.demoPromptOverride(), e.mediaStatus(), status, e.contributorId(),
+            e.demoPromptOverride(), e.mediaStatus(), e.demoPlan(), e.planStatus(), e.reference(),
+            status, e.contributorId(),
             e.createdAt(), Instant.now(), e.aliasOfExerciseId()
         );
         exercises.save(updated);
@@ -246,7 +314,8 @@ public class ExerciseService {
             e.primaryMuscles(), e.secondaryMuscles(), e.laterality(), e.mechanic(),
             e.description(), e.formCues(), e.requiredEquipment(), e.suitableBlockTypes(),
             e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
-            e.demoPromptOverride(), mediaStatus, e.status(), e.contributorId(),
+            e.demoPromptOverride(), mediaStatus, e.demoPlan(), e.planStatus(), e.reference(),
+            e.status(), e.contributorId(),
             e.createdAt(), Instant.now(), e.aliasOfExerciseId()
         );
         exercises.save(updated);
@@ -259,25 +328,55 @@ public class ExerciseService {
             e.primaryMuscles(), e.secondaryMuscles(), e.laterality(), e.mechanic(),
             e.description(), e.formCues(), e.requiredEquipment(), e.suitableBlockTypes(),
             e.defaultRepRange(), e.isTimed(), frames, e.videoUrl(),
-            e.demoPromptOverride(), e.mediaStatus(), e.status(), e.contributorId(),
+            e.demoPromptOverride(), e.mediaStatus(), e.demoPlan(), e.planStatus(), e.reference(),
+            e.status(), e.contributorId(),
             e.createdAt(), Instant.now(), e.aliasOfExerciseId()
         );
         exercises.save(updated);
         return updated;
     }
 
-    private static DemoFrame frameFor(List<DemoFrame> frames, DemoPhase phase) {
-        if (frames == null) return null;
-        return frames.stream().filter(f -> f.phase() == phase).findFirst().orElse(null);
+    private Exercise withPlan(Exercise e, List<FrameSpec> plan, ExerciseMediaStatus planStatus) {
+        Exercise updated = new Exercise(
+            e.exerciseId(), e.name(), e.nameLower(), e.aliases(), e.movementPattern(),
+            e.primaryMuscles(), e.secondaryMuscles(), e.laterality(), e.mechanic(),
+            e.description(), e.formCues(), e.requiredEquipment(), e.suitableBlockTypes(),
+            e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
+            e.demoPromptOverride(), e.mediaStatus(), plan, planStatus, e.reference(),
+            e.status(), e.contributorId(),
+            e.createdAt(), Instant.now(), e.aliasOfExerciseId()
+        );
+        exercises.save(updated);
+        return updated;
     }
 
-    private static List<DemoFrame> upsertFrame(List<DemoFrame> frames, DemoPhase phase, String url, boolean makeActive) {
-        DemoFrame existing = frameFor(frames, phase);
+    private static int phaseOrder(DemoPhase phase) {
+        if (phase == null) return 0;
+        return switch (phase) {
+            case START -> 0;
+            case MID -> 1;
+            case END -> 2;
+        };
+    }
+
+    private static DemoFrame frameFor(List<DemoFrame> frames, String key) {
+        if (frames == null || key == null) return null;
+        return frames.stream().filter(f -> key.equals(f.key())).findFirst().orElse(null);
+    }
+
+    private static List<DemoFrame> upsertFrame(
+        List<DemoFrame> frames, String key, String label, String caption, int order, String url) {
+        DemoFrame existing = frameFor(frames, key);
         LinkedHashSet<String> candidates = new LinkedHashSet<>(
             existing == null || existing.imageCandidates() == null ? List.of() : existing.imageCandidates());
         candidates.add(url);
-        String active = makeActive ? url : (existing == null ? url : existing.imageUrl());
-        return replaceFrame(frames, new DemoFrame(phase, active, new ArrayList<>(candidates)));
+        // Preserve any denormalized label/caption/order already on the frame.
+        String resolvedLabel = existing != null && existing.label() != null ? existing.label() : label;
+        String resolvedCaption = existing != null && existing.caption() != null ? existing.caption() : caption;
+        int resolvedOrder = existing != null ? existing.order() : order;
+        DemoPhase phase = existing != null ? existing.phase() : null;
+        return replaceFrame(frames, new DemoFrame(
+            key, resolvedLabel, resolvedCaption, resolvedOrder, url, new ArrayList<>(candidates), phase));
     }
 
     private static List<DemoFrame> replaceFrame(List<DemoFrame> frames, DemoFrame frame) {
@@ -285,7 +384,7 @@ public class ExerciseService {
         boolean replaced = false;
         if (frames != null) {
             for (DemoFrame f : frames) {
-                if (f.phase() == frame.phase()) {
+                if (f.key() != null && f.key().equals(frame.key())) {
                     result.add(frame);
                     replaced = true;
                 } else {

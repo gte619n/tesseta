@@ -17,7 +17,9 @@ import com.gte619n.healthfitness.core.exercise.DemoPhase;
 import com.gte619n.healthfitness.core.exercise.EquipmentRequirement;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaStatus;
+import com.gte619n.healthfitness.core.exercise.ExerciseReference;
 import com.gte619n.healthfitness.core.exercise.ExerciseRepository;
+import com.gte619n.healthfitness.core.exercise.FrameSpec;
 import com.gte619n.healthfitness.core.exercise.ExerciseStatus;
 import com.gte619n.healthfitness.core.exercise.Laterality;
 import com.gte619n.healthfitness.core.exercise.Mechanic;
@@ -119,6 +121,36 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
     }
 
     @Override
+    public List<Exercise> findByPlanStatus(ExerciseMediaStatus planStatus) {
+        // planStatus is absent on legacy docs (treated as NONE); query the
+        // stored string and, for NONE, also fold in docs missing the field.
+        List<QueryDocumentSnapshot> docs = await(collection()
+            .whereEqualTo("planStatus", planStatus.name())
+            .limit(500)
+            .get()).getDocuments();
+        List<Exercise> matched = docs.stream()
+            .map(this::toExercise)
+            .filter(e -> e.aliasOfExerciseId() == null)
+            .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+        if (planStatus == ExerciseMediaStatus.NONE) {
+            // Legacy/seeded docs written before IMPL-19 have no planStatus field;
+            // toExercise() defaults them to NONE but the equality query misses
+            // them. Sweep findAll() for those, de-duplicating by id.
+            java.util.Set<String> seen = matched.stream()
+                .map(Exercise::exerciseId)
+                .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
+            for (Exercise e : findAll()) {
+                if (e.aliasOfExerciseId() == null
+                    && e.planStatus() == ExerciseMediaStatus.NONE
+                    && seen.add(e.exerciseId())) {
+                    matched.add(e);
+                }
+            }
+        }
+        return matched;
+    }
+
+    @Override
     public void save(Exercise exercise) {
         DocumentReference ref = collection().document(exercise.exerciseId());
         boolean isNew = !await(ref.get()).exists();
@@ -153,6 +185,9 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
             : Map.of("min", e.defaultRepRange().min(), "max", e.defaultRepRange().max()));
         body.put("isTimed", e.isTimed());
         body.put("demoFrames", framesToWire(e.demoFrames()));
+        body.put("demoPlan", planToWire(e.demoPlan()));
+        body.put("planStatus", e.planStatus() == null ? ExerciseMediaStatus.NONE.name() : e.planStatus().name());
+        body.put("reference", referenceToWire(e.reference()));
         body.put("videoUrl", e.videoUrl());
         body.put("demoPromptOverride", e.demoPromptOverride());
         body.put("mediaStatus", e.mediaStatus() == null ? ExerciseMediaStatus.NONE.name() : e.mediaStatus().name());
@@ -182,12 +217,44 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
         List<Map<String, Object>> out = new ArrayList<>();
         for (DemoFrame f : frames) {
             Map<String, Object> m = new HashMap<>();
-            m.put("phase", f.phase() == null ? null : f.phase().name());
+            m.put("key", f.key());
+            m.put("label", f.label());
+            m.put("caption", f.caption());
+            m.put("order", f.order());
             m.put("imageUrl", f.imageUrl());
             m.put("imageCandidates", f.imageCandidates() == null ? List.of() : f.imageCandidates());
+            m.put("phase", f.phase() == null ? null : f.phase().name());
             out.add(m);
         }
         return out;
+    }
+
+    private static List<Map<String, Object>> planToWire(List<FrameSpec> plan) {
+        if (plan == null) return null;
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (FrameSpec f : plan) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("key", f.key());
+            m.put("order", f.order());
+            m.put("label", f.label());
+            m.put("caption", f.caption());
+            m.put("positionPrompt", f.positionPrompt());
+            out.add(m);
+        }
+        return out;
+    }
+
+    private static Map<String, Object> referenceToWire(ExerciseReference r) {
+        if (r == null) return null;
+        Map<String, Object> m = new HashMap<>();
+        m.put("url", r.url());
+        m.put("source", r.source());
+        m.put("name", r.name());
+        m.put("score", r.score());
+        m.put("match", r.match());
+        m.put("images", r.images() == null ? List.of() : r.images());
+        m.put("groundingImages", r.groundingImages());
+        return m;
     }
 
     @SuppressWarnings("unchecked")
@@ -231,15 +298,72 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
             for (Object o : list) {
                 if (o instanceof Map<?, ?> m) {
                     Map<String, Object> fm = (Map<String, Object>) m;
-                    String phase = (String) fm.get("phase");
+                    String phaseStr = (String) fm.get("phase");
+                    DemoPhase phase = phaseStr == null ? null : DemoPhase.valueOf(phaseStr);
                     Object cands = fm.get("imageCandidates");
+                    String key = (String) fm.get("key");
+                    String label = (String) fm.get("label");
+                    String caption = (String) fm.get("caption");
+                    Integer order = asInt(fm.get("order"));
+                    // Legacy read: a frame with a phase but no key (written before
+                    // IMPL-19) — derive key from phase, order from phase index,
+                    // and synthesize empty label/caption.
+                    if (key == null && phase != null) {
+                        key = DemoFrame.keyForPhase(phase);
+                        if (order == null) order = phaseIndex(phase);
+                        if (label == null) label = "";
+                        if (caption == null) caption = "";
+                    }
                     frames.add(new DemoFrame(
-                        phase == null ? null : DemoPhase.valueOf(phase),
+                        key,
+                        label,
+                        caption,
+                        order == null ? 0 : order,
                         (String) fm.get("imageUrl"),
-                        cands instanceof List<?> c ? c.stream().map(String::valueOf).toList() : List.of()
+                        cands instanceof List<?> c ? c.stream().map(String::valueOf).toList() : List.of(),
+                        phase
                     ));
                 }
             }
+        }
+
+        List<FrameSpec> demoPlan = null;
+        Object rawPlan = s.get("demoPlan");
+        if (rawPlan instanceof List<?> list) {
+            demoPlan = new ArrayList<>();
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> m) {
+                    Map<String, Object> pm = (Map<String, Object>) m;
+                    Integer order = asInt(pm.get("order"));
+                    demoPlan.add(new FrameSpec(
+                        (String) pm.get("key"),
+                        order == null ? 0 : order,
+                        (String) pm.get("label"),
+                        (String) pm.get("caption"),
+                        (String) pm.get("positionPrompt")
+                    ));
+                }
+            }
+        }
+
+        String planStatus = s.getString("planStatus");
+
+        ExerciseReference reference = null;
+        Object rawRef = s.get("reference");
+        if (rawRef instanceof Map<?, ?> m) {
+            Map<String, Object> rm = (Map<String, Object>) m;
+            Object score = rm.get("score");
+            Object images = rm.get("images");
+            Object grounding = rm.get("groundingImages");
+            reference = new ExerciseReference(
+                (String) rm.get("url"),
+                (String) rm.get("source"),
+                (String) rm.get("name"),
+                score instanceof Number n ? n.doubleValue() : null,
+                (String) rm.get("match"),
+                images instanceof List<?> il ? il.stream().map(String::valueOf).toList() : List.of(),
+                grounding instanceof List<?> gl ? gl.stream().map(String::valueOf).toList() : null
+            );
         }
 
         return new Exercise(
@@ -262,6 +386,9 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
             s.getString("videoUrl"),
             s.getString("demoPromptOverride"),
             mediaStatus == null ? ExerciseMediaStatus.NONE : ExerciseMediaStatus.valueOf(mediaStatus),
+            demoPlan,
+            planStatus == null ? ExerciseMediaStatus.NONE : ExerciseMediaStatus.valueOf(planStatus),
+            reference,
             status == null ? ExerciseStatus.DRAFT : ExerciseStatus.valueOf(status),
             s.getString("contributorId"),
             toInstant(s.get("createdAt")),
@@ -277,6 +404,14 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
 
     private static Integer asInt(Object o) {
         return o instanceof Number n ? n.intValue() : null;
+    }
+
+    private static int phaseIndex(DemoPhase phase) {
+        return switch (phase) {
+            case START -> 0;
+            case MID -> 1;
+            case END -> 2;
+        };
     }
 
     private static List<?> orEmpty(List<?> list) {

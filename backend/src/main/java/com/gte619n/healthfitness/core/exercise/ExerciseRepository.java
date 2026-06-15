@@ -13,6 +13,8 @@ public interface ExerciseRepository {
     List<Exercise> findAll();
     /** Exercises whose media is awaiting review — admin review queue. */
     List<Exercise> findByMediaStatus(ExerciseMediaStatus mediaStatus);
+    /** Exercises in a given frame-plan status — used by the plan backfill job (IMPL-19). */
+    List<Exercise> findByPlanStatus(ExerciseMediaStatus planStatus);
     void save(Exercise exercise);
     void delete(String exerciseId);
 }

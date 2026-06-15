@@ -12,6 +12,8 @@ import com.gte619n.healthfitness.core.exercise.ExerciseMediaGenerator;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaStatus;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaUploader;
 import com.gte619n.healthfitness.core.exercise.ExerciseService;
+import com.gte619n.healthfitness.core.exercise.FrameSpec;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -108,20 +110,38 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         + "held the right way for the movement. Realistic, correct joint angles "
         + "for the position.";
 
+    /**
+     * Instruction appended when a reference pose image is attached: the model
+     * must copy the body position only, never the reference's background,
+     * lighting, wardrobe, or person. The reference image is generation input
+     * only and is never stored or returned.
+     */
+    private static final String GROUNDING_CLAUSE =
+        "Use the provided reference image only as a guide for the body position "
+        + "and limb configuration; reproduce that pose, but render entirely in the "
+        + "house style described above (do not copy its background, lighting, "
+        + "wardrobe, or person).";
+
     private final ExerciseMediaStorage storage;
     private final ExerciseService exerciseService;
+    private final GroundingImageResolver grounding;
     private final String model;
+    private final boolean groundingEnabled;
     private final Client client;
 
     public GeminiExerciseMediaService(
         ExerciseMediaStorage storage,
         ExerciseService exerciseService,
+        GroundingImageResolver grounding,
         Client client,
-        @Value("${app.exercises.media.model:gemini-3.1-flash-image-preview}") String model
+        @Value("${app.exercises.media.model:gemini-3.1-flash-image-preview}") String model,
+        @Value("${app.exercises.media.grounding-enabled:true}") boolean groundingEnabled
     ) {
         this.storage = storage;
         this.exerciseService = exerciseService;
+        this.grounding = grounding;
         this.model = model;
+        this.groundingEnabled = groundingEnabled;
         this.client = client;
     }
 
@@ -133,9 +153,21 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     @Override
     public CompletableFuture<Void> generateDemoAsync(Exercise exercise, String promptOverride) {
         return CompletableFuture.runAsync(() -> {
-            boolean any = false;
-            for (DemoPhase phase : DemoPhase.values()) {
-                any |= generateOne(exercise, phase, promptOverride);
+            boolean any;
+            List<FrameSpec> plan = exercise.demoPlan();
+            if (plan != null && !plan.isEmpty()) {
+                // Plan-based: resolve grounding once, generate every spec.
+                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise);
+                any = false;
+                for (FrameSpec spec : plan) {
+                    any |= generateSpec(exercise, plan, spec, refs, promptOverride);
+                }
+            } else {
+                // Legacy START/MID/END path, unchanged.
+                any = false;
+                for (DemoPhase phase : DemoPhase.values()) {
+                    any |= generatePhase(exercise, phase, promptOverride);
+                }
             }
             finalizeStatus(exercise.exerciseId(), any);
         });
@@ -144,7 +176,25 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     @Override
     public CompletableFuture<Void> generatePhaseAsync(Exercise exercise, DemoPhase phase, String promptOverride) {
         return CompletableFuture.runAsync(() -> {
-            boolean ok = generateOne(exercise, phase, promptOverride);
+            boolean ok = generatePhase(exercise, phase, promptOverride);
+            finalizeStatus(exercise.exerciseId(), ok);
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> generateFrameAsync(Exercise exercise, String key, String promptOverride) {
+        return CompletableFuture.runAsync(() -> {
+            boolean ok;
+            List<FrameSpec> plan = exercise.demoPlan();
+            FrameSpec spec = specForKey(plan, key);
+            if (spec != null) {
+                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise);
+                ok = generateSpec(exercise, plan, spec, refs, promptOverride);
+            } else {
+                // No plan match — fall back to a legacy phase if the key is start/mid/end.
+                DemoPhase phase = phaseForKey(key);
+                ok = phase != null && generatePhase(exercise, phase, promptOverride);
+            }
             finalizeStatus(exercise.exerciseId(), ok);
         });
     }
@@ -162,6 +212,19 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     }
 
     @Override
+    public Exercise uploadFrame(String exerciseId, String key, byte[] bytes, String contentType) {
+        String url = storage.upload(exerciseId, key, bytes, contentType);
+        // Carry the spec's denormalized label/caption/order when the plan has it.
+        FrameSpec spec = specForKey(exerciseService.getPlan(exerciseId), key);
+        if (spec != null) {
+            exerciseService.recordFrame(exerciseId, key, spec.label(), spec.caption(), spec.order(), url);
+        } else {
+            exerciseService.recordFrame(exerciseId, key, "", "", 0, url);
+        }
+        return exerciseService.updateMediaStatus(exerciseId, ExerciseMediaStatus.NEEDS_REVIEW);
+    }
+
+    @Override
     public Exercise deleteFrame(String exerciseId, DemoPhase phase, String imageUrl) {
         try {
             storage.deleteByUrl(imageUrl);
@@ -171,17 +234,124 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         return exerciseService.removeFrameCandidate(exerciseId, phase, imageUrl);
     }
 
+    @Override
+    public Exercise deleteFrame(String exerciseId, String key, String imageUrl) {
+        try {
+            storage.deleteByUrl(imageUrl);
+        } catch (Exception e) {
+            log.warn("Failed to delete exercise frame blob for {}: {}", exerciseId, e.getMessage());
+        }
+        return exerciseService.removeFrameCandidate(exerciseId, key, imageUrl);
+    }
+
     // ---- internals ----
 
-    /** Generate one phase; returns true on success. Swallows errors. */
-    private boolean generateOne(Exercise exercise, DemoPhase phase, String promptOverride) {
+    /** Legacy phase → key reverse lookup for plan-less fallback. */
+    private static DemoPhase phaseForKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        for (DemoPhase p : DemoPhase.values()) {
+            if (key.equalsIgnoreCase(p.name()) || key.equalsIgnoreCase(keyForPhase(p))) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    private static String keyForPhase(DemoPhase p) {
+        return switch (p) {
+            case START -> "start";
+            case MID -> "mid";
+            case END -> "end";
+        };
+    }
+
+    private static FrameSpec specForKey(List<FrameSpec> plan, String key) {
+        if (plan == null || key == null) {
+            return null;
+        }
+        return plan.stream().filter(s -> key.equals(s.key())).findFirst().orElse(null);
+    }
+
+    private List<GroundingImageResolver.RefImage> resolveGrounding(Exercise exercise) {
+        if (!groundingEnabled || exercise.reference() == null) {
+            return List.of();
+        }
+        try {
+            return grounding.imagesFor(exercise.reference());
+        } catch (Exception e) {
+            log.warn("Grounding resolution failed for {}: {}", exercise.exerciseId(), e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Map a plan frame to a reference pose image by order: first frame → first
+     * (start) image, last frame → last (end) image, interior → nearest, none if
+     * no references. Returns null when no reference applies.
+     */
+    private static GroundingImageResolver.RefImage referenceFor(
+        List<FrameSpec> plan, FrameSpec spec, List<GroundingImageResolver.RefImage> refs) {
+        if (refs == null || refs.isEmpty() || plan == null || plan.isEmpty()) {
+            return null;
+        }
+        if (refs.size() == 1) {
+            return refs.get(0);
+        }
+        int idx = Math.max(0, plan.indexOf(spec));
+        int last = plan.size() - 1;
+        if (idx <= 0) {
+            return refs.get(0);
+        }
+        if (idx >= last) {
+            return refs.get(refs.size() - 1);
+        }
+        // Interior frame: map proportionally to the nearest reference.
+        int mapped = Math.round((float) idx / last * (refs.size() - 1));
+        mapped = Math.min(refs.size() - 1, Math.max(0, mapped));
+        return refs.get(mapped);
+    }
+
+    /** Generate one plan frame (grounded when a reference applies); true on success. */
+    private boolean generateSpec(
+        Exercise exercise, List<FrameSpec> plan, FrameSpec spec,
+        List<GroundingImageResolver.RefImage> refs, String promptOverride) {
+        String key = spec.key();
+        try {
+            if (client == null) {
+                log.warn("Skipping exercise media for {} — no API key", exercise.exerciseId());
+                return false;
+            }
+            GroundingImageResolver.RefImage ref = referenceFor(plan, spec, refs);
+            String prompt = buildPrompt(exercise, spec, promptOverride, ref != null);
+            byte[] bytes = callGemini(prompt, ref, exercise.exerciseId());
+            if (bytes != null && bytes.length > 0) {
+                String url = storage.upload(exercise.exerciseId(), key, bytes);
+                exerciseService.recordFrame(
+                    exercise.exerciseId(), key, spec.label(), spec.caption(), spec.order(), url);
+                log.info("Generated frame '{}' for exercise {}{}: {}",
+                    key, exercise.exerciseId(), ref != null ? " (grounded)" : "", url);
+                return true;
+            }
+            log.warn("Empty image bytes for exercise {} frame {}", exercise.exerciseId(), key);
+            return false;
+        } catch (Exception e) {
+            log.error("Failed to generate frame {} for exercise {}: {}",
+                key, exercise.exerciseId(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /** Generate one legacy phase; returns true on success. Swallows errors. */
+    private boolean generatePhase(Exercise exercise, DemoPhase phase, String promptOverride) {
         try {
             if (client == null) {
                 log.warn("Skipping exercise media for {} — no API key", exercise.exerciseId());
                 return false;
             }
             String prompt = buildPrompt(exercise, phase, promptOverride);
-            byte[] bytes = callGemini(prompt, exercise.exerciseId());
+            byte[] bytes = callGemini(prompt, null, exercise.exerciseId());
             if (bytes != null && bytes.length > 0) {
                 String url = storage.upload(exercise.exerciseId(), phase, bytes);
                 exerciseService.recordFrame(exercise.exerciseId(), phase, url);
@@ -210,13 +380,33 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         if (promptOverride != null && !promptOverride.isBlank()) {
             return promptOverride;
         }
+        // Movement-pattern-driven position so every exercise (not just bench) gets a
+        // concrete, maximal-range phase — the fix for shallow mid-rep stills.
+        String position = ExerciseMovementPhases.position(exercise.movementPattern(), phase);
+        return composePrompt(exercise, position, false);
+    }
+
+    /**
+     * Plan-based prompt (IMPL-19): identical house clauses to the legacy path,
+     * but the position clause comes from {@link FrameSpec#positionPrompt()}
+     * instead of {@link ExerciseMovementPhases}. {@code grounded} appends the
+     * reference-image instruction when a pose reference is attached.
+     */
+    String buildPrompt(Exercise exercise, FrameSpec spec, String promptOverride, boolean grounded) {
+        if (promptOverride != null && !promptOverride.isBlank()) {
+            return grounded ? promptOverride + "\n" + GROUNDING_CLAUSE : promptOverride;
+        }
+        String position = spec.positionPrompt() == null || spec.positionPrompt().isBlank()
+            ? ExerciseMovementPhases.position(exercise.movementPattern(), DemoPhase.MID)
+            : spec.positionPrompt();
+        return composePrompt(exercise, position, grounded);
+    }
+
+    private String composePrompt(Exercise exercise, String position, boolean grounded) {
         String name = exercise.name() == null ? "an exercise" : exercise.name();
         String cues = exercise.formCues() == null || exercise.formCues().isEmpty()
             ? "" : String.join("; ", exercise.formCues());
         boolean lying = ExerciseVideoPrompt.isLying(exercise);
-        // Movement-pattern-driven position so every exercise (not just bench) gets a
-        // concrete, maximal-range phase — the fix for shallow mid-rep stills.
-        String position = ExerciseMovementPhases.position(exercise.movementPattern(), phase);
         // Posture-aware camera: dead-level side profile foreshortens a supine press,
         // so lying lifts use an elevated three-quarter angle.
         String camera = lying ? LYING_CAMERA_CLAUSE : CAMERA_CLAUSE;
@@ -228,16 +418,31 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         // Per-exercise actor so all phases (and the video) share one consistent person.
         String actor = "The subject is " + ExerciseActor.forExercise(exercise.exerciseId()).describe()
             + ". Calm neutral facial expression, no exertion grimace.";
-        return SHARED_TREATMENT + "\n" + actor + "\n" + WARDROBE_CLAUSE + "\n"
+        String base = SHARED_TREATMENT + "\n" + actor + "\n" + WARDROBE_CLAUSE + "\n"
             + ENVIRONMENT_CLAUSE + "\n" + camera + "\n" + EQUIPMENT_TREATMENT + "\n"
             + ANATOMY_CLAUSE + "\n"
             + "The person is performing " + name + ", shown " + position
             + (cues.isBlank() ? "" : ", key form cues: " + cues) + "." + posture;
+        return grounded ? base + "\n" + GROUNDING_CLAUSE : base;
     }
 
-    byte[] callGemini(String prompt, String exerciseId) {
+    /**
+     * Call the image model. When {@code ref} is non-null its bytes are attached
+     * as an additional inline image Part to ground the pose (the reference image
+     * is input only — never stored or returned).
+     */
+    byte[] callGemini(String prompt, GroundingImageResolver.RefImage ref, String exerciseId) {
         try {
-            Content content = Content.fromParts(Part.fromText(prompt));
+            Content content;
+            if (ref != null && ref.bytes() != null && ref.bytes().length > 0) {
+                List<Part> parts = new ArrayList<>();
+                // Reference image first, then the text prompt (mirrors GeminiFoodImageGenerator).
+                parts.add(Part.fromBytes(ref.bytes(), ref.mime()));
+                parts.add(Part.fromText(prompt));
+                content = Content.fromParts(parts.toArray(new Part[0]));
+            } else {
+                content = Content.fromParts(Part.fromText(prompt));
+            }
             GenerateContentConfig config = GenerateContentConfig.builder()
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();
