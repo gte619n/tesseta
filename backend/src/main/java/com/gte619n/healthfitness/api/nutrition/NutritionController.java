@@ -269,6 +269,35 @@ public class NutritionController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * IMPL-STAB (Workstream E) — retry image generation for an entry whose image
+     * FAILED (or is stuck). Without this a failed generation left the row showing
+     * a blank/utensil placeholder forever, with no recovery — it read as a
+     * permanently "missing" picture even after a re-login. A composite meal
+     * regenerates its finished-meal image; a catalog-backed entry regenerates its
+     * food's studio image. Generation is async, so this returns 202 with the
+     * entry's current state (image flips to PENDING when the pipeline is live and
+     * the client's settle-poll swaps in the result).
+     */
+    @PostMapping("/{date}/entries/{entryId}/image/regenerate")
+    public ResponseEntity<EntryResponse> regenerateEntryImage(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry = nutrition.findEntry(userId, date, entryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Entry not found: " + entryId));
+        if (entry.isComposite()) {
+            foodEntryImages.enqueueGeneration(userId, date, entryId, entry.foodName(), entry.photoRef());
+        } else if (entry.foodId() != null) {
+            foodCatalog.regenerateImage(entry.foodId());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        // Re-read so the response reflects the just-flipped PENDING status.
+        FoodEntry refreshed = nutrition.findEntry(userId, date, entryId).orElse(entry);
+        return ResponseEntity.accepted().body(toResponse(refreshed));
+    }
+
     // ----- Composite meal (photo-logged) -------------------------------
 
     /**
