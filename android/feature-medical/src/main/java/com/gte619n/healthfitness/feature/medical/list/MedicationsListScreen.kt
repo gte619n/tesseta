@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.medications.Medication
 import com.gte619n.healthfitness.feature.medical.components.MedicationGrid
+import com.gte619n.healthfitness.feature.medical.reminders.ReminderPermissionWarning
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.state.EmptyState
 import com.gte619n.healthfitness.ui.state.ErrorState
@@ -80,6 +81,14 @@ fun MedicationsListScreen(
                     val meds = when (tab) {
                         MedicationsTab.CURRENT -> s.active
                         MedicationsTab.HISTORY -> s.discontinued
+                    }
+                    // IMPL-STAB Workstream F (item 3): persistent "reminders won't
+                    // fire" warning when a required permission is missing — shown
+                    // only when the user actually has active meds to remind about.
+                    if (s.active.isNotEmpty()) {
+                        ReminderPermissionWarning(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
+                        )
                     }
                     if (meds.isEmpty()) {
                         EmptyState(

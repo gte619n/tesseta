@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.mobile.nav
 
+import android.content.Intent
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -8,8 +10,10 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.mobile.sync.SyncStatusViewModel
@@ -87,6 +91,21 @@ fun AppNavHost(
     // status icon in the top-right corner; only a FAILED sync surfaces the full
     // banner (with Retry). Steady state shows nothing.
     val syncState by syncStatusViewModel.state.collectAsStateWithLifecycle()
+
+    // IMPL-STAB Workstream F (item 4): NavHost auto-handles the activity's INITIAL
+    // intent (cold-start deep link from a reminder notification). When the app is
+    // already running, the launch arrives via onNewIntent — singleTop activity —
+    // so forward those to the controller too, otherwise a notification tap on a
+    // foregrounded app would be a no-op.
+    val activity = LocalContext.current as? ComponentActivity
+    DisposableEffect(activity, navController) {
+        val listener = androidx.core.util.Consumer<Intent> { intent ->
+            navController.handleDeepLink(intent)
+        }
+        activity?.addOnNewIntentListener(listener)
+        onDispose { activity?.removeOnNewIntentListener(listener) }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AppNavHostGraph(widthClass = widthClass, navController = navController)
         SyncStatusOverlay(state = syncState, onRetry = syncStatusViewModel::retry)

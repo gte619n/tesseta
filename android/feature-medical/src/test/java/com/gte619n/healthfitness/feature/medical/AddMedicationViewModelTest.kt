@@ -39,7 +39,10 @@ class AddMedicationViewModelTest {
             DrugLookupEvent.Found(sampleDrug()),
         )
         val drugs = fakeDrugRepository(events = events)
-        val vm = AddMedicationViewModel(drugs, fakeMedicationRepository(), onlineConnectivity())
+        val vm = AddMedicationViewModel(
+            drugs, fakeMedicationRepository(),
+            fakeReminderSettingsRepository(), fakeReminderEngine(), onlineConnectivity(),
+        )
         advanceUntilIdle()
 
         vm.startLookup("testosterone")
@@ -54,7 +57,10 @@ class AddMedicationViewModelTest {
     @Test
     fun `not found keeps search step`() = runTest {
         val drugs = fakeDrugRepository(events = listOf(DrugLookupEvent.NotFound("no match")))
-        val vm = AddMedicationViewModel(drugs, fakeMedicationRepository(), onlineConnectivity())
+        val vm = AddMedicationViewModel(
+            drugs, fakeMedicationRepository(),
+            fakeReminderSettingsRepository(), fakeReminderEngine(), onlineConnectivity(),
+        )
         advanceUntilIdle()
 
         vm.startLookup("zzzz")
@@ -66,7 +72,10 @@ class AddMedicationViewModelTest {
 
     @Test
     fun `submit success invokes onDone`() = runTest {
-        val vm = AddMedicationViewModel(fakeDrugRepository(), fakeMedicationRepository(), onlineConnectivity())
+        val vm = AddMedicationViewModel(
+            fakeDrugRepository(), fakeMedicationRepository(),
+            fakeReminderSettingsRepository(), fakeReminderEngine(), onlineConnectivity(),
+        )
         advanceUntilIdle()
 
         var done = false
@@ -89,7 +98,10 @@ class AddMedicationViewModelTest {
         val failingRepo = fakeMedicationRepository().apply {
             coEvery { create(any()) } throws RuntimeException("save failed")
         }
-        val vm = AddMedicationViewModel(fakeDrugRepository(), failingRepo, onlineConnectivity())
+        val vm = AddMedicationViewModel(
+            fakeDrugRepository(), failingRepo,
+            fakeReminderSettingsRepository(), fakeReminderEngine(), onlineConnectivity(),
+        )
         advanceUntilIdle()
 
         var done = false
