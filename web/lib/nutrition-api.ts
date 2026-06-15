@@ -87,6 +87,18 @@ export function deleteEntry(date: string, entryId: string): Promise<void> {
   return send<void>(`/api/me/nutrition/${date}/entries/${entryId}`, "DELETE");
 }
 
+/**
+ * Retry image generation for an entry whose image FAILED (or is stuck). The
+ * backend flips it to PENDING and regenerates async; the day's
+ * PendingImageRefresher then polls until it's READY.
+ */
+export function regenerateEntryImage(date: string, entryId: string): Promise<Entry> {
+  return send<Entry>(
+    `/api/me/nutrition/${date}/entries/${entryId}/image/regenerate`,
+    "POST",
+  );
+}
+
 /** Re-portion one ingredient of a composite meal (by index). */
 export function updateIngredient(
   date: string,
