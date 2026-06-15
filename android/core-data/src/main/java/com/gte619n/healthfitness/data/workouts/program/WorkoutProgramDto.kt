@@ -48,7 +48,14 @@ data class NutritionGuidanceDto(
 )
 
 data class DemoFrameDto(
-    val phase: String,
+    // IMPL-19: frames are keyed to the per-exercise plan; `key`/`label`/`caption`
+    // are denormalized from the FrameSpec. `phase` is the deprecated legacy enum,
+    // now nullable so old documents still decode.
+    val key: String = "",
+    val label: String = "",
+    val caption: String = "",
+    val order: Int = 0,
+    val phase: String? = null,
     val imageUrl: String? = null,
     val imageCandidates: List<String> = emptyList(),
 )
@@ -228,7 +235,14 @@ fun NutritionGuidance.toDto(): NutritionGuidanceDto = NutritionGuidanceDto(
 )
 
 fun DemoFrameDto.toDomain(): DemoFrame =
-    DemoFrame(phase = phase, imageUrl = imageUrl ?: imageCandidates.firstOrNull())
+    DemoFrame(
+        key = key,
+        label = label,
+        caption = caption,
+        order = order,
+        imageUrl = imageUrl ?: imageCandidates.firstOrNull(),
+        phase = phase,
+    )
 
 fun ExerciseSummaryDto.toDomain(): ExerciseSummary = ExerciseSummary(
     exerciseId = exerciseId,
