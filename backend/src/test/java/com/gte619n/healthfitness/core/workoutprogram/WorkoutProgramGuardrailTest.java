@@ -177,7 +177,7 @@ class WorkoutProgramGuardrailTest {
             Laterality.BILATERAL, Mechanic.COMPOUND, null, List.of(), List.of(), List.of(BlockType.MAIN),
             null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED,
             null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
-            null, Instant.now(), Instant.now(), null);
+            null, Instant.now(), Instant.now(), null, false, List.of());
     }
 
     /** Bodyweight gym: a single location with no equipment, so anything is executable. */

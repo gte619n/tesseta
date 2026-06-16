@@ -90,7 +90,9 @@ public class ExerciseService {
             contributorId,
             now,
             now,
-            null
+            null,
+            false,
+            List.of()
         );
         exercises.save(exercise);
         return exercise;
@@ -127,7 +129,9 @@ public class ExerciseService {
             e.contributorId(),
             e.createdAt(),
             Instant.now(),
-            e.aliasOfExerciseId()
+            e.aliasOfExerciseId(),
+            e.reviewed(),
+            e.groundingImageUrls()
         );
         exercises.save(updated);
         return updated;
@@ -152,6 +156,26 @@ public class ExerciseService {
     /** Set the media status (used by the generator: PENDING before, FAILED on error). */
     public Exercise updateMediaStatus(String exerciseId, ExerciseMediaStatus status) {
         return withMediaStatus(require(exerciseId), status);
+    }
+
+    // ---- IMPL-20: reviewed sign-off + grounding image set ----
+
+    /**
+     * Set the human {@code reviewed} sign-off. Independent of
+     * {@code mediaStatus}/{@code planStatus}.
+     */
+    public Exercise setReviewed(String exerciseId, boolean reviewed) {
+        return withReviewed(require(exerciseId), reviewed);
+    }
+
+    /**
+     * Persist the grounding image set — the URLs (own GCS candidates and/or
+     * external reference URLs) used as regeneration pose references. A null list
+     * is normalized to empty (explicitly "no grounding").
+     */
+    public Exercise setGroundingImageUrls(String exerciseId, List<String> imageUrls) {
+        return withGroundingImageUrls(require(exerciseId),
+            imageUrls == null ? List.of() : List.copyOf(imageUrls));
     }
 
     // ---- frame plan CRUD (IMPL-19) ----
@@ -281,7 +305,8 @@ public class ExerciseService {
             source.isTimed(), source.demoFrames(), source.videoUrl(), source.demoPromptOverride(),
             source.mediaStatus(), source.demoPlan(), source.planStatus(), source.reference(),
             ExerciseStatus.ARCHIVED, source.contributorId(),
-            source.createdAt(), Instant.now(), targetId
+            source.createdAt(), Instant.now(), targetId,
+            source.reviewed(), source.groundingImageUrls()
         );
         exercises.save(merged);
         return exercises.findById(targetId).orElse(target);
@@ -302,7 +327,8 @@ public class ExerciseService {
             e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
             e.demoPromptOverride(), e.mediaStatus(), e.demoPlan(), e.planStatus(), e.reference(),
             status, e.contributorId(),
-            e.createdAt(), Instant.now(), e.aliasOfExerciseId()
+            e.createdAt(), Instant.now(), e.aliasOfExerciseId(),
+            e.reviewed(), e.groundingImageUrls()
         );
         exercises.save(updated);
         return updated;
@@ -316,7 +342,8 @@ public class ExerciseService {
             e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
             e.demoPromptOverride(), mediaStatus, e.demoPlan(), e.planStatus(), e.reference(),
             e.status(), e.contributorId(),
-            e.createdAt(), Instant.now(), e.aliasOfExerciseId()
+            e.createdAt(), Instant.now(), e.aliasOfExerciseId(),
+            e.reviewed(), e.groundingImageUrls()
         );
         exercises.save(updated);
         return updated;
@@ -330,7 +357,8 @@ public class ExerciseService {
             e.defaultRepRange(), e.isTimed(), frames, e.videoUrl(),
             e.demoPromptOverride(), e.mediaStatus(), e.demoPlan(), e.planStatus(), e.reference(),
             e.status(), e.contributorId(),
-            e.createdAt(), Instant.now(), e.aliasOfExerciseId()
+            e.createdAt(), Instant.now(), e.aliasOfExerciseId(),
+            e.reviewed(), e.groundingImageUrls()
         );
         exercises.save(updated);
         return updated;
@@ -344,7 +372,38 @@ public class ExerciseService {
             e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
             e.demoPromptOverride(), e.mediaStatus(), plan, planStatus, e.reference(),
             e.status(), e.contributorId(),
-            e.createdAt(), Instant.now(), e.aliasOfExerciseId()
+            e.createdAt(), Instant.now(), e.aliasOfExerciseId(),
+            e.reviewed(), e.groundingImageUrls()
+        );
+        exercises.save(updated);
+        return updated;
+    }
+
+    private Exercise withReviewed(Exercise e, boolean reviewed) {
+        Exercise updated = new Exercise(
+            e.exerciseId(), e.name(), e.nameLower(), e.aliases(), e.movementPattern(),
+            e.primaryMuscles(), e.secondaryMuscles(), e.laterality(), e.mechanic(),
+            e.description(), e.formCues(), e.requiredEquipment(), e.suitableBlockTypes(),
+            e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
+            e.demoPromptOverride(), e.mediaStatus(), e.demoPlan(), e.planStatus(), e.reference(),
+            e.status(), e.contributorId(),
+            e.createdAt(), Instant.now(), e.aliasOfExerciseId(),
+            reviewed, e.groundingImageUrls()
+        );
+        exercises.save(updated);
+        return updated;
+    }
+
+    private Exercise withGroundingImageUrls(Exercise e, List<String> imageUrls) {
+        Exercise updated = new Exercise(
+            e.exerciseId(), e.name(), e.nameLower(), e.aliases(), e.movementPattern(),
+            e.primaryMuscles(), e.secondaryMuscles(), e.laterality(), e.mechanic(),
+            e.description(), e.formCues(), e.requiredEquipment(), e.suitableBlockTypes(),
+            e.defaultRepRange(), e.isTimed(), e.demoFrames(), e.videoUrl(),
+            e.demoPromptOverride(), e.mediaStatus(), e.demoPlan(), e.planStatus(), e.reference(),
+            e.status(), e.contributorId(),
+            e.createdAt(), Instant.now(), e.aliasOfExerciseId(),
+            e.reviewed(), imageUrls
         );
         exercises.save(updated);
         return updated;

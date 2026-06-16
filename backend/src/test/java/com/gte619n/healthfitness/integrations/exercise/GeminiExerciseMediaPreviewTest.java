@@ -52,7 +52,7 @@ class GeminiExerciseMediaPreviewTest {
     @Test
     void previewDemoImages() throws Exception {
         GeminiExerciseMediaService media = new GeminiExerciseMediaService(
-            null, null, new GroundingImageResolver(false),
+            null, null, new GroundingImageResolver(null, "test-exercise-media", false),
             Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(),
             "gemini-3.1-flash-image-preview", false);
 
@@ -92,7 +92,7 @@ class GeminiExerciseMediaPreviewTest {
             null, s.cues(), List.of(), List.of(), null, false,
             List.of(), null, null, ExerciseMediaStatus.NONE,
             null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
-            null, now, now, null);
+            null, now, now, null, false, List.of());
     }
 
     private static String slug(String name) {

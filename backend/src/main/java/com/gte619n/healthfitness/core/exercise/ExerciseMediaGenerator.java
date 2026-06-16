@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.core.exercise;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -29,6 +30,23 @@ public interface ExerciseMediaGenerator {
      * routes to the corresponding phase.
      */
     CompletableFuture<Void> generateFrameAsync(Exercise exercise, String key, String promptOverride);
+
+    /**
+     * Regenerate all plan frames (or all legacy phases) using an explicit
+     * grounding override (IMPL-20). {@code referenceImageUrls} is the effective
+     * grounding set for this run: {@code null} ⇒ use the exercise's persisted
+     * {@code groundingImageUrls}; an empty list ⇒ explicitly no grounding; a
+     * non-null list ⇒ use exactly those URLs. Resolved bytes are never
+     * persisted — only the URL selection is stored (by the controller).
+     */
+    CompletableFuture<Void> generateDemoAsync(Exercise exercise, String promptOverride, List<String> referenceImageUrls);
+
+    /**
+     * Regenerate a single plan frame by {@code key} with an explicit grounding
+     * override (IMPL-20). See {@link #generateDemoAsync(Exercise, String, List)}
+     * for the {@code referenceImageUrls} semantics.
+     */
+    CompletableFuture<Void> generateFrameAsync(Exercise exercise, String key, String promptOverride, List<String> referenceImageUrls);
 
     /** The default prompt this generator would produce for a given phase. */
     String defaultPrompt(Exercise exercise, DemoPhase phase);

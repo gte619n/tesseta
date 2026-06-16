@@ -48,7 +48,7 @@ class Impl19FramePreviewTest {
         GeminiExerciseFramePlanner planner =
             new GeminiExerciseFramePlanner(Optional.of(client), "gemini-3.5-flash");
 
-        GroundingImageResolver grounding = new GroundingImageResolver(true);
+        GroundingImageResolver grounding = new GroundingImageResolver(null, "test-exercise-media", true);
 
         // Null repo/storage: we never call any method that writes to Firestore/GCS.
         GeminiExerciseMediaService media = new GeminiExerciseMediaService(
@@ -222,7 +222,9 @@ class Impl19FramePreviewTest {
             null,
             now,
             now,
-            null);
+            null,
+            false,                              // reviewed
+            List.of());                         // groundingImageUrls
     }
 
     private static ExerciseReference referenceFor(JsonNode r) {
@@ -250,7 +252,7 @@ class Impl19FramePreviewTest {
             e.isTimed(), e.demoFrames(), e.videoUrl(), e.demoPromptOverride(),
             e.mediaStatus(), plan, ExerciseMediaStatus.NEEDS_REVIEW, e.reference(),
             e.status(), e.contributorId(), e.createdAt(), e.updatedAt(),
-            e.aliasOfExerciseId());
+            e.aliasOfExerciseId(), e.reviewed(), e.groundingImageUrls());
     }
 
     // ---- report ----

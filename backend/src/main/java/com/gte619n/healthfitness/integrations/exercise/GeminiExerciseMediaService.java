@@ -267,17 +267,23 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
 
     @Override
     public CompletableFuture<Void> generateDemoAsync(Exercise exercise) {
-        return generateDemoAsync(exercise, null);
+        return generateDemoAsync(exercise, null, null);
     }
 
     @Override
     public CompletableFuture<Void> generateDemoAsync(Exercise exercise, String promptOverride) {
+        return generateDemoAsync(exercise, promptOverride, null);
+    }
+
+    @Override
+    public CompletableFuture<Void> generateDemoAsync(
+        Exercise exercise, String promptOverride, List<String> referenceImageUrls) {
         return CompletableFuture.runAsync(() -> {
             boolean any;
             List<FrameSpec> plan = exercise.demoPlan();
             if (plan != null && !plan.isEmpty()) {
                 // Plan-based: resolve grounding once, generate every spec.
-                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise);
+                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise, referenceImageUrls);
                 any = false;
                 for (FrameSpec spec : plan) {
                     any |= generateSpec(exercise, plan, spec, refs, promptOverride);
@@ -303,12 +309,18 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
 
     @Override
     public CompletableFuture<Void> generateFrameAsync(Exercise exercise, String key, String promptOverride) {
+        return generateFrameAsync(exercise, key, promptOverride, null);
+    }
+
+    @Override
+    public CompletableFuture<Void> generateFrameAsync(
+        Exercise exercise, String key, String promptOverride, List<String> referenceImageUrls) {
         return CompletableFuture.runAsync(() -> {
             boolean ok;
             List<FrameSpec> plan = exercise.demoPlan();
             FrameSpec spec = specForKey(plan, key);
             if (spec != null) {
-                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise);
+                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise, referenceImageUrls);
                 ok = generateSpec(exercise, plan, spec, refs, promptOverride);
             } else {
                 // No plan match — fall back to a legacy phase if the key is start/mid/end.
@@ -411,11 +423,39 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         return plan.stream().filter(s -> key.equals(s.key())).findFirst().orElse(null);
     }
 
-    private List<GroundingImageResolver.RefImage> resolveGrounding(Exercise exercise) {
-        if (!groundingEnabled || exercise.reference() == null) {
+    /**
+     * Resolve the effective grounding image set for a regeneration (IMPL-20).
+     *
+     * <p>The effective URL set is {@code referenceImageUrls} when the request
+     * supplied it (a non-null list — an empty list means "explicitly no
+     * grounding"), otherwise the exercise's persisted {@code groundingImageUrls}.
+     * When neither is present (request null and no persisted selection) we fall
+     * back to IMPL-19 reference-based resolution so existing grounded exercises
+     * keep working until an admin makes an explicit selection.
+     *
+     * <p>Resolved bytes are transient and never persisted — only the URL
+     * selection is stored (by the controller, ahead of this call).
+     */
+    private List<GroundingImageResolver.RefImage> resolveGrounding(
+        Exercise exercise, List<String> referenceImageUrls) {
+        if (!groundingEnabled) {
             return List.of();
         }
         try {
+            if (referenceImageUrls != null) {
+                // Explicit per-regen override: empty means no grounding.
+                return referenceImageUrls.isEmpty()
+                    ? List.of()
+                    : grounding.imagesForUrls(referenceImageUrls);
+            }
+            List<String> persisted = exercise.groundingImageUrls();
+            if (persisted != null && !persisted.isEmpty()) {
+                return grounding.imagesForUrls(persisted);
+            }
+            // No explicit selection — fall back to the IMPL-19 reference set.
+            if (exercise.reference() == null) {
+                return List.of();
+            }
             return grounding.imagesFor(exercise.reference());
         } catch (Exception e) {
             log.warn("Grounding resolution failed for {}: {}", exercise.exerciseId(), e.getMessage());
