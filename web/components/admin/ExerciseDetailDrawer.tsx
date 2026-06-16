@@ -12,7 +12,7 @@ import { StatusPill, MediaStatusPill } from "./ExercisePills";
 import { ReviewedCheckbox } from "./ReviewedCheckbox";
 import type { ExerciseResponse, ExerciseSummaryResponse } from "@/lib/types/exercise";
 import { MOVEMENT_PATTERN_LABEL } from "@/lib/types/exercise";
-import { regenTargets, type ExerciseAdminActions } from "./AdminExerciseReview";
+import { regenTargets, type ExerciseAdminActions } from "./exercise-admin-actions";
 
 // Catalog-level actions threaded through to the drawer (in addition to the
 // per-frame media actions in ExerciseAdminActions).
