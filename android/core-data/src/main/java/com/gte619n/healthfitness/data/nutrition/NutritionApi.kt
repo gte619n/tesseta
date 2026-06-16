@@ -88,11 +88,14 @@ interface NutritionApi {
 
     // Distinct foods/meals logged recently, deduped, newest first — the
     // add-flow's one-tap "recent meals" list. Each row carries `date`, the id
-    // of its source entry and everything needed to re-log it.
+    // of its source entry and everything needed to re-log it. When `meal` is
+    // set (the meal the user is about to log), the backend floats meals usually
+    // eaten at that time of day to the top so they survive the limit cut.
     @GET("api/me/nutrition/recent-meals")
     suspend fun recentMeals(
         @Query("days") days: Int,
         @Query("limit") limit: Int,
+        @Query("meal") meal: String? = null,
     ): List<Entry>
 
     // One-tap re-log of a recent entry: server-side copy onto the target day,

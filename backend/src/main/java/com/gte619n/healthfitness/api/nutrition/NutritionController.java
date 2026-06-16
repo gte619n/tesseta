@@ -494,7 +494,8 @@ public class NutritionController {
     @GetMapping("/recent-meals")
     public List<EntryResponse> recentMeals(
         @RequestParam(required = false, defaultValue = "14") int days,
-        @RequestParam(required = false, defaultValue = "20") int limit
+        @RequestParam(required = false, defaultValue = "20") int limit,
+        @RequestParam(required = false) MealType meal
     ) {
         int boundedDays = Math.max(1, Math.min(days, 60));
         int boundedLimit = Math.max(1, Math.min(limit, 50));
@@ -505,7 +506,8 @@ public class NutritionController {
             FoodEntry::createdAt,
             java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
 
-        List<FoodEntry> picked = new ArrayList<>();
+        // Dedup by identity, keeping each meal's most recent occurrence.
+        List<FoodEntry> distinct = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (FoodEntry e : all) {
             if (e.analysisStatus() == com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus.ANALYZING
@@ -516,12 +518,21 @@ public class NutritionController {
                 continue;
             }
             if (seen.add(recentKey(e))) {
-                picked.add(e);
-                if (picked.size() >= boundedLimit) {
-                    break;
-                }
+                distinct.add(e);
             }
         }
+        // Time-of-day awareness: when the caller passes the meal they're about
+        // to log, float meals last eaten at that time to the top (newest first
+        // within each group) *before* the limit cut, so e.g. breakfasts still
+        // make the list at breakfast time even after a run of dinner-heavy days.
+        // List.sort is stable, so recency order is preserved within each group.
+        if (meal != null) {
+            distinct.sort(java.util.Comparator.comparingInt(
+                e -> e.meal() == meal ? 0 : 1));
+        }
+        List<FoodEntry> picked = distinct.size() > boundedLimit
+            ? new ArrayList<>(distinct.subList(0, boundedLimit))
+            : distinct;
         Map<String, CatalogFood> foods = loadFoods(picked);
         return picked.stream().map(e -> toResponse(e, foods)).toList();
     }
