@@ -40,7 +40,9 @@ public record ExerciseResponse(
     ExerciseStatus status,
     String contributorId,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    boolean reviewed,
+    List<String> groundingImageUrls
 ) {
     /**
      * User-facing serialization. {@code reference} is admin-only (it is a public
@@ -85,7 +87,9 @@ public record ExerciseResponse(
             e.status(),
             e.contributorId(),
             e.createdAt(),
-            e.updatedAt()
+            e.updatedAt(),
+            e.reviewed(),
+            e.groundingImageUrls() == null ? List.of() : e.groundingImageUrls()
         );
     }
 }

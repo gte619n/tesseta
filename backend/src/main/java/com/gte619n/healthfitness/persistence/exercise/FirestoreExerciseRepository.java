@@ -194,6 +194,9 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
         body.put("status", e.status() == null ? ExerciseStatus.DRAFT.name() : e.status().name());
         body.put("contributorId", e.contributorId());
         body.put("aliasOfExerciseId", e.aliasOfExerciseId());
+        // IMPL-20 (additive): human sign-off + persisted grounding URL selection.
+        body.put("reviewed", e.reviewed());
+        body.put("groundingImageUrls", orEmpty(e.groundingImageUrls()));
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -393,7 +396,10 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
             s.getString("contributorId"),
             toInstant(s.get("createdAt")),
             toInstant(s.get("updatedAt")),
-            s.getString("aliasOfExerciseId")
+            s.getString("aliasOfExerciseId"),
+            // IMPL-20: legacy docs lack these — default false / empty.
+            Boolean.TRUE.equals(s.getBoolean("reviewed")),
+            asStringList(s.get("groundingImageUrls"))
         );
     }
 

@@ -1,0 +1,19 @@
+{
+  "name": "exercise-thumbnails",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gen2 GCS-triggered Cloud Function that generates webp thumbnails for exercise media (IMPL-20, ADR-0017).",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "start": "functions-framework --target=generateThumbnail --signature-type=cloudevent",
+    "check": "node --check index.js"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.0",
+    "@google-cloud/storage": "^7.14.0",
+    "sharp": "^0.33.5"
+  }
+}

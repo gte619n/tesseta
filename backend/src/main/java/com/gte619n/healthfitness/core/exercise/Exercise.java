@@ -44,5 +44,10 @@ public record Exercise(
     String contributorId,                   // nullable
     Instant createdAt,
     Instant updatedAt,
-    String aliasOfExerciseId                // merge pointer, nullable
+    String aliasOfExerciseId,               // merge pointer, nullable
+    // IMPL-20 (additive): human whole-exercise sign-off + the persisted set of
+    // image URLs (own GCS candidates and/or external reference URLs) fed back
+    // into regeneration as pose references. Legacy docs default to false/[].
+    boolean reviewed,
+    List<String> groundingImageUrls
 ) {}

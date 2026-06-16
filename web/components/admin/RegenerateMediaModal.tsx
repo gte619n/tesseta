@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 import { useToast } from '@/components/ui/Toast';
+import { ReferencePicker } from './ReferencePicker';
+import type { ExerciseResponse } from '@/lib/types/exercise';
 
 // A frame the modal can target. Derived from the plan (preferred) or, for
 // legacy exercises without a plan, the keyed demo frames.
@@ -18,14 +20,21 @@ interface Props {
   onStarted: () => void;
   // key == null regenerates every frame; a key regenerates that one frame. The
   // optional prompt override is applied to whichever target is selected.
+  // IMPL-20: `referenceImageUrls` overrides the persisted grounding set for the
+  // run; undefined ⇒ backend uses the persisted set.
   regenerate: (
     exerciseId: string,
     promptOverride: string | null,
     key: string | null,
+    referenceImageUrls?: string[],
   ) => Promise<void>;
   // IMPL-19: fetch the composed image prompt for one frame key, so admins can
   // see/edit the exact prompt before regenerating a single frame.
   getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
+  // IMPL-20: full detail (when loaded) so the modal can show the grounding
+  // picker. Omitted ⇒ no picker (the persisted grounding set is used as-is).
+  exercise?: ExerciseResponse | null;
+  saveGrounding?: (exerciseId: string, imageUrls: string[]) => Promise<void>;
 }
 
 export function RegenerateMediaModal({
@@ -37,6 +46,8 @@ export function RegenerateMediaModal({
   onStarted,
   regenerate,
   getDemoPrompt,
+  exercise,
+  saveGrounding,
 }: Props) {
   const toast = useToast();
   // "" sentinel ⇒ all frames; otherwise a specific frame key.
@@ -44,6 +55,15 @@ export function RegenerateMediaModal({
   const [prompt, setPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+  // IMPL-20: live grounding selection. `undefined` ⇒ admin hasn't touched the
+  // picker, so the regen omits referenceImageUrls and the backend uses the
+  // persisted set. A concrete array (incl. []) overrides for this run.
+  const [grounding, setGrounding] = useState<string[] | undefined>(undefined);
+
+  // Reset the per-run grounding override whenever the modal reopens.
+  useEffect(() => {
+    if (isOpen) setGrounding(undefined);
+  }, [isOpen]);
 
   // When a single frame is targeted, seed the textarea with that frame's
   // composed prompt so admins see/edit the exact prompt. For "all frames" we
@@ -83,6 +103,7 @@ export function RegenerateMediaModal({
         exerciseId,
         prompt.trim() ? prompt.trim() : null,
         isAll ? null : selectedKey,
+        grounding,
       );
       toast.success(
         isAll ? 'Regenerating all demo frames' : `Regenerating ${selectedLabel} frame`,
@@ -148,6 +169,23 @@ export function RegenerateMediaModal({
         }
         className="w-full rounded-md border border-border-default bg-canvas px-3 py-2 font-mono text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
       />
+
+      {exercise && saveGrounding ? (
+        <div className="mt-4 rounded-md border border-border-default bg-canvas p-3">
+          <p className="mb-2 text-xs font-medium text-secondary">
+            Pose references
+            <span className="ml-1 font-normal text-tertiary">
+              — pick the images to ground this regeneration on. Save to persist
+              them as the default; the current selection is used for this run.
+            </span>
+          </p>
+          <ReferencePicker
+            exercise={exercise}
+            saveGrounding={saveGrounding}
+            onSelectionChange={setGrounding}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-6 flex justify-end gap-2">
         <button

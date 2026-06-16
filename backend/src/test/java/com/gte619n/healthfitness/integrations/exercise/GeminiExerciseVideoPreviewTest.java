@@ -53,7 +53,7 @@ class GeminiExerciseVideoPreviewTest {
             lat, Mechanic.COMPOUND, null, cues, List.of(), List.of(), null, false,
             List.of(), null, null, ExerciseMediaStatus.NONE,
             null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
-            null, now, now, null);
+            null, now, now, null, false, List.of());
     }
 
     private static final List<Exercise> SAMPLES = List.of(

@@ -95,6 +95,28 @@ gcloud storage buckets add-iam-policy-binding "$EXERCISE_MEDIA_BUCKET" \
   --project="$PROJECT_ID" --quiet >/dev/null
 echo "    ${EXERCISE_MEDIA_BUCKET} public-read"
 
+echo "==> Exercise thumbnail Cloud Function SA (IMPL-20, ADR-0017)"
+# The repo's first Cloud Function (functions/exercise-thumbnails, deployed by
+# deploy-thumbnail-fn.sh) generates webp thumbnails on GCS finalize. It runs as
+# its own SA (least privilege: only objectAdmin on the exercise-media bucket, no
+# project-wide storage role like the shared runtime SA) so a thumbnailing bug
+# can't touch other buckets.
+THUMBNAIL_FN_SA="exercise-thumbnails-fn"
+THUMBNAIL_FN_SA_EMAIL="${THUMBNAIL_FN_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
+if ! gcloud iam service-accounts describe "$THUMBNAIL_FN_SA_EMAIL" \
+    --project="$PROJECT_ID" &>/dev/null; then
+  gcloud iam service-accounts create "$THUMBNAIL_FN_SA" \
+    --display-name="Exercise thumbnail Cloud Function runtime" \
+    --project="$PROJECT_ID"
+else
+  echo "    exists, skipping"
+fi
+gcloud storage buckets add-iam-policy-binding "$EXERCISE_MEDIA_BUCKET" \
+  --member="serviceAccount:${THUMBNAIL_FN_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --project="$PROJECT_ID" --quiet >/dev/null
+echo "    ${THUMBNAIL_FN_SA_EMAIL} -> objectAdmin on ${EXERCISE_MEDIA_BUCKET}"
+
 echo "==> Firestore default database"
 if ! gcloud firestore databases describe --database='(default)' \
     --project="$PROJECT_ID" &>/dev/null; then

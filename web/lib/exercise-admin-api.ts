@@ -1,6 +1,7 @@
 import { apiFetch, apiJson, BackendError, send } from "./api";
 import type {
   ExerciseResponse,
+  ExerciseSummaryResponse,
   CreateExerciseRequest,
   UpdateExerciseRequest,
   FrameSpec,
@@ -31,6 +32,16 @@ export function getAvailableExercises(
 
 export function getAdminExerciseCatalog(): Promise<ExerciseResponse[]> {
   return apiJson<ExerciseResponse[]>("/api/admin/exercises/catalog");
+}
+
+// IMPL-20: slim list/grid projection. Image-thin so the 352-item payload stays
+// light; the web derives thumbnail URLs and lazy-loads full detail per row.
+export function getAdminExerciseCatalogSummary(): Promise<
+  ExerciseSummaryResponse[]
+> {
+  return apiJson<ExerciseSummaryResponse[]>(
+    "/api/admin/exercises/catalog?view=summary",
+  );
 }
 
 export function getAdminExerciseReview(): Promise<ExerciseResponse[]> {
@@ -85,6 +96,41 @@ export function approveExerciseMedia(
   return send<ExerciseResponse>(
     `/api/admin/exercises/${exerciseId}/approve-media`,
     "POST",
+  );
+}
+
+// ── IMPL-20: full admin detail, reviewed flag, grounding set ──────────
+
+// Full admin detail for one exercise (includes reviewed + groundingImageUrls
+// and the admin-only `reference`). Lazy-loaded when a catalog row/tile opens.
+export function getAdminExercise(
+  exerciseId: string,
+): Promise<ExerciseResponse> {
+  return apiJson<ExerciseResponse>(`/api/admin/exercises/${exerciseId}`);
+}
+
+// Human whole-exercise sign-off, independent of media/plan status.
+export function setReviewed(
+  exerciseId: string,
+  reviewed: boolean,
+): Promise<ExerciseResponse> {
+  return send<ExerciseResponse>(
+    `/api/admin/exercises/${exerciseId}/reviewed`,
+    "POST",
+    { reviewed },
+  );
+}
+
+// Persist the grounding image set (own GCS candidate URLs and/or external
+// reference.images URLs) used as regen pose references.
+export function saveGrounding(
+  exerciseId: string,
+  imageUrls: string[],
+): Promise<ExerciseResponse> {
+  return send<ExerciseResponse>(
+    `/api/admin/exercises/${exerciseId}/grounding`,
+    "PUT",
+    { imageUrls },
   );
 }
 
@@ -143,13 +189,24 @@ export function approvePlan(exerciseId: string): Promise<PlanResponse> {
 
 // `key == null` regenerates every frame in the plan (or every legacy phase
 // when the exercise has no plan); a specific key regenerates that one frame.
+// IMPL-20: `referenceImageUrls` overrides the persisted grounding set for this
+// run. Omit ⇒ backend uses the persisted set; pass [] ⇒ explicitly none.
 export function regenerateMedia(
   exerciseId: string,
-  opts?: { promptOverride?: string | null; key?: string | null },
+  opts?: {
+    promptOverride?: string | null;
+    key?: string | null;
+    referenceImageUrls?: string[] | null;
+  },
 ): Promise<void> {
   return send<void>(`/api/admin/exercises/${exerciseId}/regenerate-media`, "POST", {
     promptOverride: opts?.promptOverride ?? null,
     key: opts?.key ?? null,
+    // Only send the field when the caller provided one, so omission keeps the
+    // backend's "use persisted grounding set" default.
+    ...(opts?.referenceImageUrls !== undefined
+      ? { referenceImageUrls: opts.referenceImageUrls }
+      : {}),
   });
 }
 

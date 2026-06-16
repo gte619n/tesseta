@@ -2,6 +2,9 @@ package com.gte619n.healthfitness.api.admin;
 
 import com.gte619n.healthfitness.api.exercise.CreateExerciseRequest;
 import com.gte619n.healthfitness.api.exercise.ExerciseResponse;
+import com.gte619n.healthfitness.api.exercise.ExerciseSummaryResponse;
+import com.gte619n.healthfitness.api.exercise.GroundingRequest;
+import com.gte619n.healthfitness.api.exercise.SetReviewedRequest;
 import com.gte619n.healthfitness.api.exercise.FrameRequest;
 import com.gte619n.healthfitness.api.exercise.PlanResponse;
 import com.gte619n.healthfitness.api.exercise.RegenerateMediaRequest;
@@ -70,8 +73,15 @@ public class AdminExerciseController {
         return seeder.seed();
     }
 
+    /**
+     * Full catalog by default; pass {@code ?view=summary} for the slim IMPL-20
+     * projection used by the admin list/grid (image-thin, 352-item friendly).
+     */
     @GetMapping("/catalog")
-    public List<ExerciseResponse> catalog() {
+    public List<?> catalog(@RequestParam(name = "view", required = false) String view) {
+        if ("summary".equalsIgnoreCase(view)) {
+            return service.listCatalog().stream().map(ExerciseSummaryResponse::from).toList();
+        }
         return service.listCatalog().stream().map(ExerciseResponse::fromAdmin).toList();
     }
 
@@ -84,6 +94,12 @@ public class AdminExerciseController {
     public ExerciseResponse create(@RequestBody CreateExerciseRequest body) {
         String contributorId = currentUser.get().userId();
         return ExerciseResponse.fromAdmin(service.create(body.toEdit(), contributorId));
+    }
+
+    /** Full admin view of one exercise (IMPL-20 detail drawer lazy-load). */
+    @GetMapping("/{exerciseId}")
+    public ExerciseResponse get(@PathVariable String exerciseId) {
+        return ExerciseResponse.fromAdmin(require(exerciseId));
     }
 
     @PatchMapping("/{exerciseId}")
@@ -176,13 +192,43 @@ public class AdminExerciseController {
         // key == null means "all frames in the plan" (or all legacy phases when
         // the exercise has no plan). A specific key regenerates that one frame.
         String key = body == null ? null : body.key();
+        // IMPL-20: optional per-regen grounding override. null ⇒ the generator
+        // uses the persisted groundingImageUrls; an empty list ⇒ explicitly none;
+        // a non-null list ⇒ exactly those URLs. Selection is persisted separately
+        // via PUT /grounding — resolved bytes are never stored.
+        List<String> referenceImageUrls = body == null ? null : body.referenceImageUrls();
         mediaGenerator.ifPresent(g -> {
             if (key == null) {
-                g.generateDemoAsync(exercise, override);
+                g.generateDemoAsync(exercise, override, referenceImageUrls);
             } else {
-                g.generateFrameAsync(exercise, key, override);
+                g.generateFrameAsync(exercise, key, override, referenceImageUrls);
             }
         });
+    }
+
+    // ---- IMPL-20: reviewed sign-off + grounding image set ----
+
+    /** Set the human {@code reviewed} sign-off (independent of media/plan status). */
+    @PostMapping("/{exerciseId}/reviewed")
+    public ExerciseResponse setReviewed(
+        @PathVariable String exerciseId,
+        @RequestBody SetReviewedRequest body
+    ) {
+        boolean reviewed = body != null && body.reviewed();
+        return ExerciseResponse.fromAdmin(service.setReviewed(exerciseId, reviewed));
+    }
+
+    /**
+     * Persist the grounding image set — the URLs (own GCS candidates and/or
+     * external reference URLs) regeneration uses as pose references.
+     */
+    @PutMapping("/{exerciseId}/grounding")
+    public ExerciseResponse setGrounding(
+        @PathVariable String exerciseId,
+        @RequestBody GroundingRequest body
+    ) {
+        List<String> imageUrls = body == null ? List.of() : body.imageUrls();
+        return ExerciseResponse.fromAdmin(service.setGroundingImageUrls(exerciseId, imageUrls));
     }
 
     @PostMapping(value = "/{exerciseId}/upload-frame", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -118,9 +118,34 @@ export type ExerciseResponse = {
   demoPromptOverride: string | null;
   mediaStatus: ExerciseMediaStatus;
   status: ExerciseStatus;
+  // IMPL-20: human whole-exercise sign-off, independent of media/plan status.
+  // Defaulted by the backend so legacy docs read cleanly.
+  reviewed: boolean;
+  // IMPL-20: persisted grounding set — own GCS candidate URLs and/or external
+  // reference.images URLs used as regen pose references.
+  groundingImageUrls: string[];
   contributorId: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+// IMPL-20: slim catalog projection for the list/grid views. Returned by
+// GET /api/admin/exercises/catalog?view=summary, kept image-thin so the
+// 352-item payload stays light. The web derives thumbnail URLs client-side.
+export type ExerciseSummaryResponse = {
+  exerciseId: string;
+  name: string;
+  movementPattern: MovementPattern;
+  suitableBlockTypes: BlockType[];
+  primaryMuscles: string[];
+  status: ExerciseStatus;
+  mediaStatus: ExerciseMediaStatus;
+  planStatus: ExerciseMediaStatus;
+  reviewed: boolean;
+  // demoPlan.size (or demoFrames.size for legacy docs).
+  frameCount: number;
+  // Active imageUrl per frame, in order. May contain nulls for unfilled frames.
+  frameImageUrls: (string | null)[];
 };
 
 // Editable fields mirror CreateExerciseRequest / UpdateExerciseRequest. For

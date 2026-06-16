@@ -161,7 +161,9 @@ public class WorkoutHistoryImporter {
                 null,
                 now,
                 now,
-                null));
+                null,
+                false,
+                List.of()));
             seeded++;
         }
         return new int[] {seeded, skipped};

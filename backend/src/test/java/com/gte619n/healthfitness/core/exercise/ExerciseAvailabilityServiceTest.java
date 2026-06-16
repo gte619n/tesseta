@@ -22,7 +22,7 @@ class ExerciseAvailabilityServiceTest {
             Laterality.BILATERAL, Mechanic.COMPOUND, null, List.of(), reqs, List.of(BlockType.MAIN),
             null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED,
             null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
-            null, Instant.now(), Instant.now(), null);
+            null, Instant.now(), Instant.now(), null, false, List.of());
     }
 
     private static EquipmentRequirement anyOf(String... ids) {

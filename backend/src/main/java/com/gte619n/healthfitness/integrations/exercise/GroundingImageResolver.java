@@ -2,6 +2,9 @@ package com.gte619n.healthfitness.integrations.exercise;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.Storage;
 import com.gte619n.healthfitness.config.JsonSupport;
 import com.gte619n.healthfitness.core.exercise.ExerciseReference;
 import java.net.URI;
@@ -61,11 +64,19 @@ public class GroundingImageResolver {
     private final boolean enabled;
     private final HttpClient http;
     private final ObjectMapper json;
+    private final Storage storage;
+    private final String ownBucket;
+    private final String ownBucketUrlPrefix;
 
     public GroundingImageResolver(
+        Storage storage,
+        @Value("${app.exercises.bucket}") String ownBucket,
         @Value("${app.exercises.media.grounding-enabled:true}") boolean enabled
     ) {
         this.enabled = enabled;
+        this.storage = storage;
+        this.ownBucket = ownBucket;
+        this.ownBucketUrlPrefix = "https://storage.googleapis.com/" + ownBucket + "/";
         this.http = HttpClient.newBuilder()
             .connectTimeout(TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -100,6 +111,76 @@ public class GroundingImageResolver {
                 ref.url(), e.getMessage());
             return List.of();
         }
+    }
+
+    /**
+     * Best-effort ordered list of reference pose image bytes for an explicit set
+     * of grounding URLs (IMPL-20). Each URL is resolved independently:
+     * <ul>
+     *   <li><b>Own-object</b> — a URL pointing at the exercise-media bucket
+     *       (host {@code storage.googleapis.com}, path starting with the bucket
+     *       name) is fetched directly from GCS as bytes.</li>
+     *   <li><b>External</b> — any other URL is fetched over HTTP, exactly like an
+     *       already-resolved IMPL-19 reference image (fedb / Wikimedia direct
+     *       image URLs).</li>
+     * </ul>
+     * Order is preserved so the generator's frame→image mapping is stable.
+     * Empty if grounding is disabled or {@code urls} is null/empty. Never throws.
+     */
+    public List<RefImage> imagesForUrls(List<String> urls) {
+        if (!enabled || urls == null || urls.isEmpty()) {
+            return List.of();
+        }
+        List<RefImage> out = new ArrayList<>();
+        for (String url : urls) {
+            if (url == null || url.isBlank()) {
+                continue;
+            }
+            try {
+                byte[] bytes = isOwnObjectUrl(url) ? fetchOwnObjectBytes(url) : fetchBytes(url);
+                if (bytes != null && bytes.length > 0) {
+                    out.add(new RefImage(bytes, mimeForUrl(url)));
+                }
+            } catch (Exception e) {
+                log.debug("Grounding URL resolution failed for {}: {}", url, e.getMessage());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * True when {@code url} points at our own exercise-media bucket: the GCS
+     * public host with a path under the configured bucket name. These are
+     * fetched directly from GCS rather than over HTTP.
+     */
+    boolean isOwnObjectUrl(String url) {
+        return url != null && url.startsWith(ownBucketUrlPrefix);
+    }
+
+    /** Read an own-bucket object's bytes directly from GCS (strips any query). */
+    private byte[] fetchOwnObjectBytes(String url) {
+        String objectName = url.substring(ownBucketUrlPrefix.length());
+        int q = objectName.indexOf('?');
+        if (q >= 0) {
+            objectName = objectName.substring(0, q);
+        }
+        if (objectName.isBlank()) {
+            return null;
+        }
+        try {
+            Blob blob = storage.get(BlobId.of(ownBucket, objectName));
+            if (blob == null || !blob.exists()) {
+                log.debug("Own-object grounding image not found in GCS: {}", objectName);
+                return null;
+            }
+            byte[] bytes = blob.getContent();
+            if (bytes != null && bytes.length > 0 && bytes.length <= MAX_IMAGE_BYTES) {
+                return bytes;
+            }
+        } catch (Exception e) {
+            log.debug("Own-object grounding GCS read failed for {}: {}", objectName, e.getMessage());
+        }
+        return null;
     }
 
     // ---- URL resolution ----
