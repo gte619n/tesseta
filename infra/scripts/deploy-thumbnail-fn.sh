@@ -100,6 +100,18 @@ gcloud functions deploy "${FUNCTION_NAME}" \
   --retry \
   --project="${PROJECT_ID}"
 
+# The Eventarc trigger invokes the Gen2 function's underlying Cloud Run service
+# AS the runtime SA. With a custom --service-account, gcloud does not auto-grant
+# that SA permission to invoke the service, so every delivery 403s with
+# "lacks run.routes.invoke". Grant it explicitly (must run after deploy, once the
+# Cloud Run service exists). Idempotent.
+echo "==> Granting roles/run.invoker on the Cloud Run service to ${RUNTIME_SA}"
+gcloud run services add-iam-policy-binding "${FUNCTION_NAME}" \
+  --region="${REGION}" \
+  --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
+  --role="roles/run.invoker" \
+  --project="${PROJECT_ID}" --quiet >/dev/null
+
 cat <<MSG
 
 Deployed Cloud Function ${FUNCTION_NAME}.
