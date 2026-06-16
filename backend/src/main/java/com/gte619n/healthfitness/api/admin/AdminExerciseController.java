@@ -96,6 +96,12 @@ public class AdminExerciseController {
         return ExerciseResponse.fromAdmin(service.create(body.toEdit(), contributorId));
     }
 
+    /** Full admin view of one exercise (IMPL-20 detail drawer lazy-load). */
+    @GetMapping("/{exerciseId}")
+    public ExerciseResponse get(@PathVariable String exerciseId) {
+        return ExerciseResponse.fromAdmin(require(exerciseId));
+    }
+
     @PatchMapping("/{exerciseId}")
     public ExerciseResponse update(@PathVariable String exerciseId, @RequestBody UpdateExerciseRequest body) {
         return ExerciseResponse.fromAdmin(service.update(exerciseId, body.toEdit()));

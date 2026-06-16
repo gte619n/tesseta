@@ -10,6 +10,8 @@ import com.gte619n.healthfitness.core.exercise.MovementPattern;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Slim catalog projection for the admin list/grid views (IMPL-20). Carries only
@@ -52,10 +54,18 @@ public record ExerciseSummaryResponse(
                     .findFirst().orElse(null);
                 frameImageUrls.add(f == null ? null : f.imageUrl());
             }
-        } else {
-            for (DemoFrame f : frames.stream().sorted(Comparator.comparingInt(DemoFrame::order)).toList()) {
-                frameImageUrls.add(f.imageUrl());
-            }
+        }
+        // Fallback when the plan-key join surfaced no images: either there is no
+        // plan, or the stored frames predate it (legacy phase-keyed frames with
+        // key == null — e.g. a regenerated plan layered over migration-era media,
+        // often alongside mediaStatus == FAILED). Use the frames' own active
+        // images in order so existing media still shows on the tile instead of a
+        // misleading "No frames".
+        if (frameImageUrls.stream().noneMatch(Objects::nonNull) && !frames.isEmpty()) {
+            frameImageUrls = frames.stream()
+                .sorted(Comparator.comparingInt(DemoFrame::order))
+                .map(DemoFrame::imageUrl)
+                .collect(Collectors.toCollection(ArrayList::new));
         }
 
         return new ExerciseSummaryResponse(
