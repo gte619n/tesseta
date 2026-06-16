@@ -6,6 +6,9 @@ Decisions made while implementing [IMPL-20](../specs/IMPL-20-exercise-admin-rede
 the design interview; the rest are implementation-level judgment calls made
 during the parallel build, recorded here for review.
 
+Decisions #2, #10, #14, and #16 were ratified as-built by Evan in a
+verification pass on 2026-06-16 (marked **✅ ratified 2026-06-16** below).
+
 ## Ratified in the design interview
 
 | # | Decision | Choice |
@@ -26,7 +29,8 @@ during the parallel build, recorded here for review.
    are read via the GCS SDK (`Storage.get(BlobId).getContent()`), not HTTP —
    avoids public-ACL/signing assumptions; the 8 MB cap still applies.
 
-2. **Effective grounding-set fallback (three cases).** `resolveGrounding`
+2. **Effective grounding-set fallback (three cases).** ✅ ratified 2026-06-16.
+   `resolveGrounding`
    distinguishes: (i) request `referenceImageUrls != null` → use exactly that
    list, where **empty = explicitly no grounding** (no fallback); (ii) request
    null but persisted `groundingImageUrls` non-empty → use persisted; (iii)
@@ -78,7 +82,8 @@ during the parallel build, recorded here for review.
    also create-if-absents the SA and re-applies the grant so it runs standalone
    (idempotent), matching the per-job scripts' defensive pattern.
 
-10. **Thumbnail rendering settings.** Output `image/webp`, `quality: 80`,
+10. **Thumbnail rendering settings.** ✅ ratified 2026-06-16 (320px kept).
+    Output `image/webp`, `quality: 80`,
     `fit: inside` + `withoutEnlargement: true` (bounds longest edge to 320px,
     preserves aspect, never upscales), `.rotate()` to honor EXIF orientation
     before resizing.
@@ -100,7 +105,8 @@ during the parallel build, recorded here for review.
 
 ## Web
 
-14. **View-mode persistence.** `localStorage` key `exerciseAdminViewMode`
+14. **View-mode persistence.** ✅ ratified 2026-06-16 (default grid kept).
+    `localStorage` key `exerciseAdminViewMode`
     (`"list" | "grid"`), default `grid`. SSR-safe: default rendered server-side,
     persisted value read in a client effect; reads/writes wrapped in try/catch
     for private-mode/unavailable storage.
@@ -112,7 +118,8 @@ during the parallel build, recorded here for review.
     composes with other filters. `ExerciseSubTabs` relabels "Review" →
     "Needs review" and highlights on the `preset` param.
 
-16. **"Recently updated" sort dropped.** The slim summary projection
+16. **"Recently updated" sort dropped.** ✅ ratified 2026-06-16 (stays dropped).
+    The slim summary projection
     deliberately omits `updatedAt` (image-thin goal); adding it back would
     defeat that. Sort options are **name (A–Z)** and **image count**; server's
     natural order is the baseline. *If "recently updated" is wanted, add
@@ -137,10 +144,11 @@ during the parallel build, recorded here for review.
     as `referenceImageUrls` for that run (undefined until touched ⇒ backend uses
     the persisted set).
 
-20. **`AdminExerciseReview.tsx` left in place.** It still hosts `regenTargets` +
-    `ExerciseAdminActions` (imported by the drawer); its top-level component is
-    now unused but harmless. *Candidate for a follow-up cleanup once the drawer
-    fully absorbs those helpers.*
+20. **`AdminExerciseReview.tsx` removed (2026-06-16).** The dead top-level
+    component + `ReviewCard` were deleted; the still-used helpers (`regenTargets`,
+    `ExerciseAdminActions`) were extracted to `components/admin/exercise-admin-actions.ts`
+    and the drawer repointed there. The `getAdminExerciseReview` data fetch
+    (needs-review count badge) is unrelated and stays.
 
 ## Follow-ups / open items
 
@@ -151,6 +159,4 @@ during the parallel build, recorded here for review.
 - **Client (user/Android) thumbnail consumption** not wired — the path
   convention leaves it open without a migration.
 - Re-add **`updatedAt`** to the summary projection if "recently updated" sort is
-  desired (decision 16).
-- Remove the now-unused `AdminExerciseReview` top-level component in a cleanup
-  pass (decision 20).
+  desired (decision 16). *Verified 2026-06-16: staying dropped.*
