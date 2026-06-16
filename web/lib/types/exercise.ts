@@ -71,8 +71,11 @@ export type DemoFrame = {
   phase?: DemoPhase | null; // legacy — pre-IMPL-19 docs
 };
 
-// IMPL-19: a public-library match (commit 140eba0). Read by the planner and
-// media generator for grounding only — its images are never stored or shown.
+// IMPL-19: a public-library match (commit 140eba0). ADMIN-ONLY — the backend
+// serializes `reference` as null on user-facing responses (GET /api/exercises,
+// /available, /{id}); it is only populated on admin/catalog/review responses.
+// Read by the planner and media generator for grounding only — its images are
+// never stored or shown to users. Never rely on it in user-facing components.
 export type ExerciseReference = {
   url: string;
   source: string; // jefit | rb100 | fedb | yoga
@@ -107,7 +110,10 @@ export type ExerciseResponse = {
   // IMPL-19: the reviewable frame plan. null ⇒ legacy START/MID/END behavior.
   demoPlan: FrameSpec[] | null;
   planStatus: ExerciseMediaStatus;
-  reference: ExerciseReference | null;
+  // ADMIN-ONLY. Null on user-facing responses (serialized as null by the
+  // backend); only populated on admin/catalog/review responses. Optional here
+  // so user-facing code can't lean on it — consume it only in admin components.
+  reference?: ExerciseReference | null;
   videoUrl: string | null;
   demoPromptOverride: string | null;
   mediaStatus: ExerciseMediaStatus;

@@ -43,6 +43,7 @@ export function AdminExerciseCatalog({
   uploadFrame,
   selectFrame,
   deleteFrame,
+  getDemoPrompt,
 }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -103,6 +104,7 @@ export function AdminExerciseCatalog({
               selectFrame={selectFrame}
               deleteFrame={deleteFrame}
               approveMedia={approveMedia}
+              getDemoPrompt={getDemoPrompt}
             />
           ))}
         </div>
@@ -151,6 +153,7 @@ function CatalogRow({
   uploadFrame,
   selectFrame,
   deleteFrame,
+  getDemoPrompt,
 }: {
   exercise: ExerciseResponse;
   catalog: ExerciseResponse[];
@@ -169,6 +172,7 @@ function CatalogRow({
   | 'selectFrame'
   | 'deleteFrame'
   | 'approveMedia'
+  | 'getDemoPrompt'
 >) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -384,6 +388,7 @@ function CatalogRow({
           router.refresh();
         }}
         regenerate={regenerateMedia}
+        getDemoPrompt={getDemoPrompt}
       />
     </>
   );

@@ -3,7 +3,6 @@ import type {
   ExerciseResponse,
   CreateExerciseRequest,
   UpdateExerciseRequest,
-  DemoPhase,
   FrameSpec,
   PlanResponse,
 } from "./types/exercise";
@@ -89,12 +88,16 @@ export function approveExerciseMedia(
   );
 }
 
+// IMPL-19: the composed image prompt for one frame, keyed by FrameSpec.key.
+// GET /api/admin/exercises/{id}/demo-prompt?key=<frameKey> → { prompt }.
+// The backend accepts legacy start/mid/end keys too. Used to seed the
+// Regenerate flow's editable prompt when a single frame is targeted.
 export async function getDemoPrompt(
   exerciseId: string,
-  phase: DemoPhase,
+  key: string,
 ): Promise<string> {
   const data = await apiJson<{ prompt: string }>(
-    `/api/admin/exercises/${exerciseId}/demo-prompt?phase=${phase}`,
+    `/api/admin/exercises/${exerciseId}/demo-prompt?key=${encodeURIComponent(key)}`,
   );
   return data.prompt ?? "";
 }

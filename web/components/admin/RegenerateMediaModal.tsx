@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 import { useToast } from '@/components/ui/Toast';
 
@@ -23,6 +23,9 @@ interface Props {
     promptOverride: string | null,
     key: string | null,
   ) => Promise<void>;
+  // IMPL-19: fetch the composed image prompt for one frame key, so admins can
+  // see/edit the exact prompt before regenerating a single frame.
+  getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
 }
 
 export function RegenerateMediaModal({
@@ -33,12 +36,40 @@ export function RegenerateMediaModal({
   onClose,
   onStarted,
   regenerate,
+  getDemoPrompt,
 }: Props) {
   const toast = useToast();
   // "" sentinel ⇒ all frames; otherwise a specific frame key.
   const [selectedKey, setSelectedKey] = useState<string>('');
   const [prompt, setPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+
+  // When a single frame is targeted, seed the textarea with that frame's
+  // composed prompt so admins see/edit the exact prompt. For "all frames" we
+  // keep the blank-override behavior (each frame uses its own position prompt).
+  useEffect(() => {
+    if (!isOpen) return;
+    if (selectedKey === '') {
+      setPrompt('');
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingPrompt(true);
+    getDemoPrompt(exerciseId, selectedKey)
+      .then((p) => {
+        if (!cancelled) setPrompt(p);
+      })
+      .catch(() => {
+        if (!cancelled) setPrompt('');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPrompt(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, selectedKey, exerciseId, getDemoPrompt]);
 
   if (!isOpen) return null;
 
@@ -100,14 +131,21 @@ export function RegenerateMediaModal({
       </select>
 
       <label className="mb-1 block text-xs font-medium text-secondary">
-        Prompt override (optional)
+        {isAll ? 'Prompt override (optional)' : 'Prompt'}
+        {isLoadingPrompt ? (
+          <span className="ml-2 text-tertiary">Loading prompt…</span>
+        ) : null}
       </label>
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        disabled={isSubmitting}
+        disabled={isSubmitting || isLoadingPrompt}
         rows={10}
-        placeholder="Leave blank to use the plan's position prompt for each frame."
+        placeholder={
+          isAll
+            ? "Leave blank to use the plan's position prompt for each frame."
+            : "The composed prompt for this frame. Edit before regenerating."
+        }
         className="w-full rounded-md border border-border-default bg-canvas px-3 py-2 font-mono text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
       />
 
@@ -121,7 +159,7 @@ export function RegenerateMediaModal({
         </button>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isLoadingPrompt}
           className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting ? 'Submitting…' : 'Regenerate'}

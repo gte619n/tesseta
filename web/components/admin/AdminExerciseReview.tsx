@@ -27,6 +27,8 @@ export interface ExerciseAdminActions {
   uploadFrame: (exerciseId: string, key: string, file: File) => Promise<void>;
   selectFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
   deleteFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
+  // IMPL-19: composed image prompt for one frame key (seeds the Regenerate flow).
+  getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
 }
 
 // Build the modal's frame targets from the plan (preferred) or legacy frames.
@@ -59,6 +61,7 @@ export function AdminExerciseReview({
   uploadFrame,
   selectFrame,
   deleteFrame,
+  getDemoPrompt,
 }: Props) {
   if (review.length === 0) {
     return (
@@ -88,6 +91,7 @@ export function AdminExerciseReview({
           uploadFrame={uploadFrame}
           selectFrame={selectFrame}
           deleteFrame={deleteFrame}
+          getDemoPrompt={getDemoPrompt}
         />
       ))}
     </div>
@@ -105,6 +109,7 @@ function ReviewCard({
   uploadFrame,
   selectFrame,
   deleteFrame,
+  getDemoPrompt,
 }: { exercise: ExerciseResponse } & ExerciseAdminActions) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -227,6 +232,7 @@ function ReviewCard({
           router.refresh();
         }}
         regenerate={regenerateMedia}
+        getDemoPrompt={getDemoPrompt}
       />
     </>
   );

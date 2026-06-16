@@ -9,6 +9,7 @@ import {
   uploadFrame,
   selectFrame,
   deleteFrame,
+  getDemoPrompt,
 } from '@/lib/exercise-admin-api';
 import { AdminExerciseReview } from '@/components/admin/AdminExerciseReview';
 import type { FrameSpec } from '@/lib/types/exercise';
@@ -82,6 +83,11 @@ export default async function AdminExerciseReviewPage() {
     revalidatePath(REVIEW_PATH);
   }
 
+  async function getDemoPromptAction(exerciseId: string, key: string) {
+    'use server';
+    return getDemoPrompt(exerciseId, key);
+  }
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
@@ -102,6 +108,7 @@ export default async function AdminExerciseReviewPage() {
         uploadFrame={uploadFrameAction}
         selectFrame={selectFrameAction}
         deleteFrame={deleteFrameAction}
+        getDemoPrompt={getDemoPromptAction}
       />
     </div>
   );
