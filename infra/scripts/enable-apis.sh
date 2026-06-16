@@ -6,6 +6,11 @@ APIS=(
   run.googleapis.com
   cloudbuild.googleapis.com
   artifactregistry.googleapis.com
+  # Gen2 Cloud Functions (IMPL-20 thumbnail fn, ADR-0017). Gen2 functions run on
+  # Cloud Run (already enabled) and are triggered via Eventarc; both APIs plus
+  # Cloud Build + Artifact Registry (already above) are required to deploy them.
+  cloudfunctions.googleapis.com
+  eventarc.googleapis.com
   firestore.googleapis.com
   secretmanager.googleapis.com
   iam.googleapis.com
