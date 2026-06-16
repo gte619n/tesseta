@@ -194,6 +194,33 @@ regenerate-media means "all frames in the plan".
 All spec code implemented and compiling. Not executed (by design): live Gemini
 planning/generation and the catalog backfills.
 
+## Interview ratification (operator review, post-implementation)
+
+**Ratified as-built (no change):**
+- Standard strength lifts → **2 frames** (start + working end); model may still
+  emit more for genuinely multi-position lifts.
+- `planStatus` **reuses the media-status enum**.
+- Grounding fetches **all sources** incl. best-effort jefit/rb100 page scraping
+  (transient, output is ours).
+- Plan re-key **keeps orphaned media frames** (no auto-prune).
+- **Manual two-step**: approve plan → operator runs the media job (no
+  auto-trigger on plan approval).
+
+**Changed by interview (follow-up work) — DONE:**
+1. **`reference` → admin-only** ✅. `ExerciseResponse.from` returns
+   `reference=null` (user-facing); new `fromAdmin` includes it; all
+   `/api/admin/exercises*` responses use `fromAdmin`. Web `reference` made
+   optional + admin-only consumers.
+2. **Restored per-frame prompt preview** ✅. `GET /api/admin/exercises/{id}/demo-prompt?key=`
+   → composed prompt (port `ExerciseMediaGenerator.promptFor(exercise, key)`);
+   web Regenerate modal seeds the textarea with it for a single-key target.
+3. **Generation run** — scaled from the 5-exercise spike to **25 exercises**
+   (operator request). Run via an env-gated preview harness (real models +
+   grounding, output to disk under
+   `docs/test_reports/workout_logs/impl19_preview/`), **no production
+   mutation**. 25 selected spanning all archetypes; 6 carry grounding images
+   (4 fedb, 1 rb100, 1 yoga).
+
 ### Operator runbook (to actually populate frames)
 
 1. **Backfill plans:** deploy `infra/scripts/deploy-exercise-plan-job.sh`
