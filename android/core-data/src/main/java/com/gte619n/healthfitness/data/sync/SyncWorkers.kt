@@ -36,10 +36,14 @@ class SyncWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
     private val syncEngine: SyncEngine,
+    private val diagnostics: SyncDiagnostics,
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = runCatching {
         syncEngine.pull()
-    }.fold(onSuccess = { Result.success() }, onFailure = { Result.retry() })
+    }.fold(
+        onSuccess = { Result.success() },
+        onFailure = { recordSyncFailure(diagnostics, NAME, it); Result.retry() },
+    )
 
     companion object {
         const val NAME = "hf-sync-pull"
@@ -52,11 +56,15 @@ class PeriodicSyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val syncEngine: SyncEngine,
     private val outbox: OutboxRepository,
+    private val diagnostics: SyncDiagnostics,
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = runCatching {
         outbox.drain()
         syncEngine.pull()
-    }.fold(onSuccess = { Result.success() }, onFailure = { Result.retry() })
+    }.fold(
+        onSuccess = { Result.success() },
+        onFailure = { recordSyncFailure(diagnostics, NAME, it); Result.retry() },
+    )
 
     companion object {
         const val NAME = "hf-sync-periodic"
@@ -69,16 +77,37 @@ class OutboxDrainWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val outbox: OutboxRepository,
     private val syncEngine: SyncEngine,
+    private val diagnostics: SyncDiagnostics,
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = runCatching {
         outbox.drain()
         // A reconnect should also pull anything we missed while offline.
         syncEngine.pull()
-    }.fold(onSuccess = { Result.success() }, onFailure = { Result.retry() })
+    }.fold(
+        onSuccess = { Result.success() },
+        onFailure = { recordSyncFailure(diagnostics, NAME, it); Result.retry() },
+    )
 
     companion object {
         const val NAME = "hf-outbox-drain"
     }
+}
+
+/**
+ * Record a worker-level failure (Workstream B) before WorkManager retries it, so
+ * the reason shows in logcat and on the diagnostics screen instead of vanishing
+ * into a silent `Result.retry()`.
+ */
+private fun recordSyncFailure(diagnostics: SyncDiagnostics, worker: String, t: Throwable) {
+    val http = t as? OutboxReplayHttpException
+    diagnostics.record(
+        source = worker,
+        message = http?.serverMessage?.takeIf { it.isNotBlank() }
+            ?: t.message
+            ?: t.javaClass.simpleName,
+        httpCode = http?.code,
+        cause = t,
+    )
 }
 
 /**

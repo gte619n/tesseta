@@ -29,6 +29,7 @@ class OutboxDrainTest {
     private lateinit var outboxDao: FakeOutboxDao
     private lateinit var mirror: FakeMirrorOps
     private lateinit var repo: OutboxRepository
+    private lateinit var diagnostics: SyncDiagnostics
     private var now = 1_000L
 
     @Before
@@ -42,11 +43,13 @@ class OutboxDrainTest {
         )
         outboxDao = FakeOutboxDao()
         mirror = FakeMirrorOps()
+        diagnostics = SyncDiagnostics()
         repo = OutboxRepository(
             outboxDao = outboxDao,
             mirror = mirror,
             replay = replay,
             deviceIdProvider = fakeDeviceIdProvider("device-A"),
+            diagnostics = diagnostics,
             io = Dispatchers.Unconfined,
             clock = { now },
         )
@@ -137,6 +140,46 @@ class OutboxDrainTest {
         assertEquals(mutationId, queued.mutationId)
         // First-attempt backoff = base (30s) added to the drain clock.
         assertEquals(now + OutboxRepository.BASE_BACKOFF_MILLIS, queued.nextAttemptAt)
+    }
+
+    @Test
+    fun `a failed replay records the server message into diagnostics (Workstream B)`() = runTest {
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("med-err", """{"id":"med-err"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "med-err", """{"id":"med-err"}""")
+
+        // Spring-style error body; the reason must reach the user-facing detail
+        // instead of being swallowed into a silent FAILED row.
+        server.enqueue(
+            MockResponse().setResponseCode(422).setBody("""{"message":"Dose exceeds safe maximum"}"""),
+        )
+
+        repo.drain()
+
+        val last = diagnostics.lastError
+        assertTrue("an error was recorded", last.value != null)
+        assertEquals(422, last.value!!.httpCode)
+        assertEquals(true, last.value!!.terminal)
+        assertEquals(MirrorTables.MEDICATIONS, last.value!!.table)
+        assertEquals("Dose exceeds safe maximum", last.value!!.message)
+    }
+
+    @Test
+    fun `a clean drain clears the surfaced last error`() = runTest {
+        // Seed a prior error, then a successful drain should clear the banner detail.
+        diagnostics.record(source = "test", message = "stale", table = MirrorTables.MEDICATIONS)
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("med-ok", """{"id":"med-ok"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "med-ok", """{"id":"med-ok"}""")
+        server.enqueue(MockResponse().setBody("""{"id":"med-ok","lastUpdate":"2026-06-02T18:00:00Z"}"""))
+
+        repo.drain()
+
+        assertTrue("clean drain clears last error", diagnostics.lastError.value == null)
     }
 
     @Test

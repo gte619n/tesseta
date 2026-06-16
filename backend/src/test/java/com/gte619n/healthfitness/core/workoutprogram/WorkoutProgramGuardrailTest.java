@@ -75,6 +75,23 @@ class WorkoutProgramGuardrailTest {
     }
 
     @Test
+    void programWithNoTrainingDaysIsRejected() {
+        exercises.save(exercise("bench", "chest"));
+        // A phase with weeks but no days materializes zero sessions on activate —
+        // IMPL-STAB G2 blocks it with an actionable issue instead of a silent
+        // empty "This week".
+        WorkoutProgram noDays = program(List.of(phase("Phase", 4, null, List.of())));
+        List<String> issues = validator.validate(USER, noDays);
+        assertTrue(issues.stream().anyMatch(i -> i.contains("no training days to schedule")),
+            () -> "expected a no-training-days error, got " + issues);
+
+        // A program with at least one schedulable day passes this guard.
+        WorkoutProgram withDay = oneDayProgram(List.of(rx("bench", 3, null)), 4, null);
+        assertFalse(validator.validate(USER, withDay).stream()
+            .anyMatch(i -> i.contains("no training days to schedule")));
+    }
+
+    @Test
     void weeklyVolumePastMrvWarns() {
         exercises.save(exercise("bench", "chest")); // chest MRV = 22
         // 8 sets x 3 days = 24 weekly chest sets > MRV.

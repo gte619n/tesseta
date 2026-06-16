@@ -1,5 +1,5 @@
 {
-  "_comment": "Composite indexes deployed via `gcloud firestore indexes composite create` or `gcloud firestore deploy --indexes-file`. IMPL-04 adds the metric+sampleTime index for body composition range queries. IMPL-12 adds the goals composite index and steps collection-group field overrides. The single-field index on users.googleHealth.healthUserId is created automatically by Firestore — no entry needed here.",
+  "_comment": "Source of truth for composite indexes + field overrides on the `production` Firestore database. Deploy with `infra/scripts/deploy-firestore-indexes.sh` (see infra/README.md § Firestore composite indexes) — run it whenever this file changes and on any fresh-DB bootstrap, because Firestore export/import copies documents only, not indexes. IMPL-04 adds the metric+sampleTime index for body composition range queries. IMPL-12 adds the goals composite index and steps collection-group field overrides. The single-field index on users.googleHealth.healthUserId is created automatically by Firestore — no entry needed here.",
   "indexes": [
     {
       "collectionGroup": "bodyComposition",

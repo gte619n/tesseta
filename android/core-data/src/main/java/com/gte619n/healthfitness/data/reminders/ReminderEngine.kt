@@ -217,11 +217,27 @@ class ReminderEngine @Inject constructor(
         )
     }
 
+    /**
+     * Content intent for the notification (IMPL-STAB Workstream F item 4):
+     * deep-links to the medications dose checklist instead of app home. An
+     * explicit `ACTION_VIEW` on the [DEEP_LINK_DOSE_CHECKLIST] URI, scoped to
+     * this package so it always resolves to the launcher activity, whose
+     * NavHost matches the URI to the medications destination (building the
+     * synthetic back stack to the dashboard). Falls back to a plain launch
+     * intent if, for any reason, the deep link can't be resolved.
+     */
     private fun launchAppIntent(): PendingIntent? {
-        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            ?: return null
+        val deepLink = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DEEP_LINK_DOSE_CHECKLIST))
+            .setPackage(context.packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val resolvable = deepLink.resolveActivity(context.packageManager) != null
+        val intent = if (resolvable) {
+            deepLink
+        } else {
+            context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
+        }
         return PendingIntent.getActivity(
-            context, RC_LAUNCH, launch,
+            context, RC_LAUNCH, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
@@ -251,6 +267,15 @@ class ReminderEngine @Inject constructor(
         const val EXTRA_TAKE_MEDS = "takeMeds"
         const val EXTRA_TAKE_WINDOWS = "takeWindows"
         const val EXTRA_REMAINING = "remaining"
+
+        /**
+         * Deep-link URI the notification opens (IMPL-STAB Workstream F item 4),
+         * matched by the medications LIST destination's `navDeepLink` in
+         * `MedicationRoutes` and the `MainActivity` `ACTION_VIEW` intent-filter.
+         * Kept as a literal here so core-data needn't depend on feature-medical;
+         * the two ends are documented to match.
+         */
+        const val DEEP_LINK_DOSE_CHECKLIST = "healthfitness://medications/today"
 
         private const val CHANNEL_ID = "medication_reminders"
         private const val MAX_PER_MED_ACTIONS = 3

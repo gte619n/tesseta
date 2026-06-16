@@ -126,6 +126,44 @@ gcloud firestore fields ttls list \
 The policy takes effect asynchronously (state goes `CREATING` → `ACTIVE`);
 Firestore then deletes documents within ~24h of their `expiresAt` passing.
 
+## Firestore composite indexes
+
+The runtime database is the **`production`** named database (not `(default)`).
+The source of truth for composite indexes and field overrides is
+[`firestore/firestore.indexes.json`](firestore/firestore.indexes.json). A query
+that needs a composite index it doesn't have fails at runtime with
+`FAILED_PRECONDITION: The query requires an index`, which the backend surfaces
+as a 500.
+
+**Indexes are not data.** `copy-default-to-production-firestore.sh` (and Firestore
+export/import generally) copies **documents only** — it does **not** carry
+composite indexes or field overrides. After that migration `production` had data
+but was missing indexes, so program activation and other queries 500'd. Deploying
+the index file to a database is therefore a separate, explicit step.
+
+Apply the index file to a database (idempotent; safe to re-run):
+
+```bash
+infra/scripts/deploy-firestore-indexes.sh                 # target: production
+infra/scripts/deploy-firestore-indexes.sh --dry-run       # show current, change nothing
+infra/scripts/deploy-firestore-indexes.sh --force         # no prompts (CI)
+infra/scripts/deploy-firestore-indexes.sh --database='(default)'
+```
+
+The script uses the firebase CLI (authenticated via gcloud Application Default
+Credentials) because `gcloud firestore indexes` cannot express `COLLECTION_GROUP`
+scope for single-field overrides. Composite indexes build asynchronously
+(`CREATING` → `READY`); verify with:
+
+```bash
+gcloud firestore indexes composite list --project=health-fitness-160 --database=production
+```
+
+**Run this script whenever `firestore.indexes.json` changes, and as part of any
+fresh-project or new-database bootstrap** — otherwise the live database silently
+drifts from the repo. See the script header for a known firebase-tools caveat
+(it will not repair the *scope* of an override that already exists).
+
 ## Terraform
 
 `terraform/` currently holds only the Firestore TTL policy above

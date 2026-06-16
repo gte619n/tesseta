@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.data.workouts.program
 import com.gte619n.healthfitness.data.workouts.session.CompleteSessionRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -35,6 +36,18 @@ interface WorkoutProgramApi {
      */
     @POST("api/me/workout-programs/{id}/activate")
     suspend fun activate(@Path("id") id: String): List<ScheduledWorkoutDto>
+
+    /**
+     * IMPL-STAB G4 — metadata-only program edit (title/description). Null fields
+     * are left unchanged by the backend; phases/schedule are not touched here
+     * (structural edits go through the conversational designer). Returns the
+     * updated deep program.
+     */
+    @PATCH("api/me/workout-programs/{id}")
+    suspend fun updateDetails(
+        @Path("id") id: String,
+        @Body body: UpdateProgramDetailsRequest,
+    ): WorkoutProgramDeepDto
 
     /**
      * ADR-0012 / IMPL-17 D1+D2 — idempotent completion upsert for one

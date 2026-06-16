@@ -8,6 +8,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.gte619n.healthfitness.data.reminders.ReminderEngine
 import com.gte619n.healthfitness.data.reminders.ReminderPlanWorker
+import com.gte619n.healthfitness.data.reminders.ReminderReplanCoordinator
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,11 @@ class HealthFitnessApp : Application(), ImageLoaderFactory, Configuration.Provid
     @Inject
     lateinit var reminderEngine: dagger.Lazy<ReminderEngine>
 
+    // IMPL-STAB Workstream F: keeps the reminder alarm chain in sync with
+    // medication-mirror changes + multi-device sync pushes (no restart needed).
+    @Inject
+    lateinit var reminderReplanCoordinator: dagger.Lazy<ReminderReplanCoordinator>
+
     // App-lifetime scope for fire-and-forget startup work (reminder replan).
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -57,6 +63,9 @@ class HealthFitnessApp : Application(), ImageLoaderFactory, Configuration.Provid
         appScope.launch {
             runCatching { ReminderPlanWorker.register(WorkManager.getInstance(this@HealthFitnessApp)) }
             runCatching { reminderEngine.get().replan() }
+            // IMPL-STAB Workstream F (items 1 & 2): start observing medication
+            // changes + sync pushes so the alarm chain re-arms without a restart.
+            runCatching { reminderReplanCoordinator.get().start() }
         }
     }
 }

@@ -49,6 +49,14 @@ interface NutritionApi {
         @Path("entryId") entryId: String,
     ): Unit
 
+    // IMPL-STAB (Workstream E): retry image generation for an entry whose image
+    // FAILED or is stuck. Returns the entry (image flips to PENDING).
+    @POST("api/me/nutrition/{date}/entries/{entryId}/image/regenerate")
+    suspend fun regenerateEntryImage(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+    ): Entry
+
     // Composite (photo-logged) meal: one entry with ingredients + a generated
     // finished-meal image.
     @POST("api/me/nutrition/{date}/composite-meal")

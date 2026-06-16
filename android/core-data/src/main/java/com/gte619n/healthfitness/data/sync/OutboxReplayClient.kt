@@ -51,7 +51,13 @@ interface OutboxReplayClient {
  * deleted the scheduled session or its block ids), so the drain loop parks the
  * row instead of retrying forever.
  */
-class OutboxReplayHttpException(val code: Int, message: String) : RuntimeException(message) {
+class OutboxReplayHttpException(
+    val code: Int,
+    message: String,
+    /** The server's error body (best-effort), so the failure reason can be
+     *  surfaced to the user instead of swallowed. Null/blank when absent. */
+    val serverMessage: String? = null,
+) : RuntimeException(message) {
     val isTerminal: Boolean
         get() = code in 400..499 && code !in RETRYABLE_CLIENT_CODES
 
@@ -117,15 +123,30 @@ class RestOutboxReplayClient @Inject constructor(
             .build()
 
         client.newCall(request).execute().use { resp ->
+            val text = resp.body?.string().orEmpty()
             if (!resp.isSuccessful) {
                 throw OutboxReplayHttpException(
                     code = resp.code,
                     message = "Outbox replay failed: HTTP ${resp.code} for $method $url",
+                    serverMessage = serverErrorMessage(text),
                 )
             }
-            val text = resp.body?.string().orEmpty()
             return extractLastUpdate(text)
         }
+    }
+
+    /**
+     * Pull a human-readable reason out of the error body. Spring's default error
+     * shape is `{"message":…}` / `{"detail":…}` / `{"error":…}`; fall back to the
+     * raw (trimmed, length-capped) body for plain-text responses.
+     */
+    private fun serverErrorMessage(text: String): String? {
+        if (text.isBlank()) return null
+        val fromJson = runCatching {
+            val map = mapAdapter.fromJson(text)
+            (map?.get("message") ?: map?.get("detail") ?: map?.get("error"))?.toString()
+        }.getOrNull()
+        return (fromJson?.takeIf { it.isNotBlank() } ?: text).trim().take(300)
     }
 
     /**

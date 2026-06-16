@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.data.sync
 
 import io.mockk.mockk
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -29,11 +30,12 @@ class MirrorRepositorySupportTest {
         }
     }
 
-    private fun support(mirror: MirrorOps) = MirrorRepositorySupport(
+    private fun support(mirror: MirrorOps, bus: LocalWriteBus = LocalWriteBus()) = MirrorRepositorySupport(
         mirror = mirror,
         outbox = mockk(relaxed = true),
         killSwitch = KillSwitchGate { false },
         drainTrigger = DrainTrigger { },
+        localWriteBus = bus,
     )
 
     @Test
@@ -51,5 +53,21 @@ class MirrorRepositorySupportTest {
         assertEquals(1, mirror.txCount)
         assertEquals(0, mirror.upsertsOutsideTx)
         assertEquals(5, mirror.rows.size)
+    }
+
+    @Test
+    fun `an optimistic local write signals the LocalWriteBus (Workstream D)`() = runBlocking {
+        // Non-reactive screens (the dashboard recents feed) collect this to refresh
+        // immediately instead of waiting for a TTL/resume.
+        val bus = LocalWriteBus()
+        val seen = mutableListOf<String>()
+        val job = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
+            .launch { bus.writes.collect { seen.add(it) } }
+
+        support(FakeMirrorOps(), bus).createLocal("medications", "med-1", "{}", 1L)
+        support(FakeMirrorOps(), bus).deleteLocal("bloodReadings", "b-1", 2L)
+
+        job.cancel()
+        assertEquals(listOf("medications", "bloodReadings"), seen)
     }
 }

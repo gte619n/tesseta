@@ -9,6 +9,7 @@ import {
   updateEntry,
   updateIngredient,
   deleteEntry,
+  regenerateEntryImage,
   searchFoods,
   describeMealAsync,
   relogEntry,
@@ -165,6 +166,12 @@ export default async function NutritionPage(props: {
     revalidatePath("/me/nutrition");
   }
 
+  async function regenerateImageAction(entryDate: string, entryId: string) {
+    "use server";
+    await regenerateEntryImage(entryDate, entryId);
+    revalidatePath("/me/nutrition");
+  }
+
   async function searchFoodsAction(q: string) {
     "use server";
     return searchFoods(q);
@@ -294,6 +301,7 @@ export default async function NutritionPage(props: {
           updateEntry={updateEntryAction}
           updateIngredient={updateIngredientAction}
           deleteEntry={deleteEntryAction}
+          regenerateImage={regenerateImageAction}
           searchFoods={searchFoodsAction}
           describeMealAsync={describeMealAsyncAction}
           relogEntry={relogAction}

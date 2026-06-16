@@ -1,11 +1,13 @@
 package com.gte619n.healthfitness.feature.nutrition
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -39,6 +41,10 @@ fun FoodThumbnail(
     imageStatus: String,
     size: Dp = 44.dp,
     zoomable: Boolean = true,
+    // IMPL-STAB (Workstream E): when set, a FAILED image renders a tappable retry
+    // chip instead of a silent utensil placeholder, so a missing picture is
+    // recoverable rather than permanent.
+    onRetry: (() -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(6.dp)
     when {
@@ -83,6 +89,23 @@ fun FoodThumbnail(
                 color = Hf.colors.accent,
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(size * 0.4f),
+            )
+        }
+        imageStatus == "FAILED" && onRetry != null -> Box(
+            modifier = Modifier
+                .size(size)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Hf.colors.canvasSunken)
+                .clickable { onRetry() },
+            contentAlignment = Alignment.Center,
+        ) {
+            // Image generation failed — offer a one-tap retry rather than a silent
+            // (permanent) placeholder.
+            Icon(
+                Icons.Outlined.Refresh,
+                contentDescription = "Retry image",
+                tint = Hf.colors.accent,
+                modifier = Modifier.size(size * 0.45f),
             )
         }
         else -> FoodThumbnailFallback(size)
