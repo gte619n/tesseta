@@ -239,9 +239,13 @@ class NutritionRepository @Inject constructor(
         return entry
     }
 
-    /** Recent distinct foods/meals for the add-flow's one-tap list. Live read. */
-    suspend fun recentMeals(days: Int = 14, limit: Int = 20): List<Entry> =
-        api.recentMeals(days, limit)
+    /**
+     * Recent distinct foods/meals for the add-flow's one-tap list. Live read.
+     * Pass [meal] (the meal being logged) to bias the order toward meals usually
+     * eaten at that time of day.
+     */
+    suspend fun recentMeals(days: Int = 14, limit: Int = 20, meal: String? = null): List<Entry> =
+        api.recentMeals(days, limit, meal)
 
     /**
      * One-tap re-log of a recent entry onto [date]. Server-side copy (reuses

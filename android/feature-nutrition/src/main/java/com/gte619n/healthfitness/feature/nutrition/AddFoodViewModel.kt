@@ -6,6 +6,8 @@ import com.gte619n.healthfitness.data.nutrition.FoodRepository
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.Food
+import com.gte619n.healthfitness.domain.nutrition.Meal
+import java.time.LocalTime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,7 +47,11 @@ class AddFoodViewModel @Inject constructor(
     private fun loadRecents() {
         viewModelScope.launch {
             try {
-                val recents = nutrition.recentMeals()
+                // Bias the list toward meals usually eaten at this time of day
+                // (breakfasts at breakfast time, etc.) — same window the sheet
+                // uses to pre-select the meal chip.
+                val currentMeal = Meal.forHour(LocalTime.now().hour)
+                val recents = nutrition.recentMeals(meal = currentMeal.wire)
                 _state.update { it.copy(recents = recents, recentsLoading = false) }
             } catch (e: Exception) {
                 // Recents are a convenience; a failed load just leaves the list
