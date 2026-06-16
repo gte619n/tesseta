@@ -105,7 +105,14 @@ fun ExerciseDetailSheet(
 
 @Composable
 private fun DemoViewer(summary: ExerciseSummary) {
-    val frames = summary.demoFrames.filter { it.imageUrl != null }
+    // IMPL-19: frames are a dynamic per-exercise plan (1–N). Order by the plan's
+    // `order`, keeping the source order as a stable tiebreaker, then drop frames
+    // without an image (as today).
+    val frames = summary.demoFrames
+        .withIndex()
+        .sortedWith(compareBy({ it.value.order }, { it.index }))
+        .map { it.value }
+        .filter { it.imageUrl != null }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -126,21 +133,49 @@ private fun DemoViewer(summary: ExerciseSummary) {
 
         var index by remember { mutableStateOf(0) }
         val frame = frames[index.coerceIn(0, frames.lastIndex)]
+        // Prefer the plan label; fall back to the deprecated phase, then the key.
+        val frameLabel = frame.label.ifBlank { frame.phase ?: frame.key }
 
         HfAsyncImage(
             model = frame.imageUrl,
-            contentDescription = "${summary.name} ${frame.phase}",
+            contentDescription = "${summary.name} $frameLabel",
             modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f),
         )
 
-        // Phase label, top-center.
-        Box(modifier = Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.TopCenter) {
+        // Frame label, top-center.
+        if (frameLabel.isNotBlank()) {
+            Box(modifier = Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.TopCenter) {
+                Box(
+                    modifier = Modifier
+                        .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    CapsLabel(frameLabel, color = Hf.colors.textSecondary)
+                }
+            }
+        }
+
+        // Teaching caption, bottom-center — only when present.
+        if (frame.caption.isNotBlank()) {
             Box(
                 modifier = Modifier
-                    .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .padding(bottom = 8.dp),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                CapsLabel(frame.phase, color = Hf.colors.textSecondary)
+                Box(
+                    modifier = Modifier
+                        .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        frame.caption,
+                        style = Hf.type.bodySm,
+                        color = Hf.colors.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
 

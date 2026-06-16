@@ -19,9 +19,27 @@ public interface ExerciseMediaGenerator {
     /** Regenerate all phases using {@code promptOverride} verbatim (null = default). */
     CompletableFuture<Void> generateDemoAsync(Exercise exercise, String promptOverride);
 
-    /** Regenerate a single phase only. */
+    /** Regenerate a single phase only (legacy START/MID/END path). */
     CompletableFuture<Void> generatePhaseAsync(Exercise exercise, DemoPhase phase, String promptOverride);
+
+    /**
+     * Regenerate a single plan frame by its {@code key} (IMPL-19). For an
+     * exercise with a {@code demoPlan} this targets the matching {@link FrameSpec};
+     * for a plan-less exercise a legacy {@code start}/{@code mid}/{@code end} key
+     * routes to the corresponding phase.
+     */
+    CompletableFuture<Void> generateFrameAsync(Exercise exercise, String key, String promptOverride);
 
     /** The default prompt this generator would produce for a given phase. */
     String defaultPrompt(Exercise exercise, DemoPhase phase);
+
+    /**
+     * The exact composed image prompt this generator would use to regenerate the
+     * frame identified by {@code key} (IMPL-19). When the exercise has a
+     * {@code demoPlan} the {@link FrameSpec} matching {@code key} drives the
+     * position clause; otherwise a legacy {@code start}/{@code mid}/{@code end}
+     * key maps to the corresponding {@link DemoPhase}. Admin preview only — does
+     * not call the model.
+     */
+    String promptFor(Exercise exercise, String key);
 }

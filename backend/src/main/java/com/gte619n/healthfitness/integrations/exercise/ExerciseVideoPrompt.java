@@ -40,10 +40,10 @@ public final class ExerciseVideoPrompt {
         cropped.""";
 
 
-    // Shared equipment treatment (single source of truth in GeminiExerciseMediaService),
-    // plus a video-specific note that the tempo reflects the real load.
-    private static final String EQUIPMENT = GeminiExerciseMediaService.EQUIPMENT_TREATMENT
-        + " The movement tempo reflects that real resistance.";
+    // Video-specific note appended to the per-exercise equipment clause: the tempo
+    // reflects the real load (or, for bodyweight, the real bodyweight).
+    private static final String EQUIPMENT_TEMPO_NOTE =
+        " The movement tempo reflects that real resistance.";
 
     private ExerciseVideoPrompt() {}
 
@@ -90,7 +90,9 @@ public final class ExerciseVideoPrompt {
                     + "body and equipment in frame and the full range of motion visible.";
         };
 
-        return TREATMENT + "\n\n" + actor + "\n\n" + EQUIPMENT + "\n\n"
+        String equipment = GeminiExerciseMediaService.equipmentClause(exercise) + EQUIPMENT_TEMPO_NOTE;
+
+        return TREATMENT + "\n\n" + actor + "\n\n" + equipment + "\n\n"
             + GeminiExerciseMediaService.ANATOMY_CLAUSE + "\n\n" + motion + "\n\n" + camera;
     }
 

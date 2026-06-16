@@ -38,9 +38,20 @@ internal object ProgramFixtures {
             "Drive through mid-foot on the way up.",
         ),
         demoFrames = listOf(
-            DemoFrame("START", "https://example.com/squat-start.jpg"),
-            DemoFrame("MID", "https://example.com/squat-mid.jpg"),
-            DemoFrame("END", "https://example.com/squat-end.jpg"),
+            DemoFrame(
+                key = "start",
+                label = "Start",
+                caption = "Bar racked, feet shoulder-width, chest tall.",
+                order = 0,
+                imageUrl = "https://example.com/squat-start.jpg",
+            ),
+            DemoFrame(
+                key = "bottom",
+                label = "Bottom",
+                caption = "Hips below parallel, knees tracking toes.",
+                order = 1,
+                imageUrl = "https://example.com/squat-mid.jpg",
+            ),
         ),
     )
 

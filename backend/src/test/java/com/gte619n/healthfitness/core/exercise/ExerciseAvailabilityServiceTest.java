@@ -20,7 +20,8 @@ class ExerciseAvailabilityServiceTest {
     private static Exercise exercise(String id, List<EquipmentRequirement> reqs) {
         return new Exercise(id, id, id, List.of(), MovementPattern.OTHER, List.of(), List.of(),
             Laterality.BILATERAL, Mechanic.COMPOUND, null, List.of(), reqs, List.of(BlockType.MAIN),
-            null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED, ExerciseStatus.PUBLISHED,
+            null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, Instant.now(), Instant.now(), null);
     }
 
@@ -84,6 +85,7 @@ class ExerciseAvailabilityServiceTest {
         }
         @Override public List<Exercise> findAll() { return List.copyOf(store.values()); }
         @Override public List<Exercise> findByMediaStatus(ExerciseMediaStatus s) { return List.of(); }
+        @Override public List<Exercise> findByPlanStatus(ExerciseMediaStatus s) { return List.of(); }
         @Override public void save(Exercise e) { store.put(e.exerciseId(), e); }
         @Override public void delete(String id) { store.remove(id); }
     }

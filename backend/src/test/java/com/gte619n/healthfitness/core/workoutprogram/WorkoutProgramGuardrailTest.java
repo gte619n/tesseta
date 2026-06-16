@@ -175,7 +175,8 @@ class WorkoutProgramGuardrailTest {
     private static Exercise exercise(String id, String muscle) {
         return new Exercise(id, id, id, List.of(), MovementPattern.OTHER, List.of(muscle), List.of(),
             Laterality.BILATERAL, Mechanic.COMPOUND, null, List.of(), List.of(), List.of(BlockType.MAIN),
-            null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED, ExerciseStatus.PUBLISHED,
+            null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, Instant.now(), Instant.now(), null);
     }
 

@@ -12,6 +12,10 @@ import com.gte619n.healthfitness.core.exercise.ExerciseMediaGenerator;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaStatus;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaUploader;
 import com.gte619n.healthfitness.core.exercise.ExerciseService;
+import com.gte619n.healthfitness.core.exercise.FrameSpec;
+import com.gte619n.healthfitness.core.exercise.Laterality;
+import com.gte619n.healthfitness.core.exercise.MovementPattern;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -74,25 +78,143 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         + "clarity prioritized over mood.";
 
     /**
-     * Shared equipment treatment — the single source of truth for how equipment
-     * and load look across stills and video ({@link ExerciseVideoPrompt} reuses
-     * it). Without this, the image model draws a light dumbbell with no plates
-     * even for a "Barbell …" exercise.
+     * Trailing guards shared by every equipment branch: plates/equipment are plain
+     * matte black with no text/numbers/branding, and only the single piece of
+     * equipment actually used is shown — no duplicate/overlapping bars and, for
+     * free-weight movements, no rack, stands, uprights, spotter arms, or mirrors.
      */
-    public static final String EQUIPMENT_TREATMENT =
-        "Modern, current commercial-gym equipment in clean condition, shown with "
-        + "real, visibly loaded working weight appropriate to the exercise — an "
-        + "Olympic barbell with properly secured iron or rubber bumper plates, "
-        + "appropriately sized dumbbells or kettlebell, or a loaded weight-stack "
-        + "machine, exactly as the named exercise requires. Never an empty barbell, "
-        + "a mimed lift, or prop weights; the load looks genuinely heavy and the "
-        + "equipment matches the exercise name. The plates and equipment are plain "
+    static final String EQUIPMENT_GUARDS =
+        "The plates and equipment are plain "
         + "matte black with absolutely no text, numbers, lettering, labels, or "
         + "branding of any kind on them. Show ONLY the single piece of equipment the "
         + "person is actually using — exactly one barbell, or one pair of dumbbells, "
         + "etc. Absolutely no power rack, squat stands, bench uprights, spotter arms, "
         + "mirrors, or any second, extra, duplicated, or overlapping barbell, bar, or "
         + "weight anywhere in the frame.";
+
+    /**
+     * Shared equipment treatment — historically the single static clause appended
+     * to every prompt. It UNCONDITIONALLY demanded a loaded Olympic barbell, which
+     * gave bodyweight movements (e.g. a Pull-Up) a phantom loaded barbell. It is
+     * retained ONLY as the BARBELL branch of {@link #equipmentClause(Exercise)};
+     * the prompt now selects a clause from the exercise instead of always using
+     * this. Without this, the image model draws a light dumbbell with no plates
+     * even for a "Barbell …" exercise.
+     */
+    public static final String EQUIPMENT_TREATMENT =
+        "Modern, current commercial-gym equipment in clean condition, shown with "
+        + "real, visibly loaded working weight appropriate to the exercise — an "
+        + "Olympic barbell with properly secured iron or rubber bumper plates, "
+        + "exactly as the named exercise requires. Never an empty barbell, "
+        + "a mimed lift, or prop weights; the load looks genuinely heavy and the "
+        + "equipment matches the exercise name. " + EQUIPMENT_GUARDS;
+
+    // ---- Equipment classification keyword lists (matched against the exercise NAME,
+    // case-insensitive). Precedence is encoded by the order of the checks in
+    // equipmentClause(...): pull-up / bodyweight before the generic free-weight
+    // keywords so a "Pull-Up" never falls through to the loaded-barbell branch. ----
+
+    /** Hanging / pull-up movements: a single fixed pull-up bar, bodyweight only. */
+    private static final List<String> PULLUP_KEYWORDS = List.of(
+        "pull-up", "pull up", "pullup", "chin-up", "chin up", "chinup",
+        "hang", "dead hang", "hanging", "muscle-up", "muscle up");
+
+    /** Plate-loaded holds (a single weight plate held as described — not a barbell). */
+    private static final List<String> PLATE_KEYWORDS = List.of(
+        "plate ", "bus-driver", "bus driver", " plate", "plate-");
+
+    private static final List<String> BARBELL_KEYWORDS = List.of(
+        "barbell", "olympic bar", "ez-bar", "ez bar", "trap bar", "hex bar",
+        "smith machine", "deadlift", "clean and jerk", "snatch", "power clean");
+
+    private static final List<String> DUMBBELL_KEYWORDS = List.of("dumbbell", "db ");
+
+    // "goblet" is intentionally NOT here: the catalog qualifies it ("Dumbbell Goblet
+    // Squat" / "Kettlebell Goblet Squat"), so the explicit implement word decides.
+    private static final List<String> KETTLEBELL_KEYWORDS = List.of("kettlebell", "kb ");
+
+    private static final List<String> CABLE_KEYWORDS = List.of(
+        "cable", "pushdown", "pulldown", "lat pulldown", "tricep pushdown",
+        "face pull", "cable fly", "cable crossover");
+
+    private static final List<String> MACHINE_KEYWORDS = List.of(
+        "machine", "leg press", "leg curl", "leg extension", "pec deck",
+        "lat pulldown", "hack squat", "seated row machine", "chest press machine",
+        "smith");
+
+    private static final List<String> BAND_KEYWORDS = List.of(
+        "band", "resistance band", "banded");
+
+    // ---- Equipment clauses (one per branch). Each ends with EQUIPMENT_GUARDS where a
+    // physical implement is present; the bodyweight/pull-up clauses state their own
+    // "nothing in frame" guard instead. ----
+
+    /** BODYWEIGHT — the most important case: explicitly NO external load or equipment. */
+    static final String BODYWEIGHT_CLAUSE =
+        "This is a pure bodyweight exercise: the subject uses NO external weight and NO "
+        + "equipment of any kind. There is no barbell, dumbbell, kettlebell, machine, "
+        + "weight plate, or band anywhere in the frame. The person moves their own "
+        + "bodyweight only — do not add any held or loaded implement, and do not place "
+        + "any gym equipment, rack, bench, or weights in the background.";
+
+    /** PULL-UP / CHIN-UP / hanging — one fixed pull-up bar, bodyweight only. */
+    static final String PULLUP_CLAUSE =
+        "The only equipment is a single fixed PULL-UP BAR mounted to the wall, ceiling, "
+        + "or a rig, from which the subject hangs and pulls their own bodyweight. This is "
+        + "a strict bodyweight movement: explicitly NO barbell, NO loaded plates, NO "
+        + "weight of any kind hanging from the person or the bar, and no power rack or rack "
+        + "uprights — just one plain pull-up bar and the athlete. Show ONLY that single "
+        + "pull-up bar — no duplicate or overlapping bars anywhere in the frame.";
+
+    /** DUMBBELL — a pair. */
+    static final String DUMBBELL_CLAUSE =
+        "The equipment is a pair of appropriately sized dumbbells, one in each hand, "
+        + "with the weight genuinely matching the movement — no loose weight plates and no "
+        + "barbell. " + EQUIPMENT_GUARDS;
+
+    /** DUMBBELL — single, for unilateral / single-arm movements. */
+    static final String DUMBBELL_SINGLE_CLAUSE =
+        "The equipment is a single appropriately sized dumbbell held in the working hand "
+        + "(this is a single-arm / unilateral movement) — no loose weight plates and no "
+        + "barbell. " + EQUIPMENT_GUARDS;
+
+    /** KETTLEBELL — a single kettlebell, plain matte black. */
+    static final String KETTLEBELL_CLAUSE =
+        "The equipment is a single kettlebell, plain matte black, sized appropriately for "
+        + "the movement — no barbell and no loose weight plates. " + EQUIPMENT_GUARDS;
+
+    /** KETTLEBELL — one per hand laterality note (still typically one for single-arm). */
+    static final String KETTLEBELL_SINGLE_CLAUSE =
+        "The equipment is a single kettlebell, plain matte black, held in the working hand "
+        + "for this single-arm / unilateral movement — no barbell and no loose weight "
+        + "plates. " + EQUIPMENT_GUARDS;
+
+    /** CABLE — a cable machine with the attachment the name implies. */
+    static final String CABLE_CLAUSE =
+        "The equipment is a cable machine (weight-stack pulley) with the appropriate "
+        + "attachment for the movement — a straight bar, rope, or single handle exactly as "
+        + "the exercise name implies. No loose barbell and no loose weight plates; the load "
+        + "is the machine's stack. " + EQUIPMENT_GUARDS;
+
+    /** MACHINE — the specific weight-stack machine the exercise names. */
+    static final String MACHINE_CLAUSE =
+        "The equipment is the specific weight-stack machine the exercise names (e.g. lat "
+        + "pulldown, leg press, leg curl, leg extension, or pec deck), used correctly with "
+        + "a genuinely loaded stack. No loose barbell and no loose weight plates. "
+        + EQUIPMENT_GUARDS;
+
+    /** WEIGHT PLATE — a single plate held as described (not a barbell). */
+    static final String PLATE_CLAUSE =
+        "The equipment is a single weight plate, plain matte black, held in the hands "
+        + "exactly as the movement describes (for example a plate held out for a "
+        + "bus-driver). This is NOT a barbell and there are no other plates — just one "
+        + "plate. " + EQUIPMENT_GUARDS;
+
+    /** BAND — a resistance band. */
+    static final String BAND_CLAUSE =
+        "The equipment is a single resistance band of the appropriate resistance, anchored "
+        + "or held as the movement requires. No barbell, no dumbbell, no weight plates. "
+        + EQUIPMENT_GUARDS;
 
     /**
      * Anatomy guardrails. Generative image models frequently produce extra
@@ -108,20 +230,38 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         + "held the right way for the movement. Realistic, correct joint angles "
         + "for the position.";
 
+    /**
+     * Instruction appended when a reference pose image is attached: the model
+     * must copy the body position only, never the reference's background,
+     * lighting, wardrobe, or person. The reference image is generation input
+     * only and is never stored or returned.
+     */
+    private static final String GROUNDING_CLAUSE =
+        "Use the provided reference image only as a guide for the body position "
+        + "and limb configuration; reproduce that pose, but render entirely in the "
+        + "house style described above (do not copy its background, lighting, "
+        + "wardrobe, or person).";
+
     private final ExerciseMediaStorage storage;
     private final ExerciseService exerciseService;
+    private final GroundingImageResolver grounding;
     private final String model;
+    private final boolean groundingEnabled;
     private final Client client;
 
     public GeminiExerciseMediaService(
         ExerciseMediaStorage storage,
         ExerciseService exerciseService,
+        GroundingImageResolver grounding,
         Client client,
-        @Value("${app.exercises.media.model:gemini-3.1-flash-image-preview}") String model
+        @Value("${app.exercises.media.model:gemini-3.1-flash-image-preview}") String model,
+        @Value("${app.exercises.media.grounding-enabled:true}") boolean groundingEnabled
     ) {
         this.storage = storage;
         this.exerciseService = exerciseService;
+        this.grounding = grounding;
         this.model = model;
+        this.groundingEnabled = groundingEnabled;
         this.client = client;
     }
 
@@ -133,9 +273,21 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     @Override
     public CompletableFuture<Void> generateDemoAsync(Exercise exercise, String promptOverride) {
         return CompletableFuture.runAsync(() -> {
-            boolean any = false;
-            for (DemoPhase phase : DemoPhase.values()) {
-                any |= generateOne(exercise, phase, promptOverride);
+            boolean any;
+            List<FrameSpec> plan = exercise.demoPlan();
+            if (plan != null && !plan.isEmpty()) {
+                // Plan-based: resolve grounding once, generate every spec.
+                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise);
+                any = false;
+                for (FrameSpec spec : plan) {
+                    any |= generateSpec(exercise, plan, spec, refs, promptOverride);
+                }
+            } else {
+                // Legacy START/MID/END path, unchanged.
+                any = false;
+                for (DemoPhase phase : DemoPhase.values()) {
+                    any |= generatePhase(exercise, phase, promptOverride);
+                }
             }
             finalizeStatus(exercise.exerciseId(), any);
         });
@@ -144,7 +296,25 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     @Override
     public CompletableFuture<Void> generatePhaseAsync(Exercise exercise, DemoPhase phase, String promptOverride) {
         return CompletableFuture.runAsync(() -> {
-            boolean ok = generateOne(exercise, phase, promptOverride);
+            boolean ok = generatePhase(exercise, phase, promptOverride);
+            finalizeStatus(exercise.exerciseId(), ok);
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> generateFrameAsync(Exercise exercise, String key, String promptOverride) {
+        return CompletableFuture.runAsync(() -> {
+            boolean ok;
+            List<FrameSpec> plan = exercise.demoPlan();
+            FrameSpec spec = specForKey(plan, key);
+            if (spec != null) {
+                List<GroundingImageResolver.RefImage> refs = resolveGrounding(exercise);
+                ok = generateSpec(exercise, plan, spec, refs, promptOverride);
+            } else {
+                // No plan match — fall back to a legacy phase if the key is start/mid/end.
+                DemoPhase phase = phaseForKey(key);
+                ok = phase != null && generatePhase(exercise, phase, promptOverride);
+            }
             finalizeStatus(exercise.exerciseId(), ok);
         });
     }
@@ -155,9 +325,39 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     }
 
     @Override
+    public String promptFor(Exercise exercise, String key) {
+        // Mirrors the generateFrameAsync dispatch so the preview matches what
+        // generation actually uses. Preview is text-only — grounding image bytes
+        // are transient and never shown, so the grounding clause is omitted.
+        List<FrameSpec> plan = exercise.demoPlan();
+        FrameSpec spec = specForKey(plan, key);
+        if (spec != null) {
+            return buildPrompt(exercise, spec, null, false);
+        }
+        DemoPhase phase = phaseForKey(key);
+        if (phase != null) {
+            return buildPrompt(exercise, phase, null);
+        }
+        throw new IllegalArgumentException("No plan frame or legacy phase for key: " + key);
+    }
+
+    @Override
     public Exercise uploadFrame(String exerciseId, DemoPhase phase, byte[] bytes, String contentType) {
         String url = storage.upload(exerciseId, phase, bytes, contentType);
         exerciseService.recordFrame(exerciseId, phase, url);
+        return exerciseService.updateMediaStatus(exerciseId, ExerciseMediaStatus.NEEDS_REVIEW);
+    }
+
+    @Override
+    public Exercise uploadFrame(String exerciseId, String key, byte[] bytes, String contentType) {
+        String url = storage.upload(exerciseId, key, bytes, contentType);
+        // Carry the spec's denormalized label/caption/order when the plan has it.
+        FrameSpec spec = specForKey(exerciseService.getPlan(exerciseId), key);
+        if (spec != null) {
+            exerciseService.recordFrame(exerciseId, key, spec.label(), spec.caption(), spec.order(), url);
+        } else {
+            exerciseService.recordFrame(exerciseId, key, "", "", 0, url);
+        }
         return exerciseService.updateMediaStatus(exerciseId, ExerciseMediaStatus.NEEDS_REVIEW);
     }
 
@@ -171,17 +371,124 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         return exerciseService.removeFrameCandidate(exerciseId, phase, imageUrl);
     }
 
+    @Override
+    public Exercise deleteFrame(String exerciseId, String key, String imageUrl) {
+        try {
+            storage.deleteByUrl(imageUrl);
+        } catch (Exception e) {
+            log.warn("Failed to delete exercise frame blob for {}: {}", exerciseId, e.getMessage());
+        }
+        return exerciseService.removeFrameCandidate(exerciseId, key, imageUrl);
+    }
+
     // ---- internals ----
 
-    /** Generate one phase; returns true on success. Swallows errors. */
-    private boolean generateOne(Exercise exercise, DemoPhase phase, String promptOverride) {
+    /** Legacy phase → key reverse lookup for plan-less fallback. */
+    private static DemoPhase phaseForKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        for (DemoPhase p : DemoPhase.values()) {
+            if (key.equalsIgnoreCase(p.name()) || key.equalsIgnoreCase(keyForPhase(p))) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    private static String keyForPhase(DemoPhase p) {
+        return switch (p) {
+            case START -> "start";
+            case MID -> "mid";
+            case END -> "end";
+        };
+    }
+
+    private static FrameSpec specForKey(List<FrameSpec> plan, String key) {
+        if (plan == null || key == null) {
+            return null;
+        }
+        return plan.stream().filter(s -> key.equals(s.key())).findFirst().orElse(null);
+    }
+
+    private List<GroundingImageResolver.RefImage> resolveGrounding(Exercise exercise) {
+        if (!groundingEnabled || exercise.reference() == null) {
+            return List.of();
+        }
+        try {
+            return grounding.imagesFor(exercise.reference());
+        } catch (Exception e) {
+            log.warn("Grounding resolution failed for {}: {}", exercise.exerciseId(), e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Map a plan frame to a reference pose image by order: first frame → first
+     * (start) image, last frame → last (end) image, interior → nearest, none if
+     * no references. Returns null when no reference applies.
+     */
+    private static GroundingImageResolver.RefImage referenceFor(
+        List<FrameSpec> plan, FrameSpec spec, List<GroundingImageResolver.RefImage> refs) {
+        if (refs == null || refs.isEmpty() || plan == null || plan.isEmpty()) {
+            return null;
+        }
+        if (refs.size() == 1) {
+            return refs.get(0);
+        }
+        int idx = Math.max(0, plan.indexOf(spec));
+        int last = plan.size() - 1;
+        if (idx <= 0) {
+            return refs.get(0);
+        }
+        if (idx >= last) {
+            return refs.get(refs.size() - 1);
+        }
+        // Interior frame: map proportionally to the nearest reference.
+        int mapped = Math.round((float) idx / last * (refs.size() - 1));
+        mapped = Math.min(refs.size() - 1, Math.max(0, mapped));
+        return refs.get(mapped);
+    }
+
+    /** Generate one plan frame (grounded when a reference applies); true on success. */
+    private boolean generateSpec(
+        Exercise exercise, List<FrameSpec> plan, FrameSpec spec,
+        List<GroundingImageResolver.RefImage> refs, String promptOverride) {
+        String key = spec.key();
+        try {
+            if (client == null) {
+                log.warn("Skipping exercise media for {} — no API key", exercise.exerciseId());
+                return false;
+            }
+            GroundingImageResolver.RefImage ref = referenceFor(plan, spec, refs);
+            String prompt = buildPrompt(exercise, spec, promptOverride, ref != null);
+            byte[] bytes = callGemini(prompt, ref, exercise.exerciseId());
+            if (bytes != null && bytes.length > 0) {
+                String url = storage.upload(exercise.exerciseId(), key, bytes);
+                exerciseService.recordFrame(
+                    exercise.exerciseId(), key, spec.label(), spec.caption(), spec.order(), url);
+                log.info("Generated frame '{}' for exercise {}{}: {}",
+                    key, exercise.exerciseId(), ref != null ? " (grounded)" : "", url);
+                return true;
+            }
+            log.warn("Empty image bytes for exercise {} frame {}", exercise.exerciseId(), key);
+            return false;
+        } catch (Exception e) {
+            log.error("Failed to generate frame {} for exercise {}: {}",
+                key, exercise.exerciseId(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /** Generate one legacy phase; returns true on success. Swallows errors. */
+    private boolean generatePhase(Exercise exercise, DemoPhase phase, String promptOverride) {
         try {
             if (client == null) {
                 log.warn("Skipping exercise media for {} — no API key", exercise.exerciseId());
                 return false;
             }
             String prompt = buildPrompt(exercise, phase, promptOverride);
-            byte[] bytes = callGemini(prompt, exercise.exerciseId());
+            byte[] bytes = callGemini(prompt, null, exercise.exerciseId());
             if (bytes != null && bytes.length > 0) {
                 String url = storage.upload(exercise.exerciseId(), phase, bytes);
                 exerciseService.recordFrame(exercise.exerciseId(), phase, url);
@@ -210,13 +517,33 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         if (promptOverride != null && !promptOverride.isBlank()) {
             return promptOverride;
         }
+        // Movement-pattern-driven position so every exercise (not just bench) gets a
+        // concrete, maximal-range phase — the fix for shallow mid-rep stills.
+        String position = ExerciseMovementPhases.position(exercise.movementPattern(), phase);
+        return composePrompt(exercise, position, false);
+    }
+
+    /**
+     * Plan-based prompt (IMPL-19): identical house clauses to the legacy path,
+     * but the position clause comes from {@link FrameSpec#positionPrompt()}
+     * instead of {@link ExerciseMovementPhases}. {@code grounded} appends the
+     * reference-image instruction when a pose reference is attached.
+     */
+    String buildPrompt(Exercise exercise, FrameSpec spec, String promptOverride, boolean grounded) {
+        if (promptOverride != null && !promptOverride.isBlank()) {
+            return grounded ? promptOverride + "\n" + GROUNDING_CLAUSE : promptOverride;
+        }
+        String position = spec.positionPrompt() == null || spec.positionPrompt().isBlank()
+            ? ExerciseMovementPhases.position(exercise.movementPattern(), DemoPhase.MID)
+            : spec.positionPrompt();
+        return composePrompt(exercise, position, grounded);
+    }
+
+    private String composePrompt(Exercise exercise, String position, boolean grounded) {
         String name = exercise.name() == null ? "an exercise" : exercise.name();
         String cues = exercise.formCues() == null || exercise.formCues().isEmpty()
             ? "" : String.join("; ", exercise.formCues());
         boolean lying = ExerciseVideoPrompt.isLying(exercise);
-        // Movement-pattern-driven position so every exercise (not just bench) gets a
-        // concrete, maximal-range phase — the fix for shallow mid-rep stills.
-        String position = ExerciseMovementPhases.position(exercise.movementPattern(), phase);
         // Posture-aware camera: dead-level side profile foreshortens a supine press,
         // so lying lifts use an elevated three-quarter angle.
         String camera = lying ? LYING_CAMERA_CLAUSE : CAMERA_CLAUSE;
@@ -228,16 +555,108 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         // Per-exercise actor so all phases (and the video) share one consistent person.
         String actor = "The subject is " + ExerciseActor.forExercise(exercise.exerciseId()).describe()
             + ". Calm neutral facial expression, no exertion grimace.";
-        return SHARED_TREATMENT + "\n" + actor + "\n" + WARDROBE_CLAUSE + "\n"
-            + ENVIRONMENT_CLAUSE + "\n" + camera + "\n" + EQUIPMENT_TREATMENT + "\n"
+        String base = SHARED_TREATMENT + "\n" + actor + "\n" + WARDROBE_CLAUSE + "\n"
+            + ENVIRONMENT_CLAUSE + "\n" + camera + "\n" + equipmentClause(exercise) + "\n"
             + ANATOMY_CLAUSE + "\n"
             + "The person is performing " + name + ", shown " + position
             + (cues.isBlank() ? "" : ", key form cues: " + cues) + "." + posture;
+        return grounded ? base + "\n" + GROUNDING_CLAUSE : base;
     }
 
-    byte[] callGemini(String prompt, String exerciseId) {
+    /**
+     * Exercise-aware equipment clause — replaces the old unconditional loaded-barbell
+     * text. Classifies PRIMARILY from the exercise NAME (the catalog names are
+     * explicit, e.g. "Barbell Back Squat", "Pull-Up", "Plate Bus-Driver"); an empty
+     * {@code requiredEquipment()} is used only as ADDITIONAL confirmation of
+     * bodyweight and never overrides a clear equipment keyword in the name (some
+     * call paths leave requiredEquipment unpopulated while the name is authoritative).
+     * Precedence: bodyweight / pull-up are checked before the generic free-weight
+     * keywords so a bodyweight or hanging movement never gets a phantom loaded bar.
+     */
+    static String equipmentClause(Exercise exercise) {
+        String name = exercise == null || exercise.name() == null
+            ? "" : exercise.name().toLowerCase();
+        boolean unilateral = exercise != null && exercise.laterality() == Laterality.UNILATERAL;
+        boolean noRequiredEquipment =
+            exercise != null
+                && (exercise.requiredEquipment() == null || exercise.requiredEquipment().isEmpty());
+        MovementPattern pattern = exercise == null ? null : exercise.movementPattern();
+
+        // 1. PULL-UP / hanging — checked first so it never falls through to a barbell.
+        if (containsAny(name, PULLUP_KEYWORDS)) {
+            return PULLUP_CLAUSE;
+        }
+
+        // 2. Plate-loaded holds — a single weight plate, NOT a barbell.
+        if (containsAny(name, PLATE_KEYWORDS) && !containsAny(name, BARBELL_KEYWORDS)) {
+            return PLATE_CLAUSE;
+        }
+
+        // 3. Explicit implement keywords in the name (authoritative even if
+        //    requiredEquipment is empty). Most specific first.
+        if (containsAny(name, BAND_KEYWORDS)) {
+            return BAND_CLAUSE;
+        }
+        if (containsAny(name, KETTLEBELL_KEYWORDS)) {
+            return unilateral ? KETTLEBELL_SINGLE_CLAUSE : KETTLEBELL_CLAUSE;
+        }
+        if (containsAny(name, DUMBBELL_KEYWORDS)) {
+            return unilateral ? DUMBBELL_SINGLE_CLAUSE : DUMBBELL_CLAUSE;
+        }
+        if (containsAny(name, CABLE_KEYWORDS)) {
+            return CABLE_CLAUSE;
+        }
+        if (containsAny(name, MACHINE_KEYWORDS)) {
+            return MACHINE_CLAUSE;
+        }
+        if (containsAny(name, BARBELL_KEYWORDS)) {
+            return EQUIPMENT_TREATMENT;
+        }
+
+        // 4. No implement keyword in the name. Confirmed bodyweight when equipment is
+        //    empty, or when the movement is a stretch/mobility/cardio/core pattern.
+        if (noRequiredEquipment || isBodyweightPattern(pattern)) {
+            return BODYWEIGHT_CLAUSE;
+        }
+
+        // 5. Fallback: name has no keyword but requiredEquipment is populated — keep the
+        //    historical loaded-equipment language (matches the exercise as best we can).
+        return EQUIPMENT_TREATMENT;
+    }
+
+    private static boolean isBodyweightPattern(MovementPattern pattern) {
+        return pattern == MovementPattern.STRETCH
+            || pattern == MovementPattern.MOBILITY
+            || pattern == MovementPattern.CARDIO
+            || pattern == MovementPattern.CORE;
+    }
+
+    private static boolean containsAny(String haystack, List<String> needles) {
+        for (String n : needles) {
+            if (haystack.contains(n)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Call the image model. When {@code ref} is non-null its bytes are attached
+     * as an additional inline image Part to ground the pose (the reference image
+     * is input only — never stored or returned).
+     */
+    byte[] callGemini(String prompt, GroundingImageResolver.RefImage ref, String exerciseId) {
         try {
-            Content content = Content.fromParts(Part.fromText(prompt));
+            Content content;
+            if (ref != null && ref.bytes() != null && ref.bytes().length > 0) {
+                List<Part> parts = new ArrayList<>();
+                // Reference image first, then the text prompt (mirrors GeminiFoodImageGenerator).
+                parts.add(Part.fromBytes(ref.bytes(), ref.mime()));
+                parts.add(Part.fromText(prompt));
+                content = Content.fromParts(parts.toArray(new Part[0]));
+            } else {
+                content = Content.fromParts(Part.fromText(prompt));
+            }
             GenerateContentConfig config = GenerateContentConfig.builder()
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();

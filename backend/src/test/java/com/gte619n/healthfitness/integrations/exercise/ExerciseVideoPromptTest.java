@@ -23,7 +23,8 @@ class ExerciseVideoPromptTest {
             Laterality.BILATERAL, Mechanic.COMPOUND, null,
             List.of("Hold the dumbbell at your chest", "Push your knees out"),
             List.of(), List.of(), null, false,
-            List.of(), null, null, ExerciseMediaStatus.NONE, ExerciseStatus.PUBLISHED,
+            List.of(), null, null, ExerciseMediaStatus.NONE,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, now, now, null);
     }
 
@@ -35,7 +36,8 @@ class ExerciseVideoPromptTest {
             Laterality.BILATERAL, Mechanic.COMPOUND, null,
             List.of("Lower the bar to mid-chest"),
             List.of(), List.of(), null, false,
-            List.of(), null, null, ExerciseMediaStatus.NONE, ExerciseStatus.PUBLISHED,
+            List.of(), null, null, ExerciseMediaStatus.NONE,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, now, now, null);
     }
 
@@ -46,8 +48,8 @@ class ExerciseVideoPromptTest {
             .contains("Dumbbell Goblet Squat")
             .contains("Hold the dumbbell at your chest")
             .contains("same single athlete")            // consistent actor
-            .contains("loaded working weight")           // actual weight
-            .contains("commercial-gym equipment")        // modern equipment
+            .contains("pair of appropriately sized dumbbells")  // exercise-aware equipment
+            .contains("real resistance")                 // video tempo note still present
             .contains("9:16")
             .containsIgnoringCase("side-profile")
             .contains("static throughout")               // locked-off side view
@@ -62,7 +64,7 @@ class ExerciseVideoPromptTest {
             .contains("orbit")                            // standing → orbit to front
             .contains("front three-quarter")
             .contains("matching the reference image")     // seeded from the same still
-            .contains("loaded working weight");
+            .contains("pair of appropriately sized dumbbells");  // exercise-aware equipment
     }
 
     @Test

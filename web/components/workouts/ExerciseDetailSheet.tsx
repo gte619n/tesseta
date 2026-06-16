@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PrescriptionExercise } from "@/lib/types/workout-program";
-import { DEMO_PHASES, DEMO_PHASE_LABEL } from "@/lib/types/exercise";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 
 type Props = {
@@ -32,7 +31,14 @@ export function ExerciseDetailSheet({ exercise, onClose }: Props) {
 
   if (!mounted || !exercise) return null;
 
-  const frameByPhase = new Map(exercise.demoFrames.map((f) => [f.phase, f]));
+  // IMPL-19: render the N planned frames in plan order, with their captions.
+  // No fixed START/MID/END assumption — frames carry denormalized label/
+  // caption/order keyed to the plan (legacy docs synthesize these server-side).
+  const frames = [...exercise.demoFrames].sort((a, b) => a.order - b.order);
+  // Choose a column count that fits the frame count without overstretching.
+  const cols = frames.length <= 1 ? 1 : frames.length === 2 ? 2 : 3;
+  const gridColsClass =
+    cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : "grid-cols-3";
 
   return createPortal(
     <ModalBackdrop
@@ -67,22 +73,21 @@ export function ExerciseDetailSheet({ exercise, onClose }: Props) {
           </div>
         ) : null}
 
-        {/* Demo phase stills */}
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          {DEMO_PHASES.map((phase) => {
-            const frame = frameByPhase.get(phase);
-            return (
-              <div key={phase} className="flex flex-col gap-1">
+        {/* Demo frames — N planned positions in order, each with its caption. */}
+        {frames.length > 0 ? (
+          <div className={`mt-4 grid gap-2 ${gridColsClass}`}>
+            {frames.map((frame) => (
+              <div key={frame.key} className="flex flex-col gap-1">
                 <span className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">
-                  {DEMO_PHASE_LABEL[phase]}
+                  {frame.label || frame.key}
                 </span>
-                {frame?.imageUrl ? (
+                {frame.imageUrl ? (
                   <div className="relative aspect-[4/5] w-full overflow-hidden rounded-md border-[0.5px] border-border-default">
                     <Image
                       src={frame.imageUrl}
-                      alt={`${exercise.name} ${phase}`}
+                      alt={`${exercise.name} ${frame.label || frame.key}`}
                       fill
-                      sizes="(max-width: 560px) 33vw, 180px"
+                      sizes="(max-width: 560px) 50vw, 180px"
                       className="object-cover"
                     />
                   </div>
@@ -91,10 +96,15 @@ export function ExerciseDetailSheet({ exercise, onClose }: Props) {
                     <span className="text-[10px] uppercase tracking-wider">No frame</span>
                   </div>
                 )}
+                {frame.caption ? (
+                  <span className="text-[11px] leading-snug text-secondary">
+                    {frame.caption}
+                  </span>
+                ) : null}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : null}
 
         {exercise.formCues.length > 0 ? (
           <div className="mt-4 border-t-[0.5px] border-border-subtle pt-3">

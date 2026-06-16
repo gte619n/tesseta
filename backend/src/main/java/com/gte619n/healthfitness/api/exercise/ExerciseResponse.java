@@ -5,7 +5,9 @@ import com.gte619n.healthfitness.core.exercise.DemoFrame;
 import com.gte619n.healthfitness.core.exercise.EquipmentRequirement;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaStatus;
+import com.gte619n.healthfitness.core.exercise.ExerciseReference;
 import com.gte619n.healthfitness.core.exercise.ExerciseStatus;
+import com.gte619n.healthfitness.core.exercise.FrameSpec;
 import com.gte619n.healthfitness.core.exercise.Laterality;
 import com.gte619n.healthfitness.core.exercise.Mechanic;
 import com.gte619n.healthfitness.core.exercise.MovementPattern;
@@ -29,6 +31,9 @@ public record ExerciseResponse(
     RepRange defaultRepRange,
     boolean isTimed,
     List<DemoFrame> demoFrames,
+    List<FrameSpec> demoPlan,
+    ExerciseMediaStatus planStatus,
+    ExerciseReference reference,
     String videoUrl,
     String demoPromptOverride,
     ExerciseMediaStatus mediaStatus,
@@ -37,7 +42,24 @@ public record ExerciseResponse(
     Instant createdAt,
     Instant updatedAt
 ) {
+    /**
+     * User-facing serialization. {@code reference} is admin-only (it is a public
+     * exercise-library citation used by the generation pipeline, not user
+     * content), so it is omitted here — see {@link #fromAdmin(Exercise)}.
+     */
     public static ExerciseResponse from(Exercise e) {
+        return build(e, null);
+    }
+
+    /**
+     * Admin serialization — identical to {@link #from(Exercise)} but includes
+     * the {@code reference}. Used by every {@code /api/admin/exercises*} response.
+     */
+    public static ExerciseResponse fromAdmin(Exercise e) {
+        return build(e, e.reference());
+    }
+
+    private static ExerciseResponse build(Exercise e, ExerciseReference reference) {
         return new ExerciseResponse(
             e.exerciseId(),
             e.name(),
@@ -54,6 +76,9 @@ public record ExerciseResponse(
             e.defaultRepRange(),
             e.isTimed(),
             e.demoFrames(),
+            e.demoPlan(),
+            e.planStatus(),
+            reference,
             e.videoUrl(),
             e.demoPromptOverride(),
             e.mediaStatus(),

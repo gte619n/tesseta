@@ -1,6 +1,4 @@
 package com.gte619n.healthfitness.api.exercise;
 
-import com.gte619n.healthfitness.core.exercise.DemoPhase;
-
-/** Body for select/delete frame actions. */
-public record FrameRequest(DemoPhase phase, String imageUrl) {}
+/** Body for select/delete frame actions, keyed to the plan (IMPL-19). */
+public record FrameRequest(String key, String imageUrl) {}

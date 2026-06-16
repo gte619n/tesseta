@@ -3,7 +3,8 @@ import type {
   ExerciseResponse,
   CreateExerciseRequest,
   UpdateExerciseRequest,
-  DemoPhase,
+  FrameSpec,
+  PlanResponse,
 } from "./types/exercise";
 import type { Equipment } from "./types/gym";
 
@@ -87,33 +88,78 @@ export function approveExerciseMedia(
   );
 }
 
+// IMPL-19: the composed image prompt for one frame, keyed by FrameSpec.key.
+// GET /api/admin/exercises/{id}/demo-prompt?key=<frameKey> → { prompt }.
+// The backend accepts legacy start/mid/end keys too. Used to seed the
+// Regenerate flow's editable prompt when a single frame is targeted.
 export async function getDemoPrompt(
   exerciseId: string,
-  phase: DemoPhase,
+  key: string,
 ): Promise<string> {
   const data = await apiJson<{ prompt: string }>(
-    `/api/admin/exercises/${exerciseId}/demo-prompt?phase=${phase}`,
+    `/api/admin/exercises/${exerciseId}/demo-prompt?key=${encodeURIComponent(key)}`,
   );
   return data.prompt ?? "";
 }
 
+// ── IMPL-19: frame plan ──────────────────────────────────────────────
+
+// Current frame plan + its review status.
+export function getPlan(exerciseId: string): Promise<PlanResponse> {
+  return apiJson<PlanResponse>(`/api/admin/exercises/${exerciseId}/plan`);
+}
+
+// Run the planner (gemini-3.5-flash). Returns the new NEEDS_REVIEW plan.
+export function regeneratePlan(
+  exerciseId: string,
+  promptOverride?: string | null,
+): Promise<PlanResponse> {
+  return send<PlanResponse>(
+    `/api/admin/exercises/${exerciseId}/regenerate-plan`,
+    "POST",
+    { promptOverride: promptOverride ?? null },
+  );
+}
+
+// Admin edits to the plan: the full ordered list of frames.
+export function savePlan(
+  exerciseId: string,
+  frames: FrameSpec[],
+): Promise<PlanResponse> {
+  return send<PlanResponse>(`/api/admin/exercises/${exerciseId}/plan`, "PUT", {
+    frames,
+  });
+}
+
+// Approve the plan: NEEDS_REVIEW → APPROVED.
+export function approvePlan(exerciseId: string): Promise<PlanResponse> {
+  return send<PlanResponse>(
+    `/api/admin/exercises/${exerciseId}/approve-plan`,
+    "POST",
+  );
+}
+
+// ── IMPL-19: media, keyed to the plan ────────────────────────────────
+
+// `key == null` regenerates every frame in the plan (or every legacy phase
+// when the exercise has no plan); a specific key regenerates that one frame.
 export function regenerateMedia(
   exerciseId: string,
-  opts?: { promptOverride?: string | null; phase?: DemoPhase | null },
+  opts?: { promptOverride?: string | null; key?: string | null },
 ): Promise<void> {
   return send<void>(`/api/admin/exercises/${exerciseId}/regenerate-media`, "POST", {
     promptOverride: opts?.promptOverride ?? null,
-    phase: opts?.phase ?? null,
+    key: opts?.key ?? null,
   });
 }
 
 export async function uploadFrame(
   exerciseId: string,
-  phase: DemoPhase,
+  key: string,
   file: File,
 ): Promise<ExerciseResponse> {
   const formData = new FormData();
-  formData.append("phase", phase);
+  formData.append("key", key);
   formData.append("file", file);
   const res = await apiFetch(`/api/admin/exercises/${exerciseId}/upload-frame`, {
     method: "POST",
@@ -127,25 +173,25 @@ export async function uploadFrame(
 
 export function selectFrame(
   exerciseId: string,
-  phase: DemoPhase,
+  key: string,
   imageUrl: string,
 ): Promise<ExerciseResponse> {
   return send<ExerciseResponse>(
     `/api/admin/exercises/${exerciseId}/select-frame`,
     "POST",
-    { phase, imageUrl },
+    { key, imageUrl },
   );
 }
 
 export function deleteFrame(
   exerciseId: string,
-  phase: DemoPhase,
+  key: string,
   imageUrl: string,
 ): Promise<ExerciseResponse> {
   return send<ExerciseResponse>(
     `/api/admin/exercises/${exerciseId}/delete-frame`,
     "POST",
-    { phase, imageUrl },
+    { key, imageUrl },
   );
 }
 

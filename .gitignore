@@ -53,5 +53,12 @@ tmp/
 .worktrees/
 web/package-lock.json
 
+# Python
+__pycache__/
+*.pyc
+
+# IMPL-19 generated demo-frame previews (regenerable)
+docs/test_reports/workout_logs/impl19_preview/
+
 # Background-agent worktrees (Agent tool isolation)
 .claude/worktrees/

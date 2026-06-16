@@ -171,9 +171,15 @@ app:
     # before it is shown to users / offered to the program generator. Set false
     # to allow programming published exercises whose media isn't approved yet.
     require-approved-media: ${EXERCISE_REQUIRE_APPROVED_MEDIA:true}
+    # IMPL-19: bound for the frame-plan backfill job, and the planner model.
+    plan-backfill-limit: ${app.exercises.plan-backfill-limit:50}
+    plan:
+      model: ${EXERCISE_PLAN_MODEL:gemini-3.5-flash}
     media:
       enabled: ${EXERCISE_MEDIA_ENABLED:true}
       model: ${EXERCISE_MEDIA_MODEL:gemini-3.1-flash-image-preview}
+      # IMPL-19: feed a reference pose image to the image model when available.
+      grounding-enabled: ${EXERCISE_MEDIA_GROUNDING_ENABLED:true}
   # IMPL-15: AI workout-program design. Second deliberate exception to the
   # flash-only convention (see ADR-0007), on its OWN env var independent of
   # GEMINI_MODEL and GOALS_GEMINI_MODEL.

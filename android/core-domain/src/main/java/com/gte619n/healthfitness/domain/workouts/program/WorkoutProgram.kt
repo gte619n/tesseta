@@ -47,8 +47,20 @@ data class NutritionGuidance(
             note.isNullOrBlank()
 }
 
-/** A single START/MID/END demo still for an exercise (IMPL-14). */
-data class DemoFrame(val phase: String, val imageUrl: String?)
+/**
+ * A single demo still for an exercise. IMPL-19 replaced the fixed
+ * START/MID/END triad with a per-exercise frame plan: [key]/[label]/[caption]
+ * are denormalized from the plan's `FrameSpec`, [order] drives display order,
+ * and [phase] is the deprecated legacy enum (nullable, read-only for old docs).
+ */
+data class DemoFrame(
+    val key: String = "",
+    val label: String = "",
+    val caption: String = "",
+    val order: Int = 0,
+    val imageUrl: String?,
+    val phase: String? = null,
+)
 
 /** Compact, embedded exercise info for rendering a prescription + its demo. */
 data class ExerciseSummary(

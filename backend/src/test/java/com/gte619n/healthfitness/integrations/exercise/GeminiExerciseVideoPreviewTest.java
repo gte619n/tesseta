@@ -51,7 +51,8 @@ class GeminiExerciseVideoPreviewTest {
         return new Exercise(
             slug(name), name, name.toLowerCase(), List.of(), p, List.of(), List.of(),
             lat, Mechanic.COMPOUND, null, cues, List.of(), List.of(), null, false,
-            List.of(), null, null, ExerciseMediaStatus.NONE, ExerciseStatus.PUBLISHED,
+            List.of(), null, null, ExerciseMediaStatus.NONE,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
             null, now, now, null);
     }
 
