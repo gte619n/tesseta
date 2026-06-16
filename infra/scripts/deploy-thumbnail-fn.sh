@@ -37,15 +37,38 @@ if ! gcloud iam service-accounts describe "$RUNTIME_SA_EMAIL" \
   gcloud iam service-accounts create "$RUNTIME_SA" \
     --display-name="Exercise thumbnail Cloud Function runtime" \
     --project="$PROJECT_ID"
+  # A freshly-created SA is not immediately visible to IAM policy writes on
+  # other resources (eventual consistency). Wait until it resolves so the
+  # bucket/project bindings below don't fail with "does not exist".
+  echo "    waiting for SA to propagate"
+  for _ in $(seq 1 30); do
+    gcloud iam service-accounts describe "$RUNTIME_SA_EMAIL" \
+      --project="$PROJECT_ID" &>/dev/null && break
+    sleep 2
+  done
 else
   echo "    exists, skipping"
 fi
 
-echo "==> Granting roles/storage.objectAdmin on gs://${BUCKET}"
-gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+# The runtime SA is also the trigger's identity. Eventarc validates the bucket
+# during trigger creation (needs storage.buckets.get) and delivers events to
+# the function (needs eventarc.eventReceiver). objectAdmin covers reading and
+# writing the thumbnail objects but NOT bucket metadata, so legacyBucketReader
+# is added for the buckets.get used in trigger validation.
+echo "==> Granting bucket roles on gs://${BUCKET} to ${RUNTIME_SA}"
+for role in roles/storage.objectAdmin roles/storage.legacyBucketReader; do
+  gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+    --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
+    --role="$role" \
+    --project="$PROJECT_ID" --quiet >/dev/null
+  echo "    ${role}"
+done
+
+echo "==> Granting roles/eventarc.eventReceiver to ${RUNTIME_SA}"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
-  --role="roles/storage.objectAdmin" \
-  --project="$PROJECT_ID" --quiet >/dev/null
+  --role="roles/eventarc.eventReceiver" \
+  --condition=None --quiet >/dev/null
 
 # Gen2 GCS triggers run through Eventarc, which delivers events via Pub/Sub
 # populated by the GCS service agent. Grant that agent pubsub.publisher (a

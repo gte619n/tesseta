@@ -73,12 +73,20 @@ Build) are enabled by `infra/scripts/enable-apis.sh`.
 
 ## Backfill existing images
 
-After the first deploy, existing objects predate the trigger. Re-finalize them
-once so the function produces their thumbs (e.g. rewrite metadata in place):
+After the first deploy, existing objects predate the trigger. Run the backfill
+script — it applies the **same transform** as `index.js` directly (via
+Application Default Credentials), writing any missing `thumb/` objects. It does
+not modify originals and is idempotent (existing thumbs are skipped).
 
 ```bash
-gcloud storage objects update \
-  'gs://health-fitness-160-exercise-media/exercises/**' \
-  --content-type-from-object --recursive 2>/dev/null || true
-# or simply re-upload / copy each object onto itself to fire a finalize event.
+gcloud auth application-default login   # if ADC isn't already set up
+node backfill.js                        # generate missing thumbs
+FORCE=1 node backfill.js                # rewrite thumbs even if present
+CONCURRENCY=12 node backfill.js         # tune parallelism (default 8)
 ```
+
+> Note: do **not** try to backfill via `gcloud storage objects update`
+> (metadata patch) — that emits `metadataUpdated`, not `finalized`, so it does
+> not fire this trigger. Re-uploading/copying an object onto a new generation
+> does fire `finalized`, but the script above is simpler and leaves originals
+> (and their immutable cache headers) untouched.
