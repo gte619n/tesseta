@@ -9,7 +9,6 @@ import com.gte619n.healthfitness.api.exercise.SavePlanRequest;
 import com.gte619n.healthfitness.api.exercise.UpdateExerciseRequest;
 import com.gte619n.healthfitness.api.security.AdminOnly;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
-import com.gte619n.healthfitness.core.exercise.DemoPhase;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseFramePlanner;
 import com.gte619n.healthfitness.core.exercise.ExerciseMediaGenerator;
@@ -73,38 +72,38 @@ public class AdminExerciseController {
 
     @GetMapping("/catalog")
     public List<ExerciseResponse> catalog() {
-        return service.listCatalog().stream().map(ExerciseResponse::from).toList();
+        return service.listCatalog().stream().map(ExerciseResponse::fromAdmin).toList();
     }
 
     @GetMapping("/review")
     public List<ExerciseResponse> review() {
-        return service.findReviewQueue().stream().map(ExerciseResponse::from).toList();
+        return service.findReviewQueue().stream().map(ExerciseResponse::fromAdmin).toList();
     }
 
     @PostMapping
     public ExerciseResponse create(@RequestBody CreateExerciseRequest body) {
         String contributorId = currentUser.get().userId();
-        return ExerciseResponse.from(service.create(body.toEdit(), contributorId));
+        return ExerciseResponse.fromAdmin(service.create(body.toEdit(), contributorId));
     }
 
     @PatchMapping("/{exerciseId}")
     public ExerciseResponse update(@PathVariable String exerciseId, @RequestBody UpdateExerciseRequest body) {
-        return ExerciseResponse.from(service.update(exerciseId, body.toEdit()));
+        return ExerciseResponse.fromAdmin(service.update(exerciseId, body.toEdit()));
     }
 
     @PostMapping("/{exerciseId}/publish")
     public ExerciseResponse publish(@PathVariable String exerciseId) {
-        return ExerciseResponse.from(service.publish(exerciseId));
+        return ExerciseResponse.fromAdmin(service.publish(exerciseId));
     }
 
     @PostMapping("/{exerciseId}/archive")
     public ExerciseResponse archive(@PathVariable String exerciseId) {
-        return ExerciseResponse.from(service.archive(exerciseId));
+        return ExerciseResponse.fromAdmin(service.archive(exerciseId));
     }
 
     @PostMapping("/{exerciseId}/approve-media")
     public ExerciseResponse approveMedia(@PathVariable String exerciseId) {
-        return ExerciseResponse.from(service.approveMedia(exerciseId));
+        return ExerciseResponse.fromAdmin(service.approveMedia(exerciseId));
     }
 
     // ---- IMPL-19: frame plan ----
@@ -144,14 +143,26 @@ public class AdminExerciseController {
         return PlanResponse.from(service.approvePlan(exerciseId));
     }
 
+    /**
+     * The exact composed image prompt for a single frame {@code key} (IMPL-19),
+     * so an admin can preview/edit it before regenerating. The key is a plan
+     * {@link FrameSpec#key()}; legacy {@code start}/{@code mid}/{@code end} keys
+     * are accepted for plan-less exercises.
+     */
     @GetMapping("/{exerciseId}/demo-prompt")
     public ImagePromptResponse demoPrompt(
         @PathVariable String exerciseId,
-        @RequestParam(defaultValue = "START") DemoPhase phase
+        @RequestParam(defaultValue = "start") String key
     ) {
         Exercise exercise = require(exerciseId);
-        String prompt = mediaGenerator.map(g -> g.defaultPrompt(exercise, phase)).orElse("");
-        return new ImagePromptResponse(prompt);
+        if (mediaGenerator.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Media generation is not configured");
+        }
+        try {
+            return new ImagePromptResponse(mediaGenerator.get().promptFor(exercise, key));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
     }
 
     @PostMapping("/{exerciseId}/regenerate-media")
@@ -203,12 +214,12 @@ public class AdminExerciseController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Frame key is required");
         }
         // Key-based upload (IMPL-19) — works for arbitrary plan keys.
-        return ExerciseResponse.from(mediaUploader.get().uploadFrame(exerciseId, key, bytes, contentType));
+        return ExerciseResponse.fromAdmin(mediaUploader.get().uploadFrame(exerciseId, key, bytes, contentType));
     }
 
     @PostMapping("/{exerciseId}/select-frame")
     public ExerciseResponse selectFrame(@PathVariable String exerciseId, @RequestBody FrameRequest body) {
-        return ExerciseResponse.from(service.selectFrame(exerciseId, body.key(), body.imageUrl()));
+        return ExerciseResponse.fromAdmin(service.selectFrame(exerciseId, body.key(), body.imageUrl()));
     }
 
     @PostMapping("/{exerciseId}/delete-frame")
@@ -220,12 +231,12 @@ public class AdminExerciseController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Frame key is required");
         }
         // Key-based delete (IMPL-19) — works for arbitrary plan keys.
-        return ExerciseResponse.from(mediaUploader.get().deleteFrame(exerciseId, body.key(), body.imageUrl()));
+        return ExerciseResponse.fromAdmin(mediaUploader.get().deleteFrame(exerciseId, body.key(), body.imageUrl()));
     }
 
     @PostMapping("/{sourceId}/merge-into/{targetId}")
     public ExerciseResponse merge(@PathVariable String sourceId, @PathVariable String targetId) {
-        return ExerciseResponse.from(service.mergeInto(sourceId, targetId));
+        return ExerciseResponse.fromAdmin(service.mergeInto(sourceId, targetId));
     }
 
     private Exercise require(String exerciseId) {

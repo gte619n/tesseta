@@ -32,4 +32,14 @@ public interface ExerciseMediaGenerator {
 
     /** The default prompt this generator would produce for a given phase. */
     String defaultPrompt(Exercise exercise, DemoPhase phase);
+
+    /**
+     * The exact composed image prompt this generator would use to regenerate the
+     * frame identified by {@code key} (IMPL-19). When the exercise has a
+     * {@code demoPlan} the {@link FrameSpec} matching {@code key} drives the
+     * position clause; otherwise a legacy {@code start}/{@code mid}/{@code end}
+     * key maps to the corresponding {@link DemoPhase}. Admin preview only — does
+     * not call the model.
+     */
+    String promptFor(Exercise exercise, String key);
 }

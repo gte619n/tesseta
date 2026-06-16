@@ -48,8 +48,8 @@ class ExerciseVideoPromptTest {
             .contains("Dumbbell Goblet Squat")
             .contains("Hold the dumbbell at your chest")
             .contains("same single athlete")            // consistent actor
-            .contains("loaded working weight")           // actual weight
-            .contains("commercial-gym equipment")        // modern equipment
+            .contains("pair of appropriately sized dumbbells")  // exercise-aware equipment
+            .contains("real resistance")                 // video tempo note still present
             .contains("9:16")
             .containsIgnoringCase("side-profile")
             .contains("static throughout")               // locked-off side view
@@ -64,7 +64,7 @@ class ExerciseVideoPromptTest {
             .contains("orbit")                            // standing → orbit to front
             .contains("front three-quarter")
             .contains("matching the reference image")     // seeded from the same still
-            .contains("loaded working weight");
+            .contains("pair of appropriately sized dumbbells");  // exercise-aware equipment
     }
 
     @Test
