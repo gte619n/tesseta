@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import {
-  getAdminExerciseCatalog,
+  getAdminExerciseCatalogSummary,
+  getAdminExercise,
   createExercise,
   updateExercise,
   publishExercise,
@@ -15,10 +16,17 @@ import {
   deleteFrame,
   getDemoPrompt,
   mergeExercise,
+  setReviewed,
+  saveGrounding,
   searchEquipment as searchEquipmentApi,
 } from '@/lib/exercise-admin-api';
 import { AdminExerciseCatalog } from '@/components/admin/AdminExerciseCatalog';
-import type { ExerciseEditableFields, FrameSpec } from '@/lib/types/exercise';
+import type { CatalogPreset } from '@/components/admin/catalog-filters';
+import type {
+  ExerciseEditableFields,
+  ExerciseResponse,
+  FrameSpec,
+} from '@/lib/types/exercise';
 import type { Equipment } from '@/lib/types/gym';
 import { pageMetadata } from '@/lib/page-metadata';
 
@@ -28,18 +36,31 @@ export const dynamic = 'force-dynamic';
 
 const CATALOG_PATH = '/admin/exercises/catalog';
 
-export default async function AdminExerciseCatalogPage() {
+export default async function AdminExerciseCatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preset?: string }>;
+}) {
   // Admin gating handled by app/admin/layout.tsx
-  const catalog = await getAdminExerciseCatalog();
+  const summary = await getAdminExerciseCatalogSummary();
 
-  // Resolve equipment names so existing requirement groups render labels, not
-  // raw ids. One catalog read covers every referenced id.
+  // IMPL-20: the Review tab redirects here with ?preset=needs-review.
+  const { preset: presetParam } = await searchParams;
+  const preset: CatalogPreset = presetParam === 'needs-review' ? 'needs-review' : null;
+
+  // Resolve equipment names so the edit modal renders labels, not raw ids.
   let equipmentNames: Record<string, string> = {};
   try {
     const equipment = await searchEquipmentApi();
     equipmentNames = Object.fromEntries(equipment.map((e) => [e.equipmentId, e.name]));
   } catch {
     equipmentNames = {};
+  }
+
+  // Lazy full-detail load for the drawer (server action → server-only helper).
+  async function loadExerciseAction(exerciseId: string): Promise<ExerciseResponse> {
+    'use server';
+    return getAdminExercise(exerciseId);
   }
 
   async function saveAction(data: ExerciseEditableFields, exerciseId: string | null) {
@@ -72,6 +93,18 @@ export default async function AdminExerciseCatalogPage() {
     revalidatePath(CATALOG_PATH);
   }
 
+  async function setReviewedAction(exerciseId: string, reviewed: boolean) {
+    'use server';
+    await setReviewed(exerciseId, reviewed);
+    revalidatePath(CATALOG_PATH);
+  }
+
+  async function saveGroundingAction(exerciseId: string, imageUrls: string[]) {
+    'use server';
+    await saveGrounding(exerciseId, imageUrls);
+    revalidatePath(CATALOG_PATH);
+  }
+
   async function approveMediaAction(exerciseId: string) {
     'use server';
     await approveExerciseMedia(exerciseId);
@@ -100,9 +133,10 @@ export default async function AdminExerciseCatalogPage() {
     exerciseId: string,
     promptOverride: string | null,
     key: string | null,
+    referenceImageUrls?: string[],
   ) {
     'use server';
-    await regenerateMedia(exerciseId, { promptOverride, key });
+    await regenerateMedia(exerciseId, { promptOverride, key, referenceImageUrls });
     revalidatePath(CATALOG_PATH);
   }
 
@@ -140,18 +174,22 @@ export default async function AdminExerciseCatalogPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-primary">Exercise Catalog</h1>
         <span className="text-sm text-secondary">
-          {catalog.length} exercise{catalog.length === 1 ? '' : 's'}
+          {summary.length} exercise{summary.length === 1 ? '' : 's'}
         </span>
       </div>
 
       <AdminExerciseCatalog
-        catalog={catalog}
+        summary={summary}
         equipmentNames={equipmentNames}
+        preset={preset}
         save={saveAction}
         searchEquipment={searchEquipmentAction}
         publish={publishAction}
         archive={archiveAction}
         merge={mergeAction}
+        setReviewed={setReviewedAction}
+        saveGrounding={saveGroundingAction}
+        loadExercise={loadExerciseAction}
         approveMedia={approveMediaAction}
         regeneratePlan={regeneratePlanAction}
         savePlan={savePlanAction}
