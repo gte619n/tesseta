@@ -105,6 +105,28 @@ login flashes.
   history (D9). The only network-only part of the detail is the history; the
   medication itself is fully mirrored. No `Loading` reset on re-entry / after edits.
 
+## Follow-up — nutrition & blood "still loading" on reload (post-merge report)
+Reported: nutrition and blood sections don't snap in like everything else.
+
+- **Nutrition — real persistent bug, fixed.** `NutritionTodayViewModel.load()` was
+  imperative (`loading=true` → one-shot `repository.day()`, no cache seed), so the
+  Today screen spun on every open; and `cachedDay()` returned null for an empty day,
+  so the dashboard nutrition card never seeded either. Fixes: (a) `cachedDay()` now
+  returns the mirror-assembled day even when empty (an empty day is real data, not a
+  reason to spin); (b) `load()` seeds instantly from `cachedDay()` and only shows the
+  spinner when nothing is cached (pre-first-sync), revalidating via `day()` and
+  keeping the cached day on error. The dashboard nutrition card (which already calls
+  `cachedToday()`) now seeds because `cachedDay` no longer returns null.
+- **Blood — already on the reactive architecture; left as-is.** `BloodOverviewViewModel`
+  and `DashboardBloodViewModel` already read the Room mirror reactively
+  (`combine(observeReadings(), observeReports())`), so they snap as soon as the mirror
+  has data. The dashboard `BloodPanel` shows "No blood markers yet" (not a spinner)
+  while empty. Any first-launch-after-update delay is the background backfill of
+  older blood readings (blood tests are infrequent, so little/none falls in the
+  14-day initial-sync window) populating the mirror — it self-heals on the next sync
+  and snaps on subsequent launches. No code change; changing the initial `Loading`
+  would also break `BloodOverviewViewModelTest`'s loading-then-ready contract.
+
 ## Scope decision — reactive UI-state hygiene (#8)
 The primary "open app → see data" surfaces are fixed (launch, dashboard,
 medications). The other list/overview screens (blood, body-composition, workouts
