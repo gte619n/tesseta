@@ -195,13 +195,19 @@ class NutritionTodayViewModel @Inject constructor(
     }
 
     private fun load(date: LocalDate) {
-        // Stale-while-revalidate: only show the full-screen spinner when we have
-        // nothing to show for this date yet. A same-date reload (e.g. resuming
-        // after logging a barcode scan) keeps the current day on screen and swaps
-        // in the fresh totals when they arrive — no flicker.
-        val quiet = _state.value.day != null && _state.value.date == date
-        _state.update { it.copy(loading = !quiet, date = date, error = null) }
+        // offline-fix — cache-first, revalidate in the background. If we're already
+        // showing this date, stay quiet (stale-while-revalidate). Otherwise seed
+        // INSTANTLY from the mirror-only cachedDay so the day snaps in with no
+        // spinner; the full-screen loader now shows only when there's genuinely
+        // nothing cached yet (i.e. before the first sync).
+        val sameDateShown = _state.value.day != null && _state.value.date == date
         viewModelScope.launch {
+            if (!sameDateShown) {
+                val cached = runCatching { repository.cachedDay(date.format(ISO_DATE)) }.getOrNull()
+                _state.update { it.copy(date = date, day = cached, loading = cached == null, error = null) }
+            } else {
+                _state.update { it.copy(date = date, error = null) }
+            }
             try {
                 val day = repository.day(date.format(ISO_DATE))
                 _state.update { it.copy(loading = false, isRefreshing = false, day = day, error = null) }
@@ -211,7 +217,9 @@ class NutritionTodayViewModel @Inject constructor(
                     it.copy(
                         loading = false,
                         isRefreshing = false,
-                        error = e.message ?: "Failed to load nutrition",
+                        // Keep any cached/seeded day on screen; only surface the
+                        // error when we have nothing to show.
+                        error = if (it.day == null) (e.message ?: "Failed to load nutrition") else null,
                     )
                 }
             }
