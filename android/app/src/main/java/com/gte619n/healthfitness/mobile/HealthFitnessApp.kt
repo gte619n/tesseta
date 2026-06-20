@@ -9,6 +9,7 @@ import coil.ImageLoaderFactory
 import com.gte619n.healthfitness.data.reminders.ReminderEngine
 import com.gte619n.healthfitness.data.reminders.ReminderPlanWorker
 import com.gte619n.healthfitness.data.reminders.ReminderReplanCoordinator
+import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,13 @@ class HealthFitnessApp : Application(), ImageLoaderFactory, Configuration.Provid
     @Inject
     lateinit var reminderReplanCoordinator: dagger.Lazy<ReminderReplanCoordinator>
 
+    // offline-fix: resolve the cached auth session as early as possible (before the
+    // Activity's first composition) so a returning user is already SignedIn by the
+    // time the UI draws — no launch-time Loading flash. @Singleton, shared with
+    // MainActivity. bootstrapOnce() is idempotent.
+    @Inject
+    lateinit var authCoordinator: AuthCoordinator
+
     // App-lifetime scope for fire-and-forget startup work (reminder replan).
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -60,6 +68,9 @@ class HealthFitnessApp : Application(), ImageLoaderFactory, Configuration.Provid
         // IMPL-16 Part A: re-arm the medication-reminder alarm chain on every
         // app start (cheap mirror read; quietly plans nothing when signed out)
         // and keep the ~12h safety-net replan registered.
+        // offline-fix: kick the auth bootstrap first (and on its own launch) so the
+        // cached session resolves ASAP, independent of the reminder work below.
+        appScope.launch { runCatching { authCoordinator.bootstrapOnce() } }
         appScope.launch {
             runCatching { ReminderPlanWorker.register(WorkManager.getInstance(this@HealthFitnessApp)) }
             runCatching { reminderEngine.get().replan() }

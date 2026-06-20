@@ -3,12 +3,14 @@ package com.gte619n.healthfitness.mobile
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -48,11 +50,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+// offline-fix: upper bound on how long the cold-start splash is held waiting for
+// the cached auth session to resolve. The common (returning-user) path resolves in
+// a few ms; this only bounds the rare blocking silent-refresh path so the splash
+// can never appear stuck.
+private const val MAX_SPLASH_HOLD_MS = 1500L
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     // Application-scoped auth state owner (Hilt @Singleton). Survives activity
-    // recreation; bootstrapped below on each onCreate (idempotent).
+    // recreation; bootstrapped from HealthFitnessApp.onCreate (offline-fix) so the
+    // cached session is usually resolved before the first composition.
     @Inject lateinit var authCoordinator: AuthCoordinator
 
     // IMPL-AND-20 (Phase 6): post-sign-in token registration (D18) + the first-run
@@ -76,11 +85,22 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        // offline-fix: hold the system splash (app icon on the brand canvas) until
+        // the cached auth session resolves out of AuthState.Loading. This replaces
+        // the launch-time sign-in flash: a returning user sees the splash, then the
+        // dashboard — never the SignInScreen. The bootstrap itself is kicked from
+        // HealthFitnessApp.onCreate, so it's usually already resolving by now.
+        // Capped at MAX_SPLASH_HOLD_MS so a pathologically slow refresh (the rare
+        // signed-in-but-no-access-token path) can't wedge the splash on screen.
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        val splashStart = SystemClock.elapsedRealtime()
+        splash.setKeepOnScreenCondition {
+            authCoordinator.state.value is AuthState.Loading &&
+                SystemClock.elapsedRealtime() - splashStart < MAX_SPLASH_HOLD_MS
+        }
         enableEdgeToEdge()
         observeFoldState()
-
-        lifecycleScope.launch { authCoordinator.bootstrap() }
 
         setContent {
             HealthFitnessTheme {
@@ -152,13 +172,18 @@ private fun AppRoot(
 
     when (state) {
         is AuthState.SignedIn -> SignedInRoot(
+            coordinator = coordinator,
             widthClass = widthClass,
             tokenRegistration = tokenRegistration,
             firstSyncGate = firstSyncGate,
             sessionBootstrap = sessionBootstrap,
             sessionLauncher = sessionLauncher,
         )
-        AuthState.Loading -> SignInScreen(state = state, onSignIn = {})
+        // offline-fix: while the cached session resolves, the system splash is still
+        // on screen (held in onCreate) — render nothing rather than the SignInScreen
+        // so a returning user never sees a sign-in flash. The Surface canvas shows
+        // through in the rare case the splash has already timed out.
+        AuthState.Loading -> Unit
         else -> SignInScreen(
             state = state,
             onSignIn = { scope.launch { coordinator.interactiveSignIn(context) } },
@@ -176,17 +201,28 @@ private fun AppRoot(
  * registration (D18) and the first-run sync gate (D14) exactly once per sign-in,
  * showing the blocking "Setting up…" screen only for a fresh sign-in; returning
  * users (who already have a full sync) drop straight to the dashboard.
+ *
+ * offline-fix: the "do we need to gate?" decision now reads a cheap boolean from
+ * the auth DataStore ([AuthCoordinator.isFirstSyncComplete]) instead of opening the
+ * SQLCipher DB to inspect `sync_state.lastFullSyncAt`. A returning user therefore
+ * drops to the dashboard WITHOUT building the encrypted DB on the visible path —
+ * that build (and the backfill scheduling) happens lazily in the background. The
+ * encrypted DB is only opened on the launch path for a genuine first run (where we
+ * gate anyway) or a one-time upgrade from a pre-flag build.
  */
 @Composable
 private fun SignedInRoot(
+    coordinator: AuthCoordinator,
     widthClass: WindowWidthSizeClass,
     tokenRegistration: TokenRegistration,
     firstSyncGate: dagger.Lazy<FirstSyncGate>,
     sessionBootstrap: dagger.Lazy<WorkoutSessionBootstrap>,
     sessionLauncher: dagger.Lazy<WorkoutSessionForegroundLauncher>,
 ) {
-    // gateDecided: null until needsFirstSync() resolves; then false (released) or
-    // true (blocking initial sync in flight).
+    // gating: null while the (cheap) decision is in flight, true while a genuine
+    // first-run sync blocks the UI, false once released to the dashboard. The null
+    // window renders nothing (canvas) — NOT the "Setting up…" screen — so a
+    // returning user never flashes the first-run copy.
     var gating by remember { mutableStateOf<Boolean?>(null) }
 
     LaunchedEffect(Unit) {
@@ -200,21 +236,30 @@ private fun SignedInRoot(
         // repository opens the SQLCipher store.
         launch(Dispatchers.IO) { runCatching { sessionLauncher.get().run() } }
 
-        // Resolve the gate (and thus build the SQLCipher DB: loadLibs + Keystore
-        // crypto) OFF the main thread — never during onCreate injection.
-        val gate = withContext(Dispatchers.IO) { firstSyncGate.get() }
-
-        // A fresh sign-in blocks on a brief, bounded initial sync; a returning
-        // user (already has a full sync) is released immediately.
-        if (gate.needsFirstSync()) {
-            gating = true
-            gate.runInitialSync()
+        // Cheap, no-SQLCipher flag read decides the gate.
+        if (coordinator.isFirstSyncComplete()) {
+            // Returning user: release immediately. Build the gate + schedule the
+            // background sync OFF the visible path (this is what opens the DB).
+            gating = false
+            launch(Dispatchers.IO) {
+                runCatching { firstSyncGate.get().scheduleBackfill() }
+            }
         } else {
+            // Flag not set: either a genuine first run, or a one-time upgrade from a
+            // pre-flag build that already has data. Resolve it via the gate (which
+            // opens the DB — acceptable here: we're either gating anyway, or paying
+            // a one-time upgrade cost). Only a true first run shows "Setting up…".
+            val gate = withContext(Dispatchers.IO) { firstSyncGate.get() }
+            if (withContext(Dispatchers.IO) { gate.needsFirstSync() }) {
+                gating = true
+                gate.runInitialSync()
+            } else {
+                gating = false
+            }
+            gate.markFirstSyncComplete()
+            gate.scheduleBackfill()
             gating = false
         }
-        // Always schedule the lazy backfill + periodic floor after the gate.
-        gate.scheduleBackfill()
-        gating = false
 
         // ADR-0012 Decision 4: after the UI is released, finalize/discard any
         // stale workout drafts and register the periodic sweep. Off the main
@@ -224,13 +269,14 @@ private fun SignedInRoot(
         }
     }
 
-    if (gating != false) {
-        // null (deciding) or true (gating) — both show the brief setup screen.
-        // The decide step is a single fast Room read, so a returning user only
-        // flashes this for a frame before dropping to the dashboard.
-        SettingUpScreen()
-    } else {
-        AppNavHost(widthClass)
+    when (gating) {
+        // Genuine first run only — the bounded initial sync is in flight.
+        true -> SettingUpScreen()
+        // Released to the app.
+        false -> AppNavHost(widthClass)
+        // Deciding (cheap flag read / one-time DB probe): render nothing. The
+        // Surface canvas shows through; no "Setting up…" copy for returning users.
+        null -> Unit
     }
 }
 

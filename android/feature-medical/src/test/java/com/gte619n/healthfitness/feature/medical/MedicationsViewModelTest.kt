@@ -1,12 +1,15 @@
 package com.gte619n.healthfitness.feature.medical
 
 import app.cash.turbine.test
+import com.gte619n.healthfitness.data.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import com.gte619n.healthfitness.feature.medical.list.MedicationsUiState
 import com.gte619n.healthfitness.feature.medical.list.MedicationsViewModel
 import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -28,15 +31,15 @@ class MedicationsViewModelTest {
             ),
         )
         val vm = MedicationsViewModel(repo)
-        vm.refresh()
 
         vm.state.test {
+            // Brief initial Loading, then the reactive mirror emission.
             assertEquals(MedicationsUiState.Loading, awaitItem())
-            advanceUntilIdle()
             val ready = awaitItem() as MedicationsUiState.Ready
             assertEquals(1, ready.active.size)
             assertEquals(1, ready.discontinued.size)
             assertEquals("a", ready.active.first().medicationId)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -44,27 +47,32 @@ class MedicationsViewModelTest {
     fun `error path surfaces message`() = runTest {
         val repo = fakeMedicationRepository(listError = RuntimeException("boom"))
         val vm = MedicationsViewModel(repo)
-        vm.refresh()
 
         vm.state.test {
             assertEquals(MedicationsUiState.Loading, awaitItem())
-            advanceUntilIdle()
             val error = awaitItem() as MedicationsUiState.Error
             assertTrue(error.message.contains("boom"))
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `refresh reloads`() = runTest {
-        val repo = fakeMedicationRepository(meds = listOf(sampleMedication("a")))
+    fun `reactive stream reflects mirror updates`() = runTest {
+        // A live mirror stream: pushing a new value updates the UI in place, with no
+        // Loading reset — the offline-first behaviour the screen relies on.
+        val meds = MutableStateFlow(listOf(sampleMedication("a")))
+        val repo = mockk<MedicationRepository>()
+        every { repo.observe() } returns meds
+        coEvery { repo.refresh() } returns Unit
         val vm = MedicationsViewModel(repo)
-        advanceUntilIdle()
 
-        coEvery { repo.list(any()) } returns listOf(sampleMedication("a"), sampleMedication("c"))
-        vm.refresh()
-        advanceUntilIdle()
+        vm.state.test {
+            assertEquals(MedicationsUiState.Loading, awaitItem())
+            assertEquals(1, (awaitItem() as MedicationsUiState.Ready).active.size)
 
-        val ready = vm.state.value as MedicationsUiState.Ready
-        assertEquals(2, ready.active.size)
+            meds.value = listOf(sampleMedication("a"), sampleMedication("c"))
+            assertEquals(2, (awaitItem() as MedicationsUiState.Ready).active.size)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

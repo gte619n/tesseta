@@ -122,6 +122,18 @@ class NutritionRepository @Inject constructor(
     }
 
     /**
+     * offline-fix: pure local (mirror-only) read of a day — never hits the network.
+     * Used to seed the dashboard's nutrition card instantly on a cold start. Returns
+     * null when nothing is mirrored for the date (no meals and no target) so the
+     * caller can leave the card on its loading state until the first sync lands.
+     */
+    suspend fun cachedDay(date: String): NutritionDay? {
+        if (support.killSwitchOn()) return null
+        val day = assembleDay(date)
+        return if (day.meals.isEmpty() && day.target == null) null else day
+    }
+
+    /**
      * Force this date's entries + target to be re-pulled from the network into
      * the mirror, even when the date already has rows. Photo capture creates the
      * ANALYZING entry server-side only (multipart, network path), so without this
