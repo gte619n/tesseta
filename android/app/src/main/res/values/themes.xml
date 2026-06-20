@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.HealthFitness" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Launcher/splash theme (androidx.core:core-splashscreen). The app's
+         windowBackground is the brand canvas so the cold-start window matches the
+         app surface (no white flash), and MainActivity calls installSplashScreen()
+         + setKeepOnScreenCondition to hold this splash until the cached auth
+         session resolves — so a returning user never sees the sign-in screen flash
+         on launch. installSplashScreen() swaps to postSplashScreenTheme below. -->
+    <style name="Theme.HealthFitness" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.HealthFitness.Main</item>
+    </style>
+
+    <!-- The real app theme applied once the splash is dismissed. -->
+    <style name="Theme.HealthFitness.Main" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

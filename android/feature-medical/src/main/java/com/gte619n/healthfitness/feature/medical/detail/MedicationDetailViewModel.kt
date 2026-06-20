@@ -74,13 +74,26 @@ class MedicationDetailViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _state.value = MedicationDetailUiState.Loading
         viewModelScope.launch {
+            // offline-fix: seed from the Room mirror instantly (no spinner) when we
+            // have nothing shown yet, so opening a medication shows the last-synced
+            // detail immediately; then revalidate from the network to graft on the
+            // pull-only history (D9). A network failure keeps the cached detail on
+            // screen — only a cold open with nothing mirrored shows the spinner/error.
+            if (_state.value !is MedicationDetailUiState.Ready) {
+                runCatching { medications.cachedDetail(medicationId) }.getOrNull()?.let { cached ->
+                    if (_state.value !is MedicationDetailUiState.Ready) {
+                        _state.value = MedicationDetailUiState.Ready(cached)
+                    }
+                }
+            }
             runCatching { medications.get(medicationId) }
                 .onSuccess { _state.value = MedicationDetailUiState.Ready(it) }
                 .onFailure {
-                    _state.value =
-                        MedicationDetailUiState.Error(it.message ?: "Could not load medication")
+                    if (_state.value !is MedicationDetailUiState.Ready) {
+                        _state.value =
+                            MedicationDetailUiState.Error(it.message ?: "Could not load medication")
+                    }
                 }
         }
     }
