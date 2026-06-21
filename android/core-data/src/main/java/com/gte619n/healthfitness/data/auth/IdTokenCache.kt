@@ -32,6 +32,13 @@ class IdTokenCache(private val context: Context) {
     private val keyRefreshExpiresAt = longPreferencesKey("refresh_expires_at")
     private val keyHasSignedIn = booleanPreferencesKey("has_signed_in")
 
+    // offline-fix: the first-run sync gate flag lives in this (plain, already-open
+    // at launch) auth DataStore — NOT in the SQLCipher mirror — so the launch path
+    // can decide whether to show the "Setting up…" gate WITHOUT building the
+    // encrypted DB (loadLibs + Keystore crypto) on the critical path. Cleared with
+    // the rest of the session on sign-out, so a new sign-in re-gates correctly.
+    private val keyFirstSyncComplete = booleanPreferencesKey("first_sync_complete")
+
     suspend fun read(): Snapshot {
         val prefs = context.authStore.data.first()
         return Snapshot(
@@ -65,6 +72,20 @@ class IdTokenCache(private val context: Context) {
     }
 
     fun hasSignedInFlow() = context.authStore.data.map { it[keyHasSignedIn] ?: false }
+
+    /**
+     * offline-fix: whether the one-time first-run sync has completed for this
+     * signed-in session. Read on the launch path (cheap, no SQLCipher) to decide
+     * whether the "Setting up…" gate is needed; a returning user reads `true` here
+     * and drops straight to the dashboard.
+     */
+    suspend fun isFirstSyncComplete(): Boolean =
+        context.authStore.data.first()[keyFirstSyncComplete] ?: false
+
+    /** Latch the first-sync-complete flag (idempotent). */
+    suspend fun setFirstSyncComplete() {
+        context.authStore.edit { prefs -> prefs[keyFirstSyncComplete] = true }
+    }
 
     data class Snapshot(
         val idToken: String?,

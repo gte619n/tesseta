@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="seed">#3E6F4E</color>
+    <!-- Brand canvas (Hf.colors.canvas = 0xFFF0EBE0). Used as the splash window
+         background so the cold-start splash matches the app surface — no white
+         flash before Compose draws. -->
+    <color name="splash_background">#F0EBE0</color>
 </resources>

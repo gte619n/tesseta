@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.mobile.sync
 
+import com.gte619n.healthfitness.data.auth.IdTokenCache
 import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.sync.SyncEngine
 import com.gte619n.healthfitness.data.sync.SyncFlags
@@ -49,6 +50,10 @@ class FirstSyncGate @Inject constructor(
     private val syncEngine: SyncEngine,
     private val scheduler: SyncScheduler,
     private val syncFlags: SyncFlags,
+    // offline-fix: latch the cheap launch-path flag once the first sync lands so
+    // subsequent launches never construct this gate (and thus the SQLCipher DB) on
+    // the visible path.
+    private val idTokenCache: IdTokenCache,
 ) {
 
     /** True ⇒ a fresh sign-in that must block on [runInitialSync] before the UI. */
@@ -58,6 +63,14 @@ class FirstSyncGate @Inject constructor(
         if (syncFlags.isKillSwitchOn()) return false
         return syncStateDao.get()?.lastFullSyncAt == null
     }
+
+    /**
+     * offline-fix: latch the cheap `first_sync_complete` flag in the auth DataStore
+     * so the next launch decides the gate WITHOUT opening the SQLCipher DB. Called
+     * after the gate has resolved (either a fresh initial sync ran, or a returning
+     * user upgrading from a pre-flag build was found to already have data).
+     */
+    suspend fun markFirstSyncComplete() = idTokenCache.setFirstSyncComplete()
 
     /**
      * Brief blocking initial sync (D14, #37): a **date-windowed** pull bounding the

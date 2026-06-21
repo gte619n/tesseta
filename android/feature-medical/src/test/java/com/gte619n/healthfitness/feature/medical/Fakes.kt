@@ -20,7 +20,9 @@ import com.gte619n.healthfitness.domain.medications.TodaysDose
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.flow
 import java.time.LocalDate
 
 internal fun sampleDrug(name: String = "Testosterone Cypionate") = Drug(
@@ -81,6 +83,12 @@ internal fun fakeMedicationRepository(
     listError: Throwable? = null,
 ): MedicationRepository {
     val repo = mockk<MedicationRepository>()
+    // offline-fix: the list screen now reads the reactive mirror stream; partition
+    // happens in the ViewModel, so the fake just emits the seed list (or throws).
+    every { repo.observe() } answers {
+        if (listError != null) flow { throw listError } else MutableStateFlow(meds)
+    }
+    coEvery { repo.refresh() } returns Unit
     coEvery { repo.list(any()) } answers {
         listError?.let { throw it }
         val status = firstArg<MedicationStatus?>()
@@ -88,6 +96,10 @@ internal fun fakeMedicationRepository(
     }
     coEvery { repo.get(any()) } answers {
         MedicationDetail(meds.first { it.medicationId == firstArg<String>() }, emptyList())
+    }
+    coEvery { repo.cachedDetail(any()) } answers {
+        meds.firstOrNull { it.medicationId == firstArg<String>() }
+            ?.let { MedicationDetail(it, emptyList()) }
     }
     coEvery { repo.create(any()) } returns sampleMedication()
     coEvery { repo.update(any(), any()) } returns sampleMedication()

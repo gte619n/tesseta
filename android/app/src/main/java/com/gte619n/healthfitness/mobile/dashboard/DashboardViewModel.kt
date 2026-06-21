@@ -164,48 +164,99 @@ class DashboardViewModel @Inject constructor(
     // can settle the whole batch before deciding whether to stamp the TTL.
     // Retry methods ignore the result; they are never TTL-gated.
     //
-    // Stale-while-revalidate: a loader only drops to CardState.Loading when it has
-    // no data yet (first load, or recovering from an error). Once a card is Loaded,
-    // a resume-driven refresh keeps the current values on screen and swaps in the
-    // new data when it arrives — no spinner flash, which is what made resuming the
-    // dashboard read as sluggish / "not refreshing".
+    // offline-fix — cache-first, revalidate in the background: a loader first seeds
+    // the card from the repository's local-only cache (Room mirror / DataStore) when
+    // it has no data yet, so a cold open shows the last-synced value INSTANTLY with
+    // no spinner, then it revalidates from the network. A network failure keeps the
+    // cached (or already-Loaded) value on screen and only surfaces an Error when
+    // there was nothing to show — so the only blocking loader left is the genuine
+    // first sync (no cache yet), which is gated separately by SettingUpScreen. This
+    // also subsumes the prior stale-while-revalidate behaviour for resume refreshes.
     private fun loadBodyComposition() = viewModelScope.async {
-        if (_ui.value.bodyComposition !is CardState.Loaded) _ui.update { it.copy(bodyComposition = CardState.Loading) }
+        if (_ui.value.bodyComposition !is CardState.Loaded) {
+            runCatching { bodyComp.cachedRecent() }.getOrNull()?.let { c ->
+                if (_ui.value.bodyComposition !is CardState.Loaded) {
+                    _ui.update { it.copy(bodyComposition = CardState.Loaded(c)) }
+                }
+            }
+        }
         runCatching { bodyComp.loadRecent() }
             .onSuccess { d -> _ui.update { it.copy(bodyComposition = CardState.Loaded(d)) } }
-            .onFailure { t -> _ui.update { it.copy(bodyComposition = CardState.Error("Couldn't load weight", t)) } }
+            .onFailure { t ->
+                if (_ui.value.bodyComposition !is CardState.Loaded) {
+                    _ui.update { it.copy(bodyComposition = CardState.Error("Couldn't load weight", t)) }
+                }
+            }
             .isSuccess
     }
 
     private fun loadDailyMetrics() = viewModelScope.async {
-        if (_ui.value.dailyMetrics !is CardState.Loaded) _ui.update { it.copy(dailyMetrics = CardState.Loading) }
+        if (_ui.value.dailyMetrics !is CardState.Loaded) {
+            val cached = runCatching { dailyMetrics.cachedRecent() }.getOrNull()
+            if (!cached.isNullOrEmpty() && _ui.value.dailyMetrics !is CardState.Loaded) {
+                _ui.update { it.copy(dailyMetrics = CardState.Loaded(cached)) }
+            }
+        }
         runCatching { dailyMetrics.loadRecent() }
             .onSuccess { d -> _ui.update { it.copy(dailyMetrics = CardState.Loaded(d)) } }
-            .onFailure { t -> _ui.update { it.copy(dailyMetrics = CardState.Error("Couldn't load metrics", t)) } }
+            .onFailure { t ->
+                if (_ui.value.dailyMetrics !is CardState.Loaded) {
+                    _ui.update { it.copy(dailyMetrics = CardState.Error("Couldn't load metrics", t)) }
+                }
+            }
             .isSuccess
     }
 
     private fun loadBlood() = viewModelScope.async {
-        if (_ui.value.blood !is CardState.Loaded) _ui.update { it.copy(blood = CardState.Loading) }
+        if (_ui.value.blood !is CardState.Loaded) {
+            val cached = runCatching { blood.cachedDashboardMarkers() }.getOrNull()
+            if (!cached.isNullOrEmpty() && _ui.value.blood !is CardState.Loaded) {
+                _ui.update { it.copy(blood = CardState.Loaded(cached)) }
+            }
+        }
         runCatching { blood.loadDashboardMarkers() }
             .onSuccess { d -> _ui.update { it.copy(blood = CardState.Loaded(d)) } }
-            .onFailure { t -> _ui.update { it.copy(blood = CardState.Error("Couldn't load blood", t)) } }
+            .onFailure { t ->
+                if (_ui.value.blood !is CardState.Loaded) {
+                    _ui.update { it.copy(blood = CardState.Error("Couldn't load blood", t)) }
+                }
+            }
             .isSuccess
     }
 
     private fun loadDoses() = viewModelScope.async {
-        if (_ui.value.todaysDoses !is CardState.Loaded) _ui.update { it.copy(todaysDoses = CardState.Loading) }
+        if (_ui.value.todaysDoses !is CardState.Loaded) {
+            runCatching { doses.cachedToday() }.getOrNull()?.let { c ->
+                if (_ui.value.todaysDoses !is CardState.Loaded) {
+                    _ui.update { it.copy(todaysDoses = CardState.Loaded(c)) }
+                }
+            }
+        }
         runCatching { doses.loadToday() }
             .onSuccess { d -> _ui.update { it.copy(todaysDoses = CardState.Loaded(d)) } }
-            .onFailure { t -> _ui.update { it.copy(todaysDoses = CardState.Error("Couldn't load doses", t)) } }
+            .onFailure { t ->
+                if (_ui.value.todaysDoses !is CardState.Loaded) {
+                    _ui.update { it.copy(todaysDoses = CardState.Error("Couldn't load doses", t)) }
+                }
+            }
             .isSuccess
     }
 
     private fun loadNutrition() = viewModelScope.async {
-        if (_ui.value.nutrition !is CardState.Loaded) _ui.update { it.copy(nutrition = CardState.Loading) }
+        if (_ui.value.nutrition !is CardState.Loaded) {
+            runCatching { nutrition.cachedToday() }.getOrNull()?.let { c ->
+                if (_ui.value.nutrition !is CardState.Loaded) {
+                    _ui.update { it.copy(nutrition = CardState.Loaded(c)) }
+                }
+            }
+        }
         runCatching { nutrition.loadToday() }
             .onSuccess { d -> _ui.update { it.copy(nutrition = CardState.Loaded(d)) } }
-            .onFailure { t -> _ui.update { it.copy(nutrition = CardState.Error("Couldn't load nutrition", t)) } }
+            .onFailure { t ->
+                if (_ui.value.nutrition !is CardState.Loaded) {
+                    _ui.update { it.copy(nutrition = CardState.Error("Couldn't load nutrition", t)) }
+                }
+            }
             .isSuccess
     }
 

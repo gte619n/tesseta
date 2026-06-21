@@ -317,11 +317,22 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
         // the user's full history; refreshInto upserts it idempotently. (Mirrors
         // DashboardDailyMetricsRepositoryImpl, which refreshes on every call.)
         runCatching { fillFromNetwork() }
+        summaryFromRoom()
+    }
+
+    // offline-fix: local-only seed — the same Room read [loadRecent] serves, minus
+    // the network refresh, so the card shows the last-synced weight instantly.
+    override suspend fun cachedRecent(): WeightSummary? = withContext(io) {
+        if (support.killSwitchOn()) return@withContext null
+        summaryFromRoom()
+    }
+
+    private suspend fun summaryFromRoom(): WeightSummary? {
         val now = Instant.now()
         val from = now.minusSeconds(120L * 24 * 3600)
         val rows = dao.pointsInRange(from.toEpochMilli(), now.toEpochMilli())
             .mapNotNull { runCatching { dtoAdapter.fromJson(it.payloadJson) }.getOrNull() }
-        BodyCompositionMapper.toWeightSummary(rows, now)
+        return BodyCompositionMapper.toWeightSummary(rows, now)
     }
 
     private suspend fun fillFromNetwork() {
@@ -392,11 +403,21 @@ internal class DashboardDailyMetricsRepositoryImpl @Inject constructor(
                 },
             )
         }
+        metricsFromRoom(from)
+    }
+
+    // offline-fix: local-only seed — Room read without the network refresh.
+    override suspend fun cachedRecent(): List<DailyMetricPoint> = withContext(io) {
+        if (support.killSwitchOn()) return@withContext emptyList()
+        metricsFromRoom(LocalDate.now().minusDays(30))
+    }
+
+    private suspend fun metricsFromRoom(from: LocalDate): List<DailyMetricPoint> {
         val rows = dao.observeActive().first()
             .mapNotNull { runCatching { dtoAdapter.fromJson(it.payloadJson) }.getOrNull() }
             .filter { it.date >= from.format(dateFmt) }
             .sortedBy { it.date }
-        DailyMetricMapper.toDomain(rows)
+        return DailyMetricMapper.toDomain(rows)
     }
 }
 
@@ -422,13 +443,23 @@ internal class DashboardBloodMarkerRepositoryImpl @Inject constructor(
             return@withContext BloodMarkerSummaryMapper.toDashboardMarkers(api.bloodReadings())
         }
         if (dao.observeActive().first().isEmpty()) runCatching { fillFromNetwork() }
+        markersFromRoom()
+    }
+
+    // offline-fix: local-only seed — Room read without the cold-miss network fill.
+    override suspend fun cachedDashboardMarkers(): List<BloodMarkerSummary> = withContext(io) {
+        if (support.killSwitchOn()) return@withContext emptyList()
+        markersFromRoom()
+    }
+
+    private suspend fun markersFromRoom(): List<BloodMarkerSummary> {
         val now = LocalDate.now()
         val from = now.minusDays(365)
         val fromMillis = from.toEpochDay() * 86_400_000L
         val toMillis = now.toEpochDay() * 86_400_000L + 86_400_000L // inclusive of today
         val rows = dao.readingsInRange(fromMillis, toMillis)
             .mapNotNull { runCatching { dtoAdapter.fromJson(it.payloadJson) }.getOrNull() }
-        BloodMarkerSummaryMapper.toDashboardMarkers(rows)
+        return BloodMarkerSummaryMapper.toDashboardMarkers(rows)
     }
 
     private suspend fun fillFromNetwork() {
@@ -447,13 +478,26 @@ internal class DashboardBloodMarkerRepositoryImpl @Inject constructor(
     }
 }
 
+// offline-fix: today's doses are a server-derived projection (no syncable Room
+// entity), so — like the recent-activity feed — they get a single-slot DataStore
+// cache. Every successful load overwrites the cache; the dashboard seeds the card
+// from the cache instantly on a cold/offline open (only for the current day) and
+// then revalidates. Cleared on sign-out via SignOutSideEffects.
 internal class DashboardTodaysDosesRepositoryImpl @Inject constructor(
     private val api: DashboardApi,
+    private val cache: DashboardDosesCache,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : DashboardTodaysDosesRepository {
     override suspend fun loadToday(): List<TodaysDoseSummary> = withContext(io) {
         // Device-local date so the dashboard dose card resets on the user's day.
-        api.todaysDoses(LocalDate.now().toString()).map { it.toDomain() }
+        val today = LocalDate.now().toString()
+        val doses = api.todaysDoses(today).map { it.toDomain() }
+        cache.write(today, doses)
+        doses
+    }
+
+    override suspend fun cachedToday(): List<TodaysDoseSummary>? = withContext(io) {
+        cache.read(LocalDate.now().toString())
     }
 }
 
@@ -467,6 +511,11 @@ internal class DashboardNutritionRepositoryImpl @Inject constructor(
     override suspend fun loadToday(): NutritionDay = withContext(io) {
         // Device-local date so the card rolls over on the user's day.
         nutrition.day(LocalDate.now().toString())
+    }
+
+    // offline-fix: local-only seed — the mirror-backed day with no network.
+    override suspend fun cachedToday(): NutritionDay? = withContext(io) {
+        nutrition.cachedDay(LocalDate.now().toString())
     }
 }
 
@@ -507,6 +556,53 @@ class RecentActivityCache @Inject constructor(
 
     suspend fun clear() {
         context.recentActivityStore.edit { it.remove(key) }
+    }
+}
+
+private val Context.dashboardDosesStore by preferencesDataStore("hf-dashboard-doses")
+
+/**
+ * offline-fix: single-slot persistent cache for the dashboard "Today's doses" card.
+ *
+ * Today's doses are a server-derived projection (medication schedule × adherence)
+ * with no stable syncable entity to mirror in Room, so — like [RecentActivityCache]
+ * — they live in their own small DataStore. It holds only the latest day's list,
+ * tagged with the device-local date, so a cold/offline open renders the last-known
+ * doses instantly while a fresh pull runs. A cache from a previous day is ignored
+ * (returns null) so the card never shows yesterday's checklist.
+ *
+ * Cleared on sign-out via [com.gte619n.healthfitness.data.db.DbWipe]'s sibling hook
+ * (this DataStore is NOT the encrypted Room DB) to avoid leaking one account's
+ * doses to the next on a shared device.
+ */
+@Singleton
+class DashboardDosesCache @Inject constructor(
+    @ApplicationContext private val context: Context,
+    moshi: Moshi,
+) {
+    private val keyDate = stringPreferencesKey("date")
+    private val keyList = stringPreferencesKey("doses")
+    private val adapter = moshi.adapter<List<TodaysDoseSummary>>(
+        Types.newParameterizedType(List::class.java, TodaysDoseSummary::class.java),
+    )
+
+    /** Cached doses for [date], or null if the cache is empty or for another day. */
+    suspend fun read(date: String): List<TodaysDoseSummary>? {
+        val prefs = context.dashboardDosesStore.data.first()
+        if (prefs[keyDate] != date) return null
+        val json = prefs[keyList] ?: return null
+        return runCatching { adapter.fromJson(json) }.getOrNull()
+    }
+
+    suspend fun write(date: String, doses: List<TodaysDoseSummary>) {
+        context.dashboardDosesStore.edit {
+            it[keyDate] = date
+            it[keyList] = adapter.toJson(doses)
+        }
+    }
+
+    suspend fun clear() {
+        context.dashboardDosesStore.edit { it.clear() }
     }
 }
 

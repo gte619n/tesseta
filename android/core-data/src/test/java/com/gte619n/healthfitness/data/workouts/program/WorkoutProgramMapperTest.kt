@@ -103,7 +103,15 @@ class WorkoutProgramMapperTest {
                                                 primaryMuscles = listOf("quadriceps"),
                                                 formCues = listOf("Brace"),
                                                 demoFrames = listOf(
-                                                    DemoFrameDto("START", "https://x/a.jpg"),
+                                                    // Named args: DemoFrameDto gained
+                                                    // key/label/caption/order BEFORE
+                                                    // phase (IMPL-19), so positional
+                                                    // ("START", url) would bind to
+                                                    // key/label and leave imageUrl null.
+                                                    DemoFrameDto(
+                                                        phase = "START",
+                                                        imageUrl = "https://x/a.jpg",
+                                                    ),
                                                     DemoFrameDto(
                                                         phase = "MID",
                                                         imageUrl = null,
