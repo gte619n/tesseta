@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.feature.medical.add.AddMedicationScreen
 import com.gte619n.healthfitness.feature.medical.detail.MedicationDetailScreen
 import com.gte619n.healthfitness.feature.medical.list.MedicationsListScreen
 import com.gte619n.healthfitness.feature.medical.reminders.ReminderSettingsScreen
+import com.gte619n.healthfitness.feature.medical.today.TodaysDosesScreen
 
 /**
  * String-based Navigation-Compose routes for the medications feature. Mirrors
@@ -19,6 +20,9 @@ object MedicationRoutes {
     const val LIST = "medications"
     const val ADD = "medications/add"
     const val REMINDERS = "medications/reminders"
+
+    /** Today's-doses checklist (the medication-reminder notification target). */
+    const val TODAY = "medications/today"
 
     /** Build a concrete detail route for [id]. */
     fun detail(id: String): String = "medications/$id"
@@ -30,8 +34,8 @@ object MedicationRoutes {
 
     /**
      * IMPL-STAB Workstream F (item 4): deep-link URI a reminder notification taps
-     * into, landing on the medications dose checklist instead of app home. The
-     * matching `<intent-filter>` lives on `MainActivity`.
+     * into, landing on the [TODAY] dose checklist (per-med checkboxes) instead of
+     * app home. The matching `<intent-filter>` lives on `MainActivity`.
      */
     const val DEEP_LINK_DOSE_CHECKLIST = "healthfitness://medications/today"
 }
@@ -42,15 +46,25 @@ object MedicationRoutes {
  * [navController]. The detail/add routes share the same back-stack as the list.
  */
 fun NavGraphBuilder.medicationsGraph(navController: NavHostController) {
-    composable(
-        route = MedicationRoutes.LIST,
-        deepLinks = listOf(navDeepLink { uriPattern = MedicationRoutes.DEEP_LINK_DOSE_CHECKLIST }),
-    ) {
+    composable(route = MedicationRoutes.LIST) {
         MedicationsListScreen(
             onAdd = { navController.navigate(MedicationRoutes.ADD) },
             onMedicationClick = { id -> navController.navigate(MedicationRoutes.detail(id)) },
             onOpenReminders = { navController.navigate(MedicationRoutes.REMINDERS) },
             onBack = { navController.popBackStack() },
+        )
+    }
+
+    // Exact-string route (preferred over the `{medicationId}` pattern, like
+    // REMINDERS below). The medication-reminder notification deep-links here so
+    // the user lands on the per-med dose checklist, not the management list.
+    composable(
+        route = MedicationRoutes.TODAY,
+        deepLinks = listOf(navDeepLink { uriPattern = MedicationRoutes.DEEP_LINK_DOSE_CHECKLIST }),
+    ) {
+        TodaysDosesScreen(
+            onBack = { navController.popBackStack() },
+            onSeeAll = { navController.navigate(MedicationRoutes.LIST) },
         )
     }
 
