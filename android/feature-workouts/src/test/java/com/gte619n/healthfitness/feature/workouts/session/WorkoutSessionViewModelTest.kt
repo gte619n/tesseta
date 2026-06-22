@@ -141,8 +141,9 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
-    fun `finish flow shows the summary then enqueues completion and closes`() = runTest {
+    fun `finish flow shows the summary then enqueues completion and surfaces the recap`() = runTest {
         coEvery { repo.finish("p1", "s2") } returns Result.success(Unit)
+        coEvery { repo.fetchRecap("p1", "s2") } returns "Strong squats — nice work."
         val vm = vm()
         advanceUntilIdle()
         timers.startRest(90)
@@ -156,9 +157,36 @@ class WorkoutSessionViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { repo.finish("p1", "s2") }
-        assertTrue(vm.state.value.closed)
-        assertNull(vm.state.value.prompt)
+        // Finish lands on the recap summary (not closed yet); rest cleared.
+        val finished = vm.state.value
+        assertTrue(finished.completed)
+        assertFalse(finished.closed)
+        assertFalse(finished.recapLoading)
+        assertEquals("Strong squats — nice work.", finished.recap)
+        assertNull(finished.prompt)
         assertNull(timers.rest.value)
+
+        // Dismissing the recap summary pops the logger.
+        vm.dismissCompleted()
+        assertTrue(vm.state.value.closed)
+    }
+
+    @Test
+    fun `finish with no recap still completes and closes on dismiss`() = runTest {
+        coEvery { repo.finish("p1", "s2") } returns Result.success(Unit)
+        coEvery { repo.fetchRecap("p1", "s2") } returns null
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.confirmFinish()
+        advanceUntilIdle()
+
+        val state = vm.state.value
+        assertTrue(state.completed)
+        assertNull(state.recap)
+        assertFalse(state.recapLoading)
+        vm.dismissCompleted()
+        assertTrue(vm.state.value.closed)
     }
 
     @Test

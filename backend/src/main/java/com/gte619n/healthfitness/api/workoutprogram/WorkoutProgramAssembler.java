@@ -124,7 +124,7 @@ public class WorkoutProgramAssembler {
                 sw.programId(), sw.scheduledId(), sw.date(), sw.phaseId(), sw.dayId(), sw.dayLabel(),
                 sw.weekIndexInPhase(), sw.isDeload(), sw.locationId(),
                 gymNames.get(sw.locationId()), sw.status(), session,
-                sw.completedAt(), sw.durationSeconds()));
+                sw.completedAt(), sw.durationSeconds(), null));
         }
         return out;
     }

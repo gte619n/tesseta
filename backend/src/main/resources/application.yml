@@ -187,6 +187,13 @@ app:
     enabled: ${WORKOUT_PROGRAMS_ENABLED:true}
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${WORKOUT_PROGRAM_GEMINI_MODEL:gemini-3.1-pro-preview}
+  # IMPL-COACH: best-effort AI post-workout recap on the session-completion
+  # response. Uses gemini-3.5-flash (the approved general-work text model) via
+  # the shared client; absent without GEMINI_API_KEY, so the recap is simply
+  # null and completion is unaffected.
+  workout-coach:
+    enabled: ${WORKOUT_COACH_ENABLED:true}
+    gemini-model: ${WORKOUT_COACH_GEMINI_MODEL:gemini-3.5-flash}
   # One-time job (profile job-split-blocks) that rewrites the imported-history
   # program's flat sessions into warm-up/main/cool-down blocks. Strength is
   # placed deterministically; warm-up vs cool-down for mobility uses

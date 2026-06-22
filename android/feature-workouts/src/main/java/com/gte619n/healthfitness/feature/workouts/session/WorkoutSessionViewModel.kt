@@ -29,8 +29,16 @@ data class WorkoutSessionUiState(
     val draft: WorkoutSessionDraft? = null,
     val error: String? = null,
     val prompt: SessionPrompt? = null,
-    /** Set once finish/skip/discard succeeded; the route pops back. */
+    /** Set once skip/discard succeeded (and after the finish recap is dismissed); the route pops back. */
     val closed: Boolean = false,
+    /**
+     * IMPL-COACH — finish succeeded; show the post-workout recap summary (over
+     * the retained draft snapshot) before popping. [recap] is the best-effort AI
+     * coach note (null when unavailable); [recapLoading] covers the fetch.
+     */
+    val completed: Boolean = false,
+    val recap: String? = null,
+    val recapLoading: Boolean = false,
 )
 
 /**
@@ -124,10 +132,31 @@ class WorkoutSessionViewModel @Inject constructor(
 
     fun dismissPrompt() = _state.update { it.copy(prompt = null) }
 
-    /** Upload COMPLETED with all logged actuals and close (ADR-0012 D2/D5). */
-    fun confirmFinish() = close("Couldn't finish the workout") {
-        repository.finish(programId, scheduledId)
+    /**
+     * Upload COMPLETED with all logged actuals (ADR-0012 D2/D5), then surface
+     * the post-workout recap summary. The AI recap is fetched best-effort
+     * afterward (IMPL-COACH) — it never blocks finishing, and the summary shows
+     * with or without it. [dismissCompleted] pops the route.
+     */
+    fun confirmFinish() {
+        viewModelScope.launch {
+            repository.finish(programId, scheduledId)
+                .onSuccess {
+                    timers.clearRest()
+                    _state.update { it.copy(prompt = null, completed = true, recapLoading = true) }
+                    val recap = repository.fetchRecap(programId, scheduledId)
+                    _state.update { it.copy(recap = recap, recapLoading = false) }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(prompt = null, error = e.message ?: "Couldn't finish the workout")
+                    }
+                }
+        }
     }
+
+    /** Dismiss the post-finish recap summary and pop the logger. */
+    fun dismissCompleted() = _state.update { it.copy(closed = true) }
 
     /** Upload SKIPPED (clears actuals, IMPL-17 D4) and close. */
     fun confirmSkip() = close("Couldn't skip the session") {

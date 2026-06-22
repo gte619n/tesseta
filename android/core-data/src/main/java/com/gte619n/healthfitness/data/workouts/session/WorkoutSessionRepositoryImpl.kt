@@ -23,6 +23,7 @@ import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepositor
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -163,6 +164,20 @@ class WorkoutSessionRepositoryImpl(
     override suspend fun discard(programId: String, scheduledId: String): Result<Unit> =
         withContext(io) {
             runCatching { draftDao.delete(programId, scheduledId) }
+        }
+
+    override suspend fun fetchRecap(programId: String, scheduledId: String): String? =
+        withContext(io) {
+            // finish() enqueues the completion through the outbox, so the server
+            // may still see the session as PLANNED (recap == null) for a moment
+            // after we're called; retry a few times before giving up. Strictly
+            // best-effort — any network error resolves to null.
+            repeat(RECAP_FETCH_ATTEMPTS) { attempt ->
+                val recap = runCatching { api.sessionRecap(programId, scheduledId).recap }.getOrNull()
+                if (!recap.isNullOrBlank()) return@withContext recap.trim()
+                if (attempt < RECAP_FETCH_ATTEMPTS - 1) delay(RECAP_RETRY_DELAY_MILLIS)
+            }
+            null
         }
 
     // ---- IMPL-17 Q3: "restore into logger" recovery for parked completions ----
@@ -469,5 +484,9 @@ class WorkoutSessionRepositoryImpl(
         const val STALE_AFTER_MILLIS: Long = 24L * 60 * 60 * 1000
 
         private const val EMPTY_LOGGED_JSON = "[]"
+
+        /** IMPL-COACH: poll the recap endpoint a few times while the outbox replays. */
+        private const val RECAP_FETCH_ATTEMPTS = 3
+        private const val RECAP_RETRY_DELAY_MILLIS = 1500L
     }
 }
