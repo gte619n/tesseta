@@ -12,6 +12,7 @@ import type {
   DescribedMeal,
   LogDescribedMealBody,
   RelogBody,
+  Meal,
 } from "./types/nutrition";
 
 // Server-only HTTP helpers for the Nutrition module (IMPL-13).
@@ -154,9 +155,14 @@ export function describeMealAsync(
  * the add-flow's one-tap "recent meals" list. Each row carries `date` + ids
  * needed to re-log it via {@link relogEntry}.
  */
-export function getRecentMeals(days = 14, limit = 20): Promise<Entry[]> {
+export function getRecentMeals(
+  days = 14,
+  limit = 20,
+  meal?: Meal,
+): Promise<Entry[]> {
+  const mealParam = meal ? `&meal=${meal}` : "";
   return apiJson<Entry[]>(
-    `/api/me/nutrition/recent-meals?days=${days}&limit=${limit}`,
+    `/api/me/nutrition/recent-meals?days=${days}&limit=${limit}${mealParam}`,
   );
 }
 

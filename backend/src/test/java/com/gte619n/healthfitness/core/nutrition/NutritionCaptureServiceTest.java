@@ -185,6 +185,9 @@ class NutritionCaptureServiceTest {
                 .limit(limit)
                 .toList();
         }
+        @Override public List<CatalogFood> searchByTokens(List<String> queryWords, int limit) {
+            return List.of();
+        }
         @Override public Optional<CatalogFood> findByBarcode(String code) { return Optional.empty(); }
         @Override public List<CatalogFood> findByImageStatus(FoodImageStatus status, int limit) {
             return foods.stream().filter(f -> f.imageStatus() == status).limit(limit).toList();

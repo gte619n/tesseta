@@ -6,6 +6,7 @@ import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 import com.gte619n.healthfitness.core.nutrition.CatalogFood;
 import com.gte619n.healthfitness.core.nutrition.FoodCatalogRepository;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
+import com.gte619n.healthfitness.core.nutrition.FoodSearchTokens;
 import com.gte619n.healthfitness.core.nutrition.FoodSource;
 import com.gte619n.healthfitness.core.nutrition.FoodStatus;
 import com.gte619n.healthfitness.core.nutrition.Macros;
@@ -20,9 +21,11 @@ import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.SetOptions;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
@@ -60,6 +63,37 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
             .limit(limit)
             .get()).getDocuments();
         return docs.stream().map(FirestoreFoodCatalogRepository::toFood).toList();
+    }
+
+    @Override
+    public List<CatalogFood> searchByTokens(List<String> queryWords, int limit) {
+        if (queryWords == null || queryWords.isEmpty()) {
+            return List.of();
+        }
+        // Firestore allows a single array-contains per query, so we filter on the
+        // most selective (longest) word, fetch a wider candidate page, then keep
+        // only docs whose tokens contain EVERY query word (the AND happens here).
+        String pivot = queryWords.stream()
+            .max(java.util.Comparator.comparingInt(String::length))
+            .orElse(queryWords.get(0));
+        List<QueryDocumentSnapshot> docs = await(collection()
+            .whereArrayContains("searchTokens", pivot)
+            .limit(Math.max(limit * 4, 40))
+            .get()).getDocuments();
+        List<CatalogFood> matches = new ArrayList<>();
+        for (QueryDocumentSnapshot doc : docs) {
+            if (!(doc.get("searchTokens") instanceof List<?> raw)) {
+                continue;
+            }
+            Set<Object> tokens = new HashSet<>(raw);
+            if (queryWords.stream().allMatch(tokens::contains)) {
+                matches.add(toFood(doc));
+                if (matches.size() >= limit) {
+                    break;
+                }
+            }
+        }
+        return matches;
     }
 
     @Override
@@ -106,6 +140,20 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
             .getDocuments().size();
     }
 
+    @Override
+    public int reindexSearchTokens() {
+        // The catalog is shared/global and modest in size, so a single scan +
+        // per-doc token update is fine. Idempotent: safe to re-run any time.
+        int count = 0;
+        for (QueryDocumentSnapshot doc : await(collection().get()).getDocuments()) {
+            List<String> tokens =
+                FoodSearchTokens.indexTokens(doc.getString("name"), doc.getString("brand"));
+            await(doc.getReference().update("searchTokens", tokens));
+            count++;
+        }
+        return count;
+    }
+
     private CollectionReference collection() {
         return firestore.collection(COLLECTION);
     }
@@ -114,6 +162,7 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
         Map<String, Object> body = new HashMap<>();
         body.put("name", f.name());
         body.put("nameLower", f.nameLower());
+        body.put("searchTokens", FoodSearchTokens.indexTokens(f.name(), f.brand()));
         body.put("brand", f.brand());
         body.put("barcode", f.barcode());
         body.put("category", f.category());
