@@ -81,18 +81,6 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
-        // Release signing is driven by env vars injected by Cloud Build via GCP Secret Manager.
-        // All four vars must be present for the config to be active; local builds that lack them
-        // produce an unsigned APK (same behaviour as before this block existed).
-        create("release") {
-            val keystorePath = System.getenv("ANDROID_RELEASE_KEYSTORE")
-            if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
-                storeFile = file(keystorePath)
-            }
-            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "upload"
-            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-        }
     }
 
     buildTypes {
@@ -105,10 +93,18 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            val releaseKeystorePath = System.getenv("ANDROID_RELEASE_KEYSTORE")
-            if (!releaseKeystorePath.isNullOrBlank() && file(releaseKeystorePath).exists()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            // Sign release with the SAME committed debug keystore as debug builds
+            // (one applicationId + one signing cert across every build, everywhere:
+            // local dev, CI, and the Cloud Build → Firebase App Distribution
+            // release). A new Firebase release then updates the installed app in
+            // place instead of failing with a signature mismatch that forces an
+            // uninstall/reinstall.
+            //
+            // Trade-off: android/debug.keystore is public-by-design (checked in,
+            // password "android"), so distributed builds are signed with a public
+            // key. Acceptable for internal-tester distribution; switch to a private
+            // upload key (Play App Signing) before any Play Store release.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
