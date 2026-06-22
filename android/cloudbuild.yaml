@@ -1,6 +1,7 @@
 steps:
-  # Pull release signing material + the WEB OAuth client ID (compiled into
-  # the APK via BuildConfig per android/app/build.gradle.kts).
+  # Pull the WEB OAuth client ID (compiled into the APK via BuildConfig per
+  # android/app/build.gradle.kts). Release builds are signed with the committed
+  # android/debug.keystore, so no signing secrets are fetched here.
   - id: fetch-secrets
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
@@ -8,17 +9,6 @@ steps:
       - -c
       - |
         set -euo pipefail
-        # --out-file writes raw bytes directly; needed for the binary
-        # PKCS12 keystore so gcloud's stdout codec can't mangle it.
-        gcloud secrets versions access latest \
-          --secret=android-release-keystore --project=$PROJECT_ID \
-          --out-file=/workspace/release.keystore
-        gcloud secrets versions access latest \
-          --secret=android-release-keystore-password --project=$PROJECT_ID \
-          --out-file=/workspace/keystore.password
-        gcloud secrets versions access latest \
-          --secret=android-release-key-password --project=$PROJECT_ID \
-          --out-file=/workspace/key.password
         gcloud secrets versions access latest \
           --secret=oauth-web-client-id --project=$PROJECT_ID \
           --out-file=/workspace/web-oauth-client-id
@@ -134,10 +124,6 @@ steps:
         # Build mounts /workspace with root ownership; rechown so gradle
         # can write into android/build/.
         sudo chown -R "$(id -u):$(id -g)" /workspace
-        export ANDROID_RELEASE_KEYSTORE=/workspace/release.keystore
-        export ANDROID_KEYSTORE_PASSWORD="$(cat /workspace/keystore.password)"
-        export ANDROID_KEY_ALIAS=upload
-        export ANDROID_KEY_PASSWORD="$(cat /workspace/key.password)"
         export WEB_OAUTH_CLIENT_ID="$(cat /workspace/web-oauth-client-id)"
         # Inject the version derived in the compute-version step (see
         # resolveVersionCode/resolveVersionName in app/build.gradle.kts).
