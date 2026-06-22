@@ -23,7 +23,7 @@ import type {
   LogDescribedMealBody,
   RelogBody,
 } from "@/lib/types/nutrition";
-import { MEALS } from "@/lib/types/nutrition";
+import { MEALS, mealForHour } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
 import { NutritionMeals } from "@/components/nutrition/NutritionMeals";
 import { PendingImageRefresher } from "@/components/nutrition/PendingImageRefresher";
@@ -108,11 +108,13 @@ export default async function NutritionPage(props: {
   const isToday = date === today();
 
   // Pre-fetch server-side (recents back the add modal's one-tap list; a
-  // failure just leaves the list empty — search/describe still work).
+  // failure just leaves the list empty — search/describe still work). Bias
+  // recents toward the meal the current hour implies, so the foods you're
+  // likely logging now float to the top (parity with Android).
   const [dayResult, target, recents] = await Promise.all([
     getDay(date).catch(() => null),
     getTarget(),
-    getRecentMeals().catch(() => []),
+    getRecentMeals(14, 20, mealForHour(new Date().getHours())).catch(() => []),
   ]);
 
   const day = dayResult
