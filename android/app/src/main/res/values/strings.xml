@@ -6,4 +6,10 @@
     <string name="workout_session_channel_name">Active workout</string>
     <string name="workout_session_channel_description">Timer and progress for the workout session in progress</string>
     <string name="workout_session_notification_title">Workout in progress</string>
+
+    <!-- IMPL-COACH: heads-up alert when a rest period ends. -->
+    <string name="workout_rest_alert_channel_name">Rest timer alerts</string>
+    <string name="workout_rest_alert_channel_description">Buzzes when a rest period ends so you can start your next set</string>
+    <string name="workout_rest_alert_title">Rest complete</string>
+    <string name="workout_rest_alert_text">Time for your next set</string>
 </resources>

@@ -24,6 +24,10 @@
     <string name="workout_session_summary_elapsed">Elapsed</string>
     <string name="workout_session_summary_sets">Sets logged</string>
     <string name="workout_session_summary_exercises">Exercises</string>
+    <string name="workout_session_complete_title">Workout complete</string>
+    <string name="workout_session_recap_label">Coach</string>
+    <string name="workout_session_recap_loading">Writing your recap…</string>
+    <string name="workout_session_done">Done</string>
     <string name="workout_session_skip">Skip session</string>
     <string name="workout_session_skip_title">Skip this session?</string>
     <string name="workout_session_skip_message">The session will be marked skipped and no sets are saved.</string>

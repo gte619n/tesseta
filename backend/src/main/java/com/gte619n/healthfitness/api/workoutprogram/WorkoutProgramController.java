@@ -37,6 +37,7 @@ public class WorkoutProgramController {
     private final WorkoutSessionCompletionService completion;
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
+    private final WorkoutSessionCoach coach;
     private final SyncChangeNotifier syncNotifier;
 
     public WorkoutProgramController(
@@ -46,6 +47,7 @@ public class WorkoutProgramController {
         WorkoutSessionCompletionService completion,
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
+        WorkoutSessionCoach coach,
         SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
@@ -54,6 +56,7 @@ public class WorkoutProgramController {
         this.completion = completion;
         this.validator = validator;
         this.assembler = assembler;
+        this.coach = coach;
         this.syncNotifier = syncNotifier;
     }
 
@@ -166,7 +169,10 @@ public class WorkoutProgramController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
         syncNotifier.changed(userId, null, "workoutPrograms/scheduled");
-        return assembler.scheduled(userId, List.of(updated)).get(0);
+        // IMPL-COACH: attach a best-effort AI recap to the completion response
+        // (transient — not persisted, null when the coach is unavailable).
+        ScheduledWorkoutResponse response = assembler.scheduled(userId, List.of(updated)).get(0);
+        return response.withAiRecap(coach.recapFor(response));
     }
 
     @GetMapping("/{programId}/calendar")
@@ -180,5 +186,28 @@ public class WorkoutProgramController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return assembler.scheduled(userId, schedule.calendar(userId, programId, from, to));
+    }
+
+    /**
+     * IMPL-COACH: best-effort AI recap for a completed session, fetched
+     * separately because the phone's completion upsert is offline-first (the
+     * outbox replays the PUT asynchronously, so the recap can't ride its
+     * response). Returns {@code {recap: null}} when the session isn't completed
+     * yet or the coach is unavailable — never an error, so the client just
+     * shows the numeric summary.
+     */
+    @GetMapping("/{programId}/sessions/{scheduledId}/recap")
+    public SessionRecapResponse sessionRecap(
+        @PathVariable String programId,
+        @PathVariable String scheduledId
+    ) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        return schedule.session(userId, programId, scheduledId)
+            .map(sw -> assembler.scheduled(userId, List.of(sw)).get(0))
+            .map(response -> new SessionRecapResponse(coach.recapFor(response)))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -55,6 +57,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
@@ -67,6 +70,7 @@ import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.image.HfAsyncImage
 import com.gte619n.healthfitness.ui.input.EditableNumber
 import com.gte619n.healthfitness.ui.state.EmptyState
 import com.gte619n.healthfitness.ui.state.ErrorState
@@ -76,6 +80,9 @@ import com.gte619n.healthfitness.ui.theme.type
 import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
+
+/** IMPL-COACH: dwell per looped demo frame in the in-player demo strip. */
+private const val DEMO_FRAME_LOOP_MILLIS = 1200L
 
 @Composable
 fun WorkoutSessionRoute(
@@ -118,6 +125,7 @@ fun WorkoutSessionRoute(
         onConfirmSkip = viewModel::confirmSkip,
         onConfirmDiscard = viewModel::confirmDiscard,
         onDismissPrompt = viewModel::dismissPrompt,
+        onDismissCompleted = viewModel::dismissCompleted,
     )
 }
 
@@ -136,6 +144,7 @@ fun WorkoutSessionScreen(
     onConfirmSkip: () -> Unit,
     onConfirmDiscard: () -> Unit,
     onDismissPrompt: () -> Unit,
+    onDismissCompleted: () -> Unit = {},
 ) {
     // One-second ticker driving the elapsed header and the rest countdown.
     var now by remember { mutableStateOf(Instant.now()) }
@@ -212,6 +221,20 @@ fun WorkoutSessionScreen(
             onDismiss = onDismissPrompt,
         )
         null -> Unit
+    }
+
+    // IMPL-COACH: after a successful finish, the recap summary sits over the
+    // retained draft snapshot until the user dismisses it (which pops the route).
+    if (state.completed) {
+        draft?.let {
+            CompletionSummaryDialog(
+                draft = it,
+                now = now,
+                recap = state.recap,
+                recapLoading = state.recapLoading,
+                onDone = onDismissCompleted,
+            )
+        }
     }
 }
 
@@ -345,6 +368,7 @@ private fun PrescriptionCard(
             Spacer(Modifier.height(2.dp))
             Text(target, style = Hf.type.monoSm, color = Hf.colors.textSecondary)
         }
+        PrescriptionDemoStrip(prescription.exercise)
         Spacer(Modifier.height(8.dp))
         SetHeaderRow()
         val totalRows = maxOf(prescription.sets ?: 1, logged.size)
@@ -566,6 +590,135 @@ private fun FinishSummaryDialog(
         },
         containerColor = Hf.colors.surface,
     )
+}
+
+/**
+ * IMPL-COACH: the post-finish summary — the same stats as the pre-confirm
+ * dialog plus the best-effort AI coach recap (a spinner-free "writing" line
+ * while it loads, the note when it lands, nothing if it never arrives).
+ */
+@Composable
+private fun CompletionSummaryDialog(
+    draft: WorkoutSessionDraft,
+    now: Instant,
+    recap: String?,
+    recapLoading: Boolean,
+    onDone: () -> Unit,
+) {
+    val (loggedExercises, totalExercises) = loggedExerciseCounts(draft)
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = {
+            Text(
+                stringResource(R.string.workout_session_complete_title),
+                style = Hf.type.headingMd,
+                color = Hf.colors.textPrimary,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SummaryRow(
+                    label = stringResource(R.string.workout_session_summary_elapsed),
+                    value = elapsedLabel(Duration.between(draft.startedAt, now).seconds),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.workout_session_summary_sets),
+                    value = pluralStringResource(
+                        R.plurals.workout_session_sets_logged,
+                        draft.totalLoggedSets,
+                        draft.totalLoggedSets,
+                    ),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.workout_session_summary_exercises),
+                    value = "$loggedExercises / $totalExercises",
+                )
+                when {
+                    recapLoading -> {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.workout_session_recap_loading),
+                            style = Hf.type.bodyMd,
+                            color = Hf.colors.textTertiary,
+                        )
+                    }
+                    !recap.isNullOrBlank() -> {
+                        Spacer(Modifier.height(4.dp))
+                        CapsLabel(text = stringResource(R.string.workout_session_recap_label))
+                        Spacer(Modifier.height(2.dp))
+                        Text(recap, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDone) {
+                Text(
+                    stringResource(R.string.workout_session_done),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.accent,
+                )
+            }
+        },
+        containerColor = Hf.colors.surface,
+    )
+}
+
+/**
+ * IMPL-COACH: the current exercise's demo frames, looped inline in the player
+ * (the "video-forward" cue the guided experience wanted, reusing the IMPL-19
+ * frame plan). Renders nothing when the exercise has no usable frames.
+ */
+@Composable
+private fun PrescriptionDemoStrip(exercise: ExerciseSummary?) {
+    val frames = remember(exercise) {
+        exercise?.demoFrames
+            ?.withIndex()
+            ?.sortedWith(compareBy({ it.value.order }, { it.index }))
+            ?.mapNotNull { indexed ->
+                indexed.value.imageUrl?.let { url -> url to indexed.value.label }
+            }
+            .orEmpty()
+    }
+    if (frames.isEmpty()) return
+
+    var index by remember(frames) { mutableStateOf(0) }
+    if (frames.size > 1) {
+        LaunchedEffect(frames) {
+            while (true) {
+                delay(DEMO_FRAME_LOOP_MILLIS)
+                index = (index + 1) % frames.size
+            }
+        }
+    }
+    val (url, label) = frames[index.coerceIn(0, frames.lastIndex)]
+
+    Spacer(Modifier.height(8.dp))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Hf.colors.canvasMuted),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        HfAsyncImage(
+            model = url,
+            contentDescription = exercise?.name,
+            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+        )
+        if (label.isNotBlank()) {
+            Text(
+                label,
+                style = Hf.type.bodySm,
+                color = Hf.colors.textPrimary,
+                modifier = Modifier
+                    .padding(6.dp)
+                    .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+    }
 }
 
 @Composable

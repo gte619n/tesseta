@@ -59,4 +59,20 @@ interface WorkoutProgramApi {
         @Path("scheduledId") scheduledId: String,
         @Body body: CompleteSessionRequest,
     ): ScheduledWorkoutDto
+
+    /**
+     * IMPL-COACH — best-effort AI post-workout recap for a completed session.
+     * Fetched separately from [completeSession] because the phone's completion
+     * is offline-first (the outbox replays the PUT asynchronously). `recap` is
+     * null until the session is COMPLETED server-side or when the coach is
+     * unavailable; the caller degrades to the numeric summary.
+     */
+    @GET("api/me/workout-programs/{id}/sessions/{scheduledId}/recap")
+    suspend fun sessionRecap(
+        @Path("id") id: String,
+        @Path("scheduledId") scheduledId: String,
+    ): SessionRecapDto
 }
+
+/** IMPL-COACH: the AI recap payload (null until available). */
+data class SessionRecapDto(val recap: String? = null)
