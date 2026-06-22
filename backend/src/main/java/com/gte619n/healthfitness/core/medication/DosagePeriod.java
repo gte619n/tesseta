@@ -58,30 +58,44 @@ public record DosagePeriod(
     }
 
     /**
-     * Close the active (open) period at {@code endDate}, leaving no open period.
-     * Used when a medication is discontinued so the dose history shows the final
-     * period ending. No-op if there is no open period.
+     * Truncate the dose history at {@code cutoff}, leaving no open period: every
+     * returned period ends on or before {@code cutoff}. Periods extending past it
+     * (including the open one) are clamped to {@code cutoff}; periods that begin on
+     * or after it are dropped, as are any zero/negative-length periods that result.
+     *
+     * <p>Used when a medication is discontinued so the dose history shows the final
+     * period ending, and as the basis for reopening. Tolerant of pre-existing
+     * inconsistencies (e.g. a discontinue date earlier than the active period's
+     * start) so it never produces an invalid history.
      */
-    public static List<DosagePeriod> closeActive(List<DosagePeriod> periods, LocalDate endDate) {
+    public static List<DosagePeriod> closeActive(List<DosagePeriod> periods, LocalDate cutoff) {
         if (periods == null) return List.of();
-        return periods.stream()
-            .map(p -> p.isActive() ? new DosagePeriod(p.dose(), p.unit(), p.startDate(), endDate) : p)
-            .toList();
+        List<DosagePeriod> result = new ArrayList<>();
+        for (DosagePeriod p : periods) {
+            // A period that begins on/after the cutoff did not run before it.
+            if (!p.startDate().isBefore(cutoff)) continue;
+            LocalDate end = (p.endDate() == null || p.endDate().isAfter(cutoff)) ? cutoff : p.endDate();
+            // Drop degenerate periods (e.g. a closed period whose end precedes its start).
+            if (!end.isAfter(p.startDate())) continue;
+            result.add(new DosagePeriod(p.dose(), p.unit(), p.startDate(), end));
+        }
+        return List.copyOf(result);
     }
 
     /**
      * Reopen dosing from {@code resumeDate} by appending a new open period with the
      * given dose/unit. Used when a discontinued medication is reactivated; the gap
      * between the previous period's end and {@code resumeDate} reflects the pause.
+     *
+     * <p>Existing history is first truncated at {@code resumeDate} (see
+     * {@link #closeActive}), so the result is always a valid, non-overlapping
+     * history with exactly one open period — even when resuming from a past date or
+     * when the stored history contains a pre-existing inconsistency.
      */
     public static List<DosagePeriod> reopen(
         List<DosagePeriod> periods, double dose, String unit, LocalDate resumeDate
     ) {
-        List<DosagePeriod> result = new ArrayList<>(periods == null ? List.of() : periods);
-        // Close any still-open period first so there is exactly one open period.
-        result = result.stream()
-            .map(p -> p.isActive() ? new DosagePeriod(p.dose(), p.unit(), p.startDate(), resumeDate) : p)
-            .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        List<DosagePeriod> result = new ArrayList<>(closeActive(periods, resumeDate));
         result.add(new DosagePeriod(dose, unit, resumeDate, null));
         return List.copyOf(result);
     }

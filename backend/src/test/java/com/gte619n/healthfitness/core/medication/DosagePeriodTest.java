@@ -78,6 +78,64 @@ class DosagePeriodTest {
     }
 
     @Test
+    @DisplayName("closeActive clamps a period that extends past the cutoff")
+    void closeActiveClampsPastCutoff() {
+        List<DosagePeriod> periods = List.of(
+            new DosagePeriod(25, "mg", JAN, MAY),
+            new DosagePeriod(50, "mg", MAY, null));
+        // Discontinue between the two periods: clamp the open one, keep the first.
+        LocalDate cutoff = MAY.plusDays(10);
+        List<DosagePeriod> result = DosagePeriod.closeActive(periods, cutoff);
+        assertThat(result).hasSize(2);
+        assertThat(result.get(1).endDate()).isEqualTo(cutoff);
+        assertThat(result.stream().anyMatch(DosagePeriod::isActive)).isFalse();
+    }
+
+    @Test
+    @DisplayName("closeActive drops periods starting on/after the cutoff and degenerate ones")
+    void closeActiveDropsInvalidPeriods() {
+        // Mirrors the production corruption: an active period that started AFTER the
+        // discontinue date, producing a closed period whose end precedes its start.
+        List<DosagePeriod> corrupt = List.of(
+            new DosagePeriod(0.25, "mg", LocalDate.of(2024, 9, 1), LocalDate.of(2026, 5, 30)),
+            new DosagePeriod(0.25, "mg", LocalDate.of(2026, 5, 30), LocalDate.of(2025, 12, 1)));
+        LocalDate cutoff = LocalDate.of(2025, 12, 1);
+        List<DosagePeriod> result = DosagePeriod.closeActive(corrupt, cutoff);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).startDate()).isEqualTo(LocalDate.of(2024, 9, 1));
+        assertThat(result.get(0).endDate()).isEqualTo(cutoff); // clamped to the discontinue date
+    }
+
+    @Test
+    @DisplayName("reopen heals a corrupt history so reactivation always validates")
+    void reopenHealsCorruptHistory() {
+        // The exact stored state of the medication that failed to resume in prod.
+        List<DosagePeriod> corrupt = List.of(
+            new DosagePeriod(0.25, "mg", LocalDate.of(2024, 9, 1), LocalDate.of(2026, 5, 30)),
+            new DosagePeriod(0.25, "mg", LocalDate.of(2026, 5, 30), LocalDate.of(2025, 12, 1)));
+        LocalDate resume = LocalDate.of(2026, 6, 22);
+        List<DosagePeriod> result = DosagePeriod.reopen(corrupt, 0.25, "mg", resume);
+
+        DosagePeriod.validate(result); // would previously throw "endDate must be after startDate"
+        assertThat(result.get(result.size() - 1).isActive()).isTrue();
+        assertThat(result.get(result.size() - 1).startDate()).isEqualTo(resume);
+    }
+
+    @Test
+    @DisplayName("reopen from a past date truncates later history without overlapping")
+    void reopenFromPastDateTruncates() {
+        List<DosagePeriod> closed = List.of(new DosagePeriod(25, "mg", JAN, MAY));
+        // Resume from a date that falls inside the previous (now-closed) period.
+        LocalDate resume = MAY.minusMonths(1);
+        List<DosagePeriod> result = DosagePeriod.reopen(closed, 25, "mg", resume);
+
+        DosagePeriod.validate(result); // no overlap despite the earlier end date
+        assertThat(result.get(0).endDate()).isEqualTo(resume); // prior period clamped to resume
+        assertThat(result.get(1).startDate()).isEqualTo(resume);
+        assertThat(result.get(1).isActive()).isTrue();
+    }
+
+    @Test
     @DisplayName("shiftEarliestStart moves only the earliest period's start")
     void shiftEarliestStartMovesEarliest() {
         List<DosagePeriod> periods = List.of(
