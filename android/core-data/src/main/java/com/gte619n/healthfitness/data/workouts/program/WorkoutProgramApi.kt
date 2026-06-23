@@ -25,12 +25,16 @@ interface WorkoutProgramApi {
     suspend fun get(@Path("id") id: String): WorkoutProgramDeepDto
 
     /**
-     * Workout history: every COMPLETED session across all programs, newest
-     * first, deep (blocks → prescriptions → logged sets) so a read-only review
-     * renders without a second fetch.
+     * Workout history: COMPLETED sessions across all programs, newest first,
+     * deep (blocks → prescriptions → logged sets) so a read-only review renders
+     * without a second fetch. Paged (default 25, max 100 server-side); the
+     * repository walks pages via [WorkoutHistoryPageDto.hasMore].
      */
     @GET("api/me/workout-history")
-    suspend fun workoutHistory(): List<ScheduledWorkoutDto>
+    suspend fun workoutHistory(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 25,
+    ): WorkoutHistoryPageDto
 
     @GET("api/me/workout-programs/{id}/calendar")
     suspend fun calendar(

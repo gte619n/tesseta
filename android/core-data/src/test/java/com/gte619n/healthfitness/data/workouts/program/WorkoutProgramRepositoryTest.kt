@@ -119,14 +119,17 @@ class WorkoutProgramRepositoryTest {
 
     @Test
     fun `workoutHistory maps the completed sessions from the network`() = runBlocking {
-        coEvery { api.workoutHistory() } returns listOf(
-            ScheduledWorkoutDto(
-                scheduledId = "2026-06-20_d1",
-                date = java.time.LocalDate.parse("2026-06-20"),
-                dayLabel = "Upper A",
-                status = "COMPLETED",
-                durationSeconds = 2_840,
+        coEvery { api.workoutHistory(any(), any()) } returns WorkoutHistoryPageDto(
+            items = listOf(
+                ScheduledWorkoutDto(
+                    scheduledId = "2026-06-20_d1",
+                    date = java.time.LocalDate.parse("2026-06-20"),
+                    dayLabel = "Upper A",
+                    status = "COMPLETED",
+                    durationSeconds = 2_840,
+                ),
             ),
+            hasMore = false,
         )
 
         val result = repo.workoutHistory().getOrThrow()
@@ -137,7 +140,40 @@ class WorkoutProgramRepositoryTest {
             com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus.COMPLETED,
             result[0].status,
         )
-        coVerify(exactly = 1) { api.workoutHistory() }
+        coVerify(exactly = 1) { api.workoutHistory(any(), any()) }
+    }
+
+    @Test
+    fun `workoutHistory walks every page until hasMore is false`() = runBlocking {
+        coEvery { api.workoutHistory(page = 0, size = any()) } returns WorkoutHistoryPageDto(
+            items = listOf(
+                ScheduledWorkoutDto(
+                    scheduledId = "p0",
+                    date = java.time.LocalDate.parse("2026-06-20"),
+                    dayLabel = "Page 0",
+                    status = "COMPLETED",
+                ),
+            ),
+            hasMore = true,
+        )
+        coEvery { api.workoutHistory(page = 1, size = any()) } returns WorkoutHistoryPageDto(
+            items = listOf(
+                ScheduledWorkoutDto(
+                    scheduledId = "p1",
+                    date = java.time.LocalDate.parse("2026-06-19"),
+                    dayLabel = "Page 1",
+                    status = "COMPLETED",
+                ),
+            ),
+            hasMore = false,
+        )
+
+        val result = repo.workoutHistory().getOrThrow()
+
+        assertEquals(2, result.size)
+        assertEquals(listOf("Page 0", "Page 1"), result.map { it.dayLabel })
+        coVerify(exactly = 1) { api.workoutHistory(page = 0, size = any()) }
+        coVerify(exactly = 1) { api.workoutHistory(page = 1, size = any()) }
     }
 
     @Test
