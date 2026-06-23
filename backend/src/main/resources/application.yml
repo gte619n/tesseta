@@ -85,6 +85,13 @@ app:
     backfill-days: 1460
     backfill-chunk-days: 365
     webhook-secret: ${GOOGLE_HEALTH_WEBHOOK_SECRET:}
+    # Defense-in-depth on top of the webhook-secret: verify the ECDSA
+    # X-HEALTHAPI-SIGNATURE Google stamps on each notification, against its
+    # published Tink keyset. OFF by default — flip on once logs confirm
+    # signatures validate (a bad signature under enforcement returns 401,
+    # which Google retries for 7 days).
+    signature-verify: ${GOOGLE_HEALTH_SIGNATURE_VERIFY:false}
+    signature-keyset-url: https://www.gstatic.com/googlehealthapi/webhooks/webhooks_public_keyset.json
     kms-key-name: ${GOOGLE_HEALTH_KMS_KEY:projects/health-fitness-160/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens}
     web-oauth-client-id: ${OAUTH_WEB_CLIENT_ID:}
     web-oauth-client-secret: ${OAUTH_WEB_CLIENT_SECRET:}

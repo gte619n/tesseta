@@ -12,6 +12,10 @@ googleKms = "2.55.0"
 googleStorage = "2.59.0"
 googleGenai = "1.53.0"
 firebaseAdmin = "9.4.3"
+# Tink: verifies the ECDSA-P256 X-HEALTHAPI-SIGNATURE on Google Health
+# webhooks. Google signs with Tink's wire format and publishes a Tink
+# keyset, so we verify with Tink's PublicKeyVerify rather than raw JCA.
+tink = "1.13.0"
 junit = "5.11.0"
 
 [libraries]
@@ -33,6 +37,7 @@ google-auth-library = { module = "com.google.auth:google-auth-library-oauth2-htt
 google-cloud-storage = { module = "com.google.cloud:google-cloud-storage", version.ref = "googleStorage" }
 google-genai = { module = "com.google.genai:google-genai", version.ref = "googleGenai" }
 firebase-admin = { module = "com.google.firebase:firebase-admin", version.ref = "firebaseAdmin" }
+google-tink = { module = "com.google.crypto.tink:tink", version.ref = "tink" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }

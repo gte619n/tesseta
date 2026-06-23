@@ -16,15 +16,17 @@ import java.util.Optional;
 // BMI as domain concepts so we can compute them ourselves later from
 // weight + height.
 public enum GoogleHealthDataType {
-    WEIGHT("weight", "weight"),
-    BODY_FAT("body-fat", "body_fat");
+    WEIGHT("weight", "weight", "weight"),
+    BODY_FAT("body-fat", "body_fat", "bodyFat");
 
     private final String urlSegment;
     private final String filterFieldName;
+    private final String jsonField;
 
-    GoogleHealthDataType(String urlSegment, String filterFieldName) {
+    GoogleHealthDataType(String urlSegment, String filterFieldName, String jsonField) {
         this.urlSegment = urlSegment;
         this.filterFieldName = filterFieldName;
+        this.jsonField = jsonField;
     }
 
     public String urlSegment() {
@@ -33,6 +35,10 @@ public enum GoogleHealthDataType {
 
     public String filterFieldName() {
         return filterFieldName;
+    }
+
+    public String jsonField() {
+        return jsonField;
     }
 
     public static GoogleHealthDataType forMetric(BodyCompositionMetric metric) {
@@ -61,7 +67,9 @@ public enum GoogleHealthDataType {
     // may instead be a daily-metric type).
     public static Optional<GoogleHealthDataType> tryFromApiName(String apiName) {
         for (GoogleHealthDataType t : values()) {
-            if (t.urlSegment.equals(apiName) || t.filterFieldName.equals(apiName)) {
+            if (t.urlSegment.equals(apiName)
+                || t.filterFieldName.equals(apiName)
+                || t.jsonField.equals(apiName)) {
                 return Optional.of(t);
             }
         }

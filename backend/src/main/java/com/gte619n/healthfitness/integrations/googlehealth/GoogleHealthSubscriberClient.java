@@ -11,15 +11,25 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-// Admin client for projects.subscribers. Used by the one-time subscriber
-// registration script (and corresponding integration test). Not on the
+// Admin client for projects.subscribers — the Java mirror of
+// infra/scripts/setup-google-health-subscriber.sh, for registering the
+// webhook subscriber from code rather than a shell one-off. Not on the
 // request path.
 //
 // All calls require a developer-issued access token (passed in by the
 // caller), not a per-user token — registering a webhook subscriber is a
 // project-level operation.
+//
+// Request schema matches the live API (confirmed against the setup script):
+//   { endpointUri, endpointAuthorization: { secret },
+//     subscriberConfigs: [ { dataTypes: [...], subscriptionCreatePolicy } ] }
+// dataTypes are the kebab url-segments (weight, body-fat, steps, sleep,
+// daily-resting-heart-rate, daily-heart-rate-variability) — i.e.
+// GoogleHealthDataType.urlSegment() / DailyMetricDataType.urlSegment().
 @Component
 public class GoogleHealthSubscriberClient {
+
+    private static final String CREATE_POLICY = "AUTOMATIC";
 
     private final HttpClient http;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -38,16 +48,9 @@ public class GoogleHealthSubscriberClient {
         String subscriberId,
         String endpointUri,
         String webhookSecret,
-        List<GoogleHealthDataType> dataTypes
+        List<String> dataTypeSegments
     ) {
-        ObjectNode body = mapper.createObjectNode();
-        body.put("endpointUri", endpointUri);
-        ObjectNode authorization = body.putObject("authorization");
-        authorization.put("secret", webhookSecret);
-        ArrayNode types = body.putArray("dataTypes");
-        for (GoogleHealthDataType t : dataTypes) {
-            types.add(t.urlSegment());
-        }
+        ObjectNode body = requestBody(endpointUri, webhookSecret, dataTypeSegments);
         // Try create. If it already exists, fall back to patch.
         int createStatus = post(developerAccessToken,
             apiBaseUrl + "/projects/" + projectId + "/subscribers?subscriberId=" + subscriberId,
@@ -56,11 +59,27 @@ public class GoogleHealthSubscriberClient {
             // Already exists or update needed. PATCH with full body.
             patch(developerAccessToken,
                 apiBaseUrl + "/projects/" + projectId + "/subscribers/" + subscriberId
-                    + "?updateMask=endpointUri,authorization,dataTypes",
+                    + "?updateMask=endpointUri,endpointAuthorization,subscriberConfigs",
                 body);
         } else if (createStatus / 100 != 2) {
             throw new RuntimeException("Subscriber create failed: " + createStatus);
         }
+    }
+
+    // Builds the subscriber request body in the live API's shape. Package
+    // private so the schema can be asserted without an HTTP round-trip.
+    ObjectNode requestBody(String endpointUri, String webhookSecret, List<String> dataTypeSegments) {
+        ObjectNode body = mapper.createObjectNode();
+        body.put("endpointUri", endpointUri);
+        body.putObject("endpointAuthorization").put("secret", webhookSecret);
+        ObjectNode config = mapper.createObjectNode();
+        ArrayNode types = config.putArray("dataTypes");
+        for (String segment : dataTypeSegments) {
+            types.add(segment);
+        }
+        config.put("subscriptionCreatePolicy", CREATE_POLICY);
+        body.putArray("subscriberConfigs").add(config);
+        return body;
     }
 
     private int post(String token, String url, ObjectNode body) {

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataType;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataType;
 import java.net.URI;
+import java.time.Instant;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -297,6 +298,112 @@ class GoogleHealthWebhookControllerTest {
 
         // Unknown type is acked (200) so Google stops retrying; neither
         // handler is invoked.
+        assertThat(response.statusCode()).isEqualTo(200);
+        verify(handler, never()).handle(any());
+        verify(dailyHandler, never()).handle(any());
+    }
+
+    @Test
+    void parsesRealEnvelopedNotificationFromGoogle() throws Exception {
+        // The exact shape the Google Health API posts: every field nested
+        // under a top-level "data" envelope, interval times under
+        // physicalTimeInterval, and the dataType in camelCase ("bodyFat").
+        // See https://developers.google.com/health/webhooks. Before the
+        // envelope/physicalTimeInterval fix, this was misclassified as a
+        // probe and silently dropped.
+        String body = """
+            {
+              "data": {
+                "version": "1",
+                "clientProvidedSubscriptionName": "health-fitness-backend",
+                "healthUserId": "12345",
+                "operation": "UPSERT",
+                "dataType": "bodyFat",
+                "intervals": [
+                  {
+                    "physicalTimeInterval": {
+                      "startTime": "2026-05-01T00:00:00Z",
+                      "endTime": "2026-05-20T00:00:00Z"
+                    },
+                    "civilIso8601TimeInterval": {
+                      "startTime": "2026-04-30T17:00:00",
+                      "endTime": "2026-05-19T17:00:00"
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        HttpResponse<String> response = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/webhooks/google-health"))
+                .header("Authorization", "Bearer test-webhook-secret")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        ArgumentCaptor<WebhookHandlerService.Notification> captor =
+            ArgumentCaptor.forClass(WebhookHandlerService.Notification.class);
+        verify(handler).handle(captor.capture());
+        WebhookHandlerService.Notification got = captor.getValue();
+        assertThat(got.healthUserId()).isEqualTo("12345");
+        assertThat(got.dataType()).isEqualTo(GoogleHealthDataType.BODY_FAT);
+        assertThat(got.operation()).isEqualTo(WebhookHandlerService.Operation.UPSERT);
+        assertThat(got.intervalStart()).isEqualTo(Instant.parse("2026-05-01T00:00:00Z"));
+        assertThat(got.intervalEnd()).isEqualTo(Instant.parse("2026-05-20T00:00:00Z"));
+    }
+
+    @Test
+    void routesEnvelopedDailyHrvNotificationToDailyMetricHandler() throws Exception {
+        // Enveloped daily roll-up with camelCase dataType, as Google sends.
+        String body = """
+            {
+              "data": {
+                "healthUserId": "12345",
+                "operation": "UPSERT",
+                "dataType": "dailyHeartRateVariability",
+                "intervals": [
+                  {
+                    "physicalTimeInterval": {
+                      "startTime": "2026-05-01T00:00:00Z",
+                      "endTime": "2026-05-02T00:00:00Z"
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        HttpResponse<String> response = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/webhooks/google-health"))
+                .header("Authorization", "Bearer test-webhook-secret")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        ArgumentCaptor<DailyMetricWebhookHandler.Notification> captor =
+            ArgumentCaptor.forClass(DailyMetricWebhookHandler.Notification.class);
+        verify(dailyHandler).handle(captor.capture());
+        assertThat(captor.getValue().dataType()).isEqualTo(DailyMetricDataType.HRV);
+        verify(handler, never()).handle(any());
+    }
+
+    @Test
+    void acceptsVerificationProbeWithoutDispatch() throws Exception {
+        // The domain-verification probe posts {"type":"verification"} with no
+        // data envelope. It must ack 200 and dispatch nothing.
+        HttpResponse<String> response = http.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/webhooks/google-health"))
+                .header("Authorization", "Bearer test-webhook-secret")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"type\":\"verification\"}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+
         assertThat(response.statusCode()).isEqualTo(200);
         verify(handler, never()).handle(any());
         verify(dailyHandler, never()).handle(any());

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataType;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataType;
+import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthSignatureVerifier;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -44,15 +45,18 @@ public class GoogleHealthWebhookController {
     private final String configuredSecret;
     private final WebhookHandlerService handler;
     private final DailyMetricWebhookHandler dailyHandler;
+    private final GoogleHealthSignatureVerifier signatureVerifier;
 
     public GoogleHealthWebhookController(
         @Value("${app.googlehealth.webhook-secret:}") String configuredSecret,
         WebhookHandlerService handler,
-        DailyMetricWebhookHandler dailyHandler
+        DailyMetricWebhookHandler dailyHandler,
+        GoogleHealthSignatureVerifier signatureVerifier
     ) {
         this.configuredSecret = configuredSecret;
         this.handler = handler;
         this.dailyHandler = dailyHandler;
+        this.signatureVerifier = signatureVerifier;
     }
 
     @PostMapping
@@ -79,17 +83,39 @@ public class GoogleHealthWebhookController {
             return ResponseEntity.ok().build();
         }
 
+        // Real notifications wrap their fields in a top-level "data"
+        // envelope (see https://developers.google.com/health/webhooks); the
+        // domain-verification probe posts {"type":"verification"} with no
+        // data object. Unwrap once so the rest of the method sees the
+        // notification fields directly, whether or not the envelope is
+        // present (older/flat payloads pass through unchanged).
+        JsonNode payload = node.hasNonNull("data") ? node.path("data") : node;
+
         // Google's domain-verification probes carry a JSON body that lacks
         // the notification fields (or has empty placeholders). Treat any
         // request without a real healthUserId + populated interval as a
         // probe and respond 200.
-        if (!looksLikeRealNotification(node)) {
+        if (!looksLikeRealNotification(payload)) {
             log.info("Webhook probe accepted (no notification payload)");
             return ResponseEntity.ok().build();
         }
 
+        // Real notifications carry an ECDSA signature over the raw body. When
+        // enforcement is enabled, a missing/invalid signature is rejected
+        // (Google retries 5xx/4xx for 7 days). Probes are exempt — they're
+        // already past the check above. Off by default; the shared secret is
+        // the baseline gate.
+        if (signatureVerifier.enforced()
+            && !signatureVerifier.verify(
+                request.getHeader(GoogleHealthSignatureVerifier.SIGNATURE_HEADER),
+                body.getBytes(StandardCharsets.UTF_8))) {
+            log.warn("Webhook rejected — invalid {}",
+                GoogleHealthSignatureVerifier.SIGNATURE_HEADER);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         try {
-            dispatch(node);
+            dispatch(payload);
             return ResponseEntity.ok().build();
         } catch (RuntimeException e) {
             log.error("Webhook notification handling failed: {}", e.getMessage(), e);
@@ -101,9 +127,18 @@ public class GoogleHealthWebhookController {
         if (node.path("healthUserId").asText("").isEmpty()) return false;
         if (node.path("dataType").asText("").isEmpty()) return false;
         JsonNode interval = node.path("intervals").path(0);
-        if (interval.path("startTime").asText("").isEmpty()) return false;
-        if (interval.path("endTime").asText("").isEmpty()) return false;
+        if (intervalTime(interval, "startTime").isEmpty()) return false;
+        if (intervalTime(interval, "endTime").isEmpty()) return false;
         return true;
+    }
+
+    // Real notifications express each interval as a nested
+    // physicalTimeInterval (UTC RFC-3339 instants); we read that. The bare
+    // startTime/endTime fallback keeps the parser tolerant of the older,
+    // flat interval shape.
+    private static String intervalTime(JsonNode interval, String field) {
+        String nested = interval.path("physicalTimeInterval").path(field).asText("");
+        return nested.isEmpty() ? interval.path(field).asText("") : nested;
     }
 
     private boolean isAuthorized(String header) {
@@ -131,8 +166,8 @@ public class GoogleHealthWebhookController {
         String dataTypeRaw = node.path("dataType").asText();
         String operationRaw = node.path("operation").asText("UPSERT");
         JsonNode interval = node.path("intervals").path(0);
-        Instant from = Instant.parse(interval.path("startTime").asText());
-        Instant to = Instant.parse(interval.path("endTime").asText());
+        Instant from = Instant.parse(intervalTime(interval, "startTime"));
+        Instant to = Instant.parse(intervalTime(interval, "endTime"));
 
         Optional<DailyMetricDataType> dailyType = DailyMetricDataType.tryFromApiName(dataTypeRaw);
         if (dailyType.isPresent()) {
