@@ -219,6 +219,9 @@ data class ScheduledWorkoutDto(
     // headers; absent (null) on calendar reads.
     val programTitle: String? = null,
     val phaseTitle: String? = null,
+    // Owning program id — carried on the cross-program history read so a row can
+    // be acted on (e.g. deleted) without the program context the calendar has.
+    val programId: String? = null,
 )
 
 /**
@@ -406,6 +409,7 @@ fun ScheduledWorkoutDto.toDomain(): ScheduledWorkout = ScheduledWorkout(
     durationSeconds = durationSeconds,
     programTitle = programTitle,
     phaseTitle = phaseTitle,
+    programId = programId.orEmpty(),
 )
 
 fun WorkoutHistoryPageDto.toDomain(): WorkoutHistoryPage = WorkoutHistoryPage(

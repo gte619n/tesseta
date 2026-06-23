@@ -142,6 +142,7 @@ fun WorkoutSessionRoute(
         onToggleSet = viewModel::toggleSet,
         onEditSet = viewModel::editSet,
         onLogTimed = viewModel::logTimedSet,
+        onLogSet = viewModel::logSet,
         onDismissRest = viewModel::dismissRest,
         onRequestFinish = viewModel::requestFinish,
         onRequestSkip = viewModel::requestSkip,
@@ -164,6 +165,7 @@ fun WorkoutSessionScreen(
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
     onLogTimed: (PrescriptionKey, Int) -> Unit,
+    onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
@@ -237,6 +239,7 @@ fun WorkoutSessionScreen(
                 onToggleSet = onToggleSet,
                 onEditSet = onEditSet,
                 onLogTimed = onLogTimed,
+                onLogSet = onLogSet,
                 onDismissRest = onDismissRest,
                 onRequestFinish = onRequestFinish,
                 onRequestSkip = onRequestSkip,
@@ -302,6 +305,7 @@ private fun SessionBody(
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
     onLogTimed: (PrescriptionKey, Int) -> Unit,
+    onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
@@ -378,6 +382,7 @@ private fun SessionBody(
                     onToggleSet = { index -> onToggleSet(step.key, index) },
                     onEditSet = { index, set -> onEditSet(step.key, index, set) },
                     onLogTimed = { seconds -> onLogTimed(step.key, seconds) },
+                    onLogSet = { set -> onLogSet(step.key, set) },
                 )
             }
             CoachActionsBar(
@@ -385,6 +390,7 @@ private fun SessionBody(
                 count = steps.size,
                 onNext = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } },
                 onFinish = onRequestFinish,
+                onAbandon = onRequestDiscard,
             )
         }
     }
@@ -438,6 +444,7 @@ private fun ExercisePage(
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
     onLogTimed: (Int) -> Unit,
+    onLogSet: (LoggedSet) -> Unit,
 ) {
     val prescription = step.prescription
     Column(
@@ -476,6 +483,7 @@ private fun ExercisePage(
                 logged = logged,
                 onToggleSet = onToggleSet,
                 onEditSet = onEditSet,
+                onLogSet = onLogSet,
             )
         }
     }
@@ -489,14 +497,24 @@ private fun RepSets(
     logged: List<LoggedSet>,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
+    onLogSet: (LoggedSet) -> Unit,
 ) {
     SetsHeader(addEnabled = canAddSet(prescription, logged), onAdd = { onToggleSet(logged.size) }) {
         CapsLabel(stringResource(R.string.workout_session_weight_header), modifier = Modifier.weight(1f))
         CapsLabel(stringResource(R.string.workout_session_reps_header), modifier = Modifier.weight(1f))
     }
+    // Prefill for the next, not-yet-logged set: weight/reps carried from the last
+    // logged set, else the designed target — mirroring the VM's check-off default
+    // so the inputs read sensibly before the user touches them.
+    val carriedWeight = logged.lastOrNull()?.weightLbs ?: prescription.targetWeightLbs
+    val targetReps = logged.lastOrNull()?.reps ?: prescription.repsMax ?: prescription.repsMin
     val totalRows = maxOf(prescription.sets ?: 1, logged.size)
     repeat(totalRows) { index ->
         val set = logged.getOrNull(index)
+        // The next actionable row shows editable inputs up front so weight/reps
+        // can be dialed in before (or instead of) tapping the circle; committing
+        // a field logs the set.
+        val isNext = set == null && index == logged.size
         SetRowFrame(
             index = index,
             logged = set != null,
@@ -504,16 +522,22 @@ private fun RepSets(
             canToggle = index <= logged.size,
             onToggle = { onToggleSet(index) },
         ) {
-            if (set != null) {
+            if (set != null || isNext) {
                 EditableNumber(
-                    value = set.weightLbs,
-                    onCommit = { onEditSet(index, set.copy(weightLbs = it)) },
+                    value = set?.weightLbs ?: carriedWeight.takeIf { isNext },
+                    onCommit = {
+                        if (set != null) onEditSet(index, set.copy(weightLbs = it))
+                        else onLogSet(LoggedSet(weightLbs = it))
+                    },
                     modifier = Modifier.weight(1f),
                     decimals = 1,
                 )
                 EditableNumber(
-                    value = set.reps?.toDouble(),
-                    onCommit = { onEditSet(index, set.copy(reps = it?.toInt())) },
+                    value = set?.reps?.toDouble() ?: targetReps?.toDouble()?.takeIf { isNext },
+                    onCommit = {
+                        if (set != null) onEditSet(index, set.copy(reps = it?.toInt()))
+                        else onLogSet(LoggedSet(reps = it?.toInt()))
+                    },
                     modifier = Modifier.weight(1f),
                     decimals = 0,
                 )
@@ -848,9 +872,15 @@ private fun OverviewRow(step: SessionStep, loggedCount: Int, onClick: () -> Unit
 
 // ---- bottom action bars ----
 
-/** Focused-mode bar: where you are in the workout, advance, or finish. */
+/** Focused-mode bar: abandon, where you are in the workout, advance, or finish. */
 @Composable
-private fun CoachActionsBar(page: Int, count: Int, onNext: () -> Unit, onFinish: () -> Unit) {
+private fun CoachActionsBar(
+    page: Int,
+    count: Int,
+    onNext: () -> Unit,
+    onFinish: () -> Unit,
+    onAbandon: () -> Unit,
+) {
     val last = page >= count - 1
     Row(
         modifier = Modifier
@@ -859,6 +889,15 @@ private fun CoachActionsBar(page: Int, count: Int, onNext: () -> Unit, onFinish:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // Exit-without-saving lives here so it's reachable on every page, not
+        // only from the overview list.
+        TextButton(onClick = onAbandon, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            Text(
+                stringResource(R.string.workout_session_discard),
+                style = Hf.type.bodyMd,
+                color = Hf.colors.alert,
+            )
+        }
         Text(
             "${page + 1} / $count",
             style = Hf.type.monoSm,
@@ -1095,6 +1134,7 @@ private fun WorkoutSessionPreview() {
             onToggleSet = { _, _ -> },
             onEditSet = { _, _, _ -> },
             onLogTimed = { _, _ -> },
+            onLogSet = { _, _ -> },
             onDismissRest = {},
             onRequestFinish = {},
             onRequestSkip = {},

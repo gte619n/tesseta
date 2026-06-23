@@ -207,6 +207,12 @@ data class ScheduledWorkout(
      */
     val programTitle: String? = null,
     val phaseTitle: String? = null,
+    /**
+     * Owning program id. Populated by the cross-program Workout History read so a
+     * row can be acted on (delete/reset); empty on calendar reads, where the
+     * program context is already known.
+     */
+    val programId: String = "",
 )
 
 /**

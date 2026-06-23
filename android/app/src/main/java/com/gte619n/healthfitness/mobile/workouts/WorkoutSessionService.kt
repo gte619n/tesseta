@@ -9,6 +9,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
@@ -24,6 +25,7 @@ import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
 import com.gte619n.healthfitness.domain.prefs.CoachAudioPreferences
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import com.gte619n.healthfitness.mobile.MainActivity
 import com.gte619n.healthfitness.mobile.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -249,6 +251,9 @@ class WorkoutSessionService : Service() {
     private fun buildNotification(draft: WorkoutSessionDraft, rest: WorkoutSessionTimers.RestTimer?): Notification {
         val content = WorkoutSessionNotificationContent.from(draft, rest, Instant.now())
         return baseBuilder()
+            // Tapping the ongoing notification jumps back into THIS session's
+            // logger (overrides baseBuilder's generic open-app intent).
+            .setContentIntent(sessionContentIntent(draft))
             .setContentTitle(content.title)
             .setContentText(content.text)
             .setUsesChronometer(true)
@@ -262,6 +267,25 @@ class WorkoutSessionService : Service() {
             }
             .build()
     }
+
+    /**
+     * Deep-link the ongoing notification into the active session logger
+     * (healthfitness://workout-session/{programId}/{scheduledId}), so a tap
+     * resumes the workout instead of just opening app home. Explicit component +
+     * singleTop so a foregrounded app routes via onNewIntent → handleDeepLink.
+     */
+    private fun sessionContentIntent(draft: WorkoutSessionDraft): PendingIntent =
+        PendingIntent.getActivity(
+            this,
+            SESSION_DEEP_LINK_REQUEST_CODE,
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse(WorkoutsRoutes.sessionDeepLink(draft.programId, draft.scheduledId)),
+                this,
+                MainActivity::class.java,
+            ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
 
     private fun baseBuilder(): NotificationCompat.Builder =
         NotificationCompat.Builder(this, CHANNEL_ID)
@@ -308,6 +332,9 @@ class WorkoutSessionService : Service() {
     companion object {
         const val CHANNEL_ID = "workout_session"
         const val NOTIFICATION_ID = 0x5E55 // "SESS"
+
+        /** Request code for the ongoing-notification deep-link PendingIntent. */
+        private const val SESSION_DEEP_LINK_REQUEST_CODE = 0x5E57
 
         /** IMPL-COACH: HIGH-importance heads-up channel for the rest-end alert. */
         const val REST_ALERT_CHANNEL_ID = "workout_rest_alert"

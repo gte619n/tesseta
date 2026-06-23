@@ -72,6 +72,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="healthfitness" android:host="medications" />
             </intent-filter>
+            <!-- The ongoing-workout notification deep-links back into the active
+                 session logger (healthfitness://workout-session/{programId}/{scheduledId}).
+                 Matched by the SESSION destination's navDeepLink in WorkoutsRoutes. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="healthfitness" android:host="workout-session" />
+            </intent-filter>
         </activity>
 
         <!-- IMPL-02: handles /auth/refresh-request messages from the paired

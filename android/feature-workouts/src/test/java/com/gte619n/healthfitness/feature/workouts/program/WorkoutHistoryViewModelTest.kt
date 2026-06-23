@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -25,6 +26,7 @@ class WorkoutHistoryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repo: WorkoutProgramRepository = mockk()
+    private val sessionRepo: WorkoutSessionRepository = mockk()
 
     private fun row(id: String, phaseId: String = "ph1") = ScheduledWorkout(
         scheduledId = id,
@@ -45,7 +47,7 @@ class WorkoutHistoryViewModelTest {
             WorkoutHistoryPage(items = listOf(row("a"), row("b")), page = 0, total = 3, hasMore = true),
         )
 
-        val vm = WorkoutHistoryViewModel(repo)
+        val vm = WorkoutHistoryViewModel(repo, sessionRepo)
         advanceUntilIdle()
 
         val s = vm.state.value
@@ -63,7 +65,7 @@ class WorkoutHistoryViewModelTest {
             WorkoutHistoryPage(items = listOf(row("b")), page = 1, total = 2, hasMore = false),
         )
 
-        val vm = WorkoutHistoryViewModel(repo)
+        val vm = WorkoutHistoryViewModel(repo, sessionRepo)
         advanceUntilIdle()
 
         vm.loadMore()
@@ -88,7 +90,7 @@ class WorkoutHistoryViewModelTest {
             ),
         )
 
-        val vm = WorkoutHistoryViewModel(repo)
+        val vm = WorkoutHistoryViewModel(repo, sessionRepo)
         advanceUntilIdle()
         assertEquals("network down", vm.state.value.error)
 
@@ -96,5 +98,25 @@ class WorkoutHistoryViewModelTest {
         advanceUntilIdle()
         assertEquals(null, vm.state.value.error)
         assertEquals(1, vm.state.value.sessions.size)
+    }
+
+    @Test
+    fun `deleteSession resets it server-side and drops it from the list`() = runTest {
+        coEvery { repo.workoutHistoryPage(0, any()) } returns Result.success(
+            WorkoutHistoryPage(
+                items = listOf(row("a").copy(programId = "p1"), row("b").copy(programId = "p1")),
+                page = 0, total = 2, hasMore = false,
+            ),
+        )
+        coEvery { sessionRepo.reset("p1", "a") } returns Result.success(Unit)
+
+        val vm = WorkoutHistoryViewModel(repo, sessionRepo)
+        advanceUntilIdle()
+
+        vm.deleteSession(row("a").copy(programId = "p1"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("b"), vm.state.value.sessions.map { it.scheduledId })
+        coVerify { sessionRepo.reset("p1", "a") }
     }
 }
