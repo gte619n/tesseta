@@ -15,6 +15,7 @@ import com.gte619n.healthfitness.data.sync.OutboxRepository
 import com.gte619n.healthfitness.data.sync.SyncTestMoshi
 import com.gte619n.healthfitness.data.sync.fakeDeviceIdProvider
 import com.gte619n.healthfitness.data.workouts.program.BlockDto
+import com.gte619n.healthfitness.data.workouts.program.LoggedSetDto
 import com.gte619n.healthfitness.data.workouts.program.PrescriptionDto
 import com.gte619n.healthfitness.data.workouts.program.ScheduledWorkoutDto
 import com.gte619n.healthfitness.data.workouts.program.WorkoutDayDto
@@ -150,6 +151,50 @@ class WorkoutSessionRepositoryTest {
     fun `start without a mirrored session fails`() = runTest {
         val result = repo.start(PROGRAM_ID, SCHEDULED_ID)
         assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `start hydrates the draft from a completed snapshot's logged sets`() = runTest {
+        // A finished session mirrored with actuals: opening it (to review) seeds
+        // the draft with what was performed, not a blank sheet.
+        val dto = scheduledDto().let { d ->
+            d.copy(
+                status = "COMPLETED",
+                session = d.session!!.copy(
+                    blocks = listOf(
+                        d.session!!.blocks.single().copy(
+                            prescriptions = listOf(
+                                PrescriptionDto(
+                                    exerciseId = "ex1", orderIndex = 0, sets = 3,
+                                    loggedSets = listOf(
+                                        LoggedSetDto(weightLbs = 185.0, reps = 5),
+                                        LoggedSetDto(weightLbs = 185.0, reps = 5),
+                                    ),
+                                ),
+                                PrescriptionDto(exerciseId = "ex2", orderIndex = 1, sets = 3),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }
+        scheduledDao.upsert(
+            WorkoutScheduledEntity(
+                id = ENTITY_ID,
+                payloadJson = scheduledAdapter.toJson(dto),
+                lastUpdate = T0,
+                status = "ACTIVE",
+                dirty = false,
+                syncState = "SYNCED",
+            ),
+        )
+
+        val draft = repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        assertEquals(2, draft.logged.getValue(KEY_0).size)
+        assertEquals(185.0, draft.logged.getValue(KEY_0)[0].weightLbs)
+        // A prescription with no prior sets stays absent.
+        assertNull(draft.logged[KEY_1])
     }
 
     @Test

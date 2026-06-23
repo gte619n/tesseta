@@ -89,6 +89,7 @@ data class LoggedSetDto(
     val rpe: Double? = null,
     val restSeconds: Int? = null,
     val completedAt: Instant? = null,
+    val durationSeconds: Int? = null,
 )
 
 data class PrescriptionDto(
@@ -268,6 +269,7 @@ fun LoggedSetDto.toDomain(): LoggedSet = LoggedSet(
     rpe = rpe,
     restSeconds = restSeconds,
     completedAt = completedAt,
+    durationSeconds = durationSeconds,
 )
 
 fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
@@ -276,6 +278,7 @@ fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
     rpe = rpe,
     restSeconds = restSeconds,
     completedAt = completedAt,
+    durationSeconds = durationSeconds,
 )
 
 fun PrescriptionDto.toDomain(): Prescription = Prescription(

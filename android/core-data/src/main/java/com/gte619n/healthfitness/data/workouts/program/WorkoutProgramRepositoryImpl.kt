@@ -142,6 +142,11 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
+    override suspend fun workoutHistory(): Result<List<ScheduledWorkout>> =
+        withContext(Dispatchers.IO) {
+            runCatching { api.workoutHistory().map { it.toDomain() } }
+        }
+
     override suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {
             runCatching {

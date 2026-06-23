@@ -118,6 +118,29 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
+    fun `workoutHistory maps the completed sessions from the network`() = runBlocking {
+        coEvery { api.workoutHistory() } returns listOf(
+            ScheduledWorkoutDto(
+                scheduledId = "2026-06-20_d1",
+                date = java.time.LocalDate.parse("2026-06-20"),
+                dayLabel = "Upper A",
+                status = "COMPLETED",
+                durationSeconds = 2_840,
+            ),
+        )
+
+        val result = repo.workoutHistory().getOrThrow()
+
+        assertEquals(1, result.size)
+        assertEquals("Upper A", result[0].dayLabel)
+        assertEquals(
+            com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus.COMPLETED,
+            result[0].status,
+        )
+        coVerify(exactly = 1) { api.workoutHistory() }
+    }
+
+    @Test
     fun `get refreshes from network when mirror holds a shallow row`() = runBlocking {
         val shallow = listAdapter.toJson(
             WorkoutProgramDto(

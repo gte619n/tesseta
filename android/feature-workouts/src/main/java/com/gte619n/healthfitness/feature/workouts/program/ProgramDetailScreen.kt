@@ -334,6 +334,10 @@ private fun ProgramBody(
                         onStartSession = { session ->
                             onOpenSession(program.programId, session.scheduledId)
                         },
+                        // Re-open a completed session to review what was logged.
+                        onReviewSession = { session ->
+                            onOpenSession(program.programId, session.scheduledId)
+                        },
                     )
                     Spacer(Modifier.height(20.dp))
                 }
@@ -492,19 +496,19 @@ private fun LogPastSessionRow(onClick: () -> Unit) {
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "Log a past session",
+                "Past workouts",
                 style = Hf.type.bodyMd.copy(fontSize = 13.sp),
                 color = Hf.colors.textPrimary,
             )
             Text(
-                "Record an earlier or missed workout.",
+                "Review a finished workout, or log a missed one.",
                 style = Hf.type.bodySm,
                 color = Hf.colors.textTertiary,
             )
         }
         Icon(
             Icons.AutoMirrored.Outlined.ArrowForward,
-            contentDescription = "Log a past session",
+            contentDescription = "Past workouts",
             tint = Hf.colors.textSecondary,
             modifier = Modifier.size(16.dp),
         )
@@ -589,10 +593,10 @@ private fun PastSessionsSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Log a past session", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+            Text("Past workouts", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
             if (sessions.isEmpty()) {
                 Text(
-                    "No earlier sessions to log.",
+                    "No earlier sessions yet.",
                     style = Hf.type.bodySm,
                     color = Hf.colors.textTertiary,
                 )

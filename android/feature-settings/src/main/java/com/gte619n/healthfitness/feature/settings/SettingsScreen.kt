@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gte619n.healthfitness.feature.settings.about.AboutSection
+import com.gte619n.healthfitness.feature.settings.coach.CoachAudioSection
 import com.gte619n.healthfitness.feature.settings.googlehealth.GoogleHealthSection
 import com.gte619n.healthfitness.feature.settings.units.UnitsSection
 import com.gte619n.healthfitness.ui.components.HfCard
@@ -65,6 +66,9 @@ fun SettingsScreen(
 
         // Units (IMPL — user-configurable display units).
         UnitsSection()
+
+        // Workout-coach audio cues (PR2).
+        CoachAudioSection()
 
         // Google Health connection.
         GoogleHealthSection()

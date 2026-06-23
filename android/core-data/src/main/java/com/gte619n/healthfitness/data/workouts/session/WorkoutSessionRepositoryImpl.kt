@@ -98,7 +98,11 @@ class WorkoutSessionRepositoryImpl(
                 // snapshot is exactly the DTO shape regardless of mirror-source
                 // extras.
                 sessionJson = scheduledAdapter.toJson(dto),
-                loggedJson = EMPTY_LOGGED_JSON,
+                // A COMPLETED/imported session's snapshot carries the sets it was
+                // performed with — seed the draft with them so opening it shows
+                // (and lets you correct) what you logged, rather than a blank
+                // sheet. A still-PLANNED session has none, so it starts empty.
+                loggedJson = loggedJsonFromSnapshot(dto),
             )
             draftDao.upsert(entity)
             entity.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
@@ -179,6 +183,18 @@ class WorkoutSessionRepositoryImpl(
             }
             null
         }
+
+    override suspend fun lastSets(
+        programId: String,
+        scheduledId: String,
+    ): Map<String, List<LoggedSet>> = withContext(io) {
+        // Best-effort: any network error (offline, session not yet COMPLETED on
+        // the server) leaves the logger on its designed-target prefill.
+        runCatching {
+            api.sessionLastSets(programId, scheduledId)
+                .mapValues { (_, sets) -> sets.map { it.toDomain() } }
+        }.getOrDefault(emptyMap())
+    }
 
     // ---- IMPL-17 Q3: "restore into logger" recovery for parked completions ----
 
@@ -471,6 +487,24 @@ class WorkoutSessionRepositoryImpl(
 
     private fun decodeLogged(json: String): List<LoggedPrescriptionDto> =
         runCatching { loggedAdapter.fromJson(json) }.getOrNull().orEmpty()
+
+    /**
+     * The actuals already recorded in a session snapshot, in the draft's
+     * [LoggedPrescriptionDto] shape — so opening a completed/imported session
+     * shows what was performed. Empty (`"[]"`) when the snapshot carries no
+     * logged sets (a still-PLANNED session).
+     */
+    private fun loggedJsonFromSnapshot(dto: ScheduledWorkoutDto): String {
+        val prefill = dto.session?.blocks.orEmpty().flatMap { block ->
+            val blockId = block.blockId ?: return@flatMap emptyList()
+            block.prescriptions.mapNotNull { rx ->
+                rx.loggedSets?.takeIf { it.isNotEmpty() }?.let { sets ->
+                    LoggedPrescriptionDto(blockId = blockId, orderIndex = rx.orderIndex, sets = sets)
+                }
+            }
+        }
+        return if (prefill.isEmpty()) EMPTY_LOGGED_JSON else loggedAdapter.toJson(prefill)
+    }
 
     companion object {
         /** The IMPL-AND-20 sync id of one scheduled session's mirror row. */

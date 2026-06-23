@@ -163,6 +163,29 @@ class ExercisePerformanceDigestServiceTest {
     }
 
     @Test
+    void lastSessionSetsReturnsTheMostRecentDateInPerformedOrder() {
+        seedProgram("p1");
+        // An older session and the most recent one; only the latter prefills.
+        seedCompleted("p1", TODAY.minusDays(20), "bench",
+            List.of(new LoggedSet(135.0, 8, null, null, instant(TODAY.minusDays(20)))));
+        Instant first = instant(TODAY.minusDays(3));
+        Instant second = first.plusSeconds(120);
+        seedCompleted("p1", TODAY.minusDays(3), "bench",
+            List.of(new LoggedSet(185.0, 5, null, null, first),
+                new LoggedSet(185.0, 4, null, null, second)));
+
+        List<LoggedSet> last = service.lastSessionSets(USER, List.of("bench")).get("bench");
+
+        // Most-recent date only, earliest-performed set first.
+        assertEquals(2, last.size());
+        assertEquals(185.0, last.get(0).weightLbs(), 1e-9);
+        assertEquals(5, last.get(0).reps());
+        assertEquals(4, last.get(1).reps());
+        // Exercises with no history are simply omitted.
+        assertTrue(service.lastSessionSets(USER, List.of("never-done")).isEmpty());
+    }
+
+    @Test
     void onlyCompletedSessionsAreScanned() {
         seedProgram("p1");
         // A PLANNED session's logged sets must not contribute.

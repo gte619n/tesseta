@@ -22,6 +22,14 @@ interface WorkoutProgramApi {
     @GET("api/me/workout-programs/{id}")
     suspend fun get(@Path("id") id: String): WorkoutProgramDeepDto
 
+    /**
+     * Workout history: every COMPLETED session across all programs, newest
+     * first, deep (blocks → prescriptions → logged sets) so a read-only review
+     * renders without a second fetch.
+     */
+    @GET("api/me/workout-history")
+    suspend fun workoutHistory(): List<ScheduledWorkoutDto>
+
     @GET("api/me/workout-programs/{id}/calendar")
     suspend fun calendar(
         @Path("id") id: String,
@@ -72,6 +80,19 @@ interface WorkoutProgramApi {
         @Path("id") id: String,
         @Path("scheduledId") scheduledId: String,
     ): SessionRecapDto
+
+    /**
+     * IMPL-COACH PR2 — the sets performed the last time each of this session's
+     * exercises was done, keyed by exerciseId. The live coach prefills new sets
+     * from these (the literal "previous time"), falling back to the designed
+     * target for exercises with no history. Best-effort; an absent exercise just
+     * has no prior data.
+     */
+    @GET("api/me/workout-programs/{id}/sessions/{scheduledId}/last-sets")
+    suspend fun sessionLastSets(
+        @Path("id") id: String,
+        @Path("scheduledId") scheduledId: String,
+    ): Map<String, List<LoggedSetDto>>
 }
 
 /** IMPL-COACH: the AI recap payload (null until available). */
