@@ -51,6 +51,10 @@ dependencies {
     implementation(libs.google.auth.library)
     implementation(libs.firebase.admin)
 
+    // Verifies the ECDSA-P256 signature Google Health stamps on every webhook
+    // (X-HEALTHAPI-SIGNATURE), using Google's published Tink keyset.
+    implementation(libs.google.tink)
+
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.security.test)
     // Gradle's embedded test worker ships an older junit-platform-launcher than

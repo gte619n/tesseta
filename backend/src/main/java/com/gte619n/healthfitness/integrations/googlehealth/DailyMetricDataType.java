@@ -67,7 +67,9 @@ public enum DailyMetricDataType {
     // flow (a string may instead be a body-composition type).
     public static Optional<DailyMetricDataType> tryFromApiName(String apiName) {
         for (DailyMetricDataType t : values()) {
-            if (t.urlSegment.equals(apiName) || t.filterFieldName.equals(apiName)) {
+            if (t.urlSegment.equals(apiName)
+                || t.filterFieldName.equals(apiName)
+                || t.jsonField.equals(apiName)) {
                 return Optional.of(t);
             }
         }
