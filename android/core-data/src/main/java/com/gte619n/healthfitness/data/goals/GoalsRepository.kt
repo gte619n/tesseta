@@ -62,7 +62,13 @@ class GoalsRepository @Inject constructor(
 
     suspend fun goals(status: GoalStatus? = null): List<Goal> {
         if (support.killSwitchOn()) return api.getGoals(status?.name)
-        if (dao.observeActive().first().isEmpty()) fillMirror()
+        // Offline-first, but ALWAYS attempt a live refresh first (symmetric with
+        // goalDeep()): a delta-pull can leave the mirror stale, empty, or holding
+        // rows that don't decode, and the old "only fill when empty" check then
+        // never recovered — the list silently rendered nothing. fillMirror()
+        // re-serializes through the domain adapter, so its rows always decode;
+        // offline (refresh fails) simply falls back to whatever the mirror holds.
+        runCatching { fillMirror() }
         return dao.observeActive().first()
             .mapNotNull { runCatching { goalAdapter.fromJson(it.payloadJson) }.getOrNull() }
             .filter { status == null || it.status == status }
