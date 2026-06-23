@@ -59,11 +59,14 @@ data class NutritionGuidanceDto(
 
 data class DemoFrameDto(
     // IMPL-19: frames are keyed to the per-exercise plan; `key`/`label`/`caption`
-    // are denormalized from the FrameSpec. `phase` is the deprecated legacy enum,
-    // now nullable so old documents still decode.
-    val key: String = "",
-    val label: String = "",
-    val caption: String = "",
+    // are denormalized from the FrameSpec. These are nullable on the wire — a
+    // default only covers an ABSENT field, but the server can send an explicit
+    // `null` (e.g. a legacy/partial frame), and Moshi rejects null for a
+    // non-null String, which would fail the whole response (e.g. workout
+    // history). `phase` is the deprecated legacy enum, nullable for old docs.
+    val key: String? = null,
+    val label: String? = null,
+    val caption: String? = null,
     val order: Int = 0,
     val phase: String? = null,
     val imageUrl: String? = null,
@@ -247,9 +250,9 @@ fun NutritionGuidance.toDto(): NutritionGuidanceDto = NutritionGuidanceDto(
 
 fun DemoFrameDto.toDomain(): DemoFrame =
     DemoFrame(
-        key = key,
-        label = label,
-        caption = caption,
+        key = key.orEmpty(),
+        label = label.orEmpty(),
+        caption = caption.orEmpty(),
         order = order,
         imageUrl = imageUrl ?: imageCandidates.firstOrNull(),
         phase = phase,
