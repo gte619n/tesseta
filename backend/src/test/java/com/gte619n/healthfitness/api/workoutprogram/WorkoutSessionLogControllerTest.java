@@ -136,14 +136,19 @@ class WorkoutSessionLogControllerTest {
         mvc.perform(get("/api/me/workout-history")
                 .header("X-Dev-User", TEST_USER))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(1))
+            // Paged response (workout-paging): rows under `items`, with cursor metadata.
+            .andExpect(jsonPath("$.total").value(1))
+            .andExpect(jsonPath("$.page").value(0))
+            .andExpect(jsonPath("$.size").value(25))
+            .andExpect(jsonPath("$.hasMore").value(false))
+            .andExpect(jsonPath("$.items.length()").value(1))
             // History rows span programs, so the web edit path (D6) addresses
             // the upsert with the row's own programId.
-            .andExpect(jsonPath("$[0].programId").value("p1"))
-            .andExpect(jsonPath("$[0].scheduledId").value(SCHEDULED_ID))
-            .andExpect(jsonPath("$[0].session.blocks[0].prescriptions[0].loggedSets[0].rpe").value(8.5))
-            .andExpect(jsonPath("$[0].session.blocks[0].prescriptions[0].loggedSets[0].restSeconds").value(90))
-            .andExpect(jsonPath("$[0].session.blocks[0].prescriptions[0].loggedSets[0].completedAt")
+            .andExpect(jsonPath("$.items[0].programId").value("p1"))
+            .andExpect(jsonPath("$.items[0].scheduledId").value(SCHEDULED_ID))
+            .andExpect(jsonPath("$.items[0].session.blocks[0].prescriptions[0].loggedSets[0].rpe").value(8.5))
+            .andExpect(jsonPath("$.items[0].session.blocks[0].prescriptions[0].loggedSets[0].restSeconds").value(90))
+            .andExpect(jsonPath("$.items[0].session.blocks[0].prescriptions[0].loggedSets[0].completedAt")
                 .value("2026-06-03T18:20:00Z"));
     }
 

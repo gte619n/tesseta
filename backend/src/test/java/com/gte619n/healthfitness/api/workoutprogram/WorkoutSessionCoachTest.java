@@ -109,7 +109,7 @@ class WorkoutSessionCoachTest {
 
     private static ScheduledWorkoutResponse base(ScheduledStatus status, DayResponse session) {
         return new ScheduledWorkoutResponse(
-            "p1", "2026-06-22_d1", LocalDate.parse("2026-06-22"), "ph1", "d1", "Push",
+            "p1", null, "2026-06-22_d1", LocalDate.parse("2026-06-22"), "ph1", null, "d1", "Push",
             1, false, null, null, status, session, null, 1800, null);
     }
 }

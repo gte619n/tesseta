@@ -78,6 +78,11 @@ public class WorkoutScheduleService {
         return scheduled.findById(userId, programId, scheduledId);
     }
 
+    /** All COMPLETED sessions in a program, newest scheduled-date first (Workout History). */
+    public List<ScheduledWorkout> completedSessions(String userId, String programId) {
+        return scheduled.findByStatus(userId, programId, ScheduledStatus.COMPLETED);
+    }
+
     /** Number of COMPLETED sessions in a program (no document reads on Firestore). */
     public int completedCount(String userId, String programId) {
         return scheduled.countByStatus(userId, programId, ScheduledStatus.COMPLETED);
