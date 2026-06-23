@@ -201,6 +201,23 @@ data class ScheduledWorkout(
     /** Outcome fields (ADR-0012); set once the session is COMPLETED. */
     val completedAt: Instant? = null,
     val durationSeconds: Int? = null,
+    /**
+     * Owning program + phase titles, resolved by the Workout History read so the
+     * list can draw program/phase delineation headers. Null elsewhere (calendar).
+     */
+    val programTitle: String? = null,
+    val phaseTitle: String? = null,
+)
+
+/**
+ * One page of Workout History rows (newest first). [hasMore] tells the caller
+ * whether a further [page] exists, driving the screen's load-on-scroll.
+ */
+data class WorkoutHistoryPage(
+    val items: List<ScheduledWorkout>,
+    val page: Int,
+    val total: Int,
+    val hasMore: Boolean,
 )
 
 /**
@@ -231,11 +248,11 @@ interface WorkoutProgramRepository {
     ): Result<List<ScheduledWorkout>>
 
     /**
-     * Every COMPLETED session across all programs, newest first, deep enough to
-     * review (each session carries its blocks → prescriptions → logged sets).
-     * Online-only; the workout-history list is read-only.
+     * One page of COMPLETED sessions across all programs, newest first, deep
+     * enough to review (each carries its blocks → prescriptions → logged sets).
+     * Paged for the history screen's load-on-scroll. Online-only, read-only.
      */
-    suspend fun workoutHistory(): Result<List<ScheduledWorkout>>
+    suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage>
 
     /**
      * The program's effective nutrition guidance (active phase's, else

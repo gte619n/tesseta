@@ -10,23 +10,30 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
@@ -48,13 +55,21 @@ import com.gte619n.healthfitness.ui.state.LoadingState
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
+// Prefetch the next page once the user scrolls within this many rows of the end.
+private const val LOAD_MORE_THRESHOLD = 5
+
 @Composable
 fun WorkoutHistoryRoute(
     onBack: () -> Unit,
     viewModel: WorkoutHistoryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    WorkoutHistoryScreen(state = state, onBack = onBack, onRetry = viewModel::load)
+    WorkoutHistoryScreen(
+        state = state,
+        onBack = onBack,
+        onRetry = viewModel::load,
+        onLoadMore = viewModel::loadMore,
+    )
 }
 
 @Composable
@@ -62,6 +77,7 @@ fun WorkoutHistoryScreen(
     state: WorkoutHistoryViewModel.State,
     onBack: () -> Unit,
     onRetry: () -> Unit = {},
+    onLoadMore: () -> Unit = {},
 ) {
     // The detail is rendered in-screen from the already-loaded session (no
     // re-fetch, and — unlike opening the logger — no draft is created).
@@ -97,15 +113,71 @@ fun WorkoutHistoryScreen(
                 description = "Workouts you complete will show up here to review.",
                 modifier = Modifier.fillMaxSize(),
             )
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(state.sessions, key = { "${it.scheduledId}" }) { session ->
-                    HistoryRow(session = session, onClick = { selected = session })
+            else -> {
+                val listState = rememberLazyListState()
+                // Load the next page once the list is scrolled near its end.
+                val loadMoreWhenNearEnd by remember {
+                    derivedStateOf {
+                        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        last >= state.sessions.size - LOAD_MORE_THRESHOLD
+                    }
+                }
+                LaunchedEffect(loadMoreWhenNearEnd, state.hasMore, state.loadingMore) {
+                    if (loadMoreWhenNearEnd && state.hasMore && !state.loadingMore) onLoadMore()
+                }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    itemsIndexed(
+                        state.sessions,
+                        key = { _, s -> s.scheduledId },
+                    ) { index, session ->
+                        // A header opens each new program/phase run. phaseId is
+                        // globally unique, so a change marks a new group.
+                        val prev = state.sessions.getOrNull(index - 1)
+                        if (prev == null || prev.phaseId != session.phaseId) {
+                            GroupHeader(session = session, firstOfList = index == 0)
+                        }
+                        HistoryRow(session = session, onClick = { selected = session })
+                    }
+                    if (state.loadingMore) {
+                        item(key = "loading-more") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Hf.colors.textTertiary,
+                                )
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+}
+
+/** Delineation header opening a program/phase run in the time-ordered list. */
+@Composable
+private fun GroupHeader(session: ScheduledWorkout, firstOfList: Boolean) {
+    val program = session.programTitle?.trim().orEmpty().ifBlank { "Workout" }
+    val phase = session.phaseTitle?.trim().orEmpty()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = if (firstOfList) 0.dp else 10.dp, bottom = 2.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        CapsLabel(program, color = Hf.colors.textSecondary)
+        if (phase.isNotBlank()) {
+            Spacer(Modifier.size(6.dp))
+            CapsLabel("· $phase", color = Hf.colors.textTertiary)
         }
     }
 }
@@ -239,6 +311,8 @@ private fun WorkoutHistoryPreview() {
     val completed = ProgramFixtures.scheduledWithSession.copy(
         status = ScheduledStatus.COMPLETED,
         durationSeconds = 2_840,
+        programTitle = "Hypertrophy Block",
+        phaseTitle = "Base",
     )
     HealthFitnessTheme {
         WorkoutHistoryScreen(
