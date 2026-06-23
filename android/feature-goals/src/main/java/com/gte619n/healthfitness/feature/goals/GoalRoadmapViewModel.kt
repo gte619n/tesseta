@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.goals.GoalsRepository
 import com.gte619n.healthfitness.domain.goals.GoalDeep
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +23,11 @@ data class GoalRoadmapUiState(
     val error: String? = null,
     /** stepIds with an in-flight mutation, so the UI can disable their checkbox. */
     val pendingStepIds: Set<String> = emptySet(),
+    /** Nutrition guidance the goal's linked program can apply; null = no "Update nutrition" action. */
+    val nutritionGuidance: NutritionGuidance? = null,
+    val applyingNutrition: Boolean = false,
+    /** One-shot: the macros just applied to the target, for a confirmation message. */
+    val appliedNutrition: Macros? = null,
 )
 
 @HiltViewModel
@@ -52,6 +59,36 @@ class GoalRoadmapViewModel @Inject constructor(
                 }
             }
         }
+        // Best-effort: whether this goal's linked program has nutrition guidance
+        // to apply (drives the "Update nutrition" action). A failure just hides it.
+        viewModelScope.launch {
+            val guidance = runCatching { repository.nutritionGuidance(goalId) }.getOrNull()
+            _state.update { it.copy(nutritionGuidance = guidance) }
+        }
+    }
+
+    /** Apply the goal's linked-program nutrition guidance as the user's macro target. */
+    fun applyNutrition() {
+        if (_state.value.applyingNutrition) return
+        _state.update { it.copy(applyingNutrition = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val applied = repository.applyNutrition(goalId)
+                _state.update { it.copy(applyingNutrition = false, appliedNutrition = applied) }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        applyingNutrition = false,
+                        error = e.message ?: "Couldn't update nutrition target",
+                    )
+                }
+            }
+        }
+    }
+
+    /** Clear the one-shot applied-nutrition result after the UI shows it. */
+    fun consumeAppliedNutrition() {
+        _state.update { it.copy(appliedNutrition = null) }
     }
 
     fun toggleStep(phaseId: String, stepId: String, done: Boolean) {

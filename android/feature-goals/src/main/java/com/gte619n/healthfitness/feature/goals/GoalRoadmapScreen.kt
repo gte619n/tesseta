@@ -26,11 +26,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -45,6 +50,8 @@ import com.gte619n.healthfitness.domain.goals.Phase
 import com.gte619n.healthfitness.domain.goals.PhaseStatus
 import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepKind
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
@@ -65,6 +72,8 @@ fun GoalRoadmapRoute(
         onBack = onBack,
         onToggleStep = viewModel::toggleStep,
         onResetStep = viewModel::resetStepToAuto,
+        onUpdateNutrition = viewModel::applyNutrition,
+        onConsumeApplied = viewModel::consumeAppliedNutrition,
     )
 }
 
@@ -74,7 +83,10 @@ fun GoalRoadmapScreen(
     onBack: () -> Unit,
     onToggleStep: (phaseId: String, stepId: String, done: Boolean) -> Unit,
     onResetStep: (phaseId: String, stepId: String) -> Unit,
+    onUpdateNutrition: () -> Unit = {},
+    onConsumeApplied: () -> Unit = {},
 ) {
+    var confirmNutrition by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -85,6 +97,20 @@ fun GoalRoadmapScreen(
             title = state.goal?.title ?: "Goal",
             subtitle = "Your phased plan and progress",
             onBack = onBack,
+            trailing = state.nutritionGuidance?.let {
+                {
+                    TextButton(
+                        onClick = { confirmNutrition = true },
+                        enabled = !state.applyingNutrition,
+                    ) {
+                        Text(
+                            if (state.applyingNutrition) "Updating…" else "Update nutrition",
+                            style = Hf.type.capsSm,
+                            color = Hf.colors.accent,
+                        )
+                    }
+                }
+            },
         )
 
         when {
@@ -99,6 +125,85 @@ fun GoalRoadmapScreen(
             )
         }
     }
+
+    // Confirm before overwriting the current nutrition target with the plan's.
+    val guidance = state.nutritionGuidance
+    if (confirmNutrition && guidance != null) {
+        AlertDialog(
+            onDismissRequest = { confirmNutrition = false },
+            title = { Text("Update nutrition target?", style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
+            text = {
+                Text(
+                    "Set your daily nutrition target to ${guidanceSummary(guidance)} from this " +
+                        "goal's plan. This replaces your current target.",
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmNutrition = false
+                    onUpdateNutrition()
+                }) { Text("Update target", color = Hf.colors.accent) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmNutrition = false }) {
+                    Text("Cancel", color = Hf.colors.textTertiary)
+                }
+            },
+            containerColor = Hf.colors.surface,
+        )
+    }
+
+    // Result confirmation once the target is written.
+    state.appliedNutrition?.let { applied ->
+        AlertDialog(
+            onDismissRequest = onConsumeApplied,
+            title = { Text("Nutrition target updated", style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
+            text = {
+                Text(
+                    macrosSummary(applied),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textPrimary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onConsumeApplied) { Text("Done", color = Hf.colors.accent) }
+            },
+            containerColor = Hf.colors.surface,
+        )
+    }
+}
+
+/** "2,640 kcal · 200P / 280C / 80F" — what applying this guidance will set (calories macro-derived). */
+private fun guidanceSummary(g: NutritionGuidance): String {
+    val derived = if (g.proteinG == null && g.carbsG == null && g.fatG == null) {
+        null
+    } else {
+        (g.proteinG ?: 0) * 4 + (g.carbsG ?: 0) * 4 + (g.fatG ?: 0) * 9
+    }
+    val kcal = derived ?: g.kcal
+    val parts = mutableListOf<String>()
+    if (kcal != null) parts += "$kcal kcal"
+    val macros = listOfNotNull(
+        g.proteinG?.let { "${it}P" },
+        g.carbsG?.let { "${it}C" },
+        g.fatG?.let { "${it}F" },
+    ).joinToString(" / ")
+    if (macros.isNotEmpty()) parts += macros
+    return parts.joinToString(" · ")
+}
+
+private fun macrosSummary(m: Macros): String {
+    val parts = mutableListOf<String>()
+    m.caloriesKcal?.let { parts += "${it.toLong()} kcal" }
+    val macros = listOfNotNull(
+        m.proteinGrams?.let { "${it.toLong()}P" },
+        m.carbsGrams?.let { "${it.toLong()}C" },
+        m.fatGrams?.let { "${it.toLong()}F" },
+    ).joinToString(" / ")
+    if (macros.isNotEmpty()) parts += macros
+    return parts.joinToString(" · ")
 }
 
 @Composable
