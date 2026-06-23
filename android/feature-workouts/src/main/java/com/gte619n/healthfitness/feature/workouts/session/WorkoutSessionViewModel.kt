@@ -113,7 +113,25 @@ class WorkoutSessionViewModel @Inject constructor(
         }
     }
 
-    /** Replace one logged set after an inline weight/reps/RPE edit. */
+    /**
+     * Log a timed exercise's set with the measured [durationSeconds] (from the
+     * hold timer) rather than the prescribed default, and start the prescribed
+     * rest countdown — the timed counterpart to checking off a rep set.
+     */
+    fun logTimedSet(key: PrescriptionKey, durationSeconds: Int) {
+        val draft = _state.value.draft ?: return
+        val current = draft.logged[key].orEmpty()
+        val at = now()
+        val set = LoggedSet(
+            durationSeconds = durationSeconds,
+            restSeconds = restSecondsBefore(draft, at),
+            completedAt = at,
+        )
+        persistSets(key, current + set)
+        draft.prescription(key)?.restSeconds?.let { timers.startRest(it, at) }
+    }
+
+    /** Replace one logged set after an inline weight/reps/duration edit. */
     fun editSet(key: PrescriptionKey, setIndex: Int, set: LoggedSet) {
         val draft = _state.value.draft ?: return
         val current = draft.logged[key].orEmpty()
@@ -190,22 +208,27 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
-     * Defaults for a freshly checked-off set: weight carried from the previous
-     * set of the same prescription, reps from the previous set or the
-     * prescribed target, RPE left for the user, and the actual rest taken
-     * (seconds since the last set logged anywhere in the session, when
-     * plausible) — the full-actuals capture of ADR-0012 Decision 2.
+     * Defaults for a freshly checked-off set. Weight/reps carry from the
+     * previous set of the same prescription, then fall back to the
+     * history-grounded design target ([Prescription.targetWeightLbs] / the
+     * prescribed rep range) so the row lands pre-filled with what to lift rather
+     * than blank. RPE is left for program design (no mid-workout capture). A
+     * timed exercise (stretch/mobility) fills [LoggedSet.durationSeconds] from
+     * the prescribed hold instead of weight/reps. [restSeconds] is the actual
+     * rest taken — the full-actuals capture of ADR-0012 Decision 2.
      */
     private fun newSet(draft: WorkoutSessionDraft, key: PrescriptionKey): LoggedSet {
         val prescription = draft.prescription(key)
         val previous = draft.logged[key]?.lastOrNull()
         val at = now()
+        val timed = prescription?.isTimed == true
         return LoggedSet(
-            weightLbs = previous?.weightLbs,
-            reps = previous?.reps ?: prescription?.repsMin ?: prescription?.repsMax,
+            weightLbs = if (timed) null else previous?.weightLbs ?: prescription?.targetWeightLbs,
+            reps = if (timed) null else previous?.reps ?: prescription?.repsMax ?: prescription?.repsMin,
             rpe = null,
             restSeconds = restSecondsBefore(draft, at),
             completedAt = at,
+            durationSeconds = if (timed) previous?.durationSeconds ?: prescription?.durationSeconds else null,
         )
     }
 

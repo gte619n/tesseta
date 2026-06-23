@@ -10,8 +10,14 @@
     <string name="workout_session_weight_header">lb</string>
     <string name="workout_session_reps_header">Reps</string>
     <string name="workout_session_rpe_header">RPE</string>
+    <string name="workout_session_time_header">Time</string>
     <string name="workout_session_set_pending">Tap the circle to log</string>
     <string name="workout_session_add_set">Add set</string>
+    <string name="workout_session_overview">Workout overview</string>
+    <string name="workout_session_next">Next</string>
+    <string name="workout_session_hold_start">Start hold</string>
+    <string name="workout_session_hold_stop">Stop · %1$s</string>
+    <string name="workout_session_hold_target">Target %1$s</string>
     <string name="workout_session_check_set">Log set %1$d</string>
     <string name="workout_session_uncheck_set">Remove set %1$d</string>
     <string name="workout_session_rest_remaining">Rest · %1$s</string>

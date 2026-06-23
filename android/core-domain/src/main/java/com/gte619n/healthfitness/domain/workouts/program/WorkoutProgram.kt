@@ -82,6 +82,8 @@ data class LoggedSet(
     val rpe: Double? = null,
     val restSeconds: Int? = null,
     val completedAt: Instant? = null,
+    /** Held time for a timed exercise (stretch/mobility/cardio); the time-based counterpart to [reps]. */
+    val durationSeconds: Int? = null,
 )
 
 data class Prescription(
@@ -107,7 +109,14 @@ data class Prescription(
     val targetWeightLbs: Double? = null,
     /** IMPL-18: short "why" for the prescribed load (e1RM / last done / ramp), shown on tap (R6). */
     val loadBasis: String? = null,
-)
+) {
+    /**
+     * A timed exercise (stretch / mobility / cardio hold) — logged by held time
+     * rather than reps. True when a duration is prescribed and no rep target is.
+     */
+    val isTimed: Boolean
+        get() = durationSeconds != null && repsMin == null && repsMax == null
+}
 
 data class Block(
     val blockId: String,

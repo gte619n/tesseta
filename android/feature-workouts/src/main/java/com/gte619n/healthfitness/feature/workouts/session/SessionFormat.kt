@@ -1,11 +1,46 @@
 package com.gte619n.healthfitness.feature.workouts.session
 
+import com.gte619n.healthfitness.domain.workouts.program.Block
+import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 
 // Display formatting helpers for the active-session logger. Pure functions,
 // kept out of the composables so they stay previewable and testable (same
 // pattern as program/ProgramFormat.kt).
+
+/**
+ * One exercise the coach steps through: a [prescription] inside its [block],
+ * plus the [key] its logged sets are stored under. The session is flattened into
+ * an ordered list of these for the one-exercise-at-a-time pager.
+ */
+data class SessionStep(
+    val block: Block,
+    val prescription: Prescription,
+    val key: PrescriptionKey,
+)
+
+/** Every prescription across the session's blocks, in display order. */
+fun WorkoutSessionDraft.sessionSteps(): List<SessionStep> {
+    val day = scheduled.session ?: return emptyList()
+    return day.blocks.sortedBy { it.orderIndex }.flatMap { block ->
+        block.prescriptions.sortedBy { it.orderIndex }.map { rx ->
+            SessionStep(block, rx, PrescriptionKey(block.blockId, rx.orderIndex))
+        }
+    }
+}
+
+/**
+ * Index of the first exercise that still has unlogged prescribed sets — where
+ * the coach should open (and re-open on resume). Falls back to 0 when every
+ * exercise is complete or there are none.
+ */
+fun WorkoutSessionDraft.firstIncompleteStepIndex(): Int {
+    val idx = sessionSteps().indexOfFirst { step ->
+        (logged[step.key]?.size ?: 0) < (step.prescription.sets ?: 1)
+    }
+    return if (idx >= 0) idx else 0
+}
 
 /** "47:32" / "1:02:10" count-up label for the session's elapsed header. */
 fun elapsedLabel(totalSeconds: Long): String {

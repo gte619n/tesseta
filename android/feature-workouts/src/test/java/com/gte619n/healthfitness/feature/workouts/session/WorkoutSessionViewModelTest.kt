@@ -46,6 +46,9 @@ class WorkoutSessionViewModelTest {
     /** The fixture's only logged prescription: the squat (sets=3, rest 90s). */
     private val squatKey = PrescriptionKey("b-main", 0)
 
+    /** The fixture's timed prescription: the plank (duration 45s, rest 30s). */
+    private val plankKey = PrescriptionKey("b-core", 0)
+
     private fun vm(): WorkoutSessionViewModel {
         coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
         every { repo.observeDraft("p1", "s2") } returns draftFlow
@@ -104,6 +107,50 @@ class WorkoutSessionViewModelTest {
         val rest = timers.rest.value
         assertNotNull(rest)
         assertEquals(90, rest!!.totalSeconds)
+    }
+
+    @Test
+    fun `checking a timed exercise defaults its hold from the prescription`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.toggleSet(plankKey, 0)
+        advanceUntilIdle()
+
+        val appended = sets.captured.single()
+        // Timed exercises carry the prescribed hold, not weight/reps.
+        assertEquals(45, appended.durationSeconds)
+        assertNull(appended.weightLbs)
+        assertNull(appended.reps)
+        // The plank's 30s rest countdown starts.
+        assertEquals(30, timers.rest.value!!.totalSeconds)
+    }
+
+    @Test
+    fun `logTimedSet records the measured hold and starts the rest timer`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+
+        val vm = vm()
+        advanceUntilIdle()
+        vm.now = { Instant.parse("2026-06-03T14:07:00Z") }
+
+        vm.logTimedSet(plankKey, 38)
+        advanceUntilIdle()
+
+        val appended = sets.captured.single()
+        // The measured hold wins over the prescribed default.
+        assertEquals(38, appended.durationSeconds)
+        assertNull(appended.weightLbs)
+        assertEquals(120, appended.restSeconds)
+        assertEquals(30, timers.rest.value!!.totalSeconds)
     }
 
     @Test
