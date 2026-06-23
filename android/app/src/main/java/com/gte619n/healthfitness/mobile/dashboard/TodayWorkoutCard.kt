@@ -57,8 +57,8 @@ fun TodayWorkoutCard(
         is TodayWorkout.Start -> CardModel(
             s.programId,
             s.scheduledId,
-            "Start workout",
-            s.label ?: "Today's session",
+            if (s.isToday) "Start workout" else "Start next workout",
+            s.label ?: if (s.isToday) "Today's session" else "Next session",
         )
     }
 

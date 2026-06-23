@@ -31,11 +31,16 @@ sealed interface TodayWorkout {
         val setsLogged: Int,
     ) : TodayWorkout
 
-    /** Today has a planned session ready to start in one tap. */
+    /**
+     * A planned session ready to start in one tap. [isToday] is false when it's
+     * the next upcoming (or a missed earlier) session rather than today's, so
+     * the card can read "Start next workout".
+     */
     data class Start(
         val programId: String,
         val scheduledId: String,
         val label: String?,
+        val isToday: Boolean,
     ) : TodayWorkout
 }
 
@@ -55,7 +60,10 @@ class TodayWorkoutViewModel @Inject constructor(
 
     val state: StateFlow<TodayWorkout> =
         combine(sessionRepository.observeDrafts(), todaySession) { drafts, planned ->
-            val draft = drafts.firstOrNull()
+            // Only a genuinely in-progress workout resumes here; a draft opened
+            // over an already-finished session (review) shouldn't read as
+            // "Resume" on the home screen — it falls through to Start instead.
+            val draft = drafts.firstOrNull { it.scheduled.status == ScheduledStatus.PLANNED }
             when {
                 draft != null -> TodayWorkout.Resume(
                     programId = draft.programId,
@@ -68,7 +76,12 @@ class TodayWorkoutViewModel @Inject constructor(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayWorkout.Hidden)
 
-    /** Resolve today's planned session from the active program's current-week calendar. */
+    /**
+     * Resolve the session to offer from the active program's current-week
+     * calendar: today's planned session if there is one, otherwise the next
+     * upcoming planned session (or the soonest missed one earlier this week) so
+     * you can start a workout right now even on a rest day.
+     */
     fun refresh() {
         viewModelScope.launch {
             val today = LocalDate.now()
@@ -79,15 +92,21 @@ class TodayWorkoutViewModel @Inject constructor(
                 return@launch
             }
             val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            val sessions = programRepository
+            val planned = programRepository
                 .calendar(active.programId, weekStart, weekStart.plusDays(6))
                 .getOrNull()
                 .orEmpty()
-            val todays = sessions.firstOrNull {
-                it.date == today && it.status == ScheduledStatus.PLANNED
-            }
-            todaySession.value = todays?.let {
-                TodayWorkout.Start(active.programId, it.scheduledId, it.dayLabel.ifBlank { null })
+                .filter { it.status == ScheduledStatus.PLANNED }
+            val chosen = planned.firstOrNull { it.date == today }
+                ?: planned.filter { !it.date.isBefore(today) }.minByOrNull { it.date }
+                ?: planned.minByOrNull { it.date }
+            todaySession.value = chosen?.let {
+                TodayWorkout.Start(
+                    programId = active.programId,
+                    scheduledId = it.scheduledId,
+                    label = it.dayLabel.ifBlank { null },
+                    isToday = it.date == today,
+                )
             }
         }
     }

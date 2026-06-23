@@ -3,6 +3,7 @@
 <resources>
     <string name="workout_session_title">Workout</string>
     <string name="workout_session_start">Start workout</string>
+    <string name="workout_session_review">Review</string>
     <string name="workout_session_resume">Resume</string>
     <string name="workout_session_in_progress">Workout in progress</string>
     <string name="workout_session_elapsed">Elapsed %1$s</string>
