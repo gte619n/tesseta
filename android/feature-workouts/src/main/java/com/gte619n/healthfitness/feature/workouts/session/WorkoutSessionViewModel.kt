@@ -74,7 +74,19 @@ class WorkoutSessionViewModel @Inject constructor(
     /** The shared rest countdown (also rendered by the foreground notification). */
     val restTimer: StateFlow<WorkoutSessionTimers.RestTimer?> = timers.rest
 
+    /**
+     * IMPL-COACH PR2 — what each exercise was performed last time, keyed by
+     * exerciseId, used to prefill new sets with the literal previous session.
+     * Fetched best-effort on open; empty until it lands (prefill falls back to
+     * the designed target meanwhile).
+     */
+    private var lastSetsByExercise: Map<String, List<LoggedSet>> = emptyMap()
+
     init {
+        // Best-effort prior-performance fetch, independent of the draft load below.
+        viewModelScope.launch {
+            lastSetsByExercise = repository.lastSets(programId, scheduledId)
+        }
         viewModelScope.launch {
             val started = repository.start(programId, scheduledId)
             started.onFailure { e ->
@@ -219,16 +231,31 @@ class WorkoutSessionViewModel @Inject constructor(
      */
     private fun newSet(draft: WorkoutSessionDraft, key: PrescriptionKey): LoggedSet {
         val prescription = draft.prescription(key)
-        val previous = draft.logged[key]?.lastOrNull()
+        val logged = draft.logged[key].orEmpty()
+        val previous = logged.lastOrNull()
+        // The matching set from the last time this exercise was performed.
+        val lastTime = prescription?.exerciseId
+            ?.let { lastSetsByExercise[it] }
+            ?.getOrNull(logged.size)
         val at = now()
         val timed = prescription?.isTimed == true
         return LoggedSet(
-            weightLbs = if (timed) null else previous?.weightLbs ?: prescription?.targetWeightLbs,
-            reps = if (timed) null else previous?.reps ?: prescription?.repsMax ?: prescription?.repsMin,
+            // Carry within the session first, then the literal previous session,
+            // then the designed target (IMPL-COACH PR2).
+            weightLbs = if (timed) null else {
+                previous?.weightLbs ?: lastTime?.weightLbs ?: prescription?.targetWeightLbs
+            },
+            reps = if (timed) null else {
+                previous?.reps ?: lastTime?.reps ?: prescription?.repsMax ?: prescription?.repsMin
+            },
             rpe = null,
             restSeconds = restSecondsBefore(draft, at),
             completedAt = at,
-            durationSeconds = if (timed) previous?.durationSeconds ?: prescription?.durationSeconds else null,
+            durationSeconds = if (timed) {
+                previous?.durationSeconds ?: lastTime?.durationSeconds ?: prescription?.durationSeconds
+            } else {
+                null
+            },
         )
     }
 

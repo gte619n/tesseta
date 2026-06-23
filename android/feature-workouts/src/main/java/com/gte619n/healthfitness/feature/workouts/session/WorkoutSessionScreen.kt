@@ -107,9 +107,12 @@ private const val DEMO_FRAME_CROSSFADE_MILLIS = 1_000
 fun WorkoutSessionRoute(
     onClose: () -> Unit,
     viewModel: WorkoutSessionViewModel = hiltViewModel(),
+    audioViewModel: CoachAudioViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val restTimer by viewModel.restTimer.collectAsStateWithLifecycle()
+    val voiceEnabled by audioViewModel.voiceAnnouncements.collectAsStateWithLifecycle()
+    val announcer = rememberCoachAnnouncer()
     LaunchedEffect(state.closed) { if (state.closed) onClose() }
 
     // ADR-0012 D6: WorkoutSessionService's shade notification (timer / rest
@@ -133,6 +136,8 @@ fun WorkoutSessionRoute(
     WorkoutSessionScreen(
         state = state,
         restTimer = restTimer,
+        voiceEnabled = voiceEnabled,
+        announce = announcer::speak,
         onBack = onClose,
         onToggleSet = viewModel::toggleSet,
         onEditSet = viewModel::editSet,
@@ -153,6 +158,8 @@ fun WorkoutSessionRoute(
 fun WorkoutSessionScreen(
     state: WorkoutSessionUiState,
     restTimer: RestTimer?,
+    voiceEnabled: Boolean = false,
+    announce: (String) -> Unit = {},
     onBack: () -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
@@ -224,6 +231,8 @@ fun WorkoutSessionScreen(
                 now = now,
                 error = state.error,
                 overview = overview,
+                voiceEnabled = voiceEnabled,
+                announce = announce,
                 onShowOverview = { overview = it },
                 onToggleSet = onToggleSet,
                 onEditSet = onEditSet,
@@ -287,6 +296,8 @@ private fun SessionBody(
     now: Instant,
     error: String?,
     overview: Boolean,
+    voiceEnabled: Boolean,
+    announce: (String) -> Unit,
     onShowOverview: (Boolean) -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
@@ -323,6 +334,18 @@ private fun SessionBody(
             pageCount = { steps.size },
         )
         val scope = rememberCoroutineScope()
+
+        // PR2: speak the exercise + target as the coach settles on it (not while
+        // paging through the reference list, and only when settled — no cue per
+        // pixel of a drag).
+        if (voiceEnabled && !overview) {
+            val settledPage = pagerState.currentPage.takeIf { !pagerState.isScrollInProgress }
+            LaunchedEffect(settledPage) {
+                settledPage?.let { steps.getOrNull(it)?.prescription }
+                    ?.let { coachAnnouncement(it) }
+                    ?.let(announce)
+            }
+        }
 
         if (overview) {
             OverviewList(

@@ -180,6 +180,18 @@ class WorkoutSessionRepositoryImpl(
             null
         }
 
+    override suspend fun lastSets(
+        programId: String,
+        scheduledId: String,
+    ): Map<String, List<LoggedSet>> = withContext(io) {
+        // Best-effort: any network error (offline, session not yet COMPLETED on
+        // the server) leaves the logger on its designed-target prefill.
+        runCatching {
+            api.sessionLastSets(programId, scheduledId)
+                .mapValues { (_, sets) -> sets.map { it.toDomain() } }
+        }.getOrDefault(emptyMap())
+    }
+
     // ---- IMPL-17 Q3: "restore into logger" recovery for parked completions ----
 
     override fun observeParkedCompletions(): Flow<List<ParkedCompletion>> =

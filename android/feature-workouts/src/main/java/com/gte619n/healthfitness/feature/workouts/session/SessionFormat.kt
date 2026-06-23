@@ -42,6 +42,29 @@ fun WorkoutSessionDraft.firstIncompleteStepIndex(): Int {
     return if (idx >= 0) idx else 0
 }
 
+/**
+ * The spoken cue for an exercise at set start (PR2 voice announcements), e.g.
+ * "Back Squat. 185 pounds, 8 reps." or, for a timed hold, "Plank. 45 second
+ * hold." Returns null when there's no exercise name to announce. Weight/reps
+ * pieces are dropped when the prescription doesn't specify them.
+ */
+fun coachAnnouncement(prescription: Prescription): String? {
+    val name = prescription.exercise?.name?.takeIf { it.isNotBlank() } ?: return null
+    if (prescription.isTimed) {
+        val seconds = prescription.durationSeconds ?: return "$name."
+        return "$name. $seconds second hold."
+    }
+    val pieces = mutableListOf<String>()
+    prescription.targetWeightLbs?.let { lbs ->
+        val rounded = if (lbs == lbs.toLong().toDouble()) lbs.toLong().toString() else lbs.toString()
+        pieces += if (lbs == 0.0) "body weight" else "$rounded pounds"
+    }
+    (prescription.repsMax ?: prescription.repsMin)?.let { reps ->
+        pieces += if (reps == 1) "1 rep" else "$reps reps"
+    }
+    return if (pieces.isEmpty()) "$name." else "$name. ${pieces.joinToString(", ")}."
+}
+
 /** "47:32" / "1:02:10" count-up label for the session's elapsed header. */
 fun elapsedLabel(totalSeconds: Long): String {
     val s = totalSeconds.coerceAtLeast(0)

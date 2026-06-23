@@ -2,6 +2,10 @@ package com.gte619n.healthfitness.api.workoutprogram;
 
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import com.gte619n.healthfitness.core.workoutprogram.Block;
+import com.gte619n.healthfitness.core.workoutprogram.ExercisePerformanceDigestService;
+import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
+import com.gte619n.healthfitness.core.workoutprogram.Prescription;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
@@ -11,7 +15,11 @@ import com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutSessionCompletionService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutSessionCompletionService.InvalidSessionLogException;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +46,7 @@ public class WorkoutProgramController {
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
     private final WorkoutSessionCoach coach;
+    private final ExercisePerformanceDigestService digests;
     private final SyncChangeNotifier syncNotifier;
 
     public WorkoutProgramController(
@@ -48,6 +57,7 @@ public class WorkoutProgramController {
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
         WorkoutSessionCoach coach,
+        ExercisePerformanceDigestService digests,
         SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
@@ -57,6 +67,7 @@ public class WorkoutProgramController {
         this.validator = validator;
         this.assembler = assembler;
         this.coach = coach;
+        this.digests = digests;
         this.syncNotifier = syncNotifier;
     }
 
@@ -209,5 +220,37 @@ public class WorkoutProgramController {
             .map(sw -> assembler.scheduled(userId, List.of(sw)).get(0))
             .map(response -> new SessionRecapResponse(coach.recapFor(response)))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    /**
+     * IMPL-COACH PR2: the sets performed the last time each of this session's
+     * exercises was done, keyed by exerciseId. The live coach prefills new sets
+     * from these — the literal "previous time you did this" — falling back to
+     * the designed target when an exercise has no history. Best-effort: an
+     * exercise absent from the map simply has no prior data.
+     */
+    @GetMapping("/{programId}/sessions/{scheduledId}/last-sets")
+    public Map<String, List<LastSetView>> sessionLastSets(
+        @PathVariable String programId,
+        @PathVariable String scheduledId
+    ) {
+        String userId = currentUser.get().userId();
+        ScheduledWorkout sw = schedule.session(userId, programId, scheduledId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        Set<String> exerciseIds = new LinkedHashSet<>();
+        if (sw.session() != null && sw.session().blocks() != null) {
+            for (Block block : sw.session().blocks()) {
+                if (block.prescriptions() == null) continue;
+                for (Prescription rx : block.prescriptions()) {
+                    if (rx.exerciseId() != null) exerciseIds.add(rx.exerciseId());
+                }
+            }
+        }
+
+        Map<String, List<LoggedSet>> last = digests.lastSessionSets(userId, exerciseIds);
+        Map<String, List<LastSetView>> out = new LinkedHashMap<>();
+        last.forEach((id, sets) -> out.put(id, sets.stream().map(LastSetView::from).toList()));
+        return out;
     }
 }

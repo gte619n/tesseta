@@ -52,6 +52,7 @@ class WorkoutSessionViewModelTest {
     private fun vm(): WorkoutSessionViewModel {
         coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
         every { repo.observeDraft("p1", "s2") } returns draftFlow
+        coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
         return WorkoutSessionViewModel(repo, timers, handle)
     }
 
@@ -70,6 +71,7 @@ class WorkoutSessionViewModelTest {
     @Test
     fun `start failure surfaces error`() = runTest {
         coEvery { repo.start("p1", "s2") } returns Result.failure(RuntimeException("not mirrored"))
+        coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
         val vm = WorkoutSessionViewModel(repo, timers, handle)
         advanceUntilIdle()
 
@@ -107,6 +109,31 @@ class WorkoutSessionViewModelTest {
         val rest = timers.rest.value
         assertNotNull(rest)
         assertEquals(90, rest!!.totalSeconds)
+    }
+
+    @Test
+    fun `first set prefills from the last time the exercise was done`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", squatKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+        // The previous session of the squat: 200 x 5.
+        coEvery { repo.lastSets("p1", "s2") } returns
+            mapOf("ex-squat" to listOf(LoggedSet(weightLbs = 200.0, reps = 5)))
+        // A fresh draft with nothing logged yet, so set 1 has no in-session carry.
+        draftFlow.value = ProgramFixtures.activeDraft.copy(logged = emptyMap())
+
+        coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
+        every { repo.observeDraft("p1", "s2") } returns draftFlow
+        val vm = WorkoutSessionViewModel(repo, timers, handle)
+        advanceUntilIdle()
+
+        vm.toggleSet(squatKey, 0)
+        advanceUntilIdle()
+
+        val appended = sets.captured.single()
+        assertEquals(200.0, appended.weightLbs)
+        assertEquals(5, appended.reps)
     }
 
     @Test

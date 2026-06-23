@@ -9,6 +9,8 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.IBinder
 import android.os.VibrationEffect
@@ -19,6 +21,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
+import com.gte619n.healthfitness.domain.prefs.CoachAudioPreferences
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.mobile.MainActivity
@@ -74,14 +77,23 @@ class WorkoutSessionService : Service() {
 
     @Inject lateinit var timers: WorkoutSessionTimers
 
+    @Inject lateinit var coachAudio: CoachAudioPreferences
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var watchJob: Job? = null
+
+    /** Latest "beep on rest end" setting, mirrored so [onRestExpired] reads it cheaply. */
+    @Volatile private var restBeepEnabled: Boolean = true
+
+    /** Lazily created on the first beep; routes to STREAM_MUSIC (i.e. headphones). */
+    private var toneGenerator: ToneGenerator? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        scope.launch { coachAudio.settings.collect { restBeepEnabled = it.restBeep } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -97,6 +109,8 @@ class WorkoutSessionService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        toneGenerator?.release()
+        toneGenerator = null
         super.onDestroy()
     }
 
@@ -141,12 +155,26 @@ class WorkoutSessionService : Service() {
             }
         }
 
-    /** IMPL-COACH: a rest period ran to zero — buzz + a heads-up alert. */
+    /** IMPL-COACH: a rest period ran to zero — beep + buzz + a heads-up alert. */
     private fun onRestExpired() {
+        if (restBeepEnabled) beep()
         vibrate()
         if (canPostNotifications()) {
             NotificationManagerCompat.from(this)
                 .notify(REST_ALERT_NOTIFICATION_ID, restAlertNotification())
+        }
+    }
+
+    /**
+     * Short beep on the music stream so it plays over connected headphones
+     * (PR2 audio cue). Best-effort: a failed/again-allocated ToneGenerator must
+     * never take down the session, so the whole thing is wrapped defensively.
+     */
+    private fun beep() {
+        runCatching {
+            val tone = toneGenerator
+                ?: ToneGenerator(AudioManager.STREAM_MUSIC, BEEP_VOLUME).also { toneGenerator = it }
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP2, BEEP_DURATION_MILLIS)
         }
     }
 
@@ -285,6 +313,10 @@ class WorkoutSessionService : Service() {
         const val REST_ALERT_CHANNEL_ID = "workout_rest_alert"
         const val REST_ALERT_NOTIFICATION_ID = 0x5E56 // distinct from the ongoing timer
         private const val REST_ALERT_TIMEOUT_MILLIS = 10_000L
+
+        /** Rest-end beep loudness (0–100) and length. */
+        private const val BEEP_VOLUME = 80
+        private const val BEEP_DURATION_MILLIS = 350
 
         /** Start (or poke) the service. Safe to call repeatedly. */
         fun start(context: android.content.Context) {

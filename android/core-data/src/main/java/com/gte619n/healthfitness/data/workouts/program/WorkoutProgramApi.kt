@@ -72,6 +72,19 @@ interface WorkoutProgramApi {
         @Path("id") id: String,
         @Path("scheduledId") scheduledId: String,
     ): SessionRecapDto
+
+    /**
+     * IMPL-COACH PR2 — the sets performed the last time each of this session's
+     * exercises was done, keyed by exerciseId. The live coach prefills new sets
+     * from these (the literal "previous time"), falling back to the designed
+     * target for exercises with no history. Best-effort; an absent exercise just
+     * has no prior data.
+     */
+    @GET("api/me/workout-programs/{id}/sessions/{scheduledId}/last-sets")
+    suspend fun sessionLastSets(
+        @Path("id") id: String,
+        @Path("scheduledId") scheduledId: String,
+    ): Map<String, List<LoggedSetDto>>
 }
 
 /** IMPL-COACH: the AI recap payload (null until available). */
