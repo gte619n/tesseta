@@ -5,6 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.gte619n.healthfitness.feature.workouts.EditGymScreen
 import com.gte619n.healthfitness.feature.workouts.GymDetailScreen
 import com.gte619n.healthfitness.feature.workouts.GymsListScreen
@@ -77,6 +78,16 @@ object WorkoutsRoutes {
 
     fun session(programId: String, scheduledId: String): String =
         "workouts/programs/$programId/sessions/$scheduledId"
+
+    // Deep link into the active session logger from the ongoing-workout
+    // notification (mirrors the medications dose-checklist link). Matched by the
+    // SESSION destination's navDeepLink below and the MainActivity ACTION_VIEW
+    // intent-filter (scheme healthfitness, host workout-session).
+    const val SESSION_DEEP_LINK =
+        "healthfitness://workout-session/{programId}/{scheduledId}"
+
+    fun sessionDeepLink(programId: String, scheduledId: String): String =
+        "healthfitness://workout-session/$programId/$scheduledId"
 }
 
 fun NavGraphBuilder.workoutsGraph(
@@ -207,6 +218,7 @@ fun NavGraphBuilder.workoutsGraph(
             navArgument(WorkoutsRoutes.ARG_PROGRAM_ID) { type = NavType.StringType },
             navArgument(WorkoutsRoutes.ARG_SCHEDULED_ID) { type = NavType.StringType },
         ),
+        deepLinks = listOf(navDeepLink { uriPattern = WorkoutsRoutes.SESSION_DEEP_LINK }),
     ) {
         WorkoutSessionRoute(onClose = { navController.popBackStack() })
     }

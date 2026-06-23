@@ -10,11 +10,14 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
@@ -41,6 +44,12 @@ fun EditableNumber(
     var editing by remember { mutableStateOf(false) }
     var text by remember(value) { mutableStateOf(formatNumber(value, decimals)) }
     val focusManager = LocalFocusManager.current
+    val focusRequester = remember { FocusRequester() }
+    // Guards the commit-on-blur: onFocusChanged fires once with isFocused=false
+    // the instant the field composes (before focus lands), which would otherwise
+    // close edit mode on the same frame — the "tap, flash, nothing" bug. Only
+    // commit once the field has actually held focus and then lost it.
+    var hasFocused by remember { mutableStateOf(false) }
 
     fun commit() {
         editing = false
@@ -72,8 +81,14 @@ fun EditableNumber(
                 .border(1.dp, Hf.colors.accent, RoundedCornerShape(6.dp))
                 .background(Hf.colors.surface, RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 4.dp)
-                .onFocusChanged { if (!it.isFocused) commit() },
+                .focusRequester(focusRequester)
+                .onFocusChanged { state ->
+                    if (state.isFocused) hasFocused = true
+                    else if (hasFocused) commit()
+                },
         )
+        // Open the keyboard and grab focus as soon as the field appears.
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
     } else {
         val display = buildString {
             append(if (value == null) placeholder else formatNumber(value, decimals))
@@ -81,7 +96,16 @@ fun EditableNumber(
         }
         Row(
             modifier = modifier
-                .then(if (enabled) Modifier.clickable { editing = true } else Modifier)
+                .then(
+                    if (enabled) {
+                        Modifier.clickable {
+                            hasFocused = false
+                            editing = true
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
             androidx.compose.material3.Text(

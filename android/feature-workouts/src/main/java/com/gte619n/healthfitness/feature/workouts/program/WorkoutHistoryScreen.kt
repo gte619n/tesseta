@@ -24,7 +24,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +50,7 @@ import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
+import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.EmptyState
@@ -69,6 +73,7 @@ fun WorkoutHistoryRoute(
         onBack = onBack,
         onRetry = viewModel::load,
         onLoadMore = viewModel::loadMore,
+        onDelete = viewModel::deleteSession,
     )
 }
 
@@ -78,6 +83,7 @@ fun WorkoutHistoryScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit = {},
     onLoadMore: () -> Unit = {},
+    onDelete: (ScheduledWorkout) -> Unit = {},
 ) {
     // The detail is rendered in-screen from the already-loaded session (no
     // re-fetch, and — unlike opening the logger — no draft is created).
@@ -86,7 +92,14 @@ fun WorkoutHistoryScreen(
     val current = selected
     if (current != null) {
         BackHandler { selected = null }
-        HistoryDetail(session = current, onBack = { selected = null })
+        HistoryDetail(
+            session = current,
+            onBack = { selected = null },
+            onDelete = {
+                onDelete(current)
+                selected = null
+            },
+        )
         return
     }
 
@@ -214,7 +227,12 @@ private fun HistoryRow(session: ScheduledWorkout, onClick: () -> Unit) {
 }
 
 @Composable
-private fun HistoryDetail(session: ScheduledWorkout, onBack: () -> Unit) {
+private fun HistoryDetail(
+    session: ScheduledWorkout,
+    onBack: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var confirmDelete by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -225,7 +243,34 @@ private fun HistoryDetail(session: ScheduledWorkout, onBack: () -> Unit) {
             title = session.dayLabel.ifBlank { "Workout" },
             subtitle = "${scheduledDateLabel(session.date)} · ${historySummaryLine(session)}",
             onBack = onBack,
+            trailing = {
+                Icon(
+                    Icons.Outlined.DeleteOutline,
+                    contentDescription = "Delete workout",
+                    tint = Hf.colors.alert,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable { confirmDelete = true }
+                        .padding(9.dp),
+                )
+            },
         )
+        if (confirmDelete) {
+            ConfirmDialog(
+                title = "Delete this workout?",
+                message = "The logged result for ${session.dayLabel.ifBlank { "this workout" }} " +
+                    "(${scheduledDateLabel(session.date)}) will be removed from your history. " +
+                    "You can run it again later.",
+                confirmLabel = "Delete",
+                dismissLabel = "Cancel",
+                destructive = true,
+                onConfirm = {
+                    confirmDelete = false
+                    onDelete()
+                },
+                onDismiss = { confirmDelete = false },
+            )
+        }
         val day = session.session
         if (day == null || day.blocks.isEmpty()) {
             EmptyState(
