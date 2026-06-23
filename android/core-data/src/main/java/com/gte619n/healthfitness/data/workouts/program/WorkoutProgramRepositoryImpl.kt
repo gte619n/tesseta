@@ -144,7 +144,20 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
 
     override suspend fun workoutHistory(): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {
-            runCatching { api.workoutHistory().map { it.toDomain() } }
+            runCatching {
+                // The endpoint is paged; the screen shows the full history, so walk
+                // pages (largest server-allowed size) until the backend says there
+                // are no more. hasMore is the loop guard — it terminates because the
+                // backend caps `to` at `total`.
+                val all = mutableListOf<ScheduledWorkout>()
+                var page = 0
+                do {
+                    val resp = api.workoutHistory(page = page, size = HISTORY_PAGE_SIZE)
+                    all += resp.items.map { it.toDomain() }
+                    page++
+                } while (resp.hasMore && resp.items.isNotEmpty())
+                all
+            }
         }
 
     override suspend fun nutritionGuidance(
@@ -328,4 +341,9 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             payloadJson = scheduledAdapter.toJson(this),
             lastUpdate = System.currentTimeMillis(),
         )
+
+    private companion object {
+        // Largest page the backend serves — fewest round-trips when walking all history.
+        const val HISTORY_PAGE_SIZE = 100
+    }
 }

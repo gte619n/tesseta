@@ -216,6 +216,19 @@ data class ScheduledWorkoutDto(
     val durationSeconds: Int? = null,
 )
 
+/**
+ * One page of Workout History rows. The backend pages /api/me/workout-history
+ * (newest first); [hasMore] drives the repository's fetch-all loop. Extra wire
+ * fields (programTitle/phaseTitle on each row) are ignored by the DTO above.
+ */
+data class WorkoutHistoryPageDto(
+    val items: List<ScheduledWorkoutDto> = emptyList(),
+    val page: Int = 0,
+    val size: Int = 0,
+    val total: Int = 0,
+    val hasMore: Boolean = false,
+)
+
 // ---- Enum parsing with safe fallback ----
 
 private inline fun <reified T : Enum<T>> parseEnum(raw: String?, fallback: T): T =
