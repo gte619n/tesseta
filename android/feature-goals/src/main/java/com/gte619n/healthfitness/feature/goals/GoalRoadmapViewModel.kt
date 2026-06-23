@@ -8,9 +8,13 @@ import com.gte619n.healthfitness.domain.goals.GoalDeep
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,6 +34,7 @@ data class GoalRoadmapUiState(
     val appliedNutrition: Macros? = null,
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class GoalRoadmapViewModel @Inject constructor(
     private val repository: GoalsRepository,
@@ -40,24 +45,35 @@ class GoalRoadmapViewModel @Inject constructor(
         "GoalRoadmapViewModel requires a '$GOAL_ID_ARG' nav argument"
     }
 
+    /** Bumped by [load] to force a re-subscription (and a fresh network refresh). */
+    private val refreshToken = MutableStateFlow(0)
+
     private val _state = MutableStateFlow(GoalRoadmapUiState())
     val state: StateFlow<GoalRoadmapUiState> = _state.asStateFlow()
 
     init {
-        load()
-    }
-
-    fun load() {
-        _state.update { it.copy(loading = true, error = null) }
+        // Observe the roadmap reactively: it assembles from the mirror and updates
+        // in place on an optimistic phase/step edit, a step-done intent's refresh,
+        // or a background sync — without blocking the first (cached) render.
         viewModelScope.launch {
-            try {
-                val goal = repository.goalDeep(goalId)
-                _state.update { it.copy(loading = false, goal = goal, error = null) }
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(loading = false, error = e.message ?: "Failed to load goal")
+            refreshToken
+                .flatMapLatest {
+                    _state.update { it.copy(loading = true, error = null) }
+                    repository.observeGoalDeep(goalId)
+                        .map<GoalDeep?, Result<GoalDeep?>> { Result.success(it) }
+                        .catch { emit(Result.failure(it)) }
                 }
-            }
+                .collect { result ->
+                    result
+                        .onSuccess { goal ->
+                            _state.update { it.copy(loading = false, goal = goal, error = null) }
+                        }
+                        .onFailure { e ->
+                            _state.update {
+                                it.copy(loading = false, error = e.message ?: "Failed to load goal")
+                            }
+                        }
+                }
         }
         // Best-effort: whether this goal's linked program has nutrition guidance
         // to apply (drives the "Update nutrition" action). A failure just hides it.
@@ -90,6 +106,8 @@ class GoalRoadmapViewModel @Inject constructor(
     fun consumeAppliedNutrition() {
         _state.update { it.copy(appliedNutrition = null) }
     }
+
+    fun load() = refreshToken.update { it + 1 }
 
     fun toggleStep(phaseId: String, stepId: String, done: Boolean) {
         mutate(stepId) { repository.setStepDone(goalId, phaseId, stepId, done) }

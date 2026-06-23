@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.workouts.program
 
 import androidx.lifecycle.SavedStateHandle
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
+import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
@@ -13,6 +14,8 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -43,8 +46,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `deep load populates program and parallel calendar populates this week`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
 
         val vm = vm()
         advanceUntilIdle()
@@ -62,8 +65,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `repo failure surfaces error`() = runTest {
-        coEvery { repo.get("p1") } returns Result.failure(RuntimeException("nope"))
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(emptyList())
+        every { repo.observeProgram("p1") } returns flow { throw RuntimeException("nope") }
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(emptyList<ScheduledWorkout>())
 
         val vm = vm()
         advanceUntilIdle()
@@ -76,8 +79,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `calendar failure still loads the program`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.failure(RuntimeException("x"))
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flow { throw RuntimeException("x") }
 
         val vm = vm()
         advanceUntilIdle()
@@ -90,8 +93,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `in-flight draft for this program surfaces as activeDraft`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
         drafts.value = listOf(
             ProgramFixtures.activeDraft.copy(programId = "other"),
             ProgramFixtures.activeDraft,
@@ -110,8 +113,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `parked completion for this program surfaces for the recovery banner`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
         parked.value = listOf(
             ProgramFixtures.parkedCompletion.copy(programId = "other"),
             ProgramFixtures.parkedCompletion,
@@ -131,8 +134,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `restore success exposes the restored session until consumed`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
         coEvery { sessionRepo.restoreParked("p1", "s2") } returns
             Result.success(ProgramFixtures.activeDraft)
 
@@ -150,8 +153,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `activation 422 surfaces the issue list inline, not a generic error`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
         val issues = listOf("Day 'Lower' has no gym assigned.", "Program has no training days to schedule.")
         coEvery { repo.activate("p1") } returns
             Result.failure(ProgramActivationInvalidException(issues))
@@ -171,8 +174,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `non-422 activation failure surfaces a generic error`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
         coEvery { repo.activate("p1") } returns Result.failure(RuntimeException("offline"))
 
         val vm = vm()
@@ -186,8 +189,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `saveEdit patches details and closes the sheet on success`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
         val updated = ProgramFixtures.deepProgram.copy(title = "New title", description = "New desc")
         coEvery { repo.updateDetails("p1", "New title", "New desc") } returns Result.success(updated)
 
@@ -205,8 +208,8 @@ class ProgramDetailViewModelTest {
 
     @Test
     fun `restore failure surfaces a banner-scoped error`() = runTest {
-        coEvery { repo.get("p1") } returns Result.success(ProgramFixtures.deepProgram)
-        coEvery { repo.calendar(any(), any(), any()) } returns Result.success(ProgramFixtures.thisWeek)
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
         coEvery { sessionRepo.restoreParked("p1", "s2") } returns
             Result.failure(RuntimeException("draft in flight"))
 

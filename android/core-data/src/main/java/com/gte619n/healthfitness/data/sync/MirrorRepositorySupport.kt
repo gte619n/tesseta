@@ -5,9 +5,11 @@ import com.gte619n.healthfitness.data.db.entity.OutboxOp
 import com.gte619n.healthfitness.data.db.entity.SyncRowState
 import com.gte619n.healthfitness.data.db.entity.SyncRowStatus
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,6 +92,47 @@ class MirrorRepositorySupport @Inject constructor(
             return@flow
         }
         emitAll(rows.map { list -> list.mapNotNull { decode(it.payloadJson, it.syncState) } })
+    }
+
+    /**
+     * IMPL-AND-20 (Phase 5 follow-up) — the **local-first** reactive read.
+     *
+     * Emits the mirror ([rows]) immediately and re-emits on every Room change,
+     * while a one-shot [refresh] runs **concurrently in the background** to
+     * fill/upgrade the mirror from the network. The screen therefore renders
+     * instantly from Room — online or offline — and updates in place when the
+     * refresh (or a background [SyncEngine] pull) lands. A refresh failure
+     * (offline, transient) is swallowed: the cache is served regardless.
+     *
+     * Contrast with [observe], whose callers awaited the network *before* the
+     * first read (`observeActive().first()` after a blocking fill): there,
+     * connectivity made every read wait on a round-trip, which is exactly what
+     * made the goals/programs/workout screens feel "not offline-first". This
+     * variant never blocks an emission on the network.
+     *
+     * Under the kill-switch (D13) Room is not the source of truth, so it serves a
+     * single live-network [liveFallback] emission instead.
+     *
+     * @param refresh fill/upgrade the mirror from the network; its result is
+     *        ignored and its failures are swallowed (it only ever writes Room,
+     *        which re-emits through [rows]).
+     */
+    fun <E : MirrorRow, D> observeLocalFirst(
+        rows: Flow<List<E>>,
+        decode: (String) -> D?,
+        liveFallback: suspend () -> List<D>,
+        refresh: suspend () -> Unit,
+    ): Flow<List<D>> = channelFlow {
+        if (killSwitch.isOn()) {
+            send(runCatching { liveFallback() }.getOrDefault(emptyList()))
+            return@channelFlow
+        }
+        // Kick the network refresh alongside the Room stream; never block an
+        // emission on it. Tied to this subscription, so it is cancelled when the
+        // collector goes away.
+        launch { runCatching { refresh() } }
+        rows.map { list -> list.mapNotNull { decode(it.payloadJson) } }
+            .collect { send(it) }
     }
 
     /** Optimistic CREATE: write a PENDING mirror row, enqueue, drain. */

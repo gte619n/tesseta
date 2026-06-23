@@ -84,7 +84,14 @@ class WorkoutSessionRepositoryImpl(
                 ?.let { return@runCatching it }
 
             val row = scheduledDao.getById(mirrorId(programId, scheduledId))
-                ?: error("Scheduled session $programId/$scheduledId is not mirrored locally")
+                // Cold miss: the coach was opened before this session synced into
+                // the mirror. Best-effort fill from the network so it can still
+                // start; offline with nothing cached, surface a clear message.
+                ?: fetchAndMirrorScheduled(programId, scheduledId)
+                ?: error(
+                    "This workout hasn't been downloaded yet. " +
+                        "Connect to the internet once to start it.",
+                )
             val dto = decodeScheduled(row.payloadJson)
                 ?: error("Scheduled session $programId/$scheduledId payload is undecodable")
             val now = clock()
@@ -400,6 +407,35 @@ class WorkoutSessionRepositoryImpl(
                 WorkoutSessionRepository.StaleDraftResult(finalized, discarded)
             }
         }
+
+    /**
+     * Cold-miss recovery for [start]: the scheduled session isn't in the mirror
+     * yet (e.g. the coach was opened before the schedule's first sync). Pull the
+     * program's whole schedule into the mirror and return the now-mirrored row, or
+     * null when offline / kill-switched with nothing to fetch (the caller then
+     * surfaces a clear "not downloaded yet" message rather than a raw error). Once
+     * the background [SyncEngine] has run normally this never executes.
+     */
+    private suspend fun fetchAndMirrorScheduled(
+        programId: String,
+        scheduledId: String,
+    ): WorkoutScheduledEntity? {
+        if (support.killSwitchOn()) return null
+        runCatching {
+            val dtos = api.calendar(programId, "1970-01-01", "2999-12-31")
+            support.refreshInto(
+                MirrorTables.WORKOUT_SCHEDULED,
+                dtos.map {
+                    MirrorRepositorySupport.RefreshRow(
+                        id = mirrorId(programId, it.scheduledId),
+                        payloadJson = scheduledAdapter.toJson(it),
+                        lastUpdate = clock(),
+                    )
+                },
+            )
+        }
+        return scheduledDao.getById(mirrorId(programId, scheduledId))
+    }
 
     /** Build + upload the COMPLETED outcome for a draft (finish + stale sweep). */
     private suspend fun uploadCompleted(entity: WorkoutSessionDraftEntity, completedAt: Instant) {

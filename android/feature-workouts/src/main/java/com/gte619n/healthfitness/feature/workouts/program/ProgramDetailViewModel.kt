@@ -14,10 +14,15 @@ import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
@@ -63,6 +68,7 @@ data class ProgramDetailUiState(
     val error: String? = null,
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ProgramDetailViewModel @Inject constructor(
     private val repository: WorkoutProgramRepository,
@@ -77,6 +83,9 @@ class ProgramDetailViewModel @Inject constructor(
         checkNotNull(savedStateHandle[WorkoutsRoutes.ARG_PROGRAM_ID]) {
             "ProgramDetailViewModel requires a '${WorkoutsRoutes.ARG_PROGRAM_ID}' nav argument"
         }
+
+    /** Bumped by [refresh] to force a re-subscription (and a fresh network fill). */
+    private val refreshToken = MutableStateFlow(0)
 
     private val _state = MutableStateFlow(ProgramDetailUiState())
     val state: StateFlow<ProgramDetailUiState> = _state.asStateFlow()
@@ -103,18 +112,21 @@ class ProgramDetailViewModel @Inject constructor(
         }
     }
 
-    fun refresh() = load()
+    fun refresh() = refreshToken.update { it + 1 }
 
     /**
      * Activate (or re-activate) this program: the backend materializes its
-     * sessions and marks it ACTIVE, then we reload so the status + "this week"
-     * strip populate (which is what makes a workout runnable).
+     * sessions and marks it ACTIVE. The reactive [load] stream then re-emits the
+     * new status + "this week" strip from the mirror (activate refreshes it), so
+     * no explicit reload is needed — we just clear the inline issue list.
      */
     fun activate() {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null, activationIssues = emptyList()) }
             repository.activate(programId)
-                .onSuccess { load() }
+                .onSuccess {
+                    _state.update { it.copy(loading = false, activationIssues = emptyList(), error = null) }
+                }
                 .onFailure { e ->
                     // IMPL-STAB G1: a 422 carries the actionable validator issue
                     // list — surface it inline instead of a generic message.
@@ -240,55 +252,77 @@ class ProgramDetailViewModel @Inject constructor(
     fun consumeAppliedNutrition() = _state.update { it.copy(appliedNutrition = null) }
 
     private fun load() {
-        _state.update { it.copy(loading = true, today = today, error = null) }
         viewModelScope.launch {
-            // The "this week" range is derived from the device date; the
-            // weekIndexInPhase / isDeload fields come from the backend
-            // (authoritative — the client never recomputes deload status).
-            val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            val weekEnd = weekStart.plusDays(6)
-
-            val deepDeferred = async { repository.get(programId) }
-            val calendarDeferred = async { repository.calendar(programId, weekStart, weekEnd) }
-            // The "log a past session" pool (G3): everything from the start of
-            // time up to the day before this week. Backend only logs against an
-            // already-materialized session, so this is what the picker offers.
-            val pastDeferred = async {
-                repository.calendar(programId, LocalDate.of(1970, 1, 1), weekStart.minusDays(1))
-            }
-
-            // Best-effort: the program's effective nutrition guidance (drives the
-            // "Apply nutrition" action). Null/absent simply hides it.
-            val guidanceDeferred = async { repository.nutritionGuidance(programId) }
-
-            val deepResult = deepDeferred.await()
-            val calendarResult = calendarDeferred.await()
-            val pastResult = pastDeferred.await()
-            val guidance = guidanceDeferred.await().getOrNull()
-
-            deepResult
-                .onSuccess { program ->
-                    val week = calendarResult.getOrDefault(emptyList())
-                        .sortedBy { it.date }
-                    val past = pastResult.getOrDefault(emptyList())
-                        .filter { it.date <= today }
-                        .sortedByDescending { it.date }
-                    _state.update {
-                        it.copy(
-                            loading = false,
-                            program = program,
-                            thisWeek = week,
-                            pastSessions = past,
-                            nutritionGuidance = guidance,
-                            error = null,
-                        )
+            refreshToken
+                .flatMapLatest {
+                    _state.update { it.copy(loading = true, today = today, error = null) }
+                    // The "this week" range is derived from the device date; the
+                    // weekIndexInPhase / isDeload fields come from the backend
+                    // (authoritative — the client never recomputes deload status).
+                    val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                    val weekEnd = weekStart.plusDays(6)
+                    // Best-effort, online-only nutrition guidance (drives the
+                    // "Apply nutrition" action). Emits null first so the program +
+                    // schedule render immediately, then the fetched value when it
+                    // lands — never blocking the screen on this network call.
+                    val guidanceFlow = flow<NutritionGuidance?> {
+                        emit(null)
+                        emit(runCatching { repository.nutritionGuidance(programId).getOrNull() }.getOrNull())
                     }
+                    // The "log a past session" pool (G3): everything up to the day
+                    // before this week; the backend only logs against an existing
+                    // materialized session, so this is what the picker offers.
+                    combine(
+                        repository.observeProgram(programId),
+                        // A schedule read failing must NOT blank the whole screen —
+                        // the program still renders, the strip just stays empty.
+                        repository.observeCalendar(programId, weekStart, weekEnd)
+                            .catch { emit(emptyList()) },
+                        repository.observeCalendar(programId, LocalDate.of(1970, 1, 1), weekStart.minusDays(1))
+                            .catch { emit(emptyList()) },
+                        guidanceFlow,
+                    ) { program, week, past, guidance ->
+                        ProgramDetailLoad(program, week, past, guidance)
+                    }
+                        .map { Result.success(it) }
+                        .catch { emit(Result.failure(it)) }
                 }
-                .onFailure { e ->
-                    _state.update {
-                        it.copy(loading = false, error = e.message ?: "Failed to load program")
-                    }
+                .collect { result ->
+                    result
+                        .onSuccess { data ->
+                            if (data.program == null) {
+                                _state.update {
+                                    it.copy(loading = false, error = it.error ?: "Failed to load program")
+                                }
+                            } else {
+                                _state.update {
+                                    it.copy(
+                                        loading = false,
+                                        program = data.program,
+                                        thisWeek = data.thisWeek.sortedBy { s -> s.date },
+                                        pastSessions = data.pastSessions
+                                            .filter { s -> s.date <= today }
+                                            .sortedByDescending { s -> s.date },
+                                        nutritionGuidance = data.guidance,
+                                        error = null,
+                                    )
+                                }
+                            }
+                        }
+                        .onFailure { e ->
+                            _state.update {
+                                it.copy(loading = false, error = e.message ?: "Failed to load program")
+                            }
+                        }
                 }
         }
     }
 }
+
+/** The reactive [ProgramDetailViewModel.load] payload — program tree, the week + past schedule strips, and best-effort nutrition guidance. */
+private data class ProgramDetailLoad(
+    val program: WorkoutProgram?,
+    val thisWeek: List<ScheduledWorkout>,
+    val pastSessions: List<ScheduledWorkout>,
+    val guidance: NutritionGuidance?,
+)
