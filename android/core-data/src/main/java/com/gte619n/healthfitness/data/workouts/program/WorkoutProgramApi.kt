@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.data.workouts.program
 
 import com.gte619n.healthfitness.data.workouts.session.CompleteSessionRequest
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -93,6 +95,15 @@ interface WorkoutProgramApi {
         @Path("id") id: String,
         @Path("scheduledId") scheduledId: String,
     ): Map<String, List<LoggedSetDto>>
+
+    // The program's effective nutrition guidance (active phase's, else
+    // program-level); 204 → null body.
+    @GET("api/me/workout-programs/{id}/nutrition-guidance")
+    suspend fun getNutritionGuidance(@Path("id") id: String): NutritionGuidance?
+
+    // Apply the program's guidance as the macro target; returns the saved macros.
+    @POST("api/me/workout-programs/{id}/nutrition-target")
+    suspend fun applyNutritionTarget(@Path("id") id: String): Macros
 }
 
 /** IMPL-COACH: the AI recap payload (null until available). */

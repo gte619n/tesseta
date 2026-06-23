@@ -238,6 +238,15 @@ interface WorkoutProgramRepository {
     suspend fun workoutHistory(): Result<List<ScheduledWorkout>>
 
     /**
+     * The program's effective nutrition guidance (active phase's, else
+     * program-level), or null when it has none. Online-only.
+     */
+    suspend fun nutritionGuidance(programId: String): Result<NutritionGuidance?>
+
+    /** Apply the program's guidance as the user's macro target; returns the saved macros. Online-only. */
+    suspend fun applyNutritionTarget(programId: String): Result<com.gte619n.healthfitness.domain.nutrition.Macros>
+
+    /**
      * Activate a program (materialize sessions + mark ACTIVE) and refresh the
      * local mirror so the detail/list reflect it. Returns the materialized
      * sessions. Online-only.

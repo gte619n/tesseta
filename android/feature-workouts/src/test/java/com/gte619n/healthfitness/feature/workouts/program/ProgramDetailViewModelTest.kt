@@ -36,6 +36,8 @@ class ProgramDetailViewModelTest {
     private fun vm(): ProgramDetailViewModel {
         every { sessionRepo.observeDrafts() } returns drafts
         every { sessionRepo.observeParkedCompletions() } returns parked
+        // Default: no program nutrition guidance (apply path covered separately).
+        coEvery { repo.nutritionGuidance(any()) } returns Result.success(null)
         return ProgramDetailViewModel(repo, sessionRepo, handle)
     }
 

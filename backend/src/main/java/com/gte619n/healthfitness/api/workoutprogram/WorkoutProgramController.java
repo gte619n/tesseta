@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.api.workoutprogram;
 
+import com.gte619n.healthfitness.api.nutrition.MacrosDto;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
+import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.ExercisePerformanceDigestService;
@@ -8,6 +10,7 @@ import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
+import com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramValidator;
@@ -47,6 +50,7 @@ public class WorkoutProgramController {
     private final WorkoutProgramAssembler assembler;
     private final WorkoutSessionCoach coach;
     private final ExercisePerformanceDigestService digests;
+    private final WorkoutProgramNutritionService programNutrition;
     private final SyncChangeNotifier syncNotifier;
 
     public WorkoutProgramController(
@@ -58,6 +62,7 @@ public class WorkoutProgramController {
         WorkoutProgramAssembler assembler,
         WorkoutSessionCoach coach,
         ExercisePerformanceDigestService digests,
+        WorkoutProgramNutritionService programNutrition,
         SyncChangeNotifier syncNotifier
     ) {
         this.currentUser = currentUser;
@@ -68,6 +73,7 @@ public class WorkoutProgramController {
         this.assembler = assembler;
         this.coach = coach;
         this.digests = digests;
+        this.programNutrition = programNutrition;
         this.syncNotifier = syncNotifier;
     }
 
@@ -252,5 +258,39 @@ public class WorkoutProgramController {
         Map<String, List<LastSetView>> out = new LinkedHashMap<>();
         last.forEach((id, sets) -> out.put(id, sets.stream().map(LastSetView::from).toList()));
         return out;
+    }
+
+    /**
+     * The program's effective nutrition guidance (active phase's, else
+     * program-level), used to show/enable an "Apply as nutrition target" action
+     * and preview the macros. 204 when the program carries no guidance.
+     */
+    @GetMapping("/{programId}/nutrition-guidance")
+    public ResponseEntity<NutritionGuidance> nutritionGuidance(@PathVariable String programId) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        return programNutrition.guidanceForProgram(userId, programId)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Apply this program's nutrition guidance as the user's macro target
+     * (calories re-derived from the macros). 409 when the program has no guidance.
+     */
+    @PostMapping("/{programId}/nutrition-target")
+    public MacrosDto applyNutritionTarget(@PathVariable String programId) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        Macros applied = programNutrition.applyToTarget(userId, programId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "This program has no nutrition guidance to apply."));
+        syncNotifier.changed(userId, null, "nutritionTargets");
+        return MacrosDto.from(applied);
     }
 }
