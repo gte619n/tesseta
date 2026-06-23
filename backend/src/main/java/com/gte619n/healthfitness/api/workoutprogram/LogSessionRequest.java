@@ -14,7 +14,7 @@ import java.util.List;
  * a repeat PUT replaces actuals and re-runs the fan-out.
  */
 public record LogSessionRequest(
-    ScheduledStatus status,           // COMPLETED or SKIPPED
+    ScheduledStatus status,           // COMPLETED, SKIPPED, or PLANNED (un-log/reset)
     Instant completedAt,              // required for COMPLETED
     Integer durationSeconds,          // required for COMPLETED
     List<LoggedPrescription> logged   // full replacement of previous actuals

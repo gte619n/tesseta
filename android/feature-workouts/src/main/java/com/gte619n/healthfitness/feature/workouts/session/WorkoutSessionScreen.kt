@@ -110,6 +110,7 @@ fun WorkoutSessionRoute(
         onBack = onClose,
         onToggleSet = viewModel::toggleSet,
         onEditSet = viewModel::editSet,
+        onLogSet = viewModel::logSet,
         onDismissRest = viewModel::dismissRest,
         onRequestFinish = viewModel::requestFinish,
         onRequestSkip = viewModel::requestSkip,
@@ -128,6 +129,7 @@ fun WorkoutSessionScreen(
     onBack: () -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
+    onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
@@ -177,6 +179,7 @@ fun WorkoutSessionScreen(
                 error = state.error,
                 onToggleSet = onToggleSet,
                 onEditSet = onEditSet,
+                onLogSet = onLogSet,
                 onDismissRest = onDismissRest,
                 onRequestFinish = onRequestFinish,
                 onRequestSkip = onRequestSkip,
@@ -223,6 +226,7 @@ private fun SessionBody(
     error: String?,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
+    onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
@@ -268,6 +272,7 @@ private fun SessionBody(
                             logged = draft.logged[key].orEmpty(),
                             onToggleSet = { index -> onToggleSet(key, index) },
                             onEditSet = { index, set -> onEditSet(key, index, set) },
+                            onLogSet = { set -> onLogSet(key, set) },
                         )
                         Spacer(Modifier.height(10.dp))
                     }
@@ -320,6 +325,10 @@ private fun RestTimerBar(restTimer: RestTimer, now: Instant, onDismiss: () -> Un
 /**
  * One prescription: exercise name, the "3 × 8–10 @ RPE 8 · rest 90s" target,
  * and a check-off row per set with editable weight / reps / optional RPE.
+ *
+ * The next un-logged row shows its inputs up front — pre-filled with the carried
+ * weight and the target reps — so the user can dial in load/reps before (or
+ * instead of) tapping the circle; committing any of those fields logs the set.
  */
 @Composable
 private fun PrescriptionCard(
@@ -327,6 +336,7 @@ private fun PrescriptionCard(
     logged: List<LoggedSet>,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
+    onLogSet: (LoggedSet) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -347,15 +357,39 @@ private fun PrescriptionCard(
         }
         Spacer(Modifier.height(8.dp))
         SetHeaderRow()
+        // Prefill for the next, not-yet-logged set: weight carried from the last
+        // logged set, reps from the prescription target — the same defaults the
+        // VM would apply on a bare check-off.
+        val carriedWeight = logged.lastOrNull()?.weightLbs
+        val targetReps = prescription.repsMin ?: prescription.repsMax
         val totalRows = maxOf(prescription.sets ?: 1, logged.size)
         repeat(totalRows) { index ->
+            val set = logged.getOrNull(index)
+            val isNext = set == null && index == logged.size
             SetRow(
                 index = index,
-                set = logged.getOrNull(index),
+                set = set,
                 // Only the next unlogged row is checkable, so sets stay ordered.
                 canToggle = index <= logged.size,
+                // Show inputs for logged rows and the next actionable row; later
+                // rows stay as faint placeholders until they become next.
+                showInputs = set != null || isNext,
+                weight = set?.weightLbs ?: carriedWeight.takeIf { isNext },
+                reps = set?.reps ?: targetReps?.takeIf { isNext },
+                rpe = set?.rpe,
                 onToggle = { onToggleSet(index) },
-                onEdit = { set -> onEditSet(index, set) },
+                onWeightCommit = { value ->
+                    if (set != null) onEditSet(index, set.copy(weightLbs = value))
+                    else onLogSet(LoggedSet(weightLbs = value))
+                },
+                onRepsCommit = { value ->
+                    if (set != null) onEditSet(index, set.copy(reps = value?.toInt()))
+                    else onLogSet(LoggedSet(reps = value?.toInt()))
+                },
+                onRpeCommit = { value ->
+                    if (set != null) onEditSet(index, set.copy(rpe = value))
+                    else onLogSet(LoggedSet(rpe = value))
+                },
             )
         }
         if (logged.size >= totalRows) {
@@ -401,8 +435,14 @@ private fun SetRow(
     index: Int,
     set: LoggedSet?,
     canToggle: Boolean,
+    showInputs: Boolean,
+    weight: Double?,
+    reps: Int?,
+    rpe: Double?,
     onToggle: () -> Unit,
-    onEdit: (LoggedSet) -> Unit,
+    onWeightCommit: (Double?) -> Unit,
+    onRepsCommit: (Double?) -> Unit,
+    onRpeCommit: (Double?) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -437,22 +477,22 @@ private fun SetRow(
             color = Hf.colors.textTertiary,
             modifier = Modifier.width(32.dp),
         )
-        if (set != null) {
+        if (showInputs) {
             EditableNumber(
-                value = set.weightLbs,
-                onCommit = { onEdit(set.copy(weightLbs = it)) },
+                value = weight,
+                onCommit = onWeightCommit,
                 modifier = Modifier.weight(1f),
                 decimals = 1,
             )
             EditableNumber(
-                value = set.reps?.toDouble(),
-                onCommit = { onEdit(set.copy(reps = it?.toInt())) },
+                value = reps?.toDouble(),
+                onCommit = onRepsCommit,
                 modifier = Modifier.weight(1f),
                 decimals = 0,
             )
             EditableNumber(
-                value = set.rpe,
-                onCommit = { onEdit(set.copy(rpe = it)) },
+                value = rpe,
+                onCommit = onRpeCommit,
                 modifier = Modifier.weight(1f),
                 decimals = 1,
             )
@@ -590,6 +630,7 @@ private fun WorkoutSessionPreview() {
             onBack = {},
             onToggleSet = { _, _ -> },
             onEditSet = { _, _, _ -> },
+            onLogSet = { _, _ -> },
             onDismissRest = {},
             onRequestFinish = {},
             onRequestSkip = {},

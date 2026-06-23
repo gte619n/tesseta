@@ -122,6 +122,15 @@ interface WorkoutSessionRepository {
     /** Skip the session: upload `SKIPPED` (clears actuals) and delete any draft. */
     suspend fun skip(programId: String, scheduledId: String): Result<Unit>
 
+    /**
+     * Delete a logged session from history by reverting it to `PLANNED`: uploads
+     * the un-log (which on the backend clears the actuals, removes the fanned-out
+     * workout, and recomputes the week) and clears the local mirror's outcome, so
+     * the day drops back to planned and can be run again. Routed through the
+     * offline outbox like [skip]; any stale local draft is removed too.
+     */
+    suspend fun reset(programId: String, scheduledId: String): Result<Unit>
+
     /** Throw the draft away locally; nothing reaches the backend. */
     suspend fun discard(programId: String, scheduledId: String): Result<Unit>
 

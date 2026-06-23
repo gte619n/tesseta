@@ -27,9 +27,9 @@
     <string name="workout_session_skip">Skip session</string>
     <string name="workout_session_skip_title">Skip this session?</string>
     <string name="workout_session_skip_message">The session will be marked skipped and no sets are saved.</string>
-    <string name="workout_session_discard">Discard</string>
-    <string name="workout_session_discard_title">Discard draft?</string>
-    <string name="workout_session_discard_message">Your logged sets will be thrown away and nothing is uploaded. The session stays planned.</string>
+    <string name="workout_session_discard">Abandon</string>
+    <string name="workout_session_discard_title">Abandon workout?</string>
+    <string name="workout_session_discard_message">Your logged sets will be thrown away and nothing is saved. The session stays planned, so you can run it again later.</string>
     <string name="workout_session_cancel">Cancel</string>
     <string name="workout_session_parked_title">Finished workout couldn\'t sync</string>
     <string name="workout_session_parked_restore">Restore</string>
