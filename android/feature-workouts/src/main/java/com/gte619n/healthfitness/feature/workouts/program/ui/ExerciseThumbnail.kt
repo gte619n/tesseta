@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
 import com.gte619n.healthfitness.ui.image.HfAsyncImage
@@ -75,3 +76,10 @@ fun firstExerciseImageUrl(day: WorkoutDay?): String? =
 /** Convenience for a scheduled session's snapshot day. */
 fun firstExerciseImageUrl(session: ScheduledWorkout): String? =
     firstExerciseImageUrl(session.session)
+
+/** First usable demo image for a single exercise (in frame order), or null. */
+fun exerciseImageUrl(exercise: ExerciseSummary?): String? =
+    exercise?.demoFrames
+        ?.sortedBy { it.order }
+        ?.firstOrNull { it.imageUrl != null }
+        ?.imageUrl

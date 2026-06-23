@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,16 +31,15 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
@@ -83,6 +81,8 @@ import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.R
 import com.gte619n.healthfitness.feature.workouts.program.ProgramFixtures
 import com.gte619n.healthfitness.feature.workouts.program.prescriptionSummary
+import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseThumbnail
+import com.gte619n.healthfitness.feature.workouts.program.ui.exerciseImageUrl
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
@@ -459,11 +459,12 @@ private fun ExercisePage(
     // stretching edge-to-edge — a centered, narrower card reads better.
     val expanded = LocalConfiguration.current.screenWidthDp >= EXPANDED_WIDTH_DP
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        // No scroll: header (name/details) and footer (sets) stay pinned, and the
+        // demo image flexes to fill whatever vertical space is left between them.
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .then(if (expanded) Modifier.widthIn(max = 560.dp) else Modifier)
-                .verticalScroll(rememberScrollState())
                 .padding(vertical = 8.dp),
         ) {
             SectionTitle(text = BlockTypeLabels.label(step.block.type), compact = true)
@@ -478,8 +479,12 @@ private fun ExercisePage(
                 Spacer(Modifier.height(4.dp))
                 Text(target, style = Hf.type.monoMd.copy(fontSize = 16.sp), color = Hf.colors.textSecondary)
             }
-            DemoStrip(prescription.exercise)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            DemoStrip(
+                exercise = prescription.exercise,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
 
             if (prescription.isTimed) {
                 TimedSets(
@@ -843,7 +848,7 @@ private fun canAddSet(prescription: Prescription, logged: List<LoggedSet>): Bool
  * nothing when the exercise has no usable frames.
  */
 @Composable
-private fun DemoStrip(exercise: ExerciseSummary?) {
+private fun DemoStrip(exercise: ExerciseSummary?, modifier: Modifier = Modifier) {
     val frames = remember(exercise) {
         exercise?.demoFrames
             ?.withIndex()
@@ -853,8 +858,6 @@ private fun DemoStrip(exercise: ExerciseSummary?) {
             }
             .orEmpty()
     }
-    if (frames.isEmpty()) return
-
     var index by remember(frames) { mutableStateOf(0) }
     if (frames.size > 1) {
         LaunchedEffect(frames) {
@@ -864,42 +867,50 @@ private fun DemoStrip(exercise: ExerciseSummary?) {
             }
         }
     }
-    val safeIndex = index.coerceIn(0, frames.lastIndex)
 
-    Spacer(Modifier.height(12.dp))
     Box(
-        modifier = Modifier
-            // Portrait frame, and ContentScale.Fit below, so the whole figure is
-            // shown top-to-bottom instead of being cropped (the demos are tall).
-            .fillMaxWidth()
-            .aspectRatio(4f / 5f)
+        // Fills the space ExercisePage gives it; ContentScale.Fit keeps the whole
+        // figure visible (no crop) however tall or short that space turns out.
+        modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(Hf.colors.canvasMuted),
-        contentAlignment = Alignment.BottomStart,
+        contentAlignment = Alignment.Center,
     ) {
-        Crossfade(
-            targetState = safeIndex,
-            animationSpec = tween(DEMO_FRAME_CROSSFADE_MILLIS),
-            label = "demo-frame",
-        ) { i ->
-            HfAsyncImage(
-                model = frames[i].first,
-                contentDescription = exercise?.name,
-                contentScale = ContentScale.Fit,
+        if (frames.isEmpty()) {
+            Icon(
+                Icons.Outlined.FitnessCenter,
+                contentDescription = null,
+                tint = Hf.colors.textQuaternary,
+                modifier = Modifier.size(48.dp),
+            )
+        } else {
+            val safeIndex = index.coerceIn(0, frames.lastIndex)
+            Crossfade(
+                targetState = safeIndex,
+                animationSpec = tween(DEMO_FRAME_CROSSFADE_MILLIS),
+                label = "demo-frame",
                 modifier = Modifier.fillMaxSize(),
-            )
-        }
-        val label = frames[safeIndex].second
-        if (label.isNotBlank()) {
-            Text(
-                label,
-                style = Hf.type.bodySm,
-                color = Hf.colors.textPrimary,
-                modifier = Modifier
-                    .padding(8.dp)
-                    .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            )
+            ) { i ->
+                HfAsyncImage(
+                    model = frames[i].first,
+                    contentDescription = exercise?.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            val label = frames[safeIndex].second
+            if (label.isNotBlank()) {
+                Text(
+                    label,
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textPrimary,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                        .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
         }
     }
 }
@@ -956,6 +967,12 @@ private fun OverviewRow(step: SessionStep, loggedCount: Int, onClick: () -> Unit
             contentDescription = null,
             tint = if (done) Hf.colors.accent else Hf.colors.textTertiary,
             modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        ExerciseThumbnail(
+            imageUrl = exerciseImageUrl(step.prescription.exercise),
+            contentDescription = step.prescription.exercise?.name,
+            size = 44.dp,
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
