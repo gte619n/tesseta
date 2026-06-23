@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import com.gte619n.healthfitness.ui.image.HfAsyncImage
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -96,6 +99,19 @@ private fun ScheduledCard(
             .background(bg, RoundedCornerShape(10.dp))
             .padding(horizontal = 12.dp, vertical = 11.dp),
     ) {
+        // A small demo thumbnail of the day's first exercise for visual interest.
+        firstExerciseImageUrl(session)?.let { url ->
+            HfAsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(74.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
