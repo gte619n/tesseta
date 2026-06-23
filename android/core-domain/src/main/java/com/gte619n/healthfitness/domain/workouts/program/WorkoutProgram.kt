@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.domain.workouts.program
 
 import com.gte619n.healthfitness.domain.common.DayOfWeek
+import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
 
@@ -243,8 +244,24 @@ interface WorkoutProgramRepository {
     /** Shallow list of the signed-in user's programs. */
     suspend fun list(): Result<List<WorkoutProgram>>
 
+    /**
+     * Local-first reactive program list: emits the `workoutPrograms` mirror
+     * immediately (offline-capable) and re-emits on every change (a background
+     * sync, a deep-cache upgrade), while a network refresh fills the mirror
+     * concurrently. The screen never blocks on the network to render the cache.
+     */
+    fun observePrograms(): Flow<List<WorkoutProgram>>
+
     /** Deep program (phases → days → blocks → prescriptions + embedded summaries). */
     suspend fun get(programId: String): Result<WorkoutProgram>
+
+    /**
+     * Local-first reactive deep program: emits the mirrored deep tree (backfilling
+     * session-only phases from the cached schedule) and re-emits on change, while a
+     * network refresh upgrades a shallow/stale row concurrently. `null` once the
+     * refresh has settled means the program isn't available (offline, no cache).
+     */
+    fun observeProgram(programId: String): Flow<WorkoutProgram?>
 
     /** Scheduled sessions in the inclusive date range, for the "this week" strip. */
     suspend fun calendar(
@@ -252,6 +269,18 @@ interface WorkoutProgramRepository {
         from: LocalDate,
         to: LocalDate,
     ): Result<List<ScheduledWorkout>>
+
+    /**
+     * Local-first reactive schedule for the inclusive date range: emits the
+     * filtered `workoutScheduled` mirror and re-emits on change (activation,
+     * completion, background sync), filling on a cold miss. Drives the "this week"
+     * / past-sessions strips without blocking on the network.
+     */
+    fun observeCalendar(
+        programId: String,
+        from: LocalDate,
+        to: LocalDate,
+    ): Flow<List<ScheduledWorkout>>
 
     /**
      * One page of COMPLETED sessions across all programs, newest first, deep

@@ -17,7 +17,13 @@ import com.gte619n.healthfitness.domain.goals.StepPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -75,6 +81,20 @@ class GoalsRepository @Inject constructor(
     }
 
     /**
+     * Local-first reactive list (D8): emits the `goals` mirror immediately and
+     * re-emits on every change (an optimistic edit, a background [SyncEngine]
+     * pull), while a network fill runs concurrently without blocking the first
+     * emission. Optional [status] filter applied to the decoded rows.
+     */
+    fun observeGoals(status: GoalStatus? = null): Flow<List<Goal>> =
+        support.observeLocalFirst(
+            rows = dao.observeActive(),
+            decode = { json -> runCatching { goalAdapter.fromJson(json) }.getOrNull() },
+            liveFallback = { api.getGoals(status?.name) },
+            refresh = { fillMirror() },
+        ).map { goals -> goals.filter { status == null || it.status == status } }
+
+    /**
      * The roadmap aggregate. When the kill-switch is on, read live. Otherwise try a
      * live refresh (fanning out into the flat mirror tables), then ALWAYS assemble
      * from the mirror so the result reflects any optimistic offline phase/step edit.
@@ -84,6 +104,38 @@ class GoalsRepository @Inject constructor(
         if (support.killSwitchOn()) return api.getGoalDeep(goalId)
         runCatching { refreshDeep(goalId) }
         return assembleDeep(goalId) ?: api.getGoalDeep(goalId)
+    }
+
+    /**
+     * Local-first reactive roadmap: assembles [GoalDeep] from the flat
+     * `goals`/`goalPhases`/`goalSteps` mirror tables and re-emits whenever any of
+     * them change (an optimistic phase/step edit, a step-done intent's refresh, a
+     * background pull). A `refreshDeep` runs concurrently to fetch the
+     * authoritative tree without blocking the first (cached) emission.
+     *
+     * Emits as soon as an assembled goal exists, or once the concurrent refresh
+     * has finished — so a `null` means "genuinely absent / offline with no cache"
+     * rather than "still warming", avoiding a transient empty flash.
+     */
+    fun observeGoalDeep(goalId: String): Flow<GoalDeep?> = channelFlow {
+        if (support.killSwitchOn()) {
+            send(runCatching { api.getGoalDeep(goalId) }.getOrNull())
+            return@channelFlow
+        }
+        val refreshed = MutableStateFlow(false)
+        launch {
+            runCatching { refreshDeep(goalId) }
+            refreshed.value = true
+        }
+        combine(
+            dao.observeActive(),
+            phaseDao.observeActive(),
+            stepDao.observeActive(),
+            refreshed,
+        ) { _, _, _, didRefresh -> assembleDeep(goalId) to didRefresh }
+            .collect { (deep, didRefresh) ->
+                if (deep != null || didRefresh) send(deep)
+            }
     }
 
     /** Fetch the authoritative deep goal and fan it into the flat mirror tables. */

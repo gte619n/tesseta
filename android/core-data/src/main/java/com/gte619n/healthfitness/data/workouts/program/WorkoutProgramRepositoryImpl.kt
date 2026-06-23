@@ -12,7 +12,13 @@ import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepositor
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.time.LocalDate
@@ -100,6 +106,40 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
+    override fun observePrograms(): Flow<List<WorkoutProgram>> =
+        support.observeLocalFirst(
+            rows = programDao.observeActive(),
+            decode = { decodeProgram(it)?.toDomain() },
+            liveFallback = { api.list().map { it.toDomain() } },
+            refresh = {
+                // Fill the shallow list, then upgrade each to its deep tree so the
+                // detail/workout screens render offline. Both best-effort.
+                runCatching { fillPrograms() }
+                cacheDeepForOffline()
+            },
+        )
+
+    override fun observeProgram(programId: String): Flow<WorkoutProgram?> = channelFlow {
+        if (support.killSwitchOn()) {
+            send(runCatching { api.get(programId).toDomain() }.getOrNull())
+            return@channelFlow
+        }
+        val refreshed = MutableStateFlow(false)
+        launch {
+            // Only hit the network when the cache isn't already a complete deep
+            // tree (cache-first); always settle [refreshed] so a genuine miss
+            // surfaces null instead of an endless spinner.
+            if (!mirroredDeep(programId).isAssembledDeep()) runCatching { refreshDeep(programId) }
+            refreshed.value = true
+        }
+        combine(programDao.observeActive(), scheduledDao.observeActive(), refreshed) { _, _, didRefresh ->
+            val program = mirroredDeep(programId)?.toDomain()?.let { backfillDays(it) }
+            program to didRefresh
+        }.collect { (program, didRefresh) ->
+            if (program != null || didRefresh) send(program)
+        }
+    }
+
     override suspend fun get(programId: String): Result<WorkoutProgram> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -161,6 +201,39 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching { api.applyNutritionTarget(programId) }
         }
+
+    override fun observeCalendar(
+        programId: String,
+        from: LocalDate,
+        to: LocalDate,
+    ): Flow<List<ScheduledWorkout>> = channelFlow {
+        if (support.killSwitchOn()) {
+            send(
+                runCatching {
+                    api.calendar(programId, from.toString(), to.toString()).map { it.toDomain() }
+                }.getOrDefault(emptyList()),
+            )
+            return@channelFlow
+        }
+        val prefix = "$programId/"
+        launch {
+            // Cold-miss fill: only when nothing is cached for this program yet.
+            // Subsequent freshness comes from the background SyncEngine pull and
+            // local writes (activate/complete), which re-emit through the Flow.
+            if (scheduledDao.observeActive().first().none { it.id.startsWith(prefix) }) {
+                runCatching { fillScheduled(programId) }
+            }
+        }
+        scheduledDao.observeActive()
+            .map { rows ->
+                rows.filter { it.id.startsWith(prefix) }
+                    .mapNotNull { decodeScheduled(it.payloadJson) }
+                    .map { it.toDomain() }
+                    .filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
+                    .sortedBy { it.date }
+            }
+            .collect { send(it) }
+    }
 
     override suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {

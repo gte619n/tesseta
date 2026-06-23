@@ -1,12 +1,15 @@
 package com.gte619n.healthfitness.feature.workouts.program
 
 import app.cash.turbine.test
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
-import io.mockk.coEvery
-import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -24,7 +27,7 @@ class ProgramsListViewModelTest {
 
     @Test
     fun `initial loading then success populates programs`() = runTest {
-        coEvery { repo.list() } returns Result.success(ProgramFixtures.listPrograms)
+        every { repo.observePrograms() } returns flowOf(ProgramFixtures.listPrograms)
         val vm = ProgramsListViewModel(repo)
 
         vm.state.test {
@@ -40,7 +43,7 @@ class ProgramsListViewModelTest {
 
     @Test
     fun `failure surfaces error`() = runTest {
-        coEvery { repo.list() } returns Result.failure(RuntimeException("boom"))
+        every { repo.observePrograms() } returns flow { throw RuntimeException("boom") }
         val vm = ProgramsListViewModel(repo)
         advanceUntilIdle()
 
@@ -50,14 +53,14 @@ class ProgramsListViewModelTest {
     }
 
     @Test
-    fun `refresh re-invokes repository`() = runTest {
-        coEvery { repo.list() } returns Result.success(emptyList())
+    fun `refresh re-subscribes the mirror stream`() = runTest {
+        every { repo.observePrograms() } returns flowOf(emptyList<WorkoutProgram>())
         val vm = ProgramsListViewModel(repo)
         advanceUntilIdle()
 
         vm.refresh()
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { repo.list() }
+        verify(exactly = 2) { repo.observePrograms() }
     }
 }
