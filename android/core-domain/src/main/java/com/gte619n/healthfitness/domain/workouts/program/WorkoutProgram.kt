@@ -82,6 +82,8 @@ data class LoggedSet(
     val rpe: Double? = null,
     val restSeconds: Int? = null,
     val completedAt: Instant? = null,
+    /** Held time for a timed exercise (stretch/mobility/cardio); the time-based counterpart to [reps]. */
+    val durationSeconds: Int? = null,
 )
 
 data class Prescription(
@@ -107,7 +109,14 @@ data class Prescription(
     val targetWeightLbs: Double? = null,
     /** IMPL-18: short "why" for the prescribed load (e1RM / last done / ramp), shown on tap (R6). */
     val loadBasis: String? = null,
-)
+) {
+    /**
+     * A timed exercise (stretch / mobility / cardio hold) — logged by held time
+     * rather than reps. True when a duration is prescribed and no rep target is.
+     */
+    val isTimed: Boolean
+        get() = durationSeconds != null && repsMin == null && repsMax == null
+}
 
 data class Block(
     val blockId: String,
@@ -192,6 +201,23 @@ data class ScheduledWorkout(
     /** Outcome fields (ADR-0012); set once the session is COMPLETED. */
     val completedAt: Instant? = null,
     val durationSeconds: Int? = null,
+    /**
+     * Owning program + phase titles, resolved by the Workout History read so the
+     * list can draw program/phase delineation headers. Null elsewhere (calendar).
+     */
+    val programTitle: String? = null,
+    val phaseTitle: String? = null,
+)
+
+/**
+ * One page of Workout History rows (newest first). [hasMore] tells the caller
+ * whether a further [page] exists, driving the screen's load-on-scroll.
+ */
+data class WorkoutHistoryPage(
+    val items: List<ScheduledWorkout>,
+    val page: Int,
+    val total: Int,
+    val hasMore: Boolean,
 )
 
 /**
@@ -220,6 +246,22 @@ interface WorkoutProgramRepository {
         from: LocalDate,
         to: LocalDate,
     ): Result<List<ScheduledWorkout>>
+
+    /**
+     * One page of COMPLETED sessions across all programs, newest first, deep
+     * enough to review (each carries its blocks → prescriptions → logged sets).
+     * Paged for the history screen's load-on-scroll. Online-only, read-only.
+     */
+    suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage>
+
+    /**
+     * The program's effective nutrition guidance (active phase's, else
+     * program-level), or null when it has none. Online-only.
+     */
+    suspend fun nutritionGuidance(programId: String): Result<NutritionGuidance?>
+
+    /** Apply the program's guidance as the user's macro target; returns the saved macros. Online-only. */
+    suspend fun applyNutritionTarget(programId: String): Result<com.gte619n.healthfitness.domain.nutrition.Macros>
 
     /**
      * Activate a program (materialize sessions + mark ACTIVE) and refresh the

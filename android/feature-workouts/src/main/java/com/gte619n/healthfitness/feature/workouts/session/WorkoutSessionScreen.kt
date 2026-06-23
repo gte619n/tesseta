@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,8 +15,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,16 +28,24 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,9 +53,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -55,6 +70,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
@@ -67,6 +83,7 @@ import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.image.HfAsyncImage
 import com.gte619n.healthfitness.ui.input.EditableNumber
 import com.gte619n.healthfitness.ui.state.EmptyState
 import com.gte619n.healthfitness.ui.state.ErrorState
@@ -74,16 +91,28 @@ import com.gte619n.healthfitness.ui.state.LoadingState
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
+
+/**
+ * IMPL-COACH: dwell per looped demo frame in the in-player demo strip. Slow on
+ * purpose — frames should read like a guided demo, not a flickering GIF — and
+ * paired with a soft [DEMO_FRAME_CROSSFADE_MILLIS] fade between them.
+ */
+private const val DEMO_FRAME_LOOP_MILLIS = 10_000L
+private const val DEMO_FRAME_CROSSFADE_MILLIS = 1_000
 
 @Composable
 fun WorkoutSessionRoute(
     onClose: () -> Unit,
     viewModel: WorkoutSessionViewModel = hiltViewModel(),
+    audioViewModel: CoachAudioViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val restTimer by viewModel.restTimer.collectAsStateWithLifecycle()
+    val voiceEnabled by audioViewModel.voiceAnnouncements.collectAsStateWithLifecycle()
+    val announcer = rememberCoachAnnouncer()
     LaunchedEffect(state.closed) { if (state.closed) onClose() }
 
     // ADR-0012 D6: WorkoutSessionService's shade notification (timer / rest
@@ -107,10 +136,12 @@ fun WorkoutSessionRoute(
     WorkoutSessionScreen(
         state = state,
         restTimer = restTimer,
+        voiceEnabled = voiceEnabled,
+        announce = announcer::speak,
         onBack = onClose,
         onToggleSet = viewModel::toggleSet,
         onEditSet = viewModel::editSet,
-        onLogSet = viewModel::logSet,
+        onLogTimed = viewModel::logTimedSet,
         onDismissRest = viewModel::dismissRest,
         onRequestFinish = viewModel::requestFinish,
         onRequestSkip = viewModel::requestSkip,
@@ -119,6 +150,7 @@ fun WorkoutSessionRoute(
         onConfirmSkip = viewModel::confirmSkip,
         onConfirmDiscard = viewModel::confirmDiscard,
         onDismissPrompt = viewModel::dismissPrompt,
+        onDismissCompleted = viewModel::dismissCompleted,
     )
 }
 
@@ -126,10 +158,12 @@ fun WorkoutSessionRoute(
 fun WorkoutSessionScreen(
     state: WorkoutSessionUiState,
     restTimer: RestTimer?,
+    voiceEnabled: Boolean = false,
+    announce: (String) -> Unit = {},
     onBack: () -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
-    onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
+    onLogTimed: (PrescriptionKey, Int) -> Unit,
     onDismissRest: () -> Unit,
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
@@ -138,8 +172,10 @@ fun WorkoutSessionScreen(
     onConfirmSkip: () -> Unit,
     onConfirmDiscard: () -> Unit,
     onDismissPrompt: () -> Unit,
+    onDismissCompleted: () -> Unit = {},
 ) {
-    // One-second ticker driving the elapsed header and the rest countdown.
+    // One-second ticker driving the elapsed header, the rest countdown, and the
+    // hold-timer count-up.
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -147,6 +183,9 @@ fun WorkoutSessionScreen(
             delay(1_000)
         }
     }
+
+    // Coach (one exercise at a time) vs. the whole-workout reference list.
+    var overview by rememberSaveable { mutableStateOf(false) }
 
     val draft = state.draft
     Column(
@@ -165,6 +204,20 @@ fun WorkoutSessionScreen(
                 )
             },
             onBack = onBack,
+            trailing = if (draft?.scheduled?.session?.blocks?.isNotEmpty() == true) {
+                {
+                    IconButton(onClick = { overview = !overview }) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.List,
+                            contentDescription = stringResource(R.string.workout_session_overview),
+                            tint = if (overview) Hf.colors.accent else Hf.colors.textSecondary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            } else {
+                null
+            },
         )
         when {
             draft == null && state.loading -> LoadingState(Modifier.fillMaxSize())
@@ -177,9 +230,13 @@ fun WorkoutSessionScreen(
                 restTimer = restTimer,
                 now = now,
                 error = state.error,
+                overview = overview,
+                voiceEnabled = voiceEnabled,
+                announce = announce,
+                onShowOverview = { overview = it },
                 onToggleSet = onToggleSet,
                 onEditSet = onEditSet,
-                onLogSet = onLogSet,
+                onLogTimed = onLogTimed,
                 onDismissRest = onDismissRest,
                 onRequestFinish = onRequestFinish,
                 onRequestSkip = onRequestSkip,
@@ -216,6 +273,20 @@ fun WorkoutSessionScreen(
         )
         null -> Unit
     }
+
+    // IMPL-COACH: after a successful finish, the recap summary sits over the
+    // retained draft snapshot until the user dismisses it (which pops the route).
+    if (state.completed) {
+        draft?.let {
+            CompletionSummaryDialog(
+                draft = it,
+                now = now,
+                recap = state.recap,
+                recapLoading = state.recapLoading,
+                onDone = onDismissCompleted,
+            )
+        }
+    }
 }
 
 @Composable
@@ -224,14 +295,19 @@ private fun SessionBody(
     restTimer: RestTimer?,
     now: Instant,
     error: String?,
+    overview: Boolean,
+    voiceEnabled: Boolean,
+    announce: (String) -> Unit,
+    onShowOverview: (Boolean) -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
-    onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
+    onLogTimed: (PrescriptionKey, Int) -> Unit,
     onDismissRest: () -> Unit,
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
     onRequestDiscard: () -> Unit,
 ) {
+    val steps = remember(draft) { draft.sessionSteps() }
     Column(modifier = Modifier.fillMaxSize()) {
         if (restTimer != null && restTimer.isRunning(now)) {
             RestTimerBar(restTimer = restTimer, now = now, onDismiss = onDismissRest)
@@ -244,46 +320,73 @@ private fun SessionBody(
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
             )
         }
-        val day = draft.scheduled.session
-        if (day == null || day.blocks.isEmpty()) {
+        if (steps.isEmpty()) {
             EmptyState(
                 title = stringResource(R.string.workout_session_empty_title),
                 description = stringResource(R.string.workout_session_empty_description),
                 modifier = Modifier.weight(1f),
             )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
-            ) {
-                day.blocks.sortedBy { it.orderIndex }.forEach { block ->
-                    item(key = "block-${block.blockId}") {
-                        Spacer(Modifier.height(8.dp))
-                        SectionTitle(text = BlockTypeLabels.label(block.type), compact = true)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    items(
-                        block.prescriptions.sortedBy { it.orderIndex },
-                        key = { "${block.blockId}-${it.orderIndex}" },
-                    ) { prescription ->
-                        val key = PrescriptionKey(block.blockId, prescription.orderIndex)
-                        PrescriptionCard(
-                            prescription = prescription,
-                            logged = draft.logged[key].orEmpty(),
-                            onToggleSet = { index -> onToggleSet(key, index) },
-                            onEditSet = { index, set -> onEditSet(key, index, set) },
-                            onLogSet = { set -> onLogSet(key, set) },
-                        )
-                        Spacer(Modifier.height(10.dp))
-                    }
-                }
+            return@Column
+        }
+
+        val pagerState = rememberPagerState(
+            initialPage = remember(draft.scheduledId) { draft.firstIncompleteStepIndex() },
+            pageCount = { steps.size },
+        )
+        val scope = rememberCoroutineScope()
+
+        // PR2: speak the exercise + target as the coach settles on it (not while
+        // paging through the reference list, and only when settled — no cue per
+        // pixel of a drag).
+        if (voiceEnabled && !overview) {
+            val settledPage = pagerState.currentPage.takeIf { !pagerState.isScrollInProgress }
+            LaunchedEffect(settledPage) {
+                settledPage?.let { steps.getOrNull(it)?.prescription }
+                    ?.let { coachAnnouncement(it) }
+                    ?.let(announce)
             }
         }
-        SessionActionsBar(
-            onFinish = onRequestFinish,
-            onSkip = onRequestSkip,
-            onDiscard = onRequestDiscard,
-        )
+
+        if (overview) {
+            OverviewList(
+                steps = steps,
+                logged = draft.logged,
+                modifier = Modifier.weight(1f),
+                onOpenStep = { index ->
+                    onShowOverview(false)
+                    scope.launch { pagerState.scrollToPage(index) }
+                },
+            )
+            // The whole-session management lever lives in the reference view.
+            SessionActionsBar(
+                onFinish = onRequestFinish,
+                onSkip = onRequestSkip,
+                onDiscard = onRequestDiscard,
+            )
+        } else {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 18.dp),
+                pageSpacing = 12.dp,
+            ) { page ->
+                val step = steps[page]
+                ExercisePage(
+                    step = step,
+                    logged = draft.logged[step.key].orEmpty(),
+                    now = now,
+                    onToggleSet = { index -> onToggleSet(step.key, index) },
+                    onEditSet = { index, set -> onEditSet(step.key, index, set) },
+                    onLogTimed = { seconds -> onLogTimed(step.key, seconds) },
+                )
+            }
+            CoachActionsBar(
+                page = pagerState.currentPage,
+                count = steps.size,
+                onNext = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } },
+                onFinish = onRequestFinish,
+            )
+        }
     }
 }
 
@@ -323,31 +426,31 @@ private fun RestTimerBar(restTimer: RestTimer, now: Instant, onDismiss: () -> Un
 }
 
 /**
- * One prescription: exercise name, the "3 × 8–10 @ RPE 8 · rest 90s" target,
- * and a check-off row per set with editable weight / reps / optional RPE.
- *
- * The next un-logged row shows its inputs up front — pre-filled with the carried
- * weight and the target reps — so the user can dial in load/reps before (or
- * instead of) tapping the circle; committing any of those fields logs the set.
+ * The focused coach page for a single exercise: the looped demo (hero), the
+ * "3 × 8–10 @ RPE 8 · rest 90s" target, and the set rows — weight/reps for a
+ * strength move, a hold timer for a timed one.
  */
 @Composable
-private fun PrescriptionCard(
-    prescription: Prescription,
+private fun ExercisePage(
+    step: SessionStep,
     logged: List<LoggedSet>,
+    now: Instant,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
-    onLogSet: (LoggedSet) -> Unit,
+    onLogTimed: (Int) -> Unit,
 ) {
+    val prescription = step.prescription
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
-            .background(Hf.colors.surface, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 8.dp),
     ) {
+        SectionTitle(text = BlockTypeLabels.label(step.block.type), compact = true)
+        Spacer(Modifier.height(8.dp))
         Text(
             prescription.exercise?.name ?: prescription.exerciseId,
-            style = Hf.type.headingMd.copy(fontSize = 14.sp),
+            style = Hf.type.headingLg.copy(fontSize = 20.sp),
             color = Hf.colors.textPrimary,
         )
         val target = prescriptionSummary(prescription)
@@ -355,57 +458,179 @@ private fun PrescriptionCard(
             Spacer(Modifier.height(2.dp))
             Text(target, style = Hf.type.monoSm, color = Hf.colors.textSecondary)
         }
-        Spacer(Modifier.height(8.dp))
-        SetHeaderRow()
-        // Prefill for the next, not-yet-logged set: weight carried from the last
-        // logged set, reps from the prescription target — the same defaults the
-        // VM would apply on a bare check-off.
-        val carriedWeight = logged.lastOrNull()?.weightLbs
-        val targetReps = prescription.repsMin ?: prescription.repsMax
-        val totalRows = maxOf(prescription.sets ?: 1, logged.size)
-        repeat(totalRows) { index ->
-            val set = logged.getOrNull(index)
-            val isNext = set == null && index == logged.size
-            SetRow(
-                index = index,
-                set = set,
-                // Only the next unlogged row is checkable, so sets stay ordered.
-                canToggle = index <= logged.size,
-                // Show inputs for logged rows and the next actionable row; later
-                // rows stay as faint placeholders until they become next.
-                showInputs = set != null || isNext,
-                weight = set?.weightLbs ?: carriedWeight.takeIf { isNext },
-                reps = set?.reps ?: targetReps?.takeIf { isNext },
-                rpe = set?.rpe,
-                onToggle = { onToggleSet(index) },
-                onWeightCommit = { value ->
-                    if (set != null) onEditSet(index, set.copy(weightLbs = value))
-                    else onLogSet(LoggedSet(weightLbs = value))
-                },
-                onRepsCommit = { value ->
-                    if (set != null) onEditSet(index, set.copy(reps = value?.toInt()))
-                    else onLogSet(LoggedSet(reps = value?.toInt()))
-                },
-                onRpeCommit = { value ->
-                    if (set != null) onEditSet(index, set.copy(rpe = value))
-                    else onLogSet(LoggedSet(rpe = value))
-                },
+        DemoStrip(prescription.exercise)
+        Spacer(Modifier.height(14.dp))
+
+        if (prescription.isTimed) {
+            TimedSets(
+                prescription = prescription,
+                logged = logged,
+                now = now,
+                onToggleSet = onToggleSet,
+                onEditSet = onEditSet,
+                onLogTimed = onLogTimed,
+            )
+        } else {
+            RepSets(
+                prescription = prescription,
+                logged = logged,
+                onToggleSet = onToggleSet,
+                onEditSet = onEditSet,
             )
         }
-        if (logged.size >= totalRows) {
-            TextButton(onClick = { onToggleSet(logged.size) }) {
-                Text(
-                    stringResource(R.string.workout_session_add_set),
-                    style = Hf.type.bodySm,
-                    color = Hf.colors.accent,
+    }
+}
+
+// ---- rep-based sets ----
+
+@Composable
+private fun RepSets(
+    prescription: Prescription,
+    logged: List<LoggedSet>,
+    onToggleSet: (Int) -> Unit,
+    onEditSet: (Int, LoggedSet) -> Unit,
+) {
+    SetsHeader(addEnabled = canAddSet(prescription, logged), onAdd = { onToggleSet(logged.size) }) {
+        CapsLabel(stringResource(R.string.workout_session_weight_header), modifier = Modifier.weight(1f))
+        CapsLabel(stringResource(R.string.workout_session_reps_header), modifier = Modifier.weight(1f))
+    }
+    val totalRows = maxOf(prescription.sets ?: 1, logged.size)
+    repeat(totalRows) { index ->
+        val set = logged.getOrNull(index)
+        SetRowFrame(
+            index = index,
+            logged = set != null,
+            // Only the next unlogged row is checkable, so sets stay ordered.
+            canToggle = index <= logged.size,
+            onToggle = { onToggleSet(index) },
+        ) {
+            if (set != null) {
+                EditableNumber(
+                    value = set.weightLbs,
+                    onCommit = { onEditSet(index, set.copy(weightLbs = it)) },
+                    modifier = Modifier.weight(1f),
+                    decimals = 1,
                 )
+                EditableNumber(
+                    value = set.reps?.toDouble(),
+                    onCommit = { onEditSet(index, set.copy(reps = it?.toInt())) },
+                    modifier = Modifier.weight(1f),
+                    decimals = 0,
+                )
+            } else {
+                PendingHint(weight = 2)
             }
         }
     }
 }
 
+// ---- timed sets (stretch / mobility holds) ----
+
 @Composable
-private fun SetHeaderRow() {
+private fun TimedSets(
+    prescription: Prescription,
+    logged: List<LoggedSet>,
+    now: Instant,
+    onToggleSet: (Int) -> Unit,
+    onEditSet: (Int, LoggedSet) -> Unit,
+    onLogTimed: (Int) -> Unit,
+) {
+    SetsHeader(addEnabled = canAddSet(prescription, logged), onAdd = { onToggleSet(logged.size) }) {
+        CapsLabel(stringResource(R.string.workout_session_time_header), modifier = Modifier.weight(2f))
+    }
+    val totalRows = maxOf(prescription.sets ?: 1, logged.size)
+    repeat(totalRows) { index ->
+        val set = logged.getOrNull(index)
+        SetRowFrame(
+            index = index,
+            logged = set != null,
+            canToggle = index <= logged.size,
+            onToggle = { onToggleSet(index) },
+        ) {
+            if (set != null) {
+                EditableNumber(
+                    value = set.durationSeconds?.toDouble(),
+                    onCommit = { onEditSet(index, set.copy(durationSeconds = it?.toInt())) },
+                    modifier = Modifier.weight(2f),
+                    decimals = 0,
+                    suffix = "s",
+                )
+            } else {
+                PendingHint(weight = 2)
+            }
+        }
+    }
+    // Guided "press start, hold, press stop" for the next unlogged set.
+    if (logged.size < totalRows) {
+        HoldTimer(
+            targetSeconds = prescription.durationSeconds,
+            now = now,
+            onLog = onLogTimed,
+        )
+    }
+}
+
+/**
+ * A count-up hold timer: tap to start, tap again to log the elapsed seconds as
+ * the next timed set. Resets whenever the exercise changes (it is `remember`ed
+ * inside the per-page composable).
+ */
+@Composable
+private fun HoldTimer(targetSeconds: Int?, now: Instant, onLog: (Int) -> Unit) {
+    var startedAt by remember { mutableStateOf<Instant?>(null) }
+    val running = startedAt != null
+    val elapsed = startedAt?.let { Duration.between(it, now).seconds.coerceAtLeast(0) } ?: 0L
+    Spacer(Modifier.height(10.dp))
+    Button(
+        onClick = {
+            val start = startedAt
+            if (start == null) {
+                startedAt = Instant.now()
+            } else {
+                onLog(Duration.between(start, Instant.now()).seconds.coerceAtLeast(0).toInt())
+                startedAt = null
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (running) Hf.colors.alert else Hf.colors.accent,
+        ),
+    ) {
+        Icon(
+            if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+            contentDescription = null,
+            tint = Hf.colors.textInverse,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            if (running) {
+                stringResource(R.string.workout_session_hold_stop, restCountdownLabel(elapsed))
+            } else {
+                stringResource(R.string.workout_session_hold_start)
+            },
+            style = Hf.type.bodyMd,
+            color = Hf.colors.textInverse,
+        )
+    }
+    if (!running && targetSeconds != null) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            stringResource(R.string.workout_session_hold_target, restCountdownLabel(targetSeconds.toLong())),
+            style = Hf.type.bodySm,
+            color = Hf.colors.textTertiary,
+        )
+    }
+}
+
+// ---- shared set-row scaffolding ----
+
+@Composable
+private fun SetsHeader(
+    addEnabled: Boolean,
+    onAdd: () -> Unit,
+    columns: @Composable RowScope.() -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -415,54 +640,41 @@ private fun SetHeaderRow() {
             stringResource(R.string.workout_session_set_header),
             modifier = Modifier.width(32.dp),
         )
-        CapsLabel(
-            stringResource(R.string.workout_session_weight_header),
-            modifier = Modifier.weight(1f),
-        )
-        CapsLabel(
-            stringResource(R.string.workout_session_reps_header),
-            modifier = Modifier.weight(1f),
-        )
-        CapsLabel(
-            stringResource(R.string.workout_session_rpe_header),
-            modifier = Modifier.weight(1f),
-        )
+        columns()
+        // Adding sets mid-workout is rare — a small, quiet affordance.
+        IconButton(onClick = onAdd, enabled = addEnabled, modifier = Modifier.size(28.dp)) {
+            Icon(
+                Icons.Outlined.Add,
+                contentDescription = stringResource(R.string.workout_session_add_set),
+                tint = if (addEnabled) Hf.colors.accent else Hf.colors.textQuaternary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
 @Composable
-private fun SetRow(
+private fun SetRowFrame(
     index: Int,
-    set: LoggedSet?,
+    logged: Boolean,
     canToggle: Boolean,
-    showInputs: Boolean,
-    weight: Double?,
-    reps: Int?,
-    rpe: Double?,
     onToggle: () -> Unit,
-    onWeightCommit: (Double?) -> Unit,
-    onRepsCommit: (Double?) -> Unit,
-    onRpeCommit: (Double?) -> Unit,
+    fields: @Composable RowScope.() -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (set != null) {
-                Icons.Filled.CheckCircle
-            } else {
-                Icons.Outlined.RadioButtonUnchecked
-            },
+            imageVector = if (logged) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
             contentDescription = stringResource(
-                if (set != null) R.string.workout_session_uncheck_set
-                else R.string.workout_session_check_set,
+                if (logged) R.string.workout_session_uncheck_set else R.string.workout_session_check_set,
                 index + 1,
             ),
             tint = when {
-                set != null -> Hf.colors.accent
+                logged -> Hf.colors.accent
                 canToggle -> Hf.colors.textTertiary
                 else -> Hf.colors.textQuaternary
             },
@@ -477,36 +689,216 @@ private fun SetRow(
             color = Hf.colors.textTertiary,
             modifier = Modifier.width(32.dp),
         )
-        if (showInputs) {
-            EditableNumber(
-                value = weight,
-                onCommit = onWeightCommit,
-                modifier = Modifier.weight(1f),
-                decimals = 1,
+        fields()
+    }
+}
+
+@Composable
+private fun RowScope.PendingHint(weight: Int) {
+    Text(
+        stringResource(R.string.workout_session_set_pending),
+        style = Hf.type.bodySm,
+        color = Hf.colors.textQuaternary,
+        modifier = Modifier.weight(weight.toFloat()).padding(horizontal = 8.dp),
+    )
+}
+
+/** True once every prescribed set is logged — adding beyond the plan is the only time the +icon lights up. */
+private fun canAddSet(prescription: Prescription, logged: List<LoggedSet>): Boolean =
+    logged.size >= maxOf(prescription.sets ?: 1, logged.size)
+
+// ---- demo strip ----
+
+/**
+ * IMPL-COACH: the current exercise's demo frames, slowly cross-faded inline as
+ * the visual hero of the coach page (reusing the IMPL-19 frame plan). Renders
+ * nothing when the exercise has no usable frames.
+ */
+@Composable
+private fun DemoStrip(exercise: ExerciseSummary?) {
+    val frames = remember(exercise) {
+        exercise?.demoFrames
+            ?.withIndex()
+            ?.sortedWith(compareBy({ it.value.order }, { it.index }))
+            ?.mapNotNull { indexed ->
+                indexed.value.imageUrl?.let { url -> url to indexed.value.label }
+            }
+            .orEmpty()
+    }
+    if (frames.isEmpty()) return
+
+    var index by remember(frames) { mutableStateOf(0) }
+    if (frames.size > 1) {
+        LaunchedEffect(frames) {
+            while (true) {
+                delay(DEMO_FRAME_LOOP_MILLIS)
+                index = (index + 1) % frames.size
+            }
+        }
+    }
+    val safeIndex = index.coerceIn(0, frames.lastIndex)
+
+    Spacer(Modifier.height(12.dp))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Hf.colors.canvasMuted),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Crossfade(
+            targetState = safeIndex,
+            animationSpec = tween(DEMO_FRAME_CROSSFADE_MILLIS),
+            label = "demo-frame",
+        ) { i ->
+            HfAsyncImage(
+                model = frames[i].first,
+                contentDescription = exercise?.name,
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
             )
-            EditableNumber(
-                value = reps?.toDouble(),
-                onCommit = onRepsCommit,
-                modifier = Modifier.weight(1f),
-                decimals = 0,
-            )
-            EditableNumber(
-                value = rpe,
-                onCommit = onRpeCommit,
-                modifier = Modifier.weight(1f),
-                decimals = 1,
-            )
-        } else {
+        }
+        val label = frames[safeIndex].second
+        if (label.isNotBlank()) {
             Text(
-                stringResource(R.string.workout_session_set_pending),
+                label,
                 style = Hf.type.bodySm,
-                color = Hf.colors.textQuaternary,
-                modifier = Modifier.weight(3f).padding(horizontal = 8.dp),
+                color = Hf.colors.textPrimary,
+                modifier = Modifier
+                    .padding(8.dp)
+                    .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
     }
 }
 
+// ---- reference overview ----
+
+/** The whole-workout reference list: scan progress and jump to any exercise. */
+@Composable
+private fun OverviewList(
+    steps: List<SessionStep>,
+    logged: Map<PrescriptionKey, List<LoggedSet>>,
+    modifier: Modifier = Modifier,
+    onOpenStep: (Int) -> Unit,
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 4.dp),
+    ) {
+        steps.forEachIndexed { index, step ->
+            val firstOfBlock = index == 0 || steps[index - 1].block.blockId != step.block.blockId
+            item(key = "overview-${step.key.blockId}-${step.key.orderIndex}") {
+                if (firstOfBlock) {
+                    Spacer(Modifier.height(8.dp))
+                    SectionTitle(text = BlockTypeLabels.label(step.block.type), compact = true)
+                    Spacer(Modifier.height(6.dp))
+                }
+                OverviewRow(
+                    step = step,
+                    loggedCount = logged[step.key]?.size ?: 0,
+                    onClick = { onOpenStep(index) },
+                )
+                Spacer(Modifier.height(6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverviewRow(step: SessionStep, loggedCount: Int, onClick: () -> Unit) {
+    val target = step.prescription.sets ?: 1
+    val done = loggedCount >= target
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
+            .background(Hf.colors.surface, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (done) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            contentDescription = null,
+            tint = if (done) Hf.colors.accent else Hf.colors.textTertiary,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                step.prescription.exercise?.name ?: step.prescription.exerciseId,
+                style = Hf.type.headingMd.copy(fontSize = 14.sp),
+                color = Hf.colors.textPrimary,
+            )
+            val summary = prescriptionSummary(step.prescription)
+            if (summary.isNotBlank()) {
+                Text(summary, style = Hf.type.monoSm, color = Hf.colors.textSecondary)
+            }
+        }
+        Text(
+            "$loggedCount/$target",
+            style = Hf.type.monoSm,
+            color = if (done) Hf.colors.accent else Hf.colors.textTertiary,
+        )
+    }
+}
+
+// ---- bottom action bars ----
+
+/** Focused-mode bar: where you are in the workout, advance, or finish. */
+@Composable
+private fun CoachActionsBar(page: Int, count: Int, onNext: () -> Unit, onFinish: () -> Unit) {
+    val last = page >= count - 1
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            "${page + 1} / $count",
+            style = Hf.type.monoSm,
+            color = Hf.colors.textTertiary,
+        )
+        Spacer(Modifier.weight(1f))
+        if (!last) {
+            TextButton(onClick = onFinish) {
+                Text(
+                    stringResource(R.string.workout_session_finish),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textSecondary,
+                )
+            }
+            Button(
+                onClick = onNext,
+                colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
+            ) {
+                Text(
+                    stringResource(R.string.workout_session_next),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textInverse,
+                )
+            }
+        } else {
+            Button(
+                onClick = onFinish,
+                colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
+            ) {
+                Text(
+                    stringResource(R.string.workout_session_finish),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textInverse,
+                )
+            }
+        }
+    }
+}
+
+/** Overview-mode bar: manage the whole session (finish / skip / discard). */
 @Composable
 private fun SessionActionsBar(
     onFinish: () -> Unit,
@@ -608,6 +1000,78 @@ private fun FinishSummaryDialog(
     )
 }
 
+/**
+ * IMPL-COACH: the post-finish summary — the same stats as the pre-confirm
+ * dialog plus the best-effort AI coach recap (a spinner-free "writing" line
+ * while it loads, the note when it lands, nothing if it never arrives).
+ */
+@Composable
+private fun CompletionSummaryDialog(
+    draft: WorkoutSessionDraft,
+    now: Instant,
+    recap: String?,
+    recapLoading: Boolean,
+    onDone: () -> Unit,
+) {
+    val (loggedExercises, totalExercises) = loggedExerciseCounts(draft)
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = {
+            Text(
+                stringResource(R.string.workout_session_complete_title),
+                style = Hf.type.headingMd,
+                color = Hf.colors.textPrimary,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SummaryRow(
+                    label = stringResource(R.string.workout_session_summary_elapsed),
+                    value = elapsedLabel(Duration.between(draft.startedAt, now).seconds),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.workout_session_summary_sets),
+                    value = pluralStringResource(
+                        R.plurals.workout_session_sets_logged,
+                        draft.totalLoggedSets,
+                        draft.totalLoggedSets,
+                    ),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.workout_session_summary_exercises),
+                    value = "$loggedExercises / $totalExercises",
+                )
+                when {
+                    recapLoading -> {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.workout_session_recap_loading),
+                            style = Hf.type.bodyMd,
+                            color = Hf.colors.textTertiary,
+                        )
+                    }
+                    !recap.isNullOrBlank() -> {
+                        Spacer(Modifier.height(4.dp))
+                        CapsLabel(text = stringResource(R.string.workout_session_recap_label))
+                        Spacer(Modifier.height(2.dp))
+                        Text(recap, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDone) {
+                Text(
+                    stringResource(R.string.workout_session_done),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.accent,
+                )
+            }
+        },
+        containerColor = Hf.colors.surface,
+    )
+}
+
 @Composable
 private fun SummaryRow(label: String, value: String) {
     Row(
@@ -630,7 +1094,7 @@ private fun WorkoutSessionPreview() {
             onBack = {},
             onToggleSet = { _, _ -> },
             onEditSet = { _, _, _ -> },
-            onLogSet = { _, _ -> },
+            onLogTimed = { _, _ -> },
             onDismissRest = {},
             onRequestFinish = {},
             onRequestSkip = {},

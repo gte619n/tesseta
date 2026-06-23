@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -194,13 +195,17 @@ private fun SearchPane(
         return
     }
 
+    val screenH = LocalConfiguration.current.screenHeightDp.dp
     when {
         state.error != null -> Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
+        // First search shows skeleton rows; later keystrokes keep the prior
+        // results visible (with the inline spinner) to avoid flicker.
+        state.searching && state.results.isEmpty() -> SkeletonRows()
         !state.searching && state.results.isEmpty() -> Text(
             "No catalog matches.", style = Hf.type.bodyMd, color = Hf.colors.textTertiary,
         )
         else -> LazyColumn(
-            modifier = Modifier.heightIn(max = 280.dp),
+            modifier = Modifier.heightIn(max = screenH * 0.45f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.results, key = { it.foodId }) { food ->
@@ -235,30 +240,61 @@ private fun RecentList(
     loading: Boolean,
     onRelog: (Entry) -> Unit,
 ) {
+    val screenH = LocalConfiguration.current.screenHeightDp.dp
     Text("RECENT", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
     Spacer(Modifier.height(8.dp))
     when {
-        loading -> Box(
-            Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = Hf.colors.accent,
-                strokeWidth = 2.dp,
-            )
-        }
+        loading -> SkeletonRows()
         recents.isEmpty() -> Text(
             "Foods you log will show up here for one-tap repeats.",
             style = Hf.type.bodySm,
             color = Hf.colors.textTertiary,
         )
         else -> LazyColumn(
-            modifier = Modifier.heightIn(max = 340.dp),
+            modifier = Modifier.heightIn(max = screenH * 0.52f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(recents, key = { "${it.date}/${it.entryId}" }) { entry ->
                 RecentRow(entry = entry, onClick = { onRelog(entry) })
+            }
+        }
+    }
+}
+
+/** Placeholder rows shown while results / recents load (mirrors the web sheet). */
+@Composable
+private fun SkeletonRows(count: Int = 4) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(count) {
+            HfCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .background(Hf.colors.canvasMuted, RoundedCornerShape(8.dp)),
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(12.dp)
+                                .background(Hf.colors.canvasMuted, RoundedCornerShape(4.dp)),
+                        )
+                        Box(
+                            Modifier
+                                .fillMaxWidth(0.25f)
+                                .height(9.dp)
+                                .background(Hf.colors.canvasMuted, RoundedCornerShape(4.dp)),
+                        )
+                    }
+                }
             }
         }
     }

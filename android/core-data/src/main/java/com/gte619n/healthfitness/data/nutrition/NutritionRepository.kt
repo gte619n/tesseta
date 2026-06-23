@@ -122,6 +122,19 @@ class NutritionRepository @Inject constructor(
     }
 
     /**
+     * offline-fix: pure local (mirror-only) read of a day — never hits the network.
+     * Used to seed the dashboard's nutrition card and the Today screen instantly on a
+     * cold start so they snap in with no spinner. Returns the mirror-assembled day
+     * even when it's empty: an empty day ("nothing logged yet") is the real current
+     * state, not a reason to spin — the network `day()` revalidates right after. Only
+     * the kill-switch (live-network mode, Room is not the source of truth) yields null.
+     */
+    suspend fun cachedDay(date: String): NutritionDay? {
+        if (support.killSwitchOn()) return null
+        return assembleDay(date)
+    }
+
+    /**
      * Force this date's entries + target to be re-pulled from the network into
      * the mirror, even when the date already has rows. Photo capture creates the
      * ANALYZING entry server-side only (multipart, network path), so without this

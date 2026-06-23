@@ -29,6 +29,17 @@
          without the grant; the logger UI requests it when starting a session. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- IMPL-COACH: haptic buzz when a rest period ends (WorkoutSessionService). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- IMPL-COACH PR2: the coach speaks set cues via TextToSpeech; API 30+
+         package visibility requires declaring the TTS engine intent. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".HealthFitnessApp"
         android:label="@string/app_name"

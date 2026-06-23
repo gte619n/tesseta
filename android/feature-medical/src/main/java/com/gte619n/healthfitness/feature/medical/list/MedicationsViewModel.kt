@@ -7,8 +7,12 @@ import com.gte619n.healthfitness.data.medications.MedicationRepository
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -31,8 +35,25 @@ class MedicationsViewModel @Inject constructor(
     private val medications: MedicationRepository,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow<MedicationsUiState>(MedicationsUiState.Loading)
-    val state: StateFlow<MedicationsUiState> = _state.asStateFlow()
+    // offline-fix: the list is reactive off the Room mirror, so the screen shows the
+    // last-synced medications INSTANTLY on every entry — no `Loading` reset, no
+    // network wait — and updates in place as optimistic writes / sync deltas land.
+    // `Loading` is only the brief initial value before the first mirror emission
+    // (i.e. the very first sync); a warm mirror emits before the first frame.
+    val state: StateFlow<MedicationsUiState> =
+        medications.observe()
+            .map { meds ->
+                MedicationsUiState.Ready(
+                    active = meds.filter { it.status == MedicationStatus.ACTIVE },
+                    discontinued = meds.filter { it.status == MedicationStatus.DISCONTINUED },
+                ) as MedicationsUiState
+            }
+            .catch { emit(MedicationsUiState.Error(it.message ?: "Could not load medications")) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = MedicationsUiState.Loading,
+            )
 
     private val _tab = MutableStateFlow(MedicationsTab.CURRENT)
     val tab: StateFlow<MedicationsTab> = _tab.asStateFlow()
@@ -41,19 +62,12 @@ class MedicationsViewModel @Inject constructor(
         _tab.value = tab
     }
 
+    /**
+     * offline-fix: revalidate the mirror from the network (best-effort). The
+     * reactive [state] reflects the result; this never flips the UI back to
+     * `Loading`. Safe to call on every screen resume.
+     */
     fun refresh() {
-        _state.value = MedicationsUiState.Loading
-        viewModelScope.launch {
-            runCatching { medications.list() }
-                .onSuccess { all ->
-                    _state.value = MedicationsUiState.Ready(
-                        active = all.filter { it.status == MedicationStatus.ACTIVE },
-                        discontinued = all.filter { it.status == MedicationStatus.DISCONTINUED },
-                    )
-                }
-                .onFailure {
-                    _state.value = MedicationsUiState.Error(it.message ?: "Could not load medications")
-                }
-        }
+        viewModelScope.launch { runCatching { medications.refresh() } }
     }
 }

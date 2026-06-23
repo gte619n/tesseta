@@ -87,26 +87,47 @@ data class RecentActivityEntry(
     val timestamp: Instant,
 )
 
+// offline-fix: every card exposes a `cached*` reader that returns ONLY local
+// (Room/DataStore) data and never touches the network, so the dashboard can seed
+// each card with the last-known value instantly on a cold start — no spinner — and
+// then revalidate via the `load*` (network) path. A null/empty result means
+// "nothing cached", in which case the card stays on its loading state until the
+// first network result lands (only relevant before the first sync).
 interface DashboardBodyCompositionRepository {
     suspend fun loadRecent(): WeightSummary? // null = no data
+
+    /** Local-only weight summary from the mirror, or null if nothing is cached. */
+    suspend fun cachedRecent(): WeightSummary?
 }
 
 interface DashboardDailyMetricsRepository {
     /** Daily metrics for roughly the last 30 days, one entry per calendar day. */
     suspend fun loadRecent(): List<DailyMetricPoint>
+
+    /** Local-only metrics from the mirror (empty if nothing is cached). */
+    suspend fun cachedRecent(): List<DailyMetricPoint>
 }
 
 interface DashboardBloodMarkerRepository {
     suspend fun loadDashboardMarkers(): List<BloodMarkerSummary>
+
+    /** Local-only blood markers from the mirror (empty if nothing is cached). */
+    suspend fun cachedDashboardMarkers(): List<BloodMarkerSummary>
 }
 
 interface DashboardTodaysDosesRepository {
     suspend fun loadToday(): List<TodaysDoseSummary>
+
+    /** Last-cached today's doses, or null if nothing cached for the current day. */
+    suspend fun cachedToday(): List<TodaysDoseSummary>?
 }
 
 interface DashboardNutritionRepository {
     /** Today's logged nutrition: totals + target for the Today card's macro tier. */
     suspend fun loadToday(): NutritionDay
+
+    /** Local-only nutrition day from the mirror, or null if nothing is cached. */
+    suspend fun cachedToday(): NutritionDay?
 }
 
 interface DashboardRecentActivityRepository {

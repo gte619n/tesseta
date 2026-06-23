@@ -33,6 +33,30 @@ class AuthCoordinator @Inject constructor(
     // Survives MainActivity recreation (this is a @Singleton).
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // offline-fix: guards the launch-path bootstrap so it runs exactly once even
+    // though it's kicked from HealthFitnessApp.onCreate (earliest) and the Activity
+    // may also recreate. Explicit re-probes (add-account) call bootstrap() directly.
+    @Volatile private var launchBootstrapped = false
+
+    /**
+     * offline-fix: the one-time launch bootstrap. Idempotent — safe to call from
+     * Application.onCreate (so the cached session is usually resolved before the
+     * first composition, eliminating the launch-time Loading flash) and harmless if
+     * called again on Activity recreation.
+     */
+    suspend fun bootstrapOnce() {
+        if (launchBootstrapped) return
+        launchBootstrapped = true
+        bootstrap()
+    }
+
+    /**
+     * offline-fix: cheap, no-SQLCipher read of the first-run sync flag from the auth
+     * DataStore, so the signed-in entry can decide whether to show the "Setting up…"
+     * gate without building the encrypted DB on the launch path.
+     */
+    suspend fun isFirstSyncComplete(): Boolean = cache.isFirstSyncComplete()
+
     /**
      * IMPL-STAB (Workstream C) — offline-first launch. A returning user (one who
      * has signed in before) goes straight to the app on their cached session,

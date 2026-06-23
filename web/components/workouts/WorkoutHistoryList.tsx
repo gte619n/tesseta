@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
   ScheduledWorkoutResponse,
   PrescriptionExercise,
   CompleteSessionRequest,
+  WorkoutHistoryPage,
 } from "@/lib/types/workout-program";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
 import { LogSessionModal } from "./LogSessionModal";
@@ -37,11 +38,24 @@ function formatClock(completedAt: string | null): string | null {
   });
 }
 
+// True when this row opens a new program/phase run — i.e. its program or phase
+// differs from the previous (more recent) row. Used to draw delineation headers.
+function startsNewGroup(
+  session: ScheduledWorkoutResponse,
+  prev: ScheduledWorkoutResponse | undefined,
+): boolean {
+  if (!prev) return true;
+  return prev.programId !== session.programId || prev.phaseId !== session.phaseId;
+}
+
 export function WorkoutHistoryList({
-  sessions,
+  firstPage,
+  loadMore,
   logSession,
 }: {
-  sessions: ScheduledWorkoutResponse[];
+  firstPage: WorkoutHistoryPage;
+  // Server action: fetch the next page of history (25 rows, newest first).
+  loadMore: (page: number) => Promise<WorkoutHistoryPage>;
   // Server action: completion upsert addressed by program + scheduled id —
   // the after-the-fact "edit actuals" path (ADR-0012 D6). Rows without a
   // programId (older backend responses) simply don't offer the edit.
@@ -59,6 +73,31 @@ export function WorkoutHistoryList({
     null,
   );
 
+  // Accumulate pages as the user loads more. `firstPage` seeds the list and
+  // resets it on a router.refresh() (e.g. after editing actuals).
+  const [sessions, setSessions] = useState(firstPage.items);
+  const [nextPage, setNextPage] = useState(firstPage.page + 1);
+  const [hasMore, setHasMore] = useState(firstPage.hasMore);
+  const [seeded, setSeeded] = useState(firstPage);
+  const [pending, startTransition] = useTransition();
+
+  // Re-seed when a fresh first page arrives (server re-render / refresh).
+  if (seeded !== firstPage) {
+    setSeeded(firstPage);
+    setSessions(firstPage.items);
+    setNextPage(firstPage.page + 1);
+    setHasMore(firstPage.hasMore);
+  }
+
+  function onLoadMore() {
+    startTransition(async () => {
+      const page = await loadMore(nextPage);
+      setSessions((prev) => [...prev, ...page.items]);
+      setNextPage(page.page + 1);
+      setHasMore(page.hasMore);
+    });
+  }
+
   if (sessions.length === 0) {
     return (
       <p className="text-[13px] text-secondary">
@@ -70,15 +109,33 @@ export function WorkoutHistoryList({
   return (
     <>
       <div className="space-y-2">
-        {sessions.map((s) => (
-          <HistoryRow
-            key={`${s.phaseId}-${s.scheduledId}`}
-            session={s}
-            onOpenExercise={setSheetExercise}
-            onEdit={s.programId ? setEditTarget : null}
-          />
+        {sessions.map((s, i) => (
+          <Fragment key={`${s.programId ?? "?"}-${s.scheduledId}`}>
+            {startsNewGroup(s, sessions[i - 1]) ? <GroupHeader session={s} /> : null}
+            <HistoryRow
+              session={s}
+              onOpenExercise={setSheetExercise}
+              onEdit={s.programId ? setEditTarget : null}
+            />
+          </Fragment>
         ))}
       </div>
+      {hasMore ? (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={pending}
+            className="caps-mono cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[11px] tracking-[0.06em] text-secondary hover:text-primary disabled:cursor-default disabled:opacity-50"
+          >
+            {pending ? "Loading…" : `Load more (${sessions.length} of ${firstPage.total})`}
+          </button>
+        </div>
+      ) : (
+        <p className="caps-mono mt-4 text-center text-[10px] tracking-[0.06em] text-tertiary">
+          {sessions.length} workout{sessions.length === 1 ? "" : "s"}
+        </p>
+      )}
       <ExerciseDetailSheet
         exercise={sheetExercise}
         onClose={() => setSheetExercise(null)}
@@ -95,6 +152,24 @@ export function WorkoutHistoryList({
         }
       />
     </>
+  );
+}
+
+// Delineation header between program/phase runs in the time-ordered list.
+function GroupHeader({ session }: { session: ScheduledWorkoutResponse }) {
+  const program = session.programTitle?.trim();
+  const phase = session.phaseTitle?.trim();
+  return (
+    <div className="flex items-baseline gap-2 pt-4 first:pt-0">
+      <span className="caps-mono text-[11px] font-medium tracking-[0.06em] text-secondary">
+        {program || "Workout"}
+      </span>
+      {phase ? (
+        <span className="caps-mono text-[10px] tracking-[0.06em] text-tertiary">
+          · {phase}
+        </span>
+      ) : null}
+    </div>
   );
 }
 

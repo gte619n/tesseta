@@ -3,6 +3,8 @@ package com.gte619n.healthfitness.feature.workouts.program
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
@@ -53,6 +55,11 @@ data class ProgramDetailUiState(
     val restoredSession: ParkedCompletion? = null,
     /** Device date, fixed by the VM so the "start today" affordance is testable. */
     val today: LocalDate = LocalDate.now(),
+    /** The program's nutrition guidance; null = no "Apply nutrition" action. */
+    val nutritionGuidance: NutritionGuidance? = null,
+    val applyingNutrition: Boolean = false,
+    /** One-shot: the macros just applied to the target, for a confirmation message. */
+    val appliedNutrition: Macros? = null,
     val error: String? = null,
 )
 
@@ -208,6 +215,30 @@ class ProgramDetailViewModel @Inject constructor(
 
     fun consumeRestoredSession() = _state.update { it.copy(restoredSession = null) }
 
+    // --- Apply the program's nutrition guidance as the macro target ---
+
+    /** Apply this program's nutrition guidance as the user's daily macro target. */
+    fun applyNutrition() {
+        if (_state.value.applyingNutrition) return
+        _state.update { it.copy(applyingNutrition = true, error = null) }
+        viewModelScope.launch {
+            repository.applyNutritionTarget(programId)
+                .onSuccess { applied ->
+                    _state.update { it.copy(applyingNutrition = false, appliedNutrition = applied) }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(
+                            applyingNutrition = false,
+                            error = e.message ?: "Couldn't update nutrition target",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun consumeAppliedNutrition() = _state.update { it.copy(appliedNutrition = null) }
+
     private fun load() {
         _state.update { it.copy(loading = true, today = today, error = null) }
         viewModelScope.launch {
@@ -226,9 +257,14 @@ class ProgramDetailViewModel @Inject constructor(
                 repository.calendar(programId, LocalDate.of(1970, 1, 1), weekStart.minusDays(1))
             }
 
+            // Best-effort: the program's effective nutrition guidance (drives the
+            // "Apply nutrition" action). Null/absent simply hides it.
+            val guidanceDeferred = async { repository.nutritionGuidance(programId) }
+
             val deepResult = deepDeferred.await()
             val calendarResult = calendarDeferred.await()
             val pastResult = pastDeferred.await()
+            val guidance = guidanceDeferred.await().getOrNull()
 
             deepResult
                 .onSuccess { program ->
@@ -243,6 +279,7 @@ class ProgramDetailViewModel @Inject constructor(
                             program = program,
                             thisWeek = week,
                             pastSessions = past,
+                            nutritionGuidance = guidance,
                             error = null,
                         )
                     }

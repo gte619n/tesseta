@@ -69,7 +69,7 @@ class AddFoodViewModel @Inject constructor(
             return
         }
         searchJob = viewModelScope.launch {
-            delay(300) // debounce keystrokes
+            delay(220) // debounce keystrokes
             _state.update { it.copy(searching = true, error = null) }
             try {
                 val results = foods.search(query)

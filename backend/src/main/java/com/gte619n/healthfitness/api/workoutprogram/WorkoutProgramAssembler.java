@@ -110,6 +110,17 @@ public class WorkoutProgramAssembler {
     }
 
     public List<ScheduledWorkoutResponse> scheduled(String userId, List<ScheduledWorkout> items) {
+        return scheduled(userId, items, Map.of());
+    }
+
+    /**
+     * Scheduled responses enriched with program + phase titles for the Workout
+     * History view's delineation headers. {@code programsById} carries the owning
+     * programs (with their phases); ids absent from the map resolve to null titles
+     * — the same nulls the program-scoped {@link #scheduled(String, List)} emits.
+     */
+    public List<ScheduledWorkoutResponse> scheduled(
+        String userId, List<ScheduledWorkout> items, Map<String, WorkoutProgram> programsById) {
         List<WorkoutDay> sessions = items.stream().map(ScheduledWorkout::session)
             .filter(d -> d != null).toList();
         Map<String, ExerciseSummary> summaries = summariesFor(collectExerciseIdsFromDays(sessions));
@@ -120,13 +131,25 @@ public class WorkoutProgramAssembler {
         List<ScheduledWorkoutResponse> out = new ArrayList<>();
         for (ScheduledWorkout sw : items) {
             DayResponse session = sw.session() == null ? null : dayResponse(sw.session(), summaries, gymNames);
+            WorkoutProgram program = programsById.get(sw.programId());
+            String programTitle = program == null ? null : program.title();
+            String phaseTitle = program == null ? null : phaseTitle(program, sw.phaseId());
             out.add(new ScheduledWorkoutResponse(
-                sw.programId(), sw.scheduledId(), sw.date(), sw.phaseId(), sw.dayId(), sw.dayLabel(),
+                sw.programId(), programTitle, sw.scheduledId(), sw.date(), sw.phaseId(), phaseTitle,
+                sw.dayId(), sw.dayLabel(),
                 sw.weekIndexInPhase(), sw.isDeload(), sw.locationId(),
                 gymNames.get(sw.locationId()), sw.status(), session,
-                sw.completedAt(), sw.durationSeconds()));
+                sw.completedAt(), sw.durationSeconds(), null));
         }
         return out;
+    }
+
+    private static String phaseTitle(WorkoutProgram program, String phaseId) {
+        if (phaseId == null || program.phases() == null) return null;
+        for (ProgramPhase ph : program.phases()) {
+            if (phaseId.equals(ph.phaseId())) return ph.title();
+        }
+        return null;
     }
 
     private DayResponse dayResponse(WorkoutDay d, Map<String, ExerciseSummary> summaries, Map<String, String> gymNames) {

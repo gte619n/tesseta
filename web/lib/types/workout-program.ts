@@ -161,6 +161,16 @@ export type WorkoutHistorySummary = {
   lastWorkoutDate: string | null;
 };
 
+// One page of Workout History rows plus the cursor metadata used to page through
+// the rest (25 at a time, newest first).
+export type WorkoutHistoryPage = {
+  items: ScheduledWorkoutResponse[];
+  page: number;
+  size: number;
+  total: number;
+  hasMore: boolean;
+};
+
 export type ScheduledWorkoutResponse = {
   scheduledId: string;
   date: string;
@@ -168,7 +178,11 @@ export type ScheduledWorkoutResponse = {
   // so cross-program reads (Workout History) need this to address the
   // completion upsert. Optional: program-scoped responses may omit it.
   programId?: string | null;
+  // Program + phase titles, resolved by the Workout History read so the list can
+  // draw program/phase delineation headers. Null on program-scoped responses.
+  programTitle?: string | null;
   phaseId: string;
+  phaseTitle?: string | null;
   dayId: string;
   dayLabel: string;
   weekIndexInPhase: number;

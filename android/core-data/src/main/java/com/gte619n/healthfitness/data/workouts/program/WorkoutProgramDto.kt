@@ -18,6 +18,7 @@ import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import java.time.Instant
 import java.time.LocalDate
@@ -59,11 +60,14 @@ data class NutritionGuidanceDto(
 
 data class DemoFrameDto(
     // IMPL-19: frames are keyed to the per-exercise plan; `key`/`label`/`caption`
-    // are denormalized from the FrameSpec. `phase` is the deprecated legacy enum,
-    // now nullable so old documents still decode.
-    val key: String = "",
-    val label: String = "",
-    val caption: String = "",
+    // are denormalized from the FrameSpec. These are nullable on the wire — a
+    // default only covers an ABSENT field, but the server can send an explicit
+    // `null` (e.g. a legacy/partial frame), and Moshi rejects null for a
+    // non-null String, which would fail the whole response (e.g. workout
+    // history). `phase` is the deprecated legacy enum, nullable for old docs.
+    val key: String? = null,
+    val label: String? = null,
+    val caption: String? = null,
     val order: Int = 0,
     val phase: String? = null,
     val imageUrl: String? = null,
@@ -89,6 +93,7 @@ data class LoggedSetDto(
     val rpe: Double? = null,
     val restSeconds: Int? = null,
     val completedAt: Instant? = null,
+    val durationSeconds: Int? = null,
 )
 
 data class PrescriptionDto(
@@ -210,6 +215,22 @@ data class ScheduledWorkoutDto(
     val session: WorkoutDayDto? = null,
     val completedAt: Instant? = null,
     val durationSeconds: Int? = null,
+    // Resolved by the workout-history read for the program/phase delineation
+    // headers; absent (null) on calendar reads.
+    val programTitle: String? = null,
+    val phaseTitle: String? = null,
+)
+
+/**
+ * One page of Workout History rows. The backend pages /api/me/workout-history
+ * (newest first); [hasMore] drives the screen's load-on-scroll.
+ */
+data class WorkoutHistoryPageDto(
+    val items: List<ScheduledWorkoutDto> = emptyList(),
+    val page: Int = 0,
+    val size: Int = 0,
+    val total: Int = 0,
+    val hasMore: Boolean = false,
 )
 
 // ---- Enum parsing with safe fallback ----
@@ -246,9 +267,9 @@ fun NutritionGuidance.toDto(): NutritionGuidanceDto = NutritionGuidanceDto(
 
 fun DemoFrameDto.toDomain(): DemoFrame =
     DemoFrame(
-        key = key,
-        label = label,
-        caption = caption,
+        key = key.orEmpty(),
+        label = label.orEmpty(),
+        caption = caption.orEmpty(),
         order = order,
         imageUrl = imageUrl ?: imageCandidates.firstOrNull(),
         phase = phase,
@@ -268,6 +289,7 @@ fun LoggedSetDto.toDomain(): LoggedSet = LoggedSet(
     rpe = rpe,
     restSeconds = restSeconds,
     completedAt = completedAt,
+    durationSeconds = durationSeconds,
 )
 
 fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
@@ -276,6 +298,7 @@ fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
     rpe = rpe,
     restSeconds = restSeconds,
     completedAt = completedAt,
+    durationSeconds = durationSeconds,
 )
 
 fun PrescriptionDto.toDomain(): Prescription = Prescription(
@@ -381,4 +404,13 @@ fun ScheduledWorkoutDto.toDomain(): ScheduledWorkout = ScheduledWorkout(
     session = session?.toDomain(),
     completedAt = completedAt,
     durationSeconds = durationSeconds,
+    programTitle = programTitle,
+    phaseTitle = phaseTitle,
+)
+
+fun WorkoutHistoryPageDto.toDomain(): WorkoutHistoryPage = WorkoutHistoryPage(
+    items = items.map { it.toDomain() },
+    page = page,
+    total = total,
+    hasMore = hasMore,
 )

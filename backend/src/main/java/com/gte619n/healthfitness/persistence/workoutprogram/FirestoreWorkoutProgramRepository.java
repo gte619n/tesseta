@@ -217,6 +217,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                             sm.put("rpe", s.rpe());
                             sm.put("restSeconds", s.restSeconds());
                             sm.put("completedAt", s.completedAt() == null ? null : s.completedAt().toString());
+                            sm.put("durationSeconds", s.durationSeconds());
                             ls.add(sm);
                         }
                         rm.put("loggedSets", ls);
@@ -411,7 +412,8 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                 intOrNull(m.get("reps")),
                 rpe instanceof Number n2 ? n2.doubleValue() : null,
                 intOrNull(m.get("restSeconds")),
-                parseInstant(str(m.get("completedAt")))));
+                parseInstant(str(m.get("completedAt"))),
+                intOrNull(m.get("durationSeconds"))));
         }
         return out;
     }

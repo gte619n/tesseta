@@ -29,8 +29,16 @@ data class WorkoutSessionUiState(
     val draft: WorkoutSessionDraft? = null,
     val error: String? = null,
     val prompt: SessionPrompt? = null,
-    /** Set once finish/skip/discard succeeded; the route pops back. */
+    /** Set once skip/discard succeeded (and after the finish recap is dismissed); the route pops back. */
     val closed: Boolean = false,
+    /**
+     * IMPL-COACH — finish succeeded; show the post-workout recap summary (over
+     * the retained draft snapshot) before popping. [recap] is the best-effort AI
+     * coach note (null when unavailable); [recapLoading] covers the fetch.
+     */
+    val completed: Boolean = false,
+    val recap: String? = null,
+    val recapLoading: Boolean = false,
 )
 
 /**
@@ -66,7 +74,19 @@ class WorkoutSessionViewModel @Inject constructor(
     /** The shared rest countdown (also rendered by the foreground notification). */
     val restTimer: StateFlow<WorkoutSessionTimers.RestTimer?> = timers.rest
 
+    /**
+     * IMPL-COACH PR2 — what each exercise was performed last time, keyed by
+     * exerciseId, used to prefill new sets with the literal previous session.
+     * Fetched best-effort on open; empty until it lands (prefill falls back to
+     * the designed target meanwhile).
+     */
+    private var lastSetsByExercise: Map<String, List<LoggedSet>> = emptyMap()
+
     init {
+        // Best-effort prior-performance fetch, independent of the draft load below.
+        viewModelScope.launch {
+            lastSetsByExercise = repository.lastSets(programId, scheduledId)
+        }
         viewModelScope.launch {
             val started = repository.start(programId, scheduledId)
             started.onFailure { e ->
@@ -123,7 +143,25 @@ class WorkoutSessionViewModel @Inject constructor(
         draft.prescription(key)?.restSeconds?.let { timers.startRest(it, now()) }
     }
 
-    /** Replace one logged set after an inline weight/reps/RPE edit. */
+    /**
+     * Log a timed exercise's set with the measured [durationSeconds] (from the
+     * hold timer) rather than the prescribed default, and start the prescribed
+     * rest countdown — the timed counterpart to checking off a rep set.
+     */
+    fun logTimedSet(key: PrescriptionKey, durationSeconds: Int) {
+        val draft = _state.value.draft ?: return
+        val current = draft.logged[key].orEmpty()
+        val at = now()
+        val set = LoggedSet(
+            durationSeconds = durationSeconds,
+            restSeconds = restSecondsBefore(draft, at),
+            completedAt = at,
+        )
+        persistSets(key, current + set)
+        draft.prescription(key)?.restSeconds?.let { timers.startRest(it, at) }
+    }
+
+    /** Replace one logged set after an inline weight/reps/duration edit. */
     fun editSet(key: PrescriptionKey, setIndex: Int, set: LoggedSet) {
         val draft = _state.value.draft ?: return
         val current = draft.logged[key].orEmpty()
@@ -142,10 +180,31 @@ class WorkoutSessionViewModel @Inject constructor(
 
     fun dismissPrompt() = _state.update { it.copy(prompt = null) }
 
-    /** Upload COMPLETED with all logged actuals and close (ADR-0012 D2/D5). */
-    fun confirmFinish() = close("Couldn't finish the workout") {
-        repository.finish(programId, scheduledId)
+    /**
+     * Upload COMPLETED with all logged actuals (ADR-0012 D2/D5), then surface
+     * the post-workout recap summary. The AI recap is fetched best-effort
+     * afterward (IMPL-COACH) — it never blocks finishing, and the summary shows
+     * with or without it. [dismissCompleted] pops the route.
+     */
+    fun confirmFinish() {
+        viewModelScope.launch {
+            repository.finish(programId, scheduledId)
+                .onSuccess {
+                    timers.clearRest()
+                    _state.update { it.copy(prompt = null, completed = true, recapLoading = true) }
+                    val recap = repository.fetchRecap(programId, scheduledId)
+                    _state.update { it.copy(recap = recap, recapLoading = false) }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(prompt = null, error = e.message ?: "Couldn't finish the workout")
+                    }
+                }
+        }
     }
+
+    /** Dismiss the post-finish recap summary and pop the logger. */
+    fun dismissCompleted() = _state.update { it.copy(closed = true) }
 
     /** Upload SKIPPED (clears actuals, IMPL-17 D4) and close. */
     fun confirmSkip() = close("Couldn't skip the session") {
@@ -179,22 +238,42 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
-     * Defaults for a freshly checked-off set: weight carried from the previous
-     * set of the same prescription, reps from the previous set or the
-     * prescribed target, RPE left for the user, and the actual rest taken
-     * (seconds since the last set logged anywhere in the session, when
-     * plausible) — the full-actuals capture of ADR-0012 Decision 2.
+     * Defaults for a freshly checked-off set. Weight/reps carry from the
+     * previous set of the same prescription, then fall back to the
+     * history-grounded design target ([Prescription.targetWeightLbs] / the
+     * prescribed rep range) so the row lands pre-filled with what to lift rather
+     * than blank. RPE is left for program design (no mid-workout capture). A
+     * timed exercise (stretch/mobility) fills [LoggedSet.durationSeconds] from
+     * the prescribed hold instead of weight/reps. [restSeconds] is the actual
+     * rest taken — the full-actuals capture of ADR-0012 Decision 2.
      */
     private fun newSet(draft: WorkoutSessionDraft, key: PrescriptionKey): LoggedSet {
         val prescription = draft.prescription(key)
-        val previous = draft.logged[key]?.lastOrNull()
+        val logged = draft.logged[key].orEmpty()
+        val previous = logged.lastOrNull()
+        // The matching set from the last time this exercise was performed.
+        val lastTime = prescription?.exerciseId
+            ?.let { lastSetsByExercise[it] }
+            ?.getOrNull(logged.size)
         val at = now()
+        val timed = prescription?.isTimed == true
         return LoggedSet(
-            weightLbs = previous?.weightLbs,
-            reps = previous?.reps ?: prescription?.repsMin ?: prescription?.repsMax,
+            // Carry within the session first, then the literal previous session,
+            // then the designed target (IMPL-COACH PR2).
+            weightLbs = if (timed) null else {
+                previous?.weightLbs ?: lastTime?.weightLbs ?: prescription?.targetWeightLbs
+            },
+            reps = if (timed) null else {
+                previous?.reps ?: lastTime?.reps ?: prescription?.repsMax ?: prescription?.repsMin
+            },
             rpe = null,
             restSeconds = restSecondsBefore(draft, at),
             completedAt = at,
+            durationSeconds = if (timed) {
+                previous?.durationSeconds ?: lastTime?.durationSeconds ?: prescription?.durationSeconds
+            } else {
+                null
+            },
         )
     }
 

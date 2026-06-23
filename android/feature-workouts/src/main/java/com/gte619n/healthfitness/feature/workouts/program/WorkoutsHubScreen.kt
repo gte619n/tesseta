@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.HistoryEdu
 import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,6 +53,7 @@ fun WorkoutsHubRoute(
     onOpenGyms: () -> Unit,
     onOpenPrograms: () -> Unit,
     onResumeSession: (programId: String, scheduledId: String) -> Unit,
+    onOpenHistory: () -> Unit = {},
     onDesignProgram: () -> Unit = {},
     viewModel: WorkoutsHubViewModel = hiltViewModel(),
 ) {
@@ -72,6 +74,7 @@ fun WorkoutsHubRoute(
         onBack = onBack,
         onOpenGyms = onOpenGyms,
         onOpenPrograms = onOpenPrograms,
+        onOpenHistory = onOpenHistory,
         onDesignProgram = onDesignProgram,
         activeDraft = activeDraft,
         onResumeSession = { draft -> onResumeSession(draft.programId, draft.scheduledId) },
@@ -87,6 +90,7 @@ fun WorkoutsHubScreen(
     onBack: () -> Unit,
     onOpenGyms: () -> Unit,
     onOpenPrograms: () -> Unit,
+    onOpenHistory: () -> Unit = {},
     onDesignProgram: () -> Unit = {},
     activeDraft: WorkoutSessionDraft? = null,
     onResumeSession: (WorkoutSessionDraft) -> Unit = {},
@@ -139,6 +143,12 @@ fun WorkoutsHubScreen(
                 title = "Programs",
                 description = "Your periodized training programs.",
                 onClick = onOpenPrograms,
+            )
+            HubCard(
+                icon = Icons.Outlined.HistoryEdu,
+                title = "History",
+                description = "Review every workout you've finished.",
+                onClick = onOpenHistory,
             )
             HubCard(
                 icon = Icons.Outlined.AutoAwesome,

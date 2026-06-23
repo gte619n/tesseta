@@ -56,6 +56,17 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
     }
 
     @Override
+    public List<ScheduledWorkout> findByStatus(String userId, String programId, ScheduledStatus status) {
+        // status equality + date DESC: served by the (status, date DESC) composite
+        // index. Reads only this status's docs (skips PLANNED), newest date first.
+        List<QueryDocumentSnapshot> docs = await(collection(userId, programId)
+            .whereEqualTo("status", status.name())
+            .orderBy("date", Query.Direction.DESCENDING)
+            .get()).getDocuments();
+        return docs.stream().map(d -> toScheduled(userId, programId, d)).toList();
+    }
+
+    @Override
     public Optional<ScheduledWorkout> findById(String userId, String programId, String scheduledId) {
         DocumentSnapshot snap = await(collection(userId, programId).document(scheduledId).get());
         return snap.exists() ? Optional.of(toScheduled(userId, programId, snap)) : Optional.empty();

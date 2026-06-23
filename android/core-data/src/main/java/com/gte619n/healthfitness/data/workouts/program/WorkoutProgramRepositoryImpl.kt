@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.squareup.moshi.Moshi
@@ -140,6 +141,25 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
                     .sortedBy { it.date }
                     .map { it.toDomain() }
             }
+        }
+
+    override suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage> =
+        withContext(Dispatchers.IO) {
+            runCatching { api.workoutHistory(page = page, size = size).toDomain() }
+        }
+
+    override suspend fun nutritionGuidance(
+        programId: String,
+    ): Result<com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance?> =
+        withContext(Dispatchers.IO) {
+            runCatching { api.getNutritionGuidance(programId) }
+        }
+
+    override suspend fun applyNutritionTarget(
+        programId: String,
+    ): Result<com.gte619n.healthfitness.domain.nutrition.Macros> =
+        withContext(Dispatchers.IO) {
+            runCatching { api.applyNutritionTarget(programId) }
         }
 
     override suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =

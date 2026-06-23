@@ -220,6 +220,9 @@ public class WorkoutSessionCompletionService {
             if (set.restSeconds() != null && set.restSeconds() < 0) {
                 issues.add("restSeconds must not be negative" + at);
             }
+            if (set.durationSeconds() != null && set.durationSeconds() < 0) {
+                issues.add("durationSeconds must not be negative" + at);
+            }
         }
     }
 

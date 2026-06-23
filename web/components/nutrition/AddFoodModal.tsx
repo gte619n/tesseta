@@ -100,7 +100,7 @@ export function AddFoodModal({
   return (
     <ModalBackdrop
       onClose={onClose}
-      contentClassName="flex max-h-[90vh] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
+      contentClassName="flex h-[680px] max-h-[88vh] w-[600px] max-w-[92vw] flex-col overflow-hidden rounded-[14px] border-[0.5px] border-border-default bg-surface shadow-[0_24px_64px_rgba(0,0,0,0.16)]"
     >
       {/* Header: title + meal chip + close */}
       <div className="flex items-center justify-between border-b-[0.5px] border-border-subtle px-5 py-4">
@@ -229,7 +229,7 @@ function SearchPane({
         } finally {
           setSearching(false);
         }
-      }, 350);
+      }, 220);
     },
     [searchFoods, toast],
   );
@@ -315,6 +315,9 @@ function SearchPane({
         </>
       ) : (
         <>
+          {/* First search shows skeleton rows; subsequent keystrokes keep the
+              prior results visible (with the inline spinner) to avoid flicker. */}
+          {searching && results.length === 0 && <ResultSkeleton />}
           {!searching && results.length === 0 && (
             <div className="py-3 text-center text-[13px] text-tertiary">
               No catalog matches for &ldquo;{query}&rdquo;
@@ -367,6 +370,26 @@ function SearchPane({
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+function ResultSkeleton() {
+  return (
+    <div
+      className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default"
+      aria-hidden
+    >
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-4 py-3">
+          <div className="h-10 w-10 shrink-0 animate-pulse rounded-md bg-canvas-sunken" />
+          <div className="min-w-0 flex-1">
+            <div className="h-[13px] w-1/2 animate-pulse rounded bg-canvas-sunken" />
+            <div className="mt-1.5 h-[9px] w-1/4 animate-pulse rounded bg-canvas-sunken" />
+          </div>
+          <div className="h-[13px] w-10 shrink-0 animate-pulse rounded bg-canvas-sunken" />
+        </div>
+      ))}
     </div>
   );
 }

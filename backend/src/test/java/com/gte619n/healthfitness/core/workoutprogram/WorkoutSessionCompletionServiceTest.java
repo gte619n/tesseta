@@ -325,6 +325,38 @@ class WorkoutSessionCompletionServiceTest {
     }
 
     @Test
+    void timedSetDurationIsAcceptedAndPersisted() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        // A stretch/hold logs by time, not reps: durationSeconds survives the upsert.
+        ScheduledWorkout updated = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 600,
+            List.of(new LoggedPrescription("b1", 0, List.of(
+                new LoggedSet(null, null, null, null, null, 45)))));
+
+        assertEquals(ScheduledStatus.COMPLETED, updated.status());
+        LoggedSet logged = prescription(updated, 0).loggedSets().get(0);
+        assertEquals(Integer.valueOf(45), logged.durationSeconds());
+        // No weight×reps, so it adds a session but no tonnage.
+        WeeklyWorkoutAggregate agg = aggregates.findByWeekStart(USER, WEEK_START).orElseThrow();
+        assertEquals(1, agg.sessionCount());
+        assertEquals(0.0, agg.totalTonnage(), 1e-9);
+    }
+
+    @Test
+    void negativeDurationIsRejected() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        InvalidSessionLogException ex = assertThrows(InvalidSessionLogException.class,
+            () -> service.complete(USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 600,
+                List.of(new LoggedPrescription("b1", 0, List.of(
+                    new LoggedSet(null, null, null, null, null, -5))))));
+
+        assertEquals(List.of("durationSeconds must not be negative at block 'b1' / prescription 0, set 0."),
+            ex.issues());
+    }
+
+    @Test
     void boundaryActualsAreLegal_zeroWeightZeroRepsAndFullRpeScale() {
         ScheduledWorkout sw = seedPlanned("p1");
 

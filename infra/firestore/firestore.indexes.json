@@ -95,7 +95,7 @@
       ]
     },
     {
-      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.latestDateByStatus — whereEqualTo(status) + orderBy(date DESC).limit(1).",
+      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.latestDateByStatus — whereEqualTo(status) + orderBy(date DESC).limit(1). Also serves findByStatus — whereEqualTo(status COMPLETED) + orderBy(date DESC) — backing the paged Workout History read (workout-paging).",
       "collectionGroup": "scheduled",
       "queryScope": "COLLECTION",
       "fields": [

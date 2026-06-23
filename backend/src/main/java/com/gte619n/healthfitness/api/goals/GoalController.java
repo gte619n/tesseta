@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.api.goals.dto.GoalResponse;
 import com.gte619n.healthfitness.api.goals.dto.PhaseResponse;
 import com.gte619n.healthfitness.api.goals.dto.StepResponse;
 import com.gte619n.healthfitness.api.goals.dto.UpdateGoalRequest;
+import com.gte619n.healthfitness.api.nutrition.MacrosDto;
 import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
@@ -20,7 +21,9 @@ import com.gte619n.healthfitness.core.goals.PhaseRepository;
 import com.gte619n.healthfitness.core.goals.Step;
 import com.gte619n.healthfitness.core.goals.StepRepository;
 import com.gte619n.healthfitness.core.goals.eval.StepEvaluationService;
+import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -51,6 +54,7 @@ public class GoalController {
     private final StepRepository steps;
     private final GoalService service;
     private final StepEvaluationService evaluator;
+    private final GoalNutritionService goalNutrition;
     private final SyncWriteContext syncWrite;
     private final SyncChangeNotifier syncNotifier;
 
@@ -61,6 +65,7 @@ public class GoalController {
         StepRepository steps,
         GoalService service,
         StepEvaluationService evaluator,
+        GoalNutritionService goalNutrition,
         SyncWriteContext syncWrite,
         SyncChangeNotifier syncNotifier
     ) {
@@ -70,6 +75,7 @@ public class GoalController {
         this.steps = steps;
         this.service = service;
         this.evaluator = evaluator;
+        this.goalNutrition = goalNutrition;
         this.syncWrite = syncWrite;
         this.syncNotifier = syncNotifier;
     }
@@ -263,5 +269,40 @@ public class GoalController {
         }
         evaluator.evaluateGoal(userId, goalId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * The nutrition guidance this goal can apply (from its linked program), used
+     * to show/enable the "Update nutrition" action and preview the macros. 204
+     * when the goal has no linked program with guidance.
+     */
+    @GetMapping("/{goalId}/nutrition-guidance")
+    public ResponseEntity<NutritionGuidance> nutritionGuidance(@PathVariable String goalId) {
+        String userId = currentUser.get().userId();
+        if (goals.findById(userId, goalId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        return goalNutrition.guidanceForGoal(userId, goalId)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Apply the goal's linked-program nutrition guidance as the user's macro
+     * target (calories re-derived from the macros). 409 when the goal has no
+     * guidance to apply.
+     */
+    @PostMapping("/{goalId}/nutrition-target")
+    public MacrosDto applyNutritionTarget(@PathVariable String goalId) {
+        String userId = currentUser.get().userId();
+        if (goals.findById(userId, goalId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        Macros applied = goalNutrition.applyToTarget(userId, goalId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "This goal has no linked program nutrition guidance to apply."));
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionTargets");
+        return MacrosDto.from(applied);
     }
 }

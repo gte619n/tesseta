@@ -19,7 +19,10 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.UUID
@@ -75,6 +78,37 @@ class MedicationRepository @Inject internal constructor(
         withDrugs(meds)
     }
 
+    /**
+     * offline-fix: reactive, offline-first read of all medications off the Room
+     * mirror (D8). The list screen collects this so it shows the last-synced
+     * medications INSTANTLY on every entry — no `Loading` reset, no network wait —
+     * and updates in place as optimistic writes and sync deltas land. Each row
+     * carries its `syncState` for the per-row PENDING/FAILED badge (#40); the
+     * embedded [Drug] is grafted on (see [withDrugs]). Under the kill-switch (D13)
+     * it serves a one-shot live-network list instead. Use [refresh] to revalidate
+     * the mirror from the network; partition by [MedicationStatus] at the call site.
+     */
+    fun observe(): Flow<List<Medication>> =
+        support.observeWithState(
+            rows = dao.observeActive(),
+            decode = { json, syncState ->
+                decode(json)?.let { MedicationMapper.toDomain(it).copy(syncState = syncState) }
+            },
+            liveFallback = { api.list(null).map { MedicationMapper.toDomain(it) } },
+        )
+            .map { meds -> withDrugs(meds) }
+            .flowOn(io)
+
+    /**
+     * offline-fix: revalidate the medications mirror from the network (best-effort).
+     * The reactive [observe] stream reflects the result. Safe to call on every
+     * screen resume; a no-op under the kill-switch (live-network mode).
+     */
+    suspend fun refresh() = withContext(io) {
+        if (support.killSwitchOn()) return@withContext
+        fillMirror()
+    }
+
     suspend fun get(medicationId: String): MedicationDetail = withContext(io) {
         if (support.killSwitchOn()) return@withContext MedicationMapper.toDomain(api.get(medicationId))
         // Detail carries the pull-only history (D9); fetch live, fall back to the
@@ -82,9 +116,24 @@ class MedicationRepository @Inject internal constructor(
         runCatching { api.get(medicationId) }
             .map { MedicationMapper.toDomain(it) }
             .getOrElse {
-                val dto = mirroredDto(medicationId) ?: throw it
-                MedicationDetail(medication = withDrugs(listOf(MedicationMapper.toDomain(dto))).first(), history = emptyList())
+                cachedDetail(medicationId) ?: throw it
             }
+    }
+
+    /**
+     * offline-fix: local-only detail seed from the `medications` mirror — never hits
+     * the network. The detail screen shows this INSTANTLY on open (no spinner) and
+     * then [get] revalidates and grafts on the pull-only `history` (D9). Returns null
+     * when the medication isn't mirrored (so the caller can fall through to a network
+     * load / error). History is empty here because it's never mirrored.
+     */
+    suspend fun cachedDetail(medicationId: String): MedicationDetail? = withContext(io) {
+        if (support.killSwitchOn()) return@withContext null
+        val dto = mirroredDto(medicationId) ?: return@withContext null
+        MedicationDetail(
+            medication = withDrugs(listOf(MedicationMapper.toDomain(dto))).first(),
+            history = emptyList(),
+        )
     }
 
     suspend fun create(request: CreateMedicationRequest): Medication = withContext(io) {

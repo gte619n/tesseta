@@ -118,6 +118,41 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
+    fun `workoutHistoryPage maps one page from the network`() = runBlocking {
+        coEvery { api.workoutHistory(page = 2, size = 25) } returns WorkoutHistoryPageDto(
+            items = listOf(
+                ScheduledWorkoutDto(
+                    scheduledId = "2026-06-20_d1",
+                    date = java.time.LocalDate.parse("2026-06-20"),
+                    dayLabel = "Upper A",
+                    status = "COMPLETED",
+                    durationSeconds = 2_840,
+                    programTitle = "Hypertrophy",
+                    phaseTitle = "Base",
+                ),
+            ),
+            page = 2,
+            total = 60,
+            hasMore = true,
+        )
+
+        val result = repo.workoutHistoryPage(page = 2, size = 25).getOrThrow()
+
+        assertEquals(1, result.items.size)
+        assertEquals("Upper A", result.items[0].dayLabel)
+        assertEquals("Hypertrophy", result.items[0].programTitle)
+        assertEquals("Base", result.items[0].phaseTitle)
+        assertEquals(2, result.page)
+        assertEquals(60, result.total)
+        assertEquals(true, result.hasMore)
+        assertEquals(
+            com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus.COMPLETED,
+            result.items[0].status,
+        )
+        coVerify(exactly = 1) { api.workoutHistory(page = 2, size = 25) }
+    }
+
+    @Test
     fun `get refreshes from network when mirror holds a shallow row`() = runBlocking {
         val shallow = listAdapter.toJson(
             WorkoutProgramDto(

@@ -1,7 +1,6 @@
 package com.gte619n.healthfitness.api.workoutprogram;
 
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
-import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramService;
@@ -11,9 +10,12 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -27,9 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/me/workout-history")
 public class WorkoutHistoryController {
 
-    // Wide bounds so the date-range query returns every session.
-    private static final LocalDate MIN = LocalDate.of(1970, 1, 1);
-    private static final LocalDate MAX = LocalDate.of(2999, 12, 31);
+    private static final int DEFAULT_PAGE_SIZE = 25;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final CurrentUserProvider currentUser;
     private final WorkoutProgramService programs;
@@ -48,22 +49,44 @@ public class WorkoutHistoryController {
         this.assembler = assembler;
     }
 
+    /**
+     * One page of performed sessions, newest first, across every program. Page
+     * size defaults to {@value #DEFAULT_PAGE_SIZE}. Only the requested page's
+     * sessions are assembled into full responses (the rest stay as lightweight
+     * records), and each row carries its program/phase titles so the client can
+     * draw delineation headers between phases.
+     */
     @GetMapping
-    public List<ScheduledWorkoutResponse> history() {
+    public WorkoutHistoryPageResponse history(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+    ) {
         String userId = currentUser.get().userId();
+        int pageSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int pageIndex = Math.max(page, 0);
+
+        // Keep the owning programs so the assembler can resolve program/phase titles.
+        Map<String, WorkoutProgram> programsById = new LinkedHashMap<>();
         List<ScheduledWorkout> completed = new ArrayList<>();
         for (WorkoutProgram p : programs.list(userId)) {
-            for (ScheduledWorkout sw : schedule.calendar(userId, p.programId(), MIN, MAX)) {
-                if (sw.status() == ScheduledStatus.COMPLETED) {
-                    completed.add(sw);
-                }
-            }
+            programsById.put(p.programId(), p);
+            completed.addAll(schedule.completedSessions(userId, p.programId()));
         }
         // Newest first; fall back to the session date when no finish time exists.
         completed.sort(Comparator.comparing(
             WorkoutHistoryController::performedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
-        return assembler.scheduled(userId, completed);
+
+        int total = completed.size();
+        int from = Math.min(pageIndex * pageSize, total);
+        int to = Math.min(from + pageSize, total);
+        List<ScheduledWorkout> slice = completed.subList(from, to);
+        List<ScheduledWorkoutResponse> items = assembler.scheduled(userId, slice, programsById);
+        return new WorkoutHistoryPageResponse(items, pageIndex, pageSize, total, to < total);
     }
+
+    /** A page of history rows plus the cursor metadata the client pages with. */
+    public record WorkoutHistoryPageResponse(
+        List<ScheduledWorkoutResponse> items, int page, int size, int total, boolean hasMore) {}
 
     /** Cheap header counts for the Workouts hub — no full session reads. */
     @GetMapping("/summary")

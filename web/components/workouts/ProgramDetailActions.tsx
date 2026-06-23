@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
+import { derivedCaloriesKcal } from "@/lib/types/nutrition";
+import type { NutritionGuidance } from "@/lib/types/workout-program";
 import { ProgramEditModal } from "./ProgramEditModal";
 
 type Props = {
@@ -16,7 +18,27 @@ type Props = {
   activate: () => Promise<{ ok: boolean; issues?: string[] }>;
   archive: () => Promise<void>;
   update: (title: string, description: string) => Promise<void>;
+  // The program's nutrition guidance (null = no "Apply as nutrition target" button).
+  nutritionGuidance: NutritionGuidance | null;
+  applyNutrition: () => Promise<void>;
 };
+
+/** "2,640 kcal · 200P / 280C / 80F" — what applying this guidance sets (calories macro-derived). */
+function guidanceSummary(g: NutritionGuidance): string {
+  const derived = derivedCaloriesKcal(g.proteinG, g.carbsG, g.fatG);
+  const kcal = derived ?? g.kcal;
+  const parts: string[] = [];
+  if (kcal != null) parts.push(`${kcal.toLocaleString()} kcal`);
+  const macros = [
+    g.proteinG != null ? `${g.proteinG}P` : null,
+    g.carbsG != null ? `${g.carbsG}C` : null,
+    g.fatG != null ? `${g.fatG}F` : null,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  if (macros) parts.push(macros);
+  return parts.join(" · ");
+}
 
 export function ProgramDetailActions({
   programId,
@@ -26,6 +48,8 @@ export function ProgramDetailActions({
   activate,
   archive,
   update,
+  nutritionGuidance,
+  applyNutrition,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -53,6 +77,25 @@ export function ProgramDetailActions({
         }
       } catch {
         toast.error("Couldn't activate program", { description: "Try again." });
+      }
+    });
+  }
+
+  async function onApplyNutrition() {
+    if (!nutritionGuidance) return;
+    const summary = guidanceSummary(nutritionGuidance);
+    const ok = await confirm({
+      title: "Apply as nutrition target?",
+      description: `Set your daily nutrition target to ${summary} from this program. This replaces your current target.`,
+      confirmLabel: "Apply target",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      try {
+        await applyNutrition();
+        toast.success("Nutrition target updated", { description: summary });
+      } catch {
+        toast.error("Couldn't update nutrition target");
       }
     });
   }
@@ -110,6 +153,16 @@ export function ProgramDetailActions({
           className="caps-mono cursor-pointer rounded-md bg-accent px-3 py-1.5 text-[10px] tracking-[0.06em] text-inverse hover:opacity-90 disabled:opacity-60"
         >
           {status === "ACTIVE" ? "Re-activate" : "Activate"}
+        </button>
+      ) : null}
+      {nutritionGuidance ? (
+        <button
+          type="button"
+          onClick={onApplyNutrition}
+          disabled={pending}
+          className="caps-mono cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[10px] tracking-[0.06em] text-secondary hover:text-primary disabled:opacity-60"
+        >
+          Apply nutrition
         </button>
       ) : null}
       {status !== "ARCHIVED" ? (

@@ -92,6 +92,36 @@ public class ExercisePerformanceDigestService {
             .toList();
     }
 
+    /**
+     * The sets performed the LAST time each requested exercise was done — the
+     * most recent COMPLETED date for that exercise, in performed order. Ids with
+     * no history are omitted. Backs the live coach's "same as last time" prefill
+     * (IMPL-COACH PR2): the literal previous session, not a designed target.
+     */
+    public Map<String, List<LoggedSet>> lastSessionSets(String userId, Collection<String> exerciseIds) {
+        Map<String, List<PerformedSet>> byExercise = scan(userId);
+        Map<String, List<LoggedSet>> out = new LinkedHashMap<>();
+        for (String exerciseId : new HashSet<>(exerciseIds)) {
+            List<PerformedSet> sets = byExercise.get(exerciseId);
+            if (sets == null || sets.isEmpty()) continue;
+            LocalDate lastDate = sets.stream()
+                .map(p -> p.date)
+                .filter(d -> d != null)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+            if (lastDate == null) continue;
+            List<LoggedSet> lastSets = sets.stream()
+                .filter(p -> lastDate.equals(p.date))
+                .sorted(Comparator.comparing(
+                    (PerformedSet p) -> p.completedAt,
+                    Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(p -> new LoggedSet(p.weightLbs, p.reps, p.rpe, null, p.completedAt))
+                .toList();
+            if (!lastSets.isEmpty()) out.put(exerciseId, lastSets);
+        }
+        return out;
+    }
+
     // ---- per-user scan (cached) ----
 
     /**

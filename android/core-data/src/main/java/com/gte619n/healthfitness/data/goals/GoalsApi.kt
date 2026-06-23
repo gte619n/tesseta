@@ -4,6 +4,8 @@ import com.gte619n.healthfitness.domain.goals.Goal
 import com.gte619n.healthfitness.domain.goals.GoalDeep
 import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepPatchRequest
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -33,4 +35,12 @@ interface GoalsApi {
     // Backend POST .../reevaluate returns 204 No Content.
     @POST("api/me/goals/{id}/reevaluate")
     suspend fun reevaluate(@Path("id") goalId: String): Unit
+
+    // The guidance the goal can apply (from its linked program); 204 → null body.
+    @GET("api/me/goals/{id}/nutrition-guidance")
+    suspend fun getNutritionGuidance(@Path("id") goalId: String): NutritionGuidance?
+
+    // Apply the linked-program guidance as the macro target; returns the saved macros.
+    @POST("api/me/goals/{id}/nutrition-target")
+    suspend fun applyNutritionTarget(@Path("id") goalId: String): Macros
 }

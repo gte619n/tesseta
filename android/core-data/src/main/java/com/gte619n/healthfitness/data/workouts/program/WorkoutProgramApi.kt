@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.data.workouts.program
 
 import com.gte619n.healthfitness.data.workouts.session.CompleteSessionRequest
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -21,6 +23,18 @@ interface WorkoutProgramApi {
 
     @GET("api/me/workout-programs/{id}")
     suspend fun get(@Path("id") id: String): WorkoutProgramDeepDto
+
+    /**
+     * Workout history: COMPLETED sessions across all programs, newest first,
+     * deep (blocks → prescriptions → logged sets) so a read-only review renders
+     * without a second fetch. Paged (default 25, max 100 server-side); the
+     * repository walks pages via [WorkoutHistoryPageDto.hasMore].
+     */
+    @GET("api/me/workout-history")
+    suspend fun workoutHistory(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 25,
+    ): WorkoutHistoryPageDto
 
     @GET("api/me/workout-programs/{id}/calendar")
     suspend fun calendar(
@@ -59,4 +73,42 @@ interface WorkoutProgramApi {
         @Path("scheduledId") scheduledId: String,
         @Body body: CompleteSessionRequest,
     ): ScheduledWorkoutDto
+
+    /**
+     * IMPL-COACH — best-effort AI post-workout recap for a completed session.
+     * Fetched separately from [completeSession] because the phone's completion
+     * is offline-first (the outbox replays the PUT asynchronously). `recap` is
+     * null until the session is COMPLETED server-side or when the coach is
+     * unavailable; the caller degrades to the numeric summary.
+     */
+    @GET("api/me/workout-programs/{id}/sessions/{scheduledId}/recap")
+    suspend fun sessionRecap(
+        @Path("id") id: String,
+        @Path("scheduledId") scheduledId: String,
+    ): SessionRecapDto
+
+    /**
+     * IMPL-COACH PR2 — the sets performed the last time each of this session's
+     * exercises was done, keyed by exerciseId. The live coach prefills new sets
+     * from these (the literal "previous time"), falling back to the designed
+     * target for exercises with no history. Best-effort; an absent exercise just
+     * has no prior data.
+     */
+    @GET("api/me/workout-programs/{id}/sessions/{scheduledId}/last-sets")
+    suspend fun sessionLastSets(
+        @Path("id") id: String,
+        @Path("scheduledId") scheduledId: String,
+    ): Map<String, List<LoggedSetDto>>
+
+    // The program's effective nutrition guidance (active phase's, else
+    // program-level); 204 → null body.
+    @GET("api/me/workout-programs/{id}/nutrition-guidance")
+    suspend fun getNutritionGuidance(@Path("id") id: String): NutritionGuidance?
+
+    // Apply the program's guidance as the macro target; returns the saved macros.
+    @POST("api/me/workout-programs/{id}/nutrition-target")
+    suspend fun applyNutritionTarget(@Path("id") id: String): Macros
 }
+
+/** IMPL-COACH: the AI recap payload (null until available). */
+data class SessionRecapDto(val recap: String? = null)
