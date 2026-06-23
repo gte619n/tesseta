@@ -49,6 +49,7 @@ import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseThumbnail
+import com.gte619n.healthfitness.feature.workouts.program.ui.exerciseImageUrl
 import com.gte619n.healthfitness.feature.workouts.program.ui.firstExerciseImageUrl
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
@@ -324,32 +325,41 @@ private fun HistoryDetail(
     }
 }
 
-/** One performed exercise: name, the prescribed target, and the sets actually logged. */
+/** One performed exercise: thumbnail, name, the prescribed target, and the sets logged. */
 @Composable
 private fun HistoryExerciseCard(prescription: Prescription) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
             .background(Hf.colors.surface, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        Text(
-            prescription.exercise?.name ?: prescription.exerciseId,
-            style = Hf.type.headingMd.copy(fontSize = 14.sp),
-            color = Hf.colors.textPrimary,
+        ExerciseThumbnail(
+            imageUrl = exerciseImageUrl(prescription.exercise),
+            contentDescription = prescription.exercise?.name,
+            size = 48.dp,
         )
-        val target = prescriptionSummary(prescription)
-        if (target.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(target, style = Hf.type.monoSm, color = Hf.colors.textTertiary)
-        }
-        val logged = loggedSetsSummary(prescription)
-        Spacer(Modifier.height(6.dp))
-        if (logged != null) {
-            Text(logged, style = Hf.type.monoMd, color = Hf.colors.textPrimary)
-        } else {
-            Text("Not logged", style = Hf.type.bodySm, color = Hf.colors.textQuaternary)
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                prescription.exercise?.name ?: prescription.exerciseId,
+                style = Hf.type.headingMd.copy(fontSize = 14.sp),
+                color = Hf.colors.textPrimary,
+            )
+            val target = prescriptionSummary(prescription)
+            if (target.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(target, style = Hf.type.monoSm, color = Hf.colors.textTertiary)
+            }
+            val logged = loggedSetsSummary(prescription)
+            Spacer(Modifier.height(6.dp))
+            if (logged != null) {
+                Text(logged, style = Hf.type.monoMd, color = Hf.colors.textPrimary)
+            } else {
+                Text("Not logged", style = Hf.type.bodySm, color = Hf.colors.textQuaternary)
+            }
         }
     }
 }
