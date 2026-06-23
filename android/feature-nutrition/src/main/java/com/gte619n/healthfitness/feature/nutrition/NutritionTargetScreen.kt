@@ -106,6 +106,25 @@ private fun TargetForm(state: NutritionTargetUiState, onSave: (Macros) -> Unit) 
             }
         }
         Spacer(Modifier.height(16.dp))
+        // Calories follow the macros (Atwater 4/4/9) — the same invariant logged
+        // food holds — so warn when the typed calorie target can't come from
+        // them; it's saved from the macros to stay consistent.
+        val derived = derivedCalories(
+            protein.toDoubleOrNull(),
+            carbs.toDoubleOrNull(),
+            fat.toDoubleOrNull(),
+        )
+        val entered = kcal.toDoubleOrNull()
+        if (derived != null && entered != null && kotlin.math.abs(entered - derived) > 1.0) {
+            Text(
+                "Your calorie target (${entered.toLong()} kcal) doesn't match your " +
+                    "macros (${derived.toLong()} kcal). It'll be saved as ${derived.toLong()} " +
+                    "to stay consistent — adjust the macros for a different total.",
+                style = Hf.type.bodySm,
+                color = Hf.colors.warn,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         if (state.error != null) {
             Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
             Spacer(Modifier.height(8.dp))
@@ -121,7 +140,9 @@ private fun TargetForm(state: NutritionTargetUiState, onSave: (Macros) -> Unit) 
             if (!state.saving) {
                 onSave(
                     Macros(
-                        caloriesKcal = kcal.toDoubleOrNull(),
+                        // Derive calories from macros when any are set; a
+                        // calories-only target keeps its entered value.
+                        caloriesKcal = derived ?: kcal.toDoubleOrNull(),
                         proteinGrams = protein.toDoubleOrNull(),
                         carbsGrams = carbs.toDoubleOrNull(),
                         fatGrams = fat.toDoubleOrNull(),
@@ -132,6 +153,15 @@ private fun TargetForm(state: NutritionTargetUiState, onSave: (Macros) -> Unit) 
             }
         }
     }
+}
+
+/**
+ * Calories from macros under Atwater 4/4/9, mirroring the backend invariant.
+ * Null when no macro is present at all (calories-only targets stay enterable).
+ */
+private fun derivedCalories(protein: Double?, carbs: Double?, fat: Double?): Double? {
+    if (protein == null && carbs == null && fat == null) return null
+    return (protein ?: 0.0) * 4 + (carbs ?: 0.0) * 4 + (fat ?: 0.0) * 9
 }
 
 @Composable

@@ -36,10 +36,15 @@ public class MacroTargetService {
         if (macros == null) {
             throw new IllegalArgumentException("macros is required");
         }
+        // Keep the calorie target consistent with the macro grams (Atwater
+        // 4/4/9) — the same invariant logged food entries hold, so a target and
+        // the food logged against it sit on the same scale. A calories-only
+        // target (no protein/carbs/fat) keeps its calories as-is.
+        Macros consistent = macros.withDerivedCalories();
         MacroTarget target = new MacroTarget(
             userId,
             UUID.randomUUID().toString(),
-            macros,
+            consistent,
             LocalDate.now(),
             null,
             null
