@@ -10,6 +10,7 @@ import type {
   UpdateEntryBody,
   UpdateIngredientBody,
   LogDescribedMealBody,
+  MealSearchResult,
   RelogBody,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS, MEAL_ICONS } from "@/lib/types/nutrition";
@@ -60,10 +61,12 @@ type Props = {
       source: string;
     }[]
   >;
+  searchMeals: (q: string) => Promise<MealSearchResult[]>;
   describeMealAsync: (
     date: string,
     body: LogDescribedMealBody,
   ) => Promise<void>;
+  logMeal: (date: string, body: LogDescribedMealBody) => Promise<void>;
   relogEntry: (date: string, body: RelogBody) => Promise<void>;
   recents: Entry[];
   // The entryId currently being dragged (lifted by the DnD context), so this
@@ -80,7 +83,9 @@ export function MealSection({
   deleteEntry,
   regenerateImage,
   searchFoods,
+  searchMeals,
   describeMealAsync,
+  logMeal,
   relogEntry,
   recents,
   activeId,
@@ -214,7 +219,9 @@ export function MealSection({
         recents={recents}
         addEntry={addEntry}
         searchFoods={searchFoods}
+        searchMeals={searchMeals}
         describeMealAsync={describeMealAsync}
+        logMeal={logMeal}
         relogEntry={relogEntry}
       />
 

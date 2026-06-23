@@ -89,6 +89,30 @@ class GoalNutritionServiceTest {
     }
 
     @Test
+    void guidanceToApply_suppressedWhenCurrentTargetAlreadyMatches() {
+        NutritionGuidance guidance = new NutritionGuidance(9999, 200, 280, 80, "surplus");
+        programs.save(program("g1", ProgramStatus.ACTIVE, guidance, null));
+        // Active target already equals what applying would set → no action offered.
+        savedTarget.set(new MacroTarget(
+            USER, "t1",
+            WorkoutProgramNutritionService.toMacros(guidance).withDerivedCalories(),
+            java.time.LocalDate.now(), null, null));
+
+        assertTrue(service.guidanceToApply(USER, "g1").isEmpty());
+    }
+
+    @Test
+    void guidanceToApply_offeredWhenCurrentTargetDiffers() {
+        programs.save(program("g1", ProgramStatus.ACTIVE,
+            new NutritionGuidance(9999, 200, 280, 80, "surplus"), null));
+        savedTarget.set(new MacroTarget(
+            USER, "t1", new Macros(2000.0, 150.0, 200.0, 60.0, 30.0, 50.0),
+            java.time.LocalDate.now(), null, null));
+
+        assertTrue(service.guidanceToApply(USER, "g1").isPresent());
+    }
+
+    @Test
     void emptyWhenGoalHasNoLinkedProgram() {
         programs.save(program("other-goal", ProgramStatus.ACTIVE,
             new NutritionGuidance(2000, 150, 200, 60, null), null));

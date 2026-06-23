@@ -8,6 +8,7 @@ import type {
   ImageStatus,
   Entry,
   LogDescribedMealBody,
+  MealSearchResult,
   RelogBody,
 } from "@/lib/types/nutrition";
 import {
@@ -52,7 +53,9 @@ type Props = {
     },
   ) => Promise<void>;
   searchFoods: (q: string) => Promise<FoodResult[]>;
+  searchMeals: (q: string) => Promise<MealSearchResult[]>;
   describeMealAsync: (date: string, body: LogDescribedMealBody) => Promise<void>;
+  logMeal: (date: string, body: LogDescribedMealBody) => Promise<void>;
   relogEntry: (date: string, body: RelogBody) => Promise<void>;
 };
 
@@ -87,7 +90,9 @@ export function AddFoodModal({
   recents,
   addEntry,
   searchFoods,
+  searchMeals,
   describeMealAsync,
+  logMeal,
   relogEntry,
 }: Props) {
   const toast = useToast();
@@ -167,7 +172,9 @@ export function AddFoodModal({
             recents={recents}
             addEntry={addEntry}
             searchFoods={searchFoods}
+            searchMeals={searchMeals}
             describeMealAsync={describeMealAsync}
+            logMeal={logMeal}
             relogEntry={relogEntry}
             onQuickAdd={() => setQuickMode(true)}
             onClose={onClose}
@@ -187,7 +194,9 @@ function SearchPane({
   recents,
   addEntry,
   searchFoods,
+  searchMeals,
   describeMealAsync,
+  logMeal,
   relogEntry,
   onQuickAdd,
   onClose,
@@ -198,7 +207,9 @@ function SearchPane({
   recents: Entry[];
   addEntry: Props["addEntry"];
   searchFoods: Props["searchFoods"];
+  searchMeals: Props["searchMeals"];
   describeMealAsync: Props["describeMealAsync"];
+  logMeal: Props["logMeal"];
   relogEntry: Props["relogEntry"];
   onQuickAdd: () => void;
   onClose: () => void;
@@ -206,6 +217,7 @@ function SearchPane({
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FoodResult[]>([]);
+  const [mealResults, setMealResults] = useState<MealSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<FoodResult | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -216,23 +228,36 @@ function SearchPane({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (!q.trim()) {
         setResults([]);
+        setMealResults([]);
         setSearching(false);
         return;
       }
       debounceRef.current = setTimeout(async () => {
         setSearching(true);
-        try {
-          const foods = await searchFoods(q.trim());
-          setResults(foods);
-        } catch {
-          toast.error("Search failed");
-        } finally {
-          setSearching(false);
-        }
+        // Saved meals and catalog foods are searched in parallel; a failure in
+        // either leaves that group empty rather than failing the whole search.
+        const [meals, foods] = await Promise.all([
+          searchMeals(q.trim()).catch(() => [] as MealSearchResult[]),
+          searchFoods(q.trim()).catch(() => {
+            toast.error("Search failed");
+            return [] as FoodResult[];
+          }),
+        ]);
+        setMealResults(meals);
+        setResults(foods);
+        setSearching(false);
       }, 220);
     },
-    [searchFoods, toast],
+    [searchFoods, searchMeals, toast],
   );
+
+  // Log a saved meal by id (reuses its ingredients + photo); closes immediately.
+  function handleLogMeal(m: MealSearchResult) {
+    onClose();
+    logMeal(date, { mealId: m.mealId, meal })
+      .then(() => toast.success(`${m.name} added to ${MEAL_LABELS[meal]}`))
+      .catch(() => toast.error("Failed to add meal"));
+  }
 
   // Fire-and-forget describe: close immediately; the day view shows the
   // processing placeholder and fills it in (the camera-capture pattern).
@@ -317,10 +342,48 @@ function SearchPane({
         <>
           {/* First search shows skeleton rows; subsequent keystrokes keep the
               prior results visible (with the inline spinner) to avoid flicker. */}
-          {searching && results.length === 0 && <ResultSkeleton />}
-          {!searching && results.length === 0 && (
+          {searching && results.length === 0 && mealResults.length === 0 && (
+            <ResultSkeleton />
+          )}
+          {!searching && results.length === 0 && mealResults.length === 0 && (
             <div className="py-3 text-center text-[13px] text-tertiary">
-              No catalog matches for &ldquo;{query}&rdquo;
+              No matches for &ldquo;{query}&rdquo;
+            </div>
+          )}
+          {/* Saved meals first — full dishes the user (or others) have logged
+              before; one tap re-logs with the saved ingredients + photo. */}
+          {mealResults.length > 0 && (
+            <div>
+              <div className="caps-mono mb-1.5 text-[9px] tracking-[0.08em] text-tertiary">
+                Saved meals
+              </div>
+              <div className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default">
+                {mealResults.map((m) => (
+                  <button
+                    key={m.mealId}
+                    type="button"
+                    onClick={() => handleLogMeal(m)}
+                    className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left first:rounded-t-[10px] last:rounded-b-[10px] hover:bg-canvas-sunken"
+                  >
+                    <FoodImage imageUrl={m.imageUrl} imageStatus={m.imageStatus} size={40} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-medium text-primary">
+                        {m.name}
+                      </div>
+                      <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
+                        Meal{m.totalGrams != null ? ` · ${Math.round(m.totalGrams)}g` : ""}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 text-right">
+                      <span className="font-mono text-[12px] tabular-nums text-secondary">
+                        {Math.round(m.macros.caloriesKcal ?? 0)}
+                        <span className="ml-0.5 text-[10px] text-tertiary">kcal</span>
+                      </span>
+                      <i className="ti ti-plus text-[14px] text-accent-dim" aria-hidden />
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {results.length > 0 && (

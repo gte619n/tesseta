@@ -263,7 +263,8 @@ public class WorkoutProgramController {
     /**
      * The program's effective nutrition guidance (active phase's, else
      * program-level), used to show/enable an "Apply as nutrition target" action
-     * and preview the macros. 204 when the program carries no guidance.
+     * and preview the macros. 204 when the program carries no guidance OR the
+     * user's current target already matches it (applying would be a no-op).
      */
     @GetMapping("/{programId}/nutrition-guidance")
     public ResponseEntity<NutritionGuidance> nutritionGuidance(@PathVariable String programId) {
@@ -271,7 +272,7 @@ public class WorkoutProgramController {
         if (service.findById(userId, programId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        return programNutrition.guidanceForProgram(userId, programId)
+        return programNutrition.guidanceToApply(userId, programId)
             .map(ResponseEntity::ok)
             .orElseGet(() -> ResponseEntity.noContent().build());
     }

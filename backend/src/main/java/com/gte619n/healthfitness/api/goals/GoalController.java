@@ -274,7 +274,8 @@ public class GoalController {
     /**
      * The nutrition guidance this goal can apply (from its linked program), used
      * to show/enable the "Update nutrition" action and preview the macros. 204
-     * when the goal has no linked program with guidance.
+     * when the goal has no linked program with guidance OR the user's current
+     * target already matches it (applying would be a no-op).
      */
     @GetMapping("/{goalId}/nutrition-guidance")
     public ResponseEntity<NutritionGuidance> nutritionGuidance(@PathVariable String goalId) {
@@ -282,7 +283,7 @@ public class GoalController {
         if (goals.findById(userId, goalId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        return goalNutrition.guidanceForGoal(userId, goalId)
+        return goalNutrition.guidanceToApply(userId, goalId)
             .map(ResponseEntity::ok)
             .orElseGet(() -> ResponseEntity.noContent().build());
     }

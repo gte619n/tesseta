@@ -179,6 +179,8 @@ internal object BodyCompositionMapper {
             xLabels = xLabels,
             latestBodyFatPct = latestBodyFat?.value,
             latestLeanMassLb = latestLeanLb,
+            // weights is sorted oldest → newest, so the last entry is the freshest.
+            lastUpdatedAt = weights.last().sampleTime,
         )
     }
 

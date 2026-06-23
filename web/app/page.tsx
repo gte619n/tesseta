@@ -56,6 +56,8 @@ type BodyCompositionView = {
   xLabels: { x: number; label: string }[];
   // Raw lb data for the top-row Weight StatCard (formatted client-side).
   weightStat: WeightStat | null;
+  // sampleTime (ISO) of the most recent weigh-in driving primaryWeightLb.
+  lastUpdated: string;
 };
 
 export const dynamic = "force-dynamic";
@@ -315,6 +317,8 @@ async function loadBodyComposition(): Promise<BodyCompositionView | null> {
     yMax,
     xLabels,
     weightStat,
+    // weightsAll is sorted oldest → newest, so the last entry is the freshest.
+    lastUpdated: weightsAll[weightsAll.length - 1]!.sampleTime,
   };
 }
 
@@ -453,6 +457,20 @@ function shortDate(iso: string): string {
   return `${month} ${day}`;
 }
 
+// "Last updated" label for the body-comp card: relative for recent weigh-ins
+// ("today" / "yesterday" / "Nd ago"), else an absolute short date. Computed on
+// the server (the page is force-dynamic), so it's the request-time delta.
+function formatUpdated(iso: string): string {
+  const then = new Date(iso).getTime();
+  const days = Math.floor((Date.now() - then) / (24 * 60 * 60 * 1000));
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso)
+    .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    .toUpperCase();
+}
+
 function TopBar() {
   return (
     <div className="mb-5 flex items-center justify-between">
@@ -570,6 +588,12 @@ function BodyCompositionCard({ view }: { view: BodyCompositionView | null }) {
               </div>
             </div>
           </div>
+        </div>
+        <div
+          className="caps-mono shrink-0 text-[9px] tracking-[0.06em] text-tertiary"
+          title={new Date(view.lastUpdated).toLocaleString()}
+        >
+          Updated {formatUpdated(view.lastUpdated)}
         </div>
       </div>
       <WeightChart

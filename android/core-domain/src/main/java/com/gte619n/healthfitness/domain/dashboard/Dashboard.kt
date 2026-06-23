@@ -32,6 +32,7 @@ data class WeightSummary(
     val xLabels: List<ChartXLabel>,
     val latestBodyFatPct: Double?,
     val latestLeanMassLb: Double?,
+    val lastUpdatedAt: Instant?, // sampleTime of the most recent weigh-in
 )
 
 enum class MarkerTone { Good, Warn, Alert }

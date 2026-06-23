@@ -38,6 +38,7 @@ import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
+import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.derivedCaloriesKcal
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.theme.Hf
@@ -66,6 +67,7 @@ fun AddFoodSheet(
     onAddQuick: (Meal, String, Macros) -> Unit,
     onDescribeAsync: (Meal, String) -> Unit,
     onRelogRecent: (Meal, Entry) -> Unit,
+    onLogMeal: (Meal, MealSearchResult) -> Unit,
     viewModel: AddFoodViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -124,6 +126,7 @@ fun AddFoodSheet(
                     onQueryChange = viewModel::onQueryChange,
                     onPick = { picked = it },
                     onRelogRecent = { onRelogRecent(meal, it) },
+                    onLogMeal = { onLogMeal(meal, it) },
                     onDescribe = { onDescribeAsync(meal, it) },
                     onQuickAdd = { quickMode = true },
                 )
@@ -152,6 +155,7 @@ private fun SearchPane(
     onQueryChange: (String) -> Unit,
     onPick: (Food) -> Unit,
     onRelogRecent: (Entry) -> Unit,
+    onLogMeal: (MealSearchResult) -> Unit,
     onDescribe: (String) -> Unit,
     onQuickAdd: () -> Unit,
 ) {
@@ -196,20 +200,38 @@ private fun SearchPane(
     }
 
     val screenH = LocalConfiguration.current.screenHeightDp.dp
+    val noResults = state.results.isEmpty() && state.mealResults.isEmpty()
     when {
         state.error != null -> Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
         // First search shows skeleton rows; later keystrokes keep the prior
         // results visible (with the inline spinner) to avoid flicker.
-        state.searching && state.results.isEmpty() -> SkeletonRows()
-        !state.searching && state.results.isEmpty() -> Text(
-            "No catalog matches.", style = Hf.type.bodyMd, color = Hf.colors.textTertiary,
+        state.searching && noResults -> SkeletonRows()
+        !state.searching && noResults -> Text(
+            "No matches.", style = Hf.type.bodyMd, color = Hf.colors.textTertiary,
         )
+        // Saved meals first (full dishes the user logged before), then catalog
+        // foods — combined into one scroll area to avoid nested scrolling.
         else -> LazyColumn(
             modifier = Modifier.heightIn(max = screenH * 0.45f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(state.results, key = { it.foodId }) { food ->
-                FoodRow(food = food, onClick = { onPick(food) })
+            if (state.mealResults.isNotEmpty()) {
+                item(key = "meals-header") {
+                    Text("SAVED MEALS", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+                }
+                items(state.mealResults, key = { "meal/${it.mealId}" }) { m ->
+                    MealRow(meal = m, onClick = { onLogMeal(m) })
+                }
+            }
+            if (state.results.isNotEmpty()) {
+                if (state.mealResults.isNotEmpty()) {
+                    item(key = "foods-header") {
+                        Text("FOODS", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+                    }
+                }
+                items(state.results, key = { it.foodId }) { food ->
+                    FoodRow(food = food, onClick = { onPick(food) })
+                }
             }
         }
     }
@@ -316,6 +338,32 @@ private fun RecentRow(entry: Entry, onClick: () -> Unit) {
                     buildString {
                         append(formatKcal(entry.macros.caloriesKcal))
                         entry.servingLabel?.takeIf { it.isNotBlank() }?.let { append(" · $it") }
+                    },
+                    style = Hf.type.monoSm,
+                    color = Hf.colors.textSecondary,
+                )
+            }
+            Text("+", style = Hf.type.headingMd, color = Hf.colors.accentDim)
+        }
+    }
+}
+
+@Composable
+private fun MealRow(meal: MealSearchResult, onClick: () -> Unit) {
+    HfCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FoodThumbnail(imageUrl = meal.imageUrl, imageStatus = meal.imageStatus, size = 44.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(meal.name, style = Hf.type.headingSm, color = Hf.colors.textPrimary)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    buildString {
+                        append(formatKcal(meal.macros.caloriesKcal))
+                        meal.totalGrams?.let { append(" · ${it.roundToInt()} g") }
                     },
                     style = Hf.type.monoSm,
                     color = Hf.colors.textSecondary,

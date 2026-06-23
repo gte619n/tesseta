@@ -112,6 +112,19 @@ export type Food = {
   imageStatus: ImageStatus;
 };
 
+// A saved-meal hit in the add-food search (GET /api/me/nutrition/meals/search).
+// Logged by `mealId` via the describe-meal path, which reuses the meal's
+// ingredient breakdown + plated photo. `macros`/`totalGrams` are one serving.
+export type MealSearchResult = {
+  mealId: string;
+  name: string;
+  macros: Macros;
+  totalGrams: number | null;
+  imageUrl: string | null;
+  imageStatus: ImageStatus;
+  mine: boolean;
+};
+
 // Request bodies
 export type AddEntryBody = {
   meal: Meal;

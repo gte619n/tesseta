@@ -59,6 +59,7 @@ import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
+import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.HfCard
@@ -100,6 +101,7 @@ fun NutritionTodayRoute(
         onAddQuick = viewModel::addQuickEntry,
         onDescribeAsync = viewModel::describeMealAsync,
         onRelogRecent = viewModel::relogRecent,
+        onLogMeal = viewModel::logSavedMeal,
         onOpenTarget = onOpenTarget,
         onOpenCapture = onOpenCapture,
         onBack = onBack,
@@ -125,6 +127,7 @@ fun NutritionTodayScreen(
     onAddQuick: (Meal, String, Macros) -> Unit,
     onDescribeAsync: (Meal, String) -> Unit,
     onRelogRecent: (Meal, Entry) -> Unit,
+    onLogMeal: (Meal, MealSearchResult) -> Unit,
     onOpenTarget: () -> Unit,
     onOpenCapture: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
@@ -169,6 +172,7 @@ fun NutritionTodayScreen(
             onAddQuick = onAddQuick,
             onDescribeAsync = onDescribeAsync,
             onRelogRecent = onRelogRecent,
+            onLogMeal = onLogMeal,
         )
     }
 
@@ -548,6 +552,7 @@ private fun NutritionTodayPreview() {
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
             onDescribeAsync = { _, _ -> }, onRelogRecent = { _, _ -> },
+            onLogMeal = { _, _ -> },
             onOpenTarget = {}, onOpenCapture = {},
         )
     }

@@ -11,6 +11,7 @@ import type {
   CreateFoodBody,
   DescribedMeal,
   LogDescribedMealBody,
+  MealSearchResult,
   RelogBody,
   Meal,
 } from "./types/nutrition";
@@ -56,6 +57,13 @@ export function searchFoods(q: string): Promise<Food[]> {
 /** Fetch a single catalog food by id. */
 export function getFood(foodId: string): Promise<Food> {
   return apiJson<Food>(`/api/foods/${foodId}`);
+}
+
+/** Name-prefix search over the shared saved-meal catalog (user's own first). */
+export function searchMeals(q: string): Promise<MealSearchResult[]> {
+  return apiJson<MealSearchResult[]>(
+    `/api/me/nutrition/meals/search?q=${encodeURIComponent(q)}`,
+  );
 }
 
 // ── Mutations ────────────────────────────────────────────────────────
