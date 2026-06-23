@@ -14,6 +14,8 @@ import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepKind
 import com.gte619n.healthfitness.domain.goals.StepMetricBinding
 import com.gte619n.healthfitness.domain.goals.StepPatchRequest
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
 import java.util.UUID
@@ -286,6 +288,14 @@ class GoalsRepository @Inject constructor(
         api.reevaluate(goalId)
         return refreshedDeep(goalId)
     }
+
+    /** Nutrition guidance the goal can apply (from its linked program), or null when none. Online-only. */
+    suspend fun nutritionGuidance(goalId: String): NutritionGuidance? =
+        api.getNutritionGuidance(goalId)
+
+    /** Apply the goal's linked-program guidance as the macro target; returns the saved macros. Online-only. */
+    suspend fun applyNutrition(goalId: String): Macros =
+        api.applyNutritionTarget(goalId)
 
     /** Re-fetch the deep goal after an intent and re-fan into the flat mirrors. */
     private suspend fun refreshedDeep(goalId: String): GoalDeep =
