@@ -142,6 +142,25 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
+    override suspend fun workoutHistory(): Result<List<ScheduledWorkout>> =
+        withContext(Dispatchers.IO) {
+            runCatching { api.workoutHistory().map { it.toDomain() } }
+        }
+
+    override suspend fun nutritionGuidance(
+        programId: String,
+    ): Result<com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance?> =
+        withContext(Dispatchers.IO) {
+            runCatching { api.getNutritionGuidance(programId) }
+        }
+
+    override suspend fun applyNutritionTarget(
+        programId: String,
+    ): Result<com.gte619n.healthfitness.domain.nutrition.Macros> =
+        withContext(Dispatchers.IO) {
+            runCatching { api.applyNutritionTarget(programId) }
+        }
+
     override suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {
             runCatching {

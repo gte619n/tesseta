@@ -29,11 +29,13 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.HistoryEdu
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
 import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
@@ -106,6 +110,8 @@ fun ProgramDetailRoute(
         onSaveEdit = viewModel::saveEdit,
         onOpenPastSessions = viewModel::openPastSessions,
         onDismissPastSessions = viewModel::dismissPastSessions,
+        onApplyNutrition = viewModel::applyNutrition,
+        onConsumeApplied = viewModel::consumeAppliedNutrition,
     )
 }
 
@@ -126,7 +132,10 @@ fun ProgramDetailScreen(
     onSaveEdit: (title: String, description: String?) -> Unit = { _, _ -> },
     onOpenPastSessions: () -> Unit = {},
     onDismissPastSessions: () -> Unit = {},
+    onApplyNutrition: () -> Unit = {},
+    onConsumeApplied: () -> Unit = {},
 ) {
+    var confirmNutrition by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -170,6 +179,9 @@ fun ProgramDetailScreen(
                 parkedCompletion = state.parkedCompletion,
                 parkedError = state.parkedError,
                 today = state.today,
+                nutritionGuidance = state.nutritionGuidance,
+                applyingNutrition = state.applyingNutrition,
+                onRequestApplyNutrition = { confirmNutrition = true },
                 onOpenGoal = onOpenGoal,
                 onOpenWorkout = { phaseId, dayId ->
                     onOpenWorkout(state.program.programId, phaseId, dayId)
@@ -205,6 +217,116 @@ fun ProgramDetailScreen(
             onDismiss = onDismissPastSessions,
         )
     }
+
+    // Confirm before overwriting the current nutrition target with the plan's.
+    val guidance = state.nutritionGuidance
+    if (confirmNutrition && guidance != null) {
+        AlertDialog(
+            onDismissRequest = { confirmNutrition = false },
+            title = { Text("Apply as nutrition target?", style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
+            text = {
+                Text(
+                    "Set your daily nutrition target to ${guidanceSummary(guidance)} from this " +
+                        "program. This replaces your current target.",
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmNutrition = false
+                    onApplyNutrition()
+                }) { Text("Apply target", color = Hf.colors.accent) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmNutrition = false }) {
+                    Text("Cancel", color = Hf.colors.textTertiary)
+                }
+            },
+            containerColor = Hf.colors.surface,
+        )
+    }
+
+    state.appliedNutrition?.let { applied ->
+        AlertDialog(
+            onDismissRequest = onConsumeApplied,
+            title = { Text("Nutrition target updated", style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
+            text = { Text(macrosSummary(applied), style = Hf.type.bodyMd, color = Hf.colors.textPrimary) },
+            confirmButton = {
+                TextButton(onClick = onConsumeApplied) { Text("Done", color = Hf.colors.accent) }
+            },
+            containerColor = Hf.colors.surface,
+        )
+    }
+}
+
+/** "2,640 kcal · 200P / 280C / 80F" — what applying this guidance sets (calories macro-derived). */
+private fun guidanceSummary(g: NutritionGuidance): String {
+    val derived = if (g.proteinG == null && g.carbsG == null && g.fatG == null) {
+        null
+    } else {
+        (g.proteinG ?: 0) * 4 + (g.carbsG ?: 0) * 4 + (g.fatG ?: 0) * 9
+    }
+    val kcal = derived ?: g.kcal
+    val parts = mutableListOf<String>()
+    if (kcal != null) parts += "$kcal kcal"
+    val macros = listOfNotNull(
+        g.proteinG?.let { "${it}P" },
+        g.carbsG?.let { "${it}C" },
+        g.fatG?.let { "${it}F" },
+    ).joinToString(" / ")
+    if (macros.isNotEmpty()) parts += macros
+    return parts.joinToString(" · ")
+}
+
+private fun macrosSummary(m: Macros): String {
+    val parts = mutableListOf<String>()
+    m.caloriesKcal?.let { parts += "${it.toLong()} kcal" }
+    val macros = listOfNotNull(
+        m.proteinGrams?.let { "${it.toLong()}P" },
+        m.carbsGrams?.let { "${it.toLong()}C" },
+        m.fatGrams?.let { "${it.toLong()}F" },
+    ).joinToString(" / ")
+    if (macros.isNotEmpty()) parts += macros
+    return parts.joinToString(" · ")
+}
+
+/** The program's nutrition guidance with an "Apply as nutrition target" action (IMPL-COACH). */
+@Composable
+private fun NutritionGuidanceCard(
+    guidance: NutritionGuidance,
+    applying: Boolean,
+    onApply: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
+            .background(Hf.colors.surface, RoundedCornerShape(10.dp))
+            .padding(14.dp),
+    ) {
+        CapsLabel("Nutrition guidance", color = Hf.colors.textTertiary)
+        Spacer(Modifier.height(6.dp))
+        Text(guidanceSummary(guidance), style = Hf.type.monoMd, color = Hf.colors.textPrimary)
+        guidance.note?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, style = Hf.type.bodySm, color = Hf.colors.textSecondary)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier
+                .background(Hf.colors.accent, RoundedCornerShape(6.dp))
+                .clickable(enabled = !applying) { onApply() }
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (applying) "APPLYING…" else "APPLY AS NUTRITION TARGET",
+                style = Hf.type.capsMd,
+                color = Hf.colors.textInverse,
+            )
+        }
+    }
 }
 
 @Composable
@@ -217,6 +339,9 @@ private fun ProgramBody(
     parkedCompletion: ParkedCompletion?,
     parkedError: String?,
     today: LocalDate,
+    nutritionGuidance: NutritionGuidance? = null,
+    applyingNutrition: Boolean = false,
+    onRequestApplyNutrition: () -> Unit = {},
     onOpenGoal: (String) -> Unit,
     onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
@@ -231,6 +356,19 @@ private fun ProgramBody(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
+        if (nutritionGuidance != null) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                    Spacer(Modifier.height(4.dp))
+                    NutritionGuidanceCard(
+                        guidance = nutritionGuidance,
+                        applying = applyingNutrition,
+                        onApply = onRequestApplyNutrition,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        }
         if (activeDraft != null) {
             item {
                 Column(modifier = Modifier.padding(horizontal = 18.dp)) {
@@ -332,6 +470,10 @@ private fun ProgramBody(
                         // flight (the resume banner is the way back in).
                         canStart = activeDraft == null,
                         onStartSession = { session ->
+                            onOpenSession(program.programId, session.scheduledId)
+                        },
+                        // Re-open a completed session to review what was logged.
+                        onReviewSession = { session ->
                             onOpenSession(program.programId, session.scheduledId)
                         },
                     )
@@ -492,19 +634,19 @@ private fun LogPastSessionRow(onClick: () -> Unit) {
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "Log a past session",
+                "Past workouts",
                 style = Hf.type.bodyMd.copy(fontSize = 13.sp),
                 color = Hf.colors.textPrimary,
             )
             Text(
-                "Record an earlier or missed workout.",
+                "Review a finished workout, or log a missed one.",
                 style = Hf.type.bodySm,
                 color = Hf.colors.textTertiary,
             )
         }
         Icon(
             Icons.AutoMirrored.Outlined.ArrowForward,
-            contentDescription = "Log a past session",
+            contentDescription = "Past workouts",
             tint = Hf.colors.textSecondary,
             modifier = Modifier.size(16.dp),
         )
@@ -589,10 +731,10 @@ private fun PastSessionsSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Log a past session", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+            Text("Past workouts", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
             if (sessions.isEmpty()) {
                 Text(
-                    "No earlier sessions to log.",
+                    "No earlier sessions yet.",
                     style = Hf.type.bodySm,
                     color = Hf.colors.textTertiary,
                 )

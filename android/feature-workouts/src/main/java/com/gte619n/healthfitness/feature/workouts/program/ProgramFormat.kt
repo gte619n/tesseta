@@ -128,6 +128,8 @@ private fun loggedSetLabel(s: LoggedSet): String {
         weight != null && reps != null -> "$weight × $reps"
         weight != null -> weight
         reps != null -> "$reps reps"
+        // A timed hold (stretch/mobility) has no weight or reps.
+        s.durationSeconds != null -> durationLabel(s.durationSeconds!!)
         else -> "—"
     }
 }

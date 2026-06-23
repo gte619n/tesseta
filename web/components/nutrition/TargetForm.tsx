@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Macros } from "@/lib/types/nutrition";
+import { derivedCaloriesKcal } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 
 type Props = {
@@ -73,12 +74,32 @@ export function TargetForm({ current, setTarget }: Props) {
     toast.info("Macros calculated — adjust to taste.");
   }
 
+  const enteredCalories = numOr(fields.caloriesKcal);
+  const derivedCalories = derivedCaloriesKcal(
+    numOr(fields.proteinGrams),
+    numOr(fields.carbsGrams),
+    numOr(fields.fatGrams),
+  );
+  // Warn when the typed calorie target can't come from the macros (Atwater
+  // 4/4/9). Calories are saved from the macros to stay consistent — the same
+  // rule logged food holds — so the user knows their number will move.
+  const caloriesMismatch =
+    derivedCalories !== null &&
+    enteredCalories !== null &&
+    Math.abs(enteredCalories - derivedCalories) > 1;
+
   async function handleSave() {
+    const protein = numOr(fields.proteinGrams);
+    const carbs = numOr(fields.carbsGrams);
+    const fat = numOr(fields.fatGrams);
+    const derived = derivedCaloriesKcal(protein, carbs, fat);
     const macros: Macros = {
-      caloriesKcal: numOr(fields.caloriesKcal),
-      proteinGrams: numOr(fields.proteinGrams),
-      carbsGrams: numOr(fields.carbsGrams),
-      fatGrams: numOr(fields.fatGrams),
+      // Calories follow the macros when any are set (server enforces the same);
+      // a calories-only target keeps its entered value.
+      caloriesKcal: derived ?? numOr(fields.caloriesKcal),
+      proteinGrams: protein,
+      carbsGrams: carbs,
+      fatGrams: fat,
       fiberGrams: numOr(fields.fiberGrams),
       sugarGrams: numOr(fields.sugarGrams),
     };
@@ -152,6 +173,19 @@ export function TargetForm({ current, setTarget }: Props) {
             </div>
           ))}
         </div>
+
+        {caloriesMismatch && (
+          <p
+            data-testid="targets-calorie-warning"
+            className="mt-4 rounded-md border-[0.5px] border-warn/40 bg-warn-bg px-3 py-2 text-[12px] text-warn"
+          >
+            Your calorie target ({enteredCalories?.toLocaleString()} kcal) doesn&apos;t
+            match your macros, which add up to{" "}
+            {derivedCalories?.toLocaleString()} kcal. It&apos;ll be saved as{" "}
+            {derivedCalories?.toLocaleString()} kcal to stay consistent — adjust
+            the macros if you want a different total.
+          </p>
+        )}
 
         <div className="mt-5 flex justify-end">
           <button

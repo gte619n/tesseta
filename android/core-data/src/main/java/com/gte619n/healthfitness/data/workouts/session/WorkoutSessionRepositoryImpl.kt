@@ -23,6 +23,7 @@ import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepositor
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -97,7 +98,11 @@ class WorkoutSessionRepositoryImpl(
                 // snapshot is exactly the DTO shape regardless of mirror-source
                 // extras.
                 sessionJson = scheduledAdapter.toJson(dto),
-                loggedJson = EMPTY_LOGGED_JSON,
+                // A COMPLETED/imported session's snapshot carries the sets it was
+                // performed with — seed the draft with them so opening it shows
+                // (and lets you correct) what you logged, rather than a blank
+                // sheet. A still-PLANNED session has none, so it starts empty.
+                loggedJson = loggedJsonFromSnapshot(dto),
             )
             draftDao.upsert(entity)
             entity.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
@@ -164,6 +169,32 @@ class WorkoutSessionRepositoryImpl(
         withContext(io) {
             runCatching { draftDao.delete(programId, scheduledId) }
         }
+
+    override suspend fun fetchRecap(programId: String, scheduledId: String): String? =
+        withContext(io) {
+            // finish() enqueues the completion through the outbox, so the server
+            // may still see the session as PLANNED (recap == null) for a moment
+            // after we're called; retry a few times before giving up. Strictly
+            // best-effort — any network error resolves to null.
+            repeat(RECAP_FETCH_ATTEMPTS) { attempt ->
+                val recap = runCatching { api.sessionRecap(programId, scheduledId).recap }.getOrNull()
+                if (!recap.isNullOrBlank()) return@withContext recap.trim()
+                if (attempt < RECAP_FETCH_ATTEMPTS - 1) delay(RECAP_RETRY_DELAY_MILLIS)
+            }
+            null
+        }
+
+    override suspend fun lastSets(
+        programId: String,
+        scheduledId: String,
+    ): Map<String, List<LoggedSet>> = withContext(io) {
+        // Best-effort: any network error (offline, session not yet COMPLETED on
+        // the server) leaves the logger on its designed-target prefill.
+        runCatching {
+            api.sessionLastSets(programId, scheduledId)
+                .mapValues { (_, sets) -> sets.map { it.toDomain() } }
+        }.getOrDefault(emptyMap())
+    }
 
     // ---- IMPL-17 Q3: "restore into logger" recovery for parked completions ----
 
@@ -457,6 +488,24 @@ class WorkoutSessionRepositoryImpl(
     private fun decodeLogged(json: String): List<LoggedPrescriptionDto> =
         runCatching { loggedAdapter.fromJson(json) }.getOrNull().orEmpty()
 
+    /**
+     * The actuals already recorded in a session snapshot, in the draft's
+     * [LoggedPrescriptionDto] shape — so opening a completed/imported session
+     * shows what was performed. Empty (`"[]"`) when the snapshot carries no
+     * logged sets (a still-PLANNED session).
+     */
+    private fun loggedJsonFromSnapshot(dto: ScheduledWorkoutDto): String {
+        val prefill = dto.session?.blocks.orEmpty().flatMap { block ->
+            val blockId = block.blockId ?: return@flatMap emptyList()
+            block.prescriptions.mapNotNull { rx ->
+                rx.loggedSets?.takeIf { it.isNotEmpty() }?.let { sets ->
+                    LoggedPrescriptionDto(blockId = blockId, orderIndex = rx.orderIndex, sets = sets)
+                }
+            }
+        }
+        return if (prefill.isEmpty()) EMPTY_LOGGED_JSON else loggedAdapter.toJson(prefill)
+    }
+
     companion object {
         /** The IMPL-AND-20 sync id of one scheduled session's mirror row. */
         fun mirrorId(programId: String, scheduledId: String): String =
@@ -469,5 +518,9 @@ class WorkoutSessionRepositoryImpl(
         const val STALE_AFTER_MILLIS: Long = 24L * 60 * 60 * 1000
 
         private const val EMPTY_LOGGED_JSON = "[]"
+
+        /** IMPL-COACH: poll the recap endpoint a few times while the outbox replays. */
+        private const val RECAP_FETCH_ATTEMPTS = 3
+        private const val RECAP_RETRY_DELAY_MILLIS = 1500L
     }
 }

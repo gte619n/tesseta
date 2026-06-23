@@ -12,6 +12,7 @@ import com.gte619n.healthfitness.feature.workouts.NewGymScreen
 import com.gte619n.healthfitness.feature.workouts.program.ProgramDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.ProgramsListRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutDetailRoute
+import com.gte619n.healthfitness.feature.workouts.program.WorkoutHistoryRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubRoute
 import com.gte619n.healthfitness.feature.workouts.program.chat.WorkoutDesignerRoute
 import com.gte619n.healthfitness.feature.workouts.session.WorkoutSessionRoute
@@ -47,6 +48,9 @@ object WorkoutsRoutes {
     const val CHAT_ROUTE = "workouts/chat?programId={programId}"
 
     fun chatEdit(programId: String): String = "workouts/chat?programId=$programId"
+
+    // Read-only workout history (every COMPLETED session).
+    const val HISTORY = "workouts/history"
 
     // Programs (IMPL-AND-15, read-only).
     const val PROGRAMS = "workouts/programs"
@@ -84,11 +88,16 @@ fun NavGraphBuilder.workoutsGraph(
             onBack = { navController.popBackStack() },
             onOpenGyms = { navController.navigate(WorkoutsRoutes.GYMS) },
             onOpenPrograms = { navController.navigate(WorkoutsRoutes.PROGRAMS) },
+            onOpenHistory = { navController.navigate(WorkoutsRoutes.HISTORY) },
             onDesignProgram = { navController.navigate(WorkoutsRoutes.CHAT) },
             onResumeSession = { programId, scheduledId ->
                 navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
             },
         )
+    }
+
+    composable(WorkoutsRoutes.HISTORY) {
+        WorkoutHistoryRoute(onBack = { navController.popBackStack() })
     }
 
     composable(

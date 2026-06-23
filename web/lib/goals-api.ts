@@ -11,6 +11,8 @@ import type {
   Comparator,
 } from "./types/goals";
 import type { ChatThread, GoalProposalDto } from "./types/goals-chat-wire";
+import type { NutritionGuidance } from "./types/workout-program";
+import type { Macros } from "./types/nutrition";
 
 // Server-only HTTP helpers for the Goals module. Do not import from
 // client components — apiFetch reads server env + the Auth.js session.
@@ -26,6 +28,30 @@ export async function listGoals(status?: GoalStatus): Promise<GoalResponse[]> {
 
 export async function getGoalDeep(goalId: string): Promise<GoalDeepResponse> {
   return apiJson<GoalDeepResponse>(`/api/me/goals/${goalId}`);
+}
+
+/**
+ * The nutrition guidance this goal can apply to the user's macro target (from
+ * its linked workout program). Null when the goal has no program guidance —
+ * the backend returns 204 No Content.
+ */
+export async function getGoalNutritionGuidance(
+  goalId: string,
+): Promise<NutritionGuidance | null> {
+  const res = await apiFetch(`/api/me/goals/${goalId}/nutrition-guidance`);
+  if (res.status === 204) return null;
+  if (!res.ok) {
+    throw new BackendError(
+      `/api/me/goals/${goalId}/nutrition-guidance returned ${res.status}`,
+      res.status,
+    );
+  }
+  return res.json() as Promise<NutritionGuidance>;
+}
+
+/** Apply the goal's linked-program guidance as the macro target; returns the saved macros. */
+export function applyGoalNutrition(goalId: string): Promise<Macros> {
+  return send<Macros>(`/api/me/goals/${goalId}/nutrition-target`, "POST");
 }
 
 // ── Request body shapes (mirror backend dto records) ─────────────────

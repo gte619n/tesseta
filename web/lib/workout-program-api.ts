@@ -10,7 +10,9 @@ import type {
   CompleteSessionRequest,
   WorkoutProgramChatThread,
   WorkoutProgramChatMessage,
+  NutritionGuidance,
 } from "./types/workout-program";
+import type { Macros } from "./types/nutrition";
 import type { TrtContext } from "./types/trt";
 
 // Server-only HTTP helpers for Workout Programs (IMPL-15). Do not import from
@@ -84,6 +86,29 @@ export function updateProgram(
 
 export function deleteProgram(programId: string): Promise<void> {
   return send<void>(`/api/me/workout-programs/${programId}`, "DELETE");
+}
+
+/**
+ * The program's effective nutrition guidance (active phase's, else
+ * program-level), or null when it has none — the backend returns 204.
+ */
+export async function getProgramNutritionGuidance(
+  programId: string,
+): Promise<NutritionGuidance | null> {
+  const res = await apiFetch(`/api/me/workout-programs/${programId}/nutrition-guidance`);
+  if (res.status === 204) return null;
+  if (!res.ok) {
+    throw new BackendError(
+      `/api/me/workout-programs/${programId}/nutrition-guidance returned ${res.status}`,
+      res.status,
+    );
+  }
+  return res.json() as Promise<NutritionGuidance>;
+}
+
+/** Apply this program's guidance as the macro target; returns the saved macros. */
+export function applyProgramNutrition(programId: string): Promise<Macros> {
+  return send<Macros>(`/api/me/workout-programs/${programId}/nutrition-target`, "POST");
 }
 
 export function validateProgram(programId: string): Promise<string[]> {

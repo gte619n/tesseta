@@ -24,6 +24,33 @@ class SessionFormatTest {
     }
 
     @Test
+    fun `session steps flatten blocks then prescriptions in order`() {
+        val steps = ProgramFixtures.activeDraft.sessionSteps()
+        // The fixture day is main (squat) then core (plank).
+        assertEquals(2, steps.size)
+        assertEquals(PrescriptionKey("b-main", 0), steps[0].key)
+        assertEquals("ex-squat", steps[0].prescription.exerciseId)
+        assertEquals(PrescriptionKey("b-core", 0), steps[1].key)
+        assertEquals("ex-plank", steps[1].prescription.exerciseId)
+    }
+
+    @Test
+    fun `first incomplete step skips fully logged exercises`() {
+        // Squat has 1 of 3 sets logged, so the coach opens on it.
+        assertEquals(0, ProgramFixtures.activeDraft.firstIncompleteStepIndex())
+
+        // Once the squat's 3 sets are all logged, the plank (index 1) is next.
+        val squatDone = ProgramFixtures.activeDraft.copy(
+            logged = mapOf(
+                PrescriptionKey("b-main", 0) to List(3) {
+                    com.gte619n.healthfitness.domain.workouts.program.LoggedSet(weightLbs = 185.0, reps = 8)
+                },
+            ),
+        )
+        assertEquals(1, squatDone.firstIncompleteStepIndex())
+    }
+
+    @Test
     fun `logged exercise counts cover all prescriptions in the snapshot`() {
         // The fixture day has two prescriptions (squat + plank); one is logged.
         assertEquals(1 to 2, loggedExerciseCounts(ProgramFixtures.activeDraft))

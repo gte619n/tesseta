@@ -220,6 +220,9 @@ class FoodImageServiceTest {
         @Override public synchronized List<CatalogFood> searchByNamePrefix(String prefixLower, int limit) {
             return List.of();
         }
+        @Override public synchronized List<CatalogFood> searchByTokens(List<String> queryWords, int limit) {
+            return List.of();
+        }
         @Override public synchronized Optional<CatalogFood> findByBarcode(String code) { return Optional.empty(); }
         @Override public synchronized List<CatalogFood> findByImageStatus(FoodImageStatus status, int limit) {
             return foods.stream().filter(f -> f.imageStatus() == status).limit(limit).toList();

@@ -122,6 +122,24 @@ interface WorkoutSessionRepository {
     /** Skip the session: upload `SKIPPED` (clears actuals) and delete any draft. */
     suspend fun skip(programId: String, scheduledId: String): Result<Unit>
 
+    /**
+     * IMPL-COACH — best-effort AI post-workout recap for a just-finished
+     * session. Network-only and side-effect-free: returns null when offline,
+     * when the completion upsert hasn't replayed server-side yet, or when the
+     * coach is unavailable. Never throws — the finish flow shows the numeric
+     * summary regardless.
+     */
+    suspend fun fetchRecap(programId: String, scheduledId: String): String?
+
+    /**
+     * IMPL-COACH PR2 — the sets performed the last time each of this session's
+     * exercises was done, keyed by exerciseId, so the logger can prefill new
+     * sets from the literal previous session. Network-only and best-effort:
+     * returns an empty map when offline or on any error (the logger falls back
+     * to the designed target).
+     */
+    suspend fun lastSets(programId: String, scheduledId: String): Map<String, List<LoggedSet>>
+
     /** Throw the draft away locally; nothing reaches the backend. */
     suspend fun discard(programId: String, scheduledId: String): Result<Unit>
 

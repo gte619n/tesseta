@@ -109,6 +109,38 @@ class GoalsRepositoryTest {
     }
 
     @Test
+    fun `goals refreshes from network and heals an undecodable mirror row`() = runBlocking {
+        // A stale mirror row whose payload can't decode to a Goal: the old
+        // "fill only when the mirror is empty" path silently rendered nothing,
+        // because the row was present but dropped by mapNotNull.
+        mirror.upsert(
+            MirrorTables.GOALS,
+            MirrorRowData("g1", "{\"garbage\":true}", 1L, "ACTIVE", false, "SYNCED"),
+        )
+        val fresh = Goal(
+            goalId = "g1", title = "Run 5k", domain = GoalDomain.CARDIOVASCULAR,
+            status = GoalStatus.ACTIVE, source = GoalSource.MANUAL,
+        )
+        io.mockk.coEvery { api.getGoals(null) } returns listOf(fresh)
+
+        val goals = repository.goals()
+
+        assertEquals(1, goals.size)
+        assertEquals("Run 5k", goals.single().title)
+    }
+
+    @Test
+    fun `goals falls back to the mirror when the live refresh fails offline`() = runBlocking {
+        seedGoal()
+        io.mockk.coEvery { api.getGoals(null) } throws RuntimeException("offline")
+
+        val goals = repository.goals()
+
+        assertEquals(1, goals.size)
+        assertEquals("Run 5k", goals.single().title)
+    }
+
+    @Test
     fun `goalDeep assembles the roadmap from the flat mirror tables offline`() = runBlocking {
         seedGoal()
         // The live refresh fails (offline) → assemble from the mirror.

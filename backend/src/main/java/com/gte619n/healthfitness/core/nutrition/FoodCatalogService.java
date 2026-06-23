@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.core.nutrition;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -44,7 +46,47 @@ public class FoodCatalogService {
         if (q == null || q.isBlank()) {
             return List.of();
         }
-        return repository.searchByNamePrefix(q.toLowerCase(), SEARCH_LIMIT);
+        List<String> words = FoodSearchTokens.queryWords(q);
+        // Token search (any-word, order-insensitive, brand-aware) is primary;
+        // the legacy name-prefix query is unioned in so foods written before
+        // searchTokens existed (i.e. not yet backfilled) still surface.
+        LinkedHashMap<String, CatalogFood> byId = new LinkedHashMap<>();
+        for (CatalogFood f : repository.searchByTokens(words, SEARCH_LIMIT)) {
+            byId.putIfAbsent(f.foodId(), f);
+        }
+        for (CatalogFood f : repository.searchByNamePrefix(q.toLowerCase(), SEARCH_LIMIT)) {
+            byId.putIfAbsent(f.foodId(), f);
+        }
+        String ql = q.toLowerCase().trim();
+        return byId.values().stream()
+            .sorted(Comparator
+                .comparingInt((CatalogFood f) -> rank(f, ql)).reversed()
+                .thenComparing(f -> f.nameLower() == null ? "" : f.nameLower()))
+            .limit(SEARCH_LIMIT)
+            .toList();
+    }
+
+    /**
+     * Relevance buckets, highest first: exact name, name-prefix, name-contains,
+     * then token/brand-only matches. Ties break alphabetically (caller-applied).
+     */
+    private static int rank(CatalogFood f, String ql) {
+        String name = f.nameLower() == null ? "" : f.nameLower();
+        if (name.equals(ql)) {
+            return 3;
+        }
+        if (name.startsWith(ql)) {
+            return 2;
+        }
+        if (name.contains(ql)) {
+            return 1;
+        }
+        return 0;
+    }
+
+    /** One-off backfill: recompute the search-token index across the catalog. */
+    public int reindexSearch() {
+        return repository.reindexSearchTokens();
     }
 
     public Optional<CatalogFood> find(String foodId) {

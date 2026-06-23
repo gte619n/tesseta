@@ -80,6 +80,9 @@ fun PhoneTodayScreen(
                 PhoneHeader(user = ui.user, lastUpdated = ui.lastUpdated)
                 Spacer(Modifier.height(16.dp))
                 PhoneVitalsGrid(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
+                // Coaching is the primary surface: one tap to start/resume today's
+                // workout (renders nothing on a rest day).
+                TodayWorkoutCard(onNavigate = onNavigate, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(11.dp))
                 TodayCard(
                     modifier = Modifier.fillMaxWidth(),

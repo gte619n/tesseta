@@ -1,11 +1,13 @@
 package com.gte619n.healthfitness.api.nutrition;
 
+import com.gte619n.healthfitness.api.security.AdminOnly;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.nutrition.CatalogFood;
 import com.gte619n.healthfitness.core.nutrition.FoodCatalogService;
 import com.gte619n.healthfitness.core.nutrition.FoodSource;
 import com.gte619n.healthfitness.core.nutrition.ServingSize;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +35,16 @@ public class FoodController {
     @GetMapping("/search")
     public List<FoodResponse> search(@RequestParam(value = "q", required = false) String q) {
         return catalog.search(q).stream().map(FoodResponse::from).toList();
+    }
+
+    /**
+     * One-off admin backfill: recompute the {@code searchTokens} index for the
+     * whole catalog after the token-search rollout. Idempotent — safe to re-run.
+     */
+    @PostMapping("/reindex-search")
+    @AdminOnly
+    public Map<String, Integer> reindexSearch() {
+        return Map.of("reindexed", catalog.reindexSearch());
     }
 
     @GetMapping("/{foodId}")

@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.mobile.sync
 
+import com.gte619n.healthfitness.data.auth.IdTokenCache
 import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.db.entity.SyncStateEntity
 import com.gte619n.healthfitness.data.sync.SyncEngine
@@ -34,8 +35,10 @@ class FirstSyncGateTest {
     private val syncEngine = mockk<SyncEngine>(relaxed = true)
     private val scheduler = mockk<SyncScheduler>(relaxed = true)
     private val syncFlags = mockk<SyncFlags>()
+    // Only used by markFirstSyncComplete(), which these tests don't exercise.
+    private val idTokenCache = mockk<IdTokenCache>(relaxed = true)
 
-    private fun gate() = FirstSyncGate(syncStateDao, syncEngine, scheduler, syncFlags)
+    private fun gate() = FirstSyncGate(syncStateDao, syncEngine, scheduler, syncFlags, idTokenCache)
 
     @Test
     fun `fresh sign-in with no prior full sync needs the gate`() = runTest {

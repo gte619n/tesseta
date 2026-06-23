@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.exercise.BlockType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,50 @@ public class WorkoutProgramService {
 
     public Optional<WorkoutProgram> findById(String userId, String programId) {
         return programs.findById(userId, programId);
+    }
+
+    /**
+     * The deep program most relevant to a goal: the goal's linked, non-archived
+     * program, preferring an ACTIVE one and then the most recently updated. Used
+     * to source nutrition guidance for the goal's "Update nutrition" action. The
+     * shallow list lacks phases, so the match is re-read deep via {@link #findById}.
+     */
+    public Optional<WorkoutProgram> findActiveForGoal(String userId, String goalId) {
+        if (goalId == null) {
+            return Optional.empty();
+        }
+        return programs.findByUser(userId).stream()
+            .filter(p -> goalId.equals(p.goalId()))
+            .filter(p -> p.status() != ProgramStatus.ARCHIVED)
+            .min(Comparator
+                .comparingInt((WorkoutProgram p) -> p.status() == ProgramStatus.ACTIVE ? 0 : 1)
+                .thenComparing(p -> p.updatedAt(),
+                    Comparator.nullsLast(Comparator.reverseOrder())))
+            .flatMap(p -> programs.findById(userId, p.programId()));
+    }
+
+    /**
+     * The nutrition guidance to apply for a program: the ACTIVE phase's, if it
+     * carries any, otherwise the program-level fallback. Empty when neither is
+     * present (IMPL-18 guidance is optional).
+     */
+    public static Optional<NutritionGuidance> effectiveGuidance(WorkoutProgram program) {
+        if (program == null) {
+            return Optional.empty();
+        }
+        if (program.phases() != null) {
+            for (ProgramPhase phase : program.phases()) {
+                NutritionGuidance g = phase.nutritionGuidance();
+                if (phase.status() == ProgramPhaseStatus.ACTIVE && g != null && !g.isEmpty()) {
+                    return Optional.of(g);
+                }
+            }
+        }
+        NutritionGuidance programLevel = program.nutritionGuidance();
+        if (programLevel != null && !programLevel.isEmpty()) {
+            return Optional.of(programLevel);
+        }
+        return Optional.empty();
     }
 
     /** Create from a (possibly partially-filled) program; assigns ids/order/dates. */

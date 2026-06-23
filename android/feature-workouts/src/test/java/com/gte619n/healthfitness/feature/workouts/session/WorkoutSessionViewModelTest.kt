@@ -46,9 +46,13 @@ class WorkoutSessionViewModelTest {
     /** The fixture's only logged prescription: the squat (sets=3, rest 90s). */
     private val squatKey = PrescriptionKey("b-main", 0)
 
+    /** The fixture's timed prescription: the plank (duration 45s, rest 30s). */
+    private val plankKey = PrescriptionKey("b-core", 0)
+
     private fun vm(): WorkoutSessionViewModel {
         coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
         every { repo.observeDraft("p1", "s2") } returns draftFlow
+        coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
         return WorkoutSessionViewModel(repo, timers, handle)
     }
 
@@ -67,6 +71,7 @@ class WorkoutSessionViewModelTest {
     @Test
     fun `start failure surfaces error`() = runTest {
         coEvery { repo.start("p1", "s2") } returns Result.failure(RuntimeException("not mirrored"))
+        coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
         val vm = WorkoutSessionViewModel(repo, timers, handle)
         advanceUntilIdle()
 
@@ -107,6 +112,75 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
+    fun `first set prefills from the last time the exercise was done`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", squatKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+        // The previous session of the squat: 200 x 5.
+        coEvery { repo.lastSets("p1", "s2") } returns
+            mapOf("ex-squat" to listOf(LoggedSet(weightLbs = 200.0, reps = 5)))
+        // A fresh draft with nothing logged yet, so set 1 has no in-session carry.
+        draftFlow.value = ProgramFixtures.activeDraft.copy(logged = emptyMap())
+
+        coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
+        every { repo.observeDraft("p1", "s2") } returns draftFlow
+        val vm = WorkoutSessionViewModel(repo, timers, handle)
+        advanceUntilIdle()
+
+        vm.toggleSet(squatKey, 0)
+        advanceUntilIdle()
+
+        val appended = sets.captured.single()
+        assertEquals(200.0, appended.weightLbs)
+        assertEquals(5, appended.reps)
+    }
+
+    @Test
+    fun `checking a timed exercise defaults its hold from the prescription`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.toggleSet(plankKey, 0)
+        advanceUntilIdle()
+
+        val appended = sets.captured.single()
+        // Timed exercises carry the prescribed hold, not weight/reps.
+        assertEquals(45, appended.durationSeconds)
+        assertNull(appended.weightLbs)
+        assertNull(appended.reps)
+        // The plank's 30s rest countdown starts.
+        assertEquals(30, timers.rest.value!!.totalSeconds)
+    }
+
+    @Test
+    fun `logTimedSet records the measured hold and starts the rest timer`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+
+        val vm = vm()
+        advanceUntilIdle()
+        vm.now = { Instant.parse("2026-06-03T14:07:00Z") }
+
+        vm.logTimedSet(plankKey, 38)
+        advanceUntilIdle()
+
+        val appended = sets.captured.single()
+        // The measured hold wins over the prescribed default.
+        assertEquals(38, appended.durationSeconds)
+        assertNull(appended.weightLbs)
+        assertEquals(120, appended.restSeconds)
+        assertEquals(30, timers.rest.value!!.totalSeconds)
+    }
+
+    @Test
     fun `unchecking a logged row removes it without starting a rest timer`() = runTest {
         val sets = slot<List<LoggedSet>>()
         coEvery {
@@ -141,8 +215,9 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
-    fun `finish flow shows the summary then enqueues completion and closes`() = runTest {
+    fun `finish flow shows the summary then enqueues completion and surfaces the recap`() = runTest {
         coEvery { repo.finish("p1", "s2") } returns Result.success(Unit)
+        coEvery { repo.fetchRecap("p1", "s2") } returns "Strong squats — nice work."
         val vm = vm()
         advanceUntilIdle()
         timers.startRest(90)
@@ -156,9 +231,36 @@ class WorkoutSessionViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { repo.finish("p1", "s2") }
-        assertTrue(vm.state.value.closed)
-        assertNull(vm.state.value.prompt)
+        // Finish lands on the recap summary (not closed yet); rest cleared.
+        val finished = vm.state.value
+        assertTrue(finished.completed)
+        assertFalse(finished.closed)
+        assertFalse(finished.recapLoading)
+        assertEquals("Strong squats — nice work.", finished.recap)
+        assertNull(finished.prompt)
         assertNull(timers.rest.value)
+
+        // Dismissing the recap summary pops the logger.
+        vm.dismissCompleted()
+        assertTrue(vm.state.value.closed)
+    }
+
+    @Test
+    fun `finish with no recap still completes and closes on dismiss`() = runTest {
+        coEvery { repo.finish("p1", "s2") } returns Result.success(Unit)
+        coEvery { repo.fetchRecap("p1", "s2") } returns null
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.confirmFinish()
+        advanceUntilIdle()
+
+        val state = vm.state.value
+        assertTrue(state.completed)
+        assertNull(state.recap)
+        assertFalse(state.recapLoading)
+        vm.dismissCompleted()
+        assertTrue(vm.state.value.closed)
     }
 
     @Test

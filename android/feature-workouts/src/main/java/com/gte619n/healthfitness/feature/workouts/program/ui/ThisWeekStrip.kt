@@ -40,9 +40,11 @@ import java.time.LocalDate
  * gym, a deload tint, and a status dot. `isDeload` / status come from the
  * backend ScheduledWorkout (authoritative — the client never recomputes).
  *
- * ADR-0012 (IMPL-AND-17): today's still-PLANNED session gets a "Start workout"
- * affordance ([today] + [onStartSession]), suppressed via [canStart] while a
- * local draft is already in flight.
+ * ADR-0012 (IMPL-AND-17): any still-PLANNED session gets a "Start workout"
+ * affordance ([onStartSession]) — you can start a day's workout early or catch
+ * up on a missed one, not only today's — suppressed via [canStart] while a local
+ * draft is already in flight. A COMPLETED session gets a "Review" affordance
+ * ([onReviewSession]) that re-opens it with the sets you logged.
  */
 @Composable
 fun ThisWeekStrip(
@@ -50,6 +52,7 @@ fun ThisWeekStrip(
     today: LocalDate? = null,
     canStart: Boolean = true,
     onStartSession: ((ScheduledWorkout) -> Unit)? = null,
+    onReviewSession: ((ScheduledWorkout) -> Unit)? = null,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -59,12 +62,18 @@ fun ThisWeekStrip(
         items(scheduled, key = { it.scheduledId }) { session ->
             val startable = canStart &&
                 onStartSession != null &&
-                session.status == ScheduledStatus.PLANNED &&
-                session.date == today
+                session.status == ScheduledStatus.PLANNED
+            val reviewable = onReviewSession != null &&
+                session.status == ScheduledStatus.COMPLETED
             ScheduledCard(
                 session = session,
                 onStart = if (startable) {
                     { onStartSession?.invoke(session) }
+                } else {
+                    null
+                },
+                onReview = if (reviewable) {
+                    { onReviewSession?.invoke(session) }
                 } else {
                     null
                 },
@@ -74,7 +83,11 @@ fun ThisWeekStrip(
 }
 
 @Composable
-private fun ScheduledCard(session: ScheduledWorkout, onStart: (() -> Unit)?) {
+private fun ScheduledCard(
+    session: ScheduledWorkout,
+    onStart: (() -> Unit)?,
+    onReview: (() -> Unit)? = null,
+) {
     val bg = if (session.isDeload) Hf.colors.warnBg else Hf.colors.surface
     Column(
         modifier = Modifier
@@ -119,6 +132,22 @@ private fun ScheduledCard(session: ScheduledWorkout, onStart: (() -> Unit)?) {
                     stringResource(R.string.workout_session_start).uppercase(),
                     style = Hf.type.capsMd,
                     color = Hf.colors.textInverse,
+                )
+            }
+        } else if (onReview != null) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(0.5.dp, Hf.colors.borderStrong, RoundedCornerShape(6.dp))
+                    .clickable { onReview() }
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    stringResource(R.string.workout_session_review).uppercase(),
+                    style = Hf.type.capsMd,
+                    color = Hf.colors.textSecondary,
                 )
             }
         }

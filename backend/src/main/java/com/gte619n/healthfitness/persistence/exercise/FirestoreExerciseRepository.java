@@ -317,6 +317,15 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
                         if (label == null) label = "";
                         if (caption == null) caption = "";
                     }
+                    // key/label/caption must never be null on the wire (non-null
+                    // client fields reject null and fail the whole response, e.g.
+                    // workout history). Cover the remaining case: a frame with
+                    // neither a key nor a legacy phase (a partial/corrupt doc).
+                    if (key == null) {
+                        key = "frame-" + (order != null ? order : frames.size());
+                    }
+                    if (label == null) label = "";
+                    if (caption == null) caption = "";
                     frames.add(new DemoFrame(
                         key,
                         label,

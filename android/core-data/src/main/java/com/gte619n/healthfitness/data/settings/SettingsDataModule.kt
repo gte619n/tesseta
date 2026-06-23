@@ -4,9 +4,11 @@ import android.content.Context
 import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthRepositoryImpl
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthService
+import com.gte619n.healthfitness.data.prefs.CoachAudioPreferencesImpl
 import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepositoryImpl
 import com.gte619n.healthfitness.data.profile.ProfileService
 import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthRepository
+import com.gte619n.healthfitness.domain.prefs.CoachAudioPreferences
 import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import dagger.Binds
 import dagger.Module
@@ -34,6 +36,10 @@ abstract class SettingsDataModule {
     @Binds
     @Singleton
     abstract fun bindUnitPreferencesRepository(impl: UnitPreferencesRepositoryImpl): UnitPreferencesRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCoachAudioPreferences(impl: CoachAudioPreferencesImpl): CoachAudioPreferences
 
     companion object {
         @Provides

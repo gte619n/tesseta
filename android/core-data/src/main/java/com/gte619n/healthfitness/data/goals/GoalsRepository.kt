@@ -14,6 +14,8 @@ import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepKind
 import com.gte619n.healthfitness.domain.goals.StepMetricBinding
 import com.gte619n.healthfitness.domain.goals.StepPatchRequest
+import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
 import java.util.UUID
@@ -60,7 +62,13 @@ class GoalsRepository @Inject constructor(
 
     suspend fun goals(status: GoalStatus? = null): List<Goal> {
         if (support.killSwitchOn()) return api.getGoals(status?.name)
-        if (dao.observeActive().first().isEmpty()) fillMirror()
+        // Offline-first, but ALWAYS attempt a live refresh first (symmetric with
+        // goalDeep()): a delta-pull can leave the mirror stale, empty, or holding
+        // rows that don't decode, and the old "only fill when empty" check then
+        // never recovered — the list silently rendered nothing. fillMirror()
+        // re-serializes through the domain adapter, so its rows always decode;
+        // offline (refresh fails) simply falls back to whatever the mirror holds.
+        runCatching { fillMirror() }
         return dao.observeActive().first()
             .mapNotNull { runCatching { goalAdapter.fromJson(it.payloadJson) }.getOrNull() }
             .filter { status == null || it.status == status }
@@ -286,6 +294,14 @@ class GoalsRepository @Inject constructor(
         api.reevaluate(goalId)
         return refreshedDeep(goalId)
     }
+
+    /** Nutrition guidance the goal can apply (from its linked program), or null when none. Online-only. */
+    suspend fun nutritionGuidance(goalId: String): NutritionGuidance? =
+        api.getNutritionGuidance(goalId)
+
+    /** Apply the goal's linked-program guidance as the macro target; returns the saved macros. Online-only. */
+    suspend fun applyNutrition(goalId: String): Macros =
+        api.applyNutritionTarget(goalId)
 
     /** Re-fetch the deep goal after an intent and re-fan into the flat mirrors. */
     private suspend fun refreshedDeep(goalId: String): GoalDeep =

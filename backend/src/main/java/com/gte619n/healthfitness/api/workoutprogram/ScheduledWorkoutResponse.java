@@ -27,5 +27,17 @@ public record ScheduledWorkoutResponse(
     ScheduledStatus status,
     DayResponse session,
     Instant completedAt,
-    Integer durationSeconds
-) {}
+    Integer durationSeconds,
+    // IMPL-COACH: a short AI-generated post-workout recap, populated only on the
+    // completion upsert response (never persisted, null on calendar/history reads
+    // and when the coach is disabled or unavailable).
+    String aiRecap
+) {
+    /** Copy with the AI recap set — used by the completion endpoint. */
+    public ScheduledWorkoutResponse withAiRecap(String recap) {
+        return new ScheduledWorkoutResponse(
+            programId, programTitle, scheduledId, date, phaseId, phaseTitle, dayId, dayLabel,
+            weekIndexInPhase, isDeload, locationId, locationName, status, session, completedAt,
+            durationSeconds, recap);
+    }
+}

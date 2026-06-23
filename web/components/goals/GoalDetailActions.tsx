@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
+import { derivedCaloriesKcal } from "@/lib/types/nutrition";
+import type { NutritionGuidance } from "@/lib/types/workout-program";
 
 // Overflow menu + re-evaluate control for the Goal roadmap detail header.
 // Server-component page passes the mutations as server-action props.
@@ -12,12 +14,34 @@ type Props = {
   goalTitle: string;
   archiveGoal: () => Promise<void>;
   reevaluateGoal: () => Promise<void>;
+  // Nutrition guidance from the goal's linked program (null = no button).
+  nutritionGuidance: NutritionGuidance | null;
+  applyNutrition: () => Promise<void>;
 };
+
+/** "2,640 kcal · 200P / 280C / 80F" — what applying the guidance will set as the target. */
+function guidanceSummary(g: NutritionGuidance): string {
+  const derived = derivedCaloriesKcal(g.proteinG, g.carbsG, g.fatG);
+  const kcal = derived ?? g.kcal;
+  const parts: string[] = [];
+  if (kcal != null) parts.push(`${kcal.toLocaleString()} kcal`);
+  const macros = [
+    g.proteinG != null ? `${g.proteinG}P` : null,
+    g.carbsG != null ? `${g.carbsG}C` : null,
+    g.fatG != null ? `${g.fatG}F` : null,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  if (macros) parts.push(macros);
+  return parts.join(" · ");
+}
 
 export function GoalDetailActions({
   goalTitle,
   archiveGoal,
   reevaluateGoal,
+  nutritionGuidance,
+  applyNutrition,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -51,6 +75,25 @@ export function GoalDetailActions({
     });
   }
 
+  async function onUpdateNutrition() {
+    if (!nutritionGuidance) return;
+    const summary = guidanceSummary(nutritionGuidance);
+    const ok = await confirm({
+      title: "Update nutrition target?",
+      description: `Set your daily nutrition target to ${summary} from this goal's plan. This replaces your current target.`,
+      confirmLabel: "Update target",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      try {
+        await applyNutrition();
+        toast.success("Nutrition target updated", { description: summary });
+      } catch {
+        toast.error("Couldn't update nutrition target");
+      }
+    });
+  }
+
   async function onArchive() {
     setOpen(false);
     const ok = await confirm({
@@ -73,6 +116,16 @@ export function GoalDetailActions({
 
   return (
     <div className="flex items-center gap-2">
+      {nutritionGuidance ? (
+        <button
+          type="button"
+          onClick={onUpdateNutrition}
+          disabled={pending}
+          className="caps-mono cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-3 py-1.5 text-[10px] tracking-[0.06em] text-secondary hover:text-primary disabled:opacity-60"
+        >
+          Update nutrition
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={onReevaluate}

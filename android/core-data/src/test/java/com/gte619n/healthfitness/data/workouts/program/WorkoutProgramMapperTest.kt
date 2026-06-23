@@ -103,7 +103,15 @@ class WorkoutProgramMapperTest {
                                                 primaryMuscles = listOf("quadriceps"),
                                                 formCues = listOf("Brace"),
                                                 demoFrames = listOf(
-                                                    DemoFrameDto("START", "https://x/a.jpg"),
+                                                    // Named args: DemoFrameDto gained
+                                                    // key/label/caption/order BEFORE
+                                                    // phase (IMPL-19), so positional
+                                                    // ("START", url) would bind to
+                                                    // key/label and leave imageUrl null.
+                                                    DemoFrameDto(
+                                                        phase = "START",
+                                                        imageUrl = "https://x/a.jpg",
+                                                    ),
                                                     DemoFrameDto(
                                                         phase = "MID",
                                                         imageUrl = null,
@@ -140,6 +148,25 @@ class WorkoutProgramMapperTest {
         // imageUrl falls back to the first imageCandidate when absent.
         assertEquals("https://x/a.jpg", exercise.demoFrames[0].imageUrl)
         assertEquals("https://x/b.jpg", exercise.demoFrames[1].imageUrl)
+    }
+
+    @Test
+    fun `demo frame with an explicit null key still decodes`() {
+        // The exact wire shape that crashed workout history: the server sent a
+        // frame whose `key` was an explicit null. key/label/caption are nullable
+        // on the wire (a default only covers an ABSENT field) and coalesce to "".
+        val adapter = com.gte619n.healthfitness.data.sync.SyncTestMoshi.instance
+            .adapter(DemoFrameDto::class.java)
+        val dto = adapter.fromJson(
+            """{"key":null,"label":null,"caption":null,"order":2,"imageUrl":"https://x/a.jpg"}""",
+        )!!
+
+        val frame = dto.toDomain()
+        assertEquals("", frame.key)
+        assertEquals("", frame.label)
+        assertEquals("", frame.caption)
+        assertEquals(2, frame.order)
+        assertEquals("https://x/a.jpg", frame.imageUrl)
     }
 
     @Test

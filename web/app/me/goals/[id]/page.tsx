@@ -8,6 +8,8 @@ import {
   updateStep,
   archiveGoal as archiveGoalApi,
   reevaluateGoal as reevaluateGoalApi,
+  getGoalNutritionGuidance,
+  applyGoalNutrition,
 } from "@/lib/goals-api";
 import { DOMAIN_LABEL } from "@/lib/types/goals";
 import { RoadmapTimeline } from "@/components/goals/RoadmapTimeline";
@@ -40,6 +42,10 @@ export default async function GoalDetailPage(props: {
     throw e;
   }
 
+  // Nutrition guidance the goal can apply (from its linked program); null when
+  // there's none, which hides the "Update nutrition" action.
+  const nutritionGuidance = await getGoalNutritionGuidance(id).catch(() => null);
+
   const detailPath = `/me/goals/${id}`;
 
   async function toggleStep(args: {
@@ -69,6 +75,12 @@ export default async function GoalDetailPage(props: {
     "use server";
     await reevaluateGoalApi(id);
     revalidatePath(detailPath);
+  }
+
+  async function applyNutrition() {
+    "use server";
+    await applyGoalNutrition(id);
+    revalidatePath("/me/nutrition");
   }
 
   const behind = isBehindSchedule(goal.targetDate, goal.status);
@@ -124,6 +136,8 @@ export default async function GoalDetailPage(props: {
               goalTitle={goal.title}
               archiveGoal={archiveGoal}
               reevaluateGoal={reevaluateGoal}
+              nutritionGuidance={nutritionGuidance}
+              applyNutrition={applyNutrition}
             />
             <Link
               href={chatHref}

@@ -10,6 +10,8 @@ import {
   deleteProgram,
   updateProgram,
   completeSession,
+  getProgramNutritionGuidance,
+  applyProgramNutrition,
 } from "@/lib/workout-program-api";
 import type {
   ScheduledWorkoutResponse,
@@ -63,6 +65,10 @@ export default async function ProgramDetailPage(props: {
 
   const detailPath = `/me/workouts/programs/${id}`;
 
+  // The program's effective nutrition guidance, if any — drives the "Apply as
+  // nutrition target" action. Best-effort: null when the program carries none.
+  const nutritionGuidance = await getProgramNutritionGuidance(id).catch(() => null);
+
   // "This week" sessions from the calendar endpoint. Best-effort: a DRAFT
   // program has no materialized schedule, so this can be empty.
   let weekSessions: ScheduledWorkoutResponse[] = [];
@@ -89,6 +95,12 @@ export default async function ProgramDetailPage(props: {
     await deleteProgram(id);
     revalidatePath("/me/workouts/programs");
     revalidatePath(detailPath);
+  }
+
+  async function applyNutrition() {
+    "use server";
+    await applyProgramNutrition(id);
+    revalidatePath("/me/nutrition");
   }
 
   async function updateDetails(title: string, description: string) {
@@ -152,6 +164,8 @@ export default async function ProgramDetailPage(props: {
             activate={activate}
             archive={archive}
             update={updateDetails}
+            nutritionGuidance={nutritionGuidance}
+            applyNutrition={applyNutrition}
           />
         </header>
 
