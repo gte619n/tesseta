@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -54,6 +55,8 @@ import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
 import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
+import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
+import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
@@ -67,6 +70,7 @@ import com.gte619n.healthfitness.feature.workouts.session.ui.ParkedSessionBanner
 import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
+import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.ErrorState
@@ -110,6 +114,7 @@ fun ProgramDetailRoute(
         onSaveEdit = viewModel::saveEdit,
         onOpenPastSessions = viewModel::openPastSessions,
         onDismissPastSessions = viewModel::dismissPastSessions,
+        onDeletePastSession = viewModel::deleteSession,
         onApplyNutrition = viewModel::applyNutrition,
         onConsumeApplied = viewModel::consumeAppliedNutrition,
     )
@@ -132,6 +137,7 @@ fun ProgramDetailScreen(
     onSaveEdit: (title: String, description: String?) -> Unit = { _, _ -> },
     onOpenPastSessions: () -> Unit = {},
     onDismissPastSessions: () -> Unit = {},
+    onDeletePastSession: (scheduledId: String) -> Unit = {},
     onApplyNutrition: () -> Unit = {},
     onConsumeApplied: () -> Unit = {},
 ) {
@@ -214,6 +220,7 @@ fun ProgramDetailScreen(
                 onDismissPastSessions()
                 state.program?.let { onOpenSession(it.programId, scheduledId) }
             },
+            onDelete = onDeletePastSession,
             onDismiss = onDismissPastSessions,
         )
     }
@@ -719,10 +726,13 @@ private fun EditProgramSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PastSessionsSheet(
-    sessions: List<com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout>,
+    sessions: List<ScheduledWorkout>,
     onPick: (scheduledId: String) -> Unit,
+    onDelete: (scheduledId: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // A logged day pending the delete (revert-to-planned) confirmation.
+    var pendingDelete by remember { mutableStateOf<ScheduledWorkout?>(null) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Hf.colors.canvas) {
         Column(
             modifier = Modifier
@@ -740,6 +750,10 @@ private fun PastSessionsSheet(
                 )
             } else {
                 sessions.forEach { session ->
+                    // A logged outcome (completed or skipped) can be deleted —
+                    // reverted to planned; a still-planned day has nothing to remove.
+                    val isLogged = session.status == ScheduledStatus.COMPLETED ||
+                        session.status == ScheduledStatus.SKIPPED
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -760,6 +774,17 @@ private fun PastSessionsSheet(
                                 color = Hf.colors.textTertiary,
                             )
                         }
+                        if (isLogged) {
+                            Icon(
+                                Icons.Outlined.DeleteOutline,
+                                contentDescription = "Delete logged ${session.dayLabel}",
+                                tint = Hf.colors.alert,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clickable { pendingDelete = session }
+                                    .padding(7.dp),
+                            )
+                        }
                         Icon(
                             Icons.AutoMirrored.Outlined.ArrowForward,
                             contentDescription = "Log ${session.dayLabel}",
@@ -770,6 +795,22 @@ private fun PastSessionsSheet(
                 }
             }
         }
+    }
+
+    pendingDelete?.let { session ->
+        ConfirmDialog(
+            title = "Delete this workout?",
+            message = "The logged result for ${session.dayLabel} (${session.date}) will be removed " +
+                "and the day goes back to planned. You can run it again later.",
+            confirmLabel = "Delete",
+            dismissLabel = "Cancel",
+            destructive = true,
+            onConfirm = {
+                onDelete(session.scheduledId)
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
     }
 }
 

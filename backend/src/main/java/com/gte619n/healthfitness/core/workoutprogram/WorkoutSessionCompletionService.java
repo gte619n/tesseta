@@ -22,9 +22,12 @@ import org.springframework.stereotype.Service;
  * SKIPPED, with full per-set actuals — lands on the existing
  * {@link ScheduledWorkout}, the same record the history import writes and the
  * Workout History view reads. Transitions are permissive (any of
- * PLANNED/COMPLETED/SKIPPED → COMPLETED or SKIPPED) because after-the-fact
- * editing is the correction lever; a repeat upsert replaces actuals and re-runs
- * the fan-out, so outbox retries are safe.
+ * PLANNED/COMPLETED/SKIPPED → COMPLETED, SKIPPED, or back to PLANNED) because
+ * after-the-fact editing is the correction lever; a repeat upsert replaces
+ * actuals and re-runs the fan-out, so outbox retries are safe. Moving a logged
+ * session back to PLANNED is how a user deletes it from history: actuals are
+ * cleared, the fanned-out Workout is removed, and the week recomputes — the same
+ * un-completing path SKIPPED takes, but leaving the day on the calendar to redo.
  *
  * <p>Fan-out on COMPLETED (server-side, never the client): one session-level
  * {@link Workout} record (id {@code "{programId}_{scheduledId}"}, so re-PUTs
@@ -158,8 +161,8 @@ public class WorkoutSessionCompletionService {
         List<LoggedPrescription> logged
     ) {
         List<String> issues = new ArrayList<>();
-        if (status != ScheduledStatus.COMPLETED && status != ScheduledStatus.SKIPPED) {
-            issues.add("Status must be COMPLETED or SKIPPED.");
+        if (status == null) {
+            issues.add("Status must be COMPLETED, SKIPPED, or PLANNED.");
             return issues;
         }
         if (status == ScheduledStatus.COMPLETED) {
@@ -172,7 +175,8 @@ public class WorkoutSessionCompletionService {
                 issues.add("durationSeconds must not be negative.");
             }
         } else if (!logged.isEmpty()) {
-            issues.add("SKIPPED clears actuals; logged sets are not allowed.");
+            // SKIPPED and PLANNED both clear actuals — the un-log/reset path.
+            issues.add("A " + status + " session clears actuals; logged sets are not allowed.");
         }
         // Every entry must hit a prescription in the session snapshot — unknown
         // keys are an error (nothing silently dropped, same stance as the

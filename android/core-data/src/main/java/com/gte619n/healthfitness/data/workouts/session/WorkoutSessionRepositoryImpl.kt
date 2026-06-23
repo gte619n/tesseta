@@ -165,6 +165,23 @@ class WorkoutSessionRepositoryImpl(
             }
         }
 
+    override suspend fun reset(programId: String, scheduledId: String): Result<Unit> =
+        withContext(io) {
+            runCatching {
+                // Un-log: PLANNED clears actuals (no completedAt/duration/logged),
+                // the same upsert path as skip but leaving the day planned.
+                val request = CompleteSessionRequest(status = ScheduledStatus.PLANNED.name)
+                uploadOutcome(
+                    programId = programId,
+                    scheduledId = scheduledId,
+                    request = request,
+                    fallbackSessionJson = draftDao.getByKey(programId, scheduledId)?.sessionJson,
+                )
+                // Drop any stale draft so the un-logged day doesn't resume.
+                draftDao.delete(programId, scheduledId)
+            }
+        }
+
     override suspend fun discard(programId: String, scheduledId: String): Result<Unit> =
         withContext(io) {
             runCatching { draftDao.delete(programId, scheduledId) }

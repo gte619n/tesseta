@@ -170,6 +170,21 @@ class ProgramDetailViewModel @Inject constructor(
 
     fun dismissPastSessions() = _state.update { it.copy(showPastSessions = false) }
 
+    /**
+     * Delete a logged session from history: revert it to PLANNED (clears the
+     * actuals and removes the fanned-out workout server-side) and reload so the
+     * picker reflects the un-logged status. The day stays on the calendar to redo.
+     */
+    fun deleteSession(scheduledId: String) {
+        viewModelScope.launch {
+            sessionRepository.reset(programId, scheduledId)
+                .onSuccess { load() }
+                .onFailure { e ->
+                    _state.update { it.copy(error = e.message ?: "Couldn't delete the workout") }
+                }
+        }
+    }
+
     /** Re-materialize the parked completion as a draft and open the logger. */
     fun restoreParked(parked: ParkedCompletion) {
         viewModelScope.launch {

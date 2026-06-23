@@ -123,6 +123,15 @@ interface WorkoutSessionRepository {
     suspend fun skip(programId: String, scheduledId: String): Result<Unit>
 
     /**
+     * Delete a logged session from history by reverting it to `PLANNED`: uploads
+     * the un-log (which on the backend clears the actuals, removes the fanned-out
+     * workout, and recomputes the week) and clears the local mirror's outcome, so
+     * the day drops back to planned and can be run again. Routed through the
+     * offline outbox like [skip]; any stale local draft is removed too.
+     */
+    suspend fun reset(programId: String, scheduledId: String): Result<Unit>
+
+    /**
      * IMPL-COACH — best-effort AI post-workout recap for a just-finished
      * session. Network-only and side-effect-free: returns null when offline,
      * when the completion upsert hasn't replayed server-side yet, or when the

@@ -148,12 +148,33 @@ class WorkoutSessionCompletionServiceTest {
     }
 
     @Test
-    void statusMustBeAnOutcome_plannedRejected() {
+    void revertToPlanned_unlogsClearsActualsRemovesWorkoutAndRecomputes() {
+        ScheduledWorkout sw = seedPlanned("p1");
+        service.complete(USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0, List.of(new LoggedSet(135.0, 8, null, null, null)))));
+
+        // Deleting a logged workout from history moves it back to PLANNED.
+        ScheduledWorkout updated = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.PLANNED, null, null, List.of());
+
+        assertEquals(ScheduledStatus.PLANNED, updated.status());
+        assertNull(updated.completedAt());
+        assertNull(updated.durationSeconds());
+        assertNull(prescription(updated, 0).loggedSets());
+        // The fanned-out Workout is removed and the week recomputes to empty.
+        assertEquals(Optional.empty(), workouts.findById(USER, "p1_" + sw.scheduledId()));
+        WeeklyWorkoutAggregate agg = aggregates.findByWeekStart(USER, WEEK_START).orElseThrow();
+        assertEquals(0, agg.sessionCount());
+        assertEquals(0.0, agg.totalTonnage(), 1e-9);
+    }
+
+    @Test
+    void revertToPlannedWithLoggedSetsIsRejected() {
         ScheduledWorkout sw = seedPlanned("p1");
 
         assertThrows(InvalidSessionLogException.class,
-            () -> service.complete(USER, "p1", sw.scheduledId(),
-                ScheduledStatus.PLANNED, null, null, List.of()));
+            () -> service.complete(USER, "p1", sw.scheduledId(), ScheduledStatus.PLANNED, null, null,
+                List.of(new LoggedPrescription("b1", 0, List.of(new LoggedSet(135.0, 8, null, null, null))))));
     }
 
     @Test

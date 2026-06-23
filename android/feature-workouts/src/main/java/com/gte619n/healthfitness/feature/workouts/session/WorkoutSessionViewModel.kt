@@ -126,6 +126,24 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
+     * Log the next set of one prescription from an inline edit on the pending
+     * row (before the user taps the circle): start from the same defaults a
+     * check-off would apply, then overlay whichever field(s) the user typed.
+     * Starts the prescribed rest countdown, exactly like [toggleSet].
+     */
+    fun logSet(key: PrescriptionKey, edited: LoggedSet) {
+        val draft = _state.value.draft ?: return
+        val base = newSet(draft, key)
+        val set = base.copy(
+            weightLbs = edited.weightLbs ?: base.weightLbs,
+            reps = edited.reps ?: base.reps,
+            rpe = edited.rpe ?: base.rpe,
+        )
+        persistSets(key, draft.logged[key].orEmpty() + set)
+        draft.prescription(key)?.restSeconds?.let { timers.startRest(it, now()) }
+    }
+
+    /**
      * Log a timed exercise's set with the measured [durationSeconds] (from the
      * hold timer) rather than the prescribed default, and start the prescribed
      * rest countdown — the timed counterpart to checking off a rep set.
