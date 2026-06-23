@@ -151,6 +151,25 @@ class WorkoutProgramMapperTest {
     }
 
     @Test
+    fun `demo frame with an explicit null key still decodes`() {
+        // The exact wire shape that crashed workout history: the server sent a
+        // frame whose `key` was an explicit null. key/label/caption are nullable
+        // on the wire (a default only covers an ABSENT field) and coalesce to "".
+        val adapter = com.gte619n.healthfitness.data.sync.SyncTestMoshi.instance
+            .adapter(DemoFrameDto::class.java)
+        val dto = adapter.fromJson(
+            """{"key":null,"label":null,"caption":null,"order":2,"imageUrl":"https://x/a.jpg"}""",
+        )!!
+
+        val frame = dto.toDomain()
+        assertEquals("", frame.key)
+        assertEquals("", frame.label)
+        assertEquals("", frame.caption)
+        assertEquals(2, frame.order)
+        assertEquals("https://x/a.jpg", frame.imageUrl)
+    }
+
+    @Test
     fun `null intensity deload and exercise are tolerated`() {
         val prescription = PrescriptionDto(
             exerciseId = "ex1",
