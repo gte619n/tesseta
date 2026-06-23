@@ -26,6 +26,21 @@ data class ServingSize(
     val grams: Double,
 )
 
+/**
+ * A saved-meal hit in the add-food search (GET api/me/nutrition/meals/search).
+ * Logged by [mealId] via the describe-meal path, which reuses the meal's
+ * ingredient breakdown + plated photo. [macros]/[totalGrams] are one serving.
+ */
+data class MealSearchResult(
+    val mealId: String,
+    val name: String,
+    val macros: Macros,
+    val totalGrams: Double? = null,
+    val imageUrl: String? = null,
+    val imageStatus: String = "NONE",
+    val mine: Boolean = false,
+)
+
 /** A globally shared, reusable catalog food. */
 data class Food(
     val foodId: String,

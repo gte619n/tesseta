@@ -9,6 +9,7 @@ import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.nutrition.RelogRequest
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
@@ -85,6 +86,12 @@ interface NutritionApi {
         @Path("date") date: String,
         @Body body: DescribeMealLogRequest,
     ): Entry
+
+    // Name-prefix search over the shared saved-meal catalog (user's own first) —
+    // the add-flow's "Saved meals" group, alongside catalog-ingredient search.
+    // Each result logs by mealId via the describe-meal endpoint.
+    @GET("api/me/nutrition/meals/search")
+    suspend fun searchMeals(@Query("q") q: String): List<MealSearchResult>
 
     // Distinct foods/meals logged recently, deduped, newest first — the
     // add-flow's one-tap "recent meals" list. Each row carries `date`, the id

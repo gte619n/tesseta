@@ -423,6 +423,26 @@ public class NutritionController {
     }
 
     /**
+     * Name-prefix search over the shared saved-meal catalog, the requesting
+     * user's own meals first. Backs the add-food flow's "Saved meals" group so
+     * full meals are searchable alongside catalog ingredients; each result logs
+     * by {@code mealId} via {@code POST /{date}/describe-meal}. Empty list when
+     * the query is blank or has no usable prefix.
+     */
+    @GetMapping("/meals/search")
+    public List<MealSearchResponse> searchMeals(
+        @RequestParam(value = "q", required = false) String q
+    ) {
+        if (q == null || q.isBlank()) {
+            return List.of();
+        }
+        String userId = currentUser.get().userId();
+        return mealDescription.searchSavedMeals(userId, q).stream()
+            .map(m -> MealSearchResponse.from(m, userId))
+            .toList();
+    }
+
+    /**
      * Log a described meal onto {@code date}. Either {@code mealId} (a meal
      * already resolved via {@code POST /api/nutrition/describe}) or a raw
      * {@code description} (one-shot: resolve then log) must be supplied. The entry

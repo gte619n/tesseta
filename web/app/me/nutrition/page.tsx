@@ -11,7 +11,9 @@ import {
   deleteEntry,
   regenerateEntryImage,
   searchFoods,
+  searchMeals,
   describeMealAsync,
+  logDescribedMeal,
   relogEntry,
 } from "@/lib/nutrition-api";
 import type {
@@ -179,6 +181,20 @@ export default async function NutritionPage(props: {
     return searchFoods(q);
   }
 
+  async function searchMealsAction(q: string) {
+    "use server";
+    return searchMeals(q);
+  }
+
+  // Log a saved meal (from the search's "Saved meals" group) by id — synchronous
+  // describe-meal, which reuses the meal's ingredient breakdown + plated photo
+  // (no AI rework), unlike the free-text async describe path.
+  async function logMealAction(entryDate: string, body: LogDescribedMealBody) {
+    "use server";
+    await logDescribedMeal(entryDate, body);
+    revalidatePath("/me/nutrition");
+  }
+
   async function describeMealAsyncAction(
     entryDate: string,
     body: LogDescribedMealBody,
@@ -305,7 +321,9 @@ export default async function NutritionPage(props: {
           deleteEntry={deleteEntryAction}
           regenerateImage={regenerateImageAction}
           searchFoods={searchFoodsAction}
+          searchMeals={searchMealsAction}
           describeMealAsync={describeMealAsyncAction}
+          logMeal={logMealAction}
           relogEntry={relogAction}
           recents={recents}
         />

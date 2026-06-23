@@ -68,6 +68,39 @@ class WorkoutProgramNutritionServiceTest {
         assertTrue(savedTarget.get() == null);
     }
 
+    @Test
+    void guidanceToApply_offeredWhenNoTargetSetYet() {
+        programs.save(program(new NutritionGuidance(9999, 200, 280, 80, "surplus")));
+
+        // No active target → applying would change it, so the action is offered.
+        assertTrue(service.guidanceToApply(USER, "p1").isPresent());
+    }
+
+    @Test
+    void guidanceToApply_suppressedWhenCurrentTargetAlreadyMatches() {
+        NutritionGuidance guidance = new NutritionGuidance(9999, 200, 280, 80, "surplus");
+        programs.save(program(guidance));
+        // Pre-set the active target to exactly what applying would produce.
+        savedTarget.set(new MacroTarget(
+            USER, "t1",
+            WorkoutProgramNutritionService.toMacros(guidance).withDerivedCalories(),
+            java.time.LocalDate.now(), null, null));
+
+        assertTrue(service.guidanceToApply(USER, "p1").isEmpty());
+    }
+
+    @Test
+    void guidanceToApply_offeredWhenCurrentTargetDiffers() {
+        NutritionGuidance guidance = new NutritionGuidance(9999, 200, 280, 80, "surplus");
+        programs.save(program(guidance));
+        // A different active target (e.g. set manually) — applying still changes it.
+        savedTarget.set(new MacroTarget(
+            USER, "t1", new Macros(2000.0, 150.0, 200.0, 60.0, 30.0, 50.0),
+            java.time.LocalDate.now(), null, null));
+
+        assertTrue(service.guidanceToApply(USER, "p1").isPresent());
+    }
+
     private WorkoutProgram program(NutritionGuidance phaseGuidance) {
         ProgramPhase phase = new ProgramPhase(
             "ph1", "Accumulation", null, 0, ProgramPhaseStatus.ACTIVE,

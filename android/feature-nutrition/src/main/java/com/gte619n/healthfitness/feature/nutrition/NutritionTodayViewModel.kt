@@ -12,6 +12,7 @@ import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
+import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.gte619n.healthfitness.domain.nutrition.forPortion
@@ -422,6 +423,27 @@ class NutritionTodayViewModel @Inject constructor(
                 repository.relog(date, sourceDate, entry.entryId, meal.wire)
                 val day = repository.day(date)
                 _state.update { it.copy(day = day, error = null) }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Add failed") }
+            }
+        }
+    }
+
+    /**
+     * Log a saved meal (from the add sheet's "Saved meals" search group) by id
+     * onto the current day's [meal]. Reuses the meal's ingredient breakdown and
+     * plated photo — no AI rework — though the image may still be generating, so
+     * we poll like the describe flow.
+     */
+    fun logSavedMeal(meal: Meal, result: MealSearchResult) {
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(addSheetOpen = false) }
+        viewModelScope.launch {
+            try {
+                repository.logDescribedMeal(date, result.mealId, meal.wire)
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, error = null) }
+                pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Add failed") }
             }

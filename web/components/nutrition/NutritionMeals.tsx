@@ -19,6 +19,7 @@ import type {
   UpdateEntryBody,
   UpdateIngredientBody,
   LogDescribedMealBody,
+  MealSearchResult,
   RelogBody,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS } from "@/lib/types/nutrition";
@@ -66,10 +67,12 @@ type Props = {
       source: string;
     }[]
   >;
+  searchMeals: (q: string) => Promise<MealSearchResult[]>;
   describeMealAsync: (
     date: string,
     body: LogDescribedMealBody,
   ) => Promise<void>;
+  logMeal: (date: string, body: LogDescribedMealBody) => Promise<void>;
   relogEntry: (date: string, body: RelogBody) => Promise<void>;
   recents: Entry[];
 };
@@ -114,7 +117,9 @@ export function NutritionMeals({
   deleteEntry,
   regenerateImage,
   searchFoods,
+  searchMeals,
   describeMealAsync,
+  logMeal,
   relogEntry,
   recents,
 }: Props) {
@@ -199,7 +204,9 @@ export function NutritionMeals({
             deleteEntry={deleteEntry}
             regenerateImage={regenerateImage}
             searchFoods={searchFoods}
+            searchMeals={searchMeals}
             describeMealAsync={describeMealAsync}
+            logMeal={logMeal}
             relogEntry={relogEntry}
             recents={recents}
             activeId={activeId}

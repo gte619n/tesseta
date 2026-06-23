@@ -350,6 +350,14 @@ private fun BodyCompositionHero(summary: WeightSummary?, weightUnit: WeightUnit)
                                 unitSizeSp = 10,
                             )
                         }
+                        summary.lastUpdatedAt?.let { updated ->
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = "Updated ${relativeTime(updated)}",
+                                style = Hf.type.bodySm.copy(fontSize = 10.sp),
+                                color = Hf.colors.textTertiary,
+                            )
+                        }
                     }
                 }
                 Segment(active = "90d")

@@ -7,9 +7,11 @@ import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Meal
+import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import java.time.LocalTime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +24,8 @@ data class AddFoodUiState(
     val query: String = "",
     val searching: Boolean = false,
     val results: List<Food> = emptyList(),
+    // Saved-meal hits, shown as a "Saved meals" group above the catalog foods.
+    val mealResults: List<MealSearchResult> = emptyList(),
     val error: String? = null,
     // One-tap "recent meals": the user's distinct foods/meals from the last
     // two weeks, shown as the sheet's default (empty-query) content.
@@ -65,15 +69,31 @@ class AddFoodViewModel @Inject constructor(
         _state.update { it.copy(query = query) }
         searchJob?.cancel()
         if (query.isBlank()) {
-            _state.update { it.copy(searching = false, results = emptyList(), error = null) }
+            _state.update {
+                it.copy(searching = false, results = emptyList(), mealResults = emptyList(), error = null)
+            }
             return
         }
         searchJob = viewModelScope.launch {
             delay(220) // debounce keystrokes
             _state.update { it.copy(searching = true, error = null) }
+            // Saved meals and catalog foods are searched in parallel; a failure in
+            // the meal search just leaves that group empty (catalog still works).
             try {
-                val results = foods.search(query)
-                _state.update { it.copy(searching = false, results = results, error = null) }
+                val mealsDeferred = async {
+                    runCatching { nutrition.searchMeals(query) }.getOrDefault(emptyList())
+                }
+                val foodsDeferred = async { foods.search(query) }
+                val meals = mealsDeferred.await()
+                val results = foodsDeferred.await()
+                _state.update {
+                    it.copy(
+                        searching = false,
+                        results = results,
+                        mealResults = meals,
+                        error = null,
+                    )
+                }
             } catch (e: Exception) {
                 _state.update {
                     it.copy(searching = false, error = e.message ?: "Search failed")

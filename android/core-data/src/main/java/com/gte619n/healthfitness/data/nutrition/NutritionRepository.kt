@@ -14,6 +14,7 @@ import com.gte619n.healthfitness.domain.nutrition.EntryIngredient
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
@@ -216,6 +217,14 @@ class NutritionRepository @Inject constructor(
         fillDay(date)
         return entry
     }
+
+    /**
+     * Name-prefix search over the shared saved-meal catalog (user's own first) —
+     * the add-flow's "Saved meals" group. Live read; tapping a result logs it by
+     * id via [logDescribedMeal].
+     */
+    suspend fun searchMeals(query: String): List<MealSearchResult> =
+        if (query.isBlank()) emptyList() else api.searchMeals(query)
 
     /**
      * Resolve a free-text description to a saved meal (a previous match, or a

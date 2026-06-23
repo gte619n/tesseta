@@ -209,6 +209,16 @@ public class MealDescriptionService {
     }
 
     /**
+     * Saved meals matching {@code query} for the add-food search, the requesting
+     * user's own meals first. Reuses the same leading-token prefix search the
+     * describe matcher uses, so the add flow surfaces full meals alongside
+     * catalog ingredients. Empty when the query has no usable prefix.
+     */
+    public List<SavedMeal> searchSavedMeals(String userId, String query) {
+        return searchUserFirst(userId, query);
+    }
+
+    /**
      * Candidate saved meals for the name, the requesting user's own meals first.
      * Searches on the meal name's leading token so "Chicken, rice and broccoli"
      * still finds "Chicken and rice".

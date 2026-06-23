@@ -38,6 +38,16 @@ public class GoalNutritionService {
     }
 
     /**
+     * The guidance to surface as the "Update nutrition" action: empty when the
+     * goal has no linked-program guidance OR applying it would not change the
+     * user's current macro target (so the action isn't offered as a no-op).
+     */
+    public Optional<NutritionGuidance> guidanceToApply(String userId, String goalId) {
+        return programs.findActiveForGoal(userId, goalId)
+            .flatMap(p -> programNutrition.guidanceToApply(userId, p.programId()));
+    }
+
+    /**
      * Apply the goal's linked-program guidance as the user's macro target,
      * returning the saved macros. Empty when the goal has no program guidance.
      */

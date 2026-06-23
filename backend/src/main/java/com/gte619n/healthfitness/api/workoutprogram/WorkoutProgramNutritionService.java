@@ -31,6 +31,26 @@ public class WorkoutProgramNutritionService {
             .flatMap(WorkoutProgramService::effectiveGuidance);
     }
 
+    /**
+     * The guidance to surface as an "Apply as nutrition target" action: the
+     * program's effective guidance, but only when applying it would actually
+     * change the user's current macro target. Empty when the program has no
+     * guidance OR the active target already equals what applying would set — so
+     * the action isn't offered when it would be a no-op.
+     */
+    public Optional<NutritionGuidance> guidanceToApply(String userId, String programId) {
+        return guidanceForProgram(userId, programId)
+            .filter(guidance -> wouldChangeTarget(userId, guidance));
+    }
+
+    /** True when applying {@code guidance} would produce a target different from the active one. */
+    private boolean wouldChangeTarget(String userId, NutritionGuidance guidance) {
+        Macros wouldApply = toMacros(guidance).withDerivedCalories();
+        return macroTargets.getActive(userId)
+            .map(target -> !wouldApply.equals(target.macros()))
+            .orElse(true); // no target yet → applying always changes it
+    }
+
     /** Apply the program's guidance as the macro target; empty when it has none. */
     public Optional<Macros> applyToTarget(String userId, String programId) {
         return guidanceForProgram(userId, programId)
