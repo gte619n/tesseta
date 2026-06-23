@@ -18,6 +18,7 @@ import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import java.time.Instant
 import java.time.LocalDate
@@ -214,12 +215,15 @@ data class ScheduledWorkoutDto(
     val session: WorkoutDayDto? = null,
     val completedAt: Instant? = null,
     val durationSeconds: Int? = null,
+    // Resolved by the workout-history read for the program/phase delineation
+    // headers; absent (null) on calendar reads.
+    val programTitle: String? = null,
+    val phaseTitle: String? = null,
 )
 
 /**
  * One page of Workout History rows. The backend pages /api/me/workout-history
- * (newest first); [hasMore] drives the repository's fetch-all loop. Extra wire
- * fields (programTitle/phaseTitle on each row) are ignored by the DTO above.
+ * (newest first); [hasMore] drives the screen's load-on-scroll.
  */
 data class WorkoutHistoryPageDto(
     val items: List<ScheduledWorkoutDto> = emptyList(),
@@ -400,4 +404,13 @@ fun ScheduledWorkoutDto.toDomain(): ScheduledWorkout = ScheduledWorkout(
     session = session?.toDomain(),
     completedAt = completedAt,
     durationSeconds = durationSeconds,
+    programTitle = programTitle,
+    phaseTitle = phaseTitle,
+)
+
+fun WorkoutHistoryPageDto.toDomain(): WorkoutHistoryPage = WorkoutHistoryPage(
+    items = items.map { it.toDomain() },
+    page = page,
+    total = total,
+    hasMore = hasMore,
 )

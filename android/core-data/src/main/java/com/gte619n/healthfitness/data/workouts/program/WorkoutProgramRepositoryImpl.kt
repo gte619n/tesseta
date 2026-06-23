@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
+import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.squareup.moshi.Moshi
@@ -142,22 +143,9 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun workoutHistory(): Result<List<ScheduledWorkout>> =
+    override suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage> =
         withContext(Dispatchers.IO) {
-            runCatching {
-                // The endpoint is paged; the screen shows the full history, so walk
-                // pages (largest server-allowed size) until the backend says there
-                // are no more. hasMore is the loop guard — it terminates because the
-                // backend caps `to` at `total`.
-                val all = mutableListOf<ScheduledWorkout>()
-                var page = 0
-                do {
-                    val resp = api.workoutHistory(page = page, size = HISTORY_PAGE_SIZE)
-                    all += resp.items.map { it.toDomain() }
-                    page++
-                } while (resp.hasMore && resp.items.isNotEmpty())
-                all
-            }
+            runCatching { api.workoutHistory(page = page, size = size).toDomain() }
         }
 
     override suspend fun nutritionGuidance(
@@ -341,9 +329,4 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             payloadJson = scheduledAdapter.toJson(this),
             lastUpdate = System.currentTimeMillis(),
         )
-
-    private companion object {
-        // Largest page the backend serves — fewest round-trips when walking all history.
-        const val HISTORY_PAGE_SIZE = 100
-    }
 }

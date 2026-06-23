@@ -118,8 +118,8 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
-    fun `workoutHistory maps the completed sessions from the network`() = runBlocking {
-        coEvery { api.workoutHistory(any(), any()) } returns WorkoutHistoryPageDto(
+    fun `workoutHistoryPage maps one page from the network`() = runBlocking {
+        coEvery { api.workoutHistory(page = 2, size = 25) } returns WorkoutHistoryPageDto(
             items = listOf(
                 ScheduledWorkoutDto(
                     scheduledId = "2026-06-20_d1",
@@ -127,53 +127,29 @@ class WorkoutProgramRepositoryTest {
                     dayLabel = "Upper A",
                     status = "COMPLETED",
                     durationSeconds = 2_840,
+                    programTitle = "Hypertrophy",
+                    phaseTitle = "Base",
                 ),
             ),
-            hasMore = false,
-        )
-
-        val result = repo.workoutHistory().getOrThrow()
-
-        assertEquals(1, result.size)
-        assertEquals("Upper A", result[0].dayLabel)
-        assertEquals(
-            com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus.COMPLETED,
-            result[0].status,
-        )
-        coVerify(exactly = 1) { api.workoutHistory(any(), any()) }
-    }
-
-    @Test
-    fun `workoutHistory walks every page until hasMore is false`() = runBlocking {
-        coEvery { api.workoutHistory(page = 0, size = any()) } returns WorkoutHistoryPageDto(
-            items = listOf(
-                ScheduledWorkoutDto(
-                    scheduledId = "p0",
-                    date = java.time.LocalDate.parse("2026-06-20"),
-                    dayLabel = "Page 0",
-                    status = "COMPLETED",
-                ),
-            ),
+            page = 2,
+            total = 60,
             hasMore = true,
         )
-        coEvery { api.workoutHistory(page = 1, size = any()) } returns WorkoutHistoryPageDto(
-            items = listOf(
-                ScheduledWorkoutDto(
-                    scheduledId = "p1",
-                    date = java.time.LocalDate.parse("2026-06-19"),
-                    dayLabel = "Page 1",
-                    status = "COMPLETED",
-                ),
-            ),
-            hasMore = false,
+
+        val result = repo.workoutHistoryPage(page = 2, size = 25).getOrThrow()
+
+        assertEquals(1, result.items.size)
+        assertEquals("Upper A", result.items[0].dayLabel)
+        assertEquals("Hypertrophy", result.items[0].programTitle)
+        assertEquals("Base", result.items[0].phaseTitle)
+        assertEquals(2, result.page)
+        assertEquals(60, result.total)
+        assertEquals(true, result.hasMore)
+        assertEquals(
+            com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus.COMPLETED,
+            result.items[0].status,
         )
-
-        val result = repo.workoutHistory().getOrThrow()
-
-        assertEquals(2, result.size)
-        assertEquals(listOf("Page 0", "Page 1"), result.map { it.dayLabel })
-        coVerify(exactly = 1) { api.workoutHistory(page = 0, size = any()) }
-        coVerify(exactly = 1) { api.workoutHistory(page = 1, size = any()) }
+        coVerify(exactly = 1) { api.workoutHistory(page = 2, size = 25) }
     }
 
     @Test
