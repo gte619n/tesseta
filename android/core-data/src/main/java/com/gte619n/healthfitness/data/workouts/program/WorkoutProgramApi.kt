@@ -22,6 +22,14 @@ interface WorkoutProgramApi {
     @GET("api/me/workout-programs/{id}")
     suspend fun get(@Path("id") id: String): WorkoutProgramDeepDto
 
+    /**
+     * Workout history: every COMPLETED session across all programs, newest
+     * first, deep (blocks → prescriptions → logged sets) so a read-only review
+     * renders without a second fetch.
+     */
+    @GET("api/me/workout-history")
+    suspend fun workoutHistory(): List<ScheduledWorkoutDto>
+
     @GET("api/me/workout-programs/{id}/calendar")
     suspend fun calendar(
         @Path("id") id: String,

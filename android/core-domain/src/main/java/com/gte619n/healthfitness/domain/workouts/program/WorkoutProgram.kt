@@ -231,6 +231,13 @@ interface WorkoutProgramRepository {
     ): Result<List<ScheduledWorkout>>
 
     /**
+     * Every COMPLETED session across all programs, newest first, deep enough to
+     * review (each session carries its blocks → prescriptions → logged sets).
+     * Online-only; the workout-history list is read-only.
+     */
+    suspend fun workoutHistory(): Result<List<ScheduledWorkout>>
+
+    /**
      * Activate a program (materialize sessions + mark ACTIVE) and refresh the
      * local mirror so the detail/list reflect it. Returns the materialized
      * sessions. Online-only.
