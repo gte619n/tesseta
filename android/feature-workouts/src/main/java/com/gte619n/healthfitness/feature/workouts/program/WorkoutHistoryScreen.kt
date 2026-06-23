@@ -48,6 +48,8 @@ import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
+import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseThumbnail
+import com.gte619n.healthfitness.feature.workouts.program.ui.firstExerciseImageUrl
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
@@ -88,6 +90,9 @@ fun WorkoutHistoryScreen(
     // The detail is rendered in-screen from the already-loaded session (no
     // re-fetch, and — unlike opening the logger — no draft is created).
     var selected by remember { mutableStateOf<ScheduledWorkout?>(null) }
+    // Hoisted so the list keeps its scroll position when the detail closes
+    // (e.g. after a delete) instead of snapping back to the top.
+    val listState = rememberLazyListState()
 
     val current = selected
     if (current != null) {
@@ -127,7 +132,6 @@ fun WorkoutHistoryScreen(
                 modifier = Modifier.fillMaxSize(),
             )
             else -> {
-                val listState = rememberLazyListState()
                 // Load the next page once the list is scrolled near its end.
                 val loadMoreWhenNearEnd by remember {
                     derivedStateOf {
@@ -148,11 +152,16 @@ fun WorkoutHistoryScreen(
                         state.sessions,
                         key = { _, s -> s.scheduledId },
                     ) { index, session ->
+                        val prev = state.sessions.getOrNull(index - 1)
+                        // A month divider opens each new calendar month in the
+                        // time-ordered list ("June 2026").
+                        if (prev == null || !sameMonth(prev.date, session.date)) {
+                            MonthDivider(label = monthYearLabel(session.date), firstOfList = index == 0)
+                        }
                         // A header opens each new program/phase run. phaseId is
                         // globally unique, so a change marks a new group.
-                        val prev = state.sessions.getOrNull(index - 1)
                         if (prev == null || prev.phaseId != session.phaseId) {
-                            GroupHeader(session = session, firstOfList = index == 0)
+                            GroupHeader(session = session)
                         }
                         HistoryRow(session = session, onClick = { selected = session })
                     }
@@ -176,15 +185,28 @@ fun WorkoutHistoryScreen(
     }
 }
 
+/** A bold month divider ("June 2026") opening each new calendar month. */
+@Composable
+private fun MonthDivider(label: String, firstOfList: Boolean) {
+    Text(
+        label,
+        style = Hf.type.headingMd,
+        color = Hf.colors.textPrimary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = if (firstOfList) 0.dp else 18.dp, bottom = 4.dp),
+    )
+}
+
 /** Delineation header opening a program/phase run in the time-ordered list. */
 @Composable
-private fun GroupHeader(session: ScheduledWorkout, firstOfList: Boolean) {
+private fun GroupHeader(session: ScheduledWorkout) {
     val program = session.programTitle?.trim().orEmpty().ifBlank { "Workout" }
     val phase = session.phaseTitle?.trim().orEmpty()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = if (firstOfList) 0.dp else 10.dp, bottom = 2.dp),
+            .padding(top = 4.dp, bottom = 2.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
         CapsLabel(program, color = Hf.colors.textSecondary)
@@ -204,9 +226,11 @@ private fun HistoryRow(session: ScheduledWorkout, onClick: () -> Unit) {
             .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
             .background(Hf.colors.surface, RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
+        ExerciseThumbnail(firstExerciseImageUrl(session), session.dayLabel)
+        Spacer(Modifier.size(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 session.dayLabel.ifBlank { "Workout" },
@@ -349,6 +373,13 @@ private fun durationText(seconds: Int): String = when {
     seconds >= 60 -> "${seconds / 60} min"
     else -> "${seconds}s"
 }
+
+/** "June 2026" — the month divider label. */
+private fun monthYearLabel(date: java.time.LocalDate): String =
+    "${date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())} ${date.year}"
+
+private fun sameMonth(a: java.time.LocalDate, b: java.time.LocalDate): Boolean =
+    a.year == b.year && a.month == b.month
 
 @Preview(showBackground = true, backgroundColor = 0xFFF0EBE0, heightDp = 900)
 @Composable

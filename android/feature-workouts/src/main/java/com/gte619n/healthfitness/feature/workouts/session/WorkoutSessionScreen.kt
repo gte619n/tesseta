@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
@@ -31,6 +33,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -59,6 +62,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -102,6 +107,9 @@ import java.time.Instant
  */
 private const val DEMO_FRAME_LOOP_MILLIS = 10_000L
 private const val DEMO_FRAME_CROSSFADE_MILLIS = 1_000
+
+/** At/above this screen width the coach page is centered and width-capped. */
+private const val EXPANDED_WIDTH_DP = 600
 
 @Composable
 fun WorkoutSessionRoute(
@@ -447,44 +455,50 @@ private fun ExercisePage(
     onLogSet: (LoggedSet) -> Unit,
 ) {
     val prescription = step.prescription
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(vertical = 8.dp),
-    ) {
-        SectionTitle(text = BlockTypeLabels.label(step.block.type), compact = true)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            prescription.exercise?.name ?: prescription.exerciseId,
-            style = Hf.type.headingLg.copy(fontSize = 20.sp),
-            color = Hf.colors.textPrimary,
-        )
-        val target = prescriptionSummary(prescription)
-        if (target.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(target, style = Hf.type.monoSm, color = Hf.colors.textSecondary)
-        }
-        DemoStrip(prescription.exercise)
-        Spacer(Modifier.height(14.dp))
+    // On unfolded / tablet widths, keep the page (and its demo image) from
+    // stretching edge-to-edge — a centered, narrower card reads better.
+    val expanded = LocalConfiguration.current.screenWidthDp >= EXPANDED_WIDTH_DP
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (expanded) Modifier.widthIn(max = 560.dp) else Modifier)
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 8.dp),
+        ) {
+            SectionTitle(text = BlockTypeLabels.label(step.block.type), compact = true)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                prescription.exercise?.name ?: prescription.exerciseId,
+                style = Hf.type.headingLg.copy(fontSize = 24.sp),
+                color = Hf.colors.textPrimary,
+            )
+            val target = prescriptionSummary(prescription)
+            if (target.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(target, style = Hf.type.monoMd.copy(fontSize = 16.sp), color = Hf.colors.textSecondary)
+            }
+            DemoStrip(prescription.exercise)
+            Spacer(Modifier.height(16.dp))
 
-        if (prescription.isTimed) {
-            TimedSets(
-                prescription = prescription,
-                logged = logged,
-                now = now,
-                onToggleSet = onToggleSet,
-                onEditSet = onEditSet,
-                onLogTimed = onLogTimed,
-            )
-        } else {
-            RepSets(
-                prescription = prescription,
-                logged = logged,
-                onToggleSet = onToggleSet,
-                onEditSet = onEditSet,
-                onLogSet = onLogSet,
-            )
+            if (prescription.isTimed) {
+                TimedSets(
+                    prescription = prescription,
+                    logged = logged,
+                    now = now,
+                    onToggleSet = onToggleSet,
+                    onEditSet = onEditSet,
+                    onLogTimed = onLogTimed,
+                )
+            } else {
+                RepSets(
+                    prescription = prescription,
+                    logged = logged,
+                    onToggleSet = onToggleSet,
+                    onEditSet = onEditSet,
+                    onLogSet = onLogSet,
+                )
+            }
         }
     }
 }
@@ -503,49 +517,133 @@ private fun RepSets(
         CapsLabel(stringResource(R.string.workout_session_weight_header), modifier = Modifier.weight(1f))
         CapsLabel(stringResource(R.string.workout_session_reps_header), modifier = Modifier.weight(1f))
     }
+    val exerciseName = prescription.exercise?.name ?: prescription.exerciseId
+    val nextIndex = logged.size
     // Prefill for the next, not-yet-logged set: weight/reps carried from the last
-    // logged set, else the designed target — mirroring the VM's check-off default
-    // so the inputs read sensibly before the user touches them.
+    // logged set, else the designed target.
     val carriedWeight = logged.lastOrNull()?.weightLbs ?: prescription.targetWeightLbs
     val targetReps = logged.lastOrNull()?.reps ?: prescription.repsMax ?: prescription.repsMin
+    // Pending values for the next set. Editing these only stages the numbers —
+    // the set is logged ONLY when the user taps the circle (re-keyed per set so
+    // each new row carries forward the previous load/reps).
+    var pendingWeight by remember(prescription.exerciseId, nextIndex) { mutableStateOf(carriedWeight) }
+    var pendingReps by remember(prescription.exerciseId, nextIndex) { mutableStateOf(targetReps) }
+
     val totalRows = maxOf(prescription.sets ?: 1, logged.size)
     repeat(totalRows) { index ->
         val set = logged.getOrNull(index)
-        // The next actionable row shows editable inputs up front so weight/reps
-        // can be dialed in before (or instead of) tapping the circle; committing
-        // a field logs the set.
         val isNext = set == null && index == logged.size
         SetRowFrame(
             index = index,
             logged = set != null,
             // Only the next unlogged row is checkable, so sets stay ordered.
             canToggle = index <= logged.size,
-            onToggle = { onToggleSet(index) },
+            onToggle = {
+                when {
+                    set != null -> onToggleSet(index) // un-log
+                    isNext -> onLogSet(LoggedSet(weightLbs = pendingWeight, reps = pendingReps))
+                }
+            },
         ) {
-            if (set != null || isNext) {
-                EditableNumber(
-                    value = set?.weightLbs ?: carriedWeight.takeIf { isNext },
-                    onCommit = {
-                        if (set != null) onEditSet(index, set.copy(weightLbs = it))
-                        else onLogSet(LoggedSet(weightLbs = it))
-                    },
-                    modifier = Modifier.weight(1f),
-                    decimals = 1,
-                )
-                EditableNumber(
-                    value = set?.reps?.toDouble() ?: targetReps?.toDouble()?.takeIf { isNext },
-                    onCommit = {
-                        if (set != null) onEditSet(index, set.copy(reps = it?.toInt()))
-                        else onLogSet(LoggedSet(reps = it?.toInt()))
-                    },
-                    modifier = Modifier.weight(1f),
-                    decimals = 0,
-                )
-            } else {
-                PendingHint(weight = 2)
+            when {
+                set != null -> {
+                    WeightStat(
+                        value = set.weightLbs,
+                        exerciseName = exerciseName,
+                        onPick = { onEditSet(index, set.copy(weightLbs = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    RepsStat(
+                        value = set.reps,
+                        exerciseName = exerciseName,
+                        onPick = { onEditSet(index, set.copy(reps = it)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                isNext -> {
+                    WeightStat(
+                        value = pendingWeight,
+                        exerciseName = exerciseName,
+                        onPick = { pendingWeight = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                    RepsStat(
+                        value = pendingReps,
+                        exerciseName = exerciseName,
+                        onPick = { pendingReps = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                else -> PendingHint(weight = 2)
             }
         }
     }
+}
+
+/** A big, tappable weight readout that opens the scroll-wheel picker (no keyboard). */
+@Composable
+private fun WeightStat(
+    value: Double?,
+    exerciseName: String,
+    onPick: (Double?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var show by remember { mutableStateOf(false) }
+    StatValue(text = formatWeight(value), modifier = modifier, onClick = { show = true })
+    if (show) {
+        WeightPickerDialog(
+            exerciseName = exerciseName,
+            initialLbs = value,
+            onConfirm = { onPick(it); show = false },
+            onDismiss = { show = false },
+        )
+    }
+}
+
+/** A big, tappable reps readout that opens the stepper popup (no keyboard). */
+@Composable
+private fun RepsStat(
+    value: Int?,
+    exerciseName: String,
+    onPick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var show by remember { mutableStateOf(false) }
+    StatValue(text = value?.toString() ?: "—", modifier = modifier, onClick = { show = true })
+    if (show) {
+        RepsPickerDialog(
+            exerciseName = exerciseName,
+            initial = value ?: 0,
+            onConfirm = { onPick(it); show = false },
+            onDismiss = { show = false },
+        )
+    }
+}
+
+/** The shared big-number tap target used for both weight and reps. */
+@Composable
+private fun StatValue(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 52.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            text,
+            style = Hf.type.monoMd.copy(fontSize = 28.sp),
+            color = if (text == "—") Hf.colors.textQuaternary else Hf.colors.textPrimary,
+        )
+    }
+}
+
+/** Whole numbers render without a trailing ".0"; fractional loads keep one place. */
+private fun formatWeight(value: Double?): String = when {
+    value == null -> "—"
+    value % 1.0 == 0.0 -> value.toInt().toString()
+    else -> "%.1f".format(value)
 }
 
 // ---- timed sets (stretch / mobility holds) ----
@@ -659,19 +757,19 @@ private fun SetsHeader(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Spacer(Modifier.width(32.dp))
+        Spacer(Modifier.width(48.dp))
         CapsLabel(
             stringResource(R.string.workout_session_set_header),
-            modifier = Modifier.width(32.dp),
+            modifier = Modifier.width(28.dp),
         )
         columns()
         // Adding sets mid-workout is rare — a small, quiet affordance.
-        IconButton(onClick = onAdd, enabled = addEnabled, modifier = Modifier.size(28.dp)) {
+        IconButton(onClick = onAdd, enabled = addEnabled, modifier = Modifier.size(40.dp)) {
             Icon(
                 Icons.Outlined.Add,
                 contentDescription = stringResource(R.string.workout_session_add_set),
                 tint = if (addEnabled) Hf.colors.accent else Hf.colors.textQuaternary,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
     }
@@ -688,30 +786,36 @@ private fun SetRowFrame(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = if (logged) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
-            contentDescription = stringResource(
-                if (logged) R.string.workout_session_uncheck_set else R.string.workout_session_check_set,
-                index + 1,
-            ),
-            tint = when {
-                logged -> Hf.colors.accent
-                canToggle -> Hf.colors.textTertiary
-                else -> Hf.colors.textQuaternary
-            },
+        // 48dp touch target around the check circle.
+        Box(
             modifier = Modifier
-                .size(22.dp)
+                .size(48.dp)
+                .clip(CircleShape)
                 .then(if (canToggle) Modifier.clickable { onToggle() } else Modifier),
-        )
-        Spacer(Modifier.width(10.dp))
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (logged) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                contentDescription = stringResource(
+                    if (logged) R.string.workout_session_uncheck_set else R.string.workout_session_check_set,
+                    index + 1,
+                ),
+                tint = when {
+                    logged -> Hf.colors.accent
+                    canToggle -> Hf.colors.textTertiary
+                    else -> Hf.colors.textQuaternary
+                },
+                modifier = Modifier.size(30.dp),
+            )
+        }
         Text(
             "${index + 1}",
-            style = Hf.type.monoSm,
+            style = Hf.type.monoMd,
             color = Hf.colors.textTertiary,
-            modifier = Modifier.width(32.dp),
+            modifier = Modifier.width(28.dp),
         )
         fields()
     }
@@ -765,8 +869,10 @@ private fun DemoStrip(exercise: ExerciseSummary?) {
     Spacer(Modifier.height(12.dp))
     Box(
         modifier = Modifier
+            // Portrait frame, and ContentScale.Fit below, so the whole figure is
+            // shown top-to-bottom instead of being cropped (the demos are tall).
             .fillMaxWidth()
-            .aspectRatio(16f / 9f)
+            .aspectRatio(4f / 5f)
             .clip(RoundedCornerShape(10.dp))
             .background(Hf.colors.canvasMuted),
         contentAlignment = Alignment.BottomStart,
@@ -779,7 +885,8 @@ private fun DemoStrip(exercise: ExerciseSummary?) {
             HfAsyncImage(
                 model = frames[i].first,
                 contentDescription = exercise?.name,
-                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
             )
         }
         val label = frames[safeIndex].second

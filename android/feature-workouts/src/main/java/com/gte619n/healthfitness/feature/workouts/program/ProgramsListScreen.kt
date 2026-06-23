@@ -24,9 +24,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.feature.workouts.program.ui.ProgramCard
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.EmptyState
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -95,17 +97,47 @@ fun ProgramsListScreen(
                 description = "Tap the sparkle to design one with the AI coach, or create one on the web.",
                 modifier = Modifier.fillMaxSize(),
             )
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(11.dp),
-            ) {
-                items(state.programs, key = { it.programId }) { program ->
-                    ProgramCard(program = program, onClick = { onOpenProgram(program.programId) })
+            else -> {
+                // Separate programs by status so Active / Drafts / Completed /
+                // Archived read as distinct sections rather than one flat list.
+                val order = listOf(
+                    ProgramStatus.ACTIVE,
+                    ProgramStatus.DRAFT,
+                    ProgramStatus.COMPLETED,
+                    ProgramStatus.ARCHIVED,
+                )
+                val groups = order.mapNotNull { status ->
+                    state.programs.filter { it.status == status }.takeIf { it.isNotEmpty() }
+                        ?.let { status to it }
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(11.dp),
+                ) {
+                    groups.forEach { (status, programs) ->
+                        item(key = "header-${status.name}") {
+                            SectionTitle(text = statusGroupLabel(status))
+                        }
+                        items(programs, key = { it.programId }) { program ->
+                            ProgramCard(
+                                program = program,
+                                onClick = { onOpenProgram(program.programId) },
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+/** Section heading for each program-status group. */
+private fun statusGroupLabel(status: ProgramStatus): String = when (status) {
+    ProgramStatus.ACTIVE -> "Active"
+    ProgramStatus.DRAFT -> "Drafts"
+    ProgramStatus.COMPLETED -> "Completed"
+    ProgramStatus.ARCHIVED -> "Archived"
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFFF0EBE0)
