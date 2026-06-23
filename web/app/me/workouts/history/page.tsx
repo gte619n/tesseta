@@ -3,7 +3,7 @@ import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { getWorkoutHistory, completeSession } from "@/lib/workout-program-api";
 import type {
-  ScheduledWorkoutResponse,
+  WorkoutHistoryPage,
   CompleteSessionRequest,
 } from "@/lib/types/workout-program";
 import { WorkoutHistoryList } from "@/components/workouts/WorkoutHistoryList";
@@ -13,12 +13,29 @@ export const metadata = pageMetadata("Workout History");
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE = 25;
+
+const EMPTY_PAGE: WorkoutHistoryPage = {
+  items: [],
+  page: 0,
+  size: PAGE_SIZE,
+  total: 0,
+  hasMore: false,
+};
+
 export default async function WorkoutHistoryPage() {
-  let sessions: ScheduledWorkoutResponse[] = [];
+  let firstPage: WorkoutHistoryPage = EMPTY_PAGE;
   try {
-    sessions = await getWorkoutHistory();
+    firstPage = await getWorkoutHistory(0, PAGE_SIZE);
   } catch {
-    sessions = [];
+    firstPage = EMPTY_PAGE;
+  }
+
+  // Fetch a later page on demand ("Load More"). Server action so the browser
+  // never holds backend credentials (apiJson reads the server session).
+  async function loadMore(page: number): Promise<WorkoutHistoryPage> {
+    "use server";
+    return getWorkoutHistory(page, PAGE_SIZE);
   }
 
   // Edit a past session's actuals — the same idempotent completion upsert the
@@ -56,7 +73,11 @@ export default async function WorkoutHistoryPage() {
         </header>
 
         <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
-          <WorkoutHistoryList sessions={sessions} logSession={logSession} />
+          <WorkoutHistoryList
+            firstPage={firstPage}
+            loadMore={loadMore}
+            logSession={logSession}
+          />
         </section>
       </div>
     </main>

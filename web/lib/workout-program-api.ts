@@ -3,6 +3,7 @@ import type {
   WorkoutProgramResponse,
   WorkoutProgramDeepResponse,
   ScheduledWorkoutResponse,
+  WorkoutHistoryPage,
   WorkoutHistorySummary,
   CreateProgramRequest,
   UpdateProgramRequest,
@@ -42,9 +43,15 @@ export function getProgramCalendar(
   );
 }
 
-// Performed sessions across every program, newest first (Workout History).
-export function getWorkoutHistory(): Promise<ScheduledWorkoutResponse[]> {
-  return apiJson<ScheduledWorkoutResponse[]>("/api/me/workout-history");
+// Performed sessions across every program, newest first (Workout History),
+// paged 25 at a time. Each row carries its program/phase titles for delineation.
+export function getWorkoutHistory(
+  page = 0,
+  size = 25,
+): Promise<WorkoutHistoryPage> {
+  return apiJson<WorkoutHistoryPage>(
+    `/api/me/workout-history?page=${page}&size=${size}`,
+  );
 }
 
 // Lightweight counts for the Workouts hub — avoids loading full sessions.

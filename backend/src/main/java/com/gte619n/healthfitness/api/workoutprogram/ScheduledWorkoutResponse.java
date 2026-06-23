@@ -10,9 +10,14 @@ public record ScheduledWorkoutResponse(
     // so cross-program reads (Workout History) need this to address the
     // completion upsert.
     String programId,
+    // Owning program + phase titles, resolved for the Workout History view so the
+    // client can render program/phase delineation headers without a second lookup.
+    // Null on program-scoped responses (calendar, session log) that don't resolve them.
+    String programTitle,
     String scheduledId,
     LocalDate date,
     String phaseId,
+    String phaseTitle,
     String dayId,
     String dayLabel,
     int weekIndexInPhase,

@@ -1,12 +1,30 @@
 package com.gte619n.healthfitness.core.workoutprogram;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
 public interface ScheduledWorkoutRepository {
     List<ScheduledWorkout> findByProgram(String userId, String programId, LocalDate from, LocalDate to);
     void save(ScheduledWorkout scheduled);
+
+    /**
+     * All sessions in a program with the given status, newest scheduled-date
+     * first. Backs the Workout History read. The default scans
+     * {@link #findByProgram}; Firestore-backed impls override with an indexed
+     * equality + order query (served by the {@code (status, date DESC)} index).
+     */
+    default List<ScheduledWorkout> findByStatus(String userId, String programId, ScheduledStatus status) {
+        List<ScheduledWorkout> out = new ArrayList<>();
+        for (ScheduledWorkout sw : findByProgram(userId, programId, LocalDate.MIN, LocalDate.MAX)) {
+            if (sw.status() == status) out.add(sw);
+        }
+        out.sort(Comparator.comparing(
+            ScheduledWorkout::date, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        return out;
+    }
 
     /**
      * Precise lookup of one session by id. The default scans
