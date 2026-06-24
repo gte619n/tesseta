@@ -52,6 +52,12 @@ app:
     issuer: tesseta-backend
     access-ttl: 1h
     refresh-ttl: 60d
+    # Grace window during which a just-rotated refresh token may be replayed and
+    # still be honoured (re-issued) rather than treated as theft. Absorbs benign
+    # client retries of a refresh whose response was lost in flight on a flaky
+    # mobile network — without it, a single dropped response burns the session
+    # family and forces an interactive re-login.
+    reuse-grace: 30s
   # Admin allowlist for @AdminOnly endpoints (comma-separated emails). Set
   # ADMIN_EMAILS in deployed environments; defaults to the project owner.
   admin:

@@ -86,7 +86,10 @@ class SessionTokenServiceTest {
     }
 
     @Test
-    void replayingARotatedTokenIsTreatedAsTheftAndBurnsTheFamily() {
+    void replayingARotatedTokenAfterTheGraceWindowIsTreatedAsTheftAndBurnsTheFamily() {
+        // A negative grace puts every replay past the window, so a re-presented
+        // rotated token is unambiguously theft.
+        props.setReuseGrace(Duration.ofSeconds(-1));
         TokenPair first = service.issueFor(ADA);
         TokenPair second = service.refresh(first.refreshToken());
 
@@ -96,6 +99,35 @@ class SessionTokenServiceTest {
 
         // ...and the whole family is now revoked, so the live token dies too.
         assertThatThrownBy(() -> service.refresh(second.refreshToken()))
+            .isInstanceOf(InvalidRefreshTokenException.class);
+    }
+
+    @Test
+    void replayingARotatedTokenWithinTheGraceWindowReissuesWithoutBurningTheFamily() {
+        // Default 30s grace: a benign retry of a refresh whose response was lost
+        // in flight must succeed, not log the user out.
+        TokenPair first = service.issueFor(ADA);
+        TokenPair second = service.refresh(first.refreshToken());
+
+        // Replaying the just-rotated token yields a fresh, usable pair...
+        TokenPair retry = service.refresh(first.refreshToken());
+        assertThat(accessDecoder.decode(retry.accessToken()).getSubject()).isEqualTo("sub-123");
+        assertThat(retry.refreshToken()).isNotEqualTo(first.refreshToken());
+
+        // ...and the family is intact: the live rotated token still refreshes,
+        // and so does the pair handed back to the retry.
+        assertThat(service.refresh(second.refreshToken())).isNotNull();
+        assertThat(service.refresh(retry.refreshToken())).isNotNull();
+    }
+
+    @Test
+    void aLoggedOutTokenIsNotResurrectedByTheGraceWindow() {
+        // Logout is definitive even within the reuse-grace window: a stray retry
+        // must not re-animate the session.
+        TokenPair pair = service.issueFor(ADA);
+        service.revoke(pair.refreshToken());
+
+        assertThatThrownBy(() -> service.refresh(pair.refreshToken()))
             .isInstanceOf(InvalidRefreshTokenException.class);
     }
 

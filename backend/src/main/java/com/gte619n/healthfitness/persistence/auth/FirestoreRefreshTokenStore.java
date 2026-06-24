@@ -58,14 +58,24 @@ public class FirestoreRefreshTokenStore implements RefreshTokenStore {
             snap.getString("tokenHash"),
             toInstant(snap.get("createdAt")),
             toInstant(snap.get("expiresAt")),
-            Boolean.TRUE.equals(snap.getBoolean("revoked"))
+            Boolean.TRUE.equals(snap.getBoolean("revoked")),
+            toInstant(snap.get("rotatedAt"))
         ));
+    }
+
+    @Override
+    public void markRotated(String tokenId, java.time.Instant rotatedAt) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("revoked", true);
+        body.put("rotatedAt", Timestamp.of(java.util.Date.from(rotatedAt)));
+        await(firestore.collection(COLLECTION).document(tokenId).set(body, SetOptions.merge()));
     }
 
     @Override
     public void markRevoked(String tokenId) {
         Map<String, Object> body = new HashMap<>();
         body.put("revoked", true);
+        // No rotatedAt: logout is definitive and must not be reuse-grace eligible.
         await(firestore.collection(COLLECTION).document(tokenId).set(body, SetOptions.merge()));
     }
 

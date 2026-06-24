@@ -14,12 +14,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 //                 server can route a token to the right decoder by issuer.
 //   access-ttl  — access-token lifetime (default 1h, matching Google's).
 //   refresh-ttl — refresh-token lifetime (default 60d, sliding via rotation).
+//   reuse-grace — how long after rotation a just-rotated refresh token may be
+//                 replayed and still be honoured (re-issued) instead of treated
+//                 as theft. Absorbs benign client retries of a refresh whose
+//                 response was lost in flight on a flaky mobile network, which
+//                 would otherwise burn the whole session family and force an
+//                 interactive re-login. Default 30s.
 @ConfigurationProperties(prefix = "app.session")
 public class AppSessionProperties {
     private String signingKey = "";
     private String issuer = "tesseta-backend";
     private Duration accessTtl = Duration.ofHours(1);
     private Duration refreshTtl = Duration.ofDays(60);
+    private Duration reuseGrace = Duration.ofSeconds(30);
 
     public String getSigningKey() {
         return signingKey;
@@ -51,6 +58,14 @@ public class AppSessionProperties {
 
     public void setRefreshTtl(Duration refreshTtl) {
         this.refreshTtl = refreshTtl;
+    }
+
+    public Duration getReuseGrace() {
+        return reuseGrace;
+    }
+
+    public void setReuseGrace(Duration reuseGrace) {
+        this.reuseGrace = reuseGrace;
     }
 
     public boolean isEnabled() {
