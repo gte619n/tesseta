@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.testsupport;
 
 import com.gte619n.healthfitness.core.auth.RefreshTokenStore;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,16 +24,27 @@ public class InMemoryRefreshTokenStore implements RefreshTokenStore {
     }
 
     @Override
-    public void markRevoked(String tokenId) {
+    public void markRotated(String tokenId, Instant rotatedAt) {
         byId.computeIfPresent(tokenId, (id, t) -> new StoredRefreshToken(
-            t.tokenId(), t.userId(), t.tokenHash(), t.createdAt(), t.expiresAt(), true));
+            t.tokenId(), t.userId(), t.tokenHash(), t.createdAt(), t.expiresAt(), true,
+            rotatedAt));
+    }
+
+    @Override
+    public void markRevoked(String tokenId) {
+        // Definitive (logout): revoked but no rotatedAt — never reuse-grace eligible.
+        byId.computeIfPresent(tokenId, (id, t) -> new StoredRefreshToken(
+            t.tokenId(), t.userId(), t.tokenHash(), t.createdAt(), t.expiresAt(), true, null));
     }
 
     @Override
     public void revokeAllForUser(String userId) {
+        // Theft burn: revoke without setting rotatedAt (preserve any existing one
+        // from a prior rotation) so burned tokens are not reuse-grace eligible.
         byId.replaceAll((id, t) -> t.userId().equals(userId)
             ? new StoredRefreshToken(
-                t.tokenId(), t.userId(), t.tokenHash(), t.createdAt(), t.expiresAt(), true)
+                t.tokenId(), t.userId(), t.tokenHash(), t.createdAt(), t.expiresAt(), true,
+                t.rotatedAt())
             : t);
     }
 }

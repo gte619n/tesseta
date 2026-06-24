@@ -87,8 +87,9 @@ public class SessionTokenService {
     }
 
     // Second leg: a stored refresh token buys a new access token and a rotated
-    // refresh token. The old refresh token is burned; presenting it again is
-    // treated as theft and burns the whole family.
+    // refresh token. The old refresh token is rotated out (single-use); replaying
+    // it after the reuse-grace window is treated as theft and burns the whole
+    // family. A replay *within* the window is honoured (re-issued) — see below.
     public TokenPair refresh(String refreshToken) {
         Parsed parsed = parse(refreshToken);
         StoredRefreshToken stored = store.findById(parsed.tokenId())
@@ -97,22 +98,36 @@ public class SessionTokenService {
         if (!constantTimeEquals(stored.tokenHash(), sha256(parsed.secret()))) {
             throw new InvalidRefreshTokenException("refresh token secret mismatch");
         }
+        Instant now = Instant.now();
         if (stored.revoked()) {
-            // A revoked token being replayed means either a double-spend race or
-            // a stolen token — invalidate every session for this user.
+            // A token retired by rotation that's replayed within the reuse-grace
+            // window is almost always a benign retry: the server rotated the token
+            // but the new pair never reached the client (a dropped/timed-out
+            // refresh on a flaky mobile network), so the client retries the only
+            // token it still holds. Honour it with a fresh pair instead of
+            // burning the session — otherwise a single lost response permanently
+            // logs the user out. A replay *after* the window, or of a token
+            // revoked by logout / a prior theft burn (rotatedAt == null), is still
+            // treated as theft.
+            if (stored.withinReuseGrace(now, props.getReuseGrace())) {
+                return issueForUserId(stored.userId(), now);
+            }
             store.revokeAllForUser(stored.userId());
             throw new InvalidRefreshTokenException("refresh token already used");
         }
-        Instant now = Instant.now();
         if (stored.isExpired(now)) {
             throw new InvalidRefreshTokenException("refresh token expired");
         }
 
-        store.markRevoked(stored.tokenId());
+        store.markRotated(stored.tokenId(), now);
+        return issueForUserId(stored.userId(), now);
+    }
 
-        // Re-stamp identity from the user record so a renamed/updated profile is
-        // reflected; the access token must never outlive its source of truth.
-        User user = users.findById(stored.userId())
+    // Mint a fresh access + refresh pair for an existing session. Re-stamps
+    // identity from the user record so a renamed/updated profile is reflected;
+    // the access token must never outlive its source of truth.
+    private TokenPair issueForUserId(String userId, Instant now) {
+        User user = users.findById(userId)
             .orElseThrow(() -> new InvalidRefreshTokenException("user no longer exists"));
         String access = mintAccessToken(user.userId(), user.email(), user.displayName(), now);
         return new TokenPair(
@@ -169,7 +184,8 @@ public class SessionTokenService {
             sha256(secret),
             now,
             now.plus(props.getRefreshTtl()),
-            false
+            false,
+            null // live token — not yet rotated
         ));
         // The wire format keeps the id and secret together; only the secret's
         // hash is ever persisted.
