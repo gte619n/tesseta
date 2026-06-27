@@ -26,6 +26,59 @@
 - Phone and wear share `applicationId` (required for pairing); namespaces differ.
 - JVM toolchain 21. Min SDK 29 (phone), 30 (wear). Target SDK 35.
 
+## Build & validation
+
+Run all Gradle commands from `android/`.
+
+- **Toolchain**: JDK 21 (e.g. `~/.sdkman/candidates/java/current`). Point Gradle
+  at the SDK via `local.properties` → `sdk.dir=...` (this file is **gitignored**,
+  so a fresh worktree has none — create it) or `ANDROID_HOME`.
+- **`WEB_OAUTH_CLIENT_ID` is mandatory** — the build *refuses* to produce an APK
+  without a real Google OAuth web client ID (sign-in, and thus the whole app,
+  needs it). Supply it one of three ways (see `resolveWebOauthClientId` in
+  `app/build.gradle.kts`): `-PwebOauthClientId=<id>.apps.googleusercontent.com`,
+  the `WEB_OAUTH_CLIENT_ID` env var, or let Gradle fetch it from GCP Secret
+  Manager (`gcloud auth login` first).
+
+### Commands
+```bash
+# CI gate (mirrors .github/workflows/android-ci.yml):
+./gradlew :app:assembleDebug :wear:assembleDebug :app:testDebugUnitTest --no-daemon
+# Release APK (R8-minified, arm64-only): app/build/outputs/apk/release/app-release.apk
+./gradlew :app:assembleRelease --no-daemon
+```
+Note: CI does **not** run `lintRelease`; it currently reports pre-existing
+`MissingPermission` errors in `WorkoutSessionService` (false positives — the
+calls are guarded by `canPostNotifications()`). Don't treat those as your
+regression.
+
+### Release build is minified — TEST THE RELEASE APK, not just debug
+The release build runs **R8 full-mode + `shrinkResources`** and is **arm64-v8a
+only**, and ML Kit is **unbundled** (models download via Play Services). These
+only affect the release variant, so debug builds + unit tests will **not** catch
+their failures. After any dependency change, R8 rule change, or
+serialization/reflection change you **must** smoke-test an actual release APK on
+a **device/emulator with Google Play Services**:
+```bash
+./gradlew :app:assembleRelease --no-daemon
+adb install -r app/build/outputs/apk/release/app-release.apk
+adb logcat -c && adb shell am start -W -n com.gte619n.healthfitness/.mobile.MainActivity
+adb logcat -d | grep -iE 'FATAL|Cannot serialize|ClassNotFound|UnsatisfiedLinkError'  # must be empty
+```
+Then exercise Google sign-in → first sync → a nutrition barcode/label scan.
+
+- **Reflective Moshi + R8**: models are serialized by `KotlinJsonAdapterFactory`
+  (reflection), and most are plain data classes **without `@JsonClass`**. R8
+  full-mode strips the constructor of any class it only sees instantiated via
+  reflection and marks it abstract → Moshi crashes with *"Cannot serialize
+  abstract class"* at startup. `app/proguard-rules.pro` keeps the model
+  namespaces (`domain.**`, `data.**`, `core.chat.**`) to prevent this — **don't
+  delete those keeps, and add any new DTO/wire-model package there.** Diagnose
+  new R8 crashes by de-obfuscating the logcat class via
+  `app/build/outputs/mapping/release/mapping.txt`.
+- **ABI**: release defaults to `arm64-v8a` only. Add `-PincludeArmv7` for 32-bit
+  ARM, `-PincludeX86` for Intel-host emulators.
+
 ## UI conventions
 - **No white form/settings backgrounds.** Settings, profile, and other form
   screens sit directly on the canvas (`Hf.colors.canvas`) — never the white

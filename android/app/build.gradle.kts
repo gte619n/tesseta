@@ -56,14 +56,19 @@ android {
                 ?: "https://health-fitness-backend-mbysudfbja-uc.a.run.app"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
 
-        // ABI filtering: a real phone only needs ARM. The x86/x86_64 libs add
-        // ~40 MB of dead weight to the (universal) debug APK and are only useful
-        // for Intel-host emulators. Default to ARM-only; pass -PincludeX86 to add
-        // the x86 ABIs when you're specifically building for such an emulator.
-        // (Apple-Silicon emulators run arm64, so they don't need this either.)
+        // ABI filtering: default to arm64-v8a ONLY. 32-bit ARM (armeabi-v7a)
+        // doubles the native-lib payload (SQLCipher etc.) yet targets essentially
+        // no real device at minSdk 29 / Android 10. The x86/x86_64 libs are only
+        // useful for Intel-host emulators. Both 32-bit ARM and x86 are opt-in:
+        //   -PincludeArmv7  → add armeabi-v7a (legacy 32-bit ARM device)
+        //   -PincludeX86    → add x86 + x86_64 (Intel-host emulator)
+        // (Apple-Silicon emulators run arm64, so they need neither.)
         ndk {
             abiFilters.clear()
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            abiFilters += "arm64-v8a"
+            if (providers.gradleProperty("includeArmv7").isPresent) {
+                abiFilters += "armeabi-v7a"
+            }
             if (providers.gradleProperty("includeX86").isPresent) {
                 abiFilters += listOf("x86", "x86_64")
             }
@@ -88,7 +93,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
-            isMinifyEnabled = false
+            // R8 full-mode: shrink + obfuscate the class graph (Compose/Material3,
+            // Hilt, Retrofit/Moshi, CameraX, Firebase, ML Kit) and strip unused
+            // resources. Most libs ship consumer ProGuard rules AGP applies
+            // automatically; proguard-rules.pro adds only the reflective-path keeps
+            // those rules don't cover (see that file). A mapping.txt is emitted at
+            // app/build/outputs/mapping/release/ for crash de-obfuscation.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
