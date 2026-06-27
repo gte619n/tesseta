@@ -37,10 +37,15 @@ firebaseBom = "33.7.0"
 googleServices = "4.4.2"
 
 # IMPL-13 (Android Nutrition capture): CameraX preview/capture + ML Kit
-# on-device barcode scanning.
+# on-device barcode scanning. The ML Kit vision artifacts are the *unbundled*
+# (play-services) variants: the model native libs + .tflite assets are NOT
+# packed into the APK (~16-18 MB saved) — Play Services downloads them on
+# demand. The com.google.mlkit.vision.* API surface is identical, so consuming
+# code is unchanged. (Play Services is already a hard dependency: Credential
+# Manager auth, play-services-wearable, Firebase FCM.)
 camerax = "1.4.1"
-mlkitBarcode = "17.3.0"
-mlkitTextRecognition = "16.0.1"
+mlkitBarcode = "18.3.1"
+mlkitTextRecognition = "19.0.1"
 
 # Wear OS
 wearComposeMaterial3 = "1.0.0-alpha28"
@@ -123,8 +128,8 @@ camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" 
 camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
-mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcode" }
-mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-barcode-scanning = { module = "com.google.android.gms:play-services-mlkit-barcode-scanning", version.ref = "mlkitBarcode" }
+mlkit-text-recognition = { module = "com.google.android.gms:play-services-mlkit-text-recognition", version.ref = "mlkitTextRecognition" }
 
 # IMPL-12 (Android Goals chat): Compose markdown renderer for assistant
 # messages. Material 3 flavour so it picks up the consumer's M3 theme.

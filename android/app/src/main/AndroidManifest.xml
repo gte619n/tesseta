@@ -51,6 +51,15 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:theme="@style/Theme.HealthFitness">
 
+        <!-- IMPL-13: ML Kit barcode + OCR run on the *unbundled* (play-services)
+             variants, so the model native libs/.tflite are kept out of the APK
+             and downloaded via Play Services. This meta-data asks Play Services
+             to fetch both models at install time, so the first nutrition scan
+             isn't a no-op while the model downloads. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode,ocr" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
