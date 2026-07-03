@@ -3,7 +3,7 @@ description: Build signed Android release APK and distribute via Firebase App Di
 serviceAccount: projects/health-fitness-160/serviceAccounts/146599669983-compute@developer.gserviceaccount.com
 github:
   owner: gte619n
-  name: health-fitness-160
+  name: tesseta
   push:
     branch: ^main$
 filename: android/cloudbuild.yaml
