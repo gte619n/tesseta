@@ -236,13 +236,25 @@ private fun SignedInRoot(
         // repository opens the SQLCipher store.
         launch(Dispatchers.IO) { runCatching { sessionLauncher.get().run() } }
 
+        // IMPL-STAB hardening: did we arrive here from an interactive (re-)sign-in
+        // rather than a silent cached-session launch? A returning user who just
+        // re-authenticated after a session loss needs a forced resync so state
+        // changed while their session was dead lands now, not up to ~6h later.
+        val cameFromInteractiveSignIn = coordinator.consumeInteractiveSignIn()
+
         // Cheap, no-SQLCipher flag read decides the gate.
         if (coordinator.isFirstSyncComplete()) {
             // Returning user: release immediately. Build the gate + schedule the
             // background sync OFF the visible path (this is what opens the DB).
             gating = false
             launch(Dispatchers.IO) {
-                runCatching { firstSyncGate.get().scheduleBackfill() }
+                runCatching {
+                    val gate = firstSyncGate.get()
+                    // After a re-auth, force a fresh windowed pull before the
+                    // (idempotent) backfill so the mirror reconciles immediately.
+                    if (cameFromInteractiveSignIn) gate.resyncAfterReauth()
+                    gate.scheduleBackfill()
+                }
             }
         } else {
             // Flag not set: either a genuine first run, or a one-time upgrade from a

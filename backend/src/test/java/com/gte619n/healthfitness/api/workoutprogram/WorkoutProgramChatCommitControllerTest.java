@@ -26,6 +26,7 @@ import com.gte619n.healthfitness.testsupport.TestPersistenceConfig;
 import com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryScheduledWorkoutRepository;
 import com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutProgramRepository;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,7 +57,12 @@ class WorkoutProgramChatCommitControllerTest {
     @Autowired WorkoutProgramChatRepository chat;
 
     private static final String TEST_USER = "user-123";
-    private static final LocalDate START = LocalDate.of(2026, 6, 1); // a Monday
+    // Anchor to the Monday of the current week so the program always extends
+    // forward from "today": activate() only materializes sessions on/after today
+    // (it never rewrites past ones), so a fixed calendar date would leave the
+    // whole program in the past and re-materialize nothing once that date passes.
+    private static final LocalDate START =
+        LocalDate.now().with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
 
     @BeforeEach
     void setUp() {

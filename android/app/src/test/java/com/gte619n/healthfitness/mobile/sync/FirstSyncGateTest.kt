@@ -103,6 +103,41 @@ class FirstSyncGateTest {
     }
 
     @Test
+    fun `resync after re-auth runs a date-windowed pull when Room is source of truth`() = runTest {
+        coEvery { syncFlags.isKillSwitchOn() } returns false
+        val recentSinceSlot = slot<String>()
+        coEvery { syncEngine.pull(any(), capture(recentSinceSlot)) } returns
+            SyncEngine.PullResult(1, 0, 0, 0, wiped = false, killSwitch = false)
+
+        gate().resyncAfterReauth()
+
+        // Same bounded window as the first-run gate: a bare ISO date `today - 14d`.
+        val sent = LocalDate.parse(recentSinceSlot.captured)
+        assertEquals(
+            FirstSyncGate.RECENT_WINDOW_DAYS.toLong(),
+            ChronoUnit.DAYS.between(sent, LocalDate.now()),
+        )
+    }
+
+    @Test
+    fun `resync after re-auth is a no-op in kill-switch mode`() = runTest {
+        coEvery { syncFlags.isKillSwitchOn() } returns true
+
+        gate().resyncAfterReauth()
+
+        // Live-network mode: Room is not the source of truth, so no pull is issued.
+        coVerify(exactly = 0) { syncEngine.pull(any(), any()) }
+    }
+
+    @Test
+    fun `resync after re-auth swallows a pull failure so it never wedges the app`() = runTest {
+        coEvery { syncFlags.isKillSwitchOn() } returns false
+        coEvery { syncEngine.pull(any(), any()) } throws RuntimeException("network down")
+        // Should not throw.
+        gate().resyncAfterReauth()
+    }
+
+    @Test
     fun `backfill registers the periodic floor and kicks a pull`() {
         every { scheduler.registerPeriodic() } just Runs
         every { scheduler.enqueuePull() } just Runs

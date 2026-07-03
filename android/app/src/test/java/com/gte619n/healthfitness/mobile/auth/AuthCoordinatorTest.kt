@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.mobile.auth
 
+import android.content.Context
 import com.gte619n.healthfitness.data.auth.AuthState
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
@@ -7,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -73,5 +75,41 @@ class AuthCoordinatorTest {
         val state = coordinator.state.value
         assertTrue("returning user is shown the app, not Loading/SignedOut", state is AuthState.SignedIn)
         assertEquals("stale", (state as AuthState.SignedIn).idToken)
+    }
+
+    @Test
+    fun `interactive sign-in that succeeds sets a one-shot re-auth resync flag`() = runTest {
+        coEvery { repo.interactiveSignIn(any()) } returns
+            AuthState.SignedIn(userId = "u", email = null, displayName = null, idToken = "tok")
+        val coordinator = AuthCoordinator(repo, cache)
+
+        coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
+
+        // The signed-in entry consumes this to force a post-re-auth resync — and it
+        // is one-shot, so a later cached launch / recomposition won't re-trigger it.
+        assertTrue(coordinator.consumeInteractiveSignIn())
+        assertFalse(coordinator.consumeInteractiveSignIn())
+    }
+
+    @Test
+    fun `interactive sign-in that fails does not set the re-auth flag`() = runTest {
+        coEvery { repo.interactiveSignIn(any()) } returns AuthState.Failed("cancelled")
+        val coordinator = AuthCoordinator(repo, cache)
+
+        coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
+
+        assertFalse(coordinator.consumeInteractiveSignIn())
+    }
+
+    @Test
+    fun `a silent cached-session launch does not set the re-auth flag`() = runTest {
+        coEvery { cache.read() } returns snapshot(idToken = "tok", accessExpiresInSeconds = 3600, hasSignedIn = true)
+        val coordinator = AuthCoordinator(repo, cache)
+
+        coordinator.bootstrap()
+
+        // Only an explicit interactive sign-in forces the resync — a returning user
+        // launching on their cached session must not pay for an extra pull.
+        assertFalse(coordinator.consumeInteractiveSignIn())
     }
 }
