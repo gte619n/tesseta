@@ -84,6 +84,27 @@ class FirstSyncGate @Inject constructor(
     }
 
     /**
+     * IMPL-STAB hardening — post-re-authentication resync.
+     *
+     * When a *returning* user is bounced to the sign-in screen by a definitive
+     * session loss (a refresh-token rejection) and signs back in interactively,
+     * their Room mirror may be stale relative to changes the server accepted while
+     * the session was dead. Force the same **date-windowed** pull the first-run
+     * gate uses so those changes land promptly, instead of waiting up to the
+     * periodic floor (~6h) for the next scheduled sync.
+     *
+     * Non-blocking and best-effort: the user already has their cached data on
+     * screen, so a failure just leaves the background triggers to catch up (it must
+     * never wedge the app). A no-op in live-network (kill-switch) mode, where Room
+     * is not the source of truth and there is nothing to resync. Pair with
+     * [scheduleBackfill] to drain the older history the window omits.
+     */
+    suspend fun resyncAfterReauth() {
+        if (syncFlags.isKillSwitchOn()) return
+        runCatching { syncEngine.pull(recentSince = recentWindowSince()) }
+    }
+
+    /**
      * Register the periodic floor and kick the **unbounded backfill** that drains
      * whatever the windowed initial sync left (`recentSince = null`), continuing the
      * same persisted cursor (no skip/dup) so the older historical time-series fill

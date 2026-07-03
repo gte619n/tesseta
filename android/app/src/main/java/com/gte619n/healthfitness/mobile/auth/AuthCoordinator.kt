@@ -38,6 +38,13 @@ class AuthCoordinator @Inject constructor(
     // may also recreate. Explicit re-probes (add-account) call bootstrap() directly.
     @Volatile private var launchBootstrapped = false
 
+    // IMPL-STAB hardening: set when a transition to SignedIn came from an explicit
+    // interactive sign-in (a returning user re-authenticating after a session
+    // loss, or a first-ever sign-in) — NOT from the silent cached-session launch
+    // (bootstrap). Consumed once by the signed-in entry to force a post-re-auth
+    // resync so state changed while the session was dead lands immediately.
+    @Volatile private var interactiveSignInPending = false
+
     /**
      * offline-fix: the one-time launch bootstrap. Idempotent — safe to call from
      * Application.onCreate (so the cached session is usually resolved before the
@@ -121,7 +128,24 @@ class AuthCoordinator @Inject constructor(
     // window to show the account picker (see GoogleAuthRepository.interactiveSignIn).
     suspend fun interactiveSignIn(activityContext: android.content.Context) {
         _state.value = AuthState.Loading
-        _state.value = repo.interactiveSignIn(activityContext)
+        val result = repo.interactiveSignIn(activityContext)
+        // Mark BEFORE publishing SignedIn so the signed-in entry's LaunchedEffect,
+        // which fires on that state change, observes the flag when it consumes it.
+        if (result is AuthState.SignedIn) interactiveSignInPending = true
+        _state.value = result
+    }
+
+    /**
+     * IMPL-STAB hardening: true exactly once after an interactive sign-in resolved
+     * to SignedIn — the signal that a returning user just re-authenticated (as
+     * opposed to launching on a cached session), so the signed-in entry should
+     * force a resync. Consuming clears it, so a later cached-session launch or
+     * config-change recomposition does not re-trigger the resync.
+     */
+    fun consumeInteractiveSignIn(): Boolean {
+        val pending = interactiveSignInPending
+        interactiveSignInPending = false
+        return pending
     }
 
     suspend fun signOut() {

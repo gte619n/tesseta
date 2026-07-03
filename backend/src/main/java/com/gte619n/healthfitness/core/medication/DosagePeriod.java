@@ -41,10 +41,22 @@ public record DosagePeriod(
     /**
      * Close the active period at {@code effective} and open a new period at the
      * same date with the new dose/unit. Returns a new list (input is not mutated).
+     *
+     * <p>When {@code effective} is not after the active period's start (i.e. the
+     * dose is changed the same day the current period began, as in the
+     * reactivate-today-then-change-dose-today flow), the new dose simply
+     * supersedes the current period from its own start via {@link #replaceActive}
+     * — closing the period at its own start would open a zero-length period and
+     * make {@link #validate} throw "endDate must be after startDate". Mirrors the
+     * guard already present on {@link #reopen}.
      */
     public static List<DosagePeriod> changeDose(
         List<DosagePeriod> periods, double dose, String unit, LocalDate effective
     ) {
+        DosagePeriod active = active(periods);
+        if (active != null && !effective.isAfter(active.startDate())) {
+            return replaceActive(periods, dose, unit);
+        }
         List<DosagePeriod> result = new ArrayList<>();
         for (DosagePeriod p : periods) {
             if (p.isActive()) {

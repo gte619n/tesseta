@@ -43,6 +43,42 @@ class DosagePeriodTest {
     }
 
     @Test
+    @DisplayName("changeDose on the same day as the period start replaces in place")
+    void changeDoseSameDayReplacesInPlace() {
+        // Same-day change: closing the active period at its own start would open a
+        // zero-length closed period and fail validate(). Instead the dose is
+        // replaced in place, leaving a single open period.
+        List<DosagePeriod> start = List.of(DosagePeriod.initial(25, "mg", JAN));
+        List<DosagePeriod> result = DosagePeriod.changeDose(start, 50, "mg", JAN);
+
+        assertThat(result).hasSize(1);
+        DosagePeriod active = DosagePeriod.active(result);
+        assertThat(active).isNotNull();
+        assertThat(active.dose()).isEqualTo(50);
+        assertThat(active.startDate()).isEqualTo(JAN);
+        DosagePeriod.validate(result); // would previously throw "endDate must be after startDate"
+    }
+
+    @Test
+    @DisplayName("reactivate-today then change-dose-today validates (the reported bug)")
+    void changeDoseAfterReactivationSameDay() {
+        // The exact user flow: a discontinued med is reopened today, then its dose
+        // is changed the same day. reopen() opens a period starting TODAY; the
+        // same-day changeDose must not split off a zero-length period.
+        LocalDate today = LocalDate.of(2026, 7, 3);
+        List<DosagePeriod> closed = List.of(new DosagePeriod(25, "mg", JAN, MAY));
+        List<DosagePeriod> reopened = DosagePeriod.reopen(closed, 25, "mg", today);
+
+        List<DosagePeriod> result = DosagePeriod.changeDose(reopened, 50, "mg", today);
+
+        DosagePeriod.validate(result); // would previously throw "endDate must be after startDate"
+        DosagePeriod active = DosagePeriod.active(result);
+        assertThat(active).isNotNull();
+        assertThat(active.dose()).isEqualTo(50);
+        assertThat(active.startDate()).isEqualTo(today);
+    }
+
+    @Test
     @DisplayName("replaceActive swaps dose/unit on the open period only")
     void replaceActiveSwapsOpenPeriod() {
         List<DosagePeriod> periods = List.of(
