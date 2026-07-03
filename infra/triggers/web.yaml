@@ -3,7 +3,7 @@ description: Build + deploy web Cloud Run service on merge to main.
 serviceAccount: projects/health-fitness-160/serviceAccounts/146599669983-compute@developer.gserviceaccount.com
 github:
   owner: gte619n
-  name: health-fitness-160
+  name: tesseta
   push:
     branch: ^main$
 filename: web/cloudbuild.yaml
