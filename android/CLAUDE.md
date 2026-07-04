@@ -4,6 +4,13 @@
   the obligatory theme XML and manifest.
 - **DI**: Hilt — fully wired (`@Module @InstallIn(SingletonComponent)` providers
   across `app` and `core-data`, `@HiltViewModel` on ~30 screens).
+- **Repositories are concrete `@Inject` classes in `core-data`** — no
+  `core-domain` repository interface, no `@Binds` indirection (single
+  implementation each). New repos follow the same pattern; tests mock the
+  concrete class directly (MockK handles final Kotlin classes). Modules keep
+  only `@Provides` for things Hilt can't construct itself (Retrofit services,
+  `@Provides`-with-defaults). `core-domain` holds the domain models/DTOs the
+  repos return, not their interfaces.
 - **Backend is the system of record; the app is offline-first against it.**
   The backend owns Firestore and is the authority. On-device, `core-data` runs
   an offline-first mirror (see `docs/plans/IMPL-AND-20-offline-first-sync.md`):
