@@ -3,10 +3,7 @@ package com.gte619n.healthfitness.data.settings
 import android.content.Context
 import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthService
-import com.gte619n.healthfitness.data.prefs.CoachAudioPreferencesImpl
 import com.gte619n.healthfitness.data.profile.ProfileService
-import com.gte619n.healthfitness.domain.prefs.CoachAudioPreferences
-import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,36 +14,29 @@ import javax.inject.Singleton
 import retrofit2.Retrofit
 import retrofit2.create
 
-// IMPL-AND-02's own Hilt module. Lives in the feature's core-data package
-// rather than touching NetworkModule. Provides the Retrofit services and the
-// GoogleHealthScopeRepository, and binds the CoachAudioPreferences interface.
-// (GoogleHealthRepository / UnitPreferencesRepository / ProfileRepository are
-// concrete @Inject classes — no binding needed.)
+// IMPL-AND-02's own Hilt module. Lives in the feature's core-data package rather
+// than touching NetworkModule. Provides the Retrofit services and the
+// GoogleHealthScopeRepository. (CoachAudioPreferences / GoogleHealthRepository /
+// UnitPreferencesRepository / ProfileRepository are concrete @Inject classes —
+// no binding needed.)
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class SettingsDataModule {
-
-    @Binds
+object SettingsDataModule {
+    @Provides
     @Singleton
-    abstract fun bindCoachAudioPreferences(impl: CoachAudioPreferencesImpl): CoachAudioPreferences
+    fun provideProfileService(retrofit: Retrofit): ProfileService =
+        retrofit.create()
 
-    companion object {
-        @Provides
-        @Singleton
-        fun provideProfileService(retrofit: Retrofit): ProfileService =
-            retrofit.create()
+    @Provides
+    @Singleton
+    fun provideGoogleHealthService(retrofit: Retrofit): GoogleHealthService =
+        retrofit.create()
 
-        @Provides
-        @Singleton
-        fun provideGoogleHealthService(retrofit: Retrofit): GoogleHealthService =
-            retrofit.create()
-
-        @Provides
-        @Singleton
-        fun provideGoogleHealthScopeRepository(
-            @ApplicationContext context: Context,
-            @Named("webOauthClientId") webOauthClientId: String,
-        ): GoogleHealthScopeRepository =
-            GoogleHealthScopeRepository(context, webOauthClientId)
-    }
+    @Provides
+    @Singleton
+    fun provideGoogleHealthScopeRepository(
+        @ApplicationContext context: Context,
+        @Named("webOauthClientId") webOauthClientId: String,
+    ): GoogleHealthScopeRepository =
+        GoogleHealthScopeRepository(context, webOauthClientId)
 }

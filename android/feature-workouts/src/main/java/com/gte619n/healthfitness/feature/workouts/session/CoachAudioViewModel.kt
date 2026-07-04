@@ -2,7 +2,7 @@ package com.gte619n.healthfitness.feature.workouts.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.gte619n.healthfitness.domain.prefs.CoachAudioPreferences
+import com.gte619n.healthfitness.data.prefs.CoachAudioPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

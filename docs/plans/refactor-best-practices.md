@@ -53,14 +53,16 @@ inspection-only:
   sync), so the placeholder module + `health-connect` catalog entry + its `app`/
   `wear` wiring were removed; docs reconciled. (Sibling to the earlier
   `feature-chat` removal.)
-- **Android — concrete `@Inject` repositories (rec #4).** Collapsed the last 10
+- **Android — concrete `@Inject` repositories (rec #4).** Collapsed the last 11
   single-implementation `core-domain` interfaces into concrete `core-data`
   classes (the GoalsRepository pattern): the 6 dashboard card repos,
   `WorkoutProgramRepository`, `WorkoutSessionRepository`, `UnitPreferencesRepository`,
-  and `GoogleHealthRepository`. Deleted their `@Binds`; stateful hand fakes were
-  converted to MockK-backed helpers (final Kotlin classes mock fine).
-  `CoachAudioPreferences` was intentionally left (its consumers span other
-  feature modules; not worth the extra churn this pass).
+  `GoogleHealthRepository`, and `CoachAudioPreferences`. Deleted their `@Binds`;
+  stateful hand fakes were converted to MockK-backed helpers (final Kotlin
+  classes mock fine). With the last binding gone, `SettingsDataModule` is now a
+  pure `@Provides` `object` (no `@Binds`), and **no repository in the app uses a
+  `core-domain` interface + `@Binds` indirection anymore** — every repository is
+  a concrete `@Inject` class.
 - **Android — split the oversized screens (rec #8).** Extracted cohesive
   sub-composables from `AddMedicationScreen`, `MedicationDetailScreen`,
   `NutritionTodayScreen`, and `NutritionCaptureScreen` into sibling
