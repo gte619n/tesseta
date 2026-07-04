@@ -136,7 +136,8 @@ is intentionally absent).
 | Nutrition label / meal photo | `NutritionLabelExtractor`, `MealPhotoExtractor` | `gemini-3.5-flash` |
 | Equipment parsing | `EquipmentParserService` | `gemini-3.5-flash` |
 | Drug / food / equipment images | `DrugImageGenerator`, `GeminiFoodImageGenerator`, `EquipmentImageService` | `gemini-3.1-flash-image-preview` |
-| **Goal chat** | `GeminiGoalChatClient` | **`gemini-3.1-pro-preview`** — the *one* documented exception (ADR-0005), via env `GOALS_GEMINI_MODEL`. (A stale constructor default string `gemini-3.5-pro` exists but is overridden by `application.yml`.) |
+| **Goal chat** | `GeminiGoalChatClient` | **`gemini-3.1-pro-preview`** — a documented Pro exception (ADR-0005), via env `GOALS_GEMINI_MODEL`. |
+| **Workout-program designer** | `GeminiWorkoutProgramChatClient` | **`gemini-3.1-pro-preview`** — a documented Pro exception (ADR-0013), via env `WORKOUT_PROGRAM_GEMINI_MODEL`. |
 
 ## Streaming (SSE) & multipart
 

@@ -29,7 +29,7 @@ composition + DEXA, medications + adherence, AI-planned Goals, nutrition
 tracking + capture, and gyms/equipment. Admin surfaces (drug & equipment
 catalogs) are web-only. See the
 [feature catalog](docs/reference/feature-catalog.md) for the full state,
-including deferred work (workout logging, Wear OS surfaces).
+including deferred work (most Wear OS surfaces).
 
 ## Quickstart
 
