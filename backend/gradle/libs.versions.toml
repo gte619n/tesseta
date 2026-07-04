@@ -6,16 +6,16 @@ springDependencyManagement = "1.1.7"
 # 1.30.0 the runtime hit NoClassDefFoundError for com.google.auth.mtls.* (the
 # mtls package only exists in the newer line), crashing Firestore bean creation
 # at Cloud Run startup. Keep these aligned with `firestore` on every bump.
-firestore = "3.30.0"
-googleAuth = "1.40.0"
-googleKms = "2.55.0"
-googleStorage = "2.59.0"
-googleGenai = "1.53.0"
-firebaseAdmin = "9.4.3"
+firestore = "3.43.1"
+googleAuth = "1.48.0"
+googleKms = "2.96.0"
+googleStorage = "2.69.0"
+googleGenai = "1.60.0"
+firebaseAdmin = "9.10.0"
 # Tink: verifies the ECDSA-P256 X-HEALTHAPI-SIGNATURE on Google Health
 # webhooks. Google signs with Tink's wire format and publishes a Tink
 # keyset, so we verify with Tink's PublicKeyVerify rather than raw JCA.
-tink = "1.13.0"
+tink = "1.22.0"
 junit = "5.11.0"
 
 [libraries]
