@@ -1,5 +1,6 @@
 plugins {
     java
+    jacoco
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dependency.management)
 }
@@ -76,10 +77,52 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     }
 }
 
+// The unit/slice suite. Excludes the emulator-backed integration tests (tag
+// "firestore-emulator") so it stays fast and needs no external processes.
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags("firestore-emulator")
+    }
     // Pass GEMINI_API_KEY through to the live-Gemini preview harness
     // (WorkoutSeedEnrichmentPreviewTest); empty when unset so other tests
     // are unaffected.
     environment("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY") ?: "")
+}
+
+// Emulator-backed integration tests (Firestore repositories, transactions,
+// query scoping). Tagged "firestore-emulator"; FirestoreEmulatorExtension
+// boots a `firebase emulators` Firestore instance per JVM on an ephemeral
+// port (no Docker). CI sets `firestore.emulator.required=true` so a missing
+// firebase CLI fails the build instead of silently skipping.
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs Firestore-emulator integration tests."
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("firestore-emulator")
+    }
+    shouldRunAfter(tasks.test)
+    environment("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY") ?: "")
+    systemProperty(
+        "firestore.emulator.required",
+        System.getProperty("firestore.emulator.required", System.getenv("CI") ?: "false")
+    )
+}
+
+tasks.named("check") {
+    dependsOn(integrationTest)
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+// Aggregate coverage from both the unit suite and the emulator integration
+// suite into one XML (for CI ratchet) + HTML (for humans) report.
+tasks.jacocoTestReport {
+    executionData(tasks.test.get(), integrationTest.get())
+    dependsOn(tasks.test, integrationTest)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
