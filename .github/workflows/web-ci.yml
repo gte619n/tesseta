@@ -41,5 +41,33 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Page-title guard
+        run: pnpm check:titles
+
+      - name: Unit tests (Vitest)
+        run: pnpm test:coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: web/coverage/coverage-final.json
+          if-no-files-found: warn
+
       - name: Build
         run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E tests (Playwright)
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          if-no-files-found: ignore

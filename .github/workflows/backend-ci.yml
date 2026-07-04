@@ -36,5 +36,20 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Build
-        run: ./gradlew build --no-daemon
+      # The Firestore-emulator integration tests (tag "firestore-emulator") boot
+      # the emulator via the firebase CLI — no Docker. GitHub sets CI=true, which
+      # flips firestore.emulator.required so a missing CLI fails the build rather
+      # than silently skipping the integration suite.
+      - name: Install firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Build (unit + emulator integration + coverage)
+        run: ./gradlew build jacocoTestReport --no-daemon
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jacoco
+          path: backend/build/reports/jacoco/test/jacocoTestReport.xml
+          if-no-files-found: warn
