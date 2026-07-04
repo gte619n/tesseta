@@ -119,8 +119,30 @@ public class SessionTokenService {
             throw new InvalidRefreshTokenException("refresh token expired");
         }
 
-        store.markRotated(stored.tokenId(), now);
+        // Atomically claim the rotation. If we lose the race, another concurrent
+        // refresh rotated this token between our read above and here, so it is now
+        // revoked-by-rotation: fall through to the same reuse-grace-or-burn
+        // handling a replay of an already-rotated token gets.
+        if (!store.tryMarkRotated(stored.tokenId(), now)) {
+            return handleAlreadyUsed(stored.tokenId(), stored.userId(), now);
+        }
         return issueForUserId(stored.userId(), now);
+    }
+
+    // A refresh token that was already revoked (by a prior rotation, or by a
+    // concurrent refresh that beat us to the atomic rotation). Honour it within
+    // the reuse-grace window (a benign lost-response / double-submit retry),
+    // otherwise treat it as theft and burn the whole family. Re-reads the token
+    // so a rotatedAt just stamped by the concurrent winner is visible.
+    private TokenPair handleAlreadyUsed(String tokenId, String userId, Instant now) {
+        boolean grace = store.findById(tokenId)
+            .map(s -> s.withinReuseGrace(now, props.getReuseGrace()))
+            .orElse(false);
+        if (grace) {
+            return issueForUserId(userId, now);
+        }
+        store.revokeAllForUser(userId);
+        throw new InvalidRefreshTokenException("refresh token already used");
     }
 
     // Mint a fresh access + refresh pair for an existing session. Re-stamps

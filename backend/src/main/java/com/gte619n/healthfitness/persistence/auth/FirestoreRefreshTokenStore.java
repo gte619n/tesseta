@@ -6,6 +6,7 @@ import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 
 import com.gte619n.healthfitness.core.auth.RefreshTokenStore;
 import com.google.cloud.Timestamp;
+import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
@@ -64,11 +65,24 @@ public class FirestoreRefreshTokenStore implements RefreshTokenStore {
     }
 
     @Override
-    public void markRotated(String tokenId, java.time.Instant rotatedAt) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("revoked", true);
-        body.put("rotatedAt", Timestamp.of(java.util.Date.from(rotatedAt)));
-        await(firestore.collection(COLLECTION).document(tokenId).set(body, SetOptions.merge()));
+    public boolean tryMarkRotated(String tokenId, java.time.Instant rotatedAt) {
+        // Atomic check-and-set in a Firestore transaction: read the token inside
+        // the transaction and only rotate if it is still live. Firestore aborts
+        // and retries the transaction on a conflicting concurrent commit, so of N
+        // racing refreshes exactly one observes the live token and rotates; the
+        // rest see revoked==true and return false.
+        DocumentReference ref = firestore.collection(COLLECTION).document(tokenId);
+        return await(firestore.runTransaction(txn -> {
+            DocumentSnapshot snap = txn.get(ref).get();
+            if (!snap.exists() || Boolean.TRUE.equals(snap.getBoolean("revoked"))) {
+                return false;
+            }
+            Map<String, Object> body = new HashMap<>();
+            body.put("revoked", true);
+            body.put("rotatedAt", Timestamp.of(java.util.Date.from(rotatedAt)));
+            txn.set(ref, body, SetOptions.merge());
+            return true;
+        }));
     }
 
     @Override

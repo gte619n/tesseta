@@ -59,9 +59,11 @@ app:
     # family and forces an interactive re-login.
     reuse-grace: 30s
   # Admin allowlist for @AdminOnly endpoints (comma-separated emails). Set
-  # ADMIN_EMAILS in deployed environments; defaults to the project owner.
+  # ADMIN_EMAILS in deployed environments. Fail-closed: the default is EMPTY (no
+  # admins) so a missing/misconfigured env can never silently grant admin to a
+  # baked-in personal address — deploys set ADMIN_EMAILS explicitly (cloudbuild).
   admin:
-    emails: ${ADMIN_EMAILS:evan.ruff@gmail.com}
+    emails: ${ADMIN_EMAILS:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   gcp:

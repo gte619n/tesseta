@@ -14,6 +14,8 @@
 - Architecture overview (start here): [`docs/architecture.md`](docs/architecture.md)
 - Durable reference (data model, API surface, cross-cutting patterns, feature
   catalog): [`docs/reference/`](docs/reference/)
+- Product & non-functional requirements, incl. the PHI **privacy & compliance**
+  posture: [`docs/requirements/`](docs/requirements/)
 - Architecture Decision Records: [`docs/decisions/`](docs/decisions/)
 - Forward-looking plans (work not yet built): [`docs/plans/`](docs/plans/)
 - Open implementation specs (only those with remaining work): [`docs/specs/`](docs/specs/)
@@ -22,7 +24,8 @@
 
 ## Conventions
 - Conventional Commits (`feat:`, `fix:`, `chore(scope):`, etc.)
-- Trunk-based dev on `main`. Feature branches named `feat/IMPL-XX-slug`.
+- Trunk-based dev on `main`. Feature branches named `feature/<slug>` (see
+  Worktrees below for the exact form).
 - One commit per logical change. Don't squash unrelated work.
 
 ## Worktrees
@@ -36,14 +39,18 @@
 - **General AI work** (text generation, parsing, extraction, lookup):
   `gemini-3.5-flash`
 - **Image generation**: `gemini-3.1-flash-image-preview`
-- Do not use any other Gemini model. Do not introduce other providers
-  (OpenAI, Anthropic, etc.) for these jobs without an ADR.
+- **Documented Gemini Pro exceptions** (each sanctioned by an ADR): Goals chat
+  (`gemini-3.1-pro-preview`, ADR-0005) and the workout-program designer
+  (`gemini-3.1-pro-preview`, ADR-0013).
+- Don't introduce another Gemini model, or another provider (OpenAI, Anthropic,
+  etc.), without an ADR.
 
 ## Never
 - Commit secrets, service account JSON keys, OAuth client secrets, or
   `local.properties`.
 - Edit files in `.github/workflows/` without calling it out in the PR description.
-- Use a Gemini model other than the two listed under "AI Models".
+- Introduce a new Gemini model or AI provider without an ADR (the sanctioned
+  Pro exceptions today are ADR-0005 and ADR-0013).
 
 ## Local Development
 Run `bash infra/scripts/dev.sh` to start both backend and web servers locally.
@@ -56,5 +63,5 @@ This script:
 ## Tools
 - GCP project: `health-fitness-160`
 - Region: `us-central1`
-- The Google Health API Parity Tool context file goes in `AGENTS.md` at the
-  repo root.
+- `AGENTS.md` at the repo root is a **placeholder** for the Google Health API
+  Parity Tool context file — it has not been added yet, so don't rely on it.

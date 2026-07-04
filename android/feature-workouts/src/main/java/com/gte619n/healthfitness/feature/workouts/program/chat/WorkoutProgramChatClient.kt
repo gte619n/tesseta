@@ -3,6 +3,9 @@ package com.gte619n.healthfitness.feature.workouts.program.chat
 import com.gte619n.healthfitness.core.chat.ChatStreamEvent
 import com.gte619n.healthfitness.data.net.SseClient
 import com.gte619n.healthfitness.data.net.SseEvent
+import com.gte619n.healthfitness.data.workouts.program.chat.ChatDoneData
+import com.gte619n.healthfitness.data.workouts.program.chat.ChatErrorData
+import com.gte619n.healthfitness.data.workouts.program.chat.ChatTokenData
 import com.gte619n.healthfitness.data.workouts.program.chat.ProgramChatRequest
 import com.gte619n.healthfitness.data.workouts.program.chat.ScheduleDto
 import com.squareup.moshi.Moshi
@@ -29,9 +32,9 @@ class WorkoutProgramChatClient @Inject constructor(
     private val moshi: Moshi,
 ) {
     private val requestAdapter = moshi.adapter(ProgramChatRequest::class.java)
-    private val tokenAdapter = moshi.adapter(TokenData::class.java)
-    private val errorAdapter = moshi.adapter(ErrorData::class.java)
-    private val doneAdapter = moshi.adapter(DoneData::class.java)
+    private val tokenAdapter = moshi.adapter(ChatTokenData::class.java)
+    private val errorAdapter = moshi.adapter(ChatErrorData::class.java)
+    private val doneAdapter = moshi.adapter(ChatDoneData::class.java)
 
     /**
      * POST the designer chat. [schedule] + [goalId] are sent ONLY when [threadId]
@@ -74,8 +77,4 @@ class WorkoutProgramChatClient @Inject constructor(
         // token (filtered to "" so it appends nothing).
         else -> ChatStreamEvent.Token("")
     }
-
-    private data class TokenData(val text: String?)
-    private data class ErrorData(val error: String?)
-    private data class DoneData(val threadId: String?)
 }

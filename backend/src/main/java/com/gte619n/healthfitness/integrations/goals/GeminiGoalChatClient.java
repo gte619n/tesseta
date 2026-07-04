@@ -44,7 +44,10 @@ public class GeminiGoalChatClient implements GoalChatClient {
 
     public GeminiGoalChatClient(
         Client client,
-        @Value("${app.goals.gemini-model:gemini-3.5-pro}") String model
+        // Default aligned with application.yml (app.goals.gemini-model) so the
+        // fallback matches the real model if the property is ever renamed.
+        // ADR-0005: Goals chat runs on Gemini Pro, an exception to the flash rule.
+        @Value("${app.goals.gemini-model:gemini-3.1-pro-preview}") String model
     ) {
         this.client = client;
         this.model = model;

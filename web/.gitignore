@@ -8,3 +8,10 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 .pnpm-store/
+
+# Test artifacts
+/coverage/
+/playwright-report/
+/test-results/
+/blob-report/
+/.playwright/

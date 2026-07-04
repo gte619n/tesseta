@@ -54,7 +54,7 @@ Four top-level collections are **shared/global**: `users`, `drugs`,
 | `users/{u}/deviceSyncs/{platform}` | `device.DeviceSync` | platform (doc id, e.g. `FITBIT`), lastSyncedAt — refreshed on every ingestion |
 | `users/{u}/dexaScans/{scanId}` | `dexa.DexaScan` | measuredOn, sourceFacility, pdfStoragePath, contentHash, whole-body + per-region (`DexaRegion`) masses (lbs), bmdTScore/ZScore, restingMetabolicRateKcal |
 | `users/{u}/weeklyWorkoutAggregates/{weekStart}` | `workoutaggregate.WeeklyWorkoutAggregate` | weekStart, totalTonnage, sessionCount |
-| `users/{u}/workouts/{workoutId}` | `workout.Workout` | **scaffold only** — repository not yet implemented (workout logging is deferred; see [feature-catalog.md](feature-catalog.md)) |
+| `users/{u}/workouts/{workoutId}` | `workout.Workout` | logged workouts, written by the ADR-0012 active-workout-logging completion via `persistence.workout.FirestoreWorkoutRepository` |
 
 ## Blood markers
 

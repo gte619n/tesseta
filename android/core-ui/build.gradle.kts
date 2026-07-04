@@ -11,6 +11,12 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            // Robolectric-backed Compose UI tests need real Android resources.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -31,4 +37,11 @@ dependencies {
     // IMPL-AND-20 (Phase 6): JVM unit tests for the pure sync-UX state mappings
     // (syncUiStateOf / badgeSpecOf) — no Compose runtime needed.
     testImplementation(libs.junit)
+
+    // Compose UI tests on the JVM via Robolectric — run by testDebugUnitTest, so
+    // they gate in CI without a device.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

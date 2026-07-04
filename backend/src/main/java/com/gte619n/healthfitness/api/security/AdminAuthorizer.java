@@ -5,6 +5,10 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,6 +40,27 @@ public class AdminAuthorizer {
     /** True when the current authenticated user's email is in the admin allowlist. */
     public boolean isAdmin() {
         String email = currentUserProvider.get().email();
-        return email != null && adminEmails.contains(email);
+        if (email == null || !adminEmails.contains(email)) {
+            return false;
+        }
+        // Defence-in-depth: only honour the email for admin when the token asserts
+        // it is verified. Google ID tokens for our client IDs set
+        // email_verified=true; this guards against ever trusting an unverified
+        // email claim (e.g. if a client id issuing self-asserted emails were ever
+        // added to the audience). Dev-mode auth is non-JWT and test-only, so an
+        // email match there is allowed through.
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof JwtAuthenticationToken jwt) {
+            return isEmailVerified(jwt.getToken());
+        }
+        return true;
+    }
+
+    private static boolean isEmailVerified(Jwt jwt) {
+        Object claim = jwt.getClaim("email_verified");
+        if (claim instanceof Boolean b) {
+            return b;
+        }
+        return "true".equalsIgnoreCase(String.valueOf(claim));
     }
 }

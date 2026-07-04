@@ -20,11 +20,7 @@
 # ../README.md under "IMPL-AND-20: Firestore TTL on idempotencyKeys" so the
 # policy is reproducible either way.
 
-variable "project_id" {
-  description = "GCP / Firebase project that owns the Firestore database."
-  type        = string
-  default     = "health-fitness-160"
-}
+# (project_id / region are declared in variables.tf.)
 
 # TTL on users/{uid}/idempotencyKeys/{doc}.expiresAt.
 #

@@ -1,6 +1,6 @@
 name: deploy-backend-on-main
 description: Build + deploy backend Cloud Run service on merge to main.
-serviceAccount: projects/health-fitness-160/serviceAccounts/146599669983-compute@developer.gserviceaccount.com
+serviceAccount: projects/health-fitness-160/serviceAccounts/tesseta-ci@health-fitness-160.iam.gserviceaccount.com
 github:
   owner: gte619n
   name: tesseta

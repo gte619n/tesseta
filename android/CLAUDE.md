@@ -14,17 +14,22 @@
     last-write-wins conflict resolution + tombstones.
   - **DataStore** still holds small key/value state — the ID-token cache
     (`IdTokenCache`) and unit prefs.
-  - Not every repository is migrated yet: `feature-goals` and `feature-nutrition`
-    still read directly over Retrofit. Treat the mirror as the target pattern.
+  - Not every repository is migrated: the main goals and nutrition repos are on
+    the mirror, but some capture/search/reference repos (e.g. `FoodRepository`,
+    `NutritionCaptureRepository`, `DrugRepository`, `EquipmentRepository`,
+    `ChatRepository`) still read Retrofit-direct. Treat the mirror as the target
+    pattern for new work.
 - **Network**: Retrofit + OkHttp + Moshi; 401 → silent refresh via
   `TokenAuthenticator`. SSE in `core-data/net/Sse.kt`.
 - All async work via Coroutines + Flow.
-- **Health Connect access goes through `core-health` only.** App and feature
-  modules never import `androidx.health.connect:*` directly.
+- **`core-health` is an empty placeholder** — Health Connect is not integrated
+  yet (health data arrives backend-side via the Google Health API). If/when it's
+  added, confine all `androidx.health.connect:*` access to `core-health`; app and
+  feature modules must not import it directly.
 - **Wear module shares `core-domain` and `core-ui` (when relevant) but never
   depends on `app`** — pairing is by `applicationId`, not module dependency.
 - Phone and wear share `applicationId` (required for pairing); namespaces differ.
-- JVM toolchain 21. Min SDK 29 (phone), 30 (wear). Target SDK 35.
+- JVM toolchain 21. Min SDK 29 (phone), 30 (wear). Target SDK 35 (phone), 34 (wear).
 
 ## Build & validation
 
@@ -42,11 +47,22 @@ Run all Gradle commands from `android/`.
 
 ### Commands
 ```bash
-# CI gate (mirrors .github/workflows/android-ci.yml):
-./gradlew :app:assembleDebug :wear:assembleDebug :app:testDebugUnitTest --no-daemon
+# CI gate (mirrors .github/workflows/android-ci.yml): all-module unit tests +
+# the R8-minified release build.
+./gradlew :app:assembleDebug :wear:assembleDebug testDebugUnitTest :app:assembleRelease --no-daemon
 # Release APK (R8-minified, arm64-only): app/build/outputs/apk/release/app-release.apk
-./gradlew :app:assembleRelease --no-daemon
 ```
+
+### Compose UI tests (JVM, no device)
+Compose UI tests run on the JVM under **Robolectric** via `testDebugUnitTest`, so
+they gate in CI without an emulator. `core-ui` is the reference; to add UI tests
+to a module: `testImplementation`(`compose-ui-test-junit4`, `robolectric`),
+`debugImplementation(compose-ui-test-manifest)`, and set
+`android { testOptions { unitTests { isIncludeAndroidResources = true } } }`. Test
+class: `@RunWith(RobolectricTestRunner)` + `@Config(sdk = [34])` +
+`@GraphicsMode(NATIVE)`, a `createComposeRule()` rule, then `setContent { ... }`
+and `onNodeWithText(...)`. See `core-ui/.../StateViewsTest.kt`. The `Hf` design
+tokens have composition-local defaults, so simple primitives need no theme wrapper.
 Note: CI does **not** run `lintRelease`; it currently reports pre-existing
 `MissingPermission` errors in `WorkoutSessionService` (false positives — the
 calls are guarded by `canPostNotifications()`). Don't treat those as your

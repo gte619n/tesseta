@@ -41,7 +41,10 @@ function Sparkline({
         : "var(--color-alert)";
 
   return (
-    <svg width={width} height={height} className="overflow-visible">
+    // Decorative: the marker's value + range are shown as adjacent text, so the
+    // sparkline is hidden from assistive tech rather than announced as an empty
+    // graphic.
+    <svg width={width} height={height} className="overflow-visible" aria-hidden="true">
       {/* Reference range band */}
       {refLow !== null && refHigh !== null && (
         <rect

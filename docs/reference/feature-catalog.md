@@ -46,9 +46,11 @@ is retained because of this open work.
 
 ## Known placeholders / cleanups
 
-- Android `core-data` declares a **Room** dependency that is entirely unused —
-  the app is backend-driven (Retrofit + OkHttp disk cache; DataStore only for
-  the token cache and unit prefs). Treat Room as a dead dependency.
+- Android `core-data` uses **Room + SQLCipher** as the offline-first read mirror
+  (ADR-0007) — a real `@Database` (`data.db.HfDatabase`) driving the `SyncEngine`
+  + outbox. It is NOT a dead dependency. (DataStore holds only the token cache
+  and unit prefs; a handful of capture/search/reference repos still read
+  Retrofit-direct — see `android/CLAUDE.md`.)
 - Settings "About" links use placeholder `https://placeholder.tesseta.app/`
   URLs.
 - `isAdmin()` allow-lists are hardcoded on both web and backend (TODO: move to

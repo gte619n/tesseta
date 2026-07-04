@@ -105,7 +105,7 @@ public class BloodTestController {
         }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        sseStreamer.stream(() -> {
+        sseStreamer.stream(emitter, () -> {
             try {
                 BloodTestReport report = service.upload(userId, fileName, bytes, phase ->
                     sendPhase(emitter, phase, phaseMessage(phase)));

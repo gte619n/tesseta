@@ -43,17 +43,18 @@ surface. LLM features stream over SSE. See
 
 ## Backend at a glance
 
-Module layering (base package `com.gte619n.healthfitness`):
+**Single Gradle module** (base package `com.gte619n.healthfitness`); the layering
+below is a **package convention**, not a build boundary (it used to be five
+modules — see [`backend/CLAUDE.md`](../backend/CLAUDE.md) for why it was
+collapsed). Packages are `<layer>.<feature>`:
 
 ```
-app ─▶ api, core, persistence, integrations   (only module with the Spring Boot plugin)
-api ─▶ core, integrations
-persistence ─▶ core          integrations ─▶ core
-core (pure-Java library + spring-context; services, domain records, the goals event system)
+api ─▶ core, integrations       persistence ─▶ core       integrations ─▶ core
+core (domain records + pure-domain services + the goals event system)
 ```
 
-Controllers (`api`/`app`) → services (`core`) → repository interfaces (`core`)
-→ Firestore implementations (`persistence`). DTOs and domain types are Java
+Controllers (`api`) → services (`core`) → repository interfaces (`core`) →
+Firestore implementations (`persistence`). DTOs and domain types are Java
 **records**. No Lombok, no JPA/SQL. Synchronous-on-virtual-threads (no WebFlux).
 Conventions in [`backend/CLAUDE.md`](../backend/CLAUDE.md).
 
@@ -70,14 +71,18 @@ pattern — in [`web/CLAUDE.md`](../web/CLAUDE.md).
 
 ## Android at a glance
 
-Multi-module Compose. **The backend is the source of truth** — clients read via
-Retrofit (+ OkHttp 20 MB disk cache); DataStore holds only the token cache and
-unit prefs (Room is an unused leftover dependency). Hilt DI is fully wired; a
-single `NavHost` registers per-feature nav graphs, with a phone-only "More" hub
-for parity features. `core-domain` holds repository interfaces, `core-data` the
-Retrofit implementations + network clients, `core-ui` the `Hf` design tokens
-and shared primitives. Wear shares `core-domain`/`core-health` and never
-depends on `app`. Conventions in [`android/CLAUDE.md`](../android/CLAUDE.md).
+Multi-module Compose. **The backend is the source of truth**, and `core-data`
+runs an **offline-first mirror** against it (ADR-0007): reads come from a local
+**Room + SQLCipher** store kept fresh by a `SyncEngine`, writes are journaled to
+an outbox and replayed. **DataStore** holds only small key/value state (the
+ID-token cache and unit prefs). Networking is Retrofit + OkHttp (20 MB disk
+cache). Hilt DI is fully wired; a single `NavHost` registers per-feature nav
+graphs, with a phone-only "More" hub for parity features. `core-domain` holds
+repository interfaces, `core-data` the mirror/Retrofit implementations + network
+clients, `core-ui` the `Hf` design tokens and shared primitives. `core-health`
+is an **empty placeholder** — Health Connect is not integrated yet (health data
+arrives backend-side via the Google Health API). Wear shares `core-domain` and
+never depends on `app`. Conventions in [`android/CLAUDE.md`](../android/CLAUDE.md).
 
 ## Reference
 
@@ -93,12 +98,19 @@ Durable detail lives in [`docs/reference/`](reference/):
 - [**feature-catalog.md**](reference/feature-catalog.md) — what's shipped per
   platform, what's deferred, what's still a fixture.
 
+## Requirements
+
+Product & non-functional requirements — including the **privacy & compliance
+posture** for this PHI-grade app — live in
+[`docs/requirements/`](requirements/).
+
 ## Decisions & plans
 
 - Architecture Decision Records: [`docs/decisions/`](decisions/).
 - Forward-looking work not yet built: [`docs/plans/`](plans/) — the
-  android↔web parity roadmap (Phases 7–9: workout logging, Wear surfaces,
-  sleep/push/dark-mode) and the bulk-equipment-import plan.
+  android↔web parity roadmap (Wear surfaces, sleep/push/dark-mode) and the
+  bulk-equipment-import plan. (Active workout logging shipped since — ADR-0012;
+  the roadmap doc itself is stale on that point.)
 
 > Implementation specs (`IMPL-*`) that described already-shipped features have
 > been retired; their durable content lives in the reference docs above. Only

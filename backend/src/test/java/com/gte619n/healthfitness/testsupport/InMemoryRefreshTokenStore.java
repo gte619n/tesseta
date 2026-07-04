@@ -24,10 +24,18 @@ public class InMemoryRefreshTokenStore implements RefreshTokenStore {
     }
 
     @Override
-    public void markRotated(String tokenId, Instant rotatedAt) {
-        byId.computeIfPresent(tokenId, (id, t) -> new StoredRefreshToken(
-            t.tokenId(), t.userId(), t.tokenHash(), t.createdAt(), t.expiresAt(), true,
-            rotatedAt));
+    public boolean tryMarkRotated(String tokenId, Instant rotatedAt) {
+        // computeIfPresent is atomic per key, so exactly one concurrent caller
+        // observes a live token and performs the transition.
+        boolean[] won = {false};
+        byId.computeIfPresent(tokenId, (id, t) -> {
+            if (t.revoked()) return t; // already revoked — this caller lost
+            won[0] = true;
+            return new StoredRefreshToken(
+                t.tokenId(), t.userId(), t.tokenHash(), t.createdAt(), t.expiresAt(), true,
+                rotatedAt);
+        });
+        return won[0];
     }
 
     @Override

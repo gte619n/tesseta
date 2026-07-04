@@ -71,8 +71,9 @@ public class TestPersistenceConfig {
     SseStreamer synchronousSseStreamer() {
         return new SseStreamer() {
             @Override
-            public void stream(Runnable task) {
-                task.run();
+            protected Thread startWorker(Runnable task) {
+                task.run();   // inline & deterministic; nothing to cancel
+                return null;
             }
         };
     }

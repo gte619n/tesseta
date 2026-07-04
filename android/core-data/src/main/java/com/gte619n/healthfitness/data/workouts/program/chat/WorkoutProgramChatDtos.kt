@@ -45,6 +45,22 @@ data class ScheduleDto(
     }
 }
 
+// SSE token/error/done payloads consumed by WorkoutProgramChatClient.dispatch.
+// They live here in the data layer ON PURPOSE: R8 full-mode keeps `data.**`
+// (app/proguard-rules.pro) but not the `feature.**` module packages. These are
+// parsed reflectively via moshi.adapter(...), so a private copy inside the
+// feature module would have its constructor stripped by R8 and the designer chat
+// would silently degrade in release builds (every token -> "", done -> no
+// threadId). Keeping them in a kept package removes that risk by construction.
+/** The `token` SSE event `data`: an assistant text delta. */
+data class ChatTokenData(val text: String?)
+
+/** The `error` SSE event `data`: a server-side error message. */
+data class ChatErrorData(val error: String?)
+
+/** The `done` SSE event `data`: the (possibly newly-created) threadId. */
+data class ChatDoneData(val threadId: String?)
+
 /** The `proposal` SSE event `data`: `{ program: <deep>, issues: [], warnings: [] }`. */
 data class ProgramProposalDto(
     val program: WorkoutProgramDeepDto? = null,

@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.integrations.config;
 
 import com.google.genai.Client;
+import com.google.genai.types.HttpOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
@@ -33,7 +34,17 @@ public class GeminiConfig {
 
     @Bean
     @ConditionalOnExpression("'${app.gemini.api-key:}'.length() > 0")
-    public Client geminiClient(@Value("${app.gemini.api-key}") String apiKey) {
-        return Client.builder().apiKey(apiKey).build();
+    public Client geminiClient(
+        @Value("${app.gemini.api-key}") String apiKey,
+        // Per-request timeout (ms) so a hung Gemini socket can't block a worker
+        // indefinitely — the backstop to SSE cancellation for non-streaming
+        // callers (enrichment jobs, image generation, admin flows). Generous by
+        // default so it never truncates a legitimate long stream.
+        @Value("${app.gemini.timeout-ms:180000}") int timeoutMs
+    ) {
+        return Client.builder()
+            .apiKey(apiKey)
+            .httpOptions(HttpOptions.builder().timeout(timeoutMs).build())
+            .build();
     }
 }

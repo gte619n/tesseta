@@ -102,9 +102,15 @@ public class DexaScanController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Could not read uploaded file", e);
         }
+        // Authoritative content check via magic bytes — the content-type header
+        // above is client-supplied and skipped entirely when omitted.
+        if (!looksLikePdf(bytes)) {
+            throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "Uploaded file is not a PDF");
+        }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        sseStreamer.stream(() -> {
+        sseStreamer.stream(emitter, () -> {
             try {
                 DexaScan scan = service.upload(userId, bytes, phase ->
                     sendPhase(emitter, phase, phaseMessage(phase)));
@@ -218,5 +224,14 @@ public class DexaScanController {
             // will hit the next emit and we'll bail out.
             emitter.completeWithError(e);
         }
+    }
+
+    // A PDF starts with the "%PDF-" signature. Package-private + static for a
+    // direct unit test without standing up the (test-disabled) DEXA pipeline.
+    static boolean looksLikePdf(byte[] bytes) {
+        return bytes != null
+            && bytes.length >= 5
+            && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D'
+            && bytes[3] == 'F' && bytes[4] == '-';
     }
 }

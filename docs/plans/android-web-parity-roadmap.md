@@ -1,5 +1,11 @@
 # Android ↔ Web Feature Parity Roadmap
 
+> **STALE — do not treat as current.** Written before active workout logging
+> shipped (Phase 7, ADR-0012 / `FirestoreWorkoutRepository`) — the "Phase 7 not
+> built / `WorkoutSessionService` is a stub" statements below are out of date.
+> For current shipped/deferred state use
+> [`docs/reference/feature-catalog.md`](../reference/feature-catalog.md).
+
 **Date:** 2026-05-26
 **Updated:** 2026-06-02
 **Status:** Mostly shipped — foundations (§3) + IMPL-AND-01..06 + IMPL-AND-12 (goals) + IMPL-13 (testosterone marker, nutrition) have landed; Android phone is now at near-parity with web. Remaining work is active workout logging (Phase 7, needs ADR), Wear OS surfaces (Phase 8), a few Phase 9 stretch items (sleep, push notifications, dark mode), and a new cross-cutting **offline-first sync** workstream (IMPL-AND-20 / ADR-0007, planned). Original discovery survey from 2026-05-26 preserved below with status indicators brought current.

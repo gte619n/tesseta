@@ -13,6 +13,7 @@ import com.gte619n.healthfitness.core.sync.SyncStatus;
 import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.CollectionGroup;
+import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
@@ -93,6 +94,53 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
         await(collection(log.userId(), log.medicationId())
             .document(log.date().toString())
             .set(body));
+    }
+
+    @Override
+    public AdherenceLog upsertDose(
+        String userId, String medicationId, LocalDate date, DoseLog dose, String notes) {
+        // Atomic read-modify-write: read the day's log inside the transaction,
+        // replace any dose for the same window, append, and write. Firestore
+        // retries on a conflicting commit, so concurrent upserts for different
+        // windows on the same day serialise instead of clobbering one another.
+        DocumentReference ref = collection(userId, medicationId).document(date.toString());
+        return await(firestore.runTransaction(txn -> {
+            DocumentSnapshot snap = txn.get(ref).get();
+            List<DoseLog> doses = (snap.exists() && !isArchived(snap))
+                ? new ArrayList<>(toAdherenceLog(userId, medicationId, snap).doses())
+                : new ArrayList<>();
+            doses.removeIf(d -> d.window() == dose.window());
+            doses.add(dose);
+            AdherenceLog log = new AdherenceLog(userId, medicationId, date, doses, notes);
+            txn.set(ref, toBody(log)); // toBody re-stamps ACTIVE, resurrecting a tombstone
+            return log;
+        }));
+    }
+
+    @Override
+    public Optional<AdherenceLog> removeDose(
+        String userId, String medicationId, LocalDate date, TimeWindow window) {
+        DocumentReference ref = collection(userId, medicationId).document(date.toString());
+        return await(firestore.runTransaction(txn -> {
+            DocumentSnapshot snap = txn.get(ref).get();
+            if (!snap.exists() || isArchived(snap)) {
+                return Optional.<AdherenceLog>empty();
+            }
+            AdherenceLog current = toAdherenceLog(userId, medicationId, snap);
+            List<DoseLog> doses = new ArrayList<>(current.doses());
+            doses.removeIf(d -> d.window() == window);
+            if (doses.isEmpty()) {
+                Map<String, Object> updates = new HashMap<>();
+                updates.put(SYNC_STATUS_KEY, SyncStatus.ARCHIVED.name());
+                updates.put("updatedAt", serverTimestamp());
+                txn.set(ref, updates, SetOptions.merge());
+                return Optional.<AdherenceLog>empty();
+            }
+            AdherenceLog updated =
+                new AdherenceLog(userId, medicationId, date, doses, current.notes());
+            txn.set(ref, toBody(updated));
+            return Optional.of(updated);
+        }));
     }
 
     @Override

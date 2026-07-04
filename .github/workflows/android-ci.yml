@@ -18,19 +18,19 @@ jobs:
       run:
         working-directory: android
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up JDK 21 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
 
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.gradle/caches
@@ -39,11 +39,32 @@ jobs:
           restore-keys: |
             gradle-android-${{ runner.os }}-
 
-      - name: Assemble + unit tests
+      - name: Assemble + unit tests + release build
         # The app build now requires a real WEB OAuth client ID (it fails the
         # build rather than embedding an empty audience). The web client ID is
         # a public identifier, supplied here via the repo variable so CI builds
         # a signable APK without gcloud/Secret Manager access.
+        #
+        # Two Phase-0 changes close the release blind-spot:
+        #  - testDebugUnitTest (no :app: prefix) runs EVERY module's unit tests,
+        #    not just :app — this is what gates the SyncEngine/ConflictResolver/
+        #    outbox/DbKeystore/chat suites that previously never ran in CI.
+        #  - :app:assembleRelease builds the R8-minified, arm64-only variant so
+        #    R8/Moshi reflection breakage (e.g. the workout-designer SSE DTOs)
+        #    surfaces pre-merge instead of only in a shipped APK.
         env:
           WEB_OAUTH_CLIENT_ID: ${{ vars.WEB_OAUTH_CLIENT_ID }}
-        run: ./gradlew :app:assembleDebug :wear:assembleDebug :app:testDebugUnitTest --no-daemon
+        run: >-
+          ./gradlew
+          :app:assembleDebug :wear:assembleDebug
+          testDebugUnitTest
+          :app:assembleRelease
+          --no-daemon
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-test-reports
+          path: android/**/build/reports/tests/
+          if-no-files-found: warn

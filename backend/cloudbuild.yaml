@@ -21,7 +21,22 @@ steps:
       - --all-tags
       - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend
 
-  - id: deploy
+  # Vulnerability scan the image before it can ship. Fails the build on HIGH or
+  # CRITICAL findings that have a fix available (--ignore-unfixed avoids blocking
+  # on unfixable base-OS CVEs). Trivy authenticates to Artifact Registry via the
+  # build SA's ambient GCP credentials.
+  - id: scan-image
+    name: aquasec/trivy:0.58.1
+    args:
+      - image
+      - --severity=HIGH,CRITICAL
+      - --ignore-unfixed
+      - --exit-code=1
+      - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA
+
+  # Canary deploy: bring the new revision up with a stable `candidate` tag but
+  # ZERO traffic, so the live revision keeps serving until it's proven healthy.
+  - id: deploy-candidate
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -34,6 +49,10 @@ steps:
       - --service-account=health-fitness-runtime@$PROJECT_ID.iam.gserviceaccount.com
       - --allow-unauthenticated
       - --port=8080
+      # Bring the revision up with no traffic under the `candidate` tag; the
+      # promote step below smoke-tests it and only then shifts 100% traffic.
+      - --no-traffic
+      - --tag=candidate
       # Meal-photo capture runs Gemini analysis + studio-image generation, which
       # holds multi-MB images in memory; the default 512Mi OOM-kills the instance
       # mid-analysis, orphaning the in-memory finalize task (entry stuck ANALYZING
@@ -63,6 +82,19 @@ steps:
       # to mint native-client session access tokens (ADR-0010); without it the
       # resource server accepts Google tokens only and /api/auth/exchange 503s.
       - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest,SESSION_SIGNING_KEY=session-signing-key:latest
+
+  # Smoke-test the candidate revision and only then shift 100% traffic to it. A
+  # failed health check leaves the previous revision serving (no bad deploy).
+  - id: promote-canary
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    env:
+      - PROJECT_ID=$PROJECT_ID
+    args:
+      - infra/scripts/canary-promote.sh
+      - health-fitness-backend
+      - us-central1
+      - /actuator/health
 
   # IMPL-12 Phase 5: keep the goals-sustained-reeval Cloud Run Job's
   # image in sync with the deployed service. The Job re-uses the same

@@ -48,7 +48,10 @@ public class FirestoreWorkoutRepository implements WorkoutRepository {
 
     @Override
     public List<Workout> findByUser(String userId) {
-        List<QueryDocumentSnapshot> docs = await(collection(userId).get()).getDocuments();
+        // Safety cap so this can't grow unbounded with a user's history (peers
+        // cap at 200-500). A user with >500 logged workouts is not expected.
+        List<QueryDocumentSnapshot> docs =
+            await(collection(userId).limit(500).get()).getDocuments();
         return docs.stream()
             .filter(d -> !isArchived(d))
             .map(d -> toWorkout(userId, d))

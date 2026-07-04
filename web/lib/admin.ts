@@ -17,10 +17,16 @@ function adminEmails(): string[] {
   return [...BUILT_IN_ADMIN_EMAILS, ...fromEnv];
 }
 
+// Pure predicate so both the session check and the apiFetch /api/admin guard
+// share one source of truth for the allow-list.
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return adminEmails().includes(email);
+}
+
 export async function isAdmin(): Promise<boolean> {
   const session = await auth();
-  if (!session?.user?.email) return false;
-  return adminEmails().includes(session.user.email);
+  return isAdminEmail(session?.user?.email);
 }
 
 export async function requireAdmin() {

@@ -633,24 +633,15 @@ public class NutritionService {
     }
 
     /**
-     * Resum all of the day's entries into the cached {@link NutritionDailyLog}
-     * and save it through the existing repo (which publishes the metric events).
+     * Resum all of the day's entries into the cached {@link NutritionDailyLog}.
+     * The recompute (read entries + write rollup) is atomic in the Firestore impl
+     * so concurrent entry writes on the same day can't lose one's contribution;
+     * the metric events are published AFTER, preserving the "publish after save"
+     * invariant logDay had.
      */
     private void recomputeDay(String userId, LocalDate date) {
-        Macros total = Macros.zero();
-        for (FoodEntry e : entries.findByDate(userId, date)) {
-            total = total.plus(e.macros());
-        }
-        logDay(
-            userId,
-            date,
-            total.proteinGrams(),
-            total.carbsGrams(),
-            total.fatGrams(),
-            total.fiberGrams(),
-            total.sugarGrams(),
-            total.caloriesKcal()
-        );
+        repository.recomputeFromEntries(userId, date, entries);
+        metricChangedPublisher.publishAll(userId, NUTRITION_KEYS);
     }
 
     private static void requireUser(String userId) {
