@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -68,6 +69,14 @@ public class TodaysDosesController {
                 .map(dose -> log.medicationId() + ":" + dose.window().name()))
             .collect(Collectors.toSet());
 
+        // Batch-load the drugs for all active meds — one chunked whereIn instead
+        // of a findById per med (N+1).
+        Map<String, Drug> drugsById = drugs.findByIds(activeMeds.stream()
+            .map(Medication::drugId)
+            .filter(id -> id != null)
+            .distinct()
+            .toList());
+
         // Build response for each scheduled dose
         List<TodaysDoseResponse> doses = new ArrayList<>();
 
@@ -82,8 +91,8 @@ public class TodaysDosesController {
                 continue;
             }
 
-            // Get drug info
-            Drug drug = drugs.findById(med.drugId()).orElse(null);
+            // Get drug info (from the batch-loaded map)
+            Drug drug = med.drugId() != null ? drugsById.get(med.drugId()) : null;
             String drugName = med.customName() != null ? med.customName()
                 : (drug != null ? drug.name() : "Unknown");
             String imageUrl = drug != null ? drug.imageUrl() : null;

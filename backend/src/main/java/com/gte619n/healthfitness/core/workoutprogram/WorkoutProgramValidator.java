@@ -60,6 +60,17 @@ public class WorkoutProgramValidator {
             return issues;
         }
         Map<String, ExerciseDigest> digestByExercise = safeDigest(userId);
+        // Batch-load every exercise referenced across the program — one chunked
+        // read instead of a findById per prescription (N+1).
+        List<String> exerciseIds = program.phases().stream()
+            .filter(p -> p.days() != null).flatMap(p -> p.days().stream())
+            .filter(d -> d.blocks() != null).flatMap(d -> d.blocks().stream())
+            .filter(b -> b.prescriptions() != null).flatMap(b -> b.prescriptions().stream())
+            .map(Prescription::exerciseId).filter(id -> id != null).distinct().toList();
+        Map<String, Exercise> exerciseById = new HashMap<>();
+        for (Exercise e : exercises.findByIds(exerciseIds)) {
+            exerciseById.put(e.exerciseId(), e);
+        }
         for (ProgramPhase phase : program.phases()) {
             if (phase.deloadWeekIndex() != null
                 && (phase.deloadWeekIndex() < 1 || phase.deloadWeekIndex() > Math.max(1, phase.weeks()))) {
@@ -67,21 +78,22 @@ public class WorkoutProgramValidator {
                     + " is outside 1.." + phase.weeks() + ".");
             }
             for (WorkoutDay day : phase.days()) {
-                validateDay(userId, phase, day, digestByExercise, issues);
+                validateDay(userId, phase, day, digestByExercise, exerciseById, issues);
             }
         }
         return issues;
     }
 
     private void validateDay(String userId, ProgramPhase phase, WorkoutDay day,
-                             Map<String, ExerciseDigest> digestByExercise, List<String> issues) {
+                             Map<String, ExerciseDigest> digestByExercise,
+                             Map<String, Exercise> exerciseById, List<String> issues) {
         if (day.locationId() == null || day.locationId().isBlank()) {
             issues.add("Day '" + day.label() + "' has no gym assigned.");
             return;
         }
         for (Block block : day.blocks()) {
             for (Prescription rx : block.prescriptions()) {
-                Exercise ex = exercises.findById(rx.exerciseId()).orElse(null);
+                Exercise ex = exerciseById.get(rx.exerciseId());
                 String where = "Day '" + day.label() + "' / " + block.type() + " block";
                 if (ex == null) {
                     issues.add(where + ": unknown exercise '" + rx.exerciseId() + "'.");
