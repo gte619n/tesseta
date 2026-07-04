@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.feature.blood
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.blood.BloodReadingRepository
@@ -52,21 +53,40 @@ class BloodOverviewViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    // Monotonic timestamp of the last successful background refresh, so a re-entry
+    // within REFRESH_TTL_MS reuses the mirror instead of re-pulling every time.
+    private var lastRefreshAt: Long = 0L
+
     init {
-        refresh()
+        // Screen renders from the Room mirror immediately (state stateIn above);
+        // this only revalidates, and only if the mirror is stale.
+        refreshIfStale()
     }
 
     fun retry() = refresh()
 
     /** Pull-to-refresh entry point (D11): re-fill the mirror from the backend. */
-    fun refresh() {
+    fun refresh() = doRefresh()
+
+    /** On-entry revalidation: skipped when the mirror was refreshed recently. */
+    private fun refreshIfStale() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
+        doRefresh()
+    }
+
+    private fun doRefresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
             runCatching {
                 readings.refresh()
                 reports.refresh()
-            }
+            }.onSuccess { lastRefreshAt = SystemClock.elapsedRealtime() }
             _isRefreshing.value = false
         }
+    }
+
+    private companion object {
+        const val REFRESH_TTL_MS = 30_000L
     }
 }

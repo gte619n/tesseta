@@ -61,8 +61,25 @@ class ReminderSettingsViewModel @Inject constructor(
     }
 
     fun load() {
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(error = null) }
         viewModelScope.launch {
+            // Offline-first: seed instantly from the cached settings + mirrored
+            // meds so the screen shows with no spinner on entry. The loader stays
+            // only when nothing is cached yet (pre-first-sync). Then revalidate
+            // against the network, keeping the seeded values on failure.
+            val cached = runCatching { settingsRepo.getCached() }.getOrNull()
+            val cachedMeds = runCatching { medications.list(MedicationStatus.ACTIVE) }.getOrNull()
+            if (cached != null) {
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        enabled = cached.enabled,
+                        windowTimes = cached.windowTimes,
+                        perMedication = cached.perMedication,
+                        medications = cachedMeds ?: it.medications,
+                    )
+                }
+            }
             try {
                 coroutineScope {
                     val settings = async { settingsRepo.get() }
@@ -80,7 +97,13 @@ class ReminderSettingsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(loading = false, error = e.message ?: "Couldn't load reminder settings")
+                    // Keep any seeded data on screen; only surface an error when
+                    // there's nothing cached to show.
+                    if (it.loading) {
+                        it.copy(loading = false, error = e.message ?: "Couldn't load reminder settings")
+                    } else {
+                        it
+                    }
                 }
             }
         }

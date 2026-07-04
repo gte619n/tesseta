@@ -4,6 +4,7 @@ import android.content.Context
 import com.gte619n.healthfitness.data.db.dao.BloodReadingDao
 import com.gte619n.healthfitness.data.db.dao.BloodTestReportDao
 import com.gte619n.healthfitness.data.db.dao.BodyCompositionDao
+import com.gte619n.healthfitness.data.db.dao.CatalogCacheDao
 import com.gte619n.healthfitness.data.db.dao.DailyMetricDao
 import com.gte619n.healthfitness.data.db.dao.DeviceSyncDao
 import com.gte619n.healthfitness.data.db.dao.DexaScanDao
@@ -85,4 +86,6 @@ object DbModule {
     @Provides fun provideUserProfileDao(db: HfDatabase): UserProfileDao = db.userProfileDao()
 
     @Provides fun provideWorkoutSessionDraftDao(db: HfDatabase): WorkoutSessionDraftDao = db.workoutSessionDraftDao()
+
+    @Provides fun provideCatalogCacheDao(db: HfDatabase): CatalogCacheDao = db.catalogCacheDao()
 }

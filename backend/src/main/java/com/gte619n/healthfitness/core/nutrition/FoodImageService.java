@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +36,15 @@ import org.springframework.stereotype.Service;
 public class FoodImageService {
 
     private static final int BACKFILL_LIMIT = 500;
+
+    // A catalog image PENDING past this age is presumed orphaned — its bare
+    // runAsync task died with the instance (OOM/restart/deploy) and will never
+    // finish — so a day read re-enqueues it. The single-food entry that
+    // references the food shows a spinner/placeholder that would otherwise never
+    // resolve. Kept well above a normal generation time so a healthy in-flight
+    // job is never disturbed.
+    private static final Duration PENDING_STALE_AFTER = Duration.ofMinutes(3);
+    private static final int STALE_PENDING_LIMIT = 50;
 
     private final FoodCatalogRepository repository;
     private final ObjectProvider<FoodImageGenerator> generator;
@@ -125,6 +135,37 @@ public class FoodImageService {
             enqueueGeneration(food.foodId(), null);
         }
         return pending.size();
+    }
+
+    /**
+     * Self-heal orphaned studio-image generation: re-enqueue any catalog food
+     * stuck at {@code PENDING} longer than {@link #PENDING_STALE_AFTER}.
+     * Generation runs in a bare {@code runAsync} with no retry, so an instance
+     * OOM/restart/deploy mid-generation leaves the food PENDING forever — and the
+     * single-food entry that references it never learns the image finished
+     * (offline it shows a permanent placeholder). Re-enqueuing re-stamps the
+     * food's {@code updatedAt}, so a healthy in-flight job or a just-swept one is
+     * not re-swept until the window elapses again. Called on the day-read path so
+     * it heals on the next fetch/poll. Returns the count re-enqueued; a no-op when
+     * the image pipeline is unavailable.
+     */
+    public int sweepStalePending() {
+        if (generator.getIfAvailable() == null || store.getIfAvailable() == null) {
+            return 0;
+        }
+        Instant cutoff = Instant.now().minus(PENDING_STALE_AFTER);
+        List<CatalogFood> pending =
+            repository.findByImageStatus(FoodImageStatus.PENDING, STALE_PENDING_LIMIT);
+        int reenqueued = 0;
+        for (CatalogFood food : pending) {
+            if (food.updatedAt() != null && food.updatedAt().isBefore(cutoff)) {
+                // enqueueGeneration re-flips PENDING (fresh updatedAt) then re-runs
+                // generation off-thread — the same path the original create took.
+                enqueueGeneration(food.foodId(), null);
+                reenqueued++;
+            }
+        }
+        return reenqueued;
     }
 
     // ---- helpers ----

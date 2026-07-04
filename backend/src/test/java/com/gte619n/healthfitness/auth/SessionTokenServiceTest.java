@@ -86,44 +86,64 @@ class SessionTokenServiceTest {
     }
 
     @Test
-    void replayingARotatedTokenAfterTheGraceWindowIsTreatedAsTheftAndBurnsTheFamily() {
-        // A negative grace puts every replay past the window, so a re-presented
-        // rotated token is unambiguously theft.
-        props.setReuseGrace(Duration.ofSeconds(-1));
+    void benignReplayOfARotatedTokenIsHonouredWhateverTheDelay() {
+        // The core offline-first guarantee (ADR-0014): a refresh whose response
+        // was lost in flight leaves the client holding the old token. Replaying it
+        // — with NO time window — must succeed while the chain tip is still live,
+        // however long the phone was offline.
         TokenPair first = service.issueFor(ADA);
         TokenPair second = service.refresh(first.refreshToken());
 
-        // Re-presenting the already-rotated first token: rejected...
-        assertThatThrownBy(() -> service.refresh(first.refreshToken()))
-            .isInstanceOf(InvalidRefreshTokenException.class);
-
-        // ...and the whole family is now revoked, so the live token dies too.
-        assertThatThrownBy(() -> service.refresh(second.refreshToken()))
-            .isInstanceOf(InvalidRefreshTokenException.class);
-    }
-
-    @Test
-    void replayingARotatedTokenWithinTheGraceWindowReissuesWithoutBurningTheFamily() {
-        // Default 30s grace: a benign retry of a refresh whose response was lost
-        // in flight must succeed, not log the user out.
-        TokenPair first = service.issueFor(ADA);
-        TokenPair second = service.refresh(first.refreshToken());
-
-        // Replaying the just-rotated token yields a fresh, usable pair...
+        // Replaying the already-rotated first token yields a fresh, usable pair...
         TokenPair retry = service.refresh(first.refreshToken());
         assertThat(accessDecoder.decode(retry.accessToken()).getSubject()).isEqualTo("sub-123");
         assertThat(retry.refreshToken()).isNotEqualTo(first.refreshToken());
 
-        // ...and the family is intact: the live rotated token still refreshes,
-        // and so does the pair handed back to the retry.
+        // ...and the family is intact: the live successor still refreshes, and so
+        // does the pair handed back to the retry.
         assertThat(service.refresh(second.refreshToken())).isNotNull();
         assertThat(service.refresh(retry.refreshToken())).isNotNull();
     }
 
     @Test
-    void aLoggedOutTokenIsNotResurrectedByTheGraceWindow() {
-        // Logout is definitive even within the reuse-grace window: a stray retry
-        // must not re-animate the session.
+    void repeatedReplaysOfTheSameStaleTokenEachSucceed() {
+        // A client stuck behind repeated lost responses replays the SAME old token
+        // several times. Each replay must be honoured — the presented token is
+        // re-pointed at the freshest successor, so it never diverges into a burn.
+        TokenPair first = service.issueFor(ADA);
+        service.refresh(first.refreshToken()); // rotate away the response (lost)
+
+        for (int i = 0; i < 5; i++) {
+            TokenPair retry = service.refresh(first.refreshToken());
+            assertThat(accessDecoder.decode(retry.accessToken()).getSubject()).isEqualTo("sub-123");
+        }
+        // The session is still healthy after all those retries.
+        TokenPair fresh = service.refresh(first.refreshToken());
+        assertThat(service.refresh(fresh.refreshToken())).isNotNull();
+    }
+
+    @Test
+    void replayOfALoggedOutChainBurnsTheFamily() {
+        // Logout severs the chain (the tip is revoked with no successor). A later
+        // replay of any token in that chain finds a dead tip → theft → burn every
+        // still-live token for the user.
+        TokenPair first = service.issueFor(ADA);
+        TokenPair second = service.refresh(first.refreshToken());
+        // A separate live session for the same user (e.g. another device).
+        TokenPair otherDevice = service.issueFor(ADA);
+
+        service.revoke(second.refreshToken()); // logout: chain tip dead, no successor
+
+        // Replaying the stale first token now dead-ends → rejected + family burned.
+        assertThatThrownBy(() -> service.refresh(first.refreshToken()))
+            .isInstanceOf(InvalidRefreshTokenException.class);
+        assertThatThrownBy(() -> service.refresh(otherDevice.refreshToken()))
+            .isInstanceOf(InvalidRefreshTokenException.class);
+    }
+
+    @Test
+    void aLoggedOutTokenCannotBeResurrected() {
+        // Logout is definitive: a stray retry must not re-animate the session.
         TokenPair pair = service.issueFor(ADA);
         service.revoke(pair.refreshToken());
 

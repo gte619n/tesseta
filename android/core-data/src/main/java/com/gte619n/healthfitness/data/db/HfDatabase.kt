@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.gte619n.healthfitness.data.db.dao.BloodReadingDao
 import com.gte619n.healthfitness.data.db.dao.BloodTestReportDao
 import com.gte619n.healthfitness.data.db.dao.BodyCompositionDao
+import com.gte619n.healthfitness.data.db.dao.CatalogCacheDao
 import com.gte619n.healthfitness.data.db.dao.DailyMetricDao
 import com.gte619n.healthfitness.data.db.dao.DeviceSyncDao
 import com.gte619n.healthfitness.data.db.dao.DexaScanDao
@@ -35,6 +36,7 @@ import com.gte619n.healthfitness.data.db.dao.WorkoutSessionDraftDao
 import com.gte619n.healthfitness.data.db.entity.BloodReadingEntity
 import com.gte619n.healthfitness.data.db.entity.BloodTestReportEntity
 import com.gte619n.healthfitness.data.db.entity.BodyCompositionEntity
+import com.gte619n.healthfitness.data.db.entity.CatalogCacheEntity
 import com.gte619n.healthfitness.data.db.entity.DailyMetricEntity
 import com.gte619n.healthfitness.data.db.entity.DeviceSyncEntity
 import com.gte619n.healthfitness.data.db.entity.DexaScanEntity
@@ -102,6 +104,9 @@ import net.sqlcipher.database.SupportFactory
         UserProfileEntity::class,
         // device-local (non-mirror) tables
         WorkoutSessionDraftEntity::class,
+        // offline-fix: shared read cache for fetched catalog entities (ADR-0018) —
+        // NOT a mirror table, NOT wired into the sync engine.
+        CatalogCacheEntity::class,
     ],
     // v3: bumped to force a destructive wipe + full resync so rows pulled before
     // the delta-doc id injection (which lacked their document id) are re-fetched
@@ -110,7 +115,10 @@ import net.sqlcipher.database.SupportFactory
     // v4: adds the workoutSessionDrafts table (ADR-0012 phone workout logger) —
     // additive MIGRATION_3_4, no wipe (a draft is the ONLY copy of an
     // in-progress session, so destructive fallback must never be its upgrade path).
-    version = 4,
+    // v5: adds the catalog_cache table (offline-fix, ADR-0018) — a bounded read
+    // cache of fetched reference entities (equipment/food/drug). Additive
+    // MIGRATION_4_5; a plain local cache, not a mirror and not synced.
+    version = 5,
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {
@@ -143,6 +151,8 @@ abstract class HfDatabase : RoomDatabase() {
 
     abstract fun workoutSessionDraftDao(): WorkoutSessionDraftDao
 
+    abstract fun catalogCacheDao(): CatalogCacheDao
+
     companion object {
         const val DB_NAME = "hf-offline.db"
 
@@ -169,6 +179,23 @@ abstract class HfDatabase : RoomDatabase() {
         }
 
         /**
+         * v4 → v5: add the catalog_cache table (offline-fix, ADR-0018). Additive —
+         * a bounded read cache of fetched reference entities (equipment/food/drug),
+         * keyed by `(type, id)`. Must match the exported schema 5.json exactly so
+         * Room's identity-hash validation passes.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `catalog_cache` (" +
+                        "`type` TEXT NOT NULL, `id` TEXT NOT NULL, " +
+                        "`json` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`type`, `id`))",
+                )
+            }
+        }
+
+        /**
          * Builds the encrypted database. Loads the SQLCipher native libs, fetches
          * the Keystore-wrapped passphrase, and hands it to [SupportFactory]
          * (which copies then zeroes the byte array).
@@ -189,7 +216,7 @@ abstract class HfDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 // Known upgrades run additive migrations (the drafts table holds
                 // device-only data that a wipe would destroy)…
-                .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
                 // …while schemaVersion bumps (D13) trigger an explicit wipe+resync
                 // at the sync layer, not a Room migration; fall back destructively
                 // so a mismatched on-disk schema can never wedge the app.

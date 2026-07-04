@@ -31,14 +31,27 @@ class GymsListViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
+            // Offline-first (ADR-0018): seed instantly from the Room mirror so
+            // re-entry shows the last-synced gyms with no spinner. Only stay on
+            // Loading when nothing is cached yet (pre-first-sync). Then revalidate.
+            val cached = runCatching { repo.cachedList() }.getOrNull().orEmpty()
+            if (cached.isNotEmpty()) {
+                _state.update { it.copy(loading = false, locations = cached, error = null) }
+            } else {
+                _state.update { it.copy(loading = true, error = null) }
+            }
             repo.list().fold(
                 onSuccess = { locations ->
                     _state.update { it.copy(loading = false, locations = locations, error = null) }
                 },
                 onFailure = { e ->
-                    _state.update { it.copy(loading = false, error = e.message ?: "Failed to load gyms") }
+                    // Keep any seeded gyms on screen; only surface an error when
+                    // there's nothing to show.
+                    _state.update {
+                        if (it.locations.isNotEmpty()) it.copy(loading = false)
+                        else it.copy(loading = false, error = e.message ?: "Failed to load gyms")
+                    }
                 },
             )
         }

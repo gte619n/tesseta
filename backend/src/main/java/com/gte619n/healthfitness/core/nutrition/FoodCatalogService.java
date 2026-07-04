@@ -255,6 +255,17 @@ public class FoodCatalogService {
     }
 
     /**
+     * Self-heal orphaned studio-image generation (see
+     * {@link FoodImageService#sweepStalePending()}): re-enqueue catalog foods
+     * stuck at {@code PENDING} past the stale window. A no-op when the image
+     * pipeline is unavailable. Returns the count re-enqueued.
+     */
+    public int sweepStalePendingImages() {
+        FoodImageService images = foodImages.getIfAvailable();
+        return images != null ? images.sweepStalePending() : 0;
+    }
+
+    /**
      * Record one distinct user's confirmation. Recomputes the denormalized
      * count and promotes the food to {@code VERIFIED} once it reaches the
      * configured threshold.

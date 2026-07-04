@@ -35,6 +35,13 @@ import javax.inject.Inject
 // meals finished and left the row stuck on "Analyzing photo…".
 private const val MAX_SETTLE_POLL_ATTEMPTS = 120
 
+// A run of consecutive failed poll fetches (offline, or a persistent server
+// error) stops the settle-poll — but a single flaky fetch does NOT count against
+// the generation-settle budget above, so a spotty connection keeps retrying
+// instead of giving up with the image still generating. The poll re-arms on the
+// next resume / nutrition push regardless.
+private const val MAX_SETTLE_POLL_FAILURES = 8
+
 data class NutritionTodayUiState(
     val loading: Boolean = true,
     val date: LocalDate = LocalDate.now(),
@@ -254,11 +261,24 @@ class NutritionTodayViewModel @Inject constructor(
         if (!_state.value.day.hasGeneratingImage()) return
         imagePollJob = viewModelScope.launch {
             var attempts = 0
-            while (attempts < MAX_SETTLE_POLL_ATTEMPTS && _state.value.date == date && _state.value.day.hasGeneratingImage()) {
-                attempts++
+            var consecutiveFailures = 0
+            while (attempts < MAX_SETTLE_POLL_ATTEMPTS &&
+                consecutiveFailures < MAX_SETTLE_POLL_FAILURES &&
+                _state.value.date == date &&
+                _state.value.day.hasGeneratingImage()
+            ) {
                 delay(2500)
                 if (_state.value.date != date) return@launch
-                val day = runCatching { repository.day(date.format(ISO_DATE)) }.getOrNull() ?: continue
+                val day = runCatching { repository.day(date.format(ISO_DATE)) }.getOrNull()
+                if (day == null) {
+                    // A flaky fetch must not consume the generation-settle budget:
+                    // keep the last-known day on screen and retry, giving up only
+                    // after a run of consecutive failures (offline / persistent).
+                    consecutiveFailures++
+                    continue
+                }
+                consecutiveFailures = 0
+                attempts++
                 if (_state.value.date == date) {
                     _state.update { it.copy(day = day) }
                 }

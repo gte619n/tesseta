@@ -31,6 +31,8 @@ class EquipmentOverrideViewModelTest {
             schema = SpecSchemaTag.SELECTORIZED,
             specs = EquipmentSpec.Selectorized(10.0, 200.0, 5.0),
         )
+        coEvery { equipmentRepo.cached(any()) } returns null
+        coEvery { locationRepo.cached(any()) } returns null
         coEvery { equipmentRepo.get("eq-1") } returns Result.success(equipment)
         coEvery { locationRepo.get("gym-1") } returns Result.success(Fixtures.location())
 
@@ -51,6 +53,8 @@ class EquipmentOverrideViewModelTest {
             schema = SpecSchemaTag.SELECTORIZED,
             specs = EquipmentSpec.Selectorized(10.0, 200.0, 5.0),
         )
+        coEvery { equipmentRepo.cached(any()) } returns null
+        coEvery { locationRepo.cached(any()) } returns null
         coEvery { equipmentRepo.get("eq-1") } returns Result.success(equipment)
         coEvery { locationRepo.get("gym-1") } returns Result.success(
             Fixtures.location(equipmentSpecs = mapOf("eq-1" to mapOf("maxWeight" to 150.0))),
@@ -67,6 +71,8 @@ class EquipmentOverrideViewModelTest {
     @Test
     fun `save sends edited specs map`() = runTest {
         val equipment = Fixtures.equipment(id = "eq-1", schema = SpecSchemaTag.SELECTORIZED)
+        coEvery { equipmentRepo.cached(any()) } returns null
+        coEvery { locationRepo.cached(any()) } returns null
         coEvery { equipmentRepo.get("eq-1") } returns Result.success(equipment)
         coEvery { locationRepo.get("gym-1") } returns Result.success(Fixtures.location())
         val captured = slot<Map<String, Any?>>()

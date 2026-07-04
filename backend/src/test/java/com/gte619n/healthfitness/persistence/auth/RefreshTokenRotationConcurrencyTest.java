@@ -37,7 +37,7 @@ class RefreshTokenRotationConcurrencyTest {
         FirestoreRefreshTokenStore store = new FirestoreRefreshTokenStore(firestore);
         Instant now = Instant.now();
         store.save(new StoredRefreshToken(
-            "tok-1", "user-1", "hash-1", now, now.plus(1, ChronoUnit.HOURS), false, null));
+            "tok-1", "user-1", "hash-1", now, now.plus(1, ChronoUnit.HOURS), false, null, null));
 
         int threads = 8;
         ExecutorService pool = Executors.newFixedThreadPool(threads);
@@ -47,7 +47,7 @@ class RefreshTokenRotationConcurrencyTest {
         for (int i = 0; i < threads; i++) {
             futures.add(pool.submit(() -> {
                 startLine.await();
-                if (store.tryMarkRotated("tok-1", Instant.now())) {
+                if (store.tryMarkRotated("tok-1", Instant.now(), "succ-" + Thread.currentThread().threadId())) {
                     winners.incrementAndGet();
                 }
                 return null;

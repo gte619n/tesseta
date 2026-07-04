@@ -44,25 +44,38 @@ class EditGymViewModel @Inject constructor(
 
     private fun load() {
         viewModelScope.launch {
+            // Offline-first (ADR-0018): seed the form instantly from the mirror so
+            // re-entry shows the current values with no spinner (submitting=false).
+            // Only keep the initial `submitting=true` gate when nothing is cached
+            // yet. Then revalidate over the network.
+            runCatching { repo.cached(locationId) }.getOrNull()?.let { location ->
+                _coverPhotoUrl.value = location.coverPhotoUrl
+                _form.value = location.toFormState()
+            }
             repo.get(locationId).fold(
                 onSuccess = { location ->
                     _coverPhotoUrl.value = location.coverPhotoUrl
-                    val hours = DayOfWeek.entries.associateWith { day -> location.hours?.get(day) }
-                    _form.value = LocationFormState(
-                        name = location.name,
-                        address = location.address.orEmpty(),
-                        is24Hours = location.is24Hours,
-                        hours = hours,
-                        amenities = location.amenities.toSet(),
-                        submitting = false,
-                    )
+                    _form.value = location.toFormState()
                 },
                 onFailure = { e ->
-                    _form.update { it.copy(submitting = false, error = e.message ?: "Failed to load gym") }
+                    // Keep any seeded form on screen; only surface an error when
+                    // nothing was cached.
+                    _form.update {
+                        if (!it.submitting) it else it.copy(submitting = false, error = e.message ?: "Failed to load gym")
+                    }
                 },
             )
         }
     }
+
+    private fun com.gte619n.healthfitness.domain.workouts.Location.toFormState() = LocationFormState(
+        name = name,
+        address = address.orEmpty(),
+        is24Hours = is24Hours,
+        hours = DayOfWeek.entries.associateWith { day -> hours?.get(day) },
+        amenities = amenities.toSet(),
+        submitting = false,
+    )
 
     fun update(state: LocationFormState) {
         _form.value = state

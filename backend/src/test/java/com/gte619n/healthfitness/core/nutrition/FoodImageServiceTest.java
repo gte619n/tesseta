@@ -3,7 +3,9 @@ package com.gte619n.healthfitness.core.nutrition;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -153,15 +155,59 @@ class FoodImageServiceTest {
         assertEquals(FoodImageStatus.READY, repo.get("b").imageStatus());
     }
 
+    @Test
+    void sweepStalePending_reenqueuesOnlyStalePendingFoods() {
+        FakeRepo repo = new FakeRepo();
+        // Stale PENDING (its runAsync task presumably died) -> re-enqueued.
+        repo.add(foodAt("stale", FoodImageStatus.PENDING, Instant.now().minus(Duration.ofMinutes(10))));
+        // Freshly PENDING (a healthy in-flight job) -> left alone.
+        repo.add(foodAt("fresh", FoodImageStatus.PENDING, Instant.now()));
+        // READY is never a candidate.
+        repo.add(foodAt("done", FoodImageStatus.READY, Instant.now().minus(Duration.ofHours(1))));
+        // Block the dispatched async work so the re-enqueued food stays at the
+        // synchronous PENDING flip (no runAsync race).
+        FoodImageGenerator blocking = (f, ref, mime) -> {
+            try { Thread.sleep(60_000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return Optional.empty();
+        };
+        FoodImageService svc = new FoodImageService(
+            repo, provider(blocking), provider(new FakeStore("u")), empty());
+
+        int reenqueued = svc.sweepStalePending();
+
+        assertEquals(1, reenqueued);
+        // The stale food was re-enqueued: still PENDING, but its updatedAt is
+        // refreshed so a rapid follow-up sweep won't re-enqueue it again.
+        assertEquals(FoodImageStatus.PENDING, repo.get("stale").imageStatus());
+        assertTrue(repo.get("stale").updatedAt().isAfter(Instant.now().minus(Duration.ofMinutes(1))),
+            "re-enqueue re-stamps updatedAt");
+        assertEquals(FoodImageStatus.PENDING, repo.get("fresh").imageStatus());
+        assertEquals(FoodImageStatus.READY, repo.get("done").imageStatus());
+    }
+
+    @Test
+    void sweepStalePending_withoutPipeline_isNoOp() {
+        FakeRepo repo = new FakeRepo();
+        repo.add(foodAt("p", FoodImageStatus.PENDING, Instant.now().minus(Duration.ofMinutes(10))));
+        FoodImageService svc = new FoodImageService(repo, empty(), empty(), empty());
+
+        assertEquals(0, svc.sweepStalePending());
+        assertEquals(FoodImageStatus.PENDING, repo.get("p").imageStatus());
+    }
+
     // ---- fakes ----
 
     private static CatalogFood food(String id, FoodImageStatus imageStatus) {
+        return foodAt(id, imageStatus, Instant.now());
+    }
+
+    private static CatalogFood foodAt(String id, FoodImageStatus imageStatus, Instant updatedAt) {
         return new CatalogFood(
             id, "Grilled chicken", "grilled chicken", null, null, "Protein",
             new Macros(165.0, 31.0, 0.0, 3.6, 0.0, 0.0),
             List.of(new ServingSize("100 g", 100.0)), 0,
             FoodSource.GEMINI_PHOTO, null, FoodStatus.UNVERIFIED, 0, null,
-            null, imageStatus, "creator", Instant.now(), Instant.now());
+            null, imageStatus, "creator", Instant.now(), updatedAt);
     }
 
     private static <T> ObjectProvider<T> empty() {

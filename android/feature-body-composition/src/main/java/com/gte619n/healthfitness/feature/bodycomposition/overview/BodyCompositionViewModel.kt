@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.feature.bodycomposition.overview
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.bodycomposition.BodyCompositionRepository
@@ -43,7 +44,14 @@ class BodyCompositionViewModel @Inject constructor(
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    // Monotonic timestamp of the last successful background refresh, so a re-entry
+    // within REFRESH_TTL_MS reuses the mirror instead of re-hitting the network.
+    private var lastRefreshAt: Long = 0L
+
     init {
+        // Offline-first: the screen renders from the Room mirror the instant it
+        // emits (loading flips false below); the network refresh is background
+        // revalidation only — it never blanks the screen back to a spinner.
         viewModelScope.launch {
             combine(
                 bodyRepo.observeSnapshot(),
@@ -58,17 +66,40 @@ class BodyCompositionViewModel @Inject constructor(
         refresh()
     }
 
-    fun refresh() {
+    /**
+     * Re-fill the mirror from the backend in the background. Non-forced calls
+     * within [REFRESH_TTL_MS] of the last success are skipped (this fires on every
+     * screen entry); pull-to-refresh passes [force] = true. Never toggles the
+     * loading spinner — the reactive mirror stream owns what the user sees.
+     */
+    fun refresh(force: Boolean = false) {
+        val now = SystemClock.elapsedRealtime()
+        if (!force && lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, error = null) }
+            _state.update { it.copy(error = null) }
             runCatching {
                 coroutineScope {
                     launch { bodyRepo.refresh() }
                     launch { dexaRepo.refreshScans() }
                 }
-            }.onFailure { e ->
-                _state.update { it.copy(loading = false, error = e.message ?: "Could not load") }
-            }
+            }.fold(
+                onSuccess = { lastRefreshAt = SystemClock.elapsedRealtime() },
+                onFailure = { e ->
+                    // Keep any mirror data on screen; only surface an error when we
+                    // have nothing to show yet.
+                    _state.update {
+                        if (it.snapshot == null && it.dexaScans.isEmpty()) {
+                            it.copy(loading = false, error = e.message ?: "Could not load")
+                        } else {
+                            it
+                        }
+                    }
+                },
+            )
         }
+    }
+
+    private companion object {
+        const val REFRESH_TTL_MS = 30_000L
     }
 }

@@ -87,9 +87,13 @@ public class SessionTokenService {
     }
 
     // Second leg: a stored refresh token buys a new access token and a rotated
-    // refresh token. The old refresh token is rotated out (single-use); replaying
-    // it after the reuse-grace window is treated as theft and burns the whole
-    // family. A replay *within* the window is honoured (re-issued) — see below.
+    // refresh token. Rotation is single-use, but a *replay* of an already-rotated
+    // token is not automatically theft — on mobile it's usually a benign retry of
+    // a refresh whose response was lost in flight, so the client still holds the
+    // old token. We resolve the token's successor chain to its live tip and
+    // advance that (ADR-0019), so the retry succeeds however long the phone was
+    // offline. Only a token revoked with no successor (logout / a prior theft
+    // burn) or a chain whose tip is dead burns the family.
     public TokenPair refresh(String refreshToken) {
         Parsed parsed = parse(refreshToken);
         StoredRefreshToken stored = store.findById(parsed.tokenId())
@@ -99,65 +103,107 @@ public class SessionTokenService {
             throw new InvalidRefreshTokenException("refresh token secret mismatch");
         }
         Instant now = Instant.now();
-        if (stored.revoked()) {
-            // A token retired by rotation that's replayed within the reuse-grace
-            // window is almost always a benign retry: the server rotated the token
-            // but the new pair never reached the client (a dropped/timed-out
-            // refresh on a flaky mobile network), so the client retries the only
-            // token it still holds. Honour it with a fresh pair instead of
-            // burning the session — otherwise a single lost response permanently
-            // logs the user out. A replay *after* the window, or of a token
-            // revoked by logout / a prior theft burn (rotatedAt == null), is still
-            // treated as theft.
-            if (stored.withinReuseGrace(now, props.getReuseGrace())) {
-                return issueForUserId(stored.userId(), now);
-            }
-            store.revokeAllForUser(stored.userId());
-            throw new InvalidRefreshTokenException("refresh token already used");
-        }
-        if (stored.isExpired(now)) {
+        // A live token that is simply past its expiry is rejected outright (never
+        // recoverable). A *revoked* token falls through to the chain walk, which
+        // decides honour-or-burn — a rotated-but-expired token there resolves to a
+        // dead tip and burns.
+        if (!stored.revoked() && stored.isExpired(now)) {
             throw new InvalidRefreshTokenException("refresh token expired");
         }
-
-        // Atomically claim the rotation. If we lose the race, another concurrent
-        // refresh rotated this token between our read above and here, so it is now
-        // revoked-by-rotation: fall through to the same reuse-grace-or-burn
-        // handling a replay of an already-rotated token gets.
-        if (!store.tryMarkRotated(stored.tokenId(), now)) {
-            return handleAlreadyUsed(stored.tokenId(), stored.userId(), now);
-        }
-        return issueForUserId(stored.userId(), now);
+        return advanceChain(stored, now);
     }
 
-    // A refresh token that was already revoked (by a prior rotation, or by a
-    // concurrent refresh that beat us to the atomic rotation). Honour it within
-    // the reuse-grace window (a benign lost-response / double-submit retry),
-    // otherwise treat it as theft and burn the whole family. Re-reads the token
-    // so a rotatedAt just stamped by the concurrent winner is visible.
-    private TokenPair handleAlreadyUsed(String tokenId, String userId, Instant now) {
-        boolean grace = store.findById(tokenId)
-            .map(s -> s.withinReuseGrace(now, props.getReuseGrace()))
-            .orElse(false);
-        if (grace) {
-            return issueForUserId(userId, now);
-        }
-        store.revokeAllForUser(userId);
-        throw new InvalidRefreshTokenException("refresh token already used");
-    }
+    // Cap the successor-chain walk. A well-behaved client is at most one lost
+    // response behind, and every honoured replay re-points the presented token to
+    // the current tip (so the next walk is a single hop). This bound is only a
+    // guard against a pathological / corrupted chain.
+    private static final int MAX_CHAIN_HOPS = 64;
 
-    // Mint a fresh access + refresh pair for an existing session. Re-stamps
-    // identity from the user record so a renamed/updated profile is reflected;
-    // the access token must never outlive its source of truth.
-    private TokenPair issueForUserId(String userId, Instant now) {
-        User user = users.findById(userId)
-            .orElseThrow(() -> new InvalidRefreshTokenException("user no longer exists"));
-        String access = mintAccessToken(user.userId(), user.email(), user.displayName(), now);
+    // Advance the session's refresh-token chain by one and hand the client the
+    // resulting pair. For a LIVE token this is a normal rotation; for a revoked
+    // (already-rotated) token it walks {@code replacedBy} to the live tip and
+    // rotates that, re-pointing the presented token forward. A token whose chain
+    // has no live tip (revoked by logout / theft burn, or expired) is theft →
+    // burn the family.
+    private TokenPair advanceChain(StoredRefreshToken presented, Instant now) {
+        StoredRefreshToken tip = liveTip(presented, now);
+        if (tip == null) {
+            store.revokeAllForUser(presented.userId());
+            throw new InvalidRefreshTokenException("refresh token already used");
+        }
+
+        String successorId = UUID.randomUUID().toString();
+        byte[] secretBytes = new byte[SECRET_BYTES];
+        random.nextBytes(secretBytes);
+        String secret = Base64.getUrlEncoder().withoutPadding().encodeToString(secretBytes);
+
+        if (!store.tryMarkRotated(tip.tokenId(), now, successorId)) {
+            // A concurrent refresh rotated the tip between our read and here.
+            // Re-resolve from the presented token and try again; the losing
+            // secret is simply discarded (never persisted).
+            return advanceChain(reRead(presented), now);
+        }
+
+        store.save(new StoredRefreshToken(
+            successorId,
+            tip.userId(),
+            sha256(secret),
+            now,
+            now.plus(props.getRefreshTtl()),
+            false,
+            null,  // live token — not yet rotated
+            null   // ...and has no successor yet
+        ));
+        // Keep a repeatedly-replayed stale token pointing at the freshest
+        // successor so its next replay is a single hop onto a live tip.
+        if (!presented.tokenId().equals(tip.tokenId())) {
+            store.repoint(presented.tokenId(), successorId);
+        }
+
+        String access = mintAccessTokenForUser(tip.userId(), now);
+        // The wire format keeps the id and secret together; only the hash persists.
         return new TokenPair(
             access,
             now.plus(props.getAccessTtl()).getEpochSecond(),
-            issueRefreshToken(user.userId(), now),
+            successorId + "." + secret,
             now.plus(props.getRefreshTtl()).getEpochSecond()
         );
+    }
+
+    // Walk the successor chain from {@code presented} and return the tip iff it is
+    // still live (usable). Returns null when the chain terminates at a dead token
+    // — revoked by logout / theft burn (no {@code replacedBy}), expired, dangling,
+    // or pathologically long — which the caller treats as theft.
+    private StoredRefreshToken liveTip(StoredRefreshToken presented, Instant now) {
+        StoredRefreshToken cur = presented;
+        for (int hop = 0; hop < MAX_CHAIN_HOPS; hop++) {
+            if (!cur.revoked()) {
+                return cur.isExpired(now) ? null : cur;
+            }
+            String next = cur.replacedBy();
+            if (next == null) {
+                return null; // revoked with no successor: logout / theft burn
+            }
+            StoredRefreshToken succ = store.findById(next).orElse(null);
+            if (succ == null) {
+                return null; // dangling successor pointer
+            }
+            cur = succ;
+        }
+        return null; // chain too long — treat as corrupt, don't loop forever
+    }
+
+    private StoredRefreshToken reRead(StoredRefreshToken presented) {
+        return store.findById(presented.tokenId()).orElse(presented);
+    }
+
+    // Mint a fresh access token for an existing session. Re-stamps identity from
+    // the user record so a renamed/updated profile is reflected; the access token
+    // must never outlive its source of truth.
+    private String mintAccessTokenForUser(String userId, Instant now) {
+        User user = users.findById(userId)
+            .orElseThrow(() -> new InvalidRefreshTokenException("user no longer exists"));
+        return mintAccessToken(user.userId(), user.email(), user.displayName(), now);
     }
 
     // Sign-out. Best-effort: an unparseable/unknown token is a no-op so logout
@@ -207,7 +253,8 @@ public class SessionTokenService {
             now,
             now.plus(props.getRefreshTtl()),
             false,
-            null // live token — not yet rotated
+            null, // live token — not yet rotated
+            null  // ...and has no successor yet
         ));
         // The wire format keeps the id and secret together; only the secret's
         // hash is ever persisted.
