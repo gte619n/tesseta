@@ -1,6 +1,11 @@
 # Dependency + action update automation. Keeps the three stacks and the CI
-# actions patched (incl. the security-critical next-auth beta) instead of
-# drifting. Grouped to keep PR volume manageable.
+# actions patched instead of drifting.
+#
+# Grouping: each group bundles only MINOR + PATCH updates, so the routine group
+# PR stays green and easy to merge. MAJOR updates are NOT grouped — Dependabot
+# raises them as individual PRs so each breaking migration (e.g. Spring Boot 4,
+# Next.js 16) is reviewed and done deliberately, one at a time, rather than
+# poisoning the whole group PR.
 version: 2
 updates:
   - package-ecosystem: "gradle"
@@ -11,6 +16,7 @@ updates:
     groups:
       backend-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "gradle"
     directory: "/android"
@@ -20,6 +26,7 @@ updates:
     groups:
       android-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/web"
@@ -29,6 +36,7 @@ updates:
     groups:
       web-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -37,3 +45,4 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
