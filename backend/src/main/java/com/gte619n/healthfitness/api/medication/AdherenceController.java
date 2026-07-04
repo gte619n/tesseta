@@ -9,7 +9,6 @@ import com.gte619n.healthfitness.core.medication.*;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
@@ -102,21 +101,12 @@ public class AdherenceController {
             "medicationAdherence:log:" + medicationId + ":" + date,
             userId,
             () -> {
-                AdherenceLog existing = adherence.findByDate(userId, medicationId, date)
-                    .orElse(null);
-
-                List<DoseLog> doses = existing != null
-                    ? new ArrayList<>(existing.doses())
-                    : new ArrayList<>();
-
                 Instant writtenAt = Instant.now();
-                DoseLog newDose = new DoseLog(window, writtenAt, dose);
-                doses.removeIf(d -> d.window() == window);  // Remove existing for this window
-                doses.add(newDose);
-
-                AdherenceLog log = new AdherenceLog(userId, medicationId, date, doses, body.notes());
-
-                adherence.save(log);
+                // Atomic add-or-replace for this window — a plain findByDate +
+                // save loses concurrent doses for other windows on the same day.
+                AdherenceLog log = adherence.upsertDose(
+                    userId, medicationId, date,
+                    new DoseLog(window, writtenAt, dose), body.notes());
                 metricChangedPublisher.publish(userId, MetricKey.MEDS_ADHERENCE_30D);
                 syncNotifier.changed(userId, syncWrite.originDeviceId(), "medicationAdherence");
                 return new SyncWriteContext.Created<>(
@@ -144,32 +134,15 @@ public class AdherenceController {
         medications.findById(userId, medicationId)
             .orElseThrow(() -> new IllegalArgumentException("Medication not found"));
 
-        // Get existing log
-        AdherenceLog existing = adherence.findByDate(userId, medicationId, date)
-            .orElse(null);
-
-        if (existing == null) {
+        // 404 when there's no log for the day at all.
+        if (adherence.findByDate(userId, medicationId, date).isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
-        // Remove the dose for this window
-        List<DoseLog> doses = new ArrayList<>(existing.doses());
-        doses.removeIf(d -> d.window() == window);
-
-        if (doses.isEmpty()) {
-            // No more doses, delete the whole log
-            adherence.deleteByDate(userId, medicationId, date);
-        } else {
-            // Save updated log
-            AdherenceLog updated = new AdherenceLog(
-                userId,
-                medicationId,
-                date,
-                doses,
-                existing.notes()
-            );
-            adherence.save(updated);
-        }
+        // Atomic remove of this window's dose; tombstones the day if it was the
+        // last one. Being atomic, it won't clobber a concurrent log for another
+        // window on the same day.
+        adherence.removeDose(userId, medicationId, date, window);
         // Publish after whichever write path ran — 30-day rolling metric changed.
         metricChangedPublisher.publish(userId, MetricKey.MEDS_ADHERENCE_30D);
         syncNotifier.changed(userId, syncWrite.originDeviceId(), "medicationAdherence");
