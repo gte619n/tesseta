@@ -6,7 +6,7 @@ import com.gte619n.healthfitness.data.bodycomposition.BodyCompositionRepository
 import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import com.gte619n.healthfitness.data.bodycomposition.DexaScanRepository
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScanSummary
-import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
+import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.coroutineScope

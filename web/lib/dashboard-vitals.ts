@@ -1,9 +1,8 @@
-import type { DailyMetric } from "@/lib/daily-metrics-api";
+import { fetchDailyMetrics, type DailyMetric } from "@/lib/daily-metrics-api";
 
 // Builders for the dashboard's top-row daily-vitals tiles (Resting HR / HRV /
-// Sleep / Steps). Extracted from app/page.tsx. `loadDailyMetrics` (which wires
-// these to the daily-metrics endpoint) stays in the page; this module holds the
-// pure per-tile builder and its sparkline helper.
+// Sleep / Steps). Extracted from app/page.tsx, together with `loadDailyMetrics`
+// which wires them to the daily-metrics endpoint.
 
 // One top-row stat tile's data (a StatCard's props). Formerly a fixture type.
 export type VitalDelta = {
@@ -122,6 +121,72 @@ export function buildVital(rows: DailyMetric[], spec: MetricSpec): Vital {
     ...(spec.unit ? { unit: spec.unit } : {}),
     ...(delta ? { delta } : {}),
     sparkline: metricSparkline(series),
+  };
+}
+
+// ── Daily metrics loader (top-row vitals) ────────────────────────────────
+// Wires the Resting HR / HRV / Sleep / Steps tiles to the daily-metrics
+// endpoint. Each tile takes the series of non-null values in the window
+// (oldest → newest): the latest value is shown, the delta is latest minus the
+// mean of prior values within the preceding 7 days, and the sparkline is built
+// from up to the last 9 non-null values. Every tile renders a "—" placeholder
+// when the user has no data for it (no wearable connected) rather than fake
+// numbers.
+
+export type DailyVitals = {
+  restingHr: Vital;
+  hrv: Vital;
+  sleep: Vital;
+  steps: Vital;
+};
+
+export async function loadDailyMetrics(): Promise<DailyVitals> {
+  const rows = await fetchDailyMetrics();
+  // Oldest → newest so "latest" is the final element.
+  const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    restingHr: buildVital(sorted, {
+      field: "restingHeartRate",
+      label: "Resting HR",
+      icon: "heart",
+      unit: "bpm",
+      higherIsBetter: false,
+      format: (v) => String(Math.round(v)),
+      formatDelta: (d) => String(Math.round(d)),
+      emptyFixture: null,
+    }),
+    hrv: buildVital(sorted, {
+      field: "hrvMs",
+      label: "HRV",
+      icon: "activity-heartbeat",
+      unit: "ms",
+      higherIsBetter: true,
+      format: (v) => String(Math.round(v)),
+      formatDelta: (d) => String(Math.round(d)),
+      emptyFixture: null,
+    }),
+    sleep: buildVital(sorted, {
+      field: "sleepMinutes",
+      label: "Sleep",
+      icon: "moon",
+      unit: "h",
+      higherIsBetter: true,
+      // Stored as minutes; display hours to 1 decimal.
+      transform: (v) => v / 60,
+      format: (v) => v.toFixed(1),
+      formatDelta: (d) => d.toFixed(1),
+      emptyFixture: null,
+    }),
+    steps: buildVital(sorted, {
+      field: "steps",
+      label: "Steps",
+      icon: "walk",
+      higherIsBetter: true,
+      format: (v) => Math.round(v).toLocaleString("en-US"),
+      formatDelta: (d) => Math.round(d).toLocaleString("en-US"),
+      emptyFixture: null,
+    }),
   };
 }
 

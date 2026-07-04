@@ -22,10 +22,12 @@
 - **Network**: Retrofit + OkHttp + Moshi; 401 → silent refresh via
   `TokenAuthenticator`. SSE in `core-data/net/Sse.kt`.
 - All async work via Coroutines + Flow.
-- **`core-health` is an empty placeholder** — Health Connect is not integrated
-  yet (health data arrives backend-side via the Google Health API). If/when it's
-  added, confine all `androidx.health.connect:*` access to `core-health`; app and
-  feature modules must not import it directly.
+- **On-device Health Connect is not integrated** — health data arrives
+  backend-side via the Google Health API. If/when device-side access is added,
+  introduce a dedicated `core-health` module and confine all
+  `androidx.health.connect:*` access to it; app and feature modules must not
+  import it directly. (The empty `core-health` placeholder was removed until the
+  feature lands.)
 - **Wear module shares `core-domain` and `core-ui` (when relevant) but never
   depends on `app`** — pairing is by `applicationId`, not module dependency.
 - Phone and wear share `applicationId` (required for pairing); namespaces differ.

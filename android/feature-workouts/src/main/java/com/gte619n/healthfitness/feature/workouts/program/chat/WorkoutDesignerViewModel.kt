@@ -18,7 +18,7 @@ import com.gte619n.healthfitness.data.workouts.program.toDomain
 import com.gte619n.healthfitness.data.workouts.trt.TrtContextRepository
 import com.gte619n.healthfitness.domain.common.DayOfWeek
 import com.gte619n.healthfitness.domain.workouts.program.ProgramProposal
-import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.domain.workouts.trt.TrtContext
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.lifecycle.HiltViewModel

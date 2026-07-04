@@ -52,10 +52,10 @@ At-a-glance truth. Foundations and all phone domains through Goals have shipped;
 | Cross-cutting / IMPL-AND-20 | Offline-first sync | ✅ Built (pending device E2E) | Encrypted Room store as UI source of truth, background sync engine (delta pull + outbox + LWW), backend soft-delete/tombstone contract, unified `/api/me/sync` API, idempotent client-UUID writes, FCM silent-push fan-out. Decision: ADR-0007. All 8 phases implemented & unit/MockMvc-green; instrumented + live-FCM E2E authored but need a device/emulator + deployed run (see plan status table + outstanding-questions). A few documented fast-follows remain (offline adherence logging, goal nested-aggregate offline, per-row badge wiring, idempotency on the long tail of write endpoints) |
 | §2.8 | Admin | ⏳ Deferred | Intentionally deferred to desktop |
 
-### Empty modules (intentional / forward-looking)
+### Deferred features (modules removed until they land)
 
-- `feature-chat` — **empty.** Standalone "AI Coach" chat not built. (Goal-chat lives in `feature-goals`; `core-chat` has a reusable `ChatSseClient`/`ChatModels`/`ChatThread` but no general-coach app surface consumes it.)
-- `core-health` — **empty.** On-device Health Connect (`androidx.health.connect`) not done; body composition comes from the backend's Google Health sync, not the device.
+- **Standalone "AI Coach" chat** — not built. (Goal-chat lives in `feature-goals`; `core-chat` has a reusable `ChatSseClient`/`ChatModels`/`ChatThread`, but no general-coach app surface consumes it.) The empty `feature-chat` placeholder was removed.
+- **On-device Health Connect** (`androidx.health.connect`) — not done; body composition comes from the backend's Google Health sync, not the device. The empty `core-health` placeholder was removed.
 
 ---
 
@@ -66,7 +66,7 @@ At-a-glance truth. Foundations and all phone domains through Goals have shipped;
 | Surface | Status | Notes |
 |---|---|---|
 | **Web** | Feature-rich, production-grade | All major domains implemented end-to-end: dashboard, blood, body comp / DEXA, medications, gym + equipment catalog, goals, nutrition, plus full admin suite (equipment review, drug catalog). Backed by real backend endpoints, SSE streaming for PDF/AI work, Google Health OAuth. |
-| **Android (phone)** | Near-parity (~90%) | Foundations shipped (Hilt, NavHost, Retrofit/SSE/multipart, Coil, shared state primitives). Dashboard, settings/profile + unit prefs, medications, blood, body comp/DEXA, gym/equipment, goals, and nutrition are all wired to the real backend across ~30 `@HiltViewModel` screens. Remaining gaps: active workout logging (greenfield, needs ADR), admin (deferred), and a few stretch items. `feature-chat` and `core-health` remain empty by design. |
+| **Android (phone)** | Near-parity (~90%) | Foundations shipped (Hilt, NavHost, Retrofit/SSE/multipart, Coil, shared state primitives). Dashboard, settings/profile + unit prefs, medications, blood, body comp/DEXA, gym/equipment, goals, and nutrition are all wired to the real backend across ~30 `@HiltViewModel` screens. Remaining gaps: active workout logging (greenfield, needs ADR), admin (deferred), and a few stretch items. Standalone AI-coach chat and on-device Health Connect stay deferred (their empty placeholder modules were removed). |
 | **Android (wear)** | ~30% complete | Token sync from phone working (sign-in, token cache, sync service, sign-in-required screen). No "Today" glance, Tiles, Complications, or Health Services implementation yet. |
 
 ### Headline gap (resolved)

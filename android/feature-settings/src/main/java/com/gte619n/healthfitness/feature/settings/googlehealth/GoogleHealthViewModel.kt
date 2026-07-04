@@ -6,7 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
 import com.gte619n.healthfitness.data.auth.HealthAuthFlow
-import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthRepository
+import com.gte619n.healthfitness.data.googlehealth.GoogleHealthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel

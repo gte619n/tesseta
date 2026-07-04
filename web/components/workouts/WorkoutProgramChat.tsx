@@ -12,7 +12,11 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import { consumeChatStream } from "@/lib/chat-stream";
+import {
+  useChatStream,
+  nextMessageId,
+  type ChatMessage as ChatStreamMessage,
+} from "@/lib/use-chat-stream";
 import { ChatMarkdown } from "@/components/goals/ChatMarkdown";
 import { ChatComposer, TypingIndicator, TrashIcon } from "@/components/chat/ChatPrimitives";
 import {
@@ -86,19 +90,7 @@ type ProposalState = {
   discarded?: boolean;
 };
 
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  proposal?: ProposalState;
-  streaming?: boolean;
-};
-
-let msgSeq = 0;
-function nextId(): string {
-  msgSeq += 1;
-  return `m-${msgSeq}-${Math.random().toString(36).slice(2, 7)}`;
-}
+type ChatMessage = ChatStreamMessage<ProposalState>;
 
 function parseProposalJson(json: string): WorkoutProgramProposalPayload | null {
   try {
@@ -129,23 +121,30 @@ export function WorkoutProgramChat({
 
   const [threads, setThreads] =
     useState<WorkoutProgramChatThread[]>(initialThreads);
-  const [threadId, setThreadId] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<WorkoutProgramChatSchedule | null>(
     null,
   );
   const [goalId, setGoalId] = useState<string | null>(null);
   // Whether the user has completed the setup form for the current session.
   const [setupDone, setSetupDone] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [, startDeleteTransition] = useTransition();
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const threadIdRef = useRef<string | null>(null);
-  threadIdRef.current = threadId;
+  const {
+    messages,
+    setMessages,
+    input,
+    setInput,
+    streaming,
+    setStreaming,
+    threadId,
+    setThreadId,
+    threadIdRef,
+    scrollRef,
+    abortRef,
+    send: sendStream,
+  } = useChatStream<ProposalState>();
+
   const scheduleRef = useRef<WorkoutProgramChatSchedule | null>(null);
   scheduleRef.current = schedule;
   const goalIdRef = useRef<string | null>(null);
@@ -185,136 +184,68 @@ export function WorkoutProgramChat({
       .join(", ");
   }, [schedule, gymName]);
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
-
-  const patchMessage = useCallback((id: string, patch: Partial<ChatMessage>) => {
-    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-  }, []);
-
   const send = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || streaming) return;
-
+    (text: string) => {
+      // Capture whether this turn opens a new thread before the stream clears it.
       const isFirst = firstTurnRef.current;
-      const userMsg: ChatMessage = { id: nextId(), role: "user", text: trimmed };
-      const assistantId = nextId();
-      const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: "assistant",
-        text: "",
-        streaming: true,
-      };
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
-      setInput("");
-      setStreaming(true);
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      let assistantText = "";
-      let sawError = false;
-
-      try {
-        const res = await fetch("/api/workout-programs/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            isFirst
-              ? {
-                  message: trimmed,
-                  schedule: scheduleRef.current,
-                  goalId: goalIdRef.current,
-                  // IMPL-18b: bind the new thread to the program being edited.
-                  programId: editProgramIdRef.current,
-                }
-              : { threadId: threadIdRef.current, message: trimmed },
-          ),
-          signal: controller.signal,
-        });
-
-        if (!res.ok || !res.body) {
-          const detail = await res.text().catch(() => "");
-          throw new Error(detail || `Request failed (${res.status})`);
-        }
-
-        await consumeChatStream(
-          res.body,
-          {
-            onToken: (t) => {
-              assistantText += t;
-              patchMessage(assistantId, { text: assistantText });
-            },
-            onProposal: (data) => {
-              try {
-                const parsed = JSON.parse(data) as WorkoutProgramProposalPayload;
-                patchMessage(assistantId, {
-                  proposal: {
-                    draft: proposalToDraft(parsed.program, parsed.issues ?? [], parsed.warnings ?? []),
-                  },
-                });
-              } catch {
-                /* ignore malformed proposal */
+      return sendStream(text, {
+        request: () => ({
+          url: "/api/workout-programs/chat",
+          body: isFirst
+            ? {
+                message: text.trim(),
+                schedule: scheduleRef.current,
+                goalId: goalIdRef.current,
+                // IMPL-18b: bind the new thread to the program being edited.
+                programId: editProgramIdRef.current,
               }
-            },
-            onError: (message) => {
-              sawError = true;
-              toast.error("Chat error", { description: message });
-            },
-            onDone: (tid) => {
-              threadIdRef.current = tid;
-              setThreadId(tid);
-            },
-          },
-          controller.signal,
-        );
-
-        // After the first turn, subsequent turns continue the persisted thread.
-        firstTurnRef.current = false;
-
-        const tid = threadIdRef.current;
-        if (tid && !threads.some((t) => t.threadId === tid)) {
-          const now = new Date().toISOString();
-          setThreads((prev) => [
-            {
-              threadId: tid,
-              title:
-                trimmed.length <= 60 ? trimmed : `${trimmed.slice(0, 57)}...`,
-              schedule: scheduleRef.current,
-              goalId: goalIdRef.current,
-              createdAt: now,
-              updatedAt: now,
-            },
-            ...prev,
-          ]);
-        }
-      } catch (e) {
-        if (!(e instanceof DOMException && e.name === "AbortError")) {
-          sawError = true;
-          toast.error("Couldn't reach the assistant", {
-            description: e instanceof Error ? e.message : "Try again.",
-          });
-        }
-      } finally {
-        patchMessage(assistantId, {
-          streaming: false,
-          text: assistantText || (sawError ? "" : "(no response)"),
-        });
-        setStreaming(false);
-        abortRef.current = null;
-      }
+            : { threadId: threadIdRef.current, message: text.trim() },
+        }),
+        onProposal: (data) => {
+          try {
+            const parsed = JSON.parse(data) as WorkoutProgramProposalPayload;
+            return {
+              draft: proposalToDraft(
+                parsed.program,
+                parsed.issues ?? [],
+                parsed.warnings ?? [],
+              ),
+            };
+          } catch {
+            /* ignore malformed proposal */
+            return null;
+          }
+        },
+        onSettled: (tid, userText) => {
+          // After the first turn, subsequent turns continue the persisted thread.
+          firstTurnRef.current = false;
+          if (tid && !threads.some((t) => t.threadId === tid)) {
+            const now = new Date().toISOString();
+            setThreads((prev) => [
+              {
+                threadId: tid,
+                title:
+                  userText.length <= 60
+                    ? userText
+                    : `${userText.slice(0, 57)}...`,
+                schedule: scheduleRef.current,
+                goalId: goalIdRef.current,
+                createdAt: now,
+                updatedAt: now,
+              },
+              ...prev,
+            ]);
+          }
+        },
+      });
     },
-    [streaming, threads, patchMessage, toast],
+    [sendStream, threadIdRef, threads],
   );
 
   // Begin a fresh setup form (back to step 1, design-new — drops any edit binding).
   function startNew() {
     abortRef.current?.abort();
     setThreadId(null);
-    threadIdRef.current = null;
     setSchedule(null);
     setGoalId(null);
     setSetupDone(false);
@@ -337,7 +268,6 @@ export function WorkoutProgramChat({
     setGoalId(linkedGoalId);
     goalIdRef.current = linkedGoalId;
     setThreadId(null);
-    threadIdRef.current = null;
     setMessages([]);
     setSetupDone(true);
     firstTurnRef.current = true;
@@ -350,7 +280,6 @@ export function WorkoutProgramChat({
     abortRef.current?.abort();
     setStreaming(false);
     setThreadId(t.threadId);
-    threadIdRef.current = t.threadId;
     setSchedule(t.schedule);
     scheduleRef.current = t.schedule;
     setGoalId(t.goalId);
@@ -383,7 +312,7 @@ export function WorkoutProgramChat({
             }
           }
           return {
-            id: nextId(),
+            id: nextMessageId(),
             role,
             text: h.content,
             ...(proposal ? { proposal } : {}),

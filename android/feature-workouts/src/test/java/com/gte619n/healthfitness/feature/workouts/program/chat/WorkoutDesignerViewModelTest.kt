@@ -14,7 +14,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.gte619n.healthfitness.data.workouts.trt.TrtContextRepository
 import com.gte619n.healthfitness.domain.common.DayOfWeek
 import com.gte619n.healthfitness.domain.workouts.Location
-import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory

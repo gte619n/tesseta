@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
-import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi

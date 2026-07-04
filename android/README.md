@@ -9,8 +9,9 @@ Phone app + standalone Wear OS app, sharing `core-*` modules.
 - `core-data` — Room, DataStore, Retrofit
 - `core-domain` — use cases + models, pure Kotlin
 - `core-ui` — Compose theme + shared composables (phone)
-- `core-health` — Health Connect wrapper
-- `feature-workouts`, `feature-medical`, `feature-chat` — feature modules
+- `core-chat` — shared AI-chat client (consumed by feature modules)
+- `feature-workouts`, `feature-medical`, `feature-goals`, `feature-nutrition`,
+  `feature-settings`, `feature-blood`, `feature-body-composition` — feature modules
 
 ## Build
 ```bash

@@ -1,7 +1,6 @@
 package com.gte619n.healthfitness.domain.workouts.program
 
 import com.gte619n.healthfitness.domain.common.DayOfWeek
-import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
 
@@ -235,85 +234,3 @@ data class WorkoutHistoryPage(
  */
 class ProgramActivationInvalidException(val issues: List<String>) :
     Exception(issues.joinToString("; "))
-
-/**
- * Read-only repository for workout programs. Mirrors the IMPL-15 read surface;
- * no mutation, no chat, no logging in v1.
- */
-interface WorkoutProgramRepository {
-    /** Shallow list of the signed-in user's programs. */
-    suspend fun list(): Result<List<WorkoutProgram>>
-
-    /**
-     * Local-first reactive program list: emits the `workoutPrograms` mirror
-     * immediately (offline-capable) and re-emits on every change (a background
-     * sync, a deep-cache upgrade), while a network refresh fills the mirror
-     * concurrently. The screen never blocks on the network to render the cache.
-     */
-    fun observePrograms(): Flow<List<WorkoutProgram>>
-
-    /** Deep program (phases → days → blocks → prescriptions + embedded summaries). */
-    suspend fun get(programId: String): Result<WorkoutProgram>
-
-    /**
-     * Local-first reactive deep program: emits the mirrored deep tree (backfilling
-     * session-only phases from the cached schedule) and re-emits on change, while a
-     * network refresh upgrades a shallow/stale row concurrently. `null` once the
-     * refresh has settled means the program isn't available (offline, no cache).
-     */
-    fun observeProgram(programId: String): Flow<WorkoutProgram?>
-
-    /** Scheduled sessions in the inclusive date range, for the "this week" strip. */
-    suspend fun calendar(
-        programId: String,
-        from: LocalDate,
-        to: LocalDate,
-    ): Result<List<ScheduledWorkout>>
-
-    /**
-     * Local-first reactive schedule for the inclusive date range: emits the
-     * filtered `workoutScheduled` mirror and re-emits on change (activation,
-     * completion, background sync), filling on a cold miss. Drives the "this week"
-     * / past-sessions strips without blocking on the network.
-     */
-    fun observeCalendar(
-        programId: String,
-        from: LocalDate,
-        to: LocalDate,
-    ): Flow<List<ScheduledWorkout>>
-
-    /**
-     * One page of COMPLETED sessions across all programs, newest first, deep
-     * enough to review (each carries its blocks → prescriptions → logged sets).
-     * Paged for the history screen's load-on-scroll. Online-only, read-only.
-     */
-    suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage>
-
-    /**
-     * The program's effective nutrition guidance (active phase's, else
-     * program-level), or null when it has none. Online-only.
-     */
-    suspend fun nutritionGuidance(programId: String): Result<NutritionGuidance?>
-
-    /** Apply the program's guidance as the user's macro target; returns the saved macros. Online-only. */
-    suspend fun applyNutritionTarget(programId: String): Result<com.gte619n.healthfitness.domain.nutrition.Macros>
-
-    /**
-     * Activate a program (materialize sessions + mark ACTIVE) and refresh the
-     * local mirror so the detail/list reflect it. Returns the materialized
-     * sessions. Online-only.
-     */
-    suspend fun activate(programId: String): Result<List<ScheduledWorkout>>
-
-    /**
-     * Edit a program's metadata (title/description) via PATCH and refresh the
-     * mirror so the detail reflects it without waiting for a sync. Structural
-     * edits go through the conversational designer, not this. Online-only
-     * (IMPL-STAB G4). Returns the updated deep program.
-     */
-    suspend fun updateDetails(
-        programId: String,
-        title: String,
-        description: String?,
-    ): Result<WorkoutProgram>
-}

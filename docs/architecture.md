@@ -79,10 +79,11 @@ ID-token cache and unit prefs). Networking is Retrofit + OkHttp (20 MB disk
 cache). Hilt DI is fully wired; a single `NavHost` registers per-feature nav
 graphs, with a phone-only "More" hub for parity features. `core-domain` holds
 repository interfaces, `core-data` the mirror/Retrofit implementations + network
-clients, `core-ui` the `Hf` design tokens and shared primitives. `core-health`
-is an **empty placeholder** — Health Connect is not integrated yet (health data
-arrives backend-side via the Google Health API). Wear shares `core-domain` and
-never depends on `app`. Conventions in [`android/CLAUDE.md`](../android/CLAUDE.md).
+clients, `core-ui` the `Hf` design tokens and shared primitives. On-device
+Health Connect is **not integrated** — health data arrives backend-side via the
+Google Health API; a dedicated `core-health` module would house device-side
+access if/when that lands. Wear shares `core-domain` and never depends on `app`.
+Conventions in [`android/CLAUDE.md`](../android/CLAUDE.md).
 
 ## Reference
 

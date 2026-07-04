@@ -54,7 +54,6 @@ android {
 
 dependencies {
     implementation(project(":core-domain"))
-    implementation(project(":core-health"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

@@ -8,16 +8,13 @@ import com.gte619n.healthfitness.domain.bodycomposition.BodyCompositionSnapshot
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScan
 import com.gte619n.healthfitness.domain.bodycomposition.DexaScanSummary
 import com.gte619n.healthfitness.domain.bodycomposition.DexaUploadEvent
-import com.gte619n.healthfitness.domain.prefs.HeightUnit
-import com.gte619n.healthfitness.domain.prefs.TemperatureUnit
+import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.UnitPreferences
-import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asFlow
@@ -123,21 +120,17 @@ fun fakeDexaScanRepository(
     return repo
 }
 
-class FakeUnitPreferencesRepository(
+// UnitPreferencesRepository is a concrete @Inject class; MockK mocks it (final
+// Kotlin classes are fine). A backing StateFlow preserves the read-after-write
+// behavior the ViewModels rely on.
+fun fakeUnitPreferencesRepository(
     weight: WeightUnit = WeightUnit.POUNDS,
-) : UnitPreferencesRepository {
-    private val _preferences = MutableStateFlow(UnitPreferences(weight = weight))
-    override val preferences: Flow<UnitPreferences> = _preferences
-
-    override suspend fun setHeightUnit(unit: HeightUnit) {
-        _preferences.value = _preferences.value.copy(height = unit)
-    }
-
-    override suspend fun setWeightUnit(unit: WeightUnit) {
-        _preferences.value = _preferences.value.copy(weight = unit)
-    }
-
-    override suspend fun setTemperatureUnit(unit: TemperatureUnit) {
-        _preferences.value = _preferences.value.copy(temperature = unit)
-    }
+): UnitPreferencesRepository {
+    val state = MutableStateFlow(UnitPreferences(weight = weight))
+    val repo = mockk<UnitPreferencesRepository>()
+    every { repo.preferences } returns state
+    coEvery { repo.setHeightUnit(any()) } coAnswers { state.value = state.value.copy(height = firstArg()) }
+    coEvery { repo.setWeightUnit(any()) } coAnswers { state.value = state.value.copy(weight = firstArg()) }
+    coEvery { repo.setTemperatureUnit(any()) } coAnswers { state.value = state.value.copy(temperature = firstArg()) }
+    return repo
 }

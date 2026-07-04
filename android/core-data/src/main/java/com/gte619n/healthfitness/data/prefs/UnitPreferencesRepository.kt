@@ -7,7 +7,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.gte619n.healthfitness.domain.prefs.HeightUnit
 import com.gte619n.healthfitness.domain.prefs.TemperatureUnit
 import com.gte619n.healthfitness.domain.prefs.UnitPreferences
-import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -18,15 +17,16 @@ import javax.inject.Singleton
 private val Context.unitsStore by preferencesDataStore("hf-units")
 
 @Singleton
-class UnitPreferencesRepositoryImpl @Inject constructor(
+// Concrete @Inject repository (single implementation — no domain interface).
+class UnitPreferencesRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-) : UnitPreferencesRepository {
+) {
 
     private val keyHeight = stringPreferencesKey("height_unit")
     private val keyWeight = stringPreferencesKey("weight_unit")
     private val keyTemperature = stringPreferencesKey("temperature_unit")
 
-    override val preferences: Flow<UnitPreferences> = context.unitsStore.data.map { prefs ->
+    val preferences: Flow<UnitPreferences> = context.unitsStore.data.map { prefs ->
         UnitPreferences(
             height = prefs[keyHeight].toEnum(HeightUnit.FEET_INCHES, HeightUnit::valueOf),
             weight = prefs[keyWeight].toEnum(WeightUnit.POUNDS, WeightUnit::valueOf),
@@ -34,15 +34,15 @@ class UnitPreferencesRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun setHeightUnit(unit: HeightUnit) {
+    suspend fun setHeightUnit(unit: HeightUnit) {
         context.unitsStore.edit { it[keyHeight] = unit.name }
     }
 
-    override suspend fun setWeightUnit(unit: WeightUnit) {
+    suspend fun setWeightUnit(unit: WeightUnit) {
         context.unitsStore.edit { it[keyWeight] = unit.name }
     }
 
-    override suspend fun setTemperatureUnit(unit: TemperatureUnit) {
+    suspend fun setTemperatureUnit(unit: TemperatureUnit) {
         context.unitsStore.edit { it[keyTemperature] = unit.name }
     }
 

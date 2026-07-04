@@ -1,7 +1,7 @@
 package com.gte619n.healthfitness.mobile.workouts
 
 import android.content.Context
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map

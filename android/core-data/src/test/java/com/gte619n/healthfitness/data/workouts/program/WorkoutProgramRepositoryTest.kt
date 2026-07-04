@@ -28,7 +28,7 @@ import java.time.Instant
 /**
  * Offline-first contract for the deep workout-program read. The mirror may hold
  * a shallow list row (no phases) or a raw delta doc (phases but no embedded
- * exercise summaries); [WorkoutProgramRepositoryImpl.get] must only trust a
+ * exercise summaries); [WorkoutProgramRepository.get] must only trust a
  * complete assembled deep tree and otherwise self-heal from the network,
  * persisting it for offline — while still serving a cached doc when offline.
  */
@@ -50,13 +50,13 @@ class WorkoutProgramRepositoryTest {
     private val scheduledDao: WorkoutScheduledDao = mockk(relaxed = true)
     private val support: MirrorRepositorySupport = mockk(relaxed = true)
 
-    private lateinit var repo: WorkoutProgramRepositoryImpl
+    private lateinit var repo: WorkoutProgramRepository
 
     private val now = Instant.parse("2026-05-01T00:00:00Z")
 
     @Before
     fun setUp() {
-        repo = WorkoutProgramRepositoryImpl(api, programDao, scheduledDao, support, moshi)
+        repo = WorkoutProgramRepository(api, programDao, scheduledDao, support, moshi)
         coEvery { support.killSwitchOn() } returns false
         // Default: no cached schedule (backfill is a no-op). Overridden per test.
         coEvery { scheduledDao.observeActive() } returns flowOf(emptyList())

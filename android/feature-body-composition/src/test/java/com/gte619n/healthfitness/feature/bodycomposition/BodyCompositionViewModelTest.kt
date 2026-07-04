@@ -22,7 +22,7 @@ class BodyCompositionViewModelTest {
     fun `initial refresh populates snapshot and clears loading`() = runTest(mainRule.dispatcher) {
         val bodyRepo = fakeBodyCompositionRepository(snapshotToEmit = sampleSnapshot())
         val dexaRepo = fakeDexaScanRepository(summaries = listOf())
-        val vm = BodyCompositionViewModel(bodyRepo, dexaRepo, FakeUnitPreferencesRepository())
+        val vm = BodyCompositionViewModel(bodyRepo, dexaRepo, fakeUnitPreferencesRepository())
 
         advanceUntilIdle()
 
@@ -38,7 +38,7 @@ class BodyCompositionViewModelTest {
     fun `refresh re-pulls`() = runTest(mainRule.dispatcher) {
         val bodyRepo = fakeBodyCompositionRepository()
         val dexaRepo = fakeDexaScanRepository()
-        val vm = BodyCompositionViewModel(bodyRepo, dexaRepo, FakeUnitPreferencesRepository())
+        val vm = BodyCompositionViewModel(bodyRepo, dexaRepo, fakeUnitPreferencesRepository())
         advanceUntilIdle()
 
         vm.refresh()
@@ -51,7 +51,7 @@ class BodyCompositionViewModelTest {
     fun `repository error surfaces as state error`() = runTest(mainRule.dispatcher) {
         val bodyRepo = fakeBodyCompositionRepository(failRefresh = true)
         val dexaRepo = fakeDexaScanRepository()
-        val vm = BodyCompositionViewModel(bodyRepo, dexaRepo, FakeUnitPreferencesRepository())
+        val vm = BodyCompositionViewModel(bodyRepo, dexaRepo, fakeUnitPreferencesRepository())
 
         advanceUntilIdle()
 

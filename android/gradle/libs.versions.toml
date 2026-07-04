@@ -23,7 +23,6 @@ activityCompose = "1.9.3"
 coreKtx = "1.15.0"
 coreSplashscreen = "1.0.1"
 junit = "4.13.2"
-healthConnect = "1.1.0-alpha07"
 window = "1.3.0"
 material3WindowSizeClass = "1.3.1"
 googleFonts = "1.7.5"
@@ -139,8 +138,6 @@ mlkit-text-recognition = { module = "com.google.android.gms:play-services-mlkit-
 # 0.27.0 pins Kotlin 2.0.21 (matches the project) and uses multiplatform
 # Compose (adapts to the host Compose BOM), so no AGP/BOM bump is needed.
 markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
-
-health-connect = { module = "androidx.health.connect:connect-client", version.ref = "healthConnect" }
 
 # IMPL-AND-20 (Phase 6): Firebase Cloud Messaging. Versionless artifact — the
 # BoM platform constraint pins it.

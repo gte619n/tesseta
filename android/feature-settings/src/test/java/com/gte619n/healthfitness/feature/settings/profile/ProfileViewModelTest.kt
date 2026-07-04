@@ -1,10 +1,12 @@
 package com.gte619n.healthfitness.feature.settings.profile
 
 import app.cash.turbine.test
+import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.data.profile.ProfileRepository
 import com.gte619n.healthfitness.domain.profile.Profile
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,23 +51,24 @@ class ProfileViewModelTest {
         coEvery { updateHeightCm(any()) } answers { updateResult(firstArg()) }
     }
 
-    private class FakeUnitPreferencesRepository :
-        com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository {
-        override val preferences =
-            kotlinx.coroutines.flow.MutableStateFlow(
-                com.gte619n.healthfitness.domain.prefs.UnitPreferences(),
-            )
-        override suspend fun setHeightUnit(unit: com.gte619n.healthfitness.domain.prefs.HeightUnit) {
-            preferences.value = preferences.value.copy(height = unit)
+    // UnitPreferencesRepository is a concrete @Inject class; MockK mocks it. A
+    // backing StateFlow preserves the read-after-write behavior the VM relies on.
+    private fun fakeUnitPreferencesRepository(): UnitPreferencesRepository {
+        val state = kotlinx.coroutines.flow.MutableStateFlow(
+            com.gte619n.healthfitness.domain.prefs.UnitPreferences(),
+        )
+        return mockk {
+            every { preferences } returns state
+            coEvery { setHeightUnit(any()) } coAnswers {
+                state.value = state.value.copy(height = firstArg())
+            }
+            coEvery { setWeightUnit(any()) } returns Unit
+            coEvery { setTemperatureUnit(any()) } returns Unit
         }
-        override suspend fun setWeightUnit(unit: com.gte619n.healthfitness.domain.prefs.WeightUnit) = Unit
-        override suspend fun setTemperatureUnit(
-            unit: com.gte619n.healthfitness.domain.prefs.TemperatureUnit,
-        ) = Unit
     }
 
     private fun viewModel(repo: ProfileRepository) =
-        ProfileViewModel(repo, FakeUnitPreferencesRepository())
+        ProfileViewModel(repo, fakeUnitPreferencesRepository())
 
     @Test
     fun loadingThenLoaded() = runTest {

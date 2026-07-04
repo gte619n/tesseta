@@ -5,7 +5,7 @@ import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import com.gte619n.healthfitness.feature.workouts.program.ProgramFixtures

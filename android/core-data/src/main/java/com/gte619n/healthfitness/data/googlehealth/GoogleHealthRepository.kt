@@ -1,15 +1,15 @@
 package com.gte619n.healthfitness.data.googlehealth
 
-import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthRepository
 import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthStatus
 import java.time.Instant
 import javax.inject.Inject
 
-class GoogleHealthRepositoryImpl @Inject constructor(
+// Concrete @Inject repository (single implementation — no domain interface).
+class GoogleHealthRepository @Inject constructor(
     private val service: GoogleHealthService,
-) : GoogleHealthRepository {
+) {
 
-    override suspend fun status(): Result<GoogleHealthStatus> = runCatching {
+    suspend fun status(): Result<GoogleHealthStatus> = runCatching {
         val dto = service.status()
         GoogleHealthStatus(
             connected = dto.connected,
@@ -19,9 +19,9 @@ class GoogleHealthRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun connectWithServerAuthCode(serverAuthCode: String): Result<Unit> =
+    suspend fun connectWithServerAuthCode(serverAuthCode: String): Result<Unit> =
         runCatching { service.connect(ConnectBody(serverAuthCode)) }
 
-    override suspend fun disconnect(): Result<Unit> =
+    suspend fun disconnect(): Result<Unit> =
         runCatching { service.disconnect() }
 }
