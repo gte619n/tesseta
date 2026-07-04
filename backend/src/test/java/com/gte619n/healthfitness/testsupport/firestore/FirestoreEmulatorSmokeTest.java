@@ -52,7 +52,7 @@ class FirestoreEmulatorSmokeTest {
         store.save(liveToken("tok-2"));
 
         Instant rotatedAt = Instant.now();
-        store.markRotated("tok-2", rotatedAt);
+        assertThat(store.tryMarkRotated("tok-2", rotatedAt)).isTrue();
 
         StoredRefreshToken rotated = store.findById("tok-2").orElseThrow();
         assertThat(rotated.revoked()).isTrue();

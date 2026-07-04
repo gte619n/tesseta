@@ -19,9 +19,18 @@ public interface RefreshTokenStore {
     // Stamps {@code rotatedAt} so a benign retry of a rotated token (a refresh
     // whose response was lost in flight) can be told apart from a genuine replay
     // attack by the reuse-grace window — see SessionTokenService#refresh.
-    void markRotated(String tokenId, Instant rotatedAt);
+    //
+    // ATOMIC single-use guarantee: flips revoked false->true only if the token
+    // is currently live, and returns true iff THIS call performed the transition.
+    // A plain read-then-write cannot provide this — two concurrent refreshes can
+    // both observe revoked==false and both rotate, minting two successor chains
+    // from one token and evading theft detection. Implementations MUST perform
+    // the check-and-set atomically (a Firestore transaction / a single atomic map
+    // op). Returns false when the token is already revoked (lost the race, or
+    // already used).
+    boolean tryMarkRotated(String tokenId, Instant rotatedAt);
 
-    // Definitive revocation with no successor (logout). Unlike markRotated this
+    // Definitive revocation with no successor (logout). Unlike tryMarkRotated this
     // leaves {@code rotatedAt} null, so the token is never reuse-grace eligible:
     // a logged-out token can't be re-animated by a stray retry.
     void markRevoked(String tokenId);
