@@ -47,11 +47,22 @@ Run all Gradle commands from `android/`.
 
 ### Commands
 ```bash
-# CI gate (mirrors .github/workflows/android-ci.yml):
-./gradlew :app:assembleDebug :wear:assembleDebug :app:testDebugUnitTest --no-daemon
+# CI gate (mirrors .github/workflows/android-ci.yml): all-module unit tests +
+# the R8-minified release build.
+./gradlew :app:assembleDebug :wear:assembleDebug testDebugUnitTest :app:assembleRelease --no-daemon
 # Release APK (R8-minified, arm64-only): app/build/outputs/apk/release/app-release.apk
-./gradlew :app:assembleRelease --no-daemon
 ```
+
+### Compose UI tests (JVM, no device)
+Compose UI tests run on the JVM under **Robolectric** via `testDebugUnitTest`, so
+they gate in CI without an emulator. `core-ui` is the reference; to add UI tests
+to a module: `testImplementation`(`compose-ui-test-junit4`, `robolectric`),
+`debugImplementation(compose-ui-test-manifest)`, and set
+`android { testOptions { unitTests { isIncludeAndroidResources = true } } }`. Test
+class: `@RunWith(RobolectricTestRunner)` + `@Config(sdk = [34])` +
+`@GraphicsMode(NATIVE)`, a `createComposeRule()` rule, then `setContent { ... }`
+and `onNodeWithText(...)`. See `core-ui/.../StateViewsTest.kt`. The `Hf` design
+tokens have composition-local defaults, so simple primitives need no theme wrapper.
 Note: CI does **not** run `lintRelease`; it currently reports pre-existing
 `MissingPermission` errors in `WorkoutSessionService` (false positives — the
 calls are guarded by `canPostNotifications()`). Don't treat those as your
