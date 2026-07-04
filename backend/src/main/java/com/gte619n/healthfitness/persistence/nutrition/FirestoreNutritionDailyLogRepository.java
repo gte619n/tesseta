@@ -5,6 +5,8 @@ import static com.gte619n.healthfitness.persistence.FirestoreMapper.isArchived;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 
+import com.gte619n.healthfitness.core.nutrition.FoodEntryRepository;
+import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLogRepository;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
@@ -64,6 +66,33 @@ public class FirestoreNutritionDailyLogRepository implements NutritionDailyLogRe
         DocumentSnapshot existing = await(docRef.get());
         Map<String, Object> body = toBody(log, !existing.exists());
         await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    public NutritionDailyLog recomputeFromEntries(
+        String userId, LocalDate date, FoodEntryRepository unusedEntries) {
+        // Atomic: read the day's entries and write the rollup in ONE transaction,
+        // so concurrent recomputes serialise on the rollup doc — a stale recompute
+        // that lost the race is retried and re-reads the full entry set. Firestore
+        // requires all reads before any write, so both gets precede the set.
+        DocumentReference rollupRef = collection(userId).document(date.toString());
+        CollectionReference entriesRef = firestore
+            .collection("users").document(userId)
+            .collection("nutritionDays").document(date.toString())
+            .collection("entries");
+        return await(firestore.runTransaction(txn -> {
+            List<QueryDocumentSnapshot> entryDocs = txn.get(entriesRef).get().getDocuments();
+            DocumentSnapshot existingRollup = txn.get(rollupRef).get();
+            Macros total = Macros.zero();
+            for (QueryDocumentSnapshot d : entryDocs) {
+                if (isArchived(d)) continue;
+                // Reuse the entry-repo's macros parser (same package) — no duplication.
+                total = total.plus(FirestoreFoodEntryRepository.macrosFromMap(d.get("macros")));
+            }
+            NutritionDailyLog log = NutritionDailyLogRepository.rollupFrom(userId, date, total);
+            txn.set(rollupRef, toBody(log, !existingRollup.exists()), SetOptions.merge());
+            return log;
+        }));
     }
 
     private CollectionReference collection(String userId) {
