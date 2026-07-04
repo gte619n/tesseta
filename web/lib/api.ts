@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 
 // Server-only fetch wrapper that pulls the current ID token from the Auth.js
 // session and attaches it as a bearer header. Throws if the session is
@@ -23,6 +24,7 @@ const getSession = cache(async () => auth());
 const READ_METHODS = new Set(["GET", "HEAD"]);
 
 export class UnauthenticatedError extends Error {}
+export class ForbiddenError extends Error {}
 export class BackendError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -46,6 +48,14 @@ export async function apiFetch(
   // connect flow.
   if (session.error === "RefreshAccessTokenError") {
     throw new UnauthenticatedError("session refresh failed");
+  }
+  // Defence-in-depth: every /api/admin/** call (read or mutation) is admin-only.
+  // Server actions are independently-addressable POST endpoints, so relying on
+  // the /admin layout's requireAdmin() to gate them is not enough — check here,
+  // at the one choke point every admin helper funnels through. (The backend
+  // enforces @AdminOnly too; this stops a non-admin action reaching it at all.)
+  if (path.startsWith("/api/admin/") && !isAdminEmail(session.user?.email)) {
+    throw new ForbiddenError("admin access required");
   }
   const url = `${BACKEND_URL.replace(/\/$/, "")}${path}`;
   // GET/HEAD reads stay cacheable/dedupable within a render; mutations force
