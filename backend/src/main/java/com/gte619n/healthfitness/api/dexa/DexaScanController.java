@@ -104,7 +104,7 @@ public class DexaScanController {
         }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        sseStreamer.stream(() -> {
+        sseStreamer.stream(emitter, () -> {
             try {
                 DexaScan scan = service.upload(userId, bytes, phase ->
                     sendPhase(emitter, phase, phaseMessage(phase)));

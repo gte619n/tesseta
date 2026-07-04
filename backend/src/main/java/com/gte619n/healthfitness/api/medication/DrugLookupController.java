@@ -79,7 +79,7 @@ public class DrugLookupController {
         }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        sseStreamer.stream(() -> {
+        sseStreamer.stream(emitter, () -> {
             try {
                 sendPhase(emitter, "searching", "Looking up drug information...");
 
@@ -128,7 +128,7 @@ public class DrugLookupController {
     @PostMapping(value = "/{drugId}/regenerate-image", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter regenerateImage(@PathVariable String drugId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        sseStreamer.stream(() -> {
+        sseStreamer.stream(emitter, () -> {
             try {
                 sendPhase(emitter, "generating", "Generating image...");
 

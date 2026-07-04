@@ -162,7 +162,7 @@ public class GoalChatController {
         final String healthContext = snapshots.buildSnapshot(userId);
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        sseStreamer.stream(() -> {
+        sseStreamer.stream(emitter, () -> {
             StringBuilder assistantText = new StringBuilder();
             try {
                 GoalChatClient.StreamResult result = chatClient.streamChat(history, message, healthContext, token -> {

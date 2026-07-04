@@ -229,7 +229,7 @@ public class WorkoutProgramChatController {
         final String editProgramId = thread.programId();
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
-        sseStreamer.stream(() -> {
+        sseStreamer.stream(emitter, () -> {
             StringBuilder assistantText = new StringBuilder();
             try {
                 WorkoutProgramChatClient.StreamResult result = chatClient.streamChat(
