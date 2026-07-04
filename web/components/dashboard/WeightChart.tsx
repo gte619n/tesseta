@@ -1,7 +1,7 @@
 "use client";
 
 import { useUnits } from "@/components/ui/UnitsProvider";
-import { weightValue } from "@/lib/units";
+import { formatWeight, weightValue } from "@/lib/units";
 import {
   movingAverage,
   projectSeries,
@@ -53,11 +53,25 @@ export function WeightChart({
   const xLabelY = isFoldable ? 138 : 155;
   const fontSize = isFoldable ? 8 : 9;
 
+  // Announce the chart's meaning to assistive tech: current value + net trend
+  // over the window (screen readers otherwise get only the generic label).
+  const chartLabel = (() => {
+    const latest = seriesLb.at(-1);
+    const first = seriesLb.at(0);
+    if (latest === undefined || first === undefined) return "Weight trend: no data";
+    const now = formatWeight(latest, prefs.weight);
+    const delta = latest - first;
+    if (Math.abs(delta) < 0.05) return `Weight trend: steady at ${now}`;
+    const move = formatWeight(Math.abs(delta), prefs.weight);
+    return `Weight trend: currently ${now}, ${delta > 0 ? "up" : "down"} ${move} over this period`;
+  })();
+
   return (
     <svg
       viewBox={`0 0 ${geom.width} ${geom.height}`}
       className="block h-auto w-full"
-      aria-label="Weight trend"
+      role="img"
+      aria-label={chartLabel}
     >
       {gridLines.map((y) => (
         <line
