@@ -85,33 +85,50 @@ public class FirestoreStepRepository implements StepRepository {
 
     @Override
     public List<Step> findByMetricKey(String userId, String metricKey) {
-        // Collection-group query — requires Firestore index on metric.metricKey.
-        // Also filter by user via the path prefix.
-        List<QueryDocumentSnapshot> docs = await(firestore
-            .collectionGroup(SUBCOLLECTION)
-            .whereEqualTo("metric.metricKey", metricKey)
-            .get()
-        ).getDocuments();
-        return docs.stream()
-            .filter(d -> !isArchived(d))
-            .filter(d -> isUnderUser(d, userId))
-            .map(this::toStepFromGroupQuery)
+        // Scoped to THIS user's goals/phases/steps. Previously a
+        // collectionGroup("steps") scan across ALL users then a client-side user
+        // filter — correct, but its read cost grew with the whole userbase on a
+        // hot path (runs on every metric-changed event). The per-user walk reads
+        // only the user's own steps.
+        return findAllStepsForUser(userId).stream()
+            .filter(s -> s.metric() != null && metricKey.equals(s.metric().metricKey()))
             .toList();
     }
 
     @Override
     public List<Step> findAllSustained(String userId) {
-        // Collection-group query — requires Firestore index on kind.
-        List<QueryDocumentSnapshot> docs = await(firestore
-            .collectionGroup(SUBCOLLECTION)
-            .whereEqualTo("kind", StepKind.SUSTAINED.name())
-            .get()
-        ).getDocuments();
-        return docs.stream()
-            .filter(d -> !isArchived(d))
-            .filter(d -> isUnderUser(d, userId))
-            .map(this::toStepFromGroupQuery)
+        // Same scoping rationale as findByMetricKey — no userbase-wide scan.
+        return findAllStepsForUser(userId).stream()
+            .filter(s -> s.kind() == StepKind.SUSTAINED)
             .toList();
+    }
+
+    // Reads every (non-archived) step under one user by walking their
+    // goals -> phases -> steps. Bounded by the user's own data, so it scales with
+    // the user, not the platform. Shared by the metric-key / sustained lookups.
+    private List<Step> findAllStepsForUser(String userId) {
+        List<Step> result = new java.util.ArrayList<>();
+        List<QueryDocumentSnapshot> goalDocs = await(firestore
+            .collection("users").document(userId)
+            .collection("goals")
+            .get()).getDocuments();
+        for (QueryDocumentSnapshot goalDoc : goalDocs) {
+            String goalId = goalDoc.getId();
+            List<QueryDocumentSnapshot> phaseDocs = await(goalDoc.getReference()
+                .collection("phases")
+                .get()).getDocuments();
+            for (QueryDocumentSnapshot phaseDoc : phaseDocs) {
+                String phaseId = phaseDoc.getId();
+                List<QueryDocumentSnapshot> stepDocs = await(phaseDoc.getReference()
+                    .collection(SUBCOLLECTION)
+                    .get()).getDocuments();
+                for (QueryDocumentSnapshot s : stepDocs) {
+                    if (isArchived(s)) continue;
+                    result.add(toStep(goalId, phaseId, s));
+                }
+            }
+        }
+        return result;
     }
 
     @Override
@@ -137,25 +154,6 @@ public class FirestoreStepRepository implements StepRepository {
             .collection("goals").document(goalId)
             .collection("phases").document(phaseId)
             .collection(SUBCOLLECTION);
-    }
-
-    private static boolean isUnderUser(DocumentSnapshot doc, String userId) {
-        // path: users/{userId}/goals/{goalId}/phases/{phaseId}/steps/{stepId}
-        DocumentReference ref = doc.getReference();
-        DocumentReference phaseDoc = ref.getParent().getParent();           // phases/{phaseId}
-        if (phaseDoc == null) return false;
-        DocumentReference goalDoc = phaseDoc.getParent().getParent();       // goals/{goalId}
-        if (goalDoc == null) return false;
-        DocumentReference userDoc = goalDoc.getParent().getParent();        // users/{userId}
-        if (userDoc == null) return false;
-        return userId.equals(userDoc.getId());
-    }
-
-    private Step toStepFromGroupQuery(QueryDocumentSnapshot doc) {
-        DocumentReference ref = doc.getReference();
-        String phaseId = ref.getParent().getParent().getId();
-        String goalId = ref.getParent().getParent().getParent().getParent().getId();
-        return toStep(goalId, phaseId, doc);
     }
 
     private static Map<String, Object> toBody(Step s) {
