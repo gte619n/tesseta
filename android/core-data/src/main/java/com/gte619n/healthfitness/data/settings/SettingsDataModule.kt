@@ -2,14 +2,10 @@ package com.gte619n.healthfitness.data.settings
 
 import android.content.Context
 import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
-import com.gte619n.healthfitness.data.googlehealth.GoogleHealthRepositoryImpl
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthService
 import com.gte619n.healthfitness.data.prefs.CoachAudioPreferencesImpl
-import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepositoryImpl
 import com.gte619n.healthfitness.data.profile.ProfileService
-import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthRepository
 import com.gte619n.healthfitness.domain.prefs.CoachAudioPreferences
-import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -23,19 +19,12 @@ import retrofit2.create
 
 // IMPL-AND-02's own Hilt module. Lives in the feature's core-data package
 // rather than touching NetworkModule. Provides the Retrofit services and the
-// GoogleHealthScopeRepository, and binds the remaining repository interfaces.
-// (ProfileRepository is a concrete @Inject class — no binding needed.)
+// GoogleHealthScopeRepository, and binds the CoachAudioPreferences interface.
+// (GoogleHealthRepository / UnitPreferencesRepository / ProfileRepository are
+// concrete @Inject classes — no binding needed.)
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class SettingsDataModule {
-
-    @Binds
-    @Singleton
-    abstract fun bindGoogleHealthRepository(impl: GoogleHealthRepositoryImpl): GoogleHealthRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindUnitPreferencesRepository(impl: UnitPreferencesRepositoryImpl): UnitPreferencesRepository
 
     @Binds
     @Singleton

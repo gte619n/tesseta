@@ -3,10 +3,10 @@ package com.gte619n.healthfitness.feature.workouts.program
 import androidx.lifecycle.SavedStateHandle
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
-import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import io.mockk.coEvery

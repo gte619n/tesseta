@@ -137,7 +137,6 @@ dependencies {
     implementation(project(":core-domain"))
     implementation(project(":core-data"))
     implementation(project(":core-ui"))
-    implementation(project(":core-health"))
     implementation(project(":feature-workouts"))
     implementation(project(":feature-medical"))
     implementation(project(":feature-goals"))

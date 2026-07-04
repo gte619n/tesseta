@@ -3,8 +3,8 @@ package com.gte619n.healthfitness.feature.workouts.program
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
-import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify

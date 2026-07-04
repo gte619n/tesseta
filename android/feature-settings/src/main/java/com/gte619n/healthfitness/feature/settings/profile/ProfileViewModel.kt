@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.feature.settings.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.prefs.HeightUnit
-import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
+import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.profile.HeightMetric
 import com.gte619n.healthfitness.domain.profile.Profile
 import com.gte619n.healthfitness.data.profile.ProfileRepository

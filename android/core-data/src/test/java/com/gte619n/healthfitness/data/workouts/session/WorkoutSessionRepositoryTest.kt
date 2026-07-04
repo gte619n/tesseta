@@ -70,7 +70,7 @@ class WorkoutSessionRepositoryTest {
         clock = { now },
     )
 
-    private val repo = WorkoutSessionRepositoryImpl(
+    private val repo = WorkoutSessionRepository(
         api = api,
         draftDao = draftDao,
         scheduledDao = scheduledDao,
@@ -704,7 +704,7 @@ class WorkoutSessionRepositoryTest {
         const val SCHEDULED_ID = "2026-06-08_d1"
         const val ENTITY_ID = "$PROGRAM_ID/$SCHEDULED_ID"
         const val T0 = 1_000_000L
-        const val STALE = WorkoutSessionRepositoryImpl.STALE_AFTER_MILLIS
+        const val STALE = WorkoutSessionRepository.STALE_AFTER_MILLIS
         val KEY_0 = PrescriptionKey(blockId = "b1", orderIndex = 0)
         val KEY_1 = PrescriptionKey(blockId = "b1", orderIndex = 1)
     }

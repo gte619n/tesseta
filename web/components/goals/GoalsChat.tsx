@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
@@ -10,7 +10,7 @@ import { GoalProposalCard } from "@/components/goals/GoalProposalCard";
 import type { GoalProposalDraft } from "@/components/goals/GoalProposalCard";
 import { ChatMarkdown } from "@/components/goals/ChatMarkdown";
 import { ChatComposer, TypingIndicator, TrashIcon } from "@/components/chat/ChatPrimitives";
-import { consumeChatStream } from "@/lib/chat-stream";
+import { useChatStream, type ChatMessage as ChatStreamMessage } from "@/lib/use-chat-stream";
 import {
   draftToProposal,
   proposalToDraft,
@@ -48,20 +48,7 @@ type ProposalState = {
   discarded?: boolean;
 };
 
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  proposal?: ProposalState;
-  // Marks the live assistant message currently receiving token deltas.
-  streaming?: boolean;
-};
-
-let msgSeq = 0;
-function nextId(): string {
-  msgSeq += 1;
-  return `m-${msgSeq}-${Math.random().toString(36).slice(2, 7)}`;
-}
+type ChatMessage = ChatStreamMessage<ProposalState>;
 
 export function GoalsChat({
   initialThreads,
@@ -78,17 +65,23 @@ export function GoalsChat({
   const seededGoalId = searchParams.get("goalId");
 
   const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
-  const [threadId, setThreadId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
   const [, startDeleteTransition] = useTransition();
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  // Keep the threadId fresh inside async stream callbacks without re-binding.
-  const threadIdRef = useRef<string | null>(null);
-  threadIdRef.current = threadId;
+  const {
+    messages,
+    setMessages,
+    input,
+    setInput,
+    streaming,
+    setStreaming,
+    threadId,
+    setThreadId,
+    threadIdRef,
+    scrollRef,
+    abortRef,
+    reset,
+    send: sendStream,
+  } = useChatStream<ProposalState>();
 
   // Seed the composer with context when arriving from "Edit in chat".
   useEffect(() => {
@@ -101,143 +94,47 @@ export function GoalsChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seededGoalId]);
 
-  // Auto-scroll to the latest content as tokens stream in.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
-
-  const patchMessage = useCallback(
-    (id: string, patch: Partial<ChatMessage>) => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-      );
-    },
-    [],
-  );
-
-  const send = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || streaming) return;
-
-      const userMsg: ChatMessage = {
-        id: nextId(),
-        role: "user",
-        text: trimmed,
-      };
-      const assistantId = nextId();
-      const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: "assistant",
-        text: "",
-        streaming: true,
-      };
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
-      setInput("");
-      setStreaming(true);
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      let assistantText = "";
-      let sawError = false;
-
-      try {
-        const res = await fetch("/api/goals/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            threadId: threadIdRef.current,
-            message: trimmed,
-          }),
-          signal: controller.signal,
-        });
-
-        if (!res.ok || !res.body) {
-          const detail = await res.text().catch(() => "");
-          throw new Error(detail || `Request failed (${res.status})`);
+  const send = (text: string) =>
+    sendStream(text, {
+      request: () => ({
+        url: "/api/goals/chat",
+        body: { threadId: threadIdRef.current, message: text.trim() },
+      }),
+      onProposal: (data) => {
+        try {
+          const dto = JSON.parse(data) as GoalProposalDto;
+          return { draft: proposalToDraft(dto) };
+        } catch {
+          // Ignore malformed proposal frames.
+          return null;
         }
-
-        await consumeChatStream(
-          res.body,
-          {
-            onToken: (t) => {
-              assistantText += t;
-              patchMessage(assistantId, { text: assistantText });
-            },
-            onProposal: (data) => {
-              try {
-                const dto = JSON.parse(data) as GoalProposalDto;
-                patchMessage(assistantId, {
-                  proposal: { draft: proposalToDraft(dto) },
-                });
-              } catch {
-                // Ignore malformed proposal frames.
-              }
-            },
-            onError: (message) => {
-              sawError = true;
-              toast.error("Chat error", { description: message });
-            },
-            onDone: (tid) => {
-              threadIdRef.current = tid;
-              setThreadId(tid);
-            },
-          },
-          controller.signal,
-        );
-
+      },
+      onSettled: (tid, userText) => {
         // A new thread won't be in the sidebar yet — add a lightweight entry.
-        const tid = threadIdRef.current;
         if (tid && !threads.some((t) => t.threadId === tid)) {
           const now = new Date().toISOString();
           setThreads((prev) => [
             {
               threadId: tid,
-              title: trimmed.length <= 60 ? trimmed : `${trimmed.slice(0, 57)}...`,
+              title:
+                userText.length <= 60 ? userText : `${userText.slice(0, 57)}...`,
               createdAt: now,
               updatedAt: now,
             },
             ...prev,
           ]);
         }
-      } catch (e) {
-        if (!(e instanceof DOMException && e.name === "AbortError")) {
-          sawError = true;
-          toast.error("Couldn't reach the assistant", {
-            description: e instanceof Error ? e.message : "Try again.",
-          });
-        }
-      } finally {
-        patchMessage(assistantId, {
-          streaming: false,
-          // If nothing came back at all, leave a gentle placeholder.
-          text:
-            assistantText ||
-            (sawError ? "" : "(no response)"),
-        });
-        setStreaming(false);
-        abortRef.current = null;
-      }
-    },
-    [streaming, threads, patchMessage, toast],
-  );
+      },
+    });
 
   function startNewThread() {
-    abortRef.current?.abort();
-    setThreadId(null);
-    threadIdRef.current = null;
-    setMessages([]);
-    setInput("");
-    setStreaming(false);
+    reset();
   }
 
   function switchThread(tid: string) {
     if (tid === threadId) return;
     abortRef.current?.abort();
     setThreadId(tid);
-    threadIdRef.current = tid;
     // Backend has no per-thread history read endpoint in v1; switching
     // resets the visible transcript and continues the persisted thread.
     setMessages([]);
@@ -258,14 +155,7 @@ export function GoalsChat({
         await deleteThread(tid);
         setThreads((prev) => prev.filter((t) => t.threadId !== tid));
         // If the deleted thread is currently open, reset to empty state.
-        if (threadIdRef.current === tid) {
-          abortRef.current?.abort();
-          setThreadId(null);
-          threadIdRef.current = null;
-          setMessages([]);
-          setInput("");
-          setStreaming(false);
-        }
+        if (threadIdRef.current === tid) reset();
         toast.success("Conversation deleted");
       } catch {
         toast.error("Couldn't delete conversation", {

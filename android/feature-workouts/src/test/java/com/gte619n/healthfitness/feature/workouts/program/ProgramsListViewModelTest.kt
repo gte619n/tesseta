@@ -2,7 +2,7 @@ package com.gte619n.healthfitness.feature.workouts.program
 
 import app.cash.turbine.test
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
-import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
+import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk

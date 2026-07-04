@@ -21,7 +21,6 @@ include(
     ":core-data",
     ":core-domain",
     ":core-ui",
-    ":core-health",
     ":core-chat",
     ":feature-workouts",
     ":feature-medical",

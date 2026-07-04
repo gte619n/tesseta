@@ -24,7 +24,7 @@ import androidx.core.content.ContextCompat
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
 import com.gte619n.healthfitness.domain.prefs.CoachAudioPreferences
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import com.gte619n.healthfitness.mobile.MainActivity
 import com.gte619n.healthfitness.mobile.R

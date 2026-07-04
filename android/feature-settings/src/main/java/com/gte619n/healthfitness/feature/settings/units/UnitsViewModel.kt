@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.domain.prefs.HeightUnit
 import com.gte619n.healthfitness.domain.prefs.TemperatureUnit
 import com.gte619n.healthfitness.domain.prefs.UnitPreferences
-import com.gte619n.healthfitness.domain.prefs.UnitPreferencesRepository
+import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted

@@ -31,6 +31,41 @@ Every change below is build-verified (`./gradlew test`; web: `tsc --noEmit` +
 environment and is verified by inspection only. Web changes are not
 visually verified (no browser runtime here).
 
+### Third pass (2026-07) — Tier-3 structural finish
+
+A third pass (branch `more-refactoring`) closed out the remaining Tier-3 items,
+this time **with** a working Android SDK, so Android changes are build- and
+test-verified (`./gradlew compileDebugKotlin` + `testDebugUnitTest`), not
+inspection-only:
+
+- **Web — `useChatStream` hook (rec #1).** Extracted the byte-identical SSE
+  streaming state machine (message bookkeeping, fetch, abort/finally, threadId
+  reconcile) out of `GoalsChat` and `WorkoutProgramChat` into
+  `lib/use-chat-stream.ts`. The two components dropped 522→412 and 890→819; the
+  duplicated ~120-line loop is now single-source. `tsc`/`eslint`/`vitest`/`next
+  build` green.
+- **Web — `app/page.tsx` decomposition (rec #5).** 875→259. Blood-panel loader
+  → `lib/blood-panel.ts`; body-composition loader + view model →
+  `lib/body-composition-dashboard.ts`; `loadDailyMetrics` → `lib/dashboard-vitals.ts`;
+  the `BodyCompositionCard` presentational tree → `components/dashboard/BodyCompositionCard.tsx`.
+- **Android — removed the empty `core-health` module (rec #3).** On-device
+  Health Connect stays unbuilt (data comes from the backend's Google Health
+  sync), so the placeholder module + `health-connect` catalog entry + its `app`/
+  `wear` wiring were removed; docs reconciled. (Sibling to the earlier
+  `feature-chat` removal.)
+- **Android — concrete `@Inject` repositories (rec #4).** Collapsed the last 10
+  single-implementation `core-domain` interfaces into concrete `core-data`
+  classes (the GoalsRepository pattern): the 6 dashboard card repos,
+  `WorkoutProgramRepository`, `WorkoutSessionRepository`, `UnitPreferencesRepository`,
+  and `GoogleHealthRepository`. Deleted their `@Binds`; stateful hand fakes were
+  converted to MockK-backed helpers (final Kotlin classes mock fine).
+  `CoachAudioPreferences` was intentionally left (its consumers span other
+  feature modules; not worth the extra churn this pass).
+- **Android — split the oversized screens (rec #8).** Extracted cohesive
+  sub-composables from `AddMedicationScreen`, `MedicationDetailScreen`,
+  `NutritionTodayScreen`, and `NutritionCaptureScreen` into sibling
+  `*Components`/`*Dialogs`/`*Panes` files (same package, `private`→`internal`).
+
 **Done**
 - **Backend:** Firestore `await`+typed-exception helper; shared Gemini `Client`
   + GCS `Storage` beans; `google-api-client` catalog entry removed; dead
@@ -100,8 +135,11 @@ visually verified (no browser runtime here).
   (and now moot as a *module* concern, but the conditional itself still gates the
   Firestore beans for tests).
 - Backend #8 "dead Goals branches" — none found (read-path-resolvable).
-- Android #2/#4/#5/#8 (build-logic plugin, concrete repos, Hilt auth, screen
-  splits) — substantive Kotlin/Gradle changes that need a real build to verify.
+- ~~Android #2/#4/#5/#8 (build-logic plugin, concrete repos, Hilt auth, screen
+  splits)~~ — **all done.** #2 (build-logic convention plugins) and #5 (Hilt auth
+  wiring + `collectAsStateWithLifecycle`) landed in earlier PRs to `main`; #4
+  (concrete repos) and #8 (screen splits) landed in the third pass above, now
+  build- and test-verified with a real SDK.
 - Backend #6 **persistence** mapper round-trips — need the Firestore emulator
   (the `api`-module half of #6 is now done; see "Done" above).
 

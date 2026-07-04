@@ -19,7 +19,6 @@ import com.gte619n.healthfitness.domain.workouts.session.DraftStatus
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.CoroutineDispatcher
@@ -51,7 +50,7 @@ import java.time.Instant
  * PUT ([WorkoutProgramApi.completeSession]) — in that mode neither Room nor
  * the outbox is the source of truth.
  */
-class WorkoutSessionRepositoryImpl(
+class WorkoutSessionRepository(
     private val api: WorkoutProgramApi,
     private val draftDao: WorkoutSessionDraftDao,
     private val scheduledDao: WorkoutScheduledDao,
@@ -60,7 +59,7 @@ class WorkoutSessionRepositoryImpl(
     moshi: Moshi,
     private val io: CoroutineDispatcher,
     private val clock: () -> Long = { System.currentTimeMillis() },
-) : WorkoutSessionRepository {
+) {
 
     private val scheduledAdapter = moshi.adapter(ScheduledWorkoutDto::class.java)
     private val requestAdapter = moshi.adapter(CompleteSessionRequest::class.java)
@@ -68,13 +67,13 @@ class WorkoutSessionRepositoryImpl(
         Types.newParameterizedType(List::class.java, LoggedPrescriptionDto::class.java),
     )
 
-    override fun observeDraft(programId: String, scheduledId: String): Flow<WorkoutSessionDraft?> =
+    fun observeDraft(programId: String, scheduledId: String): Flow<WorkoutSessionDraft?> =
         draftDao.observe(programId, scheduledId).map { it?.toDomain() }
 
-    override fun observeDrafts(): Flow<List<WorkoutSessionDraft>> =
+    fun observeDrafts(): Flow<List<WorkoutSessionDraft>> =
         draftDao.observeAll().map { rows -> rows.mapNotNull { it.toDomain() } }
 
-    override suspend fun start(
+    suspend fun start(
         programId: String,
         scheduledId: String,
     ): Result<WorkoutSessionDraft> = withContext(io) {
@@ -116,7 +115,7 @@ class WorkoutSessionRepositoryImpl(
         }
     }
 
-    override suspend fun updateSets(
+    suspend fun updateSets(
         programId: String,
         scheduledId: String,
         key: PrescriptionKey,
@@ -146,7 +145,7 @@ class WorkoutSessionRepositoryImpl(
         }
     }
 
-    override suspend fun finish(programId: String, scheduledId: String): Result<Unit> =
+    suspend fun finish(programId: String, scheduledId: String): Result<Unit> =
         withContext(io) {
             runCatching {
                 val entity = draftDao.getByKey(programId, scheduledId)
@@ -157,7 +156,7 @@ class WorkoutSessionRepositoryImpl(
             }
         }
 
-    override suspend fun skip(programId: String, scheduledId: String): Result<Unit> =
+    suspend fun skip(programId: String, scheduledId: String): Result<Unit> =
         withContext(io) {
             runCatching {
                 // D4: SKIPPED clears actuals — no completedAt/duration/logged.
@@ -172,7 +171,7 @@ class WorkoutSessionRepositoryImpl(
             }
         }
 
-    override suspend fun reset(programId: String, scheduledId: String): Result<Unit> =
+    suspend fun reset(programId: String, scheduledId: String): Result<Unit> =
         withContext(io) {
             runCatching {
                 // Un-log: PLANNED clears actuals (no completedAt/duration/logged),
@@ -189,12 +188,12 @@ class WorkoutSessionRepositoryImpl(
             }
         }
 
-    override suspend fun discard(programId: String, scheduledId: String): Result<Unit> =
+    suspend fun discard(programId: String, scheduledId: String): Result<Unit> =
         withContext(io) {
             runCatching { draftDao.delete(programId, scheduledId) }
         }
 
-    override suspend fun fetchRecap(programId: String, scheduledId: String): String? =
+    suspend fun fetchRecap(programId: String, scheduledId: String): String? =
         withContext(io) {
             // finish() enqueues the completion through the outbox, so the server
             // may still see the session as PLANNED (recap == null) for a moment
@@ -208,7 +207,7 @@ class WorkoutSessionRepositoryImpl(
             null
         }
 
-    override suspend fun lastSets(
+    suspend fun lastSets(
         programId: String,
         scheduledId: String,
     ): Map<String, List<LoggedSet>> = withContext(io) {
@@ -222,7 +221,7 @@ class WorkoutSessionRepositoryImpl(
 
     // ---- IMPL-17 Q3: "restore into logger" recovery for parked completions ----
 
-    override fun observeParkedCompletions(): Flow<List<ParkedCompletion>> =
+    fun observeParkedCompletions(): Flow<List<ParkedCompletion>> =
         combine(
             outbox.parked(MirrorTables.WORKOUT_SCHEDULED),
             draftDao.observeAll(),
@@ -257,7 +256,7 @@ class WorkoutSessionRepositoryImpl(
             }
         }
 
-    override suspend fun restoreParked(
+    suspend fun restoreParked(
         programId: String,
         scheduledId: String,
     ): Result<WorkoutSessionDraft> = withContext(io) {
@@ -309,7 +308,7 @@ class WorkoutSessionRepositoryImpl(
         }
     }
 
-    override suspend fun discardParked(programId: String, scheduledId: String): Result<Unit> =
+    suspend fun discardParked(programId: String, scheduledId: String): Result<Unit> =
         withContext(io) {
             runCatching {
                 val id = mirrorId(programId, scheduledId)
@@ -375,7 +374,7 @@ class WorkoutSessionRepositoryImpl(
         },
     )
 
-    override suspend fun finalizeStaleDrafts(): Result<WorkoutSessionRepository.StaleDraftResult> =
+    suspend fun finalizeStaleDrafts(): Result<StaleDraftResult> =
         withContext(io) {
             runCatching {
                 val cutoff = clock() - STALE_AFTER_MILLIS
@@ -404,9 +403,12 @@ class WorkoutSessionRepositoryImpl(
                         finalized++
                     }
                 }
-                WorkoutSessionRepository.StaleDraftResult(finalized, discarded)
+                StaleDraftResult(finalized, discarded)
             }
         }
+
+    /** Outcome counts of one [finalizeStaleDrafts] pass. */
+    data class StaleDraftResult(val finalized: Int, val discarded: Int)
 
     /**
      * Cold-miss recovery for [start]: the scheduled session isn't in the mirror

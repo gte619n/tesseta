@@ -6,7 +6,6 @@ import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.data.sync.OutboxRepository
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
 import com.squareup.moshi.Moshi
 import dagger.Module
 import dagger.Provides
@@ -17,7 +16,7 @@ import javax.inject.Singleton
 
 /**
  * ADR-0012 (IMPL-AND-17) — Hilt wiring for the workout-session draft store.
- * Provided (not @Inject-constructed) so [WorkoutSessionRepositoryImpl]'s
+ * Provided (not @Inject-constructed) so [WorkoutSessionRepository]'s
  * `clock` default stays the wall clock in production while tests inject a fake
  * — the same pattern SyncDataModule uses for OutboxRepository.
  */
@@ -36,5 +35,5 @@ object WorkoutSessionDataModule {
         moshi: Moshi,
         @IoDispatcher io: CoroutineDispatcher,
     ): WorkoutSessionRepository =
-        WorkoutSessionRepositoryImpl(api, draftDao, scheduledDao, support, outbox, moshi, io)
+        WorkoutSessionRepository(api, draftDao, scheduledDao, support, outbox, moshi, io)
 }

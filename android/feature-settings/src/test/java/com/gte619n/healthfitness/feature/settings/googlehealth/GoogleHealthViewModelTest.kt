@@ -5,7 +5,7 @@ import android.content.IntentSender
 import app.cash.turbine.test
 import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
 import com.gte619n.healthfitness.data.auth.HealthAuthFlow
-import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthRepository
+import com.gte619n.healthfitness.data.googlehealth.GoogleHealthRepository
 import com.gte619n.healthfitness.domain.googlehealth.GoogleHealthStatus
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -36,22 +36,26 @@ class GoogleHealthViewModelTest {
         Dispatchers.resetMain()
     }
 
+    // GoogleHealthRepository is a concrete @Inject class; MockK mocks it (final
+    // Kotlin classes are fine). This holder exposes a [mock] whose answers read
+    // the mutable fields below, so a test can flip `statusResult` mid-run and
+    // assert on `lastCode` / `statusCalls` exactly as the old hand fake allowed.
     private class FakeHealthRepo(
         var statusResult: Result<GoogleHealthStatus>,
         var connectResult: Result<Unit> = Result.success(Unit),
         var disconnectResult: Result<Unit> = Result.success(Unit),
-    ) : GoogleHealthRepository {
+    ) {
         var lastCode: String? = null
         var statusCalls = 0
-        override suspend fun status(): Result<GoogleHealthStatus> {
-            statusCalls++
-            return statusResult
+        val mock: GoogleHealthRepository = mockk()
+        init {
+            io.mockk.coEvery { mock.status() } coAnswers { statusCalls++; statusResult }
+            io.mockk.coEvery { mock.connectWithServerAuthCode(any()) } coAnswers {
+                lastCode = firstArg()
+                connectResult
+            }
+            io.mockk.coEvery { mock.disconnect() } coAnswers { disconnectResult }
         }
-        override suspend fun connectWithServerAuthCode(serverAuthCode: String): Result<Unit> {
-            lastCode = serverAuthCode
-            return connectResult
-        }
-        override suspend fun disconnect(): Result<Unit> = disconnectResult
     }
 
     // GoogleHealthScopeRepository is a concrete class; we substitute its
@@ -70,7 +74,7 @@ class GoogleHealthViewModelTest {
     @Test
     fun loadingThenDisconnected() = runTest {
         val repo = FakeHealthRepo(Result.success(GoogleHealthStatus(false, null)))
-        val vm = GoogleHealthViewModel(repo, fakeScope({ HealthAuthFlow.Failed("n/a") }))
+        val vm = GoogleHealthViewModel(repo.mock, fakeScope({ HealthAuthFlow.Failed("n/a") }))
 
         vm.state.test {
             var s = awaitItem()
@@ -84,7 +88,7 @@ class GoogleHealthViewModelTest {
     fun connectResolvedImmediatelyConnects() = runTest {
         val repo = FakeHealthRepo(Result.success(GoogleHealthStatus(false, null)))
         // After connect succeeds, refresh() reads status again -> connected.
-        val vm = GoogleHealthViewModel(repo, fakeScope({ HealthAuthFlow.Resolved("auth-123") }))
+        val vm = GoogleHealthViewModel(repo.mock, fakeScope({ HealthAuthFlow.Resolved("auth-123") }))
 
         vm.state.test {
             var s = awaitItem()
@@ -113,7 +117,7 @@ class GoogleHealthViewModelTest {
         val repo = FakeHealthRepo(Result.success(GoogleHealthStatus(false, null)))
         val data = mockk<Intent>()
         val vm = GoogleHealthViewModel(
-            repo,
+            repo.mock,
             fakeScope(
                 authorize = { HealthAuthFlow.NeedsUserConsent(sender) },
                 parse = { HealthAuthFlow.Resolved("code-from-consent") },
@@ -147,7 +151,7 @@ class GoogleHealthViewModelTest {
     @Test
     fun disconnectTransitionsToDisconnected() = runTest {
         val repo = FakeHealthRepo(Result.success(GoogleHealthStatus(true, 1700000000L)))
-        val vm = GoogleHealthViewModel(repo, fakeScope({ HealthAuthFlow.Failed("n/a") }))
+        val vm = GoogleHealthViewModel(repo.mock, fakeScope({ HealthAuthFlow.Failed("n/a") }))
 
         vm.state.test {
             var s = awaitItem()
@@ -167,7 +171,7 @@ class GoogleHealthViewModelTest {
     @Test
     fun statusFailureSurfacesError() = runTest {
         val repo = FakeHealthRepo(Result.failure(RuntimeException("network")))
-        val vm = GoogleHealthViewModel(repo, fakeScope({ HealthAuthFlow.Failed("n/a") }))
+        val vm = GoogleHealthViewModel(repo.mock, fakeScope({ HealthAuthFlow.Failed("n/a") }))
 
         vm.state.test {
             var s = awaitItem()

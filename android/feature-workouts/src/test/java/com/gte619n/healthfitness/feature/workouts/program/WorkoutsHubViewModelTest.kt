@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.feature.workouts.program
 import app.cash.turbine.test
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify

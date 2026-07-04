@@ -5,12 +5,6 @@ import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
 import com.gte619n.healthfitness.domain.dashboard.ChartXLabel
 import com.gte619n.healthfitness.domain.dashboard.DailyMetricPoint
-import com.gte619n.healthfitness.domain.dashboard.DashboardBloodMarkerRepository
-import com.gte619n.healthfitness.domain.dashboard.DashboardBodyCompositionRepository
-import com.gte619n.healthfitness.domain.dashboard.DashboardDailyMetricsRepository
-import com.gte619n.healthfitness.domain.dashboard.DashboardNutritionRepository
-import com.gte619n.healthfitness.domain.dashboard.DashboardRecentActivityRepository
-import com.gte619n.healthfitness.domain.dashboard.DashboardTodaysDosesRepository
 import com.gte619n.healthfitness.domain.dashboard.DoseWindow
 import com.gte619n.healthfitness.domain.dashboard.HistoryPoint
 import com.gte619n.healthfitness.domain.dashboard.MarkerTone
@@ -25,7 +19,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -298,16 +291,16 @@ internal object DailyMetricMapper {
  * window so the 7/90-day deltas have an anchor). Under the kill-switch (D13) it
  * falls back to the live network list.
  */
-internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
+class DashboardBodyCompositionRepository @Inject internal constructor(
     private val api: DashboardApi,
     private val dao: com.gte619n.healthfitness.data.db.dao.BodyCompositionDao,
     private val support: com.gte619n.healthfitness.data.sync.MirrorRepositorySupport,
     moshi: com.squareup.moshi.Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : DashboardBodyCompositionRepository {
+) {
     private val dtoAdapter = moshi.adapter(BodyCompositionDto::class.java)
 
-    override suspend fun loadRecent(): WeightSummary? = withContext(io) {
+    suspend fun loadRecent(): WeightSummary? = withContext(io) {
         if (support.killSwitchOn()) {
             return@withContext BodyCompositionMapper.toWeightSummary(api.bodyComposition())
         }
@@ -317,14 +310,14 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
         // guard left the dashboard stuck on the handful of recent points and never
         // showing (or updating) the real trend. /api/me/body-composition returns
         // the user's full history; refreshInto upserts it idempotently. (Mirrors
-        // DashboardDailyMetricsRepositoryImpl, which refreshes on every call.)
+        // DashboardDailyMetricsRepository, which refreshes on every call.)
         runCatching { fillFromNetwork() }
         summaryFromRoom()
     }
 
     // offline-fix: local-only seed — the same Room read [loadRecent] serves, minus
     // the network refresh, so the card shows the last-synced weight instantly.
-    override suspend fun cachedRecent(): WeightSummary? = withContext(io) {
+    suspend fun cachedRecent(): WeightSummary? = withContext(io) {
         if (support.killSwitchOn()) return@withContext null
         summaryFromRoom()
     }
@@ -370,17 +363,17 @@ internal class DashboardBodyCompositionRepositoryImpl @Inject constructor(
  * renders the trend offline. Each row's `payloadJson` is the full [DailyMetricDto]
  * (every field the chart consumes), keyed by date.
  */
-internal class DashboardDailyMetricsRepositoryImpl @Inject constructor(
+class DashboardDailyMetricsRepository @Inject internal constructor(
     private val api: DashboardApi,
     private val dao: com.gte619n.healthfitness.data.db.dao.DailyMetricDao,
     private val support: com.gte619n.healthfitness.data.sync.MirrorRepositorySupport,
     moshi: com.squareup.moshi.Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : DashboardDailyMetricsRepository {
+) {
     private val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
     private val dtoAdapter = moshi.adapter(DailyMetricDto::class.java)
 
-    override suspend fun loadRecent(): List<DailyMetricPoint> = withContext(io) {
+    suspend fun loadRecent(): List<DailyMetricPoint> = withContext(io) {
         val today = LocalDate.now()
         val from = today.minusDays(30)
         if (support.killSwitchOn()) {
@@ -409,7 +402,7 @@ internal class DashboardDailyMetricsRepositoryImpl @Inject constructor(
     }
 
     // offline-fix: local-only seed — Room read without the network refresh.
-    override suspend fun cachedRecent(): List<DailyMetricPoint> = withContext(io) {
+    suspend fun cachedRecent(): List<DailyMetricPoint> = withContext(io) {
         if (support.killSwitchOn()) return@withContext emptyList()
         metricsFromRoom(LocalDate.now().minusDays(30))
     }
@@ -431,16 +424,16 @@ internal class DashboardDailyMetricsRepositoryImpl @Inject constructor(
  * mirror payload is the blood repo's reading DTO, whose JSON is field-compatible
  * with the dashboard DTO. Under the kill-switch (D13) it falls back to live.
  */
-internal class DashboardBloodMarkerRepositoryImpl @Inject constructor(
+class DashboardBloodMarkerRepository @Inject internal constructor(
     private val api: DashboardApi,
     private val dao: com.gte619n.healthfitness.data.db.dao.BloodReadingDao,
     private val support: com.gte619n.healthfitness.data.sync.MirrorRepositorySupport,
     moshi: com.squareup.moshi.Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : DashboardBloodMarkerRepository {
+) {
     private val dtoAdapter = moshi.adapter(BloodReadingDto::class.java)
 
-    override suspend fun loadDashboardMarkers(): List<BloodMarkerSummary> = withContext(io) {
+    suspend fun loadDashboardMarkers(): List<BloodMarkerSummary> = withContext(io) {
         if (support.killSwitchOn()) {
             return@withContext BloodMarkerSummaryMapper.toDashboardMarkers(api.bloodReadings())
         }
@@ -449,7 +442,7 @@ internal class DashboardBloodMarkerRepositoryImpl @Inject constructor(
     }
 
     // offline-fix: local-only seed — Room read without the cold-miss network fill.
-    override suspend fun cachedDashboardMarkers(): List<BloodMarkerSummary> = withContext(io) {
+    suspend fun cachedDashboardMarkers(): List<BloodMarkerSummary> = withContext(io) {
         if (support.killSwitchOn()) return@withContext emptyList()
         markersFromRoom()
     }
@@ -485,12 +478,12 @@ internal class DashboardBloodMarkerRepositoryImpl @Inject constructor(
 // cache. Every successful load overwrites the cache; the dashboard seeds the card
 // from the cache instantly on a cold/offline open (only for the current day) and
 // then revalidates. Cleared on sign-out via SignOutSideEffects.
-internal class DashboardTodaysDosesRepositoryImpl @Inject constructor(
+class DashboardTodaysDosesRepository @Inject internal constructor(
     private val api: DashboardApi,
     private val cache: DashboardDosesCache,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : DashboardTodaysDosesRepository {
-    override suspend fun loadToday(): List<TodaysDoseSummary> = withContext(io) {
+) {
+    suspend fun loadToday(): List<TodaysDoseSummary> = withContext(io) {
         // Device-local date so the dashboard dose card resets on the user's day.
         val today = LocalDate.now().toString()
         val doses = api.todaysDoses(today).map { it.toDomain() }
@@ -498,7 +491,7 @@ internal class DashboardTodaysDosesRepositoryImpl @Inject constructor(
         doses
     }
 
-    override suspend fun cachedToday(): List<TodaysDoseSummary>? = withContext(io) {
+    suspend fun cachedToday(): List<TodaysDoseSummary>? = withContext(io) {
         cache.read(LocalDate.now().toString())
     }
 }
@@ -506,17 +499,17 @@ internal class DashboardTodaysDosesRepositoryImpl @Inject constructor(
 // Reuses the feature NutritionRepository (same getDay endpoint as the nutrition
 // Today screen) so the dashboard card and the full screen never disagree. The
 // returned day carries both totals and the macro target.
-internal class DashboardNutritionRepositoryImpl @Inject constructor(
+class DashboardNutritionRepository @Inject internal constructor(
     private val nutrition: NutritionRepository,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : DashboardNutritionRepository {
-    override suspend fun loadToday(): NutritionDay = withContext(io) {
+) {
+    suspend fun loadToday(): NutritionDay = withContext(io) {
         // Device-local date so the card rolls over on the user's day.
         nutrition.day(LocalDate.now().toString())
     }
 
     // offline-fix: local-only seed — the mirror-backed day with no network.
-    override suspend fun cachedToday(): NutritionDay? = withContext(io) {
+    suspend fun cachedToday(): NutritionDay? = withContext(io) {
         nutrition.cachedDay(LocalDate.now().toString())
     }
 }
@@ -613,48 +606,30 @@ class DashboardDosesCache @Inject constructor(
 // to a single-slot DataStore ([RecentActivityCache]): every successful pull
 // overwrites the cache, and the ViewModel renders the cached feed instantly on
 // open / when offline while a fresh pull runs (stale-while-revalidate).
-internal class DashboardRecentActivityRepositoryImpl @Inject constructor(
+class DashboardRecentActivityRepository @Inject internal constructor(
     private val api: DashboardApi,
     private val cache: RecentActivityCache,
     @IoDispatcher private val io: CoroutineDispatcher,
-) : DashboardRecentActivityRepository {
-    override suspend fun loadRecent(): List<RecentActivityEntry> = withContext(io) {
+) {
+    suspend fun loadRecent(): List<RecentActivityEntry> = withContext(io) {
         val entries = api.recentActivity().map { it.toDomain() }
         cache.write(entries)
         entries
     }
 
-    override suspend fun cachedRecent(): List<RecentActivityEntry>? = withContext(io) {
+    suspend fun cachedRecent(): List<RecentActivityEntry>? = withContext(io) {
         cache.read()
     }
 }
 
 // ---- Hilt ----
 
+// The card repositories are concrete @Inject classes (single implementation
+// each), so Hilt constructs them directly — this module only provides the API.
 @Module
 @InstallIn(SingletonComponent::class)
-internal abstract class DashboardDataModule {
-    @Binds @Singleton
-    abstract fun bindBodyComp(impl: DashboardBodyCompositionRepositoryImpl): DashboardBodyCompositionRepository
-
-    @Binds @Singleton
-    abstract fun bindDailyMetrics(impl: DashboardDailyMetricsRepositoryImpl): DashboardDailyMetricsRepository
-
-    @Binds @Singleton
-    abstract fun bindBlood(impl: DashboardBloodMarkerRepositoryImpl): DashboardBloodMarkerRepository
-
-    @Binds @Singleton
-    abstract fun bindDoses(impl: DashboardTodaysDosesRepositoryImpl): DashboardTodaysDosesRepository
-
-    @Binds @Singleton
-    abstract fun bindNutrition(impl: DashboardNutritionRepositoryImpl): DashboardNutritionRepository
-
-    @Binds @Singleton
-    abstract fun bindRecentActivity(impl: DashboardRecentActivityRepositoryImpl): DashboardRecentActivityRepository
-
-    companion object {
-        @Provides @Singleton
-        fun provideDashboardApi(retrofit: Retrofit): DashboardApi =
-            retrofit.create(DashboardApi::class.java)
-    }
+internal object DashboardDataModule {
+    @Provides @Singleton
+    fun provideDashboardApi(retrofit: Retrofit): DashboardApi =
+        retrofit.create(DashboardApi::class.java)
 }

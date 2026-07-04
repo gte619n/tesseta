@@ -8,7 +8,6 @@ import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvali
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
-import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgramRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.Dispatchers
@@ -54,13 +53,13 @@ import javax.inject.Singleton
  * Per D13, a latched kill-switch drops every read back to the live network.
  */
 @Singleton
-class WorkoutProgramRepositoryImpl @Inject constructor(
+class WorkoutProgramRepository @Inject internal constructor(
     private val api: WorkoutProgramApi,
     private val programDao: WorkoutProgramDao,
     private val scheduledDao: WorkoutScheduledDao,
     private val support: MirrorRepositorySupport,
     private val moshi: Moshi,
-) : WorkoutProgramRepository {
+) {
 
     private val listAdapter = moshi.adapter(WorkoutProgramDto::class.java)
     private val deepAdapter = moshi.adapter(WorkoutProgramDeepDto::class.java)
@@ -81,7 +80,7 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
         return issues?.takeIf { it.isNotEmpty() }
     }
 
-    override suspend fun list(): Result<List<WorkoutProgram>> =
+    suspend fun list(): Result<List<WorkoutProgram>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 if (support.killSwitchOn()) {
@@ -106,7 +105,7 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
-    override fun observePrograms(): Flow<List<WorkoutProgram>> =
+    fun observePrograms(): Flow<List<WorkoutProgram>> =
         support.observeLocalFirst(
             rows = programDao.observeActive(),
             decode = { decodeProgram(it)?.toDomain() },
@@ -119,7 +118,7 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             },
         )
 
-    override fun observeProgram(programId: String): Flow<WorkoutProgram?> = channelFlow {
+    fun observeProgram(programId: String): Flow<WorkoutProgram?> = channelFlow {
         if (support.killSwitchOn()) {
             send(runCatching { api.get(programId).toDomain() }.getOrNull())
             return@channelFlow
@@ -140,7 +139,7 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun get(programId: String): Result<WorkoutProgram> =
+    suspend fun get(programId: String): Result<WorkoutProgram> =
         withContext(Dispatchers.IO) {
             runCatching {
                 // The server's deep response already backfills session-only phases.
@@ -160,7 +159,7 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun calendar(
+    suspend fun calendar(
         programId: String,
         from: LocalDate,
         to: LocalDate,
@@ -183,26 +182,26 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage> =
+    suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage> =
         withContext(Dispatchers.IO) {
             runCatching { api.workoutHistory(page = page, size = size).toDomain() }
         }
 
-    override suspend fun nutritionGuidance(
+    suspend fun nutritionGuidance(
         programId: String,
     ): Result<com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance?> =
         withContext(Dispatchers.IO) {
             runCatching { api.getNutritionGuidance(programId) }
         }
 
-    override suspend fun applyNutritionTarget(
+    suspend fun applyNutritionTarget(
         programId: String,
     ): Result<com.gte619n.healthfitness.domain.nutrition.Macros> =
         withContext(Dispatchers.IO) {
             runCatching { api.applyNutritionTarget(programId) }
         }
 
-    override fun observeCalendar(
+    fun observeCalendar(
         programId: String,
         from: LocalDate,
         to: LocalDate,
@@ -235,7 +234,7 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             .collect { send(it) }
     }
 
-    override suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
+    suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val sessions = try {
@@ -261,7 +260,7 @@ class WorkoutProgramRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun updateDetails(
+    suspend fun updateDetails(
         programId: String,
         title: String,
         description: String?,
