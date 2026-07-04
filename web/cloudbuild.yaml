@@ -21,7 +21,18 @@ steps:
       - --all-tags
       - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/web
 
-  - id: deploy
+  # Vulnerability scan before shipping — fail on fixable HIGH/CRITICAL findings.
+  - id: scan-image
+    name: aquasec/trivy:0.58.1
+    args:
+      - image
+      - --severity=HIGH,CRITICAL
+      - --ignore-unfixed
+      - --exit-code=1
+      - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/web:$SHORT_SHA
+
+  # Canary deploy: new revision up under the `candidate` tag with zero traffic.
+  - id: deploy-candidate
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -34,6 +45,8 @@ steps:
       - --service-account=health-fitness-runtime@$PROJECT_ID.iam.gserviceaccount.com
       - --allow-unauthenticated
       - --port=8080
+      - --no-traffic
+      - --tag=candidate
       # BACKEND_URL is what lib/api.ts and auth.ts read. The previous
       # cloudbuild used BACKEND_BASE_URL which did not match the code, so
       # the deployed web couldn't reach the backend.
@@ -47,6 +60,19 @@ steps:
       # request to /api/auth/* and the body-comp connect flow can't
       # complete its OAuth round-trip.
       - --set-secrets=AUTH_GOOGLE_ID=oauth-web-client-id:latest,AUTH_GOOGLE_SECRET=oauth-web-client-secret:latest,AUTH_SECRET=authjs-secret:latest
+
+  # Smoke-test the candidate and only then shift 100% traffic to it. The web root
+  # redirects to sign-in, so the smoke check accepts any 2xx/3xx.
+  - id: promote-canary
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    env:
+      - PROJECT_ID=$PROJECT_ID
+    args:
+      - infra/scripts/canary-promote.sh
+      - health-fitness-web
+      - us-central1
+      - /
 
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/web:$SHORT_SHA
