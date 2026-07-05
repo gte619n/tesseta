@@ -38,12 +38,32 @@ class EquipmentOverrideViewModel @Inject constructor(
     fun load(locationId: String, equipmentId: String) {
         _state.update { UiState(loading = true) }
         viewModelScope.launch {
+            // Offline-first (ADR-0018): seed the form instantly from the catalog
+            // cache + gym mirror so re-entry paints with no spinner. Only stay on
+            // Loading when nothing is cached yet. Then revalidate over the network.
+            val cachedEquipment = runCatching { equipmentRepo.cached(equipmentId) }.getOrNull()
+            if (cachedEquipment != null) {
+                val cachedOverride = runCatching { locationRepo.cached(locationId) }.getOrNull()
+                    ?.equipmentSpecs?.get(equipmentId)
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        equipment = cachedEquipment,
+                        specs = cachedEquipment.specs.toSpecMap() + (cachedOverride ?: emptyMap()),
+                        error = null,
+                    )
+                }
+            }
+
             val equipmentResult = equipmentRepo.get(equipmentId)
             val locationResult = locationRepo.get(locationId)
             val equipment = equipmentResult.getOrNull()
             if (equipment == null) {
+                // Keep any seeded form on screen; only surface an error when
+                // there's nothing to show.
                 _state.update {
-                    it.copy(loading = false, error = equipmentResult.exceptionOrNull()?.message ?: "Failed to load equipment")
+                    if (it.equipment != null) it.copy(loading = false)
+                    else it.copy(loading = false, error = equipmentResult.exceptionOrNull()?.message ?: "Failed to load equipment")
                 }
                 return@launch
             }

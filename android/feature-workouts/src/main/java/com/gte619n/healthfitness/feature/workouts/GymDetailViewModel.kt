@@ -44,11 +44,24 @@ class GymDetailViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
+            // Offline-first (ADR-0018): seed instantly from the mirror + catalog
+            // cache so re-entry paints the gym and its equipment with no spinner.
+            // Only stay on Loading when nothing is cached yet. Then revalidate.
+            val cachedLocation = runCatching { repo.cached(locationId) }.getOrNull()
+            if (cachedLocation != null) {
+                val cachedEquipment = cachedLocation.equipmentIds
+                    .mapNotNull { id -> runCatching { equipmentRepo.cached(id) }.getOrNull() }
+                _state.update {
+                    it.copy(loading = false, location = cachedLocation, equipment = cachedEquipment, error = null)
+                }
+            } else {
+                _state.update { it.copy(loading = true, error = null) }
+            }
             repo.get(locationId).fold(
                 onSuccess = { location ->
-                    // Fetch each attached equipment's catalog row in parallel.
+                    // Fetch each attached equipment's catalog row in parallel
+                    // (cache-first per repo, so this is offline-tolerant).
                     val equipment = location.equipmentIds
                         .map { id -> async { equipmentRepo.get(id).getOrNull() } }
                         .awaitAll()
@@ -58,7 +71,12 @@ class GymDetailViewModel @Inject constructor(
                     }
                 },
                 onFailure = { e ->
-                    _state.update { it.copy(loading = false, error = e.message ?: "Failed to load gym") }
+                    // Keep any seeded gym on screen; only surface an error when
+                    // there's nothing to show.
+                    _state.update {
+                        if (it.location != null) it.copy(loading = false)
+                        else it.copy(loading = false, error = e.message ?: "Failed to load gym")
+                    }
                 },
             )
         }

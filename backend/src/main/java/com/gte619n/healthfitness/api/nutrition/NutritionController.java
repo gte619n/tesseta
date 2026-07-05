@@ -160,6 +160,9 @@ public class NutritionController {
         // Self-heal any orphaned photo placeholder (its async analysis died with
         // the instance) so the day reflects FAILED instead of a perpetual spinner.
         nutrition.sweepStaleAnalyzing(userId, date);
+        // Likewise re-enqueue any catalog studio image stuck PENDING (its bare
+        // runAsync task died mid-generation) so single-food images still finish.
+        foodCatalog.sweepStalePendingImages();
         List<FoodEntry> entries = nutrition.listEntries(userId, date);
 
         Macros totals = nutrition.findByDate(userId, date)

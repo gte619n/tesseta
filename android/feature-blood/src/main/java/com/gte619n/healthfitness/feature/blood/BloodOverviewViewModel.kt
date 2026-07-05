@@ -52,21 +52,44 @@ class BloodOverviewViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    // Monotonic timestamp of the last successful background refresh, so a re-entry
+    // within REFRESH_TTL_MS reuses the mirror instead of re-pulling every time.
+    private var lastRefreshAt: Long = 0L
+
     init {
-        refresh()
+        // Screen renders from the Room mirror immediately (state stateIn above);
+        // this only revalidates, and only if the mirror is stale.
+        refreshIfStale()
     }
 
     fun retry() = refresh()
 
     /** Pull-to-refresh entry point (D11): re-fill the mirror from the backend. */
-    fun refresh() {
+    fun refresh() = doRefresh()
+
+    /** On-entry revalidation: skipped when the mirror was refreshed recently. */
+    private fun refreshIfStale() {
+        val now = nowMs()
+        if (lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
+        doRefresh()
+    }
+
+    private fun doRefresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
             runCatching {
                 readings.refresh()
                 reports.refresh()
-            }
+            }.onSuccess { lastRefreshAt = nowMs() }
             _isRefreshing.value = false
         }
+    }
+
+    // Monotonic wall-independent millis. System.nanoTime (not SystemClock) so the
+    // TTL guard is exercisable in plain JVM unit tests.
+    private fun nowMs(): Long = System.nanoTime() / 1_000_000L
+
+    private companion object {
+        const val REFRESH_TTL_MS = 30_000L
     }
 }

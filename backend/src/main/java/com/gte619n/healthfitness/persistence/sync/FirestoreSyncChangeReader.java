@@ -3,6 +3,8 @@ package com.gte619n.healthfitness.persistence.sync;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.SYNC_STATUS_KEY;
 import static com.gte619n.healthfitness.persistence.FirestoreMapper.statusOf;
 
+import com.gte619n.healthfitness.core.nutrition.CatalogFood;
+import com.gte619n.healthfitness.core.nutrition.FoodCatalogRepository;
 import com.gte619n.healthfitness.core.sync.SyncChange;
 import com.gte619n.healthfitness.core.sync.SyncChangeReader;
 import com.gte619n.healthfitness.core.sync.SyncCursor;
@@ -21,9 +23,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -148,10 +152,15 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
     /** Field keys never forwarded to clients in {@code doc}. */
     private static final Set<String> STRIPPED_KEYS = Set.of(SYNC_STATUS_KEY);
 
-    private final Firestore firestore;
+    /** Emitted routing name for nutrition entries (see SUBCOLLECTIONS). */
+    private static final String NUTRITION_ENTRIES = "nutritionDays/entries";
 
-    public FirestoreSyncChangeReader(Firestore firestore) {
+    private final Firestore firestore;
+    private final FoodCatalogRepository foodCatalog;
+
+    public FirestoreSyncChangeReader(Firestore firestore, FoodCatalogRepository foodCatalog) {
         this.firestore = firestore;
+        this.foodCatalog = foodCatalog;
     }
 
     @Override
@@ -204,11 +213,68 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
             }
         }
 
+        enrichNutritionEntryImages(all);
+
         all.sort(SyncChange.CANONICAL_ORDER);
         if (all.size() > limit) {
             return new ArrayList<>(all.subList(0, limit));
         }
         return all;
+    }
+
+    /**
+     * Join each single (non-composite) catalog-food entry's studio image into its
+     * emitted payload.
+     *
+     * <p>The studio image for a single food lives on the shared, un-synced
+     * {@code foodCatalog} doc, not on the entry — the REST day view joins it in at
+     * read time ({@code NutritionController#toResponse}). Without the same join
+     * here the raw entry reaches the Android Room mirror as
+     * {@code mealImageStatus = NONE}, so an offline-first client (which reads the
+     * mirror) never learns the image finished: its settle-poll only re-fetches
+     * while an entry is {@code PENDING}. Stamping the referenced food's current
+     * image url + status onto the emitted entry makes the mirror row carry the
+     * real {@code PENDING}/{@code READY}, so the existing client poll + thumbnail
+     * display converge it — and a finished image is durable offline.
+     *
+     * <p>Composite meals already carry their own {@code mealImageUrl}; an entry
+     * that already has an image is left untouched. A per-call cache holds this to
+     * one catalog read per distinct food.
+     */
+    private void enrichNutritionEntryImages(List<SyncChange> changes) {
+        Map<String, Optional<CatalogFood>> cache = new HashMap<>();
+        for (SyncChange change : changes) {
+            if (!NUTRITION_ENTRIES.equals(change.collection())) {
+                continue;
+            }
+            if (!(change.doc() instanceof Map<?, ?> rawDoc)) {
+                continue; // tombstone (null payload) or unexpected shape
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> doc = (Map<String, Object>) rawDoc;
+            // Composite meals carry their own finished-meal image on the entry.
+            if (doc.get("ingredients") instanceof List<?> ings && !ings.isEmpty()) {
+                continue;
+            }
+            // Never clobber an entry that already has its own image.
+            Object ownStatus = doc.get("mealImageStatus");
+            boolean hasOwnImage = doc.get("mealImageUrl") != null
+                || (ownStatus != null && !"NONE".equals(ownStatus));
+            if (hasOwnImage) {
+                continue;
+            }
+            if (!(doc.get("foodId") instanceof String foodId) || foodId.isBlank()) {
+                continue;
+            }
+            Optional<CatalogFood> food = cache.computeIfAbsent(foodId, foodCatalog::findById);
+            food.ifPresent(f -> {
+                if (f.imageUrl() != null) {
+                    doc.put("mealImageUrl", f.imageUrl());
+                }
+                doc.put("mealImageStatus",
+                    f.imageStatus() != null ? f.imageStatus().name() : "NONE");
+            });
+        }
     }
 
     /**

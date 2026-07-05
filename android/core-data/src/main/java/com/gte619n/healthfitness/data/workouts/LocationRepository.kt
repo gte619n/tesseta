@@ -62,6 +62,31 @@ class LocationRepository @Inject constructor(
             .filter { includeInactive || it.isActive }
     }
 
+    /**
+     * offline-fix (ADR-0018): network-free seed of the gym list straight off the
+     * `locations` mirror (D8) — never hits the network. The list screen shows this
+     * INSTANTLY on every entry (no spinner) and then [list] revalidates. Returns an
+     * empty list when nothing is mirrored yet (pre-first-sync). No-op under the
+     * kill-switch (live-network mode), where there is no mirror to seed from.
+     */
+    suspend fun cachedList(includeInactive: Boolean = false): List<Location> {
+        if (support.killSwitchOn()) return emptyList()
+        return dao.observeActive().first()
+            .mapNotNull { decode(it.payloadJson) }
+            .map { it.toDomain() }
+            .filter { includeInactive || it.isActive }
+    }
+
+    /**
+     * offline-fix (ADR-0018): network-free seed of a single gym off the mirror —
+     * never hits the network. The detail/edit screens show this INSTANTLY on open;
+     * [get] then revalidates. Returns null when the gym isn't mirrored yet.
+     */
+    suspend fun cached(locationId: String): Location? {
+        if (support.killSwitchOn()) return null
+        return mirroredDto(locationId)?.toDomain()
+    }
+
     suspend fun get(locationId: String): Result<Location> = runCatching {
         if (support.killSwitchOn()) return@runCatching api.get(locationId).toDomain()
         mirroredDto(locationId)?.toDomain() ?: refreshOne(locationId).toDomain()

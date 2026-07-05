@@ -33,6 +33,14 @@ class ProfileRepository @Inject constructor(
 
     private val dtoAdapter = moshi.adapter(ProfileDto::class.java)
 
+    /**
+     * offline-fix: mirror-only read (never hits the network) to seed the profile
+     * screen instantly on entry. Null only pre-first-sync (nothing mirrored yet)
+     * or under the kill-switch, where the caller falls back to [get].
+     */
+    suspend fun cached(): Profile? =
+        if (support.killSwitchOn()) null else mirroredDto()?.toDomain()
+
     suspend fun get(): Result<Profile> = runCatching {
         if (support.killSwitchOn()) {
             return@runCatching service.get().toDomain()

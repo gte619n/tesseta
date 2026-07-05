@@ -137,3 +137,37 @@ intentionally left alone: `MedicationDetailViewModel` (detail w/ pull-only histo
 already falls back to the mirror offline), `GoogleHealthViewModel` (OAuth/settings),
 `ProfileViewModel` (settings form). Worth a follow-up only if their brief loaders
 prove annoying.
+
+## Follow-up — `offline-first` branch (2026-07-04)
+
+Second pass, prompted by three still-live reports: "keep having to log in", "loads
+too frequently / not truly offline-first", and inconsistent food images. The
+pattern is now codified as a hard rule — [ADR-0018](../docs/decisions/ADR-0018-offline-first-read-pattern.md)
+and `android/CLAUDE.md` "Offline-first reads (required)".
+
+- **Login-once ([ADR-0019](../docs/decisions/ADR-0019-successor-chain-refresh-token-rotation.md)).**
+  Root cause of the forced re-logins was the 30 s `reuse-grace` window: an offline
+  gap longer than 30 s made a benign lost-response refresh retry look like theft
+  and burned the session. Replaced the time window with a **successor chain** —
+  a rotated token points at its successor, and a replay is honoured by advancing
+  the live chain tip however long the phone was offline. Backend-only; the client
+  already clears only on a true 401.
+- **Fewer loaders (the #8 follow-ups, now done).** Converted the network-bound
+  offenders to cache-first: `ProfileViewModel` + `ProfileRepository.cached()` and
+  `ReminderSettingsViewModel` seed from cache then revalidate; `BodyComposition`
+  and `BloodOverview` VMs gained 30 s TTL guards (was an unconditional per-entry
+  re-pull). Still deferred (need full-detail doc mirroring, not just the summary):
+  `DexaScanDetailViewModel` / blood-report detail offline fallback, and the
+  network-only catalog repos (`Drug`/`Food`/`Equipment`) — tracked as the
+  structural fetched-entity-cache work.
+- **Food images robust.** Single-food (catalog) images live on the global,
+  un-synced `foodCatalog`, so they synced to the mirror as `NONE` and the client
+  poll (which only re-fetches on `PENDING`) never converged them. Fix:
+  `FirestoreSyncChangeReader` now joins the catalog food's current image
+  url/status onto the emitted single-food entry (mirroring the REST day-view
+  join), so the mirror row carries the real `PENDING`/`READY` and the existing
+  settle-poll + thumbnail converge it, offline-durably. Backend also self-heals a
+  studio image stuck `PENDING` (a lost `runAsync` task) via
+  `FoodImageService.sweepStalePending`, called on day-read alongside
+  `sweepStaleAnalyzing`. Client settle-poll no longer burns its budget on a flaky
+  fetch (`MAX_SETTLE_POLL_FAILURES`).

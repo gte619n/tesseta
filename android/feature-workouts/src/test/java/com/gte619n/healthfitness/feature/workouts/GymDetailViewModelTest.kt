@@ -30,6 +30,9 @@ class GymDetailViewModelTest {
     @Test
     fun `loads detail and fetches each equipment in parallel`() = runTest {
         val location = Fixtures.location(equipmentIds = listOf("eq-1", "eq-2"))
+        // No cache seed for these tests: the network path drives the state.
+        coEvery { locationRepo.cached(any()) } returns null
+        coEvery { equipmentRepo.cached(any()) } returns null
         coEvery { locationRepo.get("gym-1") } returns Result.success(location)
         coEvery { equipmentRepo.get("eq-1") } returns Result.success(Fixtures.equipment(id = "eq-1"))
         coEvery { equipmentRepo.get("eq-2") } returns Result.success(Fixtures.equipment(id = "eq-2"))
@@ -46,6 +49,7 @@ class GymDetailViewModelTest {
 
     @Test
     fun `optimistic setDefault rolls back on failure`() = runTest {
+        coEvery { locationRepo.cached(any()) } returns null
         coEvery { locationRepo.get("gym-1") } returns Result.success(Fixtures.location(isDefault = false))
         coEvery { locationRepo.setDefault("gym-1") } returns Result.failure(RuntimeException("nope"))
 
@@ -63,6 +67,7 @@ class GymDetailViewModelTest {
 
     @Test
     fun `removeEquipment refreshes`() = runTest {
+        coEvery { locationRepo.cached(any()) } returns null
         coEvery { locationRepo.get("gym-1") } returns Result.success(Fixtures.location())
         coEvery { locationRepo.removeEquipment("gym-1", "eq-1") } returns Result.success(Unit)
 

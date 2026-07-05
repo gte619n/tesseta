@@ -42,12 +42,20 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun refresh() {
-        _state.value = UiState.Loading
         viewModelScope.launch {
+            // Offline-first: seed instantly from the Room mirror so re-entry shows
+            // the profile with no spinner. Only stay on Loading when nothing is
+            // cached yet (pre-first-sync). Then revalidate via the network.
+            val cached = runCatching { repo.cached() }.getOrNull()
+            if (cached != null) _state.value = UiState.Loaded(cached)
             repo.get().fold(
                 onSuccess = { _state.value = UiState.Loaded(it) },
                 onFailure = {
-                    _state.value = UiState.Error(it.message ?: "Failed to load profile")
+                    // Keep any seeded profile on screen; only surface an error when
+                    // there's nothing to show.
+                    if (_state.value !is UiState.Loaded) {
+                        _state.value = UiState.Error(it.message ?: "Failed to load profile")
+                    }
                 },
             )
         }

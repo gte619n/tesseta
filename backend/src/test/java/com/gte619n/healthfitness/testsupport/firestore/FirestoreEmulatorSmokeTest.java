@@ -29,7 +29,7 @@ class FirestoreEmulatorSmokeTest {
         return new StoredRefreshToken(
             tokenId, "user-1", "hash-1",
             now, now.plus(1, ChronoUnit.HOURS),
-            false, null);
+            false, null, null);
     }
 
     @Test
@@ -52,11 +52,12 @@ class FirestoreEmulatorSmokeTest {
         store.save(liveToken("tok-2"));
 
         Instant rotatedAt = Instant.now();
-        assertThat(store.tryMarkRotated("tok-2", rotatedAt)).isTrue();
+        assertThat(store.tryMarkRotated("tok-2", rotatedAt, "tok-2-successor")).isTrue();
 
         StoredRefreshToken rotated = store.findById("tok-2").orElseThrow();
         assertThat(rotated.revoked()).isTrue();
         assertThat(rotated.rotatedAt()).isNotNull();
+        assertThat(rotated.replacedBy()).isEqualTo("tok-2-successor");
     }
 
     @Test

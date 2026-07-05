@@ -26,8 +26,29 @@
     `NutritionCaptureRepository`, `DrugRepository`, `EquipmentRepository`,
     `ChatRepository`) still read Retrofit-direct. Treat the mirror as the target
     pattern for new work.
+- **Offline-first reads (required — [ADR-0018](../docs/decisions/ADR-0018-offline-first-read-pattern.md)).**
+  Every user-facing read is **cache-first**. This is a hard rule for read
+  surfaces, not a per-screen call:
+  - ViewModels **never start in `Loading` when cached data exists** — seed
+    instantly from Room/DataStore, then revalidate in the background and keep the
+    cached value on failure. `Loading` is acceptable **only** pre-first-sign-in
+    (nothing cached yet).
+  - Repositories **serve the mirror/cache first and revalidate**; a network read
+    is the *revalidation*, never the gate for first paint.
+  - Reactive screens use `.stateIn` off the Room mirror with a **30 s TTL-guarded**
+    refresh, so re-entry within the window reuses the mirror. Never show a spinner
+    on re-entry when last-known data exists.
+  - Reference implementations to copy: `DashboardBloodViewModel` (reactive +
+    TTL-guarded refresh) and `MedicationRepository.get()` (cache-first →
+    revalidate → keep-cache-on-failure); `ProfileRepository.cached()` +
+    `ProfileViewModel` show the seed-then-revalidate variant.
+  - **Reject in review:** a `loading = true` default paired with a one-shot
+    `init` network fetch; a repository read that hits the network before serving
+    cache; a spinner on re-entry.
 - **Network**: Retrofit + OkHttp + Moshi; 401 → silent refresh via
-  `TokenAuthenticator`. SSE in `core-data/net/Sse.kt`.
+  `TokenAuthenticator` (a benign refresh replay is recovered server-side by the
+  successor chain, [ADR-0019](../docs/decisions/ADR-0019-successor-chain-refresh-token-rotation.md),
+  so the app is not logged out on flaky connectivity). SSE in `core-data/net/Sse.kt`.
 - All async work via Coroutines + Flow.
 - **On-device Health Connect is not integrated** — health data arrives
   backend-side via the Google Health API. If/when device-side access is added,

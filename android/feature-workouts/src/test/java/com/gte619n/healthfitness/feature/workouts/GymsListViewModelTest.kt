@@ -23,6 +23,8 @@ class GymsListViewModelTest {
 
     @Test
     fun `success populates locations`() = runTest {
+        // No cache seed: the network path drives the state (initial loading=true).
+        coEvery { repo.cachedList() } returns emptyList()
         coEvery { repo.list() } returns Result.success(listOf(Fixtures.location()))
         val vm = GymsListViewModel(repo)
 
@@ -40,6 +42,7 @@ class GymsListViewModelTest {
 
     @Test
     fun `failure surfaces error`() = runTest {
+        coEvery { repo.cachedList() } returns emptyList()
         coEvery { repo.list() } returns Result.failure(RuntimeException("boom"))
         val vm = GymsListViewModel(repo)
         advanceUntilIdle()
@@ -51,6 +54,7 @@ class GymsListViewModelTest {
 
     @Test
     fun `refresh re-invokes repository`() = runTest {
+        coEvery { repo.cachedList() } returns emptyList()
         coEvery { repo.list() } returns Result.success(emptyList())
         val vm = GymsListViewModel(repo)
         advanceUntilIdle()

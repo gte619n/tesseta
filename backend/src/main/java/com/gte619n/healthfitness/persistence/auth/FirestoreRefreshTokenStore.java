@@ -60,17 +60,19 @@ public class FirestoreRefreshTokenStore implements RefreshTokenStore {
             toInstant(snap.get("createdAt")),
             toInstant(snap.get("expiresAt")),
             Boolean.TRUE.equals(snap.getBoolean("revoked")),
-            toInstant(snap.get("rotatedAt"))
+            toInstant(snap.get("rotatedAt")),
+            snap.getString("replacedBy")
         ));
     }
 
     @Override
-    public boolean tryMarkRotated(String tokenId, java.time.Instant rotatedAt) {
+    public boolean tryMarkRotated(String tokenId, java.time.Instant rotatedAt, String successorId) {
         // Atomic check-and-set in a Firestore transaction: read the token inside
         // the transaction and only rotate if it is still live. Firestore aborts
         // and retries the transaction on a conflicting concurrent commit, so of N
         // racing refreshes exactly one observes the live token and rotates; the
-        // rest see revoked==true and return false.
+        // rest see revoked==true and return false. Stamps the successor pointer in
+        // the same commit so the chain is never momentarily rotated-without-a-link.
         DocumentReference ref = firestore.collection(COLLECTION).document(tokenId);
         return await(firestore.runTransaction(txn -> {
             DocumentSnapshot snap = txn.get(ref).get();
@@ -80,16 +82,25 @@ public class FirestoreRefreshTokenStore implements RefreshTokenStore {
             Map<String, Object> body = new HashMap<>();
             body.put("revoked", true);
             body.put("rotatedAt", Timestamp.of(java.util.Date.from(rotatedAt)));
+            body.put("replacedBy", successorId);
             txn.set(ref, body, SetOptions.merge());
             return true;
         }));
     }
 
     @Override
+    public void repoint(String tokenId, String successorId) {
+        // Just move the successor pointer forward; leave revoked/rotatedAt intact.
+        Map<String, Object> body = new HashMap<>();
+        body.put("replacedBy", successorId);
+        await(firestore.collection(COLLECTION).document(tokenId).set(body, SetOptions.merge()));
+    }
+
+    @Override
     public void markRevoked(String tokenId) {
         Map<String, Object> body = new HashMap<>();
         body.put("revoked", true);
-        // No rotatedAt: logout is definitive and must not be reuse-grace eligible.
+        // No replacedBy: logout severs the chain so a later replay dead-ends.
         await(firestore.collection(COLLECTION).document(tokenId).set(body, SetOptions.merge()));
     }
 
