@@ -12,6 +12,11 @@ RUN ./gradlew --no-daemon bootJar -x test
 # Runtime stage
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+# Drop the base image's `pebble` service-manager Go binary: it's unused by our
+# `java -jar` entrypoint but carries several HIGH Go stdlib / x-net CVEs that
+# fail the image vulnerability scan (no Go net paths are reachable in a Java
+# app). Deterministically removing it clears those findings; a no-op if absent.
+RUN rm -f /usr/bin/pebble
 COPY --from=builder /workspace/build/libs/app.jar /app/app.jar
 EXPOSE 8080
 # MaxRAMPercentage=65 lets the heap actually use the 2Gi container. The default
