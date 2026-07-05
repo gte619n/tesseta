@@ -1,6 +1,5 @@
 package com.gte619n.healthfitness.feature.bodycomposition.overview
 
-import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.bodycomposition.BodyCompositionRepository
@@ -63,18 +62,24 @@ class BodyCompositionViewModel @Inject constructor(
                     }
                 }
         }
-        refresh()
+        refreshIfStale()
     }
 
     /**
-     * Re-fill the mirror from the backend in the background. Non-forced calls
-     * within [REFRESH_TTL_MS] of the last success are skipped (this fires on every
-     * screen entry); pull-to-refresh passes [force] = true. Never toggles the
-     * loading spinner — the reactive mirror stream owns what the user sees.
+     * Pull-to-refresh entry point: always re-pulls (an explicit user gesture is
+     * never rate-limited). Never toggles the loading spinner — the reactive mirror
+     * stream owns what the user sees.
      */
-    fun refresh(force: Boolean = false) {
-        val now = SystemClock.elapsedRealtime()
-        if (!force && lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
+    fun refresh() = doRefresh()
+
+    /** On-entry revalidation: skipped when the mirror was refreshed recently. */
+    private fun refreshIfStale() {
+        val now = nowMs()
+        if (lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
+        doRefresh()
+    }
+
+    private fun doRefresh() {
         viewModelScope.launch {
             _state.update { it.copy(error = null) }
             runCatching {
@@ -83,7 +88,7 @@ class BodyCompositionViewModel @Inject constructor(
                     launch { dexaRepo.refreshScans() }
                 }
             }.fold(
-                onSuccess = { lastRefreshAt = SystemClock.elapsedRealtime() },
+                onSuccess = { lastRefreshAt = nowMs() },
                 onFailure = { e ->
                     // Keep any mirror data on screen; only surface an error when we
                     // have nothing to show yet.
@@ -98,6 +103,10 @@ class BodyCompositionViewModel @Inject constructor(
             )
         }
     }
+
+    // Monotonic wall-independent millis. System.nanoTime (not SystemClock) so the
+    // TTL guard is exercisable in plain JVM unit tests.
+    private fun nowMs(): Long = System.nanoTime() / 1_000_000L
 
     private companion object {
         const val REFRESH_TTL_MS = 30_000L

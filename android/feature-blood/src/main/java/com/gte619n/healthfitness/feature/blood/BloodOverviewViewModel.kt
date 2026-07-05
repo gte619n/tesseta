@@ -1,6 +1,5 @@
 package com.gte619n.healthfitness.feature.blood
 
-import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.blood.BloodReadingRepository
@@ -70,7 +69,7 @@ class BloodOverviewViewModel @Inject constructor(
 
     /** On-entry revalidation: skipped when the mirror was refreshed recently. */
     private fun refreshIfStale() {
-        val now = SystemClock.elapsedRealtime()
+        val now = nowMs()
         if (lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_TTL_MS) return
         doRefresh()
     }
@@ -81,10 +80,14 @@ class BloodOverviewViewModel @Inject constructor(
             runCatching {
                 readings.refresh()
                 reports.refresh()
-            }.onSuccess { lastRefreshAt = SystemClock.elapsedRealtime() }
+            }.onSuccess { lastRefreshAt = nowMs() }
             _isRefreshing.value = false
         }
     }
+
+    // Monotonic wall-independent millis. System.nanoTime (not SystemClock) so the
+    // TTL guard is exercisable in plain JVM unit tests.
+    private fun nowMs(): Long = System.nanoTime() / 1_000_000L
 
     private companion object {
         const val REFRESH_TTL_MS = 30_000L
