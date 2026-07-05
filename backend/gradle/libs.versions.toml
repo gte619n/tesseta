@@ -1,5 +1,9 @@
 [versions]
-springBoot = "3.5.0"
+# 3.5.14 pulls the coordinated CVE-fix train: spring-boot 3.5.14,
+# spring-framework 6.2.11 (CVE-2025-41249), spring-security 6.5.9
+# (CVE-2026-22732 / -2025-41248) and tomcat-embed 10.1.55 (CVE-2026-41293).
+# jackson + netty aren't on Boot's fixed line yet — overridden in build.gradle.kts.
+springBoot = "3.5.14"
 springDependencyManagement = "1.1.7"
 # google-auth-library-oauth2-http must track the google-auth-library-credentials
 # version that google-cloud-firestore pulls in (1.40.0). When this lagged at

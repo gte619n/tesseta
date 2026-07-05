@@ -8,6 +8,16 @@ plugins {
 group = "com.gte619n.healthfitness"
 version = "0.0.1-SNAPSHOT"
 
+// Override two BOM-managed transitive versions whose CVE fixes land ahead of the
+// Spring Boot 3.5.x line (the image scan gate blocks HIGH/CRITICAL with a fix
+// available). Spring Boot's dependency management reads these `ext` properties.
+//   jackson 2.21.4 — CVE-2026-54512 (databind RCE); Boot 3.5.x ships 2.19.
+//   netty 4.1.135.Final — CVE-2026-42583 / -33870 / -44249; Boot 3.5.x ships 4.1.12x.
+//   tomcat 10.1.55 — CVE-2026-41293 (CRITICAL); Boot 3.5.14 ships 10.1.54.
+extra["jackson-bom.version"] = "2.21.4"
+extra["netty.version"] = "4.1.135.Final"
+extra["tomcat.version"] = "10.1.55"
+
 repositories {
     mavenCentral()
 }
