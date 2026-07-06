@@ -435,12 +435,11 @@ class NutritionTodayViewModel @Inject constructor(
      * row lands complete with no AI wait.
      */
     fun relogRecent(meal: Meal, entry: Entry) {
-        val sourceDate = entry.date ?: return
         val date = _state.value.date.format(ISO_DATE)
         _state.update { it.copy(addSheetOpen = false) }
         viewModelScope.launch {
             try {
-                repository.relog(date, sourceDate, entry.entryId, meal.wire)
+                repository.relog(date, entry, meal.wire)
                 val day = repository.day(date)
                 _state.update { it.copy(day = day, error = null) }
             } catch (e: Exception) {

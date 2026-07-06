@@ -18,7 +18,6 @@ import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
-import com.gte619n.healthfitness.domain.nutrition.RelogRequest
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
@@ -270,13 +269,38 @@ class NutritionRepository @Inject constructor(
         api.recentMeals(days, limit, meal)
 
     /**
-     * One-tap re-log of a recent entry onto [date]. Server-side copy (reuses
-     * catalog foods + images — no AI rework), then refresh the date's mirror so
-     * the new row renders from Room.
+     * One-tap re-log of a recent entry onto [date] under [meal]. Offline-first,
+     * client-minted create (meal-sync-error): the recent [source] row already
+     * carries everything a copy needs — the catalog [Entry.foodId], the frozen
+     * macros snapshot, the composite ingredient breakdown and the finished-meal
+     * image — so we mint the entry id on-device and create it LOCALLY through the
+     * outbox, exactly like [addEntry], instead of a network-only server copy.
+     *
+     * This is the crux of the fix: a server-minted, off-outbox re-log left a
+     * later meal-move as a lone PATCH against an id the outbox never created, so
+     * any server/client disagreement surfaced as a permanent "entry not found"
+     * 400. Minting the id here keeps the create and every later edit on the same
+     * rail — they share one guid and collapse in the outbox — and re-log now also
+     * works offline (it appears instantly as PENDING and drains when connected).
+     * A single-food re-log carries no ingredients/image; its picture is re-joined
+     * from the catalog food server-side.
      */
-    suspend fun relog(date: String, sourceDate: String, sourceEntryId: String, meal: String): Entry {
-        val entry = api.relog(date, RelogRequest(sourceDate, sourceEntryId, meal))
-        fillDay(date)
+    suspend fun relog(date: String, source: Entry, meal: String): Entry {
+        val entryId = UUID.randomUUID().toString()
+        val entry = source.copy(
+            entryId = entryId,
+            meal = meal,
+            // Shed the recents-list bookkeeping so this is a clean create for [date].
+            date = null,
+            syncState = null,
+            analysisStatus = "NONE",
+        )
+        support.createLocal(
+            table = MirrorTables.NUTRITION_ENTRIES,
+            id = composite(date, entryId),
+            payloadJson = rowAdapter.toJson(NutritionEntryRow(date, entry)),
+            lastUpdate = System.currentTimeMillis(),
+        )
         return entry
     }
 

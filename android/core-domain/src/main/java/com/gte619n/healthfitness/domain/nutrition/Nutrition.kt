@@ -239,13 +239,6 @@ data class DescribeMealLogRequest(
     val meal: String? = null,
 )
 
-/** Body for POST api/me/nutrition/{date}/relog (copy a past entry onto a day). */
-data class RelogRequest(
-    val sourceDate: String,
-    val sourceEntryId: String,
-    val meal: String? = null,
-)
-
 // ---- Capture (multipart) proposals ---------------------------------------
 
 /** One itemized component of a meal photo (POST capture/meal). */

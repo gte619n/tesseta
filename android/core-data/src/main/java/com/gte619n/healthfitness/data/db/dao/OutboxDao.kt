@@ -77,6 +77,15 @@ interface OutboxDao {
     @Query("DELETE FROM outbox WHERE entityId = :entityId")
     suspend fun deleteByEntity(entityId: String)
 
+    /**
+     * Delete a specific set of mutations by id. The drain uses this instead of
+     * [deleteByEntity] so it only clears the rows it actually snapshotted+sent —
+     * a write that lands mid-drain (a new row for the same entity) is preserved
+     * and drains on the next pass instead of being silently dropped.
+     */
+    @Query("DELETE FROM outbox WHERE mutationId IN (:mutationIds)")
+    suspend fun deleteByIds(mutationIds: List<String>)
+
     @Query("DELETE FROM outbox")
     suspend fun clear()
 }

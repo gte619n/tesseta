@@ -131,6 +131,51 @@ class NutritionServiceTest {
     }
 
     @Test
+    void addEntry_withCarriedIngredientsAndImage_createsAComposite() {
+        // The offline re-log of a recent composite meal (meal-sync-error) is a
+        // plain client-minted create carrying the source's breakdown + plated
+        // image, so no AI re-runs and the copy keeps both.
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 23);
+
+        FoodEntry entry = svc.addEntry(
+            USER, date, MealType.DINNER, null, "Salmon & Rice", "1 plate", 200.0, 1.0,
+            new Macros(200.0, 50.0, 0.0, 0.0, 0.0, 0.0), EntrySource.PHOTO, "relog-id-1",
+            List.of(ingredient("Salmon", 100.0), ingredient("Rice", 100.0)),
+            "http://img/meal.png", FoodImageStatus.READY);
+
+        assertEquals("relog-id-1", entry.entryId(), "the client-minted id is honored");
+        assertTrue(entry.isComposite());
+        assertEquals(2, entry.ingredients().size());
+        assertEquals("http://img/meal.png", entry.mealImageUrl(), "the plated image is reused");
+        assertEquals(FoodImageStatus.READY, entry.mealImageStatus());
+        // A later meal-move finds it under that same client id (no "entry not found").
+        assertTrue(svc.findEntry(USER, date, "relog-id-1").isPresent());
+    }
+
+    @Test
+    void addEntry_singleFood_storesNoMealImage() {
+        // A single-food re-log carries no ingredients; its picture is joined from
+        // the catalog food, so the entry itself keeps no meal image even if an
+        // imageUrl is passed.
+        InMemNutrition rollups = new InMemNutrition();
+        NutritionService svc = new NutritionService(rollups, new InMemEntries(), capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 24);
+
+        FoodEntry entry = svc.addEntry(
+            USER, date, MealType.BREAKFAST, "food-1", "Chocolate protein shake", "1 bottle",
+            325.0, 1.0, new Macros(159.0, 30.0, 5.0, 3.0, 0.0, 0.0), EntrySource.CATALOG,
+            "relog-id-2", null, "http://img/catalog.png", FoodImageStatus.READY);
+
+        assertEquals("relog-id-2", entry.entryId());
+        assertTrue(!entry.isComposite());
+        assertEquals(null, entry.mealImageUrl(), "single-food entries store no meal image");
+        assertEquals(FoodImageStatus.NONE, entry.mealImageStatus());
+    }
+
+    @Test
     void compositeMealPortion_scalesTheWholeMealTotal() {
         InMemNutrition rollups = new InMemNutrition();
         InMemEntries entries = new InMemEntries();
