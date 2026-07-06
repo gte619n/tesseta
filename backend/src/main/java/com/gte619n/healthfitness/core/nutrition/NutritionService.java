@@ -177,6 +177,36 @@ public class NutritionService {
         EntrySource source,
         String entryId
     ) {
+        return addEntry(userId, date, meal, foodId, foodName, servingLabel, servingGrams,
+            quantity, macros, source, entryId, null, null, null);
+    }
+
+    /**
+     * As {@link #addEntry(String, LocalDate, MealType, String, String, String,
+     * Double, Double, Macros, EntrySource, String)} but carrying a composite
+     * meal's {@code ingredients} + finished-meal image. The one-tap re-log of a
+     * recent composite meal (meal-sync-error) creates it this way — a plain,
+     * client-minted create that reuses the source's breakdown and plated photo
+     * (no AI rework), so re-log rides the same offline sync rail as every other
+     * add. Ingredients null/empty ⇒ an ordinary single-food entry (its image is
+     * joined from the catalog food, so the entry stores no meal image).
+     */
+    public FoodEntry addEntry(
+        String userId,
+        LocalDate date,
+        MealType meal,
+        String foodId,
+        String foodName,
+        String servingLabel,
+        Double servingGrams,
+        Double quantity,
+        Macros macros,
+        EntrySource source,
+        String entryId,
+        List<CompositeIngredient> ingredients,
+        String mealImageUrl,
+        FoodImageStatus mealImageStatus
+    ) {
         requireUser(userId);
         requireDate(date);
         if (meal == null) {
@@ -188,11 +218,15 @@ public class NutritionService {
         if (entryId == null || entryId.isBlank()) {
             entryId = UUID.randomUUID().toString();
         }
+        boolean composite = ingredients != null && !ingredients.isEmpty();
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
             servingGrams, quantity, macros != null ? macros.withDerivedCalories() : null,
             null, null, source,
-            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
+            composite ? withDerivedCalories(ingredients) : null,
+            composite ? mealImageUrl : null,
+            composite && mealImageStatus != null ? mealImageStatus : FoodImageStatus.NONE,
+            EntryAnalysisStatus.NONE, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;

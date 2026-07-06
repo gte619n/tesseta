@@ -110,6 +110,19 @@ class OutboxReducerTest {
     }
 
     @Test
+    fun `delete then create on a reused id collapses to a create not an update`() {
+        // Undo(DELETE)-then-redo(CREATE) of a reused id — e.g. medication-adherence
+        // undo + re-log of the same (med, date, window). The net op must be a CREATE
+        // (POST), not an UPDATE against an endpoint the resource may not have.
+        val del = row(OutboxOp.DELETE, null)
+        val create = row(OutboxOp.CREATE, """{"v":9}""")
+        val result = OutboxReducer.reduce(listOf(del, create))!!
+        assertEquals(OutboxOp.CREATE.name, result.op)
+        assertEquals("""{"v":9}""", result.payloadJson)
+        assertEquals(create.mutationId, result.mutationId)
+    }
+
+    @Test
     fun `unordered chain is sorted by seq before reducing`() {
         val create = row(OutboxOp.CREATE, """{"v":1}""")
         val update = row(OutboxOp.UPDATE, """{"v":2}""")

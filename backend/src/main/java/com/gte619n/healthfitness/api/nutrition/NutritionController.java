@@ -223,7 +223,10 @@ public class NutritionController {
                     body.quantity(),
                     body.macros() != null ? body.macros().toMacros() : null,
                     body.source(),
-                    entryId);
+                    entryId,
+                    toCompositeIngredients(body.ingredients()),
+                    body.imageUrl(),
+                    body.imageStatus());
                 // Fan-out collection name matches the delta feed's emitted
                 // "nutritionDays/entries" exactly (IMPL-AND-20 #34).
                 syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
@@ -657,6 +660,24 @@ public class NutritionController {
         return toResponse(e, loadFoods(List.of(e)));
     }
 
+    /** Map a re-log create's carried ingredients onto the domain breakdown. */
+    private static List<CompositeIngredient> toCompositeIngredients(
+        List<AddEntryRequest.AddEntryIngredient> dtos) {
+        if (dtos == null || dtos.isEmpty()) return null;
+        List<CompositeIngredient> out = new ArrayList<>(dtos.size());
+        for (AddEntryRequest.AddEntryIngredient d : dtos) {
+            out.add(new CompositeIngredient(
+                d.name(),
+                d.foodId(),
+                d.macrosPer100g() != null ? d.macrosPer100g().toMacros() : null,
+                d.servingGrams(),
+                d.servingLabel(),
+                d.quantity(),
+                d.macros() != null ? d.macros().toMacros() : null));
+        }
+        return out;
+    }
+
     private static List<EntryResponse.IngredientResponse> ingredientResponses(
         FoodEntry e, Map<String, CatalogFood> foods) {
         List<EntryResponse.IngredientResponse> out = new ArrayList<>();
@@ -759,8 +780,28 @@ public class NutritionController {
         Double servingGrams,
         Double quantity,
         MacrosDto macros,
-        com.gte619n.healthfitness.core.nutrition.EntrySource source
-    ) {}
+        com.gte619n.healthfitness.core.nutrition.EntrySource source,
+        // Present when re-logging a composite (photo-logged) meal: its ingredient
+        // breakdown and finished-meal image are carried over on the create so the
+        // copy keeps them without re-running AI. This lets a one-tap re-log be an
+        // ordinary offline, client-minted create (meal-sync-error) instead of a
+        // network-only server copy. Null/empty for a plain single-food entry —
+        // whose image is joined from its catalog food, not stored on the entry.
+        List<AddEntryIngredient> ingredients,
+        String imageUrl,
+        FoodImageStatus imageStatus
+    ) {
+        /** One ingredient of a re-logged composite meal (mirrors EntryResponse.IngredientResponse). */
+        public record AddEntryIngredient(
+            String name,
+            String foodId,
+            String servingLabel,
+            Double servingGrams,
+            Double quantity,
+            MacrosDto macros,
+            MacrosDto macrosPer100g
+        ) {}
+    }
 
     public record UpdateEntryRequest(
         MealType meal,

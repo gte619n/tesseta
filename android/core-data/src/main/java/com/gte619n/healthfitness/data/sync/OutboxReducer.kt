@@ -38,26 +38,40 @@ object OutboxReducer {
         val ordered = chain.sortedBy { it.seq }
 
         val first = ordered.first()
-        val createdLocally = OutboxOp.valueOf(first.op) == OutboxOp.CREATE
         val last = ordered.last()
+        val firstOp = OutboxOp.valueOf(first.op)
         val lastOp = OutboxOp.valueOf(last.op)
 
-        // CREATE + … + DELETE: nothing ever reached the server ⇒ drop entirely.
-        if (createdLocally && lastOp == OutboxOp.DELETE) return null
-
-        // … + DELETE (entity already existed on the server) ⇒ a single DELETE.
+        // Chain ends in DELETE.
         if (lastOp == OutboxOp.DELETE) {
+            // CREATE + … + DELETE: created locally then deleted, all before reaching
+            // the server ⇒ nothing to create and nothing to delete ⇒ drop entirely.
+            if (firstOp == OutboxOp.CREATE) return null
+            // … + DELETE (entity already existed on the server) ⇒ a single DELETE.
             return last.copy(payloadJson = null)
         }
 
-        // No DELETE in the chain. The surviving op is the chain's *first* op kind
-        // (CREATE if created locally, otherwise UPDATE) carrying the *latest*
-        // non-null payload. Keep the first row's identity (mutationId/seq) so the
-        // create's idempotency key and the entity's global ordering are stable.
         val latestPayload = ordered.lastOrNull { it.payloadJson != null }?.payloadJson
             ?: last.payloadJson
+
+        // Chain ends in CREATE. This is a re-establishment of a *reused* id — an
+        // undo(DELETE)-then-redo(CREATE), e.g. medication-adherence undo + re-log of
+        // the same (med, date, window). The net op is a CREATE carrying the
+        // create's own identity (its idempotency key) + the latest payload; the
+        // prior delete is moot. Emitting an UPDATE here (the old behavior) targeted
+        // an update endpoint the resource may not even have (adherence is POST/
+        // DELETE only), so a re-log after an undo failed. A plain CREATE-only chain
+        // also lands here (first == last), giving the same single CREATE as before.
+        if (lastOp == OutboxOp.CREATE) {
+            return last.copy(payloadJson = latestPayload)
+        }
+
+        // Chain ends in UPDATE. It's a CREATE when the entity was first established
+        // locally in this chain (the server never had it), otherwise an UPDATE.
+        // Keep the first row's identity (mutationId/seq) so the create's idempotency
+        // key and the entity's global ordering are stable.
         return first.copy(
-            op = if (createdLocally) OutboxOp.CREATE.name else OutboxOp.UPDATE.name,
+            op = if (firstOp == OutboxOp.CREATE) OutboxOp.CREATE.name else OutboxOp.UPDATE.name,
             payloadJson = latestPayload,
         )
     }

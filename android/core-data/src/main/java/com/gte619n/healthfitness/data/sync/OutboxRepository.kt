@@ -1,11 +1,14 @@
 package com.gte619n.healthfitness.data.sync
 
 import com.gte619n.healthfitness.data.db.dao.OutboxDao
+import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.db.entity.OutboxEntity
 import com.gte619n.healthfitness.data.db.entity.OutboxOp
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
@@ -41,6 +44,9 @@ class OutboxRepository @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
+    /** Serializes [drain] so overlapping triggers can't double-send or race cleanup. */
+    private val drainMutex = Mutex()
+
     /** Reactive pending-mutation count for the global sync indicator (D11). */
     fun pendingCount(): Flow<Int> = outboxDao.observePendingCount()
 
@@ -110,29 +116,62 @@ class OutboxRepository @Inject constructor(
     /**
      * Collapse + replay every due mutation. "Due" = `nextAttemptAt <= now`, so a
      * mutation in backoff is skipped until its window elapses.
+     *
+     * Single-flight: several triggers (each local write, connectivity-regained,
+     * the periodic + drain WorkManager workers) can fire a drain, and they run on
+     * distinct work names with no WorkManager-level mutual exclusion — so guard the
+     * whole pass with a [Mutex]. Without it two drains can both snapshot the same
+     * due row and double-send, or one's `delete` can race the other's replay.
      */
     suspend fun drain(): DrainResult = withContext(io) {
+        drainMutex.withLock { drainLocked() }
+    }
+
+    private suspend fun drainLocked(): DrainResult {
         val now = clock()
         val due = outboxDao.listDue(now)
-        if (due.isEmpty()) return@withContext DrainResult(0, 0, 0)
+        if (due.isEmpty()) return DrainResult(0, 0, 0)
 
         // Collapse per entity (across ALL of the entity's queued rows, not just
         // the due ones, so create→edit→delete collapses correctly even if some
-        // rows are mid-backoff). We then only act on entities that have a due row.
+        // rows are mid-backoff). Snapshot each chain: cleanup below deletes only
+        // these exact rows (by id), so a write that lands mid-drain — a new row for
+        // the same entity, enqueued after this snapshot — survives and drains next
+        // pass instead of being swept away by a blanket delete-by-entity.
         val dueEntityIds = due.map { it.entityId }.toSet()
         val survivors = mutableListOf<OutboxEntity>()
-        val collapsedRows = mutableListOf<OutboxEntity>()
+        val chainsByEntity = mutableMapOf<String, List<OutboxEntity>>()
         for (entityId in dueEntityIds) {
             val chain = outboxDao.listByEntity(entityId)
-            collapsedRows += chain
+            chainsByEntity[entityId] = chain
             OutboxReducer.reduce(chain)?.let { survivors += it }
         }
         survivors.sortBy { it.seq }
 
+        // Entities whose chain collapsed to nothing (create→…→delete): they never
+        // reached the server.
+        val noOpEntityIds = dueEntityIds - survivors.map { it.entityId }.toSet()
+
+        // Drop orphaned descendants of a no-op'd parent BEFORE replay. If a parent
+        // was created-then-deleted offline (never on the server), a surviving child
+        // create/edit would target a nested path (`…/parent/…`) that 404s and park
+        // forever. The child is equally local-only, so discard it and its optimistic
+        // row rather than send a doomed request. A composite child id is
+        // `"<parent>/<child>"`, so any descendant starts with the parent id + "/".
+        val noOpParentPrefixes = noOpEntityIds.map { "$it/" }
+        val orphans = survivors.filter { s -> noOpParentPrefixes.any { s.entityId.startsWith(it) } }
+        for (orphan in orphans) {
+            clearChain(chainsByEntity[orphan.entityId])
+            mirror.delete(orphan.entityTable, orphan.entityId)
+        }
+        survivors.removeAll(orphans.toSet())
+
         var sent = 0
         var failed = 0
+        var reconciled = 0
         for (mutation in survivors) {
             val op = OutboxOp.valueOf(mutation.op)
+            val chain = chainsByEntity[mutation.entityId]
             try {
                 val serverLastUpdate = replay.replay(
                     table = mutation.entityTable,
@@ -142,9 +181,9 @@ class OutboxRepository @Inject constructor(
                     mutationId = mutation.mutationId,
                     originDeviceId = mutation.originDeviceId,
                 )
-                // Success: clear the whole entity chain (all collapsed rows) and
+                // Success: clear only the snapshotted rows for this entity and
                 // reconcile the mirror row.
-                outboxDao.deleteByEntity(mutation.entityId)
+                clearChain(chain)
                 if (op == OutboxOp.DELETE) {
                     mirror.markArchived(mutation.entityTable, mutation.entityId, serverLastUpdate)
                 } else {
@@ -152,53 +191,77 @@ class OutboxRepository @Inject constructor(
                 }
                 sent++
             } catch (t: Throwable) {
-                // Failure: back off the originating chain and flag the row FAILED.
-                // A terminal 4xx would fail identically on every retry, so park
-                // it out of the automatic drain instead (manual retry re-arms it).
-                val attempts = mutation.attempts + 1
                 val httpError = t as? OutboxReplayHttpException
                 val terminal = httpError != null && httpError.isTerminal
-                outboxDao.recordFailure(
-                    mutationId = mutation.mutationId,
-                    attempts = attempts,
-                    nextAttemptAt = if (terminal) PARKED_NEXT_ATTEMPT else now + backoffMillis(attempts),
-                )
-                mirror.markFailed(mutation.entityTable, mutation.entityId)
-                // Record the reason instead of swallowing it (Workstream B). The
-                // server's own message (when present) is the most useful detail.
-                diagnostics.record(
-                    source = "outbox-drain",
-                    message = httpError?.serverMessage?.takeIf { it.isNotBlank() }
-                        ?: t.message
-                        ?: t.javaClass.simpleName,
-                    table = mutation.entityTable,
-                    entityId = mutation.entityId,
-                    httpCode = httpError?.code,
-                    terminal = terminal,
-                    cause = t,
-                )
-                failed++
+                if (terminal && mutation.entityTable != MirrorTables.WORKOUT_SCHEDULED) {
+                    // Self-heal instead of parking forever: a deterministic 4xx will
+                    // fail identically on every retry, so keeping it only nags with a
+                    // permanent banner over a diverged local row. Drop the doomed
+                    // chain and converge the mirror to server truth — a rejected
+                    // create was never persisted (drop the optimistic row); a rejected
+                    // edit/delete yields to the server (reset the LWW clock to 0 so the
+                    // next pull re-applies the authoritative value). WORKOUT_SCHEDULED
+                    // is exempt: it has a bespoke "restore a parked completion into the
+                    // logger" recovery (IMPL-17) that needs the parked row kept.
+                    clearChain(chain)
+                    if (op == OutboxOp.CREATE) {
+                        mirror.delete(mutation.entityTable, mutation.entityId)
+                    } else {
+                        mirror.markSynced(mutation.entityTable, mutation.entityId, 0L)
+                    }
+                    reconciled++
+                } else {
+                    // Transient failure ⇒ back off; a WORKOUT_SCHEDULED terminal 4xx ⇒
+                    // park out of the automatic drain (manual retry / restore re-arms it).
+                    val attempts = mutation.attempts + 1
+                    outboxDao.recordFailure(
+                        mutationId = mutation.mutationId,
+                        attempts = attempts,
+                        nextAttemptAt = if (terminal) PARKED_NEXT_ATTEMPT else now + backoffMillis(attempts),
+                    )
+                    mirror.markFailed(mutation.entityTable, mutation.entityId)
+                    // Record the reason instead of swallowing it (Workstream B). The
+                    // server's own message (when present) is the most useful detail.
+                    diagnostics.record(
+                        source = "outbox-drain",
+                        message = httpError?.serverMessage?.takeIf { it.isNotBlank() }
+                            ?: t.message
+                            ?: t.javaClass.simpleName,
+                        table = mutation.entityTable,
+                        entityId = mutation.entityId,
+                        httpCode = httpError?.code,
+                        terminal = terminal,
+                        cause = t,
+                    )
+                    failed++
+                }
             }
         }
 
         // Drop pure no-op chains (create→…→delete collapsed to nothing): a due
         // entity with no survivor never reached the server, so clear its queue
         // and hard-delete the optimistic local row.
-        val survivorEntityIds = survivors.map { it.entityId }.toSet()
         var collapsed = 0
-        for (entityId in dueEntityIds - survivorEntityIds) {
-            val table = collapsedRows.first { it.entityId == entityId }.entityTable
-            outboxDao.deleteByEntity(entityId)
+        for (entityId in noOpEntityIds) {
+            val chain = chainsByEntity[entityId].orEmpty()
+            val table = chain.firstOrNull()?.entityTable ?: continue
+            clearChain(chain)
             mirror.delete(table, entityId)
             collapsed++
         }
 
-        // A drain that pushed work without any failures means the queue is
-        // healthy again — drop the surfaced banner detail (the row counts still
+        // A drain that pushed/converged work without any failures means the queue
+        // is healthy again — drop the surfaced banner detail (the row counts still
         // drive the indicator kind).
-        if (failed == 0 && (sent > 0 || collapsed > 0)) diagnostics.clearLastError()
+        if (failed == 0 && (sent > 0 || collapsed > 0 || reconciled > 0)) diagnostics.clearLastError()
 
-        DrainResult(sent = sent, failed = failed, collapsed = collapsed)
+        return DrainResult(sent = sent, failed = failed, collapsed = collapsed)
+    }
+
+    /** Delete exactly the snapshotted rows of a chain (never rows added mid-drain). */
+    private suspend fun clearChain(chain: List<OutboxEntity>?) {
+        val ids = chain?.map { it.mutationId }.orEmpty()
+        if (ids.isNotEmpty()) outboxDao.deleteByIds(ids)
     }
 
     /**

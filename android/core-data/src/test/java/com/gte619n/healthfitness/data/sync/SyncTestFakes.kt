@@ -135,6 +135,9 @@ internal class FakeOutboxDao : OutboxDao {
     override suspend fun deleteByEntity(entityId: String) {
         store.removeAll { it.entityId == entityId }; touch()
     }
+    override suspend fun deleteByIds(mutationIds: List<String>) {
+        store.removeAll { it.mutationId in mutationIds }; touch()
+    }
     override suspend fun clear() { store.clear(); touch() }
 }
 

@@ -107,7 +107,7 @@ class RestOutboxReplayClient @Inject constructor(
 
         val body = when (op) {
             OutboxOp.DELETE -> null
-            else -> wireBody(table, payloadJson).toRequestBody(jsonMedia)
+            else -> wireBody(table, entityId, payloadJson).toRequestBody(jsonMedia)
         }
 
         // Most tables key idempotency by the random per-mutation id; adherence
@@ -158,14 +158,33 @@ class RestOutboxReplayClient @Inject constructor(
      * (meal, foodName, serving…) at the top level. Unwrap to the inner `entry`
      * so e.g. moving an entry between meals actually patches its `meal`.
      */
-    private fun wireBody(table: String, payloadJson: String?): String {
+    private fun wireBody(table: String, entityId: String, payloadJson: String?): String {
         val json = payloadJson ?: "{}"
-        if (table != MirrorTables.NUTRITION_ENTRIES) return json
         return runCatching {
-            val map = mapAdapter.fromJson(json)
-            @Suppress("UNCHECKED_CAST")
-            val entry = map?.get("entry") as? Map<String, Any?>
-            if (entry != null) mapAdapter.toJson(entry) else json
+            var map = mapAdapter.fromJson(json)?.toMutableMap()
+                ?: return@runCatching json
+            // Nutrition mirrors the entry date-wrapped (`{date, entry:{…}}`) so the
+            // day view can reassemble per date; the backend EntryRequest/
+            // EntryPatchRequest want the entry's fields at top level. Unwrap it.
+            if (table == MirrorTables.NUTRITION_ENTRIES) {
+                @Suppress("UNCHECKED_CAST")
+                (map["entry"] as? Map<String, Any?>)?.let { map = it.toMutableMap() }
+            }
+            // Every backend create binds the client-minted id from `id`
+            // (`syncWrite.resolveId(body.id())`), but each domain mirror DTO carries
+            // that id under its OWN field name (medicationId / readingId /
+            // locationId / goalId / phaseId / stepId / entryId / …). Surface the
+            // client id as `id` so an offline create lands under the SAME id the
+            // client later edits against — otherwise the server mints its own and a
+            // later UPDATE/DELETE 404s "not found" (the meal-sync-error class, which
+            // affects every outbox table, not just nutrition). The id is the
+            // entity's own client-minted id: the outbox `entityId`, or its trailing
+            // segment for a composite `<parent>/<child>` id. Harmless where the
+            // endpoint takes its id from the URL or has none — the extra field is an
+            // unknown property the server ignores (`id` is never a domain payload
+            // field, so `putIfAbsent` never clobbers a real value).
+            map.putIfAbsent("id", entityId.substringAfterLast('/'))
+            mapAdapter.toJson(map)
         }.getOrDefault(json)
     }
 
