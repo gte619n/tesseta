@@ -21,6 +21,10 @@
     <string name="workout_session_hold_target">Target %1$s</string>
     <string name="workout_session_check_set">Log set %1$d</string>
     <string name="workout_session_uncheck_set">Remove set %1$d</string>
+    <string name="workout_session_log_set">Log set %1$d</string>
+    <string name="workout_session_edit">Edit</string>
+    <string name="workout_session_set_of">Set %1$d of %2$d</string>
+    <string name="workout_session_rest_label">Rest</string>
     <string name="workout_session_rest_remaining">Rest · %1$s</string>
     <string name="workout_session_rest_skip">Skip rest</string>
     <string name="workout_session_empty_title">No exercises in this session</string>
@@ -57,5 +61,13 @@
     <plurals name="workout_session_sets_logged">
         <item quantity="one">%1$d set logged</item>
         <item quantity="other">%1$d sets logged</item>
+    </plurals>
+    <plurals name="workout_session_sets_to_go">
+        <item quantity="one">%1$d set to go</item>
+        <item quantity="other">%1$d sets to go</item>
+    </plurals>
+    <plurals name="workout_session_all_sets_done">
+        <item quantity="one">%1$d set done</item>
+        <item quantity="other">All %1$d sets done</item>
     </plurals>
 </resources>

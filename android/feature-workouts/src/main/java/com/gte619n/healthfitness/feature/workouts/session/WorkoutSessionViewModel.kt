@@ -39,6 +39,13 @@ data class WorkoutSessionUiState(
     val completed: Boolean = false,
     val recap: String? = null,
     val recapLoading: Boolean = false,
+    /**
+     * IMPL-COACH PR2 — what each exercise was performed last time, keyed by
+     * exerciseId (from the most recent COMPLETED session, cross-program). The
+     * logger's pending row and the coach cue prefill from this. Empty until the
+     * best-effort fetch lands; prefill falls back to the designed target.
+     */
+    val lastSets: Map<String, List<LoggedSet>> = emptyMap(),
 )
 
 /**
@@ -74,18 +81,13 @@ class WorkoutSessionViewModel @Inject constructor(
     /** The shared rest countdown (also rendered by the foreground notification). */
     val restTimer: StateFlow<WorkoutSessionTimers.RestTimer?> = timers.rest
 
-    /**
-     * IMPL-COACH PR2 — what each exercise was performed last time, keyed by
-     * exerciseId, used to prefill new sets with the literal previous session.
-     * Fetched best-effort on open; empty until it lands (prefill falls back to
-     * the designed target meanwhile).
-     */
-    private var lastSetsByExercise: Map<String, List<LoggedSet>> = emptyMap()
-
     init {
-        // Best-effort prior-performance fetch, independent of the draft load below.
+        // Best-effort prior-performance fetch, independent of the draft load
+        // below; surfaced into state so the pending row and coach cue can
+        // prefill from the literal previous session (IMPL-COACH PR2).
         viewModelScope.launch {
-            lastSetsByExercise = repository.lastSets(programId, scheduledId)
+            val last = repository.lastSets(programId, scheduledId)
+            _state.update { it.copy(lastSets = last) }
         }
         viewModelScope.launch {
             val started = repository.start(programId, scheduledId)
@@ -250,30 +252,18 @@ class WorkoutSessionViewModel @Inject constructor(
     private fun newSet(draft: WorkoutSessionDraft, key: PrescriptionKey): LoggedSet {
         val prescription = draft.prescription(key)
         val logged = draft.logged[key].orEmpty()
-        val previous = logged.lastOrNull()
-        // The matching set from the last time this exercise was performed.
-        val lastTime = prescription?.exerciseId
-            ?.let { lastSetsByExercise[it] }
-            ?.getOrNull(logged.size)
         val at = now()
-        val timed = prescription?.isTimed == true
+        // Carry within the session first, then the literal previous session,
+        // then the designed target (IMPL-COACH PR2) — the same source of truth
+        // the UI shows on the pending row.
+        val prefill = prescription?.let { prefillFor(it, logged, _state.value.lastSets) }
         return LoggedSet(
-            // Carry within the session first, then the literal previous session,
-            // then the designed target (IMPL-COACH PR2).
-            weightLbs = if (timed) null else {
-                previous?.weightLbs ?: lastTime?.weightLbs ?: prescription?.targetWeightLbs
-            },
-            reps = if (timed) null else {
-                previous?.reps ?: lastTime?.reps ?: prescription?.repsMax ?: prescription?.repsMin
-            },
+            weightLbs = prefill?.weightLbs,
+            reps = prefill?.reps,
             rpe = null,
             restSeconds = restSecondsBefore(draft, at),
             completedAt = at,
-            durationSeconds = if (timed) {
-                previous?.durationSeconds ?: lastTime?.durationSeconds ?: prescription?.durationSeconds
-            } else {
-                null
-            },
+            durationSeconds = prefill?.durationSeconds,
         )
     }
 

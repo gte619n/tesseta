@@ -117,9 +117,24 @@ class WorkoutSessionNotificationContentTest {
         val content = WorkoutSessionNotificationContent.from(draft(), rest = null, now = now)
 
         assertEquals("Push Day", content.title)
-        assertEquals("Now: Air Bike · 0 sets logged", content.text)
+        assertEquals("Now: Air Bike · Set 1 of 1", content.text)
         assertEquals(startedAt.toEpochMilli(), content.elapsedSinceMillis)
         assertNull(content.countdownToMillis)
+    }
+
+    @Test
+    fun `active text carries set progress and the upcoming load`() {
+        // Bench's first set logged (135 x 8) -> next is set 2, carrying that load.
+        val draft = draft(
+            logged = mapOf(
+                PrescriptionKey("b-warmup", 0) to listOf(loggedSet()),
+                PrescriptionKey("b-main", 0) to listOf(loggedSet()),
+            ),
+        )
+
+        val content = WorkoutSessionNotificationContent.from(draft, rest = null, now = now)
+
+        assertEquals("Now: Bench Press · Set 2 of 3 · 135 lb × 8", content.text)
     }
 
     @Test
@@ -144,7 +159,7 @@ class WorkoutSessionNotificationContentTest {
 
         val content = WorkoutSessionNotificationContent.from(draft(), rest = rest, now = now)
 
-        assertEquals("Resting — next: Air Bike", content.text)
+        assertEquals("Resting — next: Air Bike · Set 1 of 1", content.text)
         assertEquals(rest.endsAt.toEpochMilli(), content.countdownToMillis)
         assertNull(content.elapsedSinceMillis)
     }
@@ -155,7 +170,7 @@ class WorkoutSessionNotificationContentTest {
 
         val content = WorkoutSessionNotificationContent.from(draft(), rest = rest, now = now)
 
-        assertEquals("Now: Air Bike · 0 sets logged", content.text)
+        assertEquals("Now: Air Bike · Set 1 of 1", content.text)
         assertEquals(startedAt.toEpochMilli(), content.elapsedSinceMillis)
         assertNull(content.countdownToMillis)
     }

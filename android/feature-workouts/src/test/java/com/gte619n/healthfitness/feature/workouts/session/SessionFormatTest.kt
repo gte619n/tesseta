@@ -1,11 +1,64 @@
 package com.gte619n.healthfitness.feature.workouts.session
 
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.feature.workouts.program.ProgramFixtures
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SessionFormatTest {
+
+    private val squat = ProgramFixtures.activeDraft.sessionSteps()[0].prescription
+    private val plank = ProgramFixtures.activeDraft.sessionSteps()[1].prescription
+
+    @Test
+    fun `prefill carries the last logged set within the session first`() {
+        val prefill = prefillFor(
+            squat,
+            logged = listOf(LoggedSet(weightLbs = 135.0, reps = 8)),
+            lastSets = mapOf("ex-squat" to listOf(LoggedSet(weightLbs = 200.0, reps = 5))),
+        )
+        assertEquals(135.0, prefill.weightLbs)
+        assertEquals(8, prefill.reps)
+    }
+
+    @Test
+    fun `prefill falls back to the last session, then the designed target`() {
+        // No in-session carry -> the literal previous session (200 x 5).
+        val fromHistory = prefillFor(
+            squat,
+            logged = emptyList(),
+            lastSets = mapOf("ex-squat" to listOf(LoggedSet(weightLbs = 200.0, reps = 5))),
+        )
+        assertEquals(200.0, fromHistory.weightLbs)
+        assertEquals(5, fromHistory.reps)
+
+        // No history either -> the designed reps target (fixture squat has no
+        // target weight, so weight stays null).
+        val fromTarget = prefillFor(squat, logged = emptyList(), lastSets = emptyMap())
+        assertNull(fromTarget.weightLbs)
+        assertEquals(10, fromTarget.reps)
+    }
+
+    @Test
+    fun `prefill for a timed exercise carries the held duration, not weight`() {
+        val prefill = prefillFor(plank, logged = emptyList(), lastSets = emptyMap())
+        assertEquals(45, prefill.durationSeconds)
+        assertNull(prefill.weightLbs)
+        assertNull(prefill.reps)
+    }
+
+    @Test
+    fun `announcement includes the effective load and reps`() {
+        assertEquals(
+            "Back Squat. 200 pounds, 5 reps.",
+            coachAnnouncement(squat, weightLbs = 200.0, reps = 5),
+        )
+        // No weight known -> reps only; a timed hold speaks its duration.
+        assertEquals("Back Squat. 10 reps.", coachAnnouncement(squat, weightLbs = null, reps = 10))
+        assertEquals("Plank. 45 second hold.", coachAnnouncement(plank))
+    }
 
     @Test
     fun `elapsed label is mm-ss under an hour and h-mm-ss above`() {

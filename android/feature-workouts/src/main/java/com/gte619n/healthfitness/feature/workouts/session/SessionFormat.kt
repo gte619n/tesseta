@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.feature.workouts.session
 
 import com.gte619n.healthfitness.domain.workouts.program.Block
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
@@ -43,24 +44,67 @@ fun WorkoutSessionDraft.firstIncompleteStepIndex(): Int {
 }
 
 /**
+ * The prefill for the next, not-yet-logged set of a prescription — the value
+ * the logger shows on the pending row and the coach announces. Precedence:
+ * what was carried within this session (the last logged set), then the literal
+ * previous session ([lastSets], IMPL-COACH PR2), then the designed target.
+ * Shared by the UI (display) and the ViewModel (the actual logged set) so both
+ * agree on "what to lift next". A timed exercise carries a held duration
+ * instead of weight/reps.
+ */
+data class SetPrefill(
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+    val durationSeconds: Int? = null,
+)
+
+fun prefillFor(
+    prescription: Prescription,
+    logged: List<LoggedSet>,
+    lastSets: Map<String, List<LoggedSet>>,
+): SetPrefill {
+    val previous = logged.lastOrNull()
+    // The matching set (by index) from the last time this exercise was done.
+    val lastTime = lastSets[prescription.exerciseId]?.getOrNull(logged.size)
+    return if (prescription.isTimed) {
+        SetPrefill(
+            durationSeconds = previous?.durationSeconds
+                ?: lastTime?.durationSeconds
+                ?: prescription.durationSeconds,
+        )
+    } else {
+        SetPrefill(
+            weightLbs = previous?.weightLbs ?: lastTime?.weightLbs ?: prescription.targetWeightLbs,
+            reps = previous?.reps ?: lastTime?.reps ?: prescription.repsMax ?: prescription.repsMin,
+        )
+    }
+}
+
+/**
  * The spoken cue for an exercise at set start (PR2 voice announcements), e.g.
  * "Back Squat. 185 pounds, 8 reps." or, for a timed hold, "Plank. 45 second
  * hold." Returns null when there's no exercise name to announce. Weight/reps
- * pieces are dropped when the prescription doesn't specify them.
+ * default to the prescription's target but callers pass the effective prefill
+ * (so a set carried from last time announces its real load); pieces are dropped
+ * when neither prefill nor prescription specifies them.
  */
-fun coachAnnouncement(prescription: Prescription): String? {
+fun coachAnnouncement(
+    prescription: Prescription,
+    weightLbs: Double? = prescription.targetWeightLbs,
+    reps: Int? = prescription.repsMax ?: prescription.repsMin,
+): String? {
     val name = prescription.exercise?.name?.takeIf { it.isNotBlank() } ?: return null
     if (prescription.isTimed) {
         val seconds = prescription.durationSeconds ?: return "$name."
         return "$name. $seconds second hold."
     }
     val pieces = mutableListOf<String>()
-    prescription.targetWeightLbs?.let { lbs ->
+    weightLbs?.let { lbs ->
         val rounded = if (lbs == lbs.toLong().toDouble()) lbs.toLong().toString() else lbs.toString()
         pieces += if (lbs == 0.0) "body weight" else "$rounded pounds"
     }
-    (prescription.repsMax ?: prescription.repsMin)?.let { reps ->
-        pieces += if (reps == 1) "1 rep" else "$reps reps"
+    reps?.let { r ->
+        pieces += if (r == 1) "1 rep" else "$r reps"
     }
     return if (pieces.isEmpty()) "$name." else "$name. ${pieces.joinToString(", ")}."
 }
