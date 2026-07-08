@@ -81,6 +81,61 @@ fun prefillFor(
 }
 
 /**
+ * True once every prescribed set of every exercise in the session has been
+ * logged. Drives the auto-complete flow (skip the last rest, jump straight to
+ * the summary). [projected] lets the caller test the map it is *about* to
+ * persist, before the Room round-trip lands it back on the draft.
+ */
+fun WorkoutSessionDraft.isComplete(
+    projected: Map<PrescriptionKey, List<LoggedSet>> = logged,
+): Boolean {
+    val steps = sessionSteps()
+    if (steps.isEmpty()) return false
+    return steps.all { step ->
+        (projected[step.key]?.size ?: 0) >= (step.prescription.sets ?: 1)
+    }
+}
+
+/**
+ * How a logged value compares to what was prescribed — the red/green/black
+ * signal on a completed set (target vs. achieved). [HIT] met or beat the
+ * target, [MISS] fell short, [NEUTRAL] when there's nothing to compare against
+ * (no target, or the value wasn't recorded). Pure so the UI just maps it to a
+ * colour.
+ */
+enum class TargetOutcome { HIT, MISS, NEUTRAL }
+
+/** Reps achieved vs. the prescribed rep range: short of [repsMin] is a miss. */
+fun repsOutcome(prescription: Prescription, reps: Int?): TargetOutcome {
+    val min = prescription.repsMin ?: prescription.repsMax ?: return TargetOutcome.NEUTRAL
+    if (reps == null) return TargetOutcome.NEUTRAL
+    return if (reps >= min) TargetOutcome.HIT else TargetOutcome.MISS
+}
+
+/** Weight achieved vs. the prescribed load: under the target is a miss. */
+fun weightOutcome(prescription: Prescription, weightLbs: Double?): TargetOutcome {
+    val target = prescription.targetWeightLbs ?: return TargetOutcome.NEUTRAL
+    if (weightLbs == null) return TargetOutcome.NEUTRAL
+    return if (weightLbs >= target) TargetOutcome.HIT else TargetOutcome.MISS
+}
+
+/**
+ * The spoken "rest 90 seconds" cue announced when a rest countdown starts (PR2
+ * voice announcements), phrased in minutes/seconds so a long rest doesn't read
+ * as "Rest 120 seconds".
+ */
+fun restAnnouncement(totalSeconds: Int): String {
+    val m = totalSeconds / 60
+    val s = totalSeconds % 60
+    val phrase = when {
+        m > 0 && s > 0 -> "$m ${if (m > 1) "minutes" else "minute"} $s seconds"
+        m > 0 -> "$m ${if (m > 1) "minutes" else "minute"}"
+        else -> "$s seconds"
+    }
+    return "Rest $phrase."
+}
+
+/**
  * The spoken cue for an exercise at set start (PR2 voice announcements), e.g.
  * "Back Squat. 185 pounds, 8 reps." or, for a timed hold, "Plank. 45 second
  * hold." Returns null when there's no exercise name to announce. Weight/reps

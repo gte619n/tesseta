@@ -6,6 +6,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ExerciseService {
+
+    private static final Logger log = LoggerFactory.getLogger(ExerciseService.class);
 
     private final ExerciseRepository exercises;
     private final boolean requireApprovedMedia;
@@ -156,6 +160,20 @@ public class ExerciseService {
     /** Set the media status (used by the generator: PENDING before, FAILED on error). */
     public Exercise updateMediaStatus(String exerciseId, ExerciseMediaStatus status) {
         return withMediaStatus(require(exerciseId), status);
+    }
+
+    /**
+     * The owner flagged a demo frame as bad from the app (#9): mark the exercise
+     * as needing attention in the admin catalog by clearing its {@code reviewed}
+     * sign-off, and log the flagged frame + note for the follow-up. Crucially it
+     * leaves {@code mediaStatus} untouched — the demo keeps being served, we just
+     * surface it as a high-priority item to fix, not pull it out of the pool.
+     */
+    public Exercise flagFrame(String exerciseId, String frameKey, String note) {
+        Exercise e = require(exerciseId);
+        log.warn("Demo frame flagged as bad by owner: exercise={} frame={} note={}",
+            exerciseId, frameKey, note);
+        return withReviewed(e, false);
     }
 
     // ---- IMPL-20: reviewed sign-off + grounding image set ----

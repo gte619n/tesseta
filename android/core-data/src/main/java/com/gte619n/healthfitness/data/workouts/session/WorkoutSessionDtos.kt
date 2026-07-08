@@ -30,4 +30,11 @@ data class LoggedPrescriptionDto(
     val blockId: String,
     val orderIndex: Int = 0,
     val sets: List<LoggedSetDto> = emptyList(),
+    /**
+     * The exercise actually performed for this slot (#4). Null for a set done
+     * as designed; the substitute's id when the user swapped the exercise
+     * mid-session (e.g. no barbell at their gym), so history records what was
+     * really done. Attached at upload time from the draft snapshot.
+     */
+    val exerciseId: String? = null,
 )

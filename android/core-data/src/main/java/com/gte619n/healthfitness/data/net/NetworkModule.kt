@@ -184,6 +184,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideExerciseApi(retrofit: Retrofit): com.gte619n.healthfitness.data.workouts.ExerciseApi =
+        retrofit.create(com.gte619n.healthfitness.data.workouts.ExerciseApi::class.java)
+
+    @Provides
+    @Singleton
     fun provideWorkoutProgramChatApi(retrofit: Retrofit): WorkoutProgramChatApi =
         retrofit.create(WorkoutProgramChatApi::class.java)
 

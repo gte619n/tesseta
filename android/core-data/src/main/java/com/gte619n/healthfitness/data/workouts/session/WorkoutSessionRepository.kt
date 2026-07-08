@@ -13,6 +13,7 @@ import com.gte619n.healthfitness.data.workouts.program.ScheduledWorkoutDto
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
 import com.gte619n.healthfitness.data.workouts.program.toDomain
 import com.gte619n.healthfitness.data.workouts.program.toDto
+import com.gte619n.healthfitness.data.workouts.toSummary
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.session.DraftStatus
@@ -52,6 +53,7 @@ import java.time.Instant
  */
 class WorkoutSessionRepository(
     private val api: WorkoutProgramApi,
+    private val exerciseApi: com.gte619n.healthfitness.data.workouts.ExerciseApi,
     private val draftDao: WorkoutSessionDraftDao,
     private val scheduledDao: WorkoutScheduledDao,
     private val support: MirrorRepositorySupport,
@@ -142,6 +144,65 @@ class WorkoutSessionRepository(
             )
             draftDao.upsert(updated)
             updated.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
+        }
+    }
+
+    /**
+     * The exercises executable at [locationId] — the swap picker's options (#4).
+     * Best-effort: offline / kill-switched surfaces the failure so the UI can say
+     * "couldn't load alternatives" rather than showing an empty list as "none".
+     */
+    suspend fun availableExercises(
+        locationId: String,
+    ): Result<List<com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary>> =
+        withContext(io) {
+            runCatching { exerciseApi.available(locationId).map { it.toSummary() } }
+        }
+
+    /**
+     * Swap the exercise at [key] for [exercise] in the draft's snapshot (#4).
+     * The coach re-renders the replacement immediately (name, cues, demo). Any
+     * sets already logged for that slot are dropped — they were a different
+     * movement — and the history-grounded load basis is cleared. The performed
+     * exercise rides the completion upload so history records the real movement.
+     */
+    suspend fun substituteExercise(
+        programId: String,
+        scheduledId: String,
+        key: PrescriptionKey,
+        exercise: com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary,
+    ): Result<WorkoutSessionDraft> = withContext(io) {
+        runCatching {
+            val entity = draftDao.getByKey(programId, scheduledId)
+                ?: error("No active draft for $programId/$scheduledId")
+            val dto = decodeScheduled(entity.sessionJson)
+                ?: error("Draft snapshot for $programId/$scheduledId is undecodable")
+            val swapped = dto.withSubstitutedExercise(key, exercise)
+            // Drop the old exercise's logged sets for this slot — a swap starts fresh.
+            val logged = decodeLogged(entity.loggedJson).filterNot {
+                it.blockId == key.blockId && it.orderIndex == key.orderIndex
+            }
+            val updated = entity.copy(
+                sessionJson = scheduledAdapter.toJson(swapped),
+                loggedJson = loggedAdapter.toJson(logged),
+                lastActivityAt = clock(),
+            )
+            draftDao.upsert(updated)
+            updated.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
+        }
+    }
+
+    /** Owner tooling (#9): flag a demo frame as bad so it re-enters media review. */
+    suspend fun flagFrame(
+        exerciseId: String,
+        frameKey: String,
+        note: String? = null,
+    ): Result<Unit> = withContext(io) {
+        runCatching {
+            exerciseApi.flagFrame(
+                exerciseId,
+                com.gte619n.healthfitness.data.workouts.FlagFrameRequest(frameKey = frameKey, note = note),
+            )
         }
     }
 
@@ -356,6 +417,50 @@ class WorkoutSessionRepository(
             ?.toSet()
             .orEmpty()
 
+    /**
+     * Re-point the prescription at [key] to [exercise] in this snapshot (#4):
+     * swap its exerciseId + embedded summary, drop the old logged sets, and
+     * clear the history-grounded load basis (it was for the old movement).
+     */
+    private fun ScheduledWorkoutDto.withSubstitutedExercise(
+        key: PrescriptionKey,
+        exercise: com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary,
+    ): ScheduledWorkoutDto = copy(
+        session = session?.let { day ->
+            day.copy(
+                blocks = day.blocks.map { block ->
+                    if (block.blockId != key.blockId) {
+                        block
+                    } else {
+                        block.copy(
+                            prescriptions = block.prescriptions.map { rx ->
+                                if (rx.orderIndex != key.orderIndex) {
+                                    rx
+                                } else {
+                                    rx.copy(
+                                        exerciseId = exercise.exerciseId,
+                                        exercise = exercise.toDto(),
+                                        loggedSets = emptyList(),
+                                        targetWeightLbs = null,
+                                        loadBasis = null,
+                                    )
+                                }
+                            },
+                        )
+                    }
+                },
+            )
+        },
+    )
+
+    /** Which exercise each prescription is performed as, keyed by (blockId, orderIndex). */
+    private fun ScheduledWorkoutDto.exerciseIdByKey(): Map<PrescriptionKey, String> =
+        session?.blocks.orEmpty().flatMap { block ->
+            block.prescriptions.map { rx ->
+                PrescriptionKey(block.blockId.orEmpty(), rx.orderIndex) to rx.exerciseId
+            }
+        }.toMap()
+
     /** Strip a (rejected or restored-over) outcome back to a planned snapshot. */
     private fun ScheduledWorkoutDto.withOutcomeCleared(): ScheduledWorkoutDto = copy(
         status = ScheduledStatus.PLANNED.name,
@@ -444,11 +549,16 @@ class WorkoutSessionRepository(
         val durationSeconds = ((completedAt.toEpochMilli() - entity.startedAt) / 1000L)
             .coerceAtLeast(0L)
             .toInt()
+        // Attach the exercise actually performed for each slot from the draft
+        // snapshot (#4) — normally the designed one, or a mid-session substitute.
+        val performedExercise = decodeScheduled(entity.sessionJson)?.exerciseIdByKey().orEmpty()
         val request = CompleteSessionRequest(
             status = ScheduledStatus.COMPLETED.name,
             completedAt = completedAt,
             durationSeconds = durationSeconds,
-            logged = decodeLogged(entity.loggedJson).filter { it.sets.isNotEmpty() },
+            logged = decodeLogged(entity.loggedJson).filter { it.sets.isNotEmpty() }.map { entry ->
+                entry.copy(exerciseId = performedExercise[PrescriptionKey(entry.blockId, entry.orderIndex)])
+            },
         )
         uploadOutcome(
             programId = entity.programId,

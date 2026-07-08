@@ -56,6 +56,7 @@ class WorkoutSessionRepositoryTest {
     private val outboxDao = FakeOutboxDao()
     private val mirror = FakeMirrorOps()
     private val api = mockk<WorkoutProgramApi>()
+    private val exerciseApi = mockk<com.gte619n.healthfitness.data.workouts.ExerciseApi>()
     private var killSwitch = false
     private var drainRequests = 0
     private var now = T0
@@ -72,6 +73,7 @@ class WorkoutSessionRepositoryTest {
 
     private val repo = WorkoutSessionRepository(
         api = api,
+        exerciseApi = exerciseApi,
         draftDao = draftDao,
         scheduledDao = scheduledDao,
         support = MirrorRepositorySupport(
@@ -284,6 +286,39 @@ class WorkoutSessionRepositoryTest {
         // Draft gone; a drain was requested.
         assertNull(draftDao.getByKey(PROGRAM_ID, SCHEDULED_ID))
         assertEquals(1, drainRequests)
+    }
+
+    @Test
+    fun `substituteExercise swaps the slot and finish records the performed exercise`() = runTest {
+        mirrorScheduled()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        val goblet = com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary(
+            exerciseId = "ex-goblet",
+            name = "Goblet Squat",
+            primaryMuscles = emptyList(),
+            formCues = emptyList(),
+            demoFrames = emptyList(),
+        )
+        val swapped = repo.substituteExercise(PROGRAM_ID, SCHEDULED_ID, KEY_0, goblet).getOrThrow()
+
+        // The draft snapshot now shows the replacement at that slot.
+        val rx0 = swapped.scheduled.session!!.blocks.single().prescriptions[0]
+        assertEquals("ex-goblet", rx0.exerciseId)
+        assertEquals("Goblet Squat", rx0.exercise?.name)
+
+        // Log a set of the swapped movement, then finish.
+        now += 600_000
+        repo.updateSets(
+            PROGRAM_ID, SCHEDULED_ID, KEY_0,
+            listOf(loggedSet(completedAt = Instant.ofEpochMilli(now))),
+        ).getOrThrow()
+        now = T0 + 1_800_000
+        repo.finish(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        // The completion wire records the performed (substitute) exercise (#4).
+        val body = outboxDao.listAll().single().payloadJson!!
+        assertTrue(body.contains("\"exerciseId\":\"ex-goblet\""))
     }
 
     @Test

@@ -24,6 +24,14 @@
     <string name="workout_session_log_set">Log set %1$d</string>
     <string name="workout_session_edit">Edit</string>
     <string name="workout_session_set_of">Set %1$d of %2$d</string>
+    <string name="workout_session_swap">Swap exercise</string>
+    <string name="workout_session_swap_title">Swap exercise</string>
+    <string name="workout_session_swap_loading">Finding alternatives at your gym…</string>
+    <string name="workout_session_swap_empty">No other exercises are available at this gym.</string>
+    <string name="workout_session_flag_image">Flag this image as bad</string>
+    <string name="workout_session_flag_title">Flag this demo image?</string>
+    <string name="workout_session_flag_message">Flags this demo image as a high-priority fix in the admin. It keeps being shown until it\'s fixed. Only you can do this.</string>
+    <string name="workout_session_flag_confirm">Flag image</string>
     <string name="workout_session_rest_label">Rest</string>
     <string name="workout_session_rest_remaining">Rest · %1$s</string>
     <string name="workout_session_rest_skip">Skip rest</string>

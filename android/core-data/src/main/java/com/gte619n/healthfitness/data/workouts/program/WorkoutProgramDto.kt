@@ -286,6 +286,26 @@ fun ExerciseSummaryDto.toDomain(): ExerciseSummary = ExerciseSummary(
     demoFrames = demoFrames.map { it.toDomain() },
 )
 
+// Domain → DTO for the embedded exercise summary. Only the session logger needs
+// this direction (mid-session exercise substitution, #4): the chosen replacement
+// is written back into the draft's snapshot so the coach renders it immediately.
+fun DemoFrame.toDto(): DemoFrameDto = DemoFrameDto(
+    key = key,
+    label = label,
+    caption = caption,
+    order = order,
+    phase = phase,
+    imageUrl = imageUrl,
+)
+
+fun ExerciseSummary.toDto(): ExerciseSummaryDto = ExerciseSummaryDto(
+    exerciseId = exerciseId,
+    name = name,
+    primaryMuscles = primaryMuscles,
+    formCues = formCues,
+    demoFrames = demoFrames.map { it.toDto() },
+)
+
 fun LoggedSetDto.toDomain(): LoggedSet = LoggedSet(
     weightLbs = weightLbs,
     reps = reps,

@@ -376,6 +376,24 @@ class WorkoutSessionCompletionServiceTest {
         assertEquals(0.0, agg.totalTonnage(), 1e-9);
     }
 
+    @Test
+    void substituteExerciseIsRecordedOnTheCompletedSession() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        // The user's gym has no barbell, so they swapped "sq" for a goblet squat
+        // and logged it — the slot must record what was actually performed (#4).
+        ScheduledWorkout updated = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0,
+                List.of(new LoggedSet(45.0, 8, null, null, null)), "goblet-squat")));
+
+        Prescription rx0 = prescription(updated, 0);
+        assertEquals("goblet-squat", rx0.exerciseId());
+        assertEquals(1, rx0.loggedSets().size());
+        // A slot with no substitute keeps its designed exercise.
+        assertEquals("bp", prescription(updated, 1).exerciseId());
+    }
+
     // ---- fixtures ----
 
     private ScheduledWorkout seedPlanned(String programId) {
