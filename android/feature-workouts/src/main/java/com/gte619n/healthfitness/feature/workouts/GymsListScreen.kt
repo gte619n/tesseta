@@ -39,16 +39,25 @@ fun GymsListScreen(
     onAddGym: () -> Unit,
     onOpenGym: (String) -> Unit,
     vm: GymsListViewModel = hiltViewModel(),
+    showHeader: Boolean = true,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
 
-    Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).background(Hf.colors.canvas)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // Embedded under the hub tabs the shell already consumes the insets.
+            .then(if (showHeader) Modifier.windowInsetsPadding(WindowInsets.systemBars) else Modifier)
+            .background(Hf.colors.canvas),
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            HfScreenHeader(
-                title = "Gyms",
-                subtitle = "Your gyms and their equipment",
-                onBack = onBack,
-            )
+            if (showHeader) {
+                HfScreenHeader(
+                    title = "Gyms",
+                    subtitle = "Your gyms and their equipment",
+                    onBack = onBack,
+                )
+            }
 
             when {
                 state.loading -> LoadingState(Modifier.fillMaxSize())

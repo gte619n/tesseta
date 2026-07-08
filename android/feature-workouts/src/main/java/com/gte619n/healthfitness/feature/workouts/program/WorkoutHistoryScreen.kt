@@ -69,6 +69,7 @@ private const val LOAD_MORE_THRESHOLD = 5
 fun WorkoutHistoryRoute(
     onBack: () -> Unit,
     viewModel: WorkoutHistoryViewModel = hiltViewModel(),
+    showHeader: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     WorkoutHistoryScreen(
@@ -77,6 +78,7 @@ fun WorkoutHistoryRoute(
         onRetry = viewModel::load,
         onLoadMore = viewModel::loadMore,
         onDelete = viewModel::deleteSession,
+        showHeader = showHeader,
     )
 }
 
@@ -87,6 +89,7 @@ fun WorkoutHistoryScreen(
     onRetry: () -> Unit = {},
     onLoadMore: () -> Unit = {},
     onDelete: (ScheduledWorkout) -> Unit = {},
+    showHeader: Boolean = true,
 ) {
     // The detail is rendered in-screen from the already-loaded session (no
     // re-fetch, and — unlike opening the logger — no draft is created).
@@ -113,13 +116,17 @@ fun WorkoutHistoryScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Hf.colors.canvas)
-            .windowInsetsPadding(WindowInsets.systemBars),
+            // Embedded under the hub tabs, the shell already consumes the system
+            // bars and draws the header — skip both to avoid double chrome.
+            .then(if (showHeader) Modifier.windowInsetsPadding(WindowInsets.systemBars) else Modifier),
     ) {
-        HfScreenHeader(
-            title = "Workout history",
-            subtitle = "Every workout you've finished",
-            onBack = onBack,
-        )
+        if (showHeader) {
+            HfScreenHeader(
+                title = "Workout history",
+                subtitle = "Every workout you've finished",
+                onBack = onBack,
+            )
+        }
         when {
             state.loading -> LoadingState(Modifier.fillMaxSize())
             state.error != null -> ErrorState(

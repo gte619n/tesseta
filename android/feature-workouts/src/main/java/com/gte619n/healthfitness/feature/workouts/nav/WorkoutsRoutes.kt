@@ -97,12 +97,20 @@ fun NavGraphBuilder.workoutsGraph(
     composable(WorkoutsRoutes.HUB) {
         WorkoutsHubRoute(
             onBack = { navController.popBackStack() },
-            onOpenGyms = { navController.navigate(WorkoutsRoutes.GYMS) },
-            onOpenPrograms = { navController.navigate(WorkoutsRoutes.PROGRAMS) },
-            onOpenHistory = { navController.navigate(WorkoutsRoutes.HISTORY) },
-            onDesignProgram = { navController.navigate(WorkoutsRoutes.CHAT) },
-            onResumeSession = { programId, scheduledId ->
+            onOpenProgram = { id -> navController.navigate(WorkoutsRoutes.programDetail(id)) },
+            onOpenGym = { id -> navController.navigate(WorkoutsRoutes.gymDetail(id)) },
+            onAddGym = { navController.navigate(WorkoutsRoutes.NEW_GYM) },
+            onOpenWorkout = { programId, phaseId, dayId ->
+                navController.navigate(WorkoutsRoutes.workoutDetail(programId, phaseId, dayId))
+            },
+            onOpenSession = { programId, scheduledId ->
                 navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
+            // The builder: refine an existing program (edit mode) or start a new one.
+            onDesignProgram = { activeId ->
+                navController.navigate(
+                    if (activeId != null) WorkoutsRoutes.chatEdit(activeId) else WorkoutsRoutes.CHAT,
+                )
             },
         )
     }

@@ -1,6 +1,5 @@
 package com.gte619n.healthfitness.feature.workouts.program
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,10 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.HistoryEdu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,25 +48,20 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
-import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
 import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
-import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
-import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
-import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseMeta
-import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseSpineNode
-import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseStatusPill
+import com.gte619n.healthfitness.feature.workouts.program.ui.ActivateButton
+import com.gte619n.healthfitness.feature.workouts.program.ui.PastSessionsSheet
+import com.gte619n.healthfitness.feature.workouts.program.ui.PhaseRow
 import com.gte619n.healthfitness.feature.workouts.program.ui.ProgramStatusPill
 import com.gte619n.healthfitness.feature.workouts.program.ui.ThisWeekStrip
-import com.gte619n.healthfitness.feature.workouts.program.ui.WorkoutDayRow
 import com.gte619n.healthfitness.feature.workouts.session.ui.ParkedSessionBanner
 import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
-import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.state.ErrorState
@@ -503,6 +494,8 @@ private fun ProgramBody(
                     isFirst = index == 0,
                     isLast = index == phases.lastIndex,
                     onOpenWorkout = onOpenWorkout,
+                    // Legacy detail behavior: open the first phase and the active one.
+                    defaultExpanded = { index == 0 || it.status == ProgramPhaseStatus.ACTIVE },
                 )
             }
         }
@@ -533,20 +526,6 @@ private fun GoalLinkRow(title: String?, onClick: () -> Unit) {
             tint = Hf.colors.accent,
             modifier = Modifier.size(16.dp),
         )
-    }
-}
-
-@Composable
-private fun ActivateButton(label: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Hf.colors.accent, RoundedCornerShape(10.dp))
-            .clickable { onClick() }
-            .padding(vertical = 13.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, style = Hf.type.bodyMd, color = Hf.colors.textInverse)
     }
 }
 
@@ -713,175 +692,6 @@ private fun EditProgramSheet(
                     style = Hf.type.bodyMd,
                     color = Hf.colors.textInverse,
                 )
-            }
-        }
-    }
-}
-
-/**
- * IMPL-STAB G3 — pick an earlier materialized session to log. The backend only
- * logs against an existing scheduled session, so this lists the program's past
- * sessions (date + label + status); tapping one opens the session logger.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PastSessionsSheet(
-    sessions: List<ScheduledWorkout>,
-    onPick: (scheduledId: String) -> Unit,
-    onDelete: (scheduledId: String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    // A logged day pending the delete (revert-to-planned) confirmation.
-    var pendingDelete by remember { mutableStateOf<ScheduledWorkout?>(null) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Hf.colors.canvas) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("Past workouts", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
-            if (sessions.isEmpty()) {
-                Text(
-                    "No earlier sessions yet.",
-                    style = Hf.type.bodySm,
-                    color = Hf.colors.textTertiary,
-                )
-            } else {
-                sessions.forEach { session ->
-                    // A logged outcome (completed or skipped) can be deleted —
-                    // reverted to planned; a still-planned day has nothing to remove.
-                    val isLogged = session.status == ScheduledStatus.COMPLETED ||
-                        session.status == ScheduledStatus.SKIPPED
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(8.dp))
-                            .clickable { onPick(session.scheduledId) }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                session.dayLabel,
-                                style = Hf.type.bodyMd.copy(fontSize = 13.sp),
-                                color = Hf.colors.textPrimary,
-                            )
-                            CapsLabel(
-                                "${session.date} · ${session.status.name.lowercase()}",
-                                color = Hf.colors.textTertiary,
-                            )
-                        }
-                        if (isLogged) {
-                            Icon(
-                                Icons.Outlined.DeleteOutline,
-                                contentDescription = "Delete logged ${session.dayLabel}",
-                                tint = Hf.colors.alert,
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clickable { pendingDelete = session }
-                                    .padding(7.dp),
-                            )
-                        }
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowForward,
-                            contentDescription = "Log ${session.dayLabel}",
-                            tint = Hf.colors.textSecondary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    pendingDelete?.let { session ->
-        ConfirmDialog(
-            title = "Delete this workout?",
-            message = "The logged result for ${session.dayLabel} (${session.date}) will be removed " +
-                "and the day goes back to planned. You can run it again later.",
-            confirmLabel = "Delete",
-            dismissLabel = "Cancel",
-            destructive = true,
-            onConfirm = {
-                onDelete(session.scheduledId)
-                pendingDelete = null
-            },
-            onDismiss = { pendingDelete = null },
-        )
-    }
-}
-
-@Composable
-private fun PhaseRow(
-    phase: ProgramPhase,
-    isFirst: Boolean,
-    isLast: Boolean,
-    onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
-) {
-    // The phase header is a tappable expander: tapping it reveals the phase's
-    // workout rows (each of which opens the workout detail). Default open for
-    // the first phase and any active phase so content is visible up-front.
-    var expanded by remember(phase.phaseId) {
-        mutableStateOf(isFirst || phase.status == ProgramPhaseStatus.ACTIVE)
-    }
-    Row(modifier = Modifier.fillMaxWidth()) {
-        PhaseSpineNode(status = phase.status, isFirst = isFirst, isLast = isLast)
-        Spacer(Modifier.width(12.dp))
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = 18.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        phase.title,
-                        style = Hf.type.headingMd.copy(fontSize = 14.sp),
-                        color = Hf.colors.textPrimary,
-                    )
-                    Spacer(Modifier.height(5.dp))
-                    PhaseMeta(phase)
-                }
-                Spacer(Modifier.width(8.dp))
-                PhaseStatusPill(phase.status)
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription = if (expanded) "Collapse phase" else "Expand phase",
-                    tint = Hf.colors.textTertiary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier.padding(top = 11.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    val days = phase.days.sortedBy { it.orderIndex }
-                    if (days.isEmpty()) {
-                        Text(
-                            "No workouts in this phase yet.",
-                            style = Hf.type.bodySm,
-                            color = Hf.colors.textTertiary,
-                        )
-                    } else {
-                        days.forEach { day ->
-                            WorkoutDayRow(
-                                day = day,
-                                onOpen = { onOpenWorkout(phase.phaseId, day.dayId) },
-                            )
-                        }
-                    }
-                }
             }
         }
     }

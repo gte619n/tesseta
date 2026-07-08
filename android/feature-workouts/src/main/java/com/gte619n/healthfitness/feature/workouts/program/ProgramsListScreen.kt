@@ -40,6 +40,7 @@ fun ProgramsListRoute(
     onOpenProgram: (String) -> Unit,
     onDesignProgram: () -> Unit = {},
     viewModel: ProgramsListViewModel = hiltViewModel(),
+    showHeader: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     ProgramsListScreen(
@@ -48,6 +49,7 @@ fun ProgramsListRoute(
         onOpenProgram = onOpenProgram,
         onDesignProgram = onDesignProgram,
         onRetry = viewModel::refresh,
+        showHeader = showHeader,
     )
 }
 
@@ -58,33 +60,36 @@ fun ProgramsListScreen(
     onOpenProgram: (String) -> Unit,
     onRetry: () -> Unit,
     onDesignProgram: () -> Unit = {},
+    showHeader: Boolean = true,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Hf.colors.canvas)
-            .windowInsetsPadding(WindowInsets.systemBars),
+            .then(if (showHeader) Modifier.windowInsetsPadding(WindowInsets.systemBars) else Modifier),
     ) {
-        HfScreenHeader(
-            title = "Programs",
-            subtitle = "Your training roadmap",
-            onBack = onBack,
-            trailing = {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clickable { onDesignProgram() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = "Design a program",
-                        tint = Hf.colors.accent,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            },
-        )
+        if (showHeader) {
+            HfScreenHeader(
+                title = "Programs",
+                subtitle = "Your training roadmap",
+                onBack = onBack,
+                trailing = {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clickable { onDesignProgram() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = "Design a program",
+                            tint = Hf.colors.accent,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                },
+            )
+        }
         when {
             state.loading -> LoadingState(Modifier.fillMaxSize())
             state.error != null -> ErrorState(

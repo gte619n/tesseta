@@ -1,103 +1,113 @@
 package com.gte619n.healthfitness.feature.workouts.program
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.FitnessCenter
-import androidx.compose.material.icons.outlined.HistoryEdu
-import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
-import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
-import com.gte619n.healthfitness.feature.workouts.session.ui.ParkedSessionBanner
-import com.gte619n.healthfitness.feature.workouts.session.ui.ResumeSessionBanner
+import com.gte619n.healthfitness.feature.workouts.GymsListScreen
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
-import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 /**
- * Workouts hub (IMPL-AND-15). The Workouts destination is a hub with two cards
- * — Gyms (IMPL-AND-06) and Programs (read-only). ADR-0012 adds a resume banner
- * when a local session draft is in flight (the only state the hub carries).
+ * The Workouts hub — a tabbed shell (IMPL-AND-15 redesign). The default
+ * "This Week" tab is the active-program dashboard ([WorkoutsLandingRoute]); the
+ * Programs / History / Gyms tabs render their existing screens inline with their
+ * own headers suppressed (the shell owns the one header + tab row). The program
+ * builder no longer lives here — it's the sparkle on the Programs tab and the
+ * refine action inside a program.
  */
+enum class WorkoutsTab(val label: String) {
+    THIS_WEEK("This Week"),
+    PROGRAMS("Programs"),
+    HISTORY("History"),
+    GYMS("Gyms"),
+}
+
 @Composable
 fun WorkoutsHubRoute(
     onBack: () -> Unit,
-    onOpenGyms: () -> Unit,
-    onOpenPrograms: () -> Unit,
-    onResumeSession: (programId: String, scheduledId: String) -> Unit,
-    onOpenHistory: () -> Unit = {},
-    onDesignProgram: () -> Unit = {},
-    viewModel: WorkoutsHubViewModel = hiltViewModel(),
+    onOpenProgram: (programId: String) -> Unit,
+    onOpenGym: (locationId: String) -> Unit,
+    onAddGym: () -> Unit,
+    onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
+    onDesignProgram: (programId: String?) -> Unit,
 ) {
-    val activeDraft by viewModel.activeDraft.collectAsStateWithLifecycle()
-    val parkedCompletion by viewModel.parkedCompletion.collectAsStateWithLifecycle()
-    val parkedError by viewModel.parkedError.collectAsStateWithLifecycle()
-    val restoredSession by viewModel.restoredSession.collectAsStateWithLifecycle()
-
-    // A successful restore re-materialized the draft; drop into the logger.
-    LaunchedEffect(restoredSession) {
-        restoredSession?.let {
-            viewModel.consumeRestoredSession()
-            onResumeSession(it.programId, it.scheduledId)
-        }
-    }
+    var selectedTab by rememberSaveable { mutableStateOf(WorkoutsTab.THIS_WEEK) }
 
     WorkoutsHubScreen(
+        selectedTab = selectedTab,
+        onSelectTab = { selectedTab = it },
         onBack = onBack,
-        onOpenGyms = onOpenGyms,
-        onOpenPrograms = onOpenPrograms,
-        onOpenHistory = onOpenHistory,
-        onDesignProgram = onDesignProgram,
-        activeDraft = activeDraft,
-        onResumeSession = { draft -> onResumeSession(draft.programId, draft.scheduledId) },
-        parkedCompletion = parkedCompletion,
-        parkedError = parkedError,
-        onRestoreParked = viewModel::restoreParked,
-        onDiscardParked = viewModel::discardParked,
+        onDesignNew = { onDesignProgram(null) },
+        landingContent = {
+            WorkoutsLandingRoute(
+                onOpenSession = onOpenSession,
+                onOpenWorkout = onOpenWorkout,
+                onRefine = onDesignProgram,
+                onOpenProgramsTab = { selectedTab = WorkoutsTab.PROGRAMS },
+            )
+        },
+        programsContent = {
+            ProgramsListRoute(
+                onBack = {},
+                onOpenProgram = onOpenProgram,
+                onDesignProgram = { onDesignProgram(null) },
+                showHeader = false,
+            )
+        },
+        historyContent = { WorkoutHistoryRoute(onBack = {}, showHeader = false) },
+        gymsContent = {
+            GymsListScreen(
+                onBack = {},
+                onAddGym = onAddGym,
+                onOpenGym = onOpenGym,
+                showHeader = false,
+            )
+        },
     )
 }
 
 @Composable
 fun WorkoutsHubScreen(
+    selectedTab: WorkoutsTab,
+    onSelectTab: (WorkoutsTab) -> Unit,
     onBack: () -> Unit,
-    onOpenGyms: () -> Unit,
-    onOpenPrograms: () -> Unit,
-    onOpenHistory: () -> Unit = {},
-    onDesignProgram: () -> Unit = {},
-    activeDraft: WorkoutSessionDraft? = null,
-    onResumeSession: (WorkoutSessionDraft) -> Unit = {},
-    parkedCompletion: ParkedCompletion? = null,
-    parkedError: String? = null,
-    onRestoreParked: (ParkedCompletion) -> Unit = {},
-    onDiscardParked: (ParkedCompletion) -> Unit = {},
+    onDesignNew: () -> Unit = {},
+    landingContent: @Composable () -> Unit = {},
+    programsContent: @Composable () -> Unit = {},
+    historyContent: @Composable () -> Unit = {},
+    gymsContent: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -107,90 +117,80 @@ fun WorkoutsHubScreen(
     ) {
         HfScreenHeader(
             title = "Workouts",
-            subtitle = "Your gyms and training programs",
+            subtitle = "Your training",
             onBack = onBack,
+            // The builder lives with the programs — a "design a new program"
+            // sparkle appears while the Programs tab is selected.
+            trailing = if (selectedTab == WorkoutsTab.PROGRAMS) {
+                {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clickable { onDesignNew() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = "Design a program",
+                            tint = Hf.colors.accent,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            } else {
+                null
+            },
         )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (activeDraft != null) {
-                ResumeSessionBanner(
-                    draft = activeDraft,
-                    onResume = { onResumeSession(activeDraft) },
-                )
+        WorkoutsTabRow(selected = selectedTab, onSelect = onSelectTab)
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (selectedTab) {
+                WorkoutsTab.THIS_WEEK -> landingContent()
+                WorkoutsTab.PROGRAMS -> programsContent()
+                WorkoutsTab.HISTORY -> historyContent()
+                WorkoutsTab.GYMS -> gymsContent()
             }
-            if (parkedCompletion != null) {
-                ParkedSessionBanner(
-                    parked = parkedCompletion,
-                    onRestore = { onRestoreParked(parkedCompletion) },
-                    onDiscard = { onDiscardParked(parkedCompletion) },
-                )
-            }
-            if (parkedError != null) {
-                Text(parkedError, style = Hf.type.bodySm, color = Hf.colors.alert)
-            }
-            HubCard(
-                icon = Icons.Outlined.FitnessCenter,
-                title = "Gyms",
-                description = "Your gyms, equipment, and hours.",
-                onClick = onOpenGyms,
-            )
-            HubCard(
-                icon = Icons.Outlined.ListAlt,
-                title = "Programs",
-                description = "Your periodized training programs.",
-                onClick = onOpenPrograms,
-            )
-            HubCard(
-                icon = Icons.Outlined.HistoryEdu,
-                title = "History",
-                description = "Review every workout you've finished.",
-                onClick = onOpenHistory,
-            )
-            HubCard(
-                icon = Icons.Outlined.AutoAwesome,
-                title = "Design a program",
-                description = "Plan a periodized program with the AI coach.",
-                onClick = onDesignProgram,
-            )
         }
     }
 }
 
+/** Segmented chips for the hub tabs (the app's custom tab idiom, cf. Medications). */
 @Composable
-private fun HubCard(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    onClick: () -> Unit,
+private fun WorkoutsTabRow(
+    selected: WorkoutsTab,
+    onSelect: (WorkoutsTab) -> Unit,
 ) {
-    HfCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Hf.colors.accent,
-                modifier = Modifier.size(24.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        WorkoutsTab.entries.forEach { tab ->
+            val active = tab == selected
+            Box(
+                modifier = Modifier
+                    .border(
+                        0.5.dp,
+                        if (active) Hf.colors.accent else Hf.colors.borderDefault,
+                        RoundedCornerShape(8.dp),
+                    )
+                    .background(
+                        if (active) Hf.colors.accentBg else Hf.colors.surface,
+                        RoundedCornerShape(8.dp),
+                    )
+                    .clickable { onSelect(tab) }
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+            ) {
                 Text(
-                    title,
-                    style = Hf.type.headingMd.copy(fontSize = 15.sp),
-                    color = Hf.colors.textPrimary,
+                    tab.label,
+                    style = Hf.type.bodyMd.copy(
+                        fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    ),
+                    color = if (active) Hf.colors.accentDim else Hf.colors.textSecondary,
                 )
-                Spacer(Modifier.height(3.dp))
-                Text(description, style = Hf.type.bodySm, color = Hf.colors.textSecondary)
             }
-            Text("›", style = Hf.type.headingLg, color = Hf.colors.textTertiary)
         }
     }
 }
@@ -199,6 +199,10 @@ private fun HubCard(
 @Composable
 private fun WorkoutsHubPreview() {
     HealthFitnessTheme {
-        WorkoutsHubScreen(onBack = {}, onOpenGyms = {}, onOpenPrograms = {})
+        WorkoutsHubScreen(
+            selectedTab = WorkoutsTab.THIS_WEEK,
+            onSelectTab = {},
+            onBack = {},
+        )
     }
 }
