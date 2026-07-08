@@ -38,6 +38,9 @@ import com.gte619n.healthfitness.ui.components.HfTone
 import com.gte619n.healthfitness.ui.components.Pill
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 
 // ---- Status display (all rendered from backend state; no client computation) ----
 
@@ -63,6 +66,24 @@ fun PhaseStatusPill(status: ProgramPhaseStatus) {
 @Composable
 fun DeloadBadge() {
     Pill("Deload", HfTone.Warn)
+}
+
+/**
+ * Primary full-width action button (activate / re-materialize a program). Shared
+ * by the program detail and the "This Week" landing so both read identically.
+ */
+@Composable
+fun ActivateButton(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Hf.colors.accent, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = Hf.type.bodyMd, color = Hf.colors.textInverse)
+    }
 }
 
 // ---- Program card (list) ----
@@ -258,6 +279,10 @@ fun PhaseMeta(phase: ProgramPhase) {
     val pieces = buildList {
         add("${phase.weeks} weeks")
         phase.focus?.takeIf { it.isNotBlank() }?.let { add(it) }
+        // An upcoming phase shows WHEN it starts so the roadmap reads concretely.
+        if (phase.status == ProgramPhaseStatus.LOCKED) {
+            phase.targetStartDate?.let { add("starts ${phaseStartLabel(it)}") }
+        }
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -269,3 +294,7 @@ fun PhaseMeta(phase: ProgramPhase) {
         }
     }
 }
+
+/** "Aug 4" — the month/day a phase is scheduled to start. */
+private fun phaseStartLabel(date: LocalDate): String =
+    "${date.month.getDisplayName(TextStyle.SHORT, Locale.US)} ${date.dayOfMonth}"
