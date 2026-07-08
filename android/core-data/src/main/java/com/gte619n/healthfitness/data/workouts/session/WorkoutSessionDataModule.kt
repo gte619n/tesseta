@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.data.db.dao.WorkoutSessionDraftDao
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.data.sync.OutboxRepository
+import com.gte619n.healthfitness.data.workouts.ExerciseApi
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
 import com.squareup.moshi.Moshi
 import dagger.Module
@@ -28,6 +29,7 @@ object WorkoutSessionDataModule {
     @Singleton
     fun provideWorkoutSessionRepository(
         api: WorkoutProgramApi,
+        exerciseApi: ExerciseApi,
         draftDao: WorkoutSessionDraftDao,
         scheduledDao: WorkoutScheduledDao,
         support: MirrorRepositorySupport,
@@ -35,5 +37,5 @@ object WorkoutSessionDataModule {
         moshi: Moshi,
         @IoDispatcher io: CoroutineDispatcher,
     ): WorkoutSessionRepository =
-        WorkoutSessionRepository(api, draftDao, scheduledDao, support, outbox, moshi, io)
+        WorkoutSessionRepository(api, exerciseApi, draftDao, scheduledDao, support, outbox, moshi, io)
 }

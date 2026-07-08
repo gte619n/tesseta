@@ -35,6 +35,7 @@ class WorkoutSessionViewModelTest {
 
     private val repo: WorkoutSessionRepository = mockk()
     private val timers = WorkoutSessionTimers()
+    private val profileRepo: com.gte619n.healthfitness.data.profile.ProfileRepository = mockk(relaxed = true)
     private val handle = SavedStateHandle(
         mapOf(
             WorkoutsRoutes.ARG_PROGRAM_ID to "p1",
@@ -53,7 +54,7 @@ class WorkoutSessionViewModelTest {
         coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
         every { repo.observeDraft("p1", "s2") } returns draftFlow
         coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
-        return WorkoutSessionViewModel(repo, timers, handle)
+        return WorkoutSessionViewModel(repo, timers, profileRepo, handle)
     }
 
     @Test
@@ -72,7 +73,7 @@ class WorkoutSessionViewModelTest {
     fun `start failure surfaces error`() = runTest {
         coEvery { repo.start("p1", "s2") } returns Result.failure(RuntimeException("not mirrored"))
         coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
-        val vm = WorkoutSessionViewModel(repo, timers, handle)
+        val vm = WorkoutSessionViewModel(repo, timers, profileRepo, handle)
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -125,7 +126,7 @@ class WorkoutSessionViewModelTest {
 
         coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
         every { repo.observeDraft("p1", "s2") } returns draftFlow
-        val vm = WorkoutSessionViewModel(repo, timers, handle)
+        val vm = WorkoutSessionViewModel(repo, timers, profileRepo, handle)
         advanceUntilIdle()
 
         vm.toggleSet(squatKey, 0)
@@ -212,6 +213,60 @@ class WorkoutSessionViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(edited), sets.captured)
+    }
+
+    @Test
+    fun `logging the final set auto-completes without a trailing rest`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+        // One set short of done: squat fully logged, plank 2 of 3.
+        draftFlow.value = ProgramFixtures.activeDraft.copy(
+            logged = mapOf(
+                squatKey to List(3) { LoggedSet(weightLbs = 185.0, reps = 8) },
+                plankKey to List(2) { LoggedSet(durationSeconds = 45) },
+            ),
+        )
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.logTimedSet(plankKey, 40)
+        advanceUntilIdle()
+
+        // The set is still recorded...
+        assertEquals(3, sets.captured.size)
+        // ...but no rest starts, and the finish summary auto-opens with the
+        // one-shot completion flag set for the route's chime.
+        assertNull(timers.rest.value)
+        assertEquals(SessionPrompt.FINISH_SUMMARY, vm.state.value.prompt)
+        assertTrue(vm.state.value.autoCompleted)
+
+        vm.consumeAutoCompleted()
+        assertFalse(vm.state.value.autoCompleted)
+    }
+
+    @Test
+    fun `a non-final set still starts the prescribed rest`() = runTest {
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, any())
+        } returns Result.success(ProgramFixtures.activeDraft)
+        // Squat fully logged, plank 1 of 3 -> logging plank set 2 leaves one to go.
+        draftFlow.value = ProgramFixtures.activeDraft.copy(
+            logged = mapOf(
+                squatKey to List(3) { LoggedSet(weightLbs = 185.0, reps = 8) },
+                plankKey to List(1) { LoggedSet(durationSeconds = 45) },
+            ),
+        )
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.logTimedSet(plankKey, 40)
+        advanceUntilIdle()
+
+        assertEquals(30, timers.rest.value!!.totalSeconds)
+        assertNull(vm.state.value.prompt)
+        assertFalse(vm.state.value.autoCompleted)
     }
 
     @Test
@@ -309,6 +364,72 @@ class WorkoutSessionViewModelTest {
         assertFalse(state.closed)
         assertEquals("boom", state.error)
         assertNull(state.prompt)
+    }
+
+    @Test
+    fun `loadSubstituteOptions fetches alternatives for the session's gym`() = runTest {
+        val squat = ProgramFixtures.activeDraft.sessionSteps()[0].prescription.exercise!!
+        coEvery { repo.availableExercises(any()) } returns Result.success(listOf(squat))
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.loadSubstituteOptions()
+        advanceUntilIdle()
+
+        // The draft's location drives the lookup.
+        val locationId = ProgramFixtures.activeDraft.scheduled.locationId
+        coVerify(exactly = 1) { repo.availableExercises(locationId) }
+        assertEquals(listOf(squat), vm.state.value.substituteOptions)
+        assertFalse(vm.state.value.substituteLoading)
+    }
+
+    @Test
+    fun `substituteExercise swaps via the repository and clears any rest`() = runTest {
+        val replacement = ProgramFixtures.activeDraft.sessionSteps()[0].prescription.exercise!!
+            .copy(exerciseId = "ex-goblet", name = "Goblet Squat")
+        coEvery { repo.substituteExercise("p1", "s2", squatKey, replacement) } returns
+            Result.success(ProgramFixtures.activeDraft)
+        val vm = vm()
+        advanceUntilIdle()
+        timers.startRest(90)
+
+        vm.substituteExercise(squatKey, replacement)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.substituteExercise("p1", "s2", squatKey, replacement) }
+        // A swap starts the slot fresh, so the old movement's rest is dropped.
+        assertNull(timers.rest.value)
+    }
+
+    @Test
+    fun `owner can flag a demo frame as bad`() = runTest {
+        coEvery { profileRepo.cached() } returns com.gte619n.healthfitness.domain.profile.Profile(
+            userId = "u", email = WorkoutSessionViewModel.OWNER_EMAILS.first(), displayName = null, heightCm = null,
+        )
+        coEvery { repo.flagFrame("ex-squat", "start") } returns Result.success(Unit)
+        val vm = vm()
+        advanceUntilIdle()
+        assertTrue(vm.state.value.isOwner)
+
+        vm.flagFrame("ex-squat", "start")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.flagFrame("ex-squat", "start") }
+    }
+
+    @Test
+    fun `a non-owner never flags and never sees the control`() = runTest {
+        coEvery { profileRepo.cached() } returns com.gte619n.healthfitness.domain.profile.Profile(
+            userId = "u", email = "someone@else.com", displayName = null, heightCm = null,
+        )
+        val vm = vm()
+        advanceUntilIdle()
+        assertFalse(vm.state.value.isOwner)
+
+        vm.flagFrame("ex-squat", "start")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.flagFrame(any(), any()) }
     }
 
     @Test

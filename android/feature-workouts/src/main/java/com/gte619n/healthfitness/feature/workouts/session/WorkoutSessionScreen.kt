@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,7 +40,9 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -58,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -122,7 +127,19 @@ fun WorkoutSessionRoute(
     val restTimer by viewModel.restTimer.collectAsStateWithLifecycle()
     val voiceEnabled by audioViewModel.voiceAnnouncements.collectAsStateWithLifecycle()
     val announcer = rememberCoachAnnouncer()
+    val playCompletionChime = rememberCompletionChime()
     LaunchedEffect(state.closed) { if (state.closed) onClose() }
+
+    // "Auto complete workout": the final set just landed — chime once (and, if
+    // voice is on, say so), then clear the one-shot so a recomposition doesn't
+    // replay it. The finish summary is already open (opened by the ViewModel).
+    LaunchedEffect(state.autoCompleted) {
+        if (state.autoCompleted) {
+            playCompletionChime()
+            if (voiceEnabled) announcer.speak("Workout complete.")
+            viewModel.consumeAutoCompleted()
+        }
+    }
 
     // ADR-0012 D6: WorkoutSessionService's shade notification (timer / rest
     // countdown) needs the API 33+ POST_NOTIFICATIONS grant — the foreground
@@ -148,6 +165,13 @@ fun WorkoutSessionRoute(
         voiceEnabled = voiceEnabled,
         announce = announcer::speak,
         onBack = onClose,
+        substituteOptions = state.substituteOptions,
+        substituteLoading = state.substituteLoading,
+        substituteError = state.substituteError,
+        onLoadSubstitutes = viewModel::loadSubstituteOptions,
+        onSubstitute = viewModel::substituteExercise,
+        isOwner = state.isOwner,
+        onFlagFrame = viewModel::flagFrame,
         onToggleSet = viewModel::toggleSet,
         onEditSet = viewModel::editSet,
         onLogTimed = viewModel::logTimedSet,
@@ -170,6 +194,13 @@ fun WorkoutSessionScreen(
     restTimer: RestTimer?,
     voiceEnabled: Boolean = false,
     announce: (String) -> Unit = {},
+    substituteOptions: List<ExerciseSummary> = emptyList(),
+    substituteLoading: Boolean = false,
+    substituteError: String? = null,
+    onLoadSubstitutes: () -> Unit = {},
+    onSubstitute: (PrescriptionKey, ExerciseSummary) -> Unit = { _, _ -> },
+    isOwner: Boolean = false,
+    onFlagFrame: (String, String) -> Unit = { _, _ -> },
     onBack: () -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
@@ -245,6 +276,13 @@ fun WorkoutSessionScreen(
                 overview = overview,
                 voiceEnabled = voiceEnabled,
                 announce = announce,
+                substituteOptions = substituteOptions,
+                substituteLoading = substituteLoading,
+                substituteError = substituteError,
+                onLoadSubstitutes = onLoadSubstitutes,
+                onSubstitute = onSubstitute,
+                isOwner = isOwner,
+                onFlagFrame = onFlagFrame,
                 onShowOverview = { overview = it },
                 onToggleSet = onToggleSet,
                 onEditSet = onEditSet,
@@ -312,6 +350,13 @@ private fun SessionBody(
     overview: Boolean,
     voiceEnabled: Boolean,
     announce: (String) -> Unit,
+    substituteOptions: List<ExerciseSummary>,
+    substituteLoading: Boolean,
+    substituteError: String?,
+    onLoadSubstitutes: () -> Unit,
+    onSubstitute: (PrescriptionKey, ExerciseSummary) -> Unit,
+    isOwner: Boolean,
+    onFlagFrame: (String, String) -> Unit,
     onShowOverview: (Boolean) -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
@@ -365,13 +410,19 @@ private fun SessionBody(
             }
             lastAnnounced = page
         }
-        // When a rest countdown finishes naturally (not skipped), re-announce the
-        // current exercise so the user knows what's up. Skipping rest clears the
-        // timer, restarting this effect with null and cancelling the pending cue.
+        // When a rest countdown starts, announce its length ("Rest 90 seconds");
+        // when it finishes naturally (not skipped), re-announce the current
+        // exercise so the user knows what's up. Skipping rest clears the timer,
+        // restarting this effect with null and cancelling the pending cue.
         LaunchedEffect(restTimer, voiceEnabled) {
             val timer = restTimer ?: return@LaunchedEffect
             if (!voiceEnabled || overview) return@LaunchedEffect
             val remaining = timer.remainingSeconds(Instant.now())
+            // Announce the rest only if it just started — a resume mid-rest
+            // (remaining already below the total) stays silent.
+            if (remaining >= timer.totalSeconds - 1) {
+                announce(restAnnouncement(timer.totalSeconds))
+            }
             if (remaining > 0) delay(remaining * 1_000)
             steps.getOrNull(pagerState.currentPage)?.let { step ->
                 announceStep(step, draft.logged[step.key].orEmpty(), lastSets, announce)
@@ -398,7 +449,11 @@ private fun SessionBody(
             if ((draft.logged[step.key]?.size ?: 0) >= target &&
                 pagerState.currentPage < steps.size - 1
             ) {
-                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                // Run the scroll on [scope], not this effect's coroutine: the
+                // pager flips currentPage at the animation's midpoint, which
+                // re-keys this LaunchedEffect and would otherwise cancel the
+                // scroll half-way (leaving two half-pages on screen).
+                scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
             }
         }
 
@@ -438,6 +493,13 @@ private fun SessionBody(
                     lastSets = lastSets,
                     now = now,
                     restTimer = restTimer,
+                    substituteOptions = substituteOptions,
+                    substituteLoading = substituteLoading,
+                    substituteError = substituteError,
+                    onLoadSubstitutes = onLoadSubstitutes,
+                    onSubstitute = { exercise -> onSubstitute(step.key, exercise) },
+                    isOwner = isOwner,
+                    onFlagFrame = onFlagFrame,
                     onToggleSet = { index -> onToggleSet(step.key, index) },
                     onEditSet = { index, set -> onEditSet(step.key, index, set) },
                     onLogTimed = { seconds -> onLogTimed(step.key, seconds) },
@@ -516,6 +578,13 @@ private fun ExercisePage(
     lastSets: Map<String, List<LoggedSet>>,
     now: Instant,
     restTimer: RestTimer?,
+    substituteOptions: List<ExerciseSummary>,
+    substituteLoading: Boolean,
+    substituteError: String?,
+    onLoadSubstitutes: () -> Unit,
+    onSubstitute: (ExerciseSummary) -> Unit,
+    isOwner: Boolean,
+    onFlagFrame: (String, String) -> Unit,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
     onLogTimed: (Int) -> Unit,
@@ -523,6 +592,7 @@ private fun ExercisePage(
     onDismissRest: () -> Unit,
 ) {
     val prescription = step.prescription
+    var showSwap by remember(step.key) { mutableStateOf(false) }
     // On unfolded / tablet widths, keep the page (and its demo image) from
     // stretching edge-to-edge — a centered, narrower card reads better.
     val expanded = LocalConfiguration.current.screenWidthDp >= EXPANDED_WIDTH_DP
@@ -547,11 +617,36 @@ private fun ExercisePage(
                 Spacer(Modifier.height(4.dp))
                 Text(target, style = Hf.type.monoMd.copy(fontSize = 16.sp), color = Hf.colors.textSecondary)
             }
+            // #4: swap this movement for one the current gym can actually do
+            // (e.g. no barbell). Loads options lazily when the picker opens.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.SwapHoriz,
+                    contentDescription = null,
+                    tint = Hf.colors.accent,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    stringResource(R.string.workout_session_swap),
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.accent,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { showSwap = true; onLoadSubstitutes() }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                )
+            }
             Spacer(Modifier.height(12.dp))
             // Demo hero; the rest countdown takes it over while resting so the
             // timer is unmissable without losing the exercise context.
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                DemoStrip(exercise = prescription.exercise, modifier = Modifier.fillMaxSize())
+                DemoStrip(
+                    exercise = prescription.exercise,
+                    isOwner = isOwner,
+                    onFlagFrame = onFlagFrame,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 if (restTimer != null && restTimer.isRunning(now)) {
                     RestOverlay(
                         restTimer = restTimer,
@@ -581,6 +676,114 @@ private fun ExercisePage(
                     onEditSet = onEditSet,
                     onLogSet = onLogSet,
                 )
+            }
+        }
+    }
+    if (showSwap) {
+        SwapExerciseDialog(
+            currentExerciseId = prescription.exerciseId,
+            options = substituteOptions,
+            loading = substituteLoading,
+            error = substituteError,
+            onPick = { exercise ->
+                onSubstitute(exercise)
+                showSwap = false
+            },
+            onDismiss = { showSwap = false },
+        )
+    }
+}
+
+/**
+ * #4 — the mid-session exercise-swap picker: pick a movement the current gym can
+ * actually do in place of the prescribed one. Lists the location's executable
+ * exercises (the current one filtered out), with loading/empty/error states.
+ */
+@Composable
+private fun SwapExerciseDialog(
+    currentExerciseId: String,
+    options: List<ExerciseSummary>,
+    loading: Boolean,
+    error: String?,
+    onPick: (ExerciseSummary) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val choices = remember(options, currentExerciseId) {
+        options.filter { it.exerciseId != currentExerciseId }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                stringResource(R.string.workout_session_swap_title),
+                style = Hf.type.headingMd,
+                color = Hf.colors.textPrimary,
+            )
+        },
+        text = {
+            when {
+                loading -> Text(
+                    stringResource(R.string.workout_session_swap_loading),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textTertiary,
+                )
+                error != null -> Text(error, style = Hf.type.bodyMd, color = Hf.colors.alert)
+                choices.isEmpty() -> Text(
+                    stringResource(R.string.workout_session_swap_empty),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textTertiary,
+                )
+                else -> LazyColumn(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(choices, key = { it.exerciseId }) { exercise ->
+                        SwapExerciseRow(exercise = exercise, onClick = { onPick(exercise) })
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    stringResource(R.string.workout_session_cancel),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textTertiary,
+                )
+            }
+        },
+        containerColor = Hf.colors.surface,
+    )
+}
+
+@Composable
+private fun SwapExerciseRow(exercise: ExerciseSummary, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
+            .background(Hf.colors.surface, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ExerciseThumbnail(
+            imageUrl = exerciseImageUrl(exercise),
+            contentDescription = exercise.name,
+            size = 40.dp,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                exercise.name,
+                style = Hf.type.headingMd.copy(fontSize = 14.sp),
+                color = Hf.colors.textPrimary,
+            )
+            val muscles = exercise.primaryMuscles.joinToString(", ")
+            if (muscles.isNotBlank()) {
+                Text(muscles, style = Hf.type.bodySm, color = Hf.colors.textTertiary)
             }
         }
     }
@@ -644,6 +847,7 @@ private fun RepSetsSection(
             CompletedRepRow(
                 index = index,
                 set = set,
+                prescription = prescription,
                 exerciseName = exerciseName,
                 canUndo = index == logged.lastIndex,
                 onEditWeight = { onEditSet(index, set.copy(weightLbs = it)) },
@@ -656,6 +860,7 @@ private fun RepSetsSection(
                 setNumber = logged.size + 1,
                 totalSets = totalRows,
                 prefill = prefillFor(prescription, logged, lastSets),
+                prescription = prescription,
                 exerciseName = exerciseName,
                 onLog = { weight, reps -> onLogSet(LoggedSet(weightLbs = weight, reps = reps)) },
             )
@@ -676,6 +881,7 @@ private fun ActiveRepCard(
     setNumber: Int,
     totalSets: Int,
     prefill: SetPrefill,
+    prescription: Prescription,
     exerciseName: String,
     onLog: (Double?, Int?) -> Unit,
 ) {
@@ -705,12 +911,16 @@ private fun ActiveRepCard(
             SetFieldBox(
                 label = stringResource(R.string.workout_session_weight_header),
                 value = formatWeight(weight),
+                // Live target-vs-achieved: dips red the moment the staged load
+                // drops under the prescription, green once it meets it (#8).
+                valueColor = outcomeColor(weightOutcome(prescription, weight)),
                 modifier = Modifier.weight(1f),
                 onClick = { showWeight = true },
             )
             SetFieldBox(
                 label = stringResource(R.string.workout_session_reps_header),
                 value = reps?.toString() ?: "—",
+                valueColor = outcomeColor(repsOutcome(prescription, reps)),
                 modifier = Modifier.weight(1f),
                 onClick = { showReps = true },
             )
@@ -761,6 +971,7 @@ private fun SetFieldBox(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
+    valueColor: Color = Hf.colors.textPrimary,
     onClick: () -> Unit,
 ) {
     Column(modifier = modifier) {
@@ -780,7 +991,7 @@ private fun SetFieldBox(
             Text(
                 value,
                 style = Hf.type.monoLg.copy(fontSize = 32.sp),
-                color = if (value == "—") Hf.colors.textQuaternary else Hf.colors.textPrimary,
+                color = if (value == "—") Hf.colors.textQuaternary else valueColor,
             )
             Icon(
                 Icons.Outlined.Edit,
@@ -797,6 +1008,7 @@ private fun SetFieldBox(
 private fun CompletedRepRow(
     index: Int,
     set: LoggedSet,
+    prescription: Prescription,
     exerciseName: String,
     canUndo: Boolean,
     onEditWeight: (Double?) -> Unit,
@@ -825,10 +1037,15 @@ private fun CompletedRepRow(
         Spacer(Modifier.width(4.dp))
         CompletedValue(
             text = "${formatWeight(set.weightLbs)} ${stringResource(R.string.workout_session_weight_header)}",
+            color = outcomeColor(weightOutcome(prescription, set.weightLbs)),
             onClick = { showWeight = true },
         )
         Text(" × ", style = Hf.type.monoMd, color = Hf.colors.textTertiary)
-        CompletedValue(text = set.reps?.toString() ?: "—", onClick = { showReps = true })
+        CompletedValue(
+            text = set.reps?.toString() ?: "—",
+            color = outcomeColor(repsOutcome(prescription, set.reps)),
+            onClick = { showReps = true },
+        )
         Spacer(Modifier.weight(1f))
         if (canUndo) {
             IconButton(onClick = onUndo, modifier = Modifier.size(36.dp)) {
@@ -860,11 +1077,15 @@ private fun CompletedRepRow(
 }
 
 @Composable
-private fun CompletedValue(text: String, onClick: () -> Unit) {
+private fun CompletedValue(
+    text: String,
+    onClick: () -> Unit,
+    color: Color = Hf.colors.textPrimary,
+) {
     Text(
         text,
         style = Hf.type.monoMd,
-        color = Hf.colors.textPrimary,
+        color = color,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
@@ -901,6 +1122,18 @@ private fun AllSetsDoneRow(total: Int) {
             color = Hf.colors.textSecondary,
         )
     }
+}
+
+/**
+ * Target-vs-achieved text colour (#8): green when the logged value met or beat
+ * the prescription, red when it fell short, plain text when there's nothing to
+ * compare against.
+ */
+@Composable
+private fun outcomeColor(outcome: TargetOutcome): Color = when (outcome) {
+    TargetOutcome.HIT -> Hf.colors.good
+    TargetOutcome.MISS -> Hf.colors.alert
+    TargetOutcome.NEUTRAL -> Hf.colors.textPrimary
 }
 
 /** Whole numbers render without a trailing ".0"; fractional loads keep one place. */
@@ -1004,12 +1237,14 @@ private fun CompletedTimedRow(
 
 /**
  * A count-up hold timer: tap to start, tap again to log the elapsed seconds as
- * the next timed set. Resets whenever the exercise changes (it is `remember`ed
- * inside the per-page composable).
+ * the next timed set. The running start is held in `rememberSaveable` (as epoch
+ * millis) so navigating away and back to this exercise — or a config change —
+ * does not reset a hold that's already counting.
  */
 @Composable
 private fun HoldTimer(targetSeconds: Int?, now: Instant, onLog: (Int) -> Unit) {
-    var startedAt by remember { mutableStateOf<Instant?>(null) }
+    var startedAtMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    val startedAt = startedAtMillis?.let(Instant::ofEpochMilli)
     val running = startedAt != null
     val elapsed = startedAt?.let { Duration.between(it, now).seconds.coerceAtLeast(0) } ?: 0L
     Spacer(Modifier.height(10.dp))
@@ -1017,10 +1252,10 @@ private fun HoldTimer(targetSeconds: Int?, now: Instant, onLog: (Int) -> Unit) {
         onClick = {
             val start = startedAt
             if (start == null) {
-                startedAt = Instant.now()
+                startedAtMillis = Instant.now().toEpochMilli()
             } else {
                 onLog(Duration.between(start, Instant.now()).seconds.coerceAtLeast(0).toInt())
-                startedAt = null
+                startedAtMillis = null
             }
         },
         modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -1063,17 +1298,25 @@ private fun HoldTimer(targetSeconds: Int?, now: Instant, onLog: (Int) -> Unit) {
  * nothing when the exercise has no usable frames.
  */
 @Composable
-private fun DemoStrip(exercise: ExerciseSummary?, modifier: Modifier = Modifier) {
+private fun DemoStrip(
+    exercise: ExerciseSummary?,
+    isOwner: Boolean = false,
+    onFlagFrame: (String, String) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier,
+) {
+    // Keep each frame's stable key alongside its url/label so the owner-only
+    // "flag as bad" control (#9) can reference the exact frame it's showing.
     val frames = remember(exercise) {
         exercise?.demoFrames
             ?.withIndex()
             ?.sortedWith(compareBy({ it.value.order }, { it.index }))
             ?.mapNotNull { indexed ->
-                indexed.value.imageUrl?.let { url -> url to indexed.value.label }
+                indexed.value.imageUrl?.let { url -> DemoFrameView(url, indexed.value.label, indexed.value.key) }
             }
             .orEmpty()
     }
     var index by remember(frames) { mutableStateOf(0) }
+    var flagging by remember(exercise) { mutableStateOf(false) }
     if (frames.size > 1) {
         LaunchedEffect(frames) {
             while (true) {
@@ -1107,13 +1350,13 @@ private fun DemoStrip(exercise: ExerciseSummary?, modifier: Modifier = Modifier)
                 modifier = Modifier.fillMaxSize(),
             ) { i ->
                 HfAsyncImage(
-                    model = frames[i].first,
+                    model = frames[i].url,
                     contentDescription = exercise?.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            val label = frames[safeIndex].second
+            val label = frames[safeIndex].label
             if (label.isNotBlank()) {
                 Text(
                     label,
@@ -1126,9 +1369,47 @@ private fun DemoStrip(exercise: ExerciseSummary?, modifier: Modifier = Modifier)
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 )
             }
+            // #9: owner-only "flag this demo image as bad" — tags the exact frame
+            // on screen so it re-enters media review. Hidden from ordinary users.
+            if (isOwner) {
+                IconButton(
+                    onClick = { flagging = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(32.dp)
+                        .background(Hf.colors.canvas.copy(alpha = 0.85f), RoundedCornerShape(8.dp)),
+                ) {
+                    Icon(
+                        Icons.Outlined.Flag,
+                        contentDescription = stringResource(R.string.workout_session_flag_image),
+                        tint = Hf.colors.alert,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            if (flagging) {
+                val frameKey = frames[safeIndex].key
+                val exerciseId = exercise?.exerciseId
+                ConfirmDialog(
+                    title = stringResource(R.string.workout_session_flag_title),
+                    message = stringResource(R.string.workout_session_flag_message),
+                    confirmLabel = stringResource(R.string.workout_session_flag_confirm),
+                    dismissLabel = stringResource(R.string.workout_session_cancel),
+                    destructive = true,
+                    onConfirm = {
+                        if (exerciseId != null) onFlagFrame(exerciseId, frameKey)
+                        flagging = false
+                    },
+                    onDismiss = { flagging = false },
+                )
+            }
         }
     }
 }
+
+/** A demo frame ready to render: its image [url], [label], and stable plan [key] (#9). */
+private data class DemoFrameView(val url: String, val label: String, val key: String)
 
 // ---- reference overview ----
 

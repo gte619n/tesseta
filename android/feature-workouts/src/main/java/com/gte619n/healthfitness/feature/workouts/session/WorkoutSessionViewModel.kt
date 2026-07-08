@@ -4,10 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
+import com.gte619n.healthfitness.data.profile.ProfileRepository
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +48,25 @@ data class WorkoutSessionUiState(
      * best-effort fetch lands; prefill falls back to the designed target.
      */
     val lastSets: Map<String, List<LoggedSet>> = emptyMap(),
+    /**
+     * Set for one frame when logging a set completes the *whole* session: the
+     * logger auto-opens the finish summary (no trailing rest) and plays a
+     * completion chime. The route consumes it via [consumeAutoCompleted].
+     */
+    val autoCompleted: Boolean = false,
+    /**
+     * #4 exercise substitution — the movements executable at this session's gym,
+     * loaded on demand when the swap picker opens. [substituteLoading] covers the
+     * fetch; [substituteError] is a best-effort load failure (offline).
+     */
+    val substituteOptions: List<ExerciseSummary> = emptyList(),
+    val substituteLoading: Boolean = false,
+    val substituteError: String? = null,
+    /**
+     * #9 — true only for the app owner (by account email). Gates the demo-image
+     * "flag as bad" affordance so ordinary users never see it.
+     */
+    val isOwner: Boolean = false,
 )
 
 /**
@@ -60,6 +81,7 @@ data class WorkoutSessionUiState(
 class WorkoutSessionViewModel @Inject constructor(
     private val repository: WorkoutSessionRepository,
     private val timers: WorkoutSessionTimers,
+    private val profileRepository: ProfileRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -88,6 +110,17 @@ class WorkoutSessionViewModel @Inject constructor(
         viewModelScope.launch {
             val last = repository.lastSets(programId, scheduledId)
             _state.update { it.copy(lastSets = last) }
+        }
+        // #9 — owner gating for the demo-image flag affordance. Best-effort:
+        // read the cached profile first (instant), then refresh; any failure
+        // just leaves the flag hidden.
+        viewModelScope.launch {
+            val cachedEmail = runCatching { profileRepository.cached()?.email }.getOrNull()
+            val email = cachedEmail
+                ?: runCatching { profileRepository.get().getOrNull()?.email }.getOrNull()
+            if (email != null && OWNER_EMAILS.any { it.equals(email, ignoreCase = true) }) {
+                _state.update { it.copy(isOwner = true) }
+            }
         }
         viewModelScope.launch {
             val started = repository.start(programId, scheduledId)
@@ -122,8 +155,9 @@ class WorkoutSessionViewModel @Inject constructor(
         if (setIndex < current.size) {
             persistSets(key, current.toMutableList().apply { removeAt(setIndex) })
         } else {
-            persistSets(key, current + newSet(draft, key))
-            draft.prescription(key)?.restSeconds?.let { timers.startRest(it, now()) }
+            val updated = current + newSet(draft, key)
+            persistSets(key, updated)
+            startRestOrComplete(draft, key, updated, now())
         }
     }
 
@@ -141,8 +175,9 @@ class WorkoutSessionViewModel @Inject constructor(
             reps = edited.reps ?: base.reps,
             rpe = edited.rpe ?: base.rpe,
         )
-        persistSets(key, draft.logged[key].orEmpty() + set)
-        draft.prescription(key)?.restSeconds?.let { timers.startRest(it, now()) }
+        val updated = draft.logged[key].orEmpty() + set
+        persistSets(key, updated)
+        startRestOrComplete(draft, key, updated, now())
     }
 
     /**
@@ -159,8 +194,9 @@ class WorkoutSessionViewModel @Inject constructor(
             restSeconds = restSecondsBefore(draft, at),
             completedAt = at,
         )
-        persistSets(key, current + set)
-        draft.prescription(key)?.restSeconds?.let { timers.startRest(it, at) }
+        val updated = current + set
+        persistSets(key, updated)
+        startRestOrComplete(draft, key, updated, at)
     }
 
     /** Replace one logged set after an inline weight/reps/duration edit. */
@@ -169,6 +205,81 @@ class WorkoutSessionViewModel @Inject constructor(
         val current = draft.logged[key].orEmpty()
         if (setIndex !in current.indices) return
         persistSets(key, current.toMutableList().also { it[setIndex] = set })
+    }
+
+    /**
+     * After a set is logged, either start the prescribed rest — or, if that set
+     * completed the whole session, skip the rest entirely and auto-open the
+     * finish summary (the "auto complete workout" behaviour: no dangling rest
+     * after the last set, straight to the summary + completion chime).
+     * [updated] is the sets list about to land on the draft, tested before the
+     * Room round-trip so the check doesn't lag a frame behind.
+     */
+    private fun startRestOrComplete(
+        draft: WorkoutSessionDraft,
+        key: PrescriptionKey,
+        updated: List<LoggedSet>,
+        at: Instant,
+    ) {
+        if (draft.isComplete(draft.logged + (key to updated))) {
+            timers.clearRest()
+            _state.update { it.copy(prompt = SessionPrompt.FINISH_SUMMARY, autoCompleted = true) }
+        } else {
+            draft.prescription(key)?.restSeconds?.let { timers.startRest(it, at) }
+        }
+    }
+
+    /** The route has played the completion chime; clear the one-shot flag. */
+    fun consumeAutoCompleted() = _state.update { it.copy(autoCompleted = false) }
+
+    /**
+     * #4 — load the movements executable at this session's gym for the swap
+     * picker. Reloads on each open so a just-updated gym is reflected; the
+     * options stay until the next load so re-opening is instant.
+     */
+    fun loadSubstituteOptions() {
+        val locationId = _state.value.draft?.scheduled?.locationId
+        if (locationId.isNullOrBlank()) {
+            _state.update { it.copy(substituteError = "This session has no gym to swap within.") }
+            return
+        }
+        _state.update { it.copy(substituteLoading = true, substituteError = null) }
+        viewModelScope.launch {
+            repository.availableExercises(locationId)
+                .onSuccess { options ->
+                    _state.update { it.copy(substituteLoading = false, substituteOptions = options) }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(
+                            substituteLoading = false,
+                            substituteError = e.message ?: "Couldn't load alternatives",
+                        )
+                    }
+                }
+        }
+    }
+
+    /** #4 — swap the exercise at [key] for [exercise] in the live draft. */
+    fun substituteExercise(key: PrescriptionKey, exercise: ExerciseSummary) {
+        _state.value.draft ?: return
+        // A swap starts the slot fresh — drop any rest tied to the old movement.
+        timers.clearRest()
+        viewModelScope.launch {
+            repository.substituteExercise(programId, scheduledId, key, exercise).onFailure { e ->
+                _state.update { it.copy(error = e.message ?: "Couldn't swap the exercise") }
+            }
+        }
+    }
+
+    /** #9 — owner flags a demo frame as bad; no-op for non-owners (defense in depth). */
+    fun flagFrame(exerciseId: String, frameKey: String) {
+        if (!_state.value.isOwner) return
+        viewModelScope.launch {
+            repository.flagFrame(exerciseId, frameKey).onFailure { e ->
+                _state.update { it.copy(error = e.message ?: "Couldn't flag the image") }
+            }
+        }
     }
 
     /** "Skip rest" — stop the shared countdown early. */
@@ -285,5 +396,8 @@ class WorkoutSessionViewModel @Inject constructor(
     companion object {
         /** A gap longer than this is a break, not a rest between sets. */
         const val MAX_TRACKED_REST_SECONDS: Long = 30L * 60
+
+        /** #9 — the app owner accounts; the only ones shown the demo-image flag control. */
+        val OWNER_EMAILS: Set<String> = setOf("evan.ruff@gmail.com", "evan.ruff@oxos.com")
     }
 }

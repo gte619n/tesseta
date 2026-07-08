@@ -4,7 +4,9 @@ import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.feature.workouts.program.ProgramFixtures
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionFormatTest {
@@ -101,6 +103,67 @@ class SessionFormatTest {
             ),
         )
         assertEquals(1, squatDone.firstIncompleteStepIndex())
+    }
+
+    @Test
+    fun `session is complete only when every prescribed set is logged`() {
+        val draft = ProgramFixtures.activeDraft
+        // The fixture has squat (1 of 3) and plank (0 of 3) -> not complete.
+        assertFalse(draft.isComplete())
+
+        // All three of each prescription's sets logged -> complete.
+        val allDone = draft.copy(
+            logged = mapOf(
+                PrescriptionKey("b-main", 0) to List(3) { LoggedSet(weightLbs = 185.0, reps = 8) },
+                PrescriptionKey("b-core", 0) to List(3) { LoggedSet(durationSeconds = 45) },
+            ),
+        )
+        assertTrue(allDone.isComplete())
+
+        // The projected overload sees the map about to be persisted, so the last
+        // set completes the session before Room echoes it back.
+        val oneLeft = draft.copy(
+            logged = mapOf(
+                PrescriptionKey("b-main", 0) to List(3) { LoggedSet(weightLbs = 185.0, reps = 8) },
+                PrescriptionKey("b-core", 0) to List(2) { LoggedSet(durationSeconds = 45) },
+            ),
+        )
+        assertFalse(oneLeft.isComplete())
+        assertTrue(
+            oneLeft.isComplete(
+                oneLeft.logged + (PrescriptionKey("b-core", 0) to List(3) { LoggedSet(durationSeconds = 45) }),
+            ),
+        )
+    }
+
+    @Test
+    fun `reps outcome is a hit at or above the range floor, a miss below`() {
+        // Squat range is 8-10.
+        assertEquals(TargetOutcome.HIT, repsOutcome(squat, 8))
+        assertEquals(TargetOutcome.HIT, repsOutcome(squat, 12))
+        assertEquals(TargetOutcome.MISS, repsOutcome(squat, 7))
+        assertEquals(TargetOutcome.NEUTRAL, repsOutcome(squat, null))
+        // A timed exercise has no rep range -> nothing to compare.
+        assertEquals(TargetOutcome.NEUTRAL, repsOutcome(plank, 5))
+    }
+
+    @Test
+    fun `weight outcome compares against the target load when one exists`() {
+        val loaded = squat.copy(targetWeightLbs = 185.0)
+        assertEquals(TargetOutcome.HIT, weightOutcome(loaded, 185.0))
+        assertEquals(TargetOutcome.HIT, weightOutcome(loaded, 200.0))
+        assertEquals(TargetOutcome.MISS, weightOutcome(loaded, 180.0))
+        assertEquals(TargetOutcome.NEUTRAL, weightOutcome(loaded, null))
+        // No target load on the base squat fixture -> nothing to compare.
+        assertEquals(TargetOutcome.NEUTRAL, weightOutcome(squat, 185.0))
+    }
+
+    @Test
+    fun `rest announcement phrases minutes and seconds`() {
+        assertEquals("Rest 45 seconds.", restAnnouncement(45))
+        assertEquals("Rest 1 minute 30 seconds.", restAnnouncement(90))
+        assertEquals("Rest 2 minutes.", restAnnouncement(120))
+        assertEquals("Rest 1 minute.", restAnnouncement(60))
     }
 
     @Test

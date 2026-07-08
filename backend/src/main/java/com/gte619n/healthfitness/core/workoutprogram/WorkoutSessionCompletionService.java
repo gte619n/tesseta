@@ -48,8 +48,19 @@ public class WorkoutSessionCompletionService {
     /**
      * Actuals for one prescription. Prescriptions have no id, so entries key
      * by {@code (blockId, orderIndex)} against the session snapshot.
+     *
+     * <p>{@code exerciseId} is the exercise actually performed for that slot:
+     * null (or the designed exercise) for a normal set, or the substitute the
+     * user swapped in mid-session — e.g. their gym has no barbell (#4). Recorded
+     * so history reflects what was really done rather than the prescribed
+     * movement. Idempotent: a repeat PUT re-applies the same substitute.
      */
-    public record LoggedPrescription(String blockId, int orderIndex, List<LoggedSet> sets) {}
+    public record LoggedPrescription(String blockId, int orderIndex, List<LoggedSet> sets, String exerciseId) {
+        /** Back-compat: a logged prescription performed as designed (no substitution). */
+        public LoggedPrescription(String blockId, int orderIndex, List<LoggedSet> sets) {
+            this(blockId, orderIndex, sets, null);
+        }
+    }
 
     /**
      * Rejected upsert. Carries the flat human-readable issue list (same shape
@@ -121,16 +132,20 @@ public class WorkoutSessionCompletionService {
         // clears everything), so a repeat PUT is a true upsert.
         boolean completed = status == ScheduledStatus.COMPLETED;
         Map<String, List<LoggedSet>> setsByKey = new HashMap<>();
+        Map<String, String> substituteByKey = new HashMap<>();
         if (completed) {
             for (LoggedPrescription e : entries) {
                 setsByKey.put(key(e.blockId(), e.orderIndex()), e.sets() == null ? List.of() : e.sets());
+                if (e.exerciseId() != null && !e.exerciseId().isBlank()) {
+                    substituteByKey.put(key(e.blockId(), e.orderIndex()), e.exerciseId());
+                }
             }
         }
         ScheduledWorkout updated = new ScheduledWorkout(
             sw.userId(), sw.programId(), sw.scheduledId(), sw.date(),
             sw.phaseId(), sw.dayId(), sw.dayLabel(), sw.weekIndexInPhase(),
             sw.isDeload(), sw.locationId(), status,
-            withLoggedSets(sw.session(), setsByKey),
+            withLoggedSets(sw.session(), setsByKey, substituteByKey),
             completed ? completedAt : null,
             completed ? durationSeconds : null
         );
@@ -240,16 +255,24 @@ public class WorkoutSessionCompletionService {
 
     // ---- snapshot rewrite ----
 
-    private static WorkoutDay withLoggedSets(WorkoutDay session, Map<String, List<LoggedSet>> setsByKey) {
+    private static WorkoutDay withLoggedSets(
+        WorkoutDay session,
+        Map<String, List<LoggedSet>> setsByKey,
+        Map<String, String> substituteByKey
+    ) {
         if (session == null || session.blocks() == null) return session;
         List<Block> blocks = new ArrayList<>();
         for (Block b : session.blocks()) {
             List<Prescription> rxs = new ArrayList<>();
             if (b.prescriptions() != null) {
                 for (Prescription rx : b.prescriptions()) {
-                    List<LoggedSet> sets = setsByKey.get(key(b.blockId(), rx.orderIndex()));
+                    String k = key(b.blockId(), rx.orderIndex());
+                    List<LoggedSet> sets = setsByKey.get(k);
+                    // A mid-session substitute (#4) re-points the slot at the
+                    // exercise actually performed; absent, the designed one stands.
+                    String exerciseId = substituteByKey.getOrDefault(k, rx.exerciseId());
                     rxs.add(new Prescription(
-                        rx.exerciseId(), rx.orderIndex(), rx.sets(), rx.repsMin(), rx.repsMax(),
+                        exerciseId, rx.orderIndex(), rx.sets(), rx.repsMin(), rx.repsMax(),
                         rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(),
                         rx.notes(), rx.deloadModifier(),
                         sets == null ? null : List.copyOf(sets)));

@@ -126,14 +126,23 @@ class WorkoutSessionService : Service() {
         val repo = withContext(Dispatchers.IO) { sessions.get() }
         // observeDrafts is newest-started-first; only one session is ever
         // realistically in flight, but if two exist the newest wins.
+        // The endsAt of the last rest we saw — a *new* value means the user
+        // logged the next set, so the previous rest-end alert (if any) is stale.
+        var lastRestEndsAt: Instant? = null
         combine(repo.observeDrafts().map { it.firstOrNull() }, restWithExpiry()) { draft, rest ->
             draft to rest
         }.collect { (draft, rest) ->
             if (draft == null) {
                 stopSession()
             } else {
+                // Starting the next set (a fresh rest) removes the lingering
+                // "rest complete" heads-up from the rest that just ended (#6).
+                if (rest != null && rest.endsAt != lastRestEndsAt) {
+                    NotificationManagerCompat.from(this).cancel(REST_ALERT_NOTIFICATION_ID)
+                }
                 postNotification(buildNotification(draft, rest))
             }
+            lastRestEndsAt = rest?.endsAt
         }
     }
 
@@ -214,6 +223,9 @@ class WorkoutSessionService : Service() {
     }
 
     private fun stopSession() {
+        // The ongoing timer is torn down by stopForeground; the separate
+        // rest-end heads-up isn't, so clear it explicitly (#6).
+        NotificationManagerCompat.from(this).cancel(REST_ALERT_NOTIFICATION_ID)
         watchJob?.cancel()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
