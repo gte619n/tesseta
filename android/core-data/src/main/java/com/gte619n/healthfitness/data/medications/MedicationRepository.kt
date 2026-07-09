@@ -58,6 +58,7 @@ class MedicationRepository @Inject internal constructor(
     private val dao: MedicationDao,
     private val adherenceDao: MedicationAdherenceDao,
     private val support: MirrorRepositorySupport,
+    private val dosesCache: TodaysDosesCache,
     moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
@@ -235,14 +236,31 @@ class MedicationRepository @Inject internal constructor(
         // Server-derived, adherence-computed checklist (D9). Anchor "today" to the
         // device's local date so it resets at the user's local midnight.
         val today = LocalDate.now()
-        // Fetch the live projection (the authoritative window/dose layout); fall
-        // back to an empty base when offline so the overlay still surfaces what the
-        // user just logged this session.
+        // Fetch the live projection (the authoritative window/dose layout) and cache
+        // it for the next cold/offline open; on failure fall back to today's cached
+        // list (offline-fix — the full screen used to reset to empty here), then to
+        // an empty base so the overlay still surfaces what the user just logged.
         val base = runCatching { api.today(today.toString()).map { MedicationMapper.toDomain(it) } }
-            .getOrDefault(emptyList())
+            .onSuccess { dosesCache.write(today.toString(), it) }
+            .getOrElse { dosesCache.read(today.toString()) ?: emptyList() }
         // #24: overlay the offline adherence mirror so a just-logged/undone dose
         // shows immediately, before the server projection reconciles on the next
         // pull. An ACTIVE mirror row ⇒ taken; a tombstoned (undone) row ⇒ not taken.
+        overlayMirroredAdherence(base, today)
+    }
+
+    /**
+     * offline-fix: local-only seed for the full Today's Doses screen — reads today's
+     * cached server projection (never hits the network) and applies the same offline
+     * adherence overlay [todaysDoses] does. The screen renders this INSTANTLY on open
+     * (no spinner) and then [todaysDoses] revalidates from the network. Returns null
+     * when nothing is cached for today (cold first open), so the caller falls through
+     * to the network load / error, matching the dashboard card's stale-while-
+     * revalidate flow.
+     */
+    suspend fun cachedTodaysDoses(): List<TodaysDose>? = withContext(io) {
+        val today = LocalDate.now()
+        val base = dosesCache.read(today.toString()) ?: return@withContext null
         overlayMirroredAdherence(base, today)
     }
 

@@ -97,7 +97,11 @@ class MedicationRepositoryTest {
         coEvery { drugRepo.catalog() } answers { fakeDrugs.values.toList() }
         coEvery { drugRepo.get(any()) } answers { fakeDrugs[firstArg<String>()] ?: throw NoSuchElementException(firstArg<String>()) }
         every { drugRepo.lookupStream(any()) } returns emptyFlow()
-        repository = MedicationRepository(api, drugRepo, dao, adherenceDao, support, MedsTestMoshi.instance, Dispatchers.Unconfined)
+        // offline-fix: today's-doses cache is a DataStore wrapper; a relaxed mock
+        // keeps write() a no-op and read() a cold miss (null) so the network path
+        // under MockWebServer is exercised unchanged.
+        val dosesCache = io.mockk.mockk<TodaysDosesCache>(relaxed = true)
+        repository = MedicationRepository(api, drugRepo, dao, adherenceDao, support, dosesCache, MedsTestMoshi.instance, Dispatchers.Unconfined)
     }
 
     @After

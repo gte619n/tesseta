@@ -109,6 +109,9 @@ internal fun fakeMedicationRepository(
     coEvery { repo.reactivate(any(), any()) } returns sampleMedication()
     coEvery { repo.delete(any()) } returns Unit
     coEvery { repo.todaysDoses() } returns doses
+    // offline-fix: default to a cold cache (null) so the ViewModel falls through to
+    // the network path; cache-seed behaviour is stubbed explicitly where tested.
+    coEvery { repo.cachedTodaysDoses() } returns null
     return repo
 }
 
