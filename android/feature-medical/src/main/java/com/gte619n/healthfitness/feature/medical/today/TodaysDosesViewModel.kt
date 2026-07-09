@@ -35,12 +35,26 @@ class TodaysDosesViewModel @Inject constructor(
         refresh()
     }
 
+    /**
+     * offline-fix: stale-while-revalidate, matching the dashboard card. Seed from
+     * the cache first (instant, no spinner) THEN revalidate from the network — both
+     * in one coroutine so the fresh result always wins the race and can't be clobbered
+     * by a late cache seed. Only shows a spinner on a cold first open (empty cache),
+     * and only surfaces an error when there's nothing already on screen.
+     */
     fun refresh() {
         viewModelScope.launch {
+            if (_state.value !is TodaysDosesUiState.Ready) {
+                runCatching { medications.cachedTodaysDoses() }.getOrNull()?.let {
+                    _state.value = TodaysDosesUiState.Ready(it)
+                }
+            }
             runCatching { medications.todaysDoses() }
                 .onSuccess { _state.value = TodaysDosesUiState.Ready(it) }
                 .onFailure {
-                    _state.value = TodaysDosesUiState.Error(it.message ?: "Could not load doses")
+                    if (_state.value !is TodaysDosesUiState.Ready) {
+                        _state.value = TodaysDosesUiState.Error(it.message ?: "Could not load doses")
+                    }
                 }
         }
     }
