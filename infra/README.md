@@ -3,6 +3,11 @@
 One-time GCP provisioning for `health-fitness-160` (region `us-central1`).
 Idempotent — safe to re-run.
 
+> **Deploying, not provisioning?** How code ships to production (the Cloud Build
+> triggers, canary + rollback, what deploys on merge to `main`) is documented in
+> [`docs/reference/deployment.md`](../docs/reference/deployment.md). This file
+> covers the one-time *setup* those pipelines depend on.
+
 ## Setup sequence
 
 1. `gcloud auth login`

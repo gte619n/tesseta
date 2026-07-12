@@ -18,6 +18,7 @@ below before changing anything.
 | [`docs/reference/api-surface.md`](docs/reference/api-surface.md) | Every REST/SSE endpoint by domain |
 | [`docs/reference/patterns.md`](docs/reference/patterns.md) | Auth, ingestion, Goals metric engine, Gemini, streaming, caching |
 | [`docs/reference/feature-catalog.md`](docs/reference/feature-catalog.md) | What's shipped / deferred / fixture per platform |
+| [`docs/reference/deployment.md`](docs/reference/deployment.md) | CI/CD — how code ships to production, targets, rollback |
 | [`docs/decisions/`](docs/decisions/) | Architecture Decision Records |
 | `backend/CLAUDE.md`, `web/CLAUDE.md`, `android/CLAUDE.md` | Per-component conventions |
 
