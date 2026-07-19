@@ -19,8 +19,14 @@ the `iss` claim.
   + `JwtIssuerValidator` for session access tokens. Both decode to a
   `JwtAuthenticationToken` with `sub`=userId, so the rest of the chain is
   identical. `SessionTokenService` mints access tokens and rotates opaque
-  refresh tokens (stored hashed in `refreshTokens/{tokenId}`); `AuthController`
-  exposes `/api/auth/{exchange,refresh,logout}`. With no `app.session.signing-key`
+  refresh tokens (stored hashed in `refreshTokens/{tokenId}`) using a
+  **successor-chain rotation** (ADR-0019): each token is single-use and points
+  to its replacement via `replacedBy`; a refresh walks the chain to the live
+  tip, and a benign lost-response replay inside a reuse-grace window
+  (`app.session.reuse-grace`) is honoured rather than treated as theft — only a
+  genuinely dead/revoked chain burns the whole token family (the fix for the
+  flaky-connectivity logout bug). `AuthController` exposes
+  `/api/auth/{exchange,refresh,logout,dev-login}`. With no `app.session.signing-key`
   configured the decoder accepts Google tokens only. `UserProvisioningFilter`
   runs after the bearer filter and calls `UserService.provisionIfAbsent` so
   `users/{sub}` always exists. `SecurityContextCurrentUserProvider`
@@ -92,10 +98,10 @@ metric event and let the evaluator react.
 1. **Publish.** After a write that changes a bindable metric, the writer
    publishes `MetricChangedEvent(userId, metricKey, occurredAt)` via
    `MetricChangedPublisher` (a thin wrapper over `ApplicationEventPublisher`,
-   published *after* save). Publishers: `BloodController`,
+   published *after* save). Publishers: `BloodController`, `BloodTestService`,
    `AdherenceController`, `WebhookHandlerService`, `DailyMetricWebhookHandler`,
    `NutritionService`, `MacroTargetService`, `WorkoutRepository`,
-   `DailyMetricRepository`.
+   `WorkoutSessionCompletionService`, `DailyMetricRepository`.
 2. **Consume.** `StepEvaluationService.on(@EventListener)` runs **synchronously
    on the writer's thread** (try/catch isolates goal failures from the write).
    It maps the dotted key (`MetricKey.fromKey`), finds bound steps
@@ -133,9 +139,12 @@ is intentionally absent).
 | Drug lookup (grounded) | `DrugLookupService` | `gemini-3.5-flash` |
 | Blood-test extraction | `BloodTestExtractor` | `gemini-3.5-flash` |
 | DEXA extraction | `DexaExtractor` | `gemini-3.5-flash` |
-| Nutrition label / meal photo | `NutritionLabelExtractor`, `MealPhotoExtractor` | `gemini-3.5-flash` |
+| Nutrition label / meal photo / description | `NutritionLabelExtractor`, `MealPhotoExtractor`, `MealDescriptionExtractor` | `gemini-3.5-flash` |
 | Equipment parsing | `EquipmentParserService` | `gemini-3.5-flash` |
-| Drug / food / equipment images | `DrugImageGenerator`, `GeminiFoodImageGenerator`, `EquipmentImageService` | `gemini-3.1-flash-image-preview` |
+| Exercise frame plan / metadata (IMPL-14/19) | `GeminiExerciseFramePlanner` (`EXERCISE_PLAN_MODEL`), `GeminiExerciseMetadataEnricher` | `gemini-3.5-flash` |
+| Workout post-session recap (IMPL-COACH) | `GeminiWorkoutCoachClient` (`WORKOUT_COACH_GEMINI_MODEL`) | `gemini-3.5-flash` |
+| Workout block classifier (split job) | `GeminiWorkoutBlockClassifier` (`APP_WORKOUTS_SPLIT_MODEL`) | `gemini-3.5-flash` |
+| Drug / food / equipment / exercise images | `DrugImageGenerator` (`IMAGEN_MODEL`), `GeminiFoodImageGenerator`, `EquipmentImageService`, `GeminiExerciseMediaService` (`EXERCISE_MEDIA_MODEL`) | `gemini-3.1-flash-image-preview` |
 | **Goal chat** | `GeminiGoalChatClient` | **`gemini-3.1-pro-preview`** — a documented Pro exception (ADR-0005), via env `GOALS_GEMINI_MODEL`. |
 | **Workout-program designer** | `GeminiWorkoutProgramChatClient` | **`gemini-3.1-pro-preview`** — a documented Pro exception (ADR-0013), via env `WORKOUT_PROGRAM_GEMINI_MODEL`. |
 
@@ -189,6 +198,7 @@ path that feeds a cache must `@CacheEvict`:
 | `drugById` / `drugCatalog` | 5 min | evicted on drug save/delete |
 | `userById` | 5 min | every `UserRepository` mutator is `@CacheEvict`; batch `findByIds` (chunked `whereIn`, ≤10) is deliberately uncached |
 | `userHealthSnapshot` | 60 s | the ~24-metric Goals-chat snapshot; short TTL so fresh writes surface within a minute |
+| `exerciseDigest` | 60 s | per-user exercise-performance scan (IMPL-18 designer grounding); maxSize 5000 |
 
 Pair caching with the indexed `findLatest*` reads in
 [data-model.md](data-model.md#latest-value-reads-findlatest).

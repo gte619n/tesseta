@@ -26,10 +26,12 @@ below before changing anything.
 
 Auth (Google ID tokens across web/phone/wear), profile & unit preferences,
 Google Health ingestion, dashboard, blood markers + lab-PDF extraction, body
-composition + DEXA, medications + adherence, AI-planned Goals, nutrition
-tracking + capture, and gyms/equipment. Admin surfaces (drug & equipment
-catalogs) are web-only. See the
-[feature catalog](docs/reference/feature-catalog.md) for the full state,
+composition + DEXA, medications + adherence + on-device dose reminders,
+AI-planned Goals, nutrition tracking + capture, gyms/equipment, an exercise
+catalog with generated demos, and periodized workout programs — including an
+AI program designer, a full-screen set-by-set workout coach, and workout
+history. Admin surfaces (drug, equipment & exercise catalogs) are web-only. See
+the [feature catalog](docs/reference/feature-catalog.md) for the full state,
 including deferred work (most Wear OS surfaces).
 
 ## Quickstart
