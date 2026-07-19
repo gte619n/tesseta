@@ -78,8 +78,11 @@ an outbox and replayed. **DataStore** holds only small key/value state (the
 ID-token cache and unit prefs). Networking is Retrofit + OkHttp (20 MB disk
 cache). Hilt DI is fully wired; a single `NavHost` registers per-feature nav
 graphs, with a phone-only "More" hub for parity features. `core-domain` holds
-repository interfaces, `core-data` the mirror/Retrofit implementations + network
-clients, `core-ui` the `Hf` design tokens and shared primitives. On-device
+the domain models/DTOs the repositories return (not interfaces — repos are
+concrete `@Inject` classes in `core-data`); `core-data` holds those repository
+implementations + the mirror/outbox/`SyncEngine` and network clients, `core-ui`
+the `Hf` design tokens and shared primitives, and `core-chat` the shared SSE
+chat plumbing. On-device
 Health Connect is **not integrated** — health data arrives backend-side via the
 Google Health API; a dedicated `core-health` module would house device-side
 access if/when that lands. Wear shares `core-domain` and never depends on `app`.

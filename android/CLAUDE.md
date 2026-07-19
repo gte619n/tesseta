@@ -3,7 +3,7 @@
 - Modular Compose architecture. **All UI in Compose**, no XML layouts beyond
   the obligatory theme XML and manifest.
 - **DI**: Hilt — fully wired (`@Module @InstallIn(SingletonComponent)` providers
-  across `app` and `core-data`, `@HiltViewModel` on ~30 screens).
+  across `app` and `core-data`, `@HiltViewModel` on ~45 screen ViewModels).
 - **Repositories are concrete `@Inject` classes in `core-data`** — no
   `core-domain` repository interface, no `@Binds` indirection (single
   implementation each). New repos follow the same pattern; tests mock the

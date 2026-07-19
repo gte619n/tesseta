@@ -20,29 +20,35 @@ Legend: ✅ shipped · ◐ partial · ⚠️ fixture/placeholder · ➖ not buil
 | Nutrition | ✅ logs + capture + describe + recents/relog | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode (background upload on Android); fire-and-forget describe (202 placeholder) on both clients; unified add surface w/ time-inferred meal chip + one-tap recents; calories always derived from macros (4/4/9); exact branded-product recognition (IMPL-16); **not** SSE |
 | Gym & equipment | ✅ + bulk import | ✅ `/me/workouts/gyms*` | ✅ feature-workouts | Bulk CSV import preview/confirm; cover-photo upload |
 | Admin (drugs, equipment) | ✅ `/api/admin/**` | ✅ `/admin/**` | ➖ no mobile admin | Email-gated; intentionally web-only |
-| Workout programs | ✅ programs + materialized sessions | ✅ `/me/workouts/programs*` | ✅ feature-workouts | Periodized program model (IMPL-15) |
-| Workout logging | ✅ session completion + actuals fan-out (IMPL-17) | ✅ log-result modal | ✅ active logger + foreground service | LoggedSets feed weekly aggregates + goal metrics (ADR-0012) |
+| Workout programs | ✅ programs + materialized sessions | ✅ `/me/workouts/programs*` | ✅ feature-workouts | Periodized program model (IMPL-15). Android Workouts hub is a tabbed shell defaulting to a "This Week" view (`ThisWeekStrip` + compliance calendar) |
+| Exercise catalog & demos | ✅ catalog + authoring/review pipeline + dynamic demo frames (IMPL-14/19) | ✅ `/admin/exercises*` authoring | ◐ inline demo viewer | No standalone Android library screen — the START/MID/END (or dynamic 1–N frame) demo is an inline `ExerciseDetailSheet` inside program/session screens. Owner-only "flag demo frame" pulls a bad frame back into review |
+| Workout logging | ✅ session completion + actuals fan-out (IMPL-17) | ✅ log-result modal | ✅ full-screen set-by-set coach | LoggedSets feed weekly aggregates + goal metrics (ADR-0012). Android coach: spoken TTS cues, editable sets, prior-session prefill, **mid-session exercise swap** (gym-available substitutes), offline-first completion; paged/phase-delineated workout history (online-only) |
 | Program designer (AI) | ✅ history-grounded Gemini-Pro chat (IMPL-18) | ✅ weights + "why" + nutrition strip + TRT panel | ✅ IMPL-AND-18 chat | Grounded in logged/imported history (e1RM, ease-in), volume/ramp/deload guardrails, per-phase nutrition, grounded TRT decision-support (ADR-0015) folded into the chat |
-| Wear OS surfaces | n/a | n/a | ➖ sign-in only | Tiles/complications/Health Services deferred |
+| Wear OS surfaces | n/a | n/a | ➖ sign-in only | Tiles/complications/Health Services deferred (the `health.services.client` dep is declared but unused) |
 
 ## Dashboard (the one partial)
 
-The dashboard data layer is live on both clients; some tiles are still fixtures
-on **both** because the backend has no source for them yet.
+The dashboard data layer is live on both clients; almost every tile is now
+backed by a real backend source. The lone remaining gap is **Readiness**.
 
-- **Live:** weight / body-composition hero + chart, blood panel (top markers),
-  today's doses, identity. Steps and sleep are live on the daily-vitals tiles.
-- **Fixture (both clients):** HRV, Resting HR, and Readiness vital tiles; the
-  recent-activity feed; the date/time/timezone header. On web these come from
-  `web/lib/fixtures/dashboard.ts`; on Android they are gated by
-  `DashboardFlags` in `dashboard/Fallbacks.kt`
-  (`showVitalsFixtures` / `showRecentFeedFixtures` / `showTodayCardFixtures`).
+- **Live (both clients):** weight / body-composition hero + chart, blood panel
+  (top markers), today's doses, identity, steps, sleep, **HRV**, **Resting HR**
+  (all from `GET /api/me/daily-metrics`), and the **recent-activity feed**
+  (`GET /api/me/recent-activity`). Web builds vitals in `web/lib/dashboard-vitals.ts`
+  and the feed in `web/lib/recent-feed.ts`; both render an em-dash empty state
+  (not fabricated numbers) when the backend has no series. Android reads the same
+  endpoints via `DashboardViewModel`.
+- **No backend source yet:** the **Readiness** vital tile (Android falls back to
+  a `DashboardFallbacks` placeholder; there is no web Readiness tile). The
+  date/time/timezone header is a client-rendered value.
 
-Android dashboard screens (`PhoneTodayScreen`, `FoldableDashboardScreen`) **do**
-consume `DashboardViewModel` — the remaining work (IMPL-AND-01) is replacing
-those fixtures once a backend source exists, not wiring the screens. The
-tracking spec [`../specs/IMPL-AND-01-dashboard-live-data.md`](../specs/IMPL-AND-01-dashboard-live-data.md)
-is retained because of this open work.
+There is **no longer a `web/lib/fixtures/dashboard.ts`** — that file was removed
+when the vitals/feed went live. On Android the old `DashboardFlags` constants
+`showVitalsFixtures` and `showTodayCardFixtures` are now **dead** (defined but
+read nowhere); only `showRecentFeedFixtures` was ever a live gate and it is now
+`false`. The tracking spec
+[`../specs/IMPL-AND-01-dashboard-live-data.md`](../specs/IMPL-AND-01-dashboard-live-data.md)
+is retained only for the Readiness gap.
 
 ## Known placeholders / cleanups
 
