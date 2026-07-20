@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80" viewBox="0 0 320 80" role="img" aria-label="Tesseta">
+  <rect x="0"  y="14" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <rect x="19" y="14" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <rect x="38" y="14" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <rect x="0"  y="33" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <rect x="38" y="33" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <rect x="0"  y="52" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <rect x="19" y="52" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <rect x="38" y="52" width="16" height="16" rx="2.4" fill="#F0EBE0"/>
+  <text x="78" y="52" font-family="'Instrument Sans','Inter',sans-serif" font-size="40" font-weight="500" fill="#F0EBE0" letter-spacing="-0.02em">tesseta</text>
+</svg>

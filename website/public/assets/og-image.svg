@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Tesseta — a personal health record">
+  <rect width="1200" height="630" fill="#F0EBE0"/>
+  <!-- hairline frame -->
+  <rect x="40" y="40" width="1120" height="550" rx="18" fill="none" stroke="#E6DFCF" stroke-width="2"/>
+
+  <!-- mark: 3x3 grid, center omitted, olive on oatmeal -->
+  <g transform="translate(120,150)">
+    <rect x="0"   y="0"   width="72" height="72" rx="6" fill="#5C7A2E"/>
+    <rect x="84"  y="0"   width="72" height="72" rx="6" fill="#5C7A2E"/>
+    <rect x="168" y="0"   width="72" height="72" rx="6" fill="#5C7A2E"/>
+    <rect x="0"   y="84"  width="72" height="72" rx="6" fill="#5C7A2E"/>
+    <rect x="168" y="84"  width="72" height="72" rx="6" fill="#5C7A2E"/>
+    <rect x="0"   y="168" width="72" height="72" rx="6" fill="#5C7A2E"/>
+    <rect x="84"  y="168" width="72" height="72" rx="6" fill="#5C7A2E"/>
+    <rect x="168" y="168" width="72" height="72" rx="6" fill="#5C7A2E"/>
+  </g>
+
+  <text x="120" y="470" font-family="'Instrument Sans','Inter',sans-serif" font-size="112" font-weight="500" fill="#1F2419" letter-spacing="-2">tesseta</text>
+  <text x="124" y="536" font-family="'JetBrains Mono',ui-monospace,monospace" font-size="24" font-weight="500" fill="#8A8770" letter-spacing="5">A PERSONAL HEALTH RECORD</text>
+
+  <text x="480" y="196" font-family="'Instrument Sans','Inter',sans-serif" font-size="46" font-weight="500" fill="#1F2419" letter-spacing="-1">Your whole health,</text>
+  <text x="480" y="252" font-family="'Instrument Sans','Inter',sans-serif" font-size="46" font-weight="500" fill="#5C7A2E" letter-spacing="-1">resolved into one view.</text>
+  <text x="481" y="316" font-family="'Inter',sans-serif" font-size="24" fill="#6B6856">Activity, blood, body composition, medications,</text>
+  <text x="481" y="350" font-family="'Inter',sans-serif" font-size="24" fill="#6B6856">nutrition, and training — across phone, watch, and web.</text>
+</svg>

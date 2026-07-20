@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tesseta — a personal health record</title>
+  <meta name="description" content="Tesseta gathers activity, blood markers, body composition, medications, nutrition, and training into one trustworthy view — across phone, watch, and web." />
+  <meta name="theme-color" content="#F0EBE0" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/assets/app-icon-light.svg" />
+  <link rel="canonical" href="https://tesseta.com/" />
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Tesseta" />
+  <meta property="og:title" content="Tesseta — a personal health record" />
+  <meta property="og:description" content="Activity, blood, body composition, medications, nutrition, and training — resolved into one trustworthy view across phone, watch, and web." />
+  <meta property="og:url" content="https://tesseta.com/" />
+  <meta property="og:image" content="https://tesseta.com/assets/og-image.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Tesseta — a personal health record" />
+  <meta name="twitter:description" content="One trustworthy view of your whole health, across phone, watch, and web." />
+  <meta name="twitter:image" content="https://tesseta.com/assets/og-image.svg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/" aria-label="Tesseta home">
+        <img src="/assets/wordmark-horizontal.svg" alt="Tesseta" width="160" height="40" />
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#features">What it tracks</a>
+        <a href="#closer-look">Screens</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#platforms">Platforms</a>
+        <a class="btn btn-ghost" href="https://app.tesseta.com">Open the app</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">A personal health record</p>
+          <h1>Your whole health,<br /><span class="accent">resolved into one view.</span></h1>
+          <p class="lede">
+            A weigh-in. A lab marker. A dose taken. A set logged. On their own, each is
+            a single tile. Tesseta gathers hundreds of them — from your Fitbit, your
+            bloodwork, your training — into one picture you can actually read, kept in
+            sync across your phone, your watch, and the web.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="https://app.tesseta.com">Open the app</a>
+            <a class="btn btn-ghost" href="#features">See what it tracks</a>
+          </div>
+          <p class="fineprint">One private record. The backend is the source of truth — your clients only ever read your own data.</p>
+        </div>
+
+        <!-- The mark, animated as a resolving mosaic -->
+        <div class="hero-mark" aria-hidden="true">
+          <div class="mosaic">
+            <span class="tile"></span><span class="tile"></span><span class="tile"></span>
+            <span class="tile"></span><span class="tile gap"></span><span class="tile"></span>
+            <span class="tile"></span><span class="tile"></span><span class="tile"></span>
+          </div>
+          <p class="mark-caption">A tessera is one tile of a mosaic.<br />The gap is the idea: the picture resolves at distance.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SIGNALS STRIP -->
+    <section class="strip" aria-label="Signals Tesseta brings together">
+      <div class="wrap strip-inner">
+        <span>Activity &amp; sleep</span><i></i>
+        <span>Blood markers</span><i></i>
+        <span>Body composition</span><i></i>
+        <span>Medications</span><i></i>
+        <span>Nutrition</span><i></i>
+        <span>Training</span><i></i>
+        <span>HRV &amp; resting HR</span>
+      </div>
+    </section>
+
+    <!-- PRODUCT HERO -->
+    <section class="showcase">
+      <div class="wrap">
+        <header class="section-head center">
+          <p class="eyebrow">The app</p>
+          <h2>One screen for your whole health.</h2>
+          <p class="section-sub">The dashboard draws every signal — weight and body composition, resting heart rate, HRV, sleep, blood markers, today's doses, and your latest activity — into a single glance. Real values from the record; an em-dash where there's no data, never a guess.</p>
+        </header>
+        <figure class="browser">
+          <div class="browser-bar" aria-hidden="true"><span></span><span></span><span></span><em>app.tesseta.com</em></div>
+          <img src="/assets/shots/dashboard.png" alt="The Tesseta dashboard: weight, resting heart rate, HRV, sleep and steps tiles above a body-composition trend chart, a blood panel, and today's medication doses" loading="lazy" width="1440" height="960" />
+        </figure>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section id="features" class="section">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow">What it tracks</p>
+          <h2>Every signal that describes how you're actually doing.</h2>
+          <p class="section-sub">
+            Health data flows in from your Fitbit through the Google Health API and is
+            normalized once on the backend. Everything below reads from that single,
+            correct source — a number you see always matches what was ingested or entered.
+          </p>
+        </header>
+
+        <div class="cards">
+          <article class="card">
+            <div class="card-mark" aria-hidden="true"></div>
+            <h3>A dashboard that reads at a glance</h3>
+            <p>Weight and body-composition trend, top blood markers, today's doses, steps, sleep, HRV, and resting heart rate — with a live recent-activity feed. Empty states show an em-dash, never a fabricated number.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-mark" aria-hidden="true"></div>
+            <h3>Blood markers, from a PDF</h3>
+            <p>Upload a lab report and Tesseta extracts the markers for you, then charts each one over time so a drifting value is obvious long before it's a problem.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-mark" aria-hidden="true"></div>
+            <h3>Body composition &amp; DEXA</h3>
+            <p>Track lean mass, fat, and regional breakdowns. Upload a DEXA scan and review the extracted, editable regions — no manual transcription.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-mark" aria-hidden="true"></div>
+            <h3>Medications &amp; adherence</h3>
+            <p>Dosage schedules, adherence history, and on-device dose reminders with grouped one-tap check-off. Decision support for protocols like TRT is grounded in your own history.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-mark" aria-hidden="true"></div>
+            <h3>Nutrition, captured in a tap</h3>
+            <p>Photograph a meal, a label, or a barcode and it's recognized and logged — calories always derived from macros. One-tap re-logging of recent meals and a describe-a-meal shortcut make the habit stick.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-mark" aria-hidden="true"></div>
+            <h3>Training, coached set by set</h3>
+            <p>Periodized programs, an exercise library with demo frames, and a full-screen coach with spoken cues, prior-session prefill, and mid-session swaps for whatever your gym has — offline-first, so a dead signal never stops a workout.</p>
+          </article>
+
+          <article class="card card-wide">
+            <div class="card-mark" aria-hidden="true"></div>
+            <h3>Goals and programs, planned with AI</h3>
+            <p>
+              Chat through a goal and get a concrete, trackable plan; a metric-event engine
+              measures real progress against it. The program designer is grounded in your
+              logged and imported training history — estimated 1RMs, sensible volume ramps,
+              built-in deloads, and per-phase nutrition — so the plan fits the athlete you
+              actually are, not a template.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- GALLERY -->
+    <section id="closer-look" class="section section-alt">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow">A closer look</p>
+          <h2>Every domain gets its own considered surface.</h2>
+          <p class="section-sub">Not dashboards bolted together — each area is designed for the way you actually read it, and every one stays in sync with the same record.</p>
+        </header>
+        <div class="gallery-grid">
+          <figure class="shot">
+            <img src="/assets/shots/blood.png" alt="Blood markers screen with tiles for testosterone, LDL, ApoB, HDL, triglycerides, HbA1c and more, each with a reference range and trend, plus a list of uploaded lab reports" loading="lazy" width="1440" height="960" />
+            <figcaption><strong>Blood markers</strong> — lab panels extracted from a PDF, each marker trended against its range.</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="/assets/shots/body-composition.png" alt="Body composition screen showing weight, body fat, lean mass and BMI with a table of recent weigh-ins and DEXA scans" loading="lazy" width="1440" height="960" />
+            <figcaption><strong>Body composition</strong> — weight, fat, and lean mass from the scale and DEXA, side by side.</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="/assets/shots/program.png" alt="A periodized workout program detail showing this week's sessions and a phased roadmap of accumulation, intensification and deload blocks" loading="lazy" width="1440" height="960" />
+            <figcaption><strong>Training programs</strong> — periodized blocks with this week up top and the full roadmap below.</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="/assets/shots/nutrition.png" alt="Nutrition screen tracking calories and protein, carbs and fat against targets, with breakfast, lunch, dinner and snack broken out by item" loading="lazy" width="1440" height="960" />
+            <figcaption><strong>Nutrition</strong> — macros against target, meals itemized, calories always derived from the macros.</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="/assets/shots/meds.png" alt="Medications screen with cards for each prescription and supplement showing dose, schedule and an adherence history bar" loading="lazy" width="1440" height="960" />
+            <figcaption><strong>Medications</strong> — every dose, schedule, and an adherence streak at a glance.</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="/assets/shots/goals.png" alt="A goal detail screen showing a body-fat goal broken into completed, active and locked phases with metric-tracked steps" loading="lazy" width="1440" height="960" />
+            <figcaption><strong>Goals</strong> — an AI-shaped plan in phases, with a metric engine measuring real progress.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRUST / HOW IT WORKS -->
+    <section id="trust" class="section">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow">How it works</p>
+          <h2>One source of truth, everywhere you look.</h2>
+        </header>
+
+        <div class="trust-grid">
+          <div class="trust-item">
+            <p class="trust-num">01</p>
+            <h3>The backend owns the record</h3>
+            <p>A single service holds the only connection to your data store and normalizes every signal once. Your phone, watch, and browser are readers of that record — never independent copies drifting apart.</p>
+          </div>
+          <div class="trust-item">
+            <p class="trust-num">02</p>
+            <h3>In sync across devices</h3>
+            <p>Log a set on your phone and it's there on the web. Money-path writes are atomic, so concurrent edits never lose or double-count. The goal is simple: never lose your data.</p>
+          </div>
+          <div class="trust-item">
+            <p class="trust-num">03</p>
+            <h3>Works when the network doesn't</h3>
+            <p>The Android app is offline-first: reads come from an encrypted on-device mirror and writes are journaled and replayed when you're back online. Finish the workout in the basement gym; it syncs later.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRIVACY -->
+    <section id="privacy" class="section">
+      <div class="wrap privacy-grid">
+        <div class="privacy-copy">
+          <p class="eyebrow">Privacy &amp; trust</p>
+          <h2>Health data, held to a health-data standard.</h2>
+          <p class="section-sub">
+            This is PHI-grade information, and it's treated that way. Access is
+            authenticated and denied by default. Data is strictly scoped per user —
+            you can only ever reach your own records.
+          </p>
+          <ul class="check-list">
+            <li>Authenticated access only, with Google sign-in across web, phone, and watch</li>
+            <li>Strict per-user scoping — no cross-account access, by construction</li>
+            <li>Secrets envelope-encrypted at rest with managed keys (KMS); TLS in transit</li>
+            <li>The on-device mirror is encrypted with SQLCipher</li>
+          </ul>
+        </div>
+        <aside class="privacy-aside">
+          <p class="aside-label">The principle</p>
+          <p class="aside-quote">Your record is yours. The system is built so that the easy path and the private path are the same path.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- PLATFORMS -->
+    <section id="platforms" class="section section-alt">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow">Platforms</p>
+          <h2>Meet your record where you are.</h2>
+        </header>
+        <div class="platforms">
+          <div class="platform">
+            <h3>Android phone</h3>
+            <p>The everyday capture surface — dose reminders, meal capture, and the set-by-set workout coach. Native, offline-first, built for one-handed logging.</p>
+          </div>
+          <div class="platform">
+            <h3>Wear OS</h3>
+            <p>Signed in from your wrist, sharing the phone's record — the foundation for glanceable tiles and complications as they roll out.</p>
+          </div>
+          <div class="platform">
+            <h3>Web</h3>
+            <p>The room-to-think surface: research browsing, chart-heavy review, AI goal and program chat, and admin over your catalogs.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-band">
+      <div class="wrap cta-band-inner">
+        <h2>See the whole picture.</h2>
+        <p>Sign in to your record, or reach out about access.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://app.tesseta.com">Open the app</a>
+          <a class="btn btn-ghost-inverse" href="mailto:hello@tesseta.com?subject=Tesseta%20access">Request access</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <img src="/assets/wordmark-horizontal-reversed.svg" alt="Tesseta" width="150" height="38" />
+        <p>A personal health record. Activity, blood, body, meds, nutrition, and training — resolved into one trustworthy view.</p>
+      </div>
+      <nav class="footer-nav" aria-label="Footer">
+        <a href="#features">What it tracks</a>
+        <a href="#trust">How it works</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#platforms">Platforms</a>
+        <a href="https://app.tesseta.com">Open the app</a>
+      </nav>
+    </div>
+    <div class="wrap footer-legal">
+      <span>&copy; <span id="year">2026</span> Tesseta</span>
+      <span>Built for one trustworthy view of your own health.</span>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

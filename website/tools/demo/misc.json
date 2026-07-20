@@ -1,0 +1,35 @@
+{
+  "GET /api/me": {
+    "userId": "u_alex_rivera_8f2c1d",
+    "email": "alex.rivera@example.com",
+    "displayName": "Alex Rivera",
+    "heightCm": 180
+  },
+  "GET /api/me/google-health/status": {
+    "connected": true,
+    "connectedAt": "2026-01-14T09:23:00Z"
+  },
+  "GET /api/me/daily-metrics": [
+    { "date": "2026-07-06", "steps": 9420, "restingHeartRate": 56, "sleepMinutes": 421, "hrvMs": 58, "sleepScore": 82 },
+    { "date": "2026-07-07", "steps": 11230, "restingHeartRate": 55, "sleepMinutes": 402, "hrvMs": 61, "sleepScore": 79 },
+    { "date": "2026-07-08", "steps": 8760, "restingHeartRate": 57, "sleepMinutes": 438, "hrvMs": 57, "sleepScore": 84 },
+    { "date": "2026-07-09", "steps": 12480, "restingHeartRate": 54, "sleepMinutes": 415, "hrvMs": 64, "sleepScore": 81 },
+    { "date": "2026-07-10", "steps": 10120, "restingHeartRate": 55, "sleepMinutes": 447, "hrvMs": 66, "sleepScore": 88 },
+    { "date": "2026-07-11", "steps": 9890, "restingHeartRate": 53, "sleepMinutes": 429, "hrvMs": 68, "sleepScore": 86 },
+    { "date": "2026-07-12", "steps": 8230, "restingHeartRate": 54, "sleepMinutes": 456, "hrvMs": 65, "sleepScore": 90 },
+    { "date": "2026-07-13", "steps": 11670, "restingHeartRate": 53, "sleepMinutes": 411, "hrvMs": 70, "sleepScore": 83 },
+    { "date": "2026-07-14", "steps": 10540, "restingHeartRate": 52, "sleepMinutes": 434, "hrvMs": 69, "sleepScore": 85 },
+    { "date": "2026-07-15", "steps": 9310, "restingHeartRate": 54, "sleepMinutes": 398, "hrvMs": 63, "sleepScore": 78 },
+    { "date": "2026-07-16", "steps": 12050, "restingHeartRate": 53, "sleepMinutes": 442, "hrvMs": 71, "sleepScore": 87 },
+    { "date": "2026-07-17", "steps": 10880, "restingHeartRate": 52, "sleepMinutes": 425, "hrvMs": 72, "sleepScore": 89 },
+    { "date": "2026-07-18", "steps": 9740, "restingHeartRate": 53, "sleepMinutes": 451, "hrvMs": 70, "sleepScore": 91 },
+    { "date": "2026-07-19", "steps": 11420, "restingHeartRate": 52, "sleepMinutes": 438, "hrvMs": 74, "sleepScore": 88 }
+  ],
+  "GET /api/me/recent-activity": [
+    { "kind": "WORKOUT", "title": "Push Day — Chest & Shoulders", "subtitle": "58 min · 12,400 lb volume", "timestamp": "2026-07-19T12:05:00Z" },
+    { "kind": "MEDICATION", "title": "Testosterone Cypionate", "subtitle": "50 mg · Morning", "timestamp": "2026-07-19T07:14:00Z" },
+    { "kind": "WEIGH_IN", "title": "Weighed in", "subtitle": "181.0 lb · 14.6% body fat", "timestamp": "2026-07-19T06:32:00Z" },
+    { "kind": "SLEEP", "title": "Sleep logged", "subtitle": "7h 18m · Score 88", "timestamp": "2026-07-19T05:40:00Z" },
+    { "kind": "FOOD", "title": "Breakfast — Steak & Eggs", "subtitle": "642 kcal · 52g protein", "timestamp": "2026-07-18T23:20:00Z" }
+  ]
+}

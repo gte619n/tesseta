@@ -1,0 +1,66 @@
+{
+  "GET /api/me/nutrition/target": { "caloriesKcal": 2450, "proteinGrams": 210, "carbsGrams": 230, "fatGrams": 70, "fiberGrams": 38, "sugarGrams": 60 },
+  "GET /api/me/nutrition/2026-07-19": {
+    "date": "2026-07-19",
+    "totals": { "caloriesKcal": 2296, "proteinGrams": 205, "carbsGrams": 197, "fatGrams": 76, "fiberGrams": 30, "sugarGrams": 41 },
+    "target": { "caloriesKcal": 2450, "proteinGrams": 210, "carbsGrams": 230, "fatGrams": 70, "fiberGrams": 38, "sugarGrams": 60 },
+    "meals": [
+      {
+        "meal": "BREAKFAST",
+        "subtotal": { "caloriesKcal": 582, "proteinGrams": 59, "carbsGrams": 1, "fatGrams": 37, "fiberGrams": 0, "sugarGrams": 1 },
+        "entries": [
+          { "entryId": "ent_bf_steak_20260719", "meal": "BREAKFAST", "foodId": "food_sirloin_steak", "foodName": "Grilled Sirloin Steak", "servingLabel": "6 oz", "servingGrams": 170, "quantity": 1, "macros": { "caloriesKcal": 386, "proteinGrams": 46, "carbsGrams": 0, "fatGrams": 22, "fiberGrams": 0, "sugarGrams": 0 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T12:42:11Z" },
+          { "entryId": "ent_bf_eggs_20260719", "meal": "BREAKFAST", "foodId": "food_whole_eggs", "foodName": "Whole Eggs, Fried", "servingLabel": "2 large eggs", "servingGrams": 100, "quantity": 1, "macros": { "caloriesKcal": 196, "proteinGrams": 13, "carbsGrams": 1, "fatGrams": 15, "fiberGrams": 0, "sugarGrams": 1 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T12:42:40Z" }
+        ]
+      },
+      {
+        "meal": "LUNCH",
+        "subtotal": { "caloriesKcal": 624, "proteinGrams": 57, "carbsGrams": 68, "fatGrams": 13, "fiberGrams": 7, "sugarGrams": 6 },
+        "entries": [
+          { "entryId": "ent_ln_chickenrice_20260719", "meal": "LUNCH", "foodId": null, "foodName": "Chicken Rice Bowl", "servingLabel": "1 bowl", "servingGrams": 420, "quantity": 1, "macros": { "caloriesKcal": 624, "proteinGrams": 57, "carbsGrams": 68, "fatGrams": 13, "fiberGrams": 7, "sugarGrams": 6 }, "source": "PHOTO", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "READY", "ingredients": [
+              { "name": "Grilled Chicken Breast", "foodId": "food_chicken_breast", "servingLabel": "6 oz", "servingGrams": 170, "quantity": 1, "macros": { "caloriesKcal": 281, "proteinGrams": 53, "carbsGrams": 0, "fatGrams": 6, "fiberGrams": 0, "sugarGrams": 0 }, "macrosPer100g": { "caloriesKcal": 165, "proteinGrams": 31, "carbsGrams": 0, "fatGrams": 3.6, "fiberGrams": 0, "sugarGrams": 0 }, "imageUrl": null, "imageStatus": "NONE" },
+              { "name": "Steamed White Rice", "foodId": "food_white_rice", "servingLabel": "1 cup cooked", "servingGrams": 158, "quantity": 1, "macros": { "caloriesKcal": 205, "proteinGrams": 4, "carbsGrams": 45, "fatGrams": 0, "fiberGrams": 1, "sugarGrams": 0 }, "macrosPer100g": { "caloriesKcal": 130, "proteinGrams": 2.7, "carbsGrams": 28, "fatGrams": 0.3, "fiberGrams": 0.4, "sugarGrams": 0.1 }, "imageUrl": null, "imageStatus": "NONE" },
+              { "name": "Black Beans & Corn Salsa", "foodId": null, "servingLabel": "1/2 cup", "servingGrams": 92, "quantity": 1, "macros": { "caloriesKcal": 138, "proteinGrams": 0, "carbsGrams": 23, "fatGrams": 7, "fiberGrams": 6, "sugarGrams": 6 }, "macrosPer100g": { "caloriesKcal": 150, "proteinGrams": 0, "carbsGrams": 25, "fatGrams": 7.6, "fiberGrams": 6.5, "sugarGrams": 6.5 }, "imageUrl": null, "imageStatus": "NONE" }
+            ], "createdAt": "2026-07-19T18:05:33Z" }
+        ]
+      },
+      {
+        "meal": "SNACK",
+        "subtotal": { "caloriesKcal": 350, "proteinGrams": 51, "carbsGrams": 32, "fatGrams": 3, "fiberGrams": 8, "sugarGrams": 21 },
+        "entries": [
+          { "entryId": "ent_sn_yogurt_20260719", "meal": "SNACK", "foodId": "food_greek_yogurt", "foodName": "Nonfat Greek Yogurt", "servingLabel": "1 cup", "servingGrams": 245, "quantity": 1, "macros": { "caloriesKcal": 146, "proteinGrams": 25, "carbsGrams": 9, "fatGrams": 1, "fiberGrams": 0, "sugarGrams": 7 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T16:20:09Z" },
+          { "entryId": "ent_sn_berries_20260719", "meal": "SNACK", "foodId": "food_mixed_berries", "foodName": "Mixed Berries", "servingLabel": "1 cup", "servingGrams": 150, "quantity": 1, "macros": { "caloriesKcal": 84, "proteinGrams": 1, "carbsGrams": 20, "fatGrams": 0, "fiberGrams": 7, "sugarGrams": 12 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T16:20:31Z" },
+          { "entryId": "ent_sn_shake_20260719", "meal": "SNACK", "foodId": "food_whey_protein", "foodName": "Whey Protein Shake", "servingLabel": "1 scoop", "servingGrams": 32, "quantity": 1, "macros": { "caloriesKcal": 120, "proteinGrams": 25, "carbsGrams": 3, "fatGrams": 1.5, "fiberGrams": 1, "sugarGrams": 2 }, "source": "MANUAL", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T16:21:02Z" }
+        ]
+      },
+      {
+        "meal": "DINNER",
+        "subtotal": { "caloriesKcal": 754, "proteinGrams": 55, "carbsGrams": 63, "fatGrams": 30, "fiberGrams": 15, "sugarGrams": 14 },
+        "entries": [
+          { "entryId": "ent_dn_salmon_20260719", "meal": "DINNER", "foodId": "food_salmon_fillet", "foodName": "Baked Salmon Fillet", "servingLabel": "6 oz", "servingGrams": 170, "quantity": 1, "macros": { "caloriesKcal": 367, "proteinGrams": 40, "carbsGrams": 0, "fatGrams": 22, "fiberGrams": 0, "sugarGrams": 0 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T23:48:02Z" },
+          { "entryId": "ent_dn_sweetpotato_20260719", "meal": "DINNER", "foodId": "food_sweet_potato", "foodName": "Roasted Sweet Potato", "servingLabel": "1 medium", "servingGrams": 200, "quantity": 1, "macros": { "caloriesKcal": 258, "proteinGrams": 4, "carbsGrams": 58, "fatGrams": 2, "fiberGrams": 9, "sugarGrams": 12 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T23:48:20Z" },
+          { "entryId": "ent_dn_asparagus_20260719", "meal": "DINNER", "foodId": "food_asparagus", "foodName": "Grilled Asparagus", "servingLabel": "1 cup", "servingGrams": 134, "quantity": 1, "macros": { "caloriesKcal": 129, "proteinGrams": 11, "carbsGrams": 5, "fatGrams": 6, "fiberGrams": 6, "sugarGrams": 2 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "createdAt": "2026-07-19T23:48:41Z" }
+        ]
+      }
+    ]
+  },
+  "GET /api/me/nutrition/recent-meals": [
+    { "entryId": "ent_dn_salmon_20260718", "meal": "DINNER", "foodId": "food_salmon_fillet", "foodName": "Baked Salmon Fillet", "servingLabel": "6 oz", "servingGrams": 170, "quantity": 1, "macros": { "caloriesKcal": 367, "proteinGrams": 40, "carbsGrams": 0, "fatGrams": 22, "fiberGrams": 0, "sugarGrams": 0 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "date": "2026-07-18", "createdAt": "2026-07-18T23:40:00Z" },
+    { "entryId": "ent_ln_chickenrice_20260718", "meal": "LUNCH", "foodId": null, "foodName": "Chicken Rice Bowl", "servingLabel": "1 bowl", "servingGrams": 420, "quantity": 1, "macros": { "caloriesKcal": 624, "proteinGrams": 57, "carbsGrams": 68, "fatGrams": 13, "fiberGrams": 7, "sugarGrams": 6 }, "source": "PHOTO", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "READY", "ingredients": null, "date": "2026-07-18", "createdAt": "2026-07-18T18:12:00Z" },
+    { "entryId": "ent_bf_steak_20260718", "meal": "BREAKFAST", "foodId": "food_sirloin_steak", "foodName": "Grilled Sirloin Steak", "servingLabel": "6 oz", "servingGrams": 170, "quantity": 1, "macros": { "caloriesKcal": 386, "proteinGrams": 46, "carbsGrams": 0, "fatGrams": 22, "fiberGrams": 0, "sugarGrams": 0 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "date": "2026-07-18", "createdAt": "2026-07-18T12:30:00Z" },
+    { "entryId": "ent_sn_yogurt_20260718", "meal": "SNACK", "foodId": "food_greek_yogurt", "foodName": "Nonfat Greek Yogurt", "servingLabel": "1 cup", "servingGrams": 245, "quantity": 1, "macros": { "caloriesKcal": 146, "proteinGrams": 25, "carbsGrams": 9, "fatGrams": 1, "fiberGrams": 0, "sugarGrams": 7 }, "source": "CATALOG", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "NONE", "ingredients": null, "date": "2026-07-18", "createdAt": "2026-07-18T16:00:00Z" },
+    { "entryId": "ent_bf_oats_20260716", "meal": "BREAKFAST", "foodId": "food_overnight_oats", "foodName": "Overnight Oats with Banana", "servingLabel": "1 jar", "servingGrams": 320, "quantity": 1, "macros": { "caloriesKcal": 442, "proteinGrams": 24, "carbsGrams": 62, "fatGrams": 11, "fiberGrams": 9, "sugarGrams": 18 }, "source": "PHOTO", "imageUrl": null, "imageStatus": "NONE", "analysisStatus": "READY", "ingredients": null, "date": "2026-07-16", "createdAt": "2026-07-16T12:05:00Z" }
+  ],
+  "GET /api/me/nutrition": [
+    { "date": "2026-07-10", "proteinGrams": 202, "carbsGrams": 221, "fatGrams": 68, "fiberGrams": 34, "sugarGrams": 52, "caloriesKcal": 2304 },
+    { "date": "2026-07-11", "proteinGrams": 214, "carbsGrams": 238, "fatGrams": 72, "fiberGrams": 39, "sugarGrams": 58, "caloriesKcal": 2456 },
+    { "date": "2026-07-12", "proteinGrams": 188, "carbsGrams": 265, "fatGrams": 81, "fiberGrams": 36, "sugarGrams": 74, "caloriesKcal": 2541 },
+    { "date": "2026-07-13", "proteinGrams": 219, "carbsGrams": 205, "fatGrams": 64, "fiberGrams": 41, "sugarGrams": 47, "caloriesKcal": 2272 },
+    { "date": "2026-07-14", "proteinGrams": 208, "carbsGrams": 232, "fatGrams": 69, "fiberGrams": 38, "sugarGrams": 55, "caloriesKcal": 2381 },
+    { "date": "2026-07-15", "proteinGrams": 225, "carbsGrams": 218, "fatGrams": 66, "fiberGrams": 40, "sugarGrams": 49, "caloriesKcal": 2366 },
+    { "date": "2026-07-16", "proteinGrams": 196, "carbsGrams": 244, "fatGrams": 74, "fiberGrams": 37, "sugarGrams": 61, "caloriesKcal": 2426 },
+    { "date": "2026-07-17", "proteinGrams": 211, "carbsGrams": 229, "fatGrams": 71, "fiberGrams": 39, "sugarGrams": 53, "caloriesKcal": 2399 },
+    { "date": "2026-07-18", "proteinGrams": 217, "carbsGrams": 224, "fatGrams": 67, "fiberGrams": 42, "sugarGrams": 50, "caloriesKcal": 2367 },
+    { "date": "2026-07-19", "proteinGrams": 205, "carbsGrams": 197, "fatGrams": 76, "fiberGrams": 30, "sugarGrams": 41, "caloriesKcal": 2296 }
+  ]
+}
