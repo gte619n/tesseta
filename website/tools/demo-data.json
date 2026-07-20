@@ -1,0 +1,6394 @@
+{
+  "GET /api/me": {
+    "userId": "u_alex_rivera_8f2c1d",
+    "email": "alex.rivera@example.com",
+    "displayName": "Alex Rivera",
+    "heightCm": 180
+  },
+  "GET /api/me/google-health/status": {
+    "connected": true,
+    "connectedAt": "2026-01-14T09:23:00Z"
+  },
+  "GET /api/me/daily-metrics": [
+    {
+      "date": "2026-07-06",
+      "steps": 9420,
+      "restingHeartRate": 56,
+      "sleepMinutes": 421,
+      "hrvMs": 58,
+      "sleepScore": 82
+    },
+    {
+      "date": "2026-07-07",
+      "steps": 11230,
+      "restingHeartRate": 55,
+      "sleepMinutes": 402,
+      "hrvMs": 61,
+      "sleepScore": 79
+    },
+    {
+      "date": "2026-07-08",
+      "steps": 8760,
+      "restingHeartRate": 57,
+      "sleepMinutes": 438,
+      "hrvMs": 57,
+      "sleepScore": 84
+    },
+    {
+      "date": "2026-07-09",
+      "steps": 12480,
+      "restingHeartRate": 54,
+      "sleepMinutes": 415,
+      "hrvMs": 64,
+      "sleepScore": 81
+    },
+    {
+      "date": "2026-07-10",
+      "steps": 10120,
+      "restingHeartRate": 55,
+      "sleepMinutes": 447,
+      "hrvMs": 66,
+      "sleepScore": 88
+    },
+    {
+      "date": "2026-07-11",
+      "steps": 9890,
+      "restingHeartRate": 53,
+      "sleepMinutes": 429,
+      "hrvMs": 68,
+      "sleepScore": 86
+    },
+    {
+      "date": "2026-07-12",
+      "steps": 8230,
+      "restingHeartRate": 54,
+      "sleepMinutes": 456,
+      "hrvMs": 65,
+      "sleepScore": 90
+    },
+    {
+      "date": "2026-07-13",
+      "steps": 11670,
+      "restingHeartRate": 53,
+      "sleepMinutes": 411,
+      "hrvMs": 70,
+      "sleepScore": 83
+    },
+    {
+      "date": "2026-07-14",
+      "steps": 10540,
+      "restingHeartRate": 52,
+      "sleepMinutes": 434,
+      "hrvMs": 69,
+      "sleepScore": 85
+    },
+    {
+      "date": "2026-07-15",
+      "steps": 9310,
+      "restingHeartRate": 54,
+      "sleepMinutes": 398,
+      "hrvMs": 63,
+      "sleepScore": 78
+    },
+    {
+      "date": "2026-07-16",
+      "steps": 12050,
+      "restingHeartRate": 53,
+      "sleepMinutes": 442,
+      "hrvMs": 71,
+      "sleepScore": 87
+    },
+    {
+      "date": "2026-07-17",
+      "steps": 10880,
+      "restingHeartRate": 52,
+      "sleepMinutes": 425,
+      "hrvMs": 72,
+      "sleepScore": 89
+    },
+    {
+      "date": "2026-07-18",
+      "steps": 9740,
+      "restingHeartRate": 53,
+      "sleepMinutes": 451,
+      "hrvMs": 70,
+      "sleepScore": 91
+    },
+    {
+      "date": "2026-07-19",
+      "steps": 11420,
+      "restingHeartRate": 52,
+      "sleepMinutes": 438,
+      "hrvMs": 74,
+      "sleepScore": 88
+    }
+  ],
+  "GET /api/me/recent-activity": [
+    {
+      "kind": "WORKOUT",
+      "title": "Push Day — Chest & Shoulders",
+      "subtitle": "58 min · 12,400 lb volume",
+      "timestamp": "2026-07-19T12:05:00Z"
+    },
+    {
+      "kind": "MEDICATION",
+      "title": "Testosterone Cypionate",
+      "subtitle": "50 mg · Morning",
+      "timestamp": "2026-07-19T07:14:00Z"
+    },
+    {
+      "kind": "WEIGH_IN",
+      "title": "Weighed in",
+      "subtitle": "181.0 lb · 14.6% body fat",
+      "timestamp": "2026-07-19T06:32:00Z"
+    },
+    {
+      "kind": "SLEEP",
+      "title": "Sleep logged",
+      "subtitle": "7h 18m · Score 88",
+      "timestamp": "2026-07-19T05:40:00Z"
+    },
+    {
+      "kind": "FOOD",
+      "title": "Breakfast — Steak & Eggs",
+      "subtitle": "642 kcal · 52g protein",
+      "timestamp": "2026-07-18T23:20:00Z"
+    }
+  ],
+  "GET /api/me/workout-programs": [
+    {
+      "programId": "prog_current",
+      "title": "Hypertrophy Block — Summer 2026",
+      "description": "A 12-week periodized push/pull/legs/upper build for intermediate lifters. Three phases — Accumulation, Intensification, Deload/Peak — ramping volume then intensity while keeping every prescribed lift executable at your logged gyms.",
+      "goalId": "goal_summer_lean",
+      "status": "ACTIVE",
+      "source": "AI_ASSISTED",
+      "startDate": "2026-06-01",
+      "trainingDays": [
+        "MON",
+        "TUE",
+        "THU",
+        "FRI"
+      ],
+      "totalWeeks": 12,
+      "phaseCount": 3,
+      "completedPhaseCount": 1,
+      "createdAt": "2026-05-24T18:42:11Z",
+      "updatedAt": "2026-07-18T13:05:44Z"
+    }
+  ],
+  "GET /api/me/workout-programs/prog_current": {
+    "programId": "prog_current",
+    "title": "Hypertrophy Block — Summer 2026",
+    "description": "A 12-week periodized push/pull/legs/upper build for intermediate lifters. Three phases — Accumulation, Intensification, Deload/Peak — ramping volume then intensity while keeping every prescribed lift executable at your logged gyms.",
+    "goalId": "goal_summer_lean",
+    "goalTitle": "Lean to 180 lb by Labor Day",
+    "status": "ACTIVE",
+    "source": "AI_ASSISTED",
+    "startDate": "2026-06-01",
+    "trainingDays": [
+      "MON",
+      "TUE",
+      "THU",
+      "FRI"
+    ],
+    "nutritionGuidance": {
+      "kcal": 2850,
+      "proteinG": 190,
+      "carbsG": 320,
+      "fatG": 80,
+      "note": "Slight surplus on training days to support accumulation volume; hold protein at ~1.1 g/lb."
+    },
+    "createdAt": "2026-05-24T18:42:11Z",
+    "updatedAt": "2026-07-18T13:05:44Z",
+    "completedAt": null,
+    "phases": [
+      {
+        "phaseId": "phase_accum",
+        "title": "Accumulation",
+        "focus": "Build work capacity and muscle — high volume, moderate intensity at RPE 7–8.",
+        "orderIndex": 0,
+        "status": "COMPLETED",
+        "weeks": 5,
+        "deloadWeekIndex": 5,
+        "targetStartDate": "2026-06-01",
+        "targetEndDate": "2026-07-05",
+        "nutritionGuidance": {
+          "kcal": 2850,
+          "proteinG": 190,
+          "carbsG": 320,
+          "fatG": 80,
+          "note": "Fuel the volume: carbs up around sessions, protein steady."
+        },
+        "days": [
+          {
+            "dayId": "day_accum_upper",
+            "label": "Upper A",
+            "dayOfWeek": "MON",
+            "locationId": "loc_ironforge",
+            "locationName": "Iron Forge Barbell Club",
+            "orderIndex": 0,
+            "blocks": [
+              {
+                "blockId": "blk_accum_upper_warm",
+                "type": "WARMUP",
+                "title": "Prep",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_bandpullapart",
+                    "orderIndex": 0,
+                    "sets": 2,
+                    "repsMin": 15,
+                    "repsMax": 20,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "NONE",
+                      "value": null
+                    },
+                    "targetWeightLbs": null,
+                    "loadBasis": null,
+                    "restSeconds": 45,
+                    "tempo": null,
+                    "notes": "Shoulders + upper back activation.",
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_bandpullapart",
+                      "name": "Band Pull-Apart",
+                      "primaryMuscles": [
+                        "Rear Delts",
+                        "Rhomboids"
+                      ],
+                      "formCues": [
+                        "Arms straight, pull to sternum",
+                        "Squeeze shoulder blades, don't shrug"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "start",
+                          "label": "Start",
+                          "caption": "Arms extended, band at chest height.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/band-pull-apart-start.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "end",
+                          "label": "End",
+                          "caption": "Band pulled to sternum, blades squeezed.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/band-pull-apart-end.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "blockId": "blk_accum_upper_main",
+                "type": "MAIN",
+                "title": "Horizontal Press",
+                "orderIndex": 1,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_benchpress",
+                    "orderIndex": 0,
+                    "sets": 4,
+                    "repsMin": 8,
+                    "repsMax": 10,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 185,
+                    "loadBasis": "e1RM 245 from 215×5, 75% for hypertrophy",
+                    "restSeconds": 150,
+                    "tempo": "3-0-1-0",
+                    "notes": null,
+                    "deloadModifier": {
+                      "setsMultiplier": 0.5,
+                      "intensityDelta": -2
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_benchpress",
+                      "name": "Barbell Bench Press",
+                      "primaryMuscles": [
+                        "Chest",
+                        "Triceps",
+                        "Front Delts"
+                      ],
+                      "formCues": [
+                        "Retract and depress the scapula",
+                        "Bar to lower chest, elbows ~45°",
+                        "Drive feet into the floor"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "start",
+                          "label": "Top",
+                          "caption": "Bar locked out over the shoulders.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/bench-top.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Bar touches lower chest, elbows tucked.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/bench-bottom.jpg"
+                          ],
+                          "phase": "MID"
+                        },
+                        {
+                          "key": "lockout",
+                          "label": "Lockout",
+                          "caption": "Press to full lockout, ribcage down.",
+                          "order": 2,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/bench-lockout.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "exerciseId": "ex_inclinedbpress",
+                    "orderIndex": 1,
+                    "sets": 3,
+                    "repsMin": 10,
+                    "repsMax": 12,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 60,
+                    "loadBasis": "Paired with flat bench; 60 lb dumbbells at RPE 8 last block.",
+                    "restSeconds": 120,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": {
+                      "setsMultiplier": 0.67,
+                      "intensityDelta": -2
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_inclinedbpress",
+                      "name": "Incline Dumbbell Press",
+                      "primaryMuscles": [
+                        "Upper Chest",
+                        "Front Delts",
+                        "Triceps"
+                      ],
+                      "formCues": [
+                        "Bench at 30°",
+                        "Press up and slightly in",
+                        "Control the stretch at the bottom"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "start",
+                          "label": "Start",
+                          "caption": "Dumbbells at upper-chest level.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/incline-db-start.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Dumbbells pressed together overhead.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/incline-db-top.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "blockId": "blk_accum_upper_acc",
+                "type": "ACCESSORY",
+                "title": "Back & Arms",
+                "orderIndex": 2,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_pullup",
+                    "orderIndex": 0,
+                    "sets": 4,
+                    "repsMin": 8,
+                    "repsMax": 12,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": null,
+                    "loadBasis": null,
+                    "restSeconds": 90,
+                    "tempo": null,
+                    "notes": "Add load once you clear 12 clean reps.",
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_pullup",
+                      "name": "Pull-Up",
+                      "primaryMuscles": [
+                        "Lats",
+                        "Biceps",
+                        "Mid-Back"
+                      ],
+                      "formCues": [
+                        "Full hang at the bottom",
+                        "Lead with the elbows",
+                        "Chin over the bar"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "hang",
+                          "label": "Hang",
+                          "caption": "Dead hang, shoulders active.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/pullup-hang.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Chin over bar, chest to the bar.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/pullup-top.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "exerciseId": "ex_dbcurl",
+                    "orderIndex": 1,
+                    "sets": 3,
+                    "repsMin": 12,
+                    "repsMax": 15,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 9
+                    },
+                    "targetWeightLbs": 35,
+                    "loadBasis": null,
+                    "restSeconds": 60,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_dbcurl",
+                      "name": "Dumbbell Biceps Curl",
+                      "primaryMuscles": [
+                        "Biceps"
+                      ],
+                      "formCues": [
+                        "Keep elbows pinned to your sides",
+                        "Supinate as you curl",
+                        "No swinging"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Arms extended, palms forward.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/db-curl-bottom.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Full contraction, elbows fixed.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/db-curl-top.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "dayId": "day_accum_lower",
+            "label": "Lower A",
+            "dayOfWeek": "TUE",
+            "locationId": "loc_ironforge",
+            "locationName": "Iron Forge Barbell Club",
+            "orderIndex": 1,
+            "blocks": [
+              {
+                "blockId": "blk_accum_lower_main",
+                "type": "MAIN",
+                "title": "Squat",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_backsquat",
+                    "orderIndex": 0,
+                    "sets": 4,
+                    "repsMin": 6,
+                    "repsMax": 8,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 255,
+                    "loadBasis": "e1RM 335 from 285×4, 76% for hypertrophy",
+                    "restSeconds": 180,
+                    "tempo": "2-1-1-0",
+                    "notes": null,
+                    "deloadModifier": {
+                      "setsMultiplier": 0.5,
+                      "intensityDelta": -2
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_backsquat",
+                      "name": "Barbell Back Squat",
+                      "primaryMuscles": [
+                        "Quads",
+                        "Glutes",
+                        "Adductors"
+                      ],
+                      "formCues": [
+                        "Brace before you unrack",
+                        "Break at hips and knees together",
+                        "Drive the whole foot down"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Standing tall, bar on the traps.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/squat-top.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Hip crease below knee, chest up.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/squat-bottom.jpg"
+                          ],
+                          "phase": "MID"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "exerciseId": "ex_rdl",
+                    "orderIndex": 1,
+                    "sets": 3,
+                    "repsMin": 8,
+                    "repsMax": 10,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 225,
+                    "loadBasis": "Hip hinge accessory; 225 for controlled 8s.",
+                    "restSeconds": 120,
+                    "tempo": null,
+                    "notes": "Feel the hamstring stretch; don't round.",
+                    "deloadModifier": {
+                      "setsMultiplier": 0.67,
+                      "intensityDelta": -2
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_rdl",
+                      "name": "Romanian Deadlift",
+                      "primaryMuscles": [
+                        "Hamstrings",
+                        "Glutes",
+                        "Erectors"
+                      ],
+                      "formCues": [
+                        "Soft knees, push hips back",
+                        "Bar drags the legs",
+                        "Neutral spine throughout"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Standing, hips locked out.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/rdl-top.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "bottom",
+                          "label": "Stretch",
+                          "caption": "Bar mid-shin, hamstrings loaded.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/rdl-bottom.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "blockId": "blk_accum_lower_acc",
+                "type": "ACCESSORY",
+                "title": "Quads & Calves",
+                "orderIndex": 1,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_legpress",
+                    "orderIndex": 0,
+                    "sets": 3,
+                    "repsMin": 12,
+                    "repsMax": 15,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 360,
+                    "loadBasis": null,
+                    "restSeconds": 90,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_legpress",
+                      "name": "Leg Press",
+                      "primaryMuscles": [
+                        "Quads",
+                        "Glutes"
+                      ],
+                      "formCues": [
+                        "Feet shoulder-width",
+                        "Lower to ~90°",
+                        "Don't lock the knees hard at the top"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Legs near-extended under control.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/leg-press-top.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Knees to ~90°, back flat on pad.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/leg-press-bottom.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "dayId": "day_accum_push",
+            "label": "Push A",
+            "dayOfWeek": "THU",
+            "locationId": "loc_ironforge",
+            "locationName": "Iron Forge Barbell Club",
+            "orderIndex": 2,
+            "blocks": [
+              {
+                "blockId": "blk_accum_push_main",
+                "type": "MAIN",
+                "title": "Vertical Press",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_ohp",
+                    "orderIndex": 0,
+                    "sets": 4,
+                    "repsMin": 6,
+                    "repsMax": 8,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 115,
+                    "loadBasis": "e1RM 155 from 135×4, 74% for volume.",
+                    "restSeconds": 150,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": {
+                      "setsMultiplier": 0.5,
+                      "intensityDelta": -2
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_ohp",
+                      "name": "Standing Overhead Press",
+                      "primaryMuscles": [
+                        "Front Delts",
+                        "Triceps",
+                        "Upper Chest"
+                      ],
+                      "formCues": [
+                        "Squeeze glutes, ribs down",
+                        "Bar over the mid-foot at lockout",
+                        "Head through the window at the top"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "rack",
+                          "label": "Rack",
+                          "caption": "Bar on front delts, elbows under.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/ohp-rack.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "lockout",
+                          "label": "Lockout",
+                          "caption": "Bar overhead, biceps by the ears.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/ohp-lockout.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "exerciseId": "ex_lateralraise",
+                    "orderIndex": 1,
+                    "sets": 4,
+                    "repsMin": 12,
+                    "repsMax": 15,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 9
+                    },
+                    "targetWeightLbs": 20,
+                    "loadBasis": null,
+                    "restSeconds": 60,
+                    "tempo": null,
+                    "notes": "Lead with the elbows, no traps.",
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_lateralraise",
+                      "name": "Dumbbell Lateral Raise",
+                      "primaryMuscles": [
+                        "Side Delts"
+                      ],
+                      "formCues": [
+                        "Slight forward lean",
+                        "Raise to shoulder height",
+                        "Control the way down"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Dumbbells at the sides.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/lat-raise-bottom.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Elbows at shoulder height.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/lat-raise-top.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "dayId": "day_accum_pull",
+            "label": "Pull A",
+            "dayOfWeek": "FRI",
+            "locationId": "loc_home",
+            "locationName": "Home Garage Gym",
+            "orderIndex": 3,
+            "blocks": [
+              {
+                "blockId": "blk_accum_pull_main",
+                "type": "MAIN",
+                "title": "Deadlift",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_deadlift",
+                    "orderIndex": 0,
+                    "sets": 3,
+                    "repsMin": 5,
+                    "repsMax": 5,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 315,
+                    "loadBasis": "e1RM 405 from 365×3, 78% for volume triples.",
+                    "restSeconds": 210,
+                    "tempo": null,
+                    "notes": "Reset each rep; no touch-and-go.",
+                    "deloadModifier": {
+                      "setsMultiplier": 0.67,
+                      "intensityDelta": -2
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_deadlift",
+                      "name": "Conventional Deadlift",
+                      "primaryMuscles": [
+                        "Glutes",
+                        "Hamstrings",
+                        "Erectors",
+                        "Lats"
+                      ],
+                      "formCues": [
+                        "Bar over mid-foot",
+                        "Take the slack out before you pull",
+                        "Push the floor away"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "setup",
+                          "label": "Setup",
+                          "caption": "Hips set, lats engaged, bar mid-foot.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/deadlift-setup.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "lockout",
+                          "label": "Lockout",
+                          "caption": "Standing tall, glutes locked.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/deadlift-lockout.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "exerciseId": "ex_barbellrow",
+                    "orderIndex": 1,
+                    "sets": 4,
+                    "repsMin": 8,
+                    "repsMax": 10,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 185,
+                    "loadBasis": null,
+                    "restSeconds": 120,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": {
+                      "setsMultiplier": 0.67,
+                      "intensityDelta": -2
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_barbellrow",
+                      "name": "Barbell Bent-Over Row",
+                      "primaryMuscles": [
+                        "Lats",
+                        "Mid-Back",
+                        "Rear Delts",
+                        "Biceps"
+                      ],
+                      "formCues": [
+                        "Hinge to ~45°",
+                        "Pull to the lower ribs",
+                        "Keep the neck neutral"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Bar hanging, back flat and braced.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/row-bottom.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Bar to the lower ribs, blades squeezed.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/row-top.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phaseId": "phase_intens",
+        "title": "Intensification",
+        "focus": "Push loads up — lower reps, higher intensity at RPE 8–9, trimmed volume.",
+        "orderIndex": 1,
+        "status": "ACTIVE",
+        "weeks": 4,
+        "deloadWeekIndex": null,
+        "targetStartDate": "2026-07-06",
+        "targetEndDate": "2026-08-02",
+        "nutritionGuidance": {
+          "kcal": 2950,
+          "proteinG": 195,
+          "carbsG": 330,
+          "fatG": 82,
+          "note": "Small bump to support heavier top sets and recovery."
+        },
+        "days": [
+          {
+            "dayId": "day_intens_upper",
+            "label": "Upper B",
+            "dayOfWeek": "MON",
+            "locationId": "loc_ironforge",
+            "locationName": "Iron Forge Barbell Club",
+            "orderIndex": 0,
+            "blocks": [
+              {
+                "blockId": "blk_intens_upper_main",
+                "type": "MAIN",
+                "title": "Heavy Press",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_benchpress",
+                    "orderIndex": 0,
+                    "sets": 5,
+                    "repsMin": 4,
+                    "repsMax": 5,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "PERCENT_1RM",
+                      "value": 82
+                    },
+                    "targetWeightLbs": 200,
+                    "loadBasis": "e1RM 245, 82% for heavy fives.",
+                    "restSeconds": 180,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_benchpress",
+                      "name": "Barbell Bench Press",
+                      "primaryMuscles": [
+                        "Chest",
+                        "Triceps",
+                        "Front Delts"
+                      ],
+                      "formCues": [
+                        "Retract and depress the scapula",
+                        "Bar to lower chest, elbows ~45°",
+                        "Drive feet into the floor"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "start",
+                          "label": "Top",
+                          "caption": "Bar locked out over the shoulders.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/bench-top.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Bar touches lower chest, elbows tucked.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/bench-bottom.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "exerciseId": "ex_weightedpullup",
+                    "orderIndex": 1,
+                    "sets": 4,
+                    "repsMin": 5,
+                    "repsMax": 6,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "RPE",
+                      "value": 8
+                    },
+                    "targetWeightLbs": 25,
+                    "loadBasis": "Bodyweight + 25 lb for heavy sets of 5–6.",
+                    "restSeconds": 150,
+                    "tempo": null,
+                    "notes": "Belt-loaded; full range.",
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_weightedpullup",
+                      "name": "Weighted Pull-Up",
+                      "primaryMuscles": [
+                        "Lats",
+                        "Biceps",
+                        "Mid-Back"
+                      ],
+                      "formCues": [
+                        "Dead hang start",
+                        "Drive elbows down and back",
+                        "Control the negative"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "hang",
+                          "label": "Hang",
+                          "caption": "Loaded dead hang, shoulders packed.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/wpullup-hang.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Chin over bar with the added load.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/wpullup-top.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "dayId": "day_intens_lower",
+            "label": "Lower B",
+            "dayOfWeek": "TUE",
+            "locationId": "loc_ironforge",
+            "locationName": "Iron Forge Barbell Club",
+            "orderIndex": 1,
+            "blocks": [
+              {
+                "blockId": "blk_intens_lower_main",
+                "type": "MAIN",
+                "title": "Heavy Squat",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_backsquat",
+                    "orderIndex": 0,
+                    "sets": 5,
+                    "repsMin": 3,
+                    "repsMax": 5,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "PERCENT_1RM",
+                      "value": 84
+                    },
+                    "targetWeightLbs": 285,
+                    "loadBasis": "e1RM 335, 85% for heavy triples.",
+                    "restSeconds": 210,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_backsquat",
+                      "name": "Barbell Back Squat",
+                      "primaryMuscles": [
+                        "Quads",
+                        "Glutes",
+                        "Adductors"
+                      ],
+                      "formCues": [
+                        "Brace before you unrack",
+                        "Break at hips and knees together",
+                        "Drive the whole foot down"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Standing tall, bar on the traps.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/squat-top.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Hip crease below knee, chest up.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/squat-bottom.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "dayId": "day_intens_push",
+            "label": "Push B",
+            "dayOfWeek": "THU",
+            "locationId": "loc_ironforge",
+            "locationName": "Iron Forge Barbell Club",
+            "orderIndex": 2,
+            "blocks": [
+              {
+                "blockId": "blk_intens_push_main",
+                "type": "MAIN",
+                "title": "Heavy Overhead",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_ohp",
+                    "orderIndex": 0,
+                    "sets": 5,
+                    "repsMin": 3,
+                    "repsMax": 5,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "PERCENT_1RM",
+                      "value": 83
+                    },
+                    "targetWeightLbs": 130,
+                    "loadBasis": "e1RM 155, 84% for heavy fives.",
+                    "restSeconds": 180,
+                    "tempo": null,
+                    "notes": null,
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_ohp",
+                      "name": "Standing Overhead Press",
+                      "primaryMuscles": [
+                        "Front Delts",
+                        "Triceps",
+                        "Upper Chest"
+                      ],
+                      "formCues": [
+                        "Squeeze glutes, ribs down",
+                        "Bar over the mid-foot at lockout",
+                        "Head through the window at the top"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "rack",
+                          "label": "Rack",
+                          "caption": "Bar on front delts, elbows under.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/ohp-rack.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "lockout",
+                          "label": "Lockout",
+                          "caption": "Bar overhead, biceps by the ears.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/ohp-lockout.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "dayId": "day_intens_pull",
+            "label": "Pull B",
+            "dayOfWeek": "FRI",
+            "locationId": "loc_home",
+            "locationName": "Home Garage Gym",
+            "orderIndex": 3,
+            "blocks": [
+              {
+                "blockId": "blk_intens_pull_main",
+                "type": "MAIN",
+                "title": "Heavy Pull",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_deadlift",
+                    "orderIndex": 0,
+                    "sets": 4,
+                    "repsMin": 3,
+                    "repsMax": 3,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "PERCENT_1RM",
+                      "value": 85
+                    },
+                    "targetWeightLbs": 345,
+                    "loadBasis": "e1RM 405, 85% for heavy triples.",
+                    "restSeconds": 240,
+                    "tempo": null,
+                    "notes": "Full reset between reps.",
+                    "deloadModifier": null,
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_deadlift",
+                      "name": "Conventional Deadlift",
+                      "primaryMuscles": [
+                        "Glutes",
+                        "Hamstrings",
+                        "Erectors",
+                        "Lats"
+                      ],
+                      "formCues": [
+                        "Bar over mid-foot",
+                        "Take the slack out before you pull",
+                        "Push the floor away"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "setup",
+                          "label": "Setup",
+                          "caption": "Hips set, lats engaged, bar mid-foot.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/deadlift-setup.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "lockout",
+                          "label": "Lockout",
+                          "caption": "Standing tall, glutes locked.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/deadlift-lockout.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phaseId": "phase_deload",
+        "title": "Deload & Peak",
+        "focus": "Shed fatigue, then express strength — a light week into fresh top singles.",
+        "orderIndex": 2,
+        "status": "LOCKED",
+        "weeks": 3,
+        "deloadWeekIndex": 1,
+        "targetStartDate": "2026-08-03",
+        "targetEndDate": "2026-08-23",
+        "nutritionGuidance": null,
+        "days": [
+          {
+            "dayId": "day_deload_full",
+            "label": "Full Body Primer",
+            "dayOfWeek": "MON",
+            "locationId": "loc_ironforge",
+            "locationName": "Iron Forge Barbell Club",
+            "orderIndex": 0,
+            "blocks": [
+              {
+                "blockId": "blk_deload_main",
+                "type": "MAIN",
+                "title": "Movement Refresh",
+                "orderIndex": 0,
+                "prescriptions": [
+                  {
+                    "exerciseId": "ex_backsquat",
+                    "orderIndex": 0,
+                    "sets": 3,
+                    "repsMin": 5,
+                    "repsMax": 5,
+                    "durationSeconds": null,
+                    "intensity": {
+                      "kind": "PERCENT_1RM",
+                      "value": 65
+                    },
+                    "targetWeightLbs": 220,
+                    "loadBasis": "Deload — 65% to move well and recover.",
+                    "restSeconds": 120,
+                    "tempo": null,
+                    "notes": "Crisp bar speed; leave 4+ in the tank.",
+                    "deloadModifier": {
+                      "setsMultiplier": 1,
+                      "intensityDelta": 0
+                    },
+                    "loggedSets": null,
+                    "exercise": {
+                      "exerciseId": "ex_backsquat",
+                      "name": "Barbell Back Squat",
+                      "primaryMuscles": [
+                        "Quads",
+                        "Glutes",
+                        "Adductors"
+                      ],
+                      "formCues": [
+                        "Brace before you unrack",
+                        "Break at hips and knees together",
+                        "Drive the whole foot down"
+                      ],
+                      "demoFrames": [
+                        {
+                          "key": "top",
+                          "label": "Top",
+                          "caption": "Standing tall, bar on the traps.",
+                          "order": 0,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/squat-top.jpg"
+                          ],
+                          "phase": "START"
+                        },
+                        {
+                          "key": "bottom",
+                          "label": "Bottom",
+                          "caption": "Hip crease below knee, chest up.",
+                          "order": 1,
+                          "imageUrl": null,
+                          "imageCandidates": [
+                            "https://cdn.tesseta.app/demo/squat-bottom.jpg"
+                          ],
+                          "phase": "END"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "GET /api/me/workout-programs/prog_current/nutrition-guidance": {
+    "kcal": 2950,
+    "proteinG": 195,
+    "carbsG": 330,
+    "fatG": 82,
+    "note": "Small bump to support heavier top sets and recovery."
+  },
+  "GET /api/me/workout-programs/prog_current/calendar": [
+    {
+      "scheduledId": "sch_wk2_mon",
+      "date": "2026-07-13",
+      "programId": "prog_current",
+      "programTitle": "Hypertrophy Block — Summer 2026",
+      "phaseId": "phase_intens",
+      "phaseTitle": "Intensification",
+      "dayId": "day_intens_upper",
+      "dayLabel": "Upper B",
+      "weekIndexInPhase": 2,
+      "isDeload": false,
+      "locationId": "loc_ironforge",
+      "locationName": "Iron Forge Barbell Club",
+      "status": "COMPLETED",
+      "completedAt": "2026-07-13T18:12:40Z",
+      "durationSeconds": 3960,
+      "session": {
+        "dayId": "day_intens_upper",
+        "label": "Upper B",
+        "dayOfWeek": "MON",
+        "locationId": "loc_ironforge",
+        "locationName": "Iron Forge Barbell Club",
+        "orderIndex": 0,
+        "blocks": [
+          {
+            "blockId": "blk_intens_upper_main",
+            "type": "MAIN",
+            "title": "Heavy Press",
+            "orderIndex": 0,
+            "prescriptions": [
+              {
+                "exerciseId": "ex_benchpress",
+                "orderIndex": 0,
+                "sets": 5,
+                "repsMin": 4,
+                "repsMax": 5,
+                "durationSeconds": null,
+                "intensity": {
+                  "kind": "PERCENT_1RM",
+                  "value": 82
+                },
+                "targetWeightLbs": 200,
+                "loadBasis": "e1RM 245, 82% for heavy fives.",
+                "restSeconds": 180,
+                "tempo": null,
+                "notes": null,
+                "deloadModifier": null,
+                "loggedSets": [
+                  {
+                    "weightLbs": 200,
+                    "reps": 5,
+                    "rpe": 8,
+                    "restSeconds": 180,
+                    "completedAt": "2026-07-13T17:22:10Z"
+                  },
+                  {
+                    "weightLbs": 200,
+                    "reps": 5,
+                    "rpe": 8,
+                    "restSeconds": 185,
+                    "completedAt": "2026-07-13T17:26:30Z"
+                  },
+                  {
+                    "weightLbs": 205,
+                    "reps": 4,
+                    "rpe": 9,
+                    "restSeconds": 190,
+                    "completedAt": "2026-07-13T17:31:05Z"
+                  },
+                  {
+                    "weightLbs": 205,
+                    "reps": 4,
+                    "rpe": 9,
+                    "restSeconds": 190,
+                    "completedAt": "2026-07-13T17:35:40Z"
+                  },
+                  {
+                    "weightLbs": 205,
+                    "reps": 4,
+                    "rpe": 9,
+                    "restSeconds": null,
+                    "completedAt": "2026-07-13T17:40:12Z"
+                  }
+                ],
+                "exercise": {
+                  "exerciseId": "ex_benchpress",
+                  "name": "Barbell Bench Press",
+                  "primaryMuscles": [
+                    "Chest",
+                    "Triceps",
+                    "Front Delts"
+                  ],
+                  "formCues": [
+                    "Retract and depress the scapula",
+                    "Bar to lower chest, elbows ~45°",
+                    "Drive feet into the floor"
+                  ],
+                  "demoFrames": [
+                    {
+                      "key": "start",
+                      "label": "Top",
+                      "caption": "Bar locked out over the shoulders.",
+                      "order": 0,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/bench-top.jpg"
+                      ],
+                      "phase": "START"
+                    },
+                    {
+                      "key": "bottom",
+                      "label": "Bottom",
+                      "caption": "Bar touches lower chest, elbows tucked.",
+                      "order": 1,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/bench-bottom.jpg"
+                      ],
+                      "phase": "END"
+                    }
+                  ]
+                }
+              },
+              {
+                "exerciseId": "ex_weightedpullup",
+                "orderIndex": 1,
+                "sets": 4,
+                "repsMin": 5,
+                "repsMax": 6,
+                "durationSeconds": null,
+                "intensity": {
+                  "kind": "RPE",
+                  "value": 8
+                },
+                "targetWeightLbs": 25,
+                "loadBasis": "Bodyweight + 25 lb for heavy sets of 5–6.",
+                "restSeconds": 150,
+                "tempo": null,
+                "notes": "Belt-loaded; full range.",
+                "deloadModifier": null,
+                "loggedSets": [
+                  {
+                    "weightLbs": 25,
+                    "reps": 6,
+                    "rpe": 8,
+                    "restSeconds": 150,
+                    "completedAt": "2026-07-13T17:48:00Z"
+                  },
+                  {
+                    "weightLbs": 25,
+                    "reps": 6,
+                    "rpe": 8,
+                    "restSeconds": 150,
+                    "completedAt": "2026-07-13T17:52:20Z"
+                  },
+                  {
+                    "weightLbs": 25,
+                    "reps": 5,
+                    "rpe": 9,
+                    "restSeconds": 160,
+                    "completedAt": "2026-07-13T17:56:50Z"
+                  },
+                  {
+                    "weightLbs": 25,
+                    "reps": 5,
+                    "rpe": 9,
+                    "restSeconds": null,
+                    "completedAt": "2026-07-13T18:01:15Z"
+                  }
+                ],
+                "exercise": {
+                  "exerciseId": "ex_weightedpullup",
+                  "name": "Weighted Pull-Up",
+                  "primaryMuscles": [
+                    "Lats",
+                    "Biceps",
+                    "Mid-Back"
+                  ],
+                  "formCues": [
+                    "Dead hang start",
+                    "Drive elbows down and back",
+                    "Control the negative"
+                  ],
+                  "demoFrames": [
+                    {
+                      "key": "hang",
+                      "label": "Hang",
+                      "caption": "Loaded dead hang, shoulders packed.",
+                      "order": 0,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/wpullup-hang.jpg"
+                      ],
+                      "phase": "START"
+                    },
+                    {
+                      "key": "top",
+                      "label": "Top",
+                      "caption": "Chin over bar with the added load.",
+                      "order": 1,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/wpullup-top.jpg"
+                      ],
+                      "phase": "END"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "scheduledId": "sch_wk2_tue",
+      "date": "2026-07-14",
+      "programId": "prog_current",
+      "programTitle": "Hypertrophy Block — Summer 2026",
+      "phaseId": "phase_intens",
+      "phaseTitle": "Intensification",
+      "dayId": "day_intens_lower",
+      "dayLabel": "Lower B",
+      "weekIndexInPhase": 2,
+      "isDeload": false,
+      "locationId": "loc_ironforge",
+      "locationName": "Iron Forge Barbell Club",
+      "status": "COMPLETED",
+      "completedAt": "2026-07-14T19:02:11Z",
+      "durationSeconds": 3420,
+      "session": {
+        "dayId": "day_intens_lower",
+        "label": "Lower B",
+        "dayOfWeek": "TUE",
+        "locationId": "loc_ironforge",
+        "locationName": "Iron Forge Barbell Club",
+        "orderIndex": 1,
+        "blocks": [
+          {
+            "blockId": "blk_intens_lower_main",
+            "type": "MAIN",
+            "title": "Heavy Squat",
+            "orderIndex": 0,
+            "prescriptions": [
+              {
+                "exerciseId": "ex_backsquat",
+                "orderIndex": 0,
+                "sets": 5,
+                "repsMin": 3,
+                "repsMax": 5,
+                "durationSeconds": null,
+                "intensity": {
+                  "kind": "PERCENT_1RM",
+                  "value": 84
+                },
+                "targetWeightLbs": 285,
+                "loadBasis": "e1RM 335, 85% for heavy triples.",
+                "restSeconds": 210,
+                "tempo": null,
+                "notes": null,
+                "deloadModifier": null,
+                "loggedSets": [
+                  {
+                    "weightLbs": 285,
+                    "reps": 5,
+                    "rpe": 8,
+                    "restSeconds": 210,
+                    "completedAt": "2026-07-14T18:20:00Z"
+                  },
+                  {
+                    "weightLbs": 285,
+                    "reps": 5,
+                    "rpe": 8,
+                    "restSeconds": 220,
+                    "completedAt": "2026-07-14T18:25:10Z"
+                  },
+                  {
+                    "weightLbs": 295,
+                    "reps": 4,
+                    "rpe": 9,
+                    "restSeconds": 230,
+                    "completedAt": "2026-07-14T18:30:30Z"
+                  },
+                  {
+                    "weightLbs": 295,
+                    "reps": 3,
+                    "rpe": 9,
+                    "restSeconds": 230,
+                    "completedAt": "2026-07-14T18:36:00Z"
+                  },
+                  {
+                    "weightLbs": 295,
+                    "reps": 3,
+                    "rpe": 9,
+                    "restSeconds": null,
+                    "completedAt": "2026-07-14T18:41:25Z"
+                  }
+                ],
+                "exercise": {
+                  "exerciseId": "ex_backsquat",
+                  "name": "Barbell Back Squat",
+                  "primaryMuscles": [
+                    "Quads",
+                    "Glutes",
+                    "Adductors"
+                  ],
+                  "formCues": [
+                    "Brace before you unrack",
+                    "Break at hips and knees together",
+                    "Drive the whole foot down"
+                  ],
+                  "demoFrames": [
+                    {
+                      "key": "top",
+                      "label": "Top",
+                      "caption": "Standing tall, bar on the traps.",
+                      "order": 0,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/squat-top.jpg"
+                      ],
+                      "phase": "START"
+                    },
+                    {
+                      "key": "bottom",
+                      "label": "Bottom",
+                      "caption": "Hip crease below knee, chest up.",
+                      "order": 1,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/squat-bottom.jpg"
+                      ],
+                      "phase": "END"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "scheduledId": "sch_wk2_thu",
+      "date": "2026-07-16",
+      "programId": "prog_current",
+      "programTitle": "Hypertrophy Block — Summer 2026",
+      "phaseId": "phase_intens",
+      "phaseTitle": "Intensification",
+      "dayId": "day_intens_push",
+      "dayLabel": "Push B",
+      "weekIndexInPhase": 2,
+      "isDeload": false,
+      "locationId": "loc_ironforge",
+      "locationName": "Iron Forge Barbell Club",
+      "status": "COMPLETED",
+      "completedAt": "2026-07-16T18:40:33Z",
+      "durationSeconds": 3180,
+      "session": {
+        "dayId": "day_intens_push",
+        "label": "Push B",
+        "dayOfWeek": "THU",
+        "locationId": "loc_ironforge",
+        "locationName": "Iron Forge Barbell Club",
+        "orderIndex": 2,
+        "blocks": [
+          {
+            "blockId": "blk_intens_push_main",
+            "type": "MAIN",
+            "title": "Heavy Overhead",
+            "orderIndex": 0,
+            "prescriptions": [
+              {
+                "exerciseId": "ex_ohp",
+                "orderIndex": 0,
+                "sets": 5,
+                "repsMin": 3,
+                "repsMax": 5,
+                "durationSeconds": null,
+                "intensity": {
+                  "kind": "PERCENT_1RM",
+                  "value": 83
+                },
+                "targetWeightLbs": 130,
+                "loadBasis": "e1RM 155, 84% for heavy fives.",
+                "restSeconds": 180,
+                "tempo": null,
+                "notes": null,
+                "deloadModifier": null,
+                "loggedSets": [
+                  {
+                    "weightLbs": 130,
+                    "reps": 5,
+                    "rpe": 8,
+                    "restSeconds": 180,
+                    "completedAt": "2026-07-16T18:10:00Z"
+                  },
+                  {
+                    "weightLbs": 130,
+                    "reps": 5,
+                    "rpe": 8,
+                    "restSeconds": 185,
+                    "completedAt": "2026-07-16T18:14:30Z"
+                  },
+                  {
+                    "weightLbs": 135,
+                    "reps": 4,
+                    "rpe": 9,
+                    "restSeconds": 190,
+                    "completedAt": "2026-07-16T18:19:20Z"
+                  },
+                  {
+                    "weightLbs": 135,
+                    "reps": 3,
+                    "rpe": 9,
+                    "restSeconds": 190,
+                    "completedAt": "2026-07-16T18:24:10Z"
+                  },
+                  {
+                    "weightLbs": 135,
+                    "reps": 3,
+                    "rpe": 9,
+                    "restSeconds": null,
+                    "completedAt": "2026-07-16T18:29:00Z"
+                  }
+                ],
+                "exercise": {
+                  "exerciseId": "ex_ohp",
+                  "name": "Standing Overhead Press",
+                  "primaryMuscles": [
+                    "Front Delts",
+                    "Triceps",
+                    "Upper Chest"
+                  ],
+                  "formCues": [
+                    "Squeeze glutes, ribs down",
+                    "Bar over the mid-foot at lockout",
+                    "Head through the window at the top"
+                  ],
+                  "demoFrames": [
+                    {
+                      "key": "rack",
+                      "label": "Rack",
+                      "caption": "Bar on front delts, elbows under.",
+                      "order": 0,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/ohp-rack.jpg"
+                      ],
+                      "phase": "START"
+                    },
+                    {
+                      "key": "lockout",
+                      "label": "Lockout",
+                      "caption": "Bar overhead, biceps by the ears.",
+                      "order": 1,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/ohp-lockout.jpg"
+                      ],
+                      "phase": "END"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "scheduledId": "sch_wk2_fri",
+      "date": "2026-07-17",
+      "programId": "prog_current",
+      "programTitle": "Hypertrophy Block — Summer 2026",
+      "phaseId": "phase_intens",
+      "phaseTitle": "Intensification",
+      "dayId": "day_intens_pull",
+      "dayLabel": "Pull B",
+      "weekIndexInPhase": 2,
+      "isDeload": false,
+      "locationId": "loc_home",
+      "locationName": "Home Garage Gym",
+      "status": "COMPLETED",
+      "completedAt": "2026-07-17T07:35:02Z",
+      "durationSeconds": 2760,
+      "session": {
+        "dayId": "day_intens_pull",
+        "label": "Pull B",
+        "dayOfWeek": "FRI",
+        "locationId": "loc_home",
+        "locationName": "Home Garage Gym",
+        "orderIndex": 3,
+        "blocks": [
+          {
+            "blockId": "blk_intens_pull_main",
+            "type": "MAIN",
+            "title": "Heavy Pull",
+            "orderIndex": 0,
+            "prescriptions": [
+              {
+                "exerciseId": "ex_deadlift",
+                "orderIndex": 0,
+                "sets": 4,
+                "repsMin": 3,
+                "repsMax": 3,
+                "durationSeconds": null,
+                "intensity": {
+                  "kind": "PERCENT_1RM",
+                  "value": 85
+                },
+                "targetWeightLbs": 345,
+                "loadBasis": "e1RM 405, 85% for heavy triples.",
+                "restSeconds": 240,
+                "tempo": null,
+                "notes": "Full reset between reps.",
+                "deloadModifier": null,
+                "loggedSets": [
+                  {
+                    "weightLbs": 345,
+                    "reps": 3,
+                    "rpe": 8,
+                    "restSeconds": 240,
+                    "completedAt": "2026-07-17T07:05:00Z"
+                  },
+                  {
+                    "weightLbs": 345,
+                    "reps": 3,
+                    "rpe": 8,
+                    "restSeconds": 245,
+                    "completedAt": "2026-07-17T07:10:30Z"
+                  },
+                  {
+                    "weightLbs": 355,
+                    "reps": 3,
+                    "rpe": 9,
+                    "restSeconds": 260,
+                    "completedAt": "2026-07-17T07:16:20Z"
+                  },
+                  {
+                    "weightLbs": 355,
+                    "reps": 3,
+                    "rpe": 9,
+                    "restSeconds": null,
+                    "completedAt": "2026-07-17T07:22:40Z"
+                  }
+                ],
+                "exercise": {
+                  "exerciseId": "ex_deadlift",
+                  "name": "Conventional Deadlift",
+                  "primaryMuscles": [
+                    "Glutes",
+                    "Hamstrings",
+                    "Erectors",
+                    "Lats"
+                  ],
+                  "formCues": [
+                    "Bar over mid-foot",
+                    "Take the slack out before you pull",
+                    "Push the floor away"
+                  ],
+                  "demoFrames": [
+                    {
+                      "key": "setup",
+                      "label": "Setup",
+                      "caption": "Hips set, lats engaged, bar mid-foot.",
+                      "order": 0,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/deadlift-setup.jpg"
+                      ],
+                      "phase": "START"
+                    },
+                    {
+                      "key": "lockout",
+                      "label": "Lockout",
+                      "caption": "Standing tall, glutes locked.",
+                      "order": 1,
+                      "imageUrl": null,
+                      "imageCandidates": [
+                        "https://cdn.tesseta.app/demo/deadlift-lockout.jpg"
+                      ],
+                      "phase": "END"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "GET /api/me/workout-history": {
+    "page": 0,
+    "size": 25,
+    "total": 4,
+    "hasMore": false,
+    "items": [
+      {
+        "scheduledId": "sch_wk2_fri",
+        "date": "2026-07-17",
+        "programId": "prog_current",
+        "programTitle": "Hypertrophy Block — Summer 2026",
+        "phaseId": "phase_intens",
+        "phaseTitle": "Intensification",
+        "dayId": "day_intens_pull",
+        "dayLabel": "Pull B",
+        "weekIndexInPhase": 2,
+        "isDeload": false,
+        "locationId": "loc_home",
+        "locationName": "Home Garage Gym",
+        "status": "COMPLETED",
+        "completedAt": "2026-07-17T07:35:02Z",
+        "durationSeconds": 2760,
+        "session": {
+          "dayId": "day_intens_pull",
+          "label": "Pull B",
+          "dayOfWeek": "FRI",
+          "locationId": "loc_home",
+          "locationName": "Home Garage Gym",
+          "orderIndex": 3,
+          "blocks": [
+            {
+              "blockId": "blk_intens_pull_main",
+              "type": "MAIN",
+              "title": "Heavy Pull",
+              "orderIndex": 0,
+              "prescriptions": [
+                {
+                  "exerciseId": "ex_deadlift",
+                  "orderIndex": 0,
+                  "sets": 4,
+                  "repsMin": 3,
+                  "repsMax": 3,
+                  "durationSeconds": null,
+                  "intensity": {
+                    "kind": "PERCENT_1RM",
+                    "value": 85
+                  },
+                  "targetWeightLbs": 345,
+                  "loadBasis": "e1RM 405, 85% for heavy triples.",
+                  "restSeconds": 240,
+                  "tempo": null,
+                  "notes": "Full reset between reps.",
+                  "deloadModifier": null,
+                  "loggedSets": [
+                    {
+                      "weightLbs": 345,
+                      "reps": 3,
+                      "rpe": 8,
+                      "restSeconds": 240,
+                      "completedAt": "2026-07-17T07:05:00Z"
+                    },
+                    {
+                      "weightLbs": 345,
+                      "reps": 3,
+                      "rpe": 8,
+                      "restSeconds": 245,
+                      "completedAt": "2026-07-17T07:10:30Z"
+                    },
+                    {
+                      "weightLbs": 355,
+                      "reps": 3,
+                      "rpe": 9,
+                      "restSeconds": 260,
+                      "completedAt": "2026-07-17T07:16:20Z"
+                    },
+                    {
+                      "weightLbs": 355,
+                      "reps": 3,
+                      "rpe": 9,
+                      "restSeconds": null,
+                      "completedAt": "2026-07-17T07:22:40Z"
+                    }
+                  ],
+                  "exercise": {
+                    "exerciseId": "ex_deadlift",
+                    "name": "Conventional Deadlift",
+                    "primaryMuscles": [
+                      "Glutes",
+                      "Hamstrings",
+                      "Erectors",
+                      "Lats"
+                    ],
+                    "formCues": [
+                      "Bar over mid-foot",
+                      "Take the slack out before you pull",
+                      "Push the floor away"
+                    ],
+                    "demoFrames": [
+                      {
+                        "key": "setup",
+                        "label": "Setup",
+                        "caption": "Hips set, lats engaged, bar mid-foot.",
+                        "order": 0,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/deadlift-setup.jpg"
+                        ],
+                        "phase": "START"
+                      },
+                      {
+                        "key": "lockout",
+                        "label": "Lockout",
+                        "caption": "Standing tall, glutes locked.",
+                        "order": 1,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/deadlift-lockout.jpg"
+                        ],
+                        "phase": "END"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "scheduledId": "sch_wk2_thu",
+        "date": "2026-07-16",
+        "programId": "prog_current",
+        "programTitle": "Hypertrophy Block — Summer 2026",
+        "phaseId": "phase_intens",
+        "phaseTitle": "Intensification",
+        "dayId": "day_intens_push",
+        "dayLabel": "Push B",
+        "weekIndexInPhase": 2,
+        "isDeload": false,
+        "locationId": "loc_ironforge",
+        "locationName": "Iron Forge Barbell Club",
+        "status": "COMPLETED",
+        "completedAt": "2026-07-16T18:40:33Z",
+        "durationSeconds": 3180,
+        "session": {
+          "dayId": "day_intens_push",
+          "label": "Push B",
+          "dayOfWeek": "THU",
+          "locationId": "loc_ironforge",
+          "locationName": "Iron Forge Barbell Club",
+          "orderIndex": 2,
+          "blocks": [
+            {
+              "blockId": "blk_intens_push_main",
+              "type": "MAIN",
+              "title": "Heavy Overhead",
+              "orderIndex": 0,
+              "prescriptions": [
+                {
+                  "exerciseId": "ex_ohp",
+                  "orderIndex": 0,
+                  "sets": 5,
+                  "repsMin": 3,
+                  "repsMax": 5,
+                  "durationSeconds": null,
+                  "intensity": {
+                    "kind": "PERCENT_1RM",
+                    "value": 83
+                  },
+                  "targetWeightLbs": 130,
+                  "loadBasis": "e1RM 155, 84% for heavy fives.",
+                  "restSeconds": 180,
+                  "tempo": null,
+                  "notes": null,
+                  "deloadModifier": null,
+                  "loggedSets": [
+                    {
+                      "weightLbs": 130,
+                      "reps": 5,
+                      "rpe": 8,
+                      "restSeconds": 180,
+                      "completedAt": "2026-07-16T18:10:00Z"
+                    },
+                    {
+                      "weightLbs": 130,
+                      "reps": 5,
+                      "rpe": 8,
+                      "restSeconds": 185,
+                      "completedAt": "2026-07-16T18:14:30Z"
+                    },
+                    {
+                      "weightLbs": 135,
+                      "reps": 4,
+                      "rpe": 9,
+                      "restSeconds": 190,
+                      "completedAt": "2026-07-16T18:19:20Z"
+                    },
+                    {
+                      "weightLbs": 135,
+                      "reps": 3,
+                      "rpe": 9,
+                      "restSeconds": 190,
+                      "completedAt": "2026-07-16T18:24:10Z"
+                    },
+                    {
+                      "weightLbs": 135,
+                      "reps": 3,
+                      "rpe": 9,
+                      "restSeconds": null,
+                      "completedAt": "2026-07-16T18:29:00Z"
+                    }
+                  ],
+                  "exercise": {
+                    "exerciseId": "ex_ohp",
+                    "name": "Standing Overhead Press",
+                    "primaryMuscles": [
+                      "Front Delts",
+                      "Triceps",
+                      "Upper Chest"
+                    ],
+                    "formCues": [
+                      "Squeeze glutes, ribs down",
+                      "Bar over the mid-foot at lockout",
+                      "Head through the window at the top"
+                    ],
+                    "demoFrames": [
+                      {
+                        "key": "rack",
+                        "label": "Rack",
+                        "caption": "Bar on front delts, elbows under.",
+                        "order": 0,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/ohp-rack.jpg"
+                        ],
+                        "phase": "START"
+                      },
+                      {
+                        "key": "lockout",
+                        "label": "Lockout",
+                        "caption": "Bar overhead, biceps by the ears.",
+                        "order": 1,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/ohp-lockout.jpg"
+                        ],
+                        "phase": "END"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "scheduledId": "sch_wk2_tue",
+        "date": "2026-07-14",
+        "programId": "prog_current",
+        "programTitle": "Hypertrophy Block — Summer 2026",
+        "phaseId": "phase_intens",
+        "phaseTitle": "Intensification",
+        "dayId": "day_intens_lower",
+        "dayLabel": "Lower B",
+        "weekIndexInPhase": 2,
+        "isDeload": false,
+        "locationId": "loc_ironforge",
+        "locationName": "Iron Forge Barbell Club",
+        "status": "COMPLETED",
+        "completedAt": "2026-07-14T19:02:11Z",
+        "durationSeconds": 3420,
+        "session": {
+          "dayId": "day_intens_lower",
+          "label": "Lower B",
+          "dayOfWeek": "TUE",
+          "locationId": "loc_ironforge",
+          "locationName": "Iron Forge Barbell Club",
+          "orderIndex": 1,
+          "blocks": [
+            {
+              "blockId": "blk_intens_lower_main",
+              "type": "MAIN",
+              "title": "Heavy Squat",
+              "orderIndex": 0,
+              "prescriptions": [
+                {
+                  "exerciseId": "ex_backsquat",
+                  "orderIndex": 0,
+                  "sets": 5,
+                  "repsMin": 3,
+                  "repsMax": 5,
+                  "durationSeconds": null,
+                  "intensity": {
+                    "kind": "PERCENT_1RM",
+                    "value": 84
+                  },
+                  "targetWeightLbs": 285,
+                  "loadBasis": "e1RM 335, 85% for heavy triples.",
+                  "restSeconds": 210,
+                  "tempo": null,
+                  "notes": null,
+                  "deloadModifier": null,
+                  "loggedSets": [
+                    {
+                      "weightLbs": 285,
+                      "reps": 5,
+                      "rpe": 8,
+                      "restSeconds": 210,
+                      "completedAt": "2026-07-14T18:20:00Z"
+                    },
+                    {
+                      "weightLbs": 285,
+                      "reps": 5,
+                      "rpe": 8,
+                      "restSeconds": 220,
+                      "completedAt": "2026-07-14T18:25:10Z"
+                    },
+                    {
+                      "weightLbs": 295,
+                      "reps": 4,
+                      "rpe": 9,
+                      "restSeconds": 230,
+                      "completedAt": "2026-07-14T18:30:30Z"
+                    },
+                    {
+                      "weightLbs": 295,
+                      "reps": 3,
+                      "rpe": 9,
+                      "restSeconds": 230,
+                      "completedAt": "2026-07-14T18:36:00Z"
+                    },
+                    {
+                      "weightLbs": 295,
+                      "reps": 3,
+                      "rpe": 9,
+                      "restSeconds": null,
+                      "completedAt": "2026-07-14T18:41:25Z"
+                    }
+                  ],
+                  "exercise": {
+                    "exerciseId": "ex_backsquat",
+                    "name": "Barbell Back Squat",
+                    "primaryMuscles": [
+                      "Quads",
+                      "Glutes",
+                      "Adductors"
+                    ],
+                    "formCues": [
+                      "Brace before you unrack",
+                      "Break at hips and knees together",
+                      "Drive the whole foot down"
+                    ],
+                    "demoFrames": [
+                      {
+                        "key": "top",
+                        "label": "Top",
+                        "caption": "Standing tall, bar on the traps.",
+                        "order": 0,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/squat-top.jpg"
+                        ],
+                        "phase": "START"
+                      },
+                      {
+                        "key": "bottom",
+                        "label": "Bottom",
+                        "caption": "Hip crease below knee, chest up.",
+                        "order": 1,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/squat-bottom.jpg"
+                        ],
+                        "phase": "END"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "scheduledId": "sch_wk1_fri",
+        "date": "2026-07-10",
+        "programId": "prog_current",
+        "programTitle": "Hypertrophy Block — Summer 2026",
+        "phaseId": "phase_accum",
+        "phaseTitle": "Accumulation",
+        "dayId": "day_accum_pull",
+        "dayLabel": "Pull A",
+        "weekIndexInPhase": 5,
+        "isDeload": false,
+        "locationId": "loc_home",
+        "locationName": "Home Garage Gym",
+        "status": "COMPLETED",
+        "completedAt": "2026-07-10T07:28:44Z",
+        "durationSeconds": 3300,
+        "session": {
+          "dayId": "day_accum_pull",
+          "label": "Pull A",
+          "dayOfWeek": "FRI",
+          "locationId": "loc_home",
+          "locationName": "Home Garage Gym",
+          "orderIndex": 3,
+          "blocks": [
+            {
+              "blockId": "blk_accum_pull_main",
+              "type": "MAIN",
+              "title": "Deadlift",
+              "orderIndex": 0,
+              "prescriptions": [
+                {
+                  "exerciseId": "ex_deadlift",
+                  "orderIndex": 0,
+                  "sets": 3,
+                  "repsMin": 5,
+                  "repsMax": 5,
+                  "durationSeconds": null,
+                  "intensity": {
+                    "kind": "RPE",
+                    "value": 8
+                  },
+                  "targetWeightLbs": 315,
+                  "loadBasis": "e1RM 405 from 365×3, 78% for volume triples.",
+                  "restSeconds": 210,
+                  "tempo": null,
+                  "notes": "Reset each rep; no touch-and-go.",
+                  "deloadModifier": {
+                    "setsMultiplier": 0.67,
+                    "intensityDelta": -2
+                  },
+                  "loggedSets": [
+                    {
+                      "weightLbs": 315,
+                      "reps": 5,
+                      "rpe": 7,
+                      "restSeconds": 210,
+                      "completedAt": "2026-07-10T06:52:00Z"
+                    },
+                    {
+                      "weightLbs": 315,
+                      "reps": 5,
+                      "rpe": 8,
+                      "restSeconds": 215,
+                      "completedAt": "2026-07-10T06:57:30Z"
+                    },
+                    {
+                      "weightLbs": 315,
+                      "reps": 5,
+                      "rpe": 8,
+                      "restSeconds": null,
+                      "completedAt": "2026-07-10T07:03:10Z"
+                    }
+                  ],
+                  "exercise": {
+                    "exerciseId": "ex_deadlift",
+                    "name": "Conventional Deadlift",
+                    "primaryMuscles": [
+                      "Glutes",
+                      "Hamstrings",
+                      "Erectors",
+                      "Lats"
+                    ],
+                    "formCues": [
+                      "Bar over mid-foot",
+                      "Take the slack out before you pull",
+                      "Push the floor away"
+                    ],
+                    "demoFrames": [
+                      {
+                        "key": "setup",
+                        "label": "Setup",
+                        "caption": "Hips set, lats engaged, bar mid-foot.",
+                        "order": 0,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/deadlift-setup.jpg"
+                        ],
+                        "phase": "START"
+                      },
+                      {
+                        "key": "lockout",
+                        "label": "Lockout",
+                        "caption": "Standing tall, glutes locked.",
+                        "order": 1,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/deadlift-lockout.jpg"
+                        ],
+                        "phase": "END"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "exerciseId": "ex_barbellrow",
+                  "orderIndex": 1,
+                  "sets": 4,
+                  "repsMin": 8,
+                  "repsMax": 10,
+                  "durationSeconds": null,
+                  "intensity": {
+                    "kind": "RPE",
+                    "value": 8
+                  },
+                  "targetWeightLbs": 185,
+                  "loadBasis": null,
+                  "restSeconds": 120,
+                  "tempo": null,
+                  "notes": null,
+                  "deloadModifier": {
+                    "setsMultiplier": 0.67,
+                    "intensityDelta": -2
+                  },
+                  "loggedSets": [
+                    {
+                      "weightLbs": 185,
+                      "reps": 10,
+                      "rpe": 7,
+                      "restSeconds": 120,
+                      "completedAt": "2026-07-10T07:10:00Z"
+                    },
+                    {
+                      "weightLbs": 185,
+                      "reps": 10,
+                      "rpe": 8,
+                      "restSeconds": 120,
+                      "completedAt": "2026-07-10T07:14:20Z"
+                    },
+                    {
+                      "weightLbs": 185,
+                      "reps": 9,
+                      "rpe": 8,
+                      "restSeconds": 125,
+                      "completedAt": "2026-07-10T07:18:40Z"
+                    },
+                    {
+                      "weightLbs": 185,
+                      "reps": 8,
+                      "rpe": 9,
+                      "restSeconds": null,
+                      "completedAt": "2026-07-10T07:23:15Z"
+                    }
+                  ],
+                  "exercise": {
+                    "exerciseId": "ex_barbellrow",
+                    "name": "Barbell Bent-Over Row",
+                    "primaryMuscles": [
+                      "Lats",
+                      "Mid-Back",
+                      "Rear Delts",
+                      "Biceps"
+                    ],
+                    "formCues": [
+                      "Hinge to ~45°",
+                      "Pull to the lower ribs",
+                      "Keep the neck neutral"
+                    ],
+                    "demoFrames": [
+                      {
+                        "key": "bottom",
+                        "label": "Bottom",
+                        "caption": "Bar hanging, back flat and braced.",
+                        "order": 0,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/row-bottom.jpg"
+                        ],
+                        "phase": "START"
+                      },
+                      {
+                        "key": "top",
+                        "label": "Top",
+                        "caption": "Bar to the lower ribs, blades squeezed.",
+                        "order": 1,
+                        "imageUrl": null,
+                        "imageCandidates": [
+                          "https://cdn.tesseta.app/demo/row-top.jpg"
+                        ],
+                        "phase": "END"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "GET /api/me/workout-history/summary": {
+    "count": 24,
+    "lastWorkoutDate": "2026-07-17"
+  },
+  "GET /api/me/gyms": [
+    {
+      "locationId": "loc_ironforge",
+      "name": "Iron Forge Barbell Club",
+      "address": "1420 Warehouse Row, Austin, TX 78702",
+      "coverPhotoUrl": null,
+      "is24Hours": true,
+      "hours": {
+        "mon": {
+          "open": "05:00",
+          "close": "23:00"
+        },
+        "tue": {
+          "open": "05:00",
+          "close": "23:00"
+        },
+        "wed": {
+          "open": "05:00",
+          "close": "23:00"
+        },
+        "thu": {
+          "open": "05:00",
+          "close": "23:00"
+        },
+        "fri": {
+          "open": "05:00",
+          "close": "23:00"
+        },
+        "sat": {
+          "open": "07:00",
+          "close": "20:00"
+        },
+        "sun": {
+          "open": "07:00",
+          "close": "20:00"
+        }
+      },
+      "amenities": [
+        "24hr",
+        "lockers",
+        "showers",
+        "parking",
+        "sauna",
+        "training"
+      ],
+      "equipmentIds": [
+        "eq_power_rack",
+        "eq_barbell",
+        "eq_bench",
+        "eq_db_set",
+        "eq_leg_press",
+        "eq_cable_station",
+        "eq_pullup_bar",
+        "eq_treadmill"
+      ],
+      "equipmentSpecs": {
+        "eq_db_set": {
+          "minWeight": 5,
+          "maxWeight": 120,
+          "increment": 5
+        }
+      },
+      "isDefault": true,
+      "isActive": true,
+      "createdAt": "2026-05-20T15:10:00Z",
+      "updatedAt": "2026-07-01T12:00:00Z"
+    },
+    {
+      "locationId": "loc_home",
+      "name": "Home Garage Gym",
+      "address": "Home — Cedar Park, TX",
+      "coverPhotoUrl": null,
+      "is24Hours": true,
+      "hours": null,
+      "amenities": [
+        "24hr",
+        "parking"
+      ],
+      "equipmentIds": [
+        "eq_barbell",
+        "eq_bench",
+        "eq_power_rack",
+        "eq_pullup_bar",
+        "eq_db_set_home"
+      ],
+      "equipmentSpecs": {},
+      "isDefault": false,
+      "isActive": true,
+      "createdAt": "2026-05-22T09:30:00Z",
+      "updatedAt": "2026-06-18T08:45:00Z"
+    }
+  ],
+  "GET /api/me/blood": [
+    {
+      "readingId": "rd_test_20260715",
+      "marker": "TESTOSTERONE",
+      "value": 892,
+      "unit": "ng/dL",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": "Trough draw, 36h post-injection",
+      "reference": {
+        "unit": "ng/dL",
+        "orientation": "HIGHER_IS_BETTER",
+        "goodThreshold": 900,
+        "displayMin": 300,
+        "displayMax": 1100
+      }
+    },
+    {
+      "readingId": "rd_test_20260410",
+      "marker": "TESTOSTERONE",
+      "value": 754,
+      "unit": "ng/dL",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "ng/dL",
+        "orientation": "HIGHER_IS_BETTER",
+        "goodThreshold": 900,
+        "displayMin": 300,
+        "displayMax": 1100
+      }
+    },
+    {
+      "readingId": "rd_test_20260112",
+      "marker": "TESTOSTERONE",
+      "value": 611,
+      "unit": "ng/dL",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": "Pre-dose adjustment",
+      "reference": {
+        "unit": "ng/dL",
+        "orientation": "HIGHER_IS_BETTER",
+        "goodThreshold": 900,
+        "displayMin": 300,
+        "displayMax": 1100
+      }
+    },
+    {
+      "readingId": "rd_ldl_20260715",
+      "marker": "LDL",
+      "value": 78,
+      "unit": "mg/dL",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 0,
+        "displayMax": 190
+      }
+    },
+    {
+      "readingId": "rd_ldl_20260410",
+      "marker": "LDL",
+      "value": 88,
+      "unit": "mg/dL",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 0,
+        "displayMax": 190
+      }
+    },
+    {
+      "readingId": "rd_ldl_20260112",
+      "marker": "LDL",
+      "value": 104,
+      "unit": "mg/dL",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": "Started omega-3 + fiber",
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 0,
+        "displayMax": 190
+      }
+    },
+    {
+      "readingId": "rd_apob_20260715",
+      "marker": "APO_B",
+      "value": 74,
+      "unit": "mg/dL",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 90,
+        "displayMin": 0,
+        "displayMax": 150
+      }
+    },
+    {
+      "readingId": "rd_apob_20260410",
+      "marker": "APO_B",
+      "value": 82,
+      "unit": "mg/dL",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 90,
+        "displayMin": 0,
+        "displayMax": 150
+      }
+    },
+    {
+      "readingId": "rd_apob_20260112",
+      "marker": "APO_B",
+      "value": 95,
+      "unit": "mg/dL",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 90,
+        "displayMin": 0,
+        "displayMax": 150
+      }
+    },
+    {
+      "readingId": "rd_hdl_20260715",
+      "marker": "HDL",
+      "value": 58,
+      "unit": "mg/dL",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "HIGHER_IS_BETTER",
+        "goodThreshold": 60,
+        "displayMin": 40,
+        "displayMax": 90
+      }
+    },
+    {
+      "readingId": "rd_hdl_20260410",
+      "marker": "HDL",
+      "value": 54,
+      "unit": "mg/dL",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "HIGHER_IS_BETTER",
+        "goodThreshold": 60,
+        "displayMin": 40,
+        "displayMax": 90
+      }
+    },
+    {
+      "readingId": "rd_hdl_20260112",
+      "marker": "HDL",
+      "value": 49,
+      "unit": "mg/dL",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "HIGHER_IS_BETTER",
+        "goodThreshold": 60,
+        "displayMin": 40,
+        "displayMax": 90
+      }
+    },
+    {
+      "readingId": "rd_trig_20260715",
+      "marker": "TRIGLYCERIDES",
+      "value": 71,
+      "unit": "mg/dL",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 0,
+        "displayMax": 200
+      }
+    },
+    {
+      "readingId": "rd_trig_20260410",
+      "marker": "TRIGLYCERIDES",
+      "value": 88,
+      "unit": "mg/dL",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 0,
+        "displayMax": 200
+      }
+    },
+    {
+      "readingId": "rd_trig_20260112",
+      "marker": "TRIGLYCERIDES",
+      "value": 112,
+      "unit": "mg/dL",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 0,
+        "displayMax": 200
+      }
+    },
+    {
+      "readingId": "rd_chol_20260715",
+      "marker": "TOTAL_CHOLESTEROL",
+      "value": 168,
+      "unit": "mg/dL",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 200,
+        "displayMin": 120,
+        "displayMax": 260
+      }
+    },
+    {
+      "readingId": "rd_chol_20260410",
+      "marker": "TOTAL_CHOLESTEROL",
+      "value": 179,
+      "unit": "mg/dL",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 200,
+        "displayMin": 120,
+        "displayMax": 260
+      }
+    },
+    {
+      "readingId": "rd_chol_20260112",
+      "marker": "TOTAL_CHOLESTEROL",
+      "value": 194,
+      "unit": "mg/dL",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 200,
+        "displayMin": 120,
+        "displayMax": 260
+      }
+    },
+    {
+      "readingId": "rd_hba1c_20260715",
+      "marker": "HBA1C",
+      "value": 5.1,
+      "unit": "%",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "%",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 5.7,
+        "displayMin": 4,
+        "displayMax": 6.5
+      }
+    },
+    {
+      "readingId": "rd_hba1c_20260410",
+      "marker": "HBA1C",
+      "value": 5.3,
+      "unit": "%",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "%",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 5.7,
+        "displayMin": 4,
+        "displayMax": 6.5
+      }
+    },
+    {
+      "readingId": "rd_hba1c_20260112",
+      "marker": "HBA1C",
+      "value": 5.4,
+      "unit": "%",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": null,
+      "reference": {
+        "unit": "%",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 5.7,
+        "displayMin": 4,
+        "displayMax": 6.5
+      }
+    },
+    {
+      "readingId": "rd_glu_20260715",
+      "marker": "FASTING_GLUCOSE",
+      "value": 88,
+      "unit": "mg/dL",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": "12h fast",
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 65,
+        "displayMax": 126
+      }
+    },
+    {
+      "readingId": "rd_glu_20260410",
+      "marker": "FASTING_GLUCOSE",
+      "value": 91,
+      "unit": "mg/dL",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 65,
+        "displayMax": 126
+      }
+    },
+    {
+      "readingId": "rd_glu_20260112",
+      "marker": "FASTING_GLUCOSE",
+      "value": 96,
+      "unit": "mg/dL",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": null,
+      "reference": {
+        "unit": "mg/dL",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 100,
+        "displayMin": 65,
+        "displayMax": 126
+      }
+    },
+    {
+      "readingId": "rd_crp_20260715",
+      "marker": "HS_CRP",
+      "value": 0.6,
+      "unit": "mg/L",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/L",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 1,
+        "displayMin": 0,
+        "displayMax": 3
+      }
+    },
+    {
+      "readingId": "rd_crp_20260410",
+      "marker": "HS_CRP",
+      "value": 0.9,
+      "unit": "mg/L",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "notes": null,
+      "reference": {
+        "unit": "mg/L",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 1,
+        "displayMin": 0,
+        "displayMax": 3
+      }
+    },
+    {
+      "readingId": "rd_crp_20260112",
+      "marker": "HS_CRP",
+      "value": 1.4,
+      "unit": "mg/L",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "notes": null,
+      "reference": {
+        "unit": "mg/L",
+        "orientation": "LOWER_IS_BETTER",
+        "goodThreshold": 1,
+        "displayMin": 0,
+        "displayMax": 3
+      }
+    }
+  ],
+  "GET /api/me/blood/reports": [
+    {
+      "reportId": "rpt_20260715_quest",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "markers": [
+        {
+          "name": "Testosterone, Total, LC/MS",
+          "value": 892,
+          "unit": "ng/dL",
+          "refRangeLow": 300,
+          "refRangeHigh": 1000,
+          "flag": null
+        },
+        {
+          "name": "Testosterone, Free",
+          "value": 21.4,
+          "unit": "pg/mL",
+          "refRangeLow": 8.7,
+          "refRangeHigh": 25.1,
+          "flag": null
+        },
+        {
+          "name": "Estradiol, Sensitive",
+          "value": 28,
+          "unit": "pg/mL",
+          "refRangeLow": 8,
+          "refRangeHigh": 43,
+          "flag": null
+        },
+        {
+          "name": "LDL Cholesterol",
+          "value": 78,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "HDL Cholesterol",
+          "value": 58,
+          "unit": "mg/dL",
+          "refRangeLow": 40,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "Triglycerides",
+          "value": 71,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 150,
+          "flag": null
+        },
+        {
+          "name": "Cholesterol, Total",
+          "value": 168,
+          "unit": "mg/dL",
+          "refRangeLow": 100,
+          "refRangeHigh": 200,
+          "flag": null
+        },
+        {
+          "name": "Apolipoprotein B",
+          "value": 74,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 90,
+          "flag": null
+        },
+        {
+          "name": "Hemoglobin A1c",
+          "value": 5.1,
+          "unit": "%",
+          "refRangeLow": 4,
+          "refRangeHigh": 5.7,
+          "flag": null
+        },
+        {
+          "name": "Glucose, Fasting",
+          "value": 88,
+          "unit": "mg/dL",
+          "refRangeLow": 65,
+          "refRangeHigh": 99,
+          "flag": null
+        },
+        {
+          "name": "hs-CRP",
+          "value": 0.6,
+          "unit": "mg/L",
+          "refRangeLow": 0,
+          "refRangeHigh": 1,
+          "flag": null
+        },
+        {
+          "name": "Vitamin D, 25-Hydroxy",
+          "value": 52,
+          "unit": "ng/mL",
+          "refRangeLow": 30,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "Ferritin",
+          "value": 145,
+          "unit": "ng/mL",
+          "refRangeLow": 30,
+          "refRangeHigh": 400,
+          "flag": null
+        },
+        {
+          "name": "TSH",
+          "value": 1.8,
+          "unit": "mIU/L",
+          "refRangeLow": 0.45,
+          "refRangeHigh": 4.5,
+          "flag": null
+        }
+      ]
+    },
+    {
+      "reportId": "rpt_20260410_quest",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "markers": [
+        {
+          "name": "Testosterone, Total, LC/MS",
+          "value": 754,
+          "unit": "ng/dL",
+          "refRangeLow": 300,
+          "refRangeHigh": 1000,
+          "flag": null
+        },
+        {
+          "name": "Testosterone, Free",
+          "value": 18.6,
+          "unit": "pg/mL",
+          "refRangeLow": 8.7,
+          "refRangeHigh": 25.1,
+          "flag": null
+        },
+        {
+          "name": "Estradiol, Sensitive",
+          "value": 31,
+          "unit": "pg/mL",
+          "refRangeLow": 8,
+          "refRangeHigh": 43,
+          "flag": null
+        },
+        {
+          "name": "LDL Cholesterol",
+          "value": 88,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "HDL Cholesterol",
+          "value": 54,
+          "unit": "mg/dL",
+          "refRangeLow": 40,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "Triglycerides",
+          "value": 88,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 150,
+          "flag": null
+        },
+        {
+          "name": "Cholesterol, Total",
+          "value": 179,
+          "unit": "mg/dL",
+          "refRangeLow": 100,
+          "refRangeHigh": 200,
+          "flag": null
+        },
+        {
+          "name": "Apolipoprotein B",
+          "value": 82,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 90,
+          "flag": null
+        },
+        {
+          "name": "Hemoglobin A1c",
+          "value": 5.3,
+          "unit": "%",
+          "refRangeLow": 4,
+          "refRangeHigh": 5.7,
+          "flag": null
+        },
+        {
+          "name": "Glucose, Fasting",
+          "value": 91,
+          "unit": "mg/dL",
+          "refRangeLow": 65,
+          "refRangeHigh": 99,
+          "flag": null
+        },
+        {
+          "name": "hs-CRP",
+          "value": 0.9,
+          "unit": "mg/L",
+          "refRangeLow": 0,
+          "refRangeHigh": 1,
+          "flag": null
+        },
+        {
+          "name": "Vitamin D, 25-Hydroxy",
+          "value": 44,
+          "unit": "ng/mL",
+          "refRangeLow": 30,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "Ferritin",
+          "value": 132,
+          "unit": "ng/mL",
+          "refRangeLow": 30,
+          "refRangeHigh": 400,
+          "flag": null
+        },
+        {
+          "name": "TSH",
+          "value": 2.1,
+          "unit": "mIU/L",
+          "refRangeLow": 0.45,
+          "refRangeHigh": 4.5,
+          "flag": null
+        }
+      ]
+    },
+    {
+      "reportId": "rpt_20260112_labcorp",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "markers": [
+        {
+          "name": "Testosterone, Total",
+          "value": 611,
+          "unit": "ng/dL",
+          "refRangeLow": 264,
+          "refRangeHigh": 916,
+          "flag": null
+        },
+        {
+          "name": "Testosterone, Free",
+          "value": 14.9,
+          "unit": "pg/mL",
+          "refRangeLow": 8.7,
+          "refRangeHigh": 25.1,
+          "flag": null
+        },
+        {
+          "name": "Estradiol",
+          "value": 34,
+          "unit": "pg/mL",
+          "refRangeLow": 8,
+          "refRangeHigh": 43,
+          "flag": null
+        },
+        {
+          "name": "LDL Cholesterol",
+          "value": 104,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 100,
+          "flag": "H"
+        },
+        {
+          "name": "HDL Cholesterol",
+          "value": 49,
+          "unit": "mg/dL",
+          "refRangeLow": 40,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "Triglycerides",
+          "value": 112,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 150,
+          "flag": null
+        },
+        {
+          "name": "Cholesterol, Total",
+          "value": 194,
+          "unit": "mg/dL",
+          "refRangeLow": 100,
+          "refRangeHigh": 200,
+          "flag": null
+        },
+        {
+          "name": "Apolipoprotein B",
+          "value": 95,
+          "unit": "mg/dL",
+          "refRangeLow": 0,
+          "refRangeHigh": 90,
+          "flag": "H"
+        },
+        {
+          "name": "Hemoglobin A1c",
+          "value": 5.4,
+          "unit": "%",
+          "refRangeLow": 4,
+          "refRangeHigh": 5.7,
+          "flag": null
+        },
+        {
+          "name": "Glucose, Fasting",
+          "value": 96,
+          "unit": "mg/dL",
+          "refRangeLow": 65,
+          "refRangeHigh": 99,
+          "flag": null
+        },
+        {
+          "name": "hs-CRP",
+          "value": 1.4,
+          "unit": "mg/L",
+          "refRangeLow": 0,
+          "refRangeHigh": 1,
+          "flag": "H"
+        },
+        {
+          "name": "Vitamin D, 25-Hydroxy",
+          "value": 33,
+          "unit": "ng/mL",
+          "refRangeLow": 30,
+          "refRangeHigh": 100,
+          "flag": null
+        },
+        {
+          "name": "Ferritin",
+          "value": 118,
+          "unit": "ng/mL",
+          "refRangeLow": 30,
+          "refRangeHigh": 400,
+          "flag": null
+        },
+        {
+          "name": "TSH",
+          "value": 2.4,
+          "unit": "mIU/L",
+          "refRangeLow": 0.45,
+          "refRangeHigh": 4.5,
+          "flag": null
+        }
+      ]
+    }
+  ],
+  "GET /api/me/body-composition": [
+    {
+      "recordId": "gh_wt_20260119",
+      "metric": "WEIGHT_KG",
+      "value": 86.18,
+      "sampleTime": "2026-01-19T13:04:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260119",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 18.4,
+      "sampleTime": "2026-01-19T13:04:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260209",
+      "metric": "WEIGHT_KG",
+      "value": 85.55,
+      "sampleTime": "2026-02-09T12:51:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260209",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 17.9,
+      "sampleTime": "2026-02-09T12:51:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260302",
+      "metric": "WEIGHT_KG",
+      "value": 84.82,
+      "sampleTime": "2026-03-02T13:12:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260302",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 17.3,
+      "sampleTime": "2026-03-02T13:12:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260323",
+      "metric": "WEIGHT_KG",
+      "value": 84.1,
+      "sampleTime": "2026-03-23T12:58:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260323",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 16.8,
+      "sampleTime": "2026-03-23T12:58:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260413",
+      "metric": "WEIGHT_KG",
+      "value": 83.55,
+      "sampleTime": "2026-04-13T13:06:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260413",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 16.4,
+      "sampleTime": "2026-04-13T13:06:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260504",
+      "metric": "WEIGHT_KG",
+      "value": 83.01,
+      "sampleTime": "2026-05-04T12:47:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260504",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 16.1,
+      "sampleTime": "2026-05-04T12:47:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260525",
+      "metric": "WEIGHT_KG",
+      "value": 82.65,
+      "sampleTime": "2026-05-25T13:19:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260525",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 15.7,
+      "sampleTime": "2026-05-25T13:19:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260615",
+      "metric": "WEIGHT_KG",
+      "value": 82.37,
+      "sampleTime": "2026-06-15T12:55:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260615",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 15.4,
+      "sampleTime": "2026-06-15T12:55:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260706",
+      "metric": "WEIGHT_KG",
+      "value": 82.19,
+      "sampleTime": "2026-07-06T13:02:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260706",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 15.2,
+      "sampleTime": "2026-07-06T13:02:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_wt_20260718",
+      "metric": "WEIGHT_KG",
+      "value": 82.1,
+      "sampleTime": "2026-07-18T13:08:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    },
+    {
+      "recordId": "gh_bf_20260718",
+      "metric": "BODY_FAT_PERCENT",
+      "value": 15,
+      "sampleTime": "2026-07-18T13:08:00Z",
+      "sourcePlatform": "Fitbit",
+      "recordingMethod": "AUTOMATICALLY_RECORDED"
+    }
+  ],
+  "GET /api/me/dexa/scans": [
+    {
+      "scanId": "dexa_20260117",
+      "measuredOn": "2026-01-17",
+      "sourceFacility": "BodySpec — Austin, TX",
+      "totalMassLb": 190.2,
+      "leanTissueLb": 152.6,
+      "fatTissueLb": 34.8,
+      "totalBodyFatPercent": 18.3,
+      "visceralFatLb": 0.94,
+      "androidGynoidRatio": 1.02,
+      "trunk": {
+        "totalMassLb": 88.4,
+        "leanTissueLb": 71.9,
+        "fatTissueLb": 15.4,
+        "regionFatPercent": 17.4
+      },
+      "android": {
+        "totalMassLb": 14.6,
+        "leanTissueLb": 11.9,
+        "fatTissueLb": 2.6,
+        "regionFatPercent": 17.8
+      },
+      "gynoid": {
+        "totalMassLb": 22.9,
+        "leanTissueLb": 18.6,
+        "fatTissueLb": 4,
+        "regionFatPercent": 17.5
+      },
+      "armsTotal": {
+        "totalMassLb": 24.1,
+        "leanTissueLb": 20.9,
+        "fatTissueLb": 2.9,
+        "regionFatPercent": 12
+      },
+      "armsRight": {
+        "totalMassLb": 12.2,
+        "leanTissueLb": 10.6,
+        "fatTissueLb": 1.5,
+        "regionFatPercent": 12.3
+      },
+      "armsLeft": {
+        "totalMassLb": 11.9,
+        "leanTissueLb": 10.3,
+        "fatTissueLb": 1.4,
+        "regionFatPercent": 11.8
+      },
+      "legsTotal": {
+        "totalMassLb": 61.8,
+        "leanTissueLb": 51.4,
+        "fatTissueLb": 9.5,
+        "regionFatPercent": 15.4
+      },
+      "legsRight": {
+        "totalMassLb": 31.1,
+        "leanTissueLb": 25.9,
+        "fatTissueLb": 4.8,
+        "regionFatPercent": 15.4
+      },
+      "legsLeft": {
+        "totalMassLb": 30.7,
+        "leanTissueLb": 25.5,
+        "fatTissueLb": 4.7,
+        "regionFatPercent": 15.3
+      },
+      "bmdTScore": 1.4,
+      "bmdZScore": 1.2,
+      "restingMetabolicRateKcal": 1842
+    },
+    {
+      "scanId": "dexa_20260411",
+      "measuredOn": "2026-04-11",
+      "sourceFacility": "BodySpec — Austin, TX",
+      "totalMassLb": 184.6,
+      "leanTissueLb": 153.9,
+      "fatTissueLb": 28.1,
+      "totalBodyFatPercent": 15.2,
+      "visceralFatLb": 0.71,
+      "androidGynoidRatio": 0.93,
+      "trunk": {
+        "totalMassLb": 85.2,
+        "leanTissueLb": 72.6,
+        "fatTissueLb": 11.6,
+        "regionFatPercent": 13.6
+      },
+      "android": {
+        "totalMassLb": 13.9,
+        "leanTissueLb": 12.1,
+        "fatTissueLb": 1.7,
+        "regionFatPercent": 12.2
+      },
+      "gynoid": {
+        "totalMassLb": 22.3,
+        "leanTissueLb": 18.9,
+        "fatTissueLb": 3.1,
+        "regionFatPercent": 13.9
+      },
+      "armsTotal": {
+        "totalMassLb": 24.8,
+        "leanTissueLb": 21.7,
+        "fatTissueLb": 2.6,
+        "regionFatPercent": 10.5
+      },
+      "armsRight": {
+        "totalMassLb": 12.5,
+        "leanTissueLb": 11,
+        "fatTissueLb": 1.3,
+        "regionFatPercent": 10.4
+      },
+      "armsLeft": {
+        "totalMassLb": 12.3,
+        "leanTissueLb": 10.7,
+        "fatTissueLb": 1.3,
+        "regionFatPercent": 10.6
+      },
+      "legsTotal": {
+        "totalMassLb": 62.9,
+        "leanTissueLb": 52.8,
+        "fatTissueLb": 8.4,
+        "regionFatPercent": 13.4
+      },
+      "legsRight": {
+        "totalMassLb": 31.6,
+        "leanTissueLb": 26.6,
+        "fatTissueLb": 4.2,
+        "regionFatPercent": 13.3
+      },
+      "legsLeft": {
+        "totalMassLb": 31.3,
+        "leanTissueLb": 26.2,
+        "fatTissueLb": 4.2,
+        "regionFatPercent": 13.4
+      },
+      "bmdTScore": 1.5,
+      "bmdZScore": 1.3,
+      "restingMetabolicRateKcal": 1861
+    },
+    {
+      "scanId": "dexa_20260704",
+      "measuredOn": "2026-07-04",
+      "sourceFacility": "BodySpec — Austin, TX",
+      "totalMassLb": 181.3,
+      "leanTissueLb": 154.8,
+      "fatTissueLb": 24,
+      "totalBodyFatPercent": 13.2,
+      "visceralFatLb": 0.58,
+      "androidGynoidRatio": 0.86,
+      "trunk": {
+        "totalMassLb": 83.1,
+        "leanTissueLb": 73.4,
+        "fatTissueLb": 9.1,
+        "regionFatPercent": 11
+      },
+      "android": {
+        "totalMassLb": 13.4,
+        "leanTissueLb": 12.2,
+        "fatTissueLb": 1.2,
+        "regionFatPercent": 8.9
+      },
+      "gynoid": {
+        "totalMassLb": 21.8,
+        "leanTissueLb": 19.1,
+        "fatTissueLb": 2.5,
+        "regionFatPercent": 11.4
+      },
+      "armsTotal": {
+        "totalMassLb": 25.3,
+        "leanTissueLb": 22.4,
+        "fatTissueLb": 2.4,
+        "regionFatPercent": 9.5
+      },
+      "armsRight": {
+        "totalMassLb": 12.7,
+        "leanTissueLb": 11.3,
+        "fatTissueLb": 1.2,
+        "regionFatPercent": 9.4
+      },
+      "armsLeft": {
+        "totalMassLb": 12.6,
+        "leanTissueLb": 11.1,
+        "fatTissueLb": 1.2,
+        "regionFatPercent": 9.5
+      },
+      "legsTotal": {
+        "totalMassLb": 63.7,
+        "leanTissueLb": 53.9,
+        "fatTissueLb": 7.6,
+        "regionFatPercent": 11.9
+      },
+      "legsRight": {
+        "totalMassLb": 32,
+        "leanTissueLb": 27.1,
+        "fatTissueLb": 3.8,
+        "regionFatPercent": 11.9
+      },
+      "legsLeft": {
+        "totalMassLb": 31.7,
+        "leanTissueLb": 26.8,
+        "fatTissueLb": 3.8,
+        "regionFatPercent": 12
+      },
+      "bmdTScore": 1.6,
+      "bmdZScore": 1.4,
+      "restingMetabolicRateKcal": 1878
+    }
+  ],
+  "GET /api/me/medications": [
+    {
+      "medicationId": "med_trt_test_cyp",
+      "drugId": "drug_testosterone_cypionate",
+      "drug": {
+        "drugId": "drug_testosterone_cypionate",
+        "name": "Testosterone Cypionate",
+        "aliases": [
+          "Test Cyp",
+          "Depo-Testosterone",
+          "Testosterone C"
+        ],
+        "category": "PRESCRIPTION",
+        "form": "INJECTABLE_VIAL",
+        "defaultUnit": "mg",
+        "commonDoses": [
+          "50 mg",
+          "100 mg",
+          "200 mg"
+        ],
+        "imageUrl": null,
+        "imageCandidates": [],
+        "imageFallback": null,
+        "suggestedMarkers": [
+          "Total Testosterone",
+          "Free Testosterone",
+          "Estradiol",
+          "Hematocrit"
+        ],
+        "description": "Long-acting injectable testosterone ester used for testosterone replacement therapy (TRT)."
+      },
+      "customName": null,
+      "status": "ACTIVE",
+      "dose": 100,
+      "unit": "mg",
+      "frequency": {
+        "type": "WEEKLY",
+        "timesPerPeriod": 2,
+        "specificDays": [
+          "MON",
+          "THU"
+        ]
+      },
+      "timeSlots": [
+        {
+          "window": "MORNING",
+          "dose": 100
+        }
+      ],
+      "protocolId": "proto_trt_2026",
+      "notes": "Subcutaneous injection into abdominal fat, 27g x 1/2\" insulin syringe. Rotate injection sites.",
+      "prescribedBy": "Dr. Marcus Hale, Renew Men's Health",
+      "startDate": "2026-01-06",
+      "endDate": null,
+      "discontinueReason": null,
+      "discontinueNotes": null,
+      "correlatedMarkers": [
+        "Total Testosterone",
+        "Free Testosterone",
+        "Estradiol",
+        "Hematocrit"
+      ],
+      "dosagePeriods": [
+        {
+          "dose": 80,
+          "unit": "mg",
+          "startDate": "2026-01-06",
+          "endDate": "2026-03-30"
+        },
+        {
+          "dose": 100,
+          "unit": "mg",
+          "startDate": "2026-03-30",
+          "endDate": null
+        }
+      ],
+      "adherence": {
+        "percentage": 96,
+        "last30Days": [
+          {
+            "date": "2026-06-20",
+            "taken": true
+          },
+          {
+            "date": "2026-06-21",
+            "taken": true
+          },
+          {
+            "date": "2026-06-22",
+            "taken": true
+          },
+          {
+            "date": "2026-06-23",
+            "taken": true
+          },
+          {
+            "date": "2026-06-24",
+            "taken": true
+          },
+          {
+            "date": "2026-06-25",
+            "taken": true
+          },
+          {
+            "date": "2026-06-26",
+            "taken": true
+          },
+          {
+            "date": "2026-06-27",
+            "taken": true
+          },
+          {
+            "date": "2026-06-28",
+            "taken": true
+          },
+          {
+            "date": "2026-06-29",
+            "taken": true
+          },
+          {
+            "date": "2026-06-30",
+            "taken": true
+          },
+          {
+            "date": "2026-07-01",
+            "taken": true
+          },
+          {
+            "date": "2026-07-02",
+            "taken": true
+          },
+          {
+            "date": "2026-07-03",
+            "taken": false
+          },
+          {
+            "date": "2026-07-04",
+            "taken": true
+          },
+          {
+            "date": "2026-07-05",
+            "taken": true
+          },
+          {
+            "date": "2026-07-06",
+            "taken": true
+          },
+          {
+            "date": "2026-07-07",
+            "taken": true
+          },
+          {
+            "date": "2026-07-08",
+            "taken": true
+          },
+          {
+            "date": "2026-07-09",
+            "taken": true
+          },
+          {
+            "date": "2026-07-10",
+            "taken": true
+          },
+          {
+            "date": "2026-07-11",
+            "taken": true
+          },
+          {
+            "date": "2026-07-12",
+            "taken": true
+          },
+          {
+            "date": "2026-07-13",
+            "taken": true
+          },
+          {
+            "date": "2026-07-14",
+            "taken": true
+          },
+          {
+            "date": "2026-07-15",
+            "taken": true
+          },
+          {
+            "date": "2026-07-16",
+            "taken": true
+          },
+          {
+            "date": "2026-07-17",
+            "taken": true
+          },
+          {
+            "date": "2026-07-18",
+            "taken": true
+          },
+          {
+            "date": "2026-07-19",
+            "taken": true
+          }
+        ]
+      }
+    },
+    {
+      "medicationId": "med_anastrozole",
+      "drugId": "drug_anastrozole",
+      "drug": {
+        "drugId": "drug_anastrozole",
+        "name": "Anastrozole",
+        "aliases": [
+          "Arimidex",
+          "Ana"
+        ],
+        "category": "PRESCRIPTION",
+        "form": "TABLET",
+        "defaultUnit": "mg",
+        "commonDoses": [
+          "0.25 mg",
+          "0.5 mg",
+          "1 mg"
+        ],
+        "imageUrl": null,
+        "imageCandidates": [],
+        "imageFallback": null,
+        "suggestedMarkers": [
+          "Estradiol",
+          "Total Testosterone"
+        ],
+        "description": "Aromatase inhibitor used to control estrogen conversion during testosterone therapy."
+      },
+      "customName": null,
+      "status": "ACTIVE",
+      "dose": 0.25,
+      "unit": "mg",
+      "frequency": {
+        "type": "WEEKLY",
+        "timesPerPeriod": 2,
+        "specificDays": [
+          "MON",
+          "THU"
+        ]
+      },
+      "timeSlots": [
+        {
+          "window": "MORNING",
+          "dose": 0.25
+        }
+      ],
+      "protocolId": "proto_trt_2026",
+      "notes": "Take alongside testosterone injection days. Adjust only per estradiol labs.",
+      "prescribedBy": "Dr. Marcus Hale, Renew Men's Health",
+      "startDate": "2026-03-30",
+      "endDate": null,
+      "discontinueReason": null,
+      "discontinueNotes": null,
+      "correlatedMarkers": [
+        "Estradiol",
+        "Total Testosterone"
+      ],
+      "dosagePeriods": [
+        {
+          "dose": 0.25,
+          "unit": "mg",
+          "startDate": "2026-03-30",
+          "endDate": null
+        }
+      ],
+      "adherence": {
+        "percentage": 91,
+        "last30Days": [
+          {
+            "date": "2026-06-20",
+            "taken": true
+          },
+          {
+            "date": "2026-06-21",
+            "taken": true
+          },
+          {
+            "date": "2026-06-22",
+            "taken": true
+          },
+          {
+            "date": "2026-06-23",
+            "taken": true
+          },
+          {
+            "date": "2026-06-24",
+            "taken": false
+          },
+          {
+            "date": "2026-06-25",
+            "taken": true
+          },
+          {
+            "date": "2026-06-26",
+            "taken": true
+          },
+          {
+            "date": "2026-06-27",
+            "taken": true
+          },
+          {
+            "date": "2026-06-28",
+            "taken": true
+          },
+          {
+            "date": "2026-06-29",
+            "taken": true
+          },
+          {
+            "date": "2026-06-30",
+            "taken": true
+          },
+          {
+            "date": "2026-07-01",
+            "taken": true
+          },
+          {
+            "date": "2026-07-02",
+            "taken": true
+          },
+          {
+            "date": "2026-07-03",
+            "taken": false
+          },
+          {
+            "date": "2026-07-04",
+            "taken": true
+          },
+          {
+            "date": "2026-07-05",
+            "taken": true
+          },
+          {
+            "date": "2026-07-06",
+            "taken": true
+          },
+          {
+            "date": "2026-07-07",
+            "taken": true
+          },
+          {
+            "date": "2026-07-08",
+            "taken": true
+          },
+          {
+            "date": "2026-07-09",
+            "taken": true
+          },
+          {
+            "date": "2026-07-10",
+            "taken": true
+          },
+          {
+            "date": "2026-07-11",
+            "taken": true
+          },
+          {
+            "date": "2026-07-12",
+            "taken": true
+          },
+          {
+            "date": "2026-07-13",
+            "taken": true
+          },
+          {
+            "date": "2026-07-14",
+            "taken": true
+          },
+          {
+            "date": "2026-07-15",
+            "taken": false
+          },
+          {
+            "date": "2026-07-16",
+            "taken": true
+          },
+          {
+            "date": "2026-07-17",
+            "taken": true
+          },
+          {
+            "date": "2026-07-18",
+            "taken": true
+          },
+          {
+            "date": "2026-07-19",
+            "taken": true
+          }
+        ]
+      }
+    },
+    {
+      "medicationId": "med_vitamin_d3",
+      "drugId": "drug_vitamin_d3",
+      "drug": {
+        "drugId": "drug_vitamin_d3",
+        "name": "Vitamin D3",
+        "aliases": [
+          "Cholecalciferol",
+          "Vit D"
+        ],
+        "category": "SUPPLEMENT",
+        "form": "SOFTGEL",
+        "defaultUnit": "IU",
+        "commonDoses": [
+          "1000 IU",
+          "2000 IU",
+          "5000 IU"
+        ],
+        "imageUrl": null,
+        "imageCandidates": [],
+        "imageFallback": null,
+        "suggestedMarkers": [
+          "Vitamin D, 25-OH"
+        ],
+        "description": "Fat-soluble vitamin supporting bone health, immune function, and hormone production."
+      },
+      "customName": null,
+      "status": "ACTIVE",
+      "dose": 5000,
+      "unit": "IU",
+      "frequency": {
+        "type": "DAILY",
+        "timesPerPeriod": 1
+      },
+      "timeSlots": [
+        {
+          "window": "MORNING",
+          "dose": 5000
+        }
+      ],
+      "protocolId": null,
+      "notes": "Take with a meal containing fat for absorption.",
+      "prescribedBy": null,
+      "startDate": "2026-01-02",
+      "endDate": null,
+      "discontinueReason": null,
+      "discontinueNotes": null,
+      "correlatedMarkers": [
+        "Vitamin D, 25-OH"
+      ],
+      "dosagePeriods": [
+        {
+          "dose": 5000,
+          "unit": "IU",
+          "startDate": "2026-01-02",
+          "endDate": null
+        }
+      ],
+      "adherence": {
+        "percentage": 88,
+        "last30Days": [
+          {
+            "date": "2026-06-20",
+            "taken": true
+          },
+          {
+            "date": "2026-06-21",
+            "taken": false
+          },
+          {
+            "date": "2026-06-22",
+            "taken": true
+          },
+          {
+            "date": "2026-06-23",
+            "taken": true
+          },
+          {
+            "date": "2026-06-24",
+            "taken": true
+          },
+          {
+            "date": "2026-06-25",
+            "taken": true
+          },
+          {
+            "date": "2026-06-26",
+            "taken": false
+          },
+          {
+            "date": "2026-06-27",
+            "taken": true
+          },
+          {
+            "date": "2026-06-28",
+            "taken": true
+          },
+          {
+            "date": "2026-06-29",
+            "taken": true
+          },
+          {
+            "date": "2026-06-30",
+            "taken": true
+          },
+          {
+            "date": "2026-07-01",
+            "taken": true
+          },
+          {
+            "date": "2026-07-02",
+            "taken": true
+          },
+          {
+            "date": "2026-07-03",
+            "taken": true
+          },
+          {
+            "date": "2026-07-04",
+            "taken": false
+          },
+          {
+            "date": "2026-07-05",
+            "taken": true
+          },
+          {
+            "date": "2026-07-06",
+            "taken": true
+          },
+          {
+            "date": "2026-07-07",
+            "taken": true
+          },
+          {
+            "date": "2026-07-08",
+            "taken": true
+          },
+          {
+            "date": "2026-07-09",
+            "taken": true
+          },
+          {
+            "date": "2026-07-10",
+            "taken": true
+          },
+          {
+            "date": "2026-07-11",
+            "taken": true
+          },
+          {
+            "date": "2026-07-12",
+            "taken": true
+          },
+          {
+            "date": "2026-07-13",
+            "taken": true
+          },
+          {
+            "date": "2026-07-14",
+            "taken": true
+          },
+          {
+            "date": "2026-07-15",
+            "taken": true
+          },
+          {
+            "date": "2026-07-16",
+            "taken": true
+          },
+          {
+            "date": "2026-07-17",
+            "taken": true
+          },
+          {
+            "date": "2026-07-18",
+            "taken": true
+          },
+          {
+            "date": "2026-07-19",
+            "taken": true
+          }
+        ]
+      }
+    },
+    {
+      "medicationId": "med_omega_3",
+      "drugId": "drug_omega_3",
+      "drug": {
+        "drugId": "drug_omega_3",
+        "name": "Omega-3 Fish Oil",
+        "aliases": [
+          "Fish Oil",
+          "EPA/DHA",
+          "Omega 3"
+        ],
+        "category": "SUPPLEMENT",
+        "form": "SOFTGEL",
+        "defaultUnit": "mg",
+        "commonDoses": [
+          "1000 mg",
+          "2000 mg",
+          "3000 mg"
+        ],
+        "imageUrl": null,
+        "imageCandidates": [],
+        "imageFallback": null,
+        "suggestedMarkers": [
+          "Triglycerides",
+          "hs-CRP",
+          "Omega-3 Index"
+        ],
+        "description": "EPA/DHA fish oil supporting cardiovascular health and reducing inflammation."
+      },
+      "customName": null,
+      "status": "ACTIVE",
+      "dose": 2000,
+      "unit": "mg",
+      "frequency": {
+        "type": "DAILY",
+        "timesPerPeriod": 2
+      },
+      "timeSlots": [
+        {
+          "window": "MORNING",
+          "dose": 1000
+        },
+        {
+          "window": "EVENING",
+          "dose": 1000
+        }
+      ],
+      "protocolId": null,
+      "notes": "Split dose with breakfast and dinner. Store in fridge to reduce fishy aftertaste.",
+      "prescribedBy": null,
+      "startDate": "2026-01-02",
+      "endDate": null,
+      "discontinueReason": null,
+      "discontinueNotes": null,
+      "correlatedMarkers": [
+        "Triglycerides",
+        "hs-CRP",
+        "Omega-3 Index"
+      ],
+      "dosagePeriods": [
+        {
+          "dose": 2000,
+          "unit": "mg",
+          "startDate": "2026-01-02",
+          "endDate": null
+        }
+      ],
+      "adherence": {
+        "percentage": 84,
+        "last30Days": [
+          {
+            "date": "2026-06-20",
+            "taken": true
+          },
+          {
+            "date": "2026-06-21",
+            "taken": true
+          },
+          {
+            "date": "2026-06-22",
+            "taken": false
+          },
+          {
+            "date": "2026-06-23",
+            "taken": true
+          },
+          {
+            "date": "2026-06-24",
+            "taken": true
+          },
+          {
+            "date": "2026-06-25",
+            "taken": true
+          },
+          {
+            "date": "2026-06-26",
+            "taken": true
+          },
+          {
+            "date": "2026-06-27",
+            "taken": false
+          },
+          {
+            "date": "2026-06-28",
+            "taken": true
+          },
+          {
+            "date": "2026-06-29",
+            "taken": true
+          },
+          {
+            "date": "2026-06-30",
+            "taken": true
+          },
+          {
+            "date": "2026-07-01",
+            "taken": false
+          },
+          {
+            "date": "2026-07-02",
+            "taken": true
+          },
+          {
+            "date": "2026-07-03",
+            "taken": true
+          },
+          {
+            "date": "2026-07-04",
+            "taken": true
+          },
+          {
+            "date": "2026-07-05",
+            "taken": true
+          },
+          {
+            "date": "2026-07-06",
+            "taken": true
+          },
+          {
+            "date": "2026-07-07",
+            "taken": false
+          },
+          {
+            "date": "2026-07-08",
+            "taken": true
+          },
+          {
+            "date": "2026-07-09",
+            "taken": true
+          },
+          {
+            "date": "2026-07-10",
+            "taken": true
+          },
+          {
+            "date": "2026-07-11",
+            "taken": true
+          },
+          {
+            "date": "2026-07-12",
+            "taken": true
+          },
+          {
+            "date": "2026-07-13",
+            "taken": true
+          },
+          {
+            "date": "2026-07-14",
+            "taken": true
+          },
+          {
+            "date": "2026-07-15",
+            "taken": true
+          },
+          {
+            "date": "2026-07-16",
+            "taken": true
+          },
+          {
+            "date": "2026-07-17",
+            "taken": true
+          },
+          {
+            "date": "2026-07-18",
+            "taken": true
+          },
+          {
+            "date": "2026-07-19",
+            "taken": false
+          }
+        ]
+      }
+    },
+    {
+      "medicationId": "med_magnesium_glycinate",
+      "drugId": "drug_magnesium_glycinate",
+      "drug": {
+        "drugId": "drug_magnesium_glycinate",
+        "name": "Magnesium Glycinate",
+        "aliases": [
+          "Mag Glycinate",
+          "Magnesium Bisglycinate"
+        ],
+        "category": "SUPPLEMENT",
+        "form": "CAPSULE",
+        "defaultUnit": "mg",
+        "commonDoses": [
+          "200 mg",
+          "300 mg",
+          "400 mg"
+        ],
+        "imageUrl": null,
+        "imageCandidates": [],
+        "imageFallback": null,
+        "suggestedMarkers": [
+          "Magnesium, RBC"
+        ],
+        "description": "Highly bioavailable, gentle form of magnesium supporting sleep, recovery, and muscle relaxation."
+      },
+      "customName": null,
+      "status": "ACTIVE",
+      "dose": 400,
+      "unit": "mg",
+      "frequency": {
+        "type": "DAILY",
+        "timesPerPeriod": 1
+      },
+      "timeSlots": [
+        {
+          "window": "BEDTIME",
+          "dose": 400
+        }
+      ],
+      "protocolId": null,
+      "notes": "Take 30–60 minutes before bed to support sleep quality.",
+      "prescribedBy": null,
+      "startDate": "2026-02-14",
+      "endDate": null,
+      "discontinueReason": null,
+      "discontinueNotes": null,
+      "correlatedMarkers": [
+        "Magnesium, RBC"
+      ],
+      "dosagePeriods": [
+        {
+          "dose": 400,
+          "unit": "mg",
+          "startDate": "2026-02-14",
+          "endDate": null
+        }
+      ],
+      "adherence": {
+        "percentage": 93,
+        "last30Days": [
+          {
+            "date": "2026-06-20",
+            "taken": true
+          },
+          {
+            "date": "2026-06-21",
+            "taken": true
+          },
+          {
+            "date": "2026-06-22",
+            "taken": true
+          },
+          {
+            "date": "2026-06-23",
+            "taken": true
+          },
+          {
+            "date": "2026-06-24",
+            "taken": true
+          },
+          {
+            "date": "2026-06-25",
+            "taken": false
+          },
+          {
+            "date": "2026-06-26",
+            "taken": true
+          },
+          {
+            "date": "2026-06-27",
+            "taken": true
+          },
+          {
+            "date": "2026-06-28",
+            "taken": true
+          },
+          {
+            "date": "2026-06-29",
+            "taken": true
+          },
+          {
+            "date": "2026-06-30",
+            "taken": true
+          },
+          {
+            "date": "2026-07-01",
+            "taken": true
+          },
+          {
+            "date": "2026-07-02",
+            "taken": true
+          },
+          {
+            "date": "2026-07-03",
+            "taken": true
+          },
+          {
+            "date": "2026-07-04",
+            "taken": true
+          },
+          {
+            "date": "2026-07-05",
+            "taken": true
+          },
+          {
+            "date": "2026-07-06",
+            "taken": false
+          },
+          {
+            "date": "2026-07-07",
+            "taken": true
+          },
+          {
+            "date": "2026-07-08",
+            "taken": true
+          },
+          {
+            "date": "2026-07-09",
+            "taken": true
+          },
+          {
+            "date": "2026-07-10",
+            "taken": true
+          },
+          {
+            "date": "2026-07-11",
+            "taken": true
+          },
+          {
+            "date": "2026-07-12",
+            "taken": true
+          },
+          {
+            "date": "2026-07-13",
+            "taken": true
+          },
+          {
+            "date": "2026-07-14",
+            "taken": true
+          },
+          {
+            "date": "2026-07-15",
+            "taken": true
+          },
+          {
+            "date": "2026-07-16",
+            "taken": true
+          },
+          {
+            "date": "2026-07-17",
+            "taken": true
+          },
+          {
+            "date": "2026-07-18",
+            "taken": true
+          },
+          {
+            "date": "2026-07-19",
+            "taken": false
+          }
+        ]
+      }
+    },
+    {
+      "medicationId": "med_finasteride_disc",
+      "drugId": "drug_finasteride",
+      "drug": {
+        "drugId": "drug_finasteride",
+        "name": "Finasteride",
+        "aliases": [
+          "Propecia",
+          "Proscar"
+        ],
+        "category": "PRESCRIPTION",
+        "form": "TABLET",
+        "defaultUnit": "mg",
+        "commonDoses": [
+          "1 mg",
+          "5 mg"
+        ],
+        "imageUrl": null,
+        "imageCandidates": [],
+        "imageFallback": null,
+        "suggestedMarkers": [
+          "DHT",
+          "PSA"
+        ],
+        "description": "5-alpha reductase inhibitor used for hair loss prevention."
+      },
+      "customName": null,
+      "status": "DISCONTINUED",
+      "dose": 1,
+      "unit": "mg",
+      "frequency": {
+        "type": "DAILY",
+        "timesPerPeriod": 1
+      },
+      "timeSlots": [
+        {
+          "window": "MORNING",
+          "dose": 1
+        }
+      ],
+      "protocolId": null,
+      "notes": "Trialed for hair retention alongside TRT.",
+      "prescribedBy": "Dr. Marcus Hale, Renew Men's Health",
+      "startDate": "2026-01-06",
+      "endDate": "2026-05-01",
+      "discontinueReason": "SIDE_EFFECTS",
+      "discontinueNotes": "Noticed reduced libido and low mood; stopped after discussion with prescriber.",
+      "correlatedMarkers": [
+        "DHT",
+        "PSA"
+      ],
+      "dosagePeriods": [
+        {
+          "dose": 1,
+          "unit": "mg",
+          "startDate": "2026-01-06",
+          "endDate": "2026-05-01"
+        }
+      ]
+    }
+  ],
+  "GET /api/me/medications/today": [
+    {
+      "medicationId": "med_vitamin_d3",
+      "drugName": "Vitamin D3",
+      "imageUrl": null,
+      "window": "MORNING",
+      "dose": 5000,
+      "unit": "IU",
+      "taken": true,
+      "takenAt": "2026-07-19T07:42:00-04:00"
+    },
+    {
+      "medicationId": "med_omega_3",
+      "drugName": "Omega-3 Fish Oil",
+      "imageUrl": null,
+      "window": "MORNING",
+      "dose": 1000,
+      "unit": "mg",
+      "taken": true,
+      "takenAt": "2026-07-19T07:43:00-04:00"
+    },
+    {
+      "medicationId": "med_omega_3",
+      "drugName": "Omega-3 Fish Oil",
+      "imageUrl": null,
+      "window": "EVENING",
+      "dose": 1000,
+      "unit": "mg",
+      "taken": false,
+      "takenAt": null
+    },
+    {
+      "medicationId": "med_magnesium_glycinate",
+      "drugName": "Magnesium Glycinate",
+      "imageUrl": null,
+      "window": "BEDTIME",
+      "dose": 400,
+      "unit": "mg",
+      "taken": false,
+      "takenAt": null
+    }
+  ],
+  "GET /api/drugs": [
+    {
+      "drugId": "drug_testosterone_cypionate",
+      "name": "Testosterone Cypionate",
+      "aliases": [
+        "Test Cyp",
+        "Depo-Testosterone"
+      ],
+      "category": "PRESCRIPTION",
+      "form": "INJECTABLE_VIAL",
+      "defaultUnit": "mg",
+      "commonDoses": [
+        "50 mg",
+        "100 mg",
+        "200 mg"
+      ],
+      "imageUrl": null,
+      "imageCandidates": [],
+      "imageFallback": null,
+      "suggestedMarkers": [
+        "Total Testosterone",
+        "Free Testosterone",
+        "Estradiol"
+      ],
+      "description": "Long-acting injectable testosterone ester used for TRT."
+    },
+    {
+      "drugId": "drug_anastrozole",
+      "name": "Anastrozole",
+      "aliases": [
+        "Arimidex"
+      ],
+      "category": "PRESCRIPTION",
+      "form": "TABLET",
+      "defaultUnit": "mg",
+      "commonDoses": [
+        "0.25 mg",
+        "0.5 mg",
+        "1 mg"
+      ],
+      "imageUrl": null,
+      "imageCandidates": [],
+      "imageFallback": null,
+      "suggestedMarkers": [
+        "Estradiol"
+      ],
+      "description": "Aromatase inhibitor controlling estrogen conversion during testosterone therapy."
+    },
+    {
+      "drugId": "drug_vitamin_d3",
+      "name": "Vitamin D3",
+      "aliases": [
+        "Cholecalciferol"
+      ],
+      "category": "SUPPLEMENT",
+      "form": "SOFTGEL",
+      "defaultUnit": "IU",
+      "commonDoses": [
+        "1000 IU",
+        "2000 IU",
+        "5000 IU"
+      ],
+      "imageUrl": null,
+      "imageCandidates": [],
+      "imageFallback": null,
+      "suggestedMarkers": [
+        "Vitamin D, 25-OH"
+      ],
+      "description": "Fat-soluble vitamin supporting bone, immune, and hormone health."
+    },
+    {
+      "drugId": "drug_omega_3",
+      "name": "Omega-3 Fish Oil",
+      "aliases": [
+        "Fish Oil",
+        "EPA/DHA"
+      ],
+      "category": "SUPPLEMENT",
+      "form": "SOFTGEL",
+      "defaultUnit": "mg",
+      "commonDoses": [
+        "1000 mg",
+        "2000 mg",
+        "3000 mg"
+      ],
+      "imageUrl": null,
+      "imageCandidates": [],
+      "imageFallback": null,
+      "suggestedMarkers": [
+        "Triglycerides",
+        "hs-CRP"
+      ],
+      "description": "EPA/DHA fish oil supporting cardiovascular health."
+    },
+    {
+      "drugId": "drug_magnesium_glycinate",
+      "name": "Magnesium Glycinate",
+      "aliases": [
+        "Mag Glycinate"
+      ],
+      "category": "SUPPLEMENT",
+      "form": "CAPSULE",
+      "defaultUnit": "mg",
+      "commonDoses": [
+        "200 mg",
+        "300 mg",
+        "400 mg"
+      ],
+      "imageUrl": null,
+      "imageCandidates": [],
+      "imageFallback": null,
+      "suggestedMarkers": [
+        "Magnesium, RBC"
+      ],
+      "description": "Bioavailable magnesium supporting sleep and recovery."
+    },
+    {
+      "drugId": "drug_creatine",
+      "name": "Creatine Monohydrate",
+      "aliases": [
+        "Creatine"
+      ],
+      "category": "SUPPLEMENT",
+      "form": "POWDER",
+      "defaultUnit": "g",
+      "commonDoses": [
+        "3 g",
+        "5 g"
+      ],
+      "imageUrl": null,
+      "imageCandidates": [],
+      "imageFallback": null,
+      "suggestedMarkers": [],
+      "description": "Most-studied strength and lean-mass supplement."
+    }
+  ],
+  "GET /api/me/nutrition/target": {
+    "caloriesKcal": 2450,
+    "proteinGrams": 210,
+    "carbsGrams": 230,
+    "fatGrams": 70,
+    "fiberGrams": 38,
+    "sugarGrams": 60
+  },
+  "GET /api/me/nutrition/2026-07-19": {
+    "date": "2026-07-19",
+    "totals": {
+      "caloriesKcal": 2310,
+      "proteinGrams": 222,
+      "carbsGrams": 164,
+      "fatGrams": 82.5,
+      "fiberGrams": 30,
+      "sugarGrams": 42
+    },
+    "target": {
+      "caloriesKcal": 2450,
+      "proteinGrams": 210,
+      "carbsGrams": 230,
+      "fatGrams": 70,
+      "fiberGrams": 38,
+      "sugarGrams": 60
+    },
+    "meals": [
+      {
+        "meal": "BREAKFAST",
+        "subtotal": {
+          "caloriesKcal": 582,
+          "proteinGrams": 59,
+          "carbsGrams": 1,
+          "fatGrams": 37,
+          "fiberGrams": 0,
+          "sugarGrams": 1
+        },
+        "entries": [
+          {
+            "entryId": "ent_bf_steak_20260719",
+            "meal": "BREAKFAST",
+            "foodId": "food_sirloin_steak",
+            "foodName": "Grilled Sirloin Steak",
+            "servingLabel": "6 oz",
+            "servingGrams": 170,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 386,
+              "proteinGrams": 46,
+              "carbsGrams": 0,
+              "fatGrams": 22,
+              "fiberGrams": 0,
+              "sugarGrams": 0
+            },
+            "source": "CATALOG",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T12:42:11Z"
+          },
+          {
+            "entryId": "ent_bf_eggs_20260719",
+            "meal": "BREAKFAST",
+            "foodId": "food_whole_eggs",
+            "foodName": "Whole Eggs, Fried",
+            "servingLabel": "2 large eggs",
+            "servingGrams": 100,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 196,
+              "proteinGrams": 13,
+              "carbsGrams": 1,
+              "fatGrams": 15,
+              "fiberGrams": 0,
+              "sugarGrams": 1
+            },
+            "source": "CATALOG",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T12:42:40Z"
+          }
+        ]
+      },
+      {
+        "meal": "LUNCH",
+        "subtotal": {
+          "caloriesKcal": 624,
+          "proteinGrams": 57,
+          "carbsGrams": 68,
+          "fatGrams": 13,
+          "fiberGrams": 7,
+          "sugarGrams": 6
+        },
+        "entries": [
+          {
+            "entryId": "ent_ln_chickenrice_20260719",
+            "meal": "LUNCH",
+            "foodId": null,
+            "foodName": "Chicken Rice Bowl",
+            "servingLabel": "1 bowl",
+            "servingGrams": 420,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 624,
+              "proteinGrams": 57,
+              "carbsGrams": 68,
+              "fatGrams": 13,
+              "fiberGrams": 7,
+              "sugarGrams": 6
+            },
+            "source": "PHOTO",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "READY",
+            "ingredients": [
+              {
+                "name": "Grilled Chicken Breast",
+                "foodId": "food_chicken_breast",
+                "servingLabel": "6 oz",
+                "servingGrams": 170,
+                "quantity": 1,
+                "macros": {
+                  "caloriesKcal": 281,
+                  "proteinGrams": 53,
+                  "carbsGrams": 0,
+                  "fatGrams": 6,
+                  "fiberGrams": 0,
+                  "sugarGrams": 0
+                },
+                "macrosPer100g": {
+                  "caloriesKcal": 165,
+                  "proteinGrams": 31,
+                  "carbsGrams": 0,
+                  "fatGrams": 3.6,
+                  "fiberGrams": 0,
+                  "sugarGrams": 0
+                },
+                "imageUrl": null,
+                "imageStatus": "NONE"
+              },
+              {
+                "name": "Steamed White Rice",
+                "foodId": "food_white_rice",
+                "servingLabel": "1 cup cooked",
+                "servingGrams": 158,
+                "quantity": 1,
+                "macros": {
+                  "caloriesKcal": 205,
+                  "proteinGrams": 4,
+                  "carbsGrams": 45,
+                  "fatGrams": 0,
+                  "fiberGrams": 1,
+                  "sugarGrams": 0
+                },
+                "macrosPer100g": {
+                  "caloriesKcal": 130,
+                  "proteinGrams": 2.7,
+                  "carbsGrams": 28,
+                  "fatGrams": 0.3,
+                  "fiberGrams": 0.4,
+                  "sugarGrams": 0.1
+                },
+                "imageUrl": null,
+                "imageStatus": "NONE"
+              },
+              {
+                "name": "Black Beans & Corn Salsa",
+                "foodId": null,
+                "servingLabel": "1/2 cup",
+                "servingGrams": 92,
+                "quantity": 1,
+                "macros": {
+                  "caloriesKcal": 138,
+                  "proteinGrams": 0,
+                  "carbsGrams": 23,
+                  "fatGrams": 7,
+                  "fiberGrams": 6,
+                  "sugarGrams": 6
+                },
+                "macrosPer100g": {
+                  "caloriesKcal": 150,
+                  "proteinGrams": 0,
+                  "carbsGrams": 25,
+                  "fatGrams": 7.6,
+                  "fiberGrams": 6.5,
+                  "sugarGrams": 6.5
+                },
+                "imageUrl": null,
+                "imageStatus": "NONE"
+              }
+            ],
+            "createdAt": "2026-07-19T18:05:33Z"
+          }
+        ]
+      },
+      {
+        "meal": "SNACK",
+        "subtotal": {
+          "caloriesKcal": 350,
+          "proteinGrams": 51,
+          "carbsGrams": 32,
+          "fatGrams": 2.5,
+          "fiberGrams": 8,
+          "sugarGrams": 21
+        },
+        "entries": [
+          {
+            "entryId": "ent_sn_yogurt_20260719",
+            "meal": "SNACK",
+            "foodId": "food_greek_yogurt",
+            "foodName": "Nonfat Greek Yogurt",
+            "servingLabel": "1 cup",
+            "servingGrams": 245,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 146,
+              "proteinGrams": 25,
+              "carbsGrams": 9,
+              "fatGrams": 1,
+              "fiberGrams": 0,
+              "sugarGrams": 7
+            },
+            "source": "CATALOG",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T16:20:09Z"
+          },
+          {
+            "entryId": "ent_sn_berries_20260719",
+            "meal": "SNACK",
+            "foodId": "food_mixed_berries",
+            "foodName": "Mixed Berries",
+            "servingLabel": "1 cup",
+            "servingGrams": 150,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 84,
+              "proteinGrams": 1,
+              "carbsGrams": 20,
+              "fatGrams": 0,
+              "fiberGrams": 7,
+              "sugarGrams": 12
+            },
+            "source": "CATALOG",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T16:20:31Z"
+          },
+          {
+            "entryId": "ent_sn_shake_20260719",
+            "meal": "SNACK",
+            "foodId": "food_whey_protein",
+            "foodName": "Whey Protein Shake",
+            "servingLabel": "1 scoop",
+            "servingGrams": 32,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 120,
+              "proteinGrams": 25,
+              "carbsGrams": 3,
+              "fatGrams": 1.5,
+              "fiberGrams": 1,
+              "sugarGrams": 2
+            },
+            "source": "MANUAL",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T16:21:02Z"
+          }
+        ]
+      },
+      {
+        "meal": "DINNER",
+        "subtotal": {
+          "caloriesKcal": 754,
+          "proteinGrams": 55,
+          "carbsGrams": 63,
+          "fatGrams": 30,
+          "fiberGrams": 15,
+          "sugarGrams": 14
+        },
+        "entries": [
+          {
+            "entryId": "ent_dn_salmon_20260719",
+            "meal": "DINNER",
+            "foodId": "food_salmon_fillet",
+            "foodName": "Baked Salmon Fillet",
+            "servingLabel": "6 oz",
+            "servingGrams": 170,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 367,
+              "proteinGrams": 40,
+              "carbsGrams": 0,
+              "fatGrams": 22,
+              "fiberGrams": 0,
+              "sugarGrams": 0
+            },
+            "source": "CATALOG",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T23:48:02Z"
+          },
+          {
+            "entryId": "ent_dn_sweetpotato_20260719",
+            "meal": "DINNER",
+            "foodId": "food_sweet_potato",
+            "foodName": "Roasted Sweet Potato",
+            "servingLabel": "1 medium",
+            "servingGrams": 200,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 258,
+              "proteinGrams": 4,
+              "carbsGrams": 58,
+              "fatGrams": 2,
+              "fiberGrams": 9,
+              "sugarGrams": 12
+            },
+            "source": "CATALOG",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T23:48:20Z"
+          },
+          {
+            "entryId": "ent_dn_asparagus_20260719",
+            "meal": "DINNER",
+            "foodId": "food_asparagus",
+            "foodName": "Grilled Asparagus",
+            "servingLabel": "1 cup",
+            "servingGrams": 134,
+            "quantity": 1,
+            "macros": {
+              "caloriesKcal": 129,
+              "proteinGrams": 11,
+              "carbsGrams": 5,
+              "fatGrams": 6,
+              "fiberGrams": 6,
+              "sugarGrams": 2
+            },
+            "source": "CATALOG",
+            "imageUrl": null,
+            "imageStatus": "NONE",
+            "analysisStatus": "NONE",
+            "ingredients": null,
+            "createdAt": "2026-07-19T23:48:41Z"
+          }
+        ]
+      }
+    ]
+  },
+  "GET /api/me/nutrition/recent-meals": [
+    {
+      "entryId": "ent_dn_salmon_20260718",
+      "meal": "DINNER",
+      "foodId": "food_salmon_fillet",
+      "foodName": "Baked Salmon Fillet",
+      "servingLabel": "6 oz",
+      "servingGrams": 170,
+      "quantity": 1,
+      "macros": {
+        "caloriesKcal": 367,
+        "proteinGrams": 40,
+        "carbsGrams": 0,
+        "fatGrams": 22,
+        "fiberGrams": 0,
+        "sugarGrams": 0
+      },
+      "source": "CATALOG",
+      "imageUrl": null,
+      "imageStatus": "NONE",
+      "analysisStatus": "NONE",
+      "ingredients": null,
+      "date": "2026-07-18",
+      "createdAt": "2026-07-18T23:40:00Z"
+    },
+    {
+      "entryId": "ent_ln_chickenrice_20260718",
+      "meal": "LUNCH",
+      "foodId": null,
+      "foodName": "Chicken Rice Bowl",
+      "servingLabel": "1 bowl",
+      "servingGrams": 420,
+      "quantity": 1,
+      "macros": {
+        "caloriesKcal": 624,
+        "proteinGrams": 57,
+        "carbsGrams": 68,
+        "fatGrams": 13,
+        "fiberGrams": 7,
+        "sugarGrams": 6
+      },
+      "source": "PHOTO",
+      "imageUrl": null,
+      "imageStatus": "NONE",
+      "analysisStatus": "READY",
+      "ingredients": null,
+      "date": "2026-07-18",
+      "createdAt": "2026-07-18T18:12:00Z"
+    },
+    {
+      "entryId": "ent_bf_steak_20260718",
+      "meal": "BREAKFAST",
+      "foodId": "food_sirloin_steak",
+      "foodName": "Grilled Sirloin Steak",
+      "servingLabel": "6 oz",
+      "servingGrams": 170,
+      "quantity": 1,
+      "macros": {
+        "caloriesKcal": 386,
+        "proteinGrams": 46,
+        "carbsGrams": 0,
+        "fatGrams": 22,
+        "fiberGrams": 0,
+        "sugarGrams": 0
+      },
+      "source": "CATALOG",
+      "imageUrl": null,
+      "imageStatus": "NONE",
+      "analysisStatus": "NONE",
+      "ingredients": null,
+      "date": "2026-07-18",
+      "createdAt": "2026-07-18T12:30:00Z"
+    },
+    {
+      "entryId": "ent_sn_yogurt_20260718",
+      "meal": "SNACK",
+      "foodId": "food_greek_yogurt",
+      "foodName": "Nonfat Greek Yogurt",
+      "servingLabel": "1 cup",
+      "servingGrams": 245,
+      "quantity": 1,
+      "macros": {
+        "caloriesKcal": 146,
+        "proteinGrams": 25,
+        "carbsGrams": 9,
+        "fatGrams": 1,
+        "fiberGrams": 0,
+        "sugarGrams": 7
+      },
+      "source": "CATALOG",
+      "imageUrl": null,
+      "imageStatus": "NONE",
+      "analysisStatus": "NONE",
+      "ingredients": null,
+      "date": "2026-07-18",
+      "createdAt": "2026-07-18T16:00:00Z"
+    },
+    {
+      "entryId": "ent_bf_oats_20260716",
+      "meal": "BREAKFAST",
+      "foodId": "food_overnight_oats",
+      "foodName": "Overnight Oats with Banana",
+      "servingLabel": "1 jar",
+      "servingGrams": 320,
+      "quantity": 1,
+      "macros": {
+        "caloriesKcal": 442,
+        "proteinGrams": 24,
+        "carbsGrams": 62,
+        "fatGrams": 11,
+        "fiberGrams": 9,
+        "sugarGrams": 18
+      },
+      "source": "PHOTO",
+      "imageUrl": null,
+      "imageStatus": "NONE",
+      "analysisStatus": "READY",
+      "ingredients": null,
+      "date": "2026-07-16",
+      "createdAt": "2026-07-16T12:05:00Z"
+    }
+  ],
+  "GET /api/me/nutrition": [
+    {
+      "date": "2026-07-10",
+      "proteinGrams": 202,
+      "carbsGrams": 221,
+      "fatGrams": 68,
+      "fiberGrams": 34,
+      "sugarGrams": 52,
+      "caloriesKcal": 2304
+    },
+    {
+      "date": "2026-07-11",
+      "proteinGrams": 214,
+      "carbsGrams": 238,
+      "fatGrams": 72,
+      "fiberGrams": 39,
+      "sugarGrams": 58,
+      "caloriesKcal": 2456
+    },
+    {
+      "date": "2026-07-12",
+      "proteinGrams": 188,
+      "carbsGrams": 265,
+      "fatGrams": 81,
+      "fiberGrams": 36,
+      "sugarGrams": 74,
+      "caloriesKcal": 2541
+    },
+    {
+      "date": "2026-07-13",
+      "proteinGrams": 219,
+      "carbsGrams": 205,
+      "fatGrams": 64,
+      "fiberGrams": 41,
+      "sugarGrams": 47,
+      "caloriesKcal": 2272
+    },
+    {
+      "date": "2026-07-14",
+      "proteinGrams": 208,
+      "carbsGrams": 232,
+      "fatGrams": 69,
+      "fiberGrams": 38,
+      "sugarGrams": 55,
+      "caloriesKcal": 2381
+    },
+    {
+      "date": "2026-07-15",
+      "proteinGrams": 225,
+      "carbsGrams": 218,
+      "fatGrams": 66,
+      "fiberGrams": 40,
+      "sugarGrams": 49,
+      "caloriesKcal": 2366
+    },
+    {
+      "date": "2026-07-16",
+      "proteinGrams": 196,
+      "carbsGrams": 244,
+      "fatGrams": 74,
+      "fiberGrams": 37,
+      "sugarGrams": 61,
+      "caloriesKcal": 2426
+    },
+    {
+      "date": "2026-07-17",
+      "proteinGrams": 211,
+      "carbsGrams": 229,
+      "fatGrams": 71,
+      "fiberGrams": 39,
+      "sugarGrams": 53,
+      "caloriesKcal": 2399
+    },
+    {
+      "date": "2026-07-18",
+      "proteinGrams": 217,
+      "carbsGrams": 224,
+      "fatGrams": 67,
+      "fiberGrams": 42,
+      "sugarGrams": 50,
+      "caloriesKcal": 2367
+    },
+    {
+      "date": "2026-07-19",
+      "proteinGrams": 205,
+      "carbsGrams": 197,
+      "fatGrams": 76,
+      "fiberGrams": 30,
+      "sugarGrams": 41,
+      "caloriesKcal": 2296
+    }
+  ],
+  "GET /api/me/goals": [
+    {
+      "goalId": "goal_bodyfab",
+      "title": "Cut to 12% body fat by October",
+      "description": "Drop from 18% to 12% body fat while protecting lean mass — a slow, tracked recomp so the abs show up for the fall shoot. Down to ~14% and holding strength.",
+      "domain": "BODY_COMPOSITION",
+      "status": "ACTIVE",
+      "startDate": "2026-03-02",
+      "targetDate": "2026-10-01",
+      "createdAt": "2026-02-24T15:12:04Z",
+      "updatedAt": "2026-07-18T11:40:22Z",
+      "completedAt": null,
+      "phaseOrder": [
+        "ph_bf_prime",
+        "ph_bf_deficit",
+        "ph_bf_polish"
+      ],
+      "source": "AI_ASSISTED"
+    },
+    {
+      "goalId": "goal_bench275",
+      "title": "Bench press 275 for 5 reps",
+      "description": "Add a strict 30 lb to the bench top-set without losing the cut. Sitting at 245×5 — the linear runway is closing, so switch to a wave block through summer.",
+      "domain": "STRENGTH",
+      "status": "ACTIVE",
+      "startDate": "2026-04-06",
+      "targetDate": "2026-09-14",
+      "createdAt": "2026-04-01T09:03:41Z",
+      "updatedAt": "2026-07-17T18:55:10Z",
+      "completedAt": null,
+      "phaseOrder": [
+        "ph_bp_base",
+        "ph_bp_wave",
+        "ph_bp_peak"
+      ],
+      "source": "MANUAL"
+    },
+    {
+      "goalId": "goal_protein90",
+      "title": "Hit 210g protein daily for 90 days",
+      "description": "Lock in 210g protein a day across a full 90-day block to fuel the recomp — measured on the 7-day rolling average so one low day doesn't break the streak. Averaging ~198g and climbing.",
+      "domain": "METABOLIC",
+      "status": "ACTIVE",
+      "startDate": "2026-05-15",
+      "targetDate": "2026-08-13",
+      "createdAt": "2026-05-14T22:10:00Z",
+      "updatedAt": "2026-07-18T07:20:33Z",
+      "completedAt": null,
+      "phaseOrder": [
+        "ph_pr_ramp",
+        "ph_pr_hold",
+        "ph_pr_lock"
+      ],
+      "source": "AI_GENERATED"
+    }
+  ],
+  "GET /api/me/goals/goal_bodyfab": {
+    "goalId": "goal_bodyfab",
+    "title": "Cut to 12% body fat by October",
+    "description": "Drop from 18% to 12% body fat while protecting lean mass — a slow, tracked recomp so the abs show up for the fall shoot. Down to ~14% and holding strength.",
+    "domain": "BODY_COMPOSITION",
+    "status": "ACTIVE",
+    "startDate": "2026-03-02",
+    "targetDate": "2026-10-01",
+    "createdAt": "2026-02-24T15:12:04Z",
+    "updatedAt": "2026-07-18T11:40:22Z",
+    "completedAt": null,
+    "phaseOrder": [
+      "ph_bf_prime",
+      "ph_bf_deficit",
+      "ph_bf_polish"
+    ],
+    "source": "AI_ASSISTED",
+    "phases": [
+      {
+        "phaseId": "ph_bf_prime",
+        "goalId": "goal_bodyfab",
+        "title": "Prime the metabolism",
+        "description": "Set a maintenance baseline, dial in tracking, and build the habit floor before any deficit. Establish lean mass and starting body fat.",
+        "orderIndex": 0,
+        "status": "COMPLETED",
+        "targetStartDate": "2026-03-02",
+        "targetEndDate": "2026-04-12",
+        "completedAt": "2026-04-10T13:22:00Z",
+        "stepOrder": [
+          "st_bf_p1",
+          "st_bf_p2",
+          "st_bf_p3"
+        ],
+        "steps": [
+          {
+            "stepId": "st_bf_p1",
+            "phaseId": "ph_bf_prime",
+            "goalId": "goal_bodyfab",
+            "title": "Log body composition weekly for 4 weeks",
+            "orderIndex": 0,
+            "kind": "COUNT",
+            "done": true,
+            "doneAt": "2026-04-01T08:15:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "workouts.count",
+              "comparator": "GTE",
+              "targetValue": 4,
+              "windowDays": 28,
+              "countFrom": "2026-03-02"
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_bf_p2",
+            "phaseId": "ph_bf_prime",
+            "goalId": "goal_bodyfab",
+            "title": "Establish starting body fat under 19%",
+            "orderIndex": 1,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-03-09T07:40:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "body.bodyFatPct",
+              "comparator": "LTE",
+              "targetValue": 19,
+              "windowDays": null,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_bf_p3",
+            "phaseId": "ph_bf_prime",
+            "goalId": "goal_bodyfab",
+            "title": "Confirm InBody scan appointment",
+            "orderIndex": 2,
+            "kind": "MANUAL",
+            "done": true,
+            "doneAt": "2026-03-05T16:00:00Z",
+            "manualOverride": false,
+            "metric": null,
+            "metricRegressed": null
+          }
+        ]
+      },
+      {
+        "phaseId": "ph_bf_deficit",
+        "goalId": "goal_bodyfab",
+        "title": "Steady deficit to 14%",
+        "description": "Run a moderate 400 kcal deficit with protein held high and lifting volume intact. Weekly weigh-ins, biweekly composition checks.",
+        "orderIndex": 1,
+        "status": "ACTIVE",
+        "targetStartDate": "2026-04-13",
+        "targetEndDate": "2026-08-02",
+        "completedAt": null,
+        "stepOrder": [
+          "st_bf_d1",
+          "st_bf_d2",
+          "st_bf_d3",
+          "st_bf_d4"
+        ],
+        "steps": [
+          {
+            "stepId": "st_bf_d1",
+            "phaseId": "ph_bf_deficit",
+            "goalId": "goal_bodyfab",
+            "title": "Reach 16% body fat",
+            "orderIndex": 0,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-06-01T07:30:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "body.bodyFatPct",
+              "comparator": "LTE",
+              "targetValue": 16,
+              "windowDays": null,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_bf_d2",
+            "phaseId": "ph_bf_deficit",
+            "goalId": "goal_bodyfab",
+            "title": "Reach 14% body fat",
+            "orderIndex": 1,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-07-12T07:25:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "body.bodyFatPct",
+              "comparator": "LTE",
+              "targetValue": 14,
+              "windowDays": null,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_bf_d3",
+            "phaseId": "ph_bf_deficit",
+            "goalId": "goal_bodyfab",
+            "title": "Hold lean mass above 165 lb",
+            "orderIndex": 2,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-07-12T07:26:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "body.leanMass",
+              "comparator": "GTE",
+              "targetValue": 165,
+              "windowDays": null,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_bf_d4",
+            "phaseId": "ph_bf_deficit",
+            "goalId": "goal_bodyfab",
+            "title": "Drop scale weight to 178 lb",
+            "orderIndex": 3,
+            "kind": "THRESHOLD",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "body.weight",
+              "comparator": "LTE",
+              "targetValue": 178,
+              "windowDays": null,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          }
+        ]
+      },
+      {
+        "phaseId": "ph_bf_polish",
+        "goalId": "goal_bodyfab",
+        "title": "Polish to 12%",
+        "description": "Final tightening block — slower deficit, refeeds every 10 days, and a diet break scheduled before the shoot to look full on camera.",
+        "orderIndex": 2,
+        "status": "LOCKED",
+        "targetStartDate": "2026-08-03",
+        "targetEndDate": "2026-10-01",
+        "completedAt": null,
+        "stepOrder": [
+          "st_bf_x1",
+          "st_bf_x2"
+        ],
+        "steps": [
+          {
+            "stepId": "st_bf_x1",
+            "phaseId": "ph_bf_polish",
+            "goalId": "goal_bodyfab",
+            "title": "Reach 12% body fat",
+            "orderIndex": 0,
+            "kind": "THRESHOLD",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "body.bodyFatPct",
+              "comparator": "LTE",
+              "targetValue": 12,
+              "windowDays": null,
+              "countFrom": null
+            },
+            "metricRegressed": null
+          },
+          {
+            "stepId": "st_bf_x2",
+            "phaseId": "ph_bf_polish",
+            "goalId": "goal_bodyfab",
+            "title": "Keep resting HR under 58 bpm through the cut",
+            "orderIndex": 1,
+            "kind": "SUSTAINED",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "vitals.restingHr",
+              "comparator": "LTE",
+              "targetValue": 58,
+              "windowDays": 14,
+              "countFrom": null
+            },
+            "metricRegressed": null
+          }
+        ]
+      }
+    ]
+  },
+  "GET /api/me/goals/goal_bench275": {
+    "goalId": "goal_bench275",
+    "title": "Bench press 275 for 5 reps",
+    "description": "Add a strict 30 lb to the bench top-set without losing the cut. Sitting at 245×5 — the linear runway is closing, so switch to a wave block through summer.",
+    "domain": "STRENGTH",
+    "status": "ACTIVE",
+    "startDate": "2026-04-06",
+    "targetDate": "2026-09-14",
+    "createdAt": "2026-04-01T09:03:41Z",
+    "updatedAt": "2026-07-17T18:55:10Z",
+    "completedAt": null,
+    "phaseOrder": [
+      "ph_bp_base",
+      "ph_bp_wave",
+      "ph_bp_peak"
+    ],
+    "source": "MANUAL",
+    "phases": [
+      {
+        "phaseId": "ph_bp_base",
+        "goalId": "goal_bench275",
+        "title": "Rebuild the base",
+        "description": "Six weeks of higher-volume pressing to re-groove the bar path and bank weekly tonnage before intensity climbs.",
+        "orderIndex": 0,
+        "status": "COMPLETED",
+        "targetStartDate": "2026-04-06",
+        "targetEndDate": "2026-05-24",
+        "completedAt": "2026-05-22T19:10:00Z",
+        "stepOrder": [
+          "st_bp_b1",
+          "st_bp_b2"
+        ],
+        "steps": [
+          {
+            "stepId": "st_bp_b1",
+            "phaseId": "ph_bp_base",
+            "goalId": "goal_bench275",
+            "title": "Bench 225 for 5 clean reps",
+            "orderIndex": 0,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-04-27T18:20:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "workouts.weeklyVolume",
+              "comparator": "GTE",
+              "targetValue": 18000,
+              "windowDays": 7,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_bp_b2",
+            "phaseId": "ph_bp_base",
+            "goalId": "goal_bench275",
+            "title": "Log 3 press sessions per week for 6 weeks",
+            "orderIndex": 1,
+            "kind": "COUNT",
+            "done": true,
+            "doneAt": "2026-05-22T19:05:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "workouts.count",
+              "comparator": "GTE",
+              "targetValue": 18,
+              "windowDays": 42,
+              "countFrom": "2026-04-06"
+            },
+            "metricRegressed": false
+          }
+        ]
+      },
+      {
+        "phaseId": "ph_bp_wave",
+        "goalId": "goal_bench275",
+        "title": "Wave to 255",
+        "description": "Three-week waves loading toward a 255×5 top set. This is where I am now — 245 moved fast last week, 255 is the next checkpoint.",
+        "orderIndex": 1,
+        "status": "ACTIVE",
+        "targetStartDate": "2026-05-25",
+        "targetEndDate": "2026-08-16",
+        "completedAt": null,
+        "stepOrder": [
+          "st_bp_w1",
+          "st_bp_w2",
+          "st_bp_w3"
+        ],
+        "steps": [
+          {
+            "stepId": "st_bp_w1",
+            "phaseId": "ph_bp_wave",
+            "goalId": "goal_bench275",
+            "title": "Bench 245 for 5 reps",
+            "orderIndex": 0,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-07-10T18:40:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "workouts.weeklyVolume",
+              "comparator": "GTE",
+              "targetValue": 21000,
+              "windowDays": 7,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_bp_w2",
+            "phaseId": "ph_bp_wave",
+            "goalId": "goal_bench275",
+            "title": "Bench 255 for 5 reps",
+            "orderIndex": 1,
+            "kind": "MANUAL",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": null,
+            "metricRegressed": null
+          },
+          {
+            "stepId": "st_bp_w3",
+            "phaseId": "ph_bp_wave",
+            "goalId": "goal_bench275",
+            "title": "Keep weekly press volume above 22k lb",
+            "orderIndex": 2,
+            "kind": "SUSTAINED",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "workouts.weeklyVolume",
+              "comparator": "GTE",
+              "targetValue": 22000,
+              "windowDays": 21,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          }
+        ]
+      },
+      {
+        "phaseId": "ph_bp_peak",
+        "goalId": "goal_bench275",
+        "title": "Peak to 275",
+        "description": "Taper volume, push intensity, and test the 275×5 on a fresh CNS after a deload. Backoff sets stay heavy but low-rep.",
+        "orderIndex": 2,
+        "status": "LOCKED",
+        "targetStartDate": "2026-08-17",
+        "targetEndDate": "2026-09-14",
+        "completedAt": null,
+        "stepOrder": [
+          "st_bp_p1",
+          "st_bp_p2"
+        ],
+        "steps": [
+          {
+            "stepId": "st_bp_p1",
+            "phaseId": "ph_bp_peak",
+            "goalId": "goal_bench275",
+            "title": "Hit a 265x3 heavy single-set day",
+            "orderIndex": 0,
+            "kind": "MANUAL",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": null,
+            "metricRegressed": null
+          },
+          {
+            "stepId": "st_bp_p2",
+            "phaseId": "ph_bp_peak",
+            "goalId": "goal_bench275",
+            "title": "Bench 275 for 5 reps",
+            "orderIndex": 1,
+            "kind": "MANUAL",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": null,
+            "metricRegressed": null
+          }
+        ]
+      }
+    ]
+  },
+  "GET /api/me/goals/goal_protein90": {
+    "goalId": "goal_protein90",
+    "title": "Hit 210g protein daily for 90 days",
+    "description": "Lock in 210g protein a day across a full 90-day block to fuel the recomp — measured on the 7-day rolling average so one low day doesn't break the streak. Averaging ~198g and climbing.",
+    "domain": "METABOLIC",
+    "status": "ACTIVE",
+    "startDate": "2026-05-15",
+    "targetDate": "2026-08-13",
+    "createdAt": "2026-05-14T22:10:00Z",
+    "updatedAt": "2026-07-18T07:20:33Z",
+    "completedAt": null,
+    "phaseOrder": [
+      "ph_pr_ramp",
+      "ph_pr_hold",
+      "ph_pr_lock"
+    ],
+    "source": "AI_GENERATED",
+    "phases": [
+      {
+        "phaseId": "ph_pr_ramp",
+        "goalId": "goal_protein90",
+        "title": "Ramp the intake",
+        "description": "Climb from a ~150g baseline to 210g over two weeks by front-loading protein at breakfast and adding a nightly casein shake.",
+        "orderIndex": 0,
+        "status": "COMPLETED",
+        "targetStartDate": "2026-05-15",
+        "targetEndDate": "2026-05-29",
+        "completedAt": "2026-05-28T21:00:00Z",
+        "stepOrder": [
+          "st_pr_r1",
+          "st_pr_r2"
+        ],
+        "steps": [
+          {
+            "stepId": "st_pr_r1",
+            "phaseId": "ph_pr_ramp",
+            "goalId": "goal_protein90",
+            "title": "Average 180g protein over 7 days",
+            "orderIndex": 0,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-05-24T08:00:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "nutrition.proteinAvg7d",
+              "comparator": "GTE",
+              "targetValue": 180,
+              "windowDays": 7,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_pr_r2",
+            "phaseId": "ph_pr_ramp",
+            "goalId": "goal_protein90",
+            "title": "Keep calories at maintenance (2,700 kcal 7d avg)",
+            "orderIndex": 1,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-05-28T08:00:00Z",
+            "manualOverride": true,
+            "metric": {
+              "metricKey": "nutrition.caloriesAvg7d",
+              "comparator": "GTE",
+              "targetValue": 2700,
+              "windowDays": 7,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          }
+        ]
+      },
+      {
+        "phaseId": "ph_pr_hold",
+        "goalId": "goal_protein90",
+        "title": "Hold the 210 line",
+        "description": "Sustain a 210g 7-day average through the meat of the block. Currently sitting at ~198g — close, warn range, one strong week from clearing it.",
+        "orderIndex": 1,
+        "status": "ACTIVE",
+        "targetStartDate": "2026-05-30",
+        "targetEndDate": "2026-07-27",
+        "completedAt": null,
+        "stepOrder": [
+          "st_pr_h1",
+          "st_pr_h2",
+          "st_pr_h3"
+        ],
+        "steps": [
+          {
+            "stepId": "st_pr_h1",
+            "phaseId": "ph_pr_hold",
+            "goalId": "goal_protein90",
+            "title": "Average 200g protein over 7 days",
+            "orderIndex": 0,
+            "kind": "THRESHOLD",
+            "done": true,
+            "doneAt": "2026-06-21T08:00:00Z",
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "nutrition.proteinAvg7d",
+              "comparator": "GTE",
+              "targetValue": 200,
+              "windowDays": 7,
+              "countFrom": null
+            },
+            "metricRegressed": true
+          },
+          {
+            "stepId": "st_pr_h2",
+            "phaseId": "ph_pr_hold",
+            "goalId": "goal_protein90",
+            "title": "Sustain a 210g 7-day average",
+            "orderIndex": 1,
+            "kind": "SUSTAINED",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "nutrition.proteinAvg7d",
+              "comparator": "GTE",
+              "targetValue": 210,
+              "windowDays": 7,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          },
+          {
+            "stepId": "st_pr_h3",
+            "phaseId": "ph_pr_hold",
+            "goalId": "goal_protein90",
+            "title": "Keep carbs above 260g to protect training",
+            "orderIndex": 2,
+            "kind": "THRESHOLD",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "nutrition.carbsAvg7d",
+              "comparator": "GTE",
+              "targetValue": 260,
+              "windowDays": 7,
+              "countFrom": null
+            },
+            "metricRegressed": false
+          }
+        ]
+      },
+      {
+        "phaseId": "ph_pr_lock",
+        "goalId": "goal_protein90",
+        "title": "Lock the streak",
+        "description": "Close out the final stretch with the 90-day count intact — no single 7-day window dipping below 210g.",
+        "orderIndex": 2,
+        "status": "LOCKED",
+        "targetStartDate": "2026-07-28",
+        "targetEndDate": "2026-08-13",
+        "completedAt": null,
+        "stepOrder": [
+          "st_pr_l1"
+        ],
+        "steps": [
+          {
+            "stepId": "st_pr_l1",
+            "phaseId": "ph_pr_lock",
+            "goalId": "goal_protein90",
+            "title": "Complete 90 days at 210g 7-day average",
+            "orderIndex": 0,
+            "kind": "COUNT",
+            "done": false,
+            "doneAt": null,
+            "manualOverride": false,
+            "metric": {
+              "metricKey": "nutrition.proteinAvg7d",
+              "comparator": "GTE",
+              "targetValue": 210,
+              "windowDays": 90,
+              "countFrom": "2026-05-15"
+            },
+            "metricRegressed": null
+          }
+        ]
+      }
+    ]
+  }
+}

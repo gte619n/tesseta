@@ -1,0 +1,96 @@
+{
+  "GET /api/me/blood": [
+    { "readingId": "rd_test_20260715", "marker": "TESTOSTERONE", "value": 892, "unit": "ng/dL", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": "Trough draw, 36h post-injection", "reference": { "unit": "ng/dL", "orientation": "HIGHER_IS_BETTER", "goodThreshold": 900, "displayMin": 300, "displayMax": 1100 } },
+    { "readingId": "rd_test_20260410", "marker": "TESTOSTERONE", "value": 754, "unit": "ng/dL", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "ng/dL", "orientation": "HIGHER_IS_BETTER", "goodThreshold": 900, "displayMin": 300, "displayMax": 1100 } },
+    { "readingId": "rd_test_20260112", "marker": "TESTOSTERONE", "value": 611, "unit": "ng/dL", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": "Pre-dose adjustment", "reference": { "unit": "ng/dL", "orientation": "HIGHER_IS_BETTER", "goodThreshold": 900, "displayMin": 300, "displayMax": 1100 } },
+    { "readingId": "rd_ldl_20260715", "marker": "LDL", "value": 78, "unit": "mg/dL", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 0, "displayMax": 190 } },
+    { "readingId": "rd_ldl_20260410", "marker": "LDL", "value": 88, "unit": "mg/dL", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 0, "displayMax": 190 } },
+    { "readingId": "rd_ldl_20260112", "marker": "LDL", "value": 104, "unit": "mg/dL", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": "Started omega-3 + fiber", "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 0, "displayMax": 190 } },
+    { "readingId": "rd_apob_20260715", "marker": "APO_B", "value": 74, "unit": "mg/dL", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 90, "displayMin": 0, "displayMax": 150 } },
+    { "readingId": "rd_apob_20260410", "marker": "APO_B", "value": 82, "unit": "mg/dL", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 90, "displayMin": 0, "displayMax": 150 } },
+    { "readingId": "rd_apob_20260112", "marker": "APO_B", "value": 95, "unit": "mg/dL", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 90, "displayMin": 0, "displayMax": 150 } },
+    { "readingId": "rd_hdl_20260715", "marker": "HDL", "value": 58, "unit": "mg/dL", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "HIGHER_IS_BETTER", "goodThreshold": 60, "displayMin": 40, "displayMax": 90 } },
+    { "readingId": "rd_hdl_20260410", "marker": "HDL", "value": 54, "unit": "mg/dL", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "HIGHER_IS_BETTER", "goodThreshold": 60, "displayMin": 40, "displayMax": 90 } },
+    { "readingId": "rd_hdl_20260112", "marker": "HDL", "value": 49, "unit": "mg/dL", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": null, "reference": { "unit": "mg/dL", "orientation": "HIGHER_IS_BETTER", "goodThreshold": 60, "displayMin": 40, "displayMax": 90 } },
+    { "readingId": "rd_trig_20260715", "marker": "TRIGLYCERIDES", "value": 71, "unit": "mg/dL", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 0, "displayMax": 200 } },
+    { "readingId": "rd_trig_20260410", "marker": "TRIGLYCERIDES", "value": 88, "unit": "mg/dL", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 0, "displayMax": 200 } },
+    { "readingId": "rd_trig_20260112", "marker": "TRIGLYCERIDES", "value": 112, "unit": "mg/dL", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 0, "displayMax": 200 } },
+    { "readingId": "rd_chol_20260715", "marker": "TOTAL_CHOLESTEROL", "value": 168, "unit": "mg/dL", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 200, "displayMin": 120, "displayMax": 260 } },
+    { "readingId": "rd_chol_20260410", "marker": "TOTAL_CHOLESTEROL", "value": 179, "unit": "mg/dL", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 200, "displayMin": 120, "displayMax": 260 } },
+    { "readingId": "rd_chol_20260112", "marker": "TOTAL_CHOLESTEROL", "value": 194, "unit": "mg/dL", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 200, "displayMin": 120, "displayMax": 260 } },
+    { "readingId": "rd_hba1c_20260715", "marker": "HBA1C", "value": 5.1, "unit": "%", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "%", "orientation": "LOWER_IS_BETTER", "goodThreshold": 5.7, "displayMin": 4, "displayMax": 6.5 } },
+    { "readingId": "rd_hba1c_20260410", "marker": "HBA1C", "value": 5.3, "unit": "%", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "%", "orientation": "LOWER_IS_BETTER", "goodThreshold": 5.7, "displayMin": 4, "displayMax": 6.5 } },
+    { "readingId": "rd_hba1c_20260112", "marker": "HBA1C", "value": 5.4, "unit": "%", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": null, "reference": { "unit": "%", "orientation": "LOWER_IS_BETTER", "goodThreshold": 5.7, "displayMin": 4, "displayMax": 6.5 } },
+    { "readingId": "rd_glu_20260715", "marker": "FASTING_GLUCOSE", "value": 88, "unit": "mg/dL", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": "12h fast", "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 65, "displayMax": 126 } },
+    { "readingId": "rd_glu_20260410", "marker": "FASTING_GLUCOSE", "value": 91, "unit": "mg/dL", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 65, "displayMax": 126 } },
+    { "readingId": "rd_glu_20260112", "marker": "FASTING_GLUCOSE", "value": 96, "unit": "mg/dL", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": null, "reference": { "unit": "mg/dL", "orientation": "LOWER_IS_BETTER", "goodThreshold": 100, "displayMin": 65, "displayMax": 126 } },
+    { "readingId": "rd_crp_20260715", "marker": "HS_CRP", "value": 0.6, "unit": "mg/L", "sampleDate": "2026-07-15", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/L", "orientation": "LOWER_IS_BETTER", "goodThreshold": 1, "displayMin": 0, "displayMax": 3 } },
+    { "readingId": "rd_crp_20260410", "marker": "HS_CRP", "value": 0.9, "unit": "mg/L", "sampleDate": "2026-04-10", "labSource": "Quest Diagnostics", "notes": null, "reference": { "unit": "mg/L", "orientation": "LOWER_IS_BETTER", "goodThreshold": 1, "displayMin": 0, "displayMax": 3 } },
+    { "readingId": "rd_crp_20260112", "marker": "HS_CRP", "value": 1.4, "unit": "mg/L", "sampleDate": "2026-01-12", "labSource": "LabCorp", "notes": null, "reference": { "unit": "mg/L", "orientation": "LOWER_IS_BETTER", "goodThreshold": 1, "displayMin": 0, "displayMax": 3 } }
+  ],
+  "GET /api/me/blood/reports": [
+    {
+      "reportId": "rpt_20260715_quest",
+      "sampleDate": "2026-07-15",
+      "labSource": "Quest Diagnostics",
+      "markers": [
+        { "name": "Testosterone, Total, LC/MS", "value": 892, "unit": "ng/dL", "refRangeLow": 300, "refRangeHigh": 1000, "flag": null },
+        { "name": "Testosterone, Free", "value": 21.4, "unit": "pg/mL", "refRangeLow": 8.7, "refRangeHigh": 25.1, "flag": null },
+        { "name": "Estradiol, Sensitive", "value": 28, "unit": "pg/mL", "refRangeLow": 8, "refRangeHigh": 43, "flag": null },
+        { "name": "LDL Cholesterol", "value": 78, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 100, "flag": null },
+        { "name": "HDL Cholesterol", "value": 58, "unit": "mg/dL", "refRangeLow": 40, "refRangeHigh": 100, "flag": null },
+        { "name": "Triglycerides", "value": 71, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 150, "flag": null },
+        { "name": "Cholesterol, Total", "value": 168, "unit": "mg/dL", "refRangeLow": 100, "refRangeHigh": 200, "flag": null },
+        { "name": "Apolipoprotein B", "value": 74, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 90, "flag": null },
+        { "name": "Hemoglobin A1c", "value": 5.1, "unit": "%", "refRangeLow": 4.0, "refRangeHigh": 5.7, "flag": null },
+        { "name": "Glucose, Fasting", "value": 88, "unit": "mg/dL", "refRangeLow": 65, "refRangeHigh": 99, "flag": null },
+        { "name": "hs-CRP", "value": 0.6, "unit": "mg/L", "refRangeLow": 0, "refRangeHigh": 1.0, "flag": null },
+        { "name": "Vitamin D, 25-Hydroxy", "value": 52, "unit": "ng/mL", "refRangeLow": 30, "refRangeHigh": 100, "flag": null },
+        { "name": "Ferritin", "value": 145, "unit": "ng/mL", "refRangeLow": 30, "refRangeHigh": 400, "flag": null },
+        { "name": "TSH", "value": 1.8, "unit": "mIU/L", "refRangeLow": 0.45, "refRangeHigh": 4.5, "flag": null }
+      ]
+    },
+    {
+      "reportId": "rpt_20260410_quest",
+      "sampleDate": "2026-04-10",
+      "labSource": "Quest Diagnostics",
+      "markers": [
+        { "name": "Testosterone, Total, LC/MS", "value": 754, "unit": "ng/dL", "refRangeLow": 300, "refRangeHigh": 1000, "flag": null },
+        { "name": "Testosterone, Free", "value": 18.6, "unit": "pg/mL", "refRangeLow": 8.7, "refRangeHigh": 25.1, "flag": null },
+        { "name": "Estradiol, Sensitive", "value": 31, "unit": "pg/mL", "refRangeLow": 8, "refRangeHigh": 43, "flag": null },
+        { "name": "LDL Cholesterol", "value": 88, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 100, "flag": null },
+        { "name": "HDL Cholesterol", "value": 54, "unit": "mg/dL", "refRangeLow": 40, "refRangeHigh": 100, "flag": null },
+        { "name": "Triglycerides", "value": 88, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 150, "flag": null },
+        { "name": "Cholesterol, Total", "value": 179, "unit": "mg/dL", "refRangeLow": 100, "refRangeHigh": 200, "flag": null },
+        { "name": "Apolipoprotein B", "value": 82, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 90, "flag": null },
+        { "name": "Hemoglobin A1c", "value": 5.3, "unit": "%", "refRangeLow": 4.0, "refRangeHigh": 5.7, "flag": null },
+        { "name": "Glucose, Fasting", "value": 91, "unit": "mg/dL", "refRangeLow": 65, "refRangeHigh": 99, "flag": null },
+        { "name": "hs-CRP", "value": 0.9, "unit": "mg/L", "refRangeLow": 0, "refRangeHigh": 1.0, "flag": null },
+        { "name": "Vitamin D, 25-Hydroxy", "value": 44, "unit": "ng/mL", "refRangeLow": 30, "refRangeHigh": 100, "flag": null },
+        { "name": "Ferritin", "value": 132, "unit": "ng/mL", "refRangeLow": 30, "refRangeHigh": 400, "flag": null },
+        { "name": "TSH", "value": 2.1, "unit": "mIU/L", "refRangeLow": 0.45, "refRangeHigh": 4.5, "flag": null }
+      ]
+    },
+    {
+      "reportId": "rpt_20260112_labcorp",
+      "sampleDate": "2026-01-12",
+      "labSource": "LabCorp",
+      "markers": [
+        { "name": "Testosterone, Total", "value": 611, "unit": "ng/dL", "refRangeLow": 264, "refRangeHigh": 916, "flag": null },
+        { "name": "Testosterone, Free", "value": 14.9, "unit": "pg/mL", "refRangeLow": 8.7, "refRangeHigh": 25.1, "flag": null },
+        { "name": "Estradiol", "value": 34, "unit": "pg/mL", "refRangeLow": 8, "refRangeHigh": 43, "flag": null },
+        { "name": "LDL Cholesterol", "value": 104, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 100, "flag": "H" },
+        { "name": "HDL Cholesterol", "value": 49, "unit": "mg/dL", "refRangeLow": 40, "refRangeHigh": 100, "flag": null },
+        { "name": "Triglycerides", "value": 112, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 150, "flag": null },
+        { "name": "Cholesterol, Total", "value": 194, "unit": "mg/dL", "refRangeLow": 100, "refRangeHigh": 200, "flag": null },
+        { "name": "Apolipoprotein B", "value": 95, "unit": "mg/dL", "refRangeLow": 0, "refRangeHigh": 90, "flag": "H" },
+        { "name": "Hemoglobin A1c", "value": 5.4, "unit": "%", "refRangeLow": 4.0, "refRangeHigh": 5.7, "flag": null },
+        { "name": "Glucose, Fasting", "value": 96, "unit": "mg/dL", "refRangeLow": 65, "refRangeHigh": 99, "flag": null },
+        { "name": "hs-CRP", "value": 1.4, "unit": "mg/L", "refRangeLow": 0, "refRangeHigh": 1.0, "flag": "H" },
+        { "name": "Vitamin D, 25-Hydroxy", "value": 33, "unit": "ng/mL", "refRangeLow": 30, "refRangeHigh": 100, "flag": null },
+        { "name": "Ferritin", "value": 118, "unit": "ng/mL", "refRangeLow": 30, "refRangeHigh": 400, "flag": null },
+        { "name": "TSH", "value": 2.4, "unit": "mIU/L", "refRangeLow": 0.45, "refRangeHigh": 4.5, "flag": null }
+      ]
+    }
+  ]
+}

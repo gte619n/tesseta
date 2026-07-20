@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="Tesseta app icon">
+  <rect width="120" height="120" rx="26" fill="#F0EBE0"/>
+  <rect x="34"    y="34"    width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+  <rect x="51.75" y="34"    width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+  <rect x="69.5"  y="34"    width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+  <rect x="34"    y="51.75" width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+  <rect x="69.5"  y="51.75" width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+  <rect x="34"    y="69.5"  width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+  <rect x="51.75" y="69.5"  width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+  <rect x="69.5"  y="69.5"  width="16.5" height="16.5" rx="2.5" fill="#5C7A2E"/>
+</svg>
