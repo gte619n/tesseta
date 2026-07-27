@@ -66,6 +66,11 @@ dependencies {
     // (X-HEALTHAPI-SIGNATURE), using Google's published Tink keyset.
     implementation(libs.google.tink)
 
+    // ADR-0020 (decision D16): live OpenAPI 3 spec + Swagger UI for the /v1
+    // third-party API. Scoped to /v1 via springdoc.paths-to-match so it never
+    // documents the first-party /api surface.
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9")
+
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.security.test)
     // Gradle's embedded test worker ships an older junit-platform-launcher than

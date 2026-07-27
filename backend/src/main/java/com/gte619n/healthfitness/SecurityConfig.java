@@ -7,9 +7,17 @@ import com.gte619n.healthfitness.auth.DevHeaderAuthFilter;
 import com.gte619n.healthfitness.auth.UserProvisioningFilter;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.user.UserService;
+import com.gte619n.healthfitness.platform.AppPlatformProperties;
+import com.gte619n.healthfitness.platform.PlatformAudienceFilter;
+import com.gte619n.healthfitness.platform.PlatformAuditLogger;
+import com.gte619n.healthfitness.platform.PlatformKeys;
+import com.gte619n.healthfitness.platform.V1AuditFilter;
+import com.gte619n.healthfitness.platform.V1RateLimitFilter;
 import com.nimbusds.jwt.SignedJWT;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,7 +26,9 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -40,19 +50,29 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties({
-    AppAuthProperties.class, AppCorsProperties.class, AppSessionProperties.class})
+    AppAuthProperties.class, AppCorsProperties.class, AppSessionProperties.class,
+    AppPlatformProperties.class})
 public class SecurityConfig {
 
-    // The resource server validates two distinct token families and routes by
-    // the `iss` claim (ADR-0010):
-    //   - accounts.google.com  → Google ID tokens (web client, and the Android
-    //     /api/auth/exchange call that bootstraps a session)
-    //   - app.session.issuer   → our own HS256 access tokens (Android phone +
-    //     Wear, on every other request)
-    // Both decode to a JwtAuthenticationToken with `sub`=userId, so CurrentUser
-    // resolution and user provisioning are identical regardless of family.
+    // The resource server validates up to three distinct token families and
+    // routes by the `iss` claim:
+    //   - accounts.google.com    → Google ID tokens (web client, and the Android
+    //     /api/auth/exchange call that bootstraps a session) (ADR-0002)
+    //   - app.session.issuer     → first-party HS256 access tokens (Android phone
+    //     + Wear, on every other request) (ADR-0010)
+    //   - app.platform.issuer    → third-party RS256 access tokens carrying
+    //     `client_id`/`scope`, validated against the platform key + audience,
+    //     for the /oauth + /v1 surface (ADR-0020)
+    // All decode to a JwtAuthenticationToken with `sub`=userId; the platform
+    // token additionally yields SCOPE_* authorities (default converter) for the
+    // resource API's scope enforcement.
     @Bean
-    JwtDecoder jwtDecoder(AppAuthProperties authProps, AppSessionProperties sessionProps) {
+    JwtDecoder jwtDecoder(
+        AppAuthProperties authProps,
+        AppSessionProperties sessionProps,
+        AppPlatformProperties platformProps,
+        ObjectProvider<PlatformKeys> platformKeys
+    ) {
         if (authProps.isDevMode()) {
             return token -> {
                 throw new BadJwtException(
@@ -60,15 +80,39 @@ public class SecurityConfig {
             };
         }
         JwtDecoder google = googleDecoder(authProps);
-        if (!sessionProps.isEnabled()) {
-            // No signing key configured — only Google tokens are accepted.
-            return google;
-        }
-        JwtDecoder session = sessionDecoder(sessionProps);
+        JwtDecoder platform = platformProps.isEnabled()
+            ? platformDecoder(platformProps, platformKeys.getObject())
+            : null;
+        String platformIssuer = platformProps.getIssuer();
+        JwtDecoder session = sessionProps.isEnabled() ? sessionDecoder(sessionProps) : null;
         String sessionIssuer = sessionProps.getIssuer();
-        return token -> sessionIssuer.equals(peekIssuer(token))
-            ? session.decode(token)
-            : google.decode(token);
+        return token -> {
+            String issuer = peekIssuer(token);
+            if (platform != null && platformIssuer.equals(issuer)) {
+                return platform.decode(token);
+            }
+            if (session != null && sessionIssuer.equals(issuer)) {
+                return session.decode(token);
+            }
+            return google.decode(token);
+        };
+    }
+
+    // Third-party access tokens (ADR-0020): RS256, verified against the platform
+    // public key, and required to carry both the platform issuer and audience so
+    // a first-party or Google token can never satisfy a /v1 or /oauth/userinfo
+    // route by accident.
+    private static JwtDecoder platformDecoder(AppPlatformProperties props, PlatformKeys keys) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(keys.publicKey())
+            .signatureAlgorithm(SignatureAlgorithm.RS256)
+            .build();
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+            JwtValidators.createDefault(),
+            new JwtIssuerValidator(props.getIssuer()),
+            new JwtClaimValidator<List<String>>("aud",
+                aud -> aud != null && aud.contains(props.getAudience()))
+        ));
+        return decoder;
     }
 
     private static JwtDecoder googleDecoder(AppAuthProperties props) {
@@ -109,12 +153,20 @@ public class SecurityConfig {
     SecurityFilterChain filterChain(
         HttpSecurity http,
         AppAuthProperties authProps,
+        AppPlatformProperties platformProps,
+        PlatformAuditLogger auditLogger,
+        com.gte619n.healthfitness.core.platform.PlatformRateLimitStore rateLimitStore,
         UserService userService,
         CurrentUserProvider currentUserProvider,
         UrlBasedCorsConfigurationSource corsSource
     ) throws Exception {
         UserProvisioningFilter provisioning =
             new UserProvisioningFilter(userService, currentUserProvider);
+        PlatformAudienceFilter platformAudience =
+            new PlatformAudienceFilter(platformProps.getIssuer());
+        V1AuditFilter v1Audit = new V1AuditFilter(auditLogger);
+        V1RateLimitFilter v1RateLimit = new V1RateLimitFilter(
+            platformProps.getRateLimitRequests(), platformProps.getRateLimitWindow(), rateLimitStore);
 
         http
             .csrf(csrf -> csrf.disable())
@@ -134,6 +186,25 @@ public class SecurityConfig {
                 // controller itself 404s unless app.auth.dev-mode is true.
                 .requestMatchers("/api/auth/dev-login").permitAll()
                 .requestMatchers("/api/auth/exchange").authenticated()
+                // Third-party OAuth platform (ADR-0020). Discovery + JWKS +
+                // token/revoke are public (the client authenticates itself with
+                // its own credentials / PKCE, not a bearer). The authorize +
+                // consent flow and userinfo require a bearer: authorize/consent
+                // a FIRST-PARTY session (enforced in the controller), userinfo a
+                // platform access token.
+                .requestMatchers("/.well-known/oauth-authorization-server", "/oauth/jwks.json")
+                    .permitAll()
+                .requestMatchers("/oauth/token", "/oauth/revoke").permitAll()
+                // Public API documentation (ADR-0020, D16): the OpenAPI JSON and
+                // Swagger UI for the /v1 surface.
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                    .permitAll()
+                .requestMatchers("/oauth/authorize", "/oauth/authorize/consent").authenticated()
+                .requestMatchers("/oauth/userinfo").authenticated()
+                // The third-party read API (ADR-0020). Authentication is required
+                // here; per-endpoint @PreAuthorize enforces the specific scope and
+                // PlatformAudienceFilter confines these to platform tokens only.
+                .requestMatchers("/v1/**").authenticated()
                 .requestMatchers("/api/me/**", "/api/me").authenticated()
                 // Equipment catalog endpoints - authenticated users can browse
                 .requestMatchers("/api/equipment/**").authenticated()
@@ -168,13 +239,26 @@ public class SecurityConfig {
                     if (uri.startsWith("/api/webhooks/")
                         || uri.equals("/api/auth/refresh")
                         || uri.equals("/api/auth/logout")
-                        || uri.equals("/api/auth/dev-login")) {
+                        || uri.equals("/api/auth/dev-login")
+                        // Platform token endpoints carry client credentials / an
+                        // authorization code / a refresh token in the form body,
+                        // not a JWT bearer (ADR-0020).
+                        || uri.equals("/oauth/token")
+                        || uri.equals("/oauth/revoke")) {
                         return null;
                     }
                     return new DefaultBearerTokenResolver().resolve(request);
                 })
                 .jwt(j -> {}))
             .addFilterAfter(provisioning, BearerTokenAuthenticationFilter.class)
+            // Confine platform tokens to /v1 + /oauth/userinfo (ADR-0020) so a
+            // third-party bearer can never satisfy `.authenticated()` on the
+            // first-party /api surface. Runs after authentication is populated.
+            .addFilterAfter(platformAudience, UserProvisioningFilter.class)
+            // /v1 cross-cutting (ADR-0020): audit outermost so it records the
+            // final status (incl. a 429 from the rate limiter it wraps).
+            .addFilterAfter(v1Audit, PlatformAudienceFilter.class)
+            .addFilterAfter(v1RateLimit, V1AuditFilter.class)
             .httpBasic(b -> b.disable())
             .formLogin(f -> f.disable());
 

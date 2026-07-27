@@ -160,6 +160,24 @@ export default async function ProfilePage() {
             )}
           </div>
         </section>
+
+        <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
+          <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
+            Connected apps
+          </h2>
+          <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
+            Review and revoke third-party apps you’ve given read-only access to
+            your data.
+          </p>
+          <div className="mt-4">
+            <Link
+              href="/me/connected-apps"
+              className="inline-flex cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
+            >
+              Manage connected apps
+            </Link>
+          </div>
+        </section>
       </div>
     </main>
   );
