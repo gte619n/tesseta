@@ -17,6 +17,15 @@ server:
   port: ${PORT:8080}
   shutdown: graceful
 
+# ADR-0020 (D16): OpenAPI/Swagger scoped to the /v1 third-party API only, so the
+# published spec never documents the first-party /api surface.
+springdoc:
+  paths-to-match: /v1/**
+  swagger-ui:
+    path: /swagger-ui.html
+    oauth:
+      use-pkce-with-authorization-code-grant: true
+
 management:
   endpoints:
     web:
@@ -63,6 +72,35 @@ app:
   # baked-in personal address — deploys set ADMIN_EMAILS explicitly (cloudbuild).
   admin:
     emails: ${ADMIN_EMAILS:}
+  # ADR-0020: third-party OAuth platform API. A separate token family from the
+  # first-party session (app.session): Authorization Code + PKCE, read-only
+  # scopes, RS256 access tokens so integrators can validate offline. `enabled`
+  # is the master switch (additive — with no clients registered nothing is
+  # reachable). `rsa-private-key` arrives from Secret Manager (PLATFORM_RSA_KEY)
+  # at deploy; when blank an ephemeral key is generated at startup (access tokens
+  # then reset on restart — fine for dev, not for production). `consent-page-url`
+  # is the web app's browser consent page advertised in discovery.
+  platform:
+    enabled: ${PLATFORM_OAUTH_ENABLED:true}
+    issuer: tesseta-platform
+    audience: tesseta-platform-api
+    rsa-private-key: ${PLATFORM_RSA_KEY:}
+    key-id: ${PLATFORM_KEY_ID:}
+    # Fail-closed (D22): deployed instances must supply PLATFORM_RSA_KEY. Set
+    # PLATFORM_ALLOW_EPHEMERAL_KEY=true for local/dev to auto-generate a key.
+    allow-ephemeral-key: ${PLATFORM_ALLOW_EPHEMERAL_KEY:false}
+    access-ttl: 15m
+    refresh-ttl: 60d
+    code-ttl: 5m
+    consent-page-url: ${PLATFORM_CONSENT_PAGE_URL:}
+    # /v1 rate limit (D18): Firestore-backed distributed counters.
+    rate-limit-requests: ${PLATFORM_RATE_LIMIT_REQUESTS:600}
+    rate-limit-window: ${PLATFORM_RATE_LIMIT_WINDOW:5m}
+    # Outbound webhooks (D15). Off by default; when on, the poller pushes signed
+    # event batches to admin-configured subscription URLs every webhook-poll-ms.
+    webhooks-enabled: ${PLATFORM_WEBHOOKS_ENABLED:false}
+    webhook-poll-ms: ${PLATFORM_WEBHOOK_POLL_MS:60000}
+    webhook-max-attempts: ${PLATFORM_WEBHOOK_MAX_ATTEMPTS:5}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   gcp:

@@ -15,6 +15,13 @@ app:
   # AdminEquipmentControllerTest authenticates as this email for admin cases.
   admin:
     emails: admin@example.com
+  # ADR-0020: keep the third-party OAuth platform OFF in unit tests so no RSA key
+  # is generated at context load and the /oauth + Firestore-backed platform beans
+  # stay dormant. The platform services are covered by direct unit tests
+  # (PlatformTokenServiceTest, OAuthAuthorizationServiceTest) with in-memory
+  # stores and their own keys.
+  platform:
+    enabled: false
   cors:
     allowed-origins: http://localhost:3000
   gcp:

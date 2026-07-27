@@ -1,15 +1,12 @@
 package com.gte619n.healthfitness.api.medication;
 
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
-import com.gte619n.healthfitness.core.medication.*;
-import java.time.DayOfWeek;
+import com.gte619n.healthfitness.core.medication.TimeWindow;
+import com.gte619n.healthfitness.core.medication.TodaysDose;
+import com.gte619n.healthfitness.core.medication.TodaysDosesService;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST controller for today's scheduled doses.
  * Endpoint: /api/me/medications/today
+ *
+ * <p>The scheduling rule (frequency / day-of-week / cycle / taken status) lives
+ * in {@link TodaysDosesService}, shared with the third-party GET /v1/doses
+ * (ADR-0020, decision D10). This controller only adapts it to the first-party
+ * wire shape.
  */
 @RestController
 @RequestMapping("/api/me/medications/today")
@@ -26,20 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class TodaysDosesController {
 
     private final CurrentUserProvider currentUser;
-    private final MedicationRepository medications;
-    private final AdherenceRepository adherence;
-    private final DrugRepository drugs;
+    private final TodaysDosesService todaysDoses;
 
-    public TodaysDosesController(
-        CurrentUserProvider currentUser,
-        MedicationRepository medications,
-        AdherenceRepository adherence,
-        DrugRepository drugs
-    ) {
+    public TodaysDosesController(CurrentUserProvider currentUser, TodaysDosesService todaysDoses) {
         this.currentUser = currentUser;
-        this.medications = medications;
-        this.adherence = adherence;
-        this.drugs = drugs;
+        this.todaysDoses = todaysDoses;
     }
 
     /**
@@ -47,165 +40,18 @@ public class TodaysDosesController {
      *
      * <p>"Today" is the caller's local date when supplied via {@code ?date=}, so a
      * phone in a timezone behind/ahead of the server sees its own calendar day and
-     * the checklist resets at the user's local midnight. Doses are logged against
-     * the same client-local date (see {@code AdherenceController}), so the two stay
-     * consistent. Falls back to the server date when the param is absent.
+     * the checklist resets at the user's local midnight. Falls back to the server
+     * date when the param is absent.
      */
     @GetMapping
     public List<TodaysDoseResponse> list(@RequestParam(required = false) LocalDate date) {
         String userId = currentUser.get().userId();
         LocalDate today = date != null ? date : LocalDate.now();
-        DayOfWeek dayOfWeek = today.getDayOfWeek();
-
-        // Get all active medications
-        List<Medication> activeMeds = medications.findByUserAndStatus(userId, MedicationStatus.ACTIVE);
-
-        // Get today's adherence logs
-        List<AdherenceLog> todayLogs = adherence.findByUserAndDateRange(userId, today, today);
-
-        // Build set of already-taken (medicationId:window)
-        Set<String> taken = todayLogs.stream()
-            .flatMap(log -> log.doses().stream()
-                .map(dose -> log.medicationId() + ":" + dose.window().name()))
-            .collect(Collectors.toSet());
-
-        // Batch-load the drugs for all active meds — one chunked whereIn instead
-        // of a findById per med (N+1).
-        Map<String, Drug> drugsById = drugs.findByIds(activeMeds.stream()
-            .map(Medication::drugId)
-            .filter(id -> id != null)
-            .distinct()
-            .toList());
-
-        // Build response for each scheduled dose
-        List<TodaysDoseResponse> doses = new ArrayList<>();
-
-        for (Medication med : activeMeds) {
-            // Skip PRN medications (as needed, not scheduled)
-            if (med.frequency().type() == FrequencyType.PRN) {
-                continue;
-            }
-
-            // Check if medication is scheduled for today
-            if (!isScheduledForToday(med.frequency(), dayOfWeek, today)) {
-                continue;
-            }
-
-            // Get drug info (from the batch-loaded map)
-            Drug drug = med.drugId() != null ? drugsById.get(med.drugId()) : null;
-            String drugName = med.customName() != null ? med.customName()
-                : (drug != null ? drug.name() : "Unknown");
-            String imageUrl = drug != null ? drug.imageUrl() : null;
-
-            // Get time slots (or default to a single dose)
-            List<TimeSlot> timeSlots = med.timeSlots();
-            if (timeSlots == null || timeSlots.isEmpty()) {
-                // Default: single morning dose
-                timeSlots = List.of(new TimeSlot(TimeWindow.MORNING, med.dose()));
-            }
-
-            // Find taken info from adherence logs
-            AdherenceLog todayLog = todayLogs.stream()
-                .filter(log -> log.medicationId().equals(med.medicationId()))
-                .findFirst()
-                .orElse(null);
-
-            for (TimeSlot slot : timeSlots) {
-                String key = med.medicationId() + ":" + slot.window().name();
-                boolean isTaken = taken.contains(key);
-                Instant takenAt = null;
-
-                if (isTaken && todayLog != null) {
-                    takenAt = todayLog.doses().stream()
-                        .filter(d -> d.window() == slot.window())
-                        .map(DoseLog::takenAt)
-                        .findFirst()
-                        .orElse(null);
-                }
-
-                doses.add(new TodaysDoseResponse(
-                    med.medicationId(),
-                    drugName,
-                    imageUrl,
-                    slot.window(),
-                    slot.dose(),
-                    med.unit(),
-                    isTaken,
-                    takenAt
-                ));
-            }
-        }
-
-        // Sort by time window order
-        doses.sort((a, b) -> {
-            int orderA = getWindowOrder(a.window());
-            int orderB = getWindowOrder(b.window());
-            return Integer.compare(orderA, orderB);
-        });
-
-        return doses;
-    }
-
-    /**
-     * Check if medication is scheduled for today based on frequency config.
-     */
-    private boolean isScheduledForToday(FrequencyConfig freq, DayOfWeek dayOfWeek, LocalDate today) {
-        return switch (freq.type()) {
-            case DAILY -> true;  // Always scheduled
-            case WEEKLY -> {
-                if (freq.specificDays() != null && !freq.specificDays().isEmpty()) {
-                    // Check if today matches specific days
-                    yield freq.specificDays().stream()
-                        .anyMatch(d -> toDayOfWeek(d) == dayOfWeek);
-                }
-                // Default: scheduled every day
-                yield true;
-            }
-            case MONTHLY -> {
-                // For now, assume scheduled on specific day of month
-                // Could be improved with more sophisticated logic
-                yield true;
-            }
-            case CYCLE -> {
-                if (freq.cycle() != null) {
-                    // Calculate if we're in an "on" period
-                    LocalDate startDate = freq.cycle().startDate();
-                    long daysSinceStart = java.time.temporal.ChronoUnit.DAYS.between(startDate, today);
-                    int cycleLength = (freq.cycle().onWeeks() + freq.cycle().offWeeks()) * 7;
-                    long dayInCycle = daysSinceStart % cycleLength;
-                    yield dayInCycle < freq.cycle().onWeeks() * 7;
-                }
-                yield true;
-            }
-            case PRN -> false;  // Never scheduled (as needed)
-        };
-    }
-
-    /**
-     * Convert our DayOfWeek enum to Java's DayOfWeek.
-     */
-    private DayOfWeek toDayOfWeek(com.gte619n.healthfitness.core.medication.DayOfWeek day) {
-        return switch (day) {
-            case MON -> DayOfWeek.MONDAY;
-            case TUE -> DayOfWeek.TUESDAY;
-            case WED -> DayOfWeek.WEDNESDAY;
-            case THU -> DayOfWeek.THURSDAY;
-            case FRI -> DayOfWeek.FRIDAY;
-            case SAT -> DayOfWeek.SATURDAY;
-            case SUN -> DayOfWeek.SUNDAY;
-        };
-    }
-
-    /**
-     * Get sort order for time window.
-     */
-    private int getWindowOrder(TimeWindow window) {
-        return switch (window) {
-            case MORNING -> 0;
-            case AFTERNOON -> 1;
-            case EVENING -> 2;
-            case BEDTIME -> 3;
-        };
+        return todaysDoses.forDate(userId, today).stream()
+            .map(d -> new TodaysDoseResponse(
+                d.medicationId(), d.drugName(), d.imageUrl(), d.window(),
+                d.dose(), d.unit(), d.taken(), d.takenAt()))
+            .toList();
     }
 
     // Response DTO
