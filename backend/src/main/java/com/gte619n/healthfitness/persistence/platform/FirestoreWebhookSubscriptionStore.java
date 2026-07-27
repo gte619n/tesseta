@@ -6,7 +6,6 @@ import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 
 import com.gte619n.healthfitness.core.platform.WebhookSubscription;
 import com.gte619n.healthfitness.core.platform.WebhookSubscriptionStore;
-import com.google.cloud.firestore.Blob;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
@@ -20,8 +19,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 // `webhookSubscriptions/{clientId}` (ADR-0020). One subscription per client. The
-// HMAC signing secret is stored KMS-encrypted (secret/dek Blobs); the plaintext
-// never touches Firestore.
+// HMAC signing secret is NOT stored — it is derived from a master key at
+// delivery (WebhookSecrets) — so this holds only url + events + active.
 @Repository
 @ConditionalOnProperty(name = "app.persistence.firestore-enabled", havingValue = "true", matchIfMissing = true)
 public class FirestoreWebhookSubscriptionStore implements WebhookSubscriptionStore {
@@ -39,8 +38,6 @@ public class FirestoreWebhookSubscriptionStore implements WebhookSubscriptionSto
         Map<String, Object> body = new HashMap<>();
         body.put("url", s.url());
         body.put("eventTypes", new ArrayList<>(s.eventTypes()));
-        body.put("secret", Blob.fromBytes(s.secretCiphertext()));
-        body.put("dek", Blob.fromBytes(s.dekCiphertext()));
         body.put("active", s.active());
         body.put("updatedAt", serverTimestamp());
         body.put("createdAt", s.createdAt() == null ? serverTimestamp()
@@ -73,14 +70,10 @@ public class FirestoreWebhookSubscriptionStore implements WebhookSubscriptionSto
     @SuppressWarnings("unchecked")
     private static WebhookSubscription map(DocumentSnapshot snap) {
         List<String> events = (List<String>) snap.get("eventTypes");
-        Blob secret = snap.getBlob("secret");
-        Blob dek = snap.getBlob("dek");
         return new WebhookSubscription(
             snap.getId(),
             snap.getString("url"),
             events == null ? new LinkedHashSet<>() : new LinkedHashSet<>(events),
-            secret == null ? new byte[0] : secret.toBytes(),
-            dek == null ? new byte[0] : dek.toBytes(),
             Boolean.TRUE.equals(snap.getBoolean("active")),
             toInstant(snap.get("createdAt")),
             toInstant(snap.get("updatedAt")));

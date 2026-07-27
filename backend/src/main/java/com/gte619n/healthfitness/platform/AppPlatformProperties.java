@@ -51,6 +51,9 @@ public class AppPlatformProperties {
     // pushes signed event batches to admin-configured subscription URLs.
     private boolean webhooksEnabled = false;
     private int webhookMaxAttempts = 5;
+    // Master key from which each client's webhook HMAC signing secret is derived
+    // (never stored). Required when webhooks are enabled.
+    private String webhookSigningKey = "";
 
     public boolean isEnabled() {
         return enabled;
@@ -162,5 +165,13 @@ public class AppPlatformProperties {
 
     public void setWebhookMaxAttempts(int webhookMaxAttempts) {
         this.webhookMaxAttempts = webhookMaxAttempts;
+    }
+
+    public String getWebhookSigningKey() {
+        return webhookSigningKey;
+    }
+
+    public void setWebhookSigningKey(String webhookSigningKey) {
+        this.webhookSigningKey = webhookSigningKey;
     }
 }

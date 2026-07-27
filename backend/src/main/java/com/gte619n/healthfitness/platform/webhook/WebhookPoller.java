@@ -6,8 +6,7 @@ import com.gte619n.healthfitness.core.platform.OAuthGrantStore;
 import com.gte619n.healthfitness.core.platform.WebhookCheckpointStore;
 import com.gte619n.healthfitness.core.platform.WebhookSubscription;
 import com.gte619n.healthfitness.core.platform.WebhookSubscriptionStore;
-import com.gte619n.healthfitness.integrations.googlehealth.KmsTokenCipher;
-import com.gte619n.healthfitness.integrations.googlehealth.KmsTokenCipher.EncryptedToken;
+import com.gte619n.healthfitness.platform.AppPlatformProperties;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,7 +37,7 @@ public class WebhookPoller {
     private final WebhookCheckpointStore checkpoints;
     private final WebhookEventCollector collector;
     private final WebhookDeliveryService delivery;
-    private final KmsTokenCipher cipher;
+    private final AppPlatformProperties props;
     private final ObjectMapper objectMapper;
 
     public WebhookPoller(
@@ -47,7 +46,7 @@ public class WebhookPoller {
         WebhookCheckpointStore checkpoints,
         WebhookEventCollector collector,
         WebhookDeliveryService delivery,
-        KmsTokenCipher cipher,
+        AppPlatformProperties props,
         ObjectMapper objectMapper
     ) {
         this.subscriptions = subscriptions;
@@ -55,7 +54,7 @@ public class WebhookPoller {
         this.checkpoints = checkpoints;
         this.collector = collector;
         this.delivery = delivery;
-        this.cipher = cipher;
+        this.props = props;
         this.objectMapper = objectMapper;
     }
 
@@ -68,13 +67,7 @@ public class WebhookPoller {
     }
 
     private void deliverForSubscription(WebhookSubscription sub, Instant until) {
-        String secret;
-        try {
-            secret = cipher.decrypt(new EncryptedToken(sub.secretCiphertext(), sub.dekCiphertext()));
-        } catch (RuntimeException e) {
-            log.warn("cannot decrypt webhook secret for client {} — skipping", sub.clientId(), e);
-            return;
-        }
+        String secret = WebhookSecrets.deriveSecret(props.getWebhookSigningKey(), sub.clientId());
         for (OAuthGrant grant : grants.findByClient(sub.clientId())) {
             String userId = grant.userId();
             // No checkpoint yet => start from now (no historical backfill).

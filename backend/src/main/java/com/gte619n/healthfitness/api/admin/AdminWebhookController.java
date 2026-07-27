@@ -4,10 +4,9 @@ import com.gte619n.healthfitness.api.security.AdminOnly;
 import com.gte619n.healthfitness.core.platform.OAuthClientStore;
 import com.gte619n.healthfitness.core.platform.WebhookSubscription;
 import com.gte619n.healthfitness.core.platform.WebhookSubscriptionStore;
-import com.gte619n.healthfitness.integrations.googlehealth.KmsTokenCipher;
-import com.gte619n.healthfitness.integrations.googlehealth.KmsTokenCipher.EncryptedToken;
-import com.gte619n.healthfitness.platform.PlatformCrypto;
+import com.gte619n.healthfitness.platform.AppPlatformProperties;
 import com.gte619n.healthfitness.platform.webhook.WebhookEventType;
+import com.gte619n.healthfitness.platform.webhook.WebhookSecrets;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,16 +38,16 @@ public class AdminWebhookController {
 
     private final OAuthClientStore clients;
     private final WebhookSubscriptionStore subscriptions;
-    private final KmsTokenCipher cipher;
+    private final AppPlatformProperties props;
 
     public AdminWebhookController(
         OAuthClientStore clients,
         WebhookSubscriptionStore subscriptions,
-        KmsTokenCipher cipher
+        AppPlatformProperties props
     ) {
         this.clients = clients;
         this.subscriptions = subscriptions;
-        this.cipher = cipher;
+        this.props = props;
     }
 
     @PostMapping
@@ -70,13 +69,15 @@ public class AdminWebhookController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
 
-        String secret = PlatformCrypto.randomToken();
-        EncryptedToken enc = cipher.encrypt(secret);
+        if (props.getWebhookSigningKey() == null || props.getWebhookSigningKey().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                "webhook signing key is not configured");
+        }
         subscriptions.save(new WebhookSubscription(
-            clientId, body.url(), events,
-            enc.refreshTokenCiphertext(), enc.dekCiphertext(),
-            true, Instant.now(), Instant.now()));
+            clientId, body.url(), events, true, Instant.now(), Instant.now()));
 
+        // Derived, not stored; shown once here so the developer can verify signatures.
+        String secret = WebhookSecrets.deriveSecret(props.getWebhookSigningKey(), clientId);
         return new CreateResponse(clientId, body.url(), events, secret);
     }
 

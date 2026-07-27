@@ -141,7 +141,17 @@ Status legend: ✅ done · 🔶 deferred · ⚠️ needs review
   risky edits to write paths. Latency is poll-interval-bounded (fine for
   monitoring), not sub-second.
 
-- **D20 Webhook signature = HMAC-SHA256** per-subscription secret
+- **D20b Webhook secret is derived, not stored.** Each client's HMAC signing
+  secret = `HMAC-SHA256(masterKey, "webhook:" + clientId)` (WebhookSecrets), shown
+  to the admin once at subscription and recomputed at delivery — no signing secret
+  at rest. This replaced an earlier KMS-encrypted-at-rest design after CodeQL
+  flagged a HIGH "static IV" alert on the shared `KmsTokenCipher` (a false positive
+  — its nonce is random — surfaced only because the webhook path added a new
+  caller). Deriving avoids touching the reviewed ADR-0004 crypto and removes the
+  secret-at-rest entirely. Requires `PLATFORM_WEBHOOK_SIGNING_KEY` when webhooks
+  are on.
+
+- **D20 Webhook signature = HMAC-SHA256** per-client secret
   (`X-Tesseta-Signature: sha256=<hex>` over the raw body), *deviating* from the
   ADR's offhand "ECDSA/Tink" suggestion. Rationale: HMAC is the de-facto outbound
   webhook standard (Stripe/GitHub/Shopify) and trivially verifiable by any
