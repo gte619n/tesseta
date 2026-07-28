@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.api.googlehealth;
 import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
 import com.gte619n.healthfitness.core.metric.DailyMetric;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataPoint;
 import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataType;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthClient;
@@ -29,6 +30,7 @@ public class DailyMetricBackfillService {
     private final DeviceSyncRepository deviceSyncs;
     private final AccessTokenService tokens;
     private final GoogleHealthClient googleHealth;
+    private final SyncChangeNotifier syncNotifier;
     private final int backfillDays;
     private final int chunkDays;
 
@@ -37,6 +39,7 @@ public class DailyMetricBackfillService {
         DeviceSyncRepository deviceSyncs,
         AccessTokenService tokens,
         GoogleHealthClient googleHealth,
+        SyncChangeNotifier syncNotifier,
         @Value("${app.googlehealth.backfill-days:1460}") int backfillDays,
         @Value("${app.googlehealth.backfill-chunk-days:365}") int chunkDays
     ) {
@@ -44,6 +47,7 @@ public class DailyMetricBackfillService {
         this.deviceSyncs = deviceSyncs;
         this.tokens = tokens;
         this.googleHealth = googleHealth;
+        this.syncNotifier = syncNotifier;
         this.backfillDays = backfillDays;
         this.chunkDays = chunkDays;
     }
@@ -79,6 +83,12 @@ public class DailyMetricBackfillService {
             }
             for (String platform : platforms) {
                 deviceSyncs.recordSync(userId, platform, now);
+            }
+            // Server-originated import (e.g. after a reconnect) — fan out to ALL
+            // devices so steps / resting HR / HRV / sleep refresh now instead of
+            // on the next periodic sync. Matches the webhook path.
+            if (total > 0) {
+                syncNotifier.changed(userId, null, "dailyMetrics");
             }
             log.info("Daily-metric backfill complete user={} totalStored={} platforms={}",
                 userId, total, platforms);
