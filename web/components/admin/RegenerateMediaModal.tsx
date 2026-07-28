@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 import { useToast } from '@/components/ui/Toast';
-import { ReferencePicker } from './ReferencePicker';
+import { thumbUrl } from '@/lib/exercise-thumb';
 import type { ExerciseResponse } from '@/lib/types/exercise';
 
 // A frame the modal can target. Derived from the plan (preferred) or, for
@@ -31,10 +31,10 @@ interface Props {
   // IMPL-19: fetch the composed image prompt for one frame key, so admins can
   // see/edit the exact prompt before regenerating a single frame.
   getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
-  // IMPL-20: full detail (when loaded) so the modal can show the grounding
-  // picker. Omitted ⇒ no picker (the persisted grounding set is used as-is).
+  // IMPL-20: full detail (when loaded) so the modal can preview the saved
+  // grounding set that this run will use. Edit the set in the exercise editor's
+  // grounding gallery; the regen always grounds on the persisted set.
   exercise?: ExerciseResponse | null;
-  saveGrounding?: (exerciseId: string, imageUrls: string[]) => Promise<void>;
 }
 
 export function RegenerateMediaModal({
@@ -47,7 +47,6 @@ export function RegenerateMediaModal({
   regenerate,
   getDemoPrompt,
   exercise,
-  saveGrounding,
 }: Props) {
   const toast = useToast();
   // "" sentinel ⇒ all frames; otherwise a specific frame key.
@@ -55,15 +54,6 @@ export function RegenerateMediaModal({
   const [prompt, setPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
-  // IMPL-20: live grounding selection. `undefined` ⇒ admin hasn't touched the
-  // picker, so the regen omits referenceImageUrls and the backend uses the
-  // persisted set. A concrete array (incl. []) overrides for this run.
-  const [grounding, setGrounding] = useState<string[] | undefined>(undefined);
-
-  // Reset the per-run grounding override whenever the modal reopens.
-  useEffect(() => {
-    if (isOpen) setGrounding(undefined);
-  }, [isOpen]);
 
   // When a single frame is targeted, seed the textarea with that frame's
   // composed prompt so admins see/edit the exact prompt. For "all frames" we
@@ -99,11 +89,12 @@ export function RegenerateMediaModal({
   async function handleSubmit() {
     setIsSubmitting(true);
     try {
+      // Always ground on the exercise's persisted set (curated in the editor's
+      // grounding gallery) — omit referenceImageUrls so the backend uses it.
       await regenerate(
         exerciseId,
         prompt.trim() ? prompt.trim() : null,
         isAll ? null : selectedKey,
-        grounding,
       );
       toast.success(
         isAll ? 'Regenerating all demo frames' : `Regenerating ${selectedLabel} frame`,
@@ -170,20 +161,42 @@ export function RegenerateMediaModal({
         className="w-full rounded-md border border-border-default bg-canvas px-3 py-2 font-mono text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
       />
 
-      {exercise && saveGrounding ? (
+      {exercise ? (
         <div className="mt-4 rounded-md border border-border-default bg-canvas p-3">
           <p className="mb-2 text-xs font-medium text-secondary">
             Pose references
             <span className="ml-1 font-normal text-tertiary">
-              — pick the images to ground this regeneration on. Save to persist
-              them as the default; the current selection is used for this run.
+              — this run grounds on the exercise&rsquo;s saved grounding set. Edit
+              it in the exercise editor&rsquo;s grounding gallery.
             </span>
           </p>
-          <ReferencePicker
-            exercise={exercise}
-            saveGrounding={saveGrounding}
-            onSelectionChange={setGrounding}
-          />
+          {exercise.groundingImageUrls.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {exercise.groundingImageUrls.map((url) => (
+                <div
+                  key={url}
+                  className="h-20 w-16 overflow-hidden rounded border border-border-default"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={thumbUrl(url)}
+                    alt="grounding reference"
+                    loading="lazy"
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      if (img.src !== url) img.src = url;
+                    }}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-tertiary">
+              No saved grounding photos — regeneration falls back to reference
+              images.
+            </p>
+          )}
         </div>
       ) : null}
 

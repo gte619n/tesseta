@@ -319,13 +319,6 @@ export function ExerciseDetailDrawer({
               approveMedia={approveMedia}
               regenerateMedia={regenerateMedia}
               getDemoPrompt={getDemoPrompt}
-              saveGrounding={async (id, urls) => {
-                await saveGrounding(id, urls);
-                // Reflect the new persisted set locally so a reopen pre-selects it.
-                setExercise((cur) =>
-                  cur ? { ...cur, groundingImageUrls: urls } : cur,
-                );
-              }}
             />
 
             {/* Grounding photos: upload (drop/paste/click), X to remove, and
@@ -356,14 +349,13 @@ export function ExerciseDetailDrawer({
   );
 }
 
-// Regenerate-all + approve-media controls, with the regen modal (which itself
-// hosts the per-run grounding picker).
+// Regenerate-all + approve-media controls. The regen modal previews the saved
+// grounding set (edited in the grounding gallery above) and grounds the run on it.
 function MediaActions({
   exercise,
   approveMedia,
   regenerateMedia,
   getDemoPrompt,
-  saveGrounding,
 }: {
   exercise: ExerciseResponse;
   approveMedia: (exerciseId: string) => Promise<void>;
@@ -374,7 +366,6 @@ function MediaActions({
     referenceImageUrls?: string[],
   ) => Promise<void>;
   getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
-  saveGrounding: (exerciseId: string, imageUrls: string[]) => Promise<void>;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -435,7 +426,6 @@ function MediaActions({
         regenerate={regenerateMedia}
         getDemoPrompt={getDemoPrompt}
         exercise={exercise}
-        saveGrounding={saveGrounding}
       />
     </div>
   );
