@@ -239,18 +239,35 @@ public class ExerciseService {
      * derives the plan {@code key} from the phase.
      */
     public Exercise recordFrame(String exerciseId, DemoPhase phase, String url) {
+        return recordFrame(exerciseId, phase, url, null);
+    }
+
+    /** Legacy phase-based record that also captures the generation prompt. */
+    public Exercise recordFrame(String exerciseId, DemoPhase phase, String url, String generationPrompt) {
         return recordFrame(exerciseId, DemoFrame.keyForPhase(phase),
-            "", "", phaseOrder(phase), url);
+            "", "", phaseOrder(phase), url, generationPrompt, List.of());
     }
 
     /**
      * Key-based frame record (IMPL-19): append {@code url} to the frame's
      * candidates and make it active, carrying the spec's {@code label}/
-     * {@code caption}/{@code order}.
+     * {@code caption}/{@code order}. Overload without generation metadata (admin
+     * uploads) records a null prompt and empty grounding.
      */
     public Exercise recordFrame(String exerciseId, String key, String label, String caption, int order, String url) {
+        return recordFrame(exerciseId, key, label, caption, order, url, null, List.of());
+    }
+
+    /**
+     * Full frame record: also captures the exact {@code generationPrompt} and the
+     * {@code groundingUrls} attached, so the admin UI can show what produced the
+     * latest image for the frame.
+     */
+    public Exercise recordFrame(String exerciseId, String key, String label, String caption, int order,
+                                String url, String generationPrompt, List<String> groundingUrls) {
         Exercise e = require(exerciseId);
-        List<DemoFrame> frames = upsertFrame(e.demoFrames(), key, label, caption, order, url);
+        List<DemoFrame> frames = upsertFrame(
+            e.demoFrames(), key, label, caption, order, url, generationPrompt, groundingUrls);
         return withFrames(e, frames);
     }
 
@@ -269,7 +286,8 @@ public class ExerciseService {
         }
         List<DemoFrame> frames = replaceFrame(e.demoFrames(),
             new DemoFrame(existing.key(), existing.label(), existing.caption(), existing.order(),
-                imageUrl, existing.imageCandidates(), existing.phase()));
+                imageUrl, existing.imageCandidates(),
+                existing.generationPrompt(), existing.groundingUrls(), existing.phase()));
         return withFrames(e, frames);
     }
 
@@ -293,7 +311,8 @@ public class ExerciseService {
             : existing.imageUrl();
         List<DemoFrame> frames = replaceFrame(e.demoFrames(),
             new DemoFrame(existing.key(), existing.label(), existing.caption(), existing.order(),
-                active, remaining, existing.phase()));
+                active, remaining,
+                existing.generationPrompt(), existing.groundingUrls(), existing.phase()));
         return withFrames(e, frames);
     }
 
@@ -442,7 +461,8 @@ public class ExerciseService {
     }
 
     private static List<DemoFrame> upsertFrame(
-        List<DemoFrame> frames, String key, String label, String caption, int order, String url) {
+        List<DemoFrame> frames, String key, String label, String caption, int order, String url,
+        String generationPrompt, List<String> groundingUrls) {
         DemoFrame existing = frameFor(frames, key);
         LinkedHashSet<String> candidates = new LinkedHashSet<>(
             existing == null || existing.imageCandidates() == null ? List.of() : existing.imageCandidates());
@@ -452,8 +472,17 @@ public class ExerciseService {
         String resolvedCaption = existing != null && existing.caption() != null ? existing.caption() : caption;
         int resolvedOrder = existing != null ? existing.order() : order;
         DemoPhase phase = existing != null ? existing.phase() : null;
+        // The prompt/grounding describe THIS (latest) generation; an upload with
+        // no prompt keeps whatever the frame last recorded.
+        String resolvedPrompt = generationPrompt != null
+            ? generationPrompt
+            : (existing != null ? existing.generationPrompt() : null);
+        List<String> resolvedGrounding = generationPrompt != null
+            ? (groundingUrls == null ? List.of() : new ArrayList<>(groundingUrls))
+            : (existing != null ? existing.groundingUrls() : List.of());
         return replaceFrame(frames, new DemoFrame(
-            key, resolvedLabel, resolvedCaption, resolvedOrder, url, new ArrayList<>(candidates), phase));
+            key, resolvedLabel, resolvedCaption, resolvedOrder, url, new ArrayList<>(candidates),
+            resolvedPrompt, resolvedGrounding, phase));
     }
 
     private static List<DemoFrame> replaceFrame(List<DemoFrame> frames, DemoFrame frame) {

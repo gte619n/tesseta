@@ -68,6 +68,11 @@ export type DemoFrame = {
   order: number;
   imageUrl: string | null;
   imageCandidates: string[];
+  // The exact prompt + grounding image URLs used for the latest generation of
+  // this frame (admin visibility). Null/empty for frames generated before this
+  // was recorded, or for uploads.
+  generationPrompt?: string | null;
+  groundingUrls?: string[] | null;
   phase?: DemoPhase | null; // legacy — pre-IMPL-19 docs
 };
 

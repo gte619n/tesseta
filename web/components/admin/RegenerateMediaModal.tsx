@@ -16,6 +16,9 @@ interface Props {
   // Targets to offer (one per planned/legacy frame). Empty ⇒ only "all".
   targets: RegenTarget[];
   isOpen: boolean;
+  // Which frame to target when opened: "" = all frames; a key = that single
+  // frame (prefills its editable prompt). Applied each time the modal opens.
+  initialKey?: string;
   onClose: () => void;
   onStarted: () => void;
   // key == null regenerates every frame; a key regenerates that one frame. The
@@ -42,6 +45,7 @@ export function RegenerateMediaModal({
   exerciseName,
   targets,
   isOpen,
+  initialKey,
   onClose,
   onStarted,
   regenerate,
@@ -51,6 +55,12 @@ export function RegenerateMediaModal({
   const toast = useToast();
   // "" sentinel ⇒ all frames; otherwise a specific frame key.
   const [selectedKey, setSelectedKey] = useState<string>('');
+
+  // Seed the target each time the modal opens (e.g. a per-frame Regenerate
+  // button opens it pointed at that frame).
+  useEffect(() => {
+    if (isOpen) setSelectedKey(initialKey ?? '');
+  }, [isOpen, initialKey]);
   const [prompt, setPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);

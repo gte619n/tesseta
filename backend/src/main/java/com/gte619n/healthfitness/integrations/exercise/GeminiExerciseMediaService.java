@@ -545,8 +545,13 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
             byte[] bytes = callGemini(prompt, ref, exercise.exerciseId());
             if (bytes != null && bytes.length > 0) {
                 String url = storage.upload(exercise.exerciseId(), key, bytes);
+                // Record the exact prompt + grounding image actually used, so the
+                // admin can see what produced this frame.
+                List<String> grounding = ref != null && ref.sourceUrl() != null
+                    ? List.of(ref.sourceUrl()) : List.of();
                 exerciseService.recordFrame(
-                    exercise.exerciseId(), key, spec.label(), spec.caption(), spec.order(), url);
+                    exercise.exerciseId(), key, spec.label(), spec.caption(), spec.order(),
+                    url, prompt, grounding);
                 log.info("Generated frame '{}' for exercise {}{}: {}",
                     key, exercise.exerciseId(), ref != null ? " (grounded)" : "", url);
                 return true;
@@ -571,7 +576,7 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
             byte[] bytes = callGemini(prompt, null, exercise.exerciseId());
             if (bytes != null && bytes.length > 0) {
                 String url = storage.upload(exercise.exerciseId(), phase, bytes);
-                exerciseService.recordFrame(exercise.exerciseId(), phase, url);
+                exerciseService.recordFrame(exercise.exerciseId(), phase, url, prompt);
                 log.info("Generated {} frame for exercise {}: {}", phase, exercise.exerciseId(), url);
                 return true;
             }
