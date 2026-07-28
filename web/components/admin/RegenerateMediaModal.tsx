@@ -54,10 +54,16 @@ export function RegenerateMediaModal({
   const [prompt, setPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+  // Composed prompt per view, for the "all frames" preview so the admin can see
+  // exactly what each view will regenerate with (rather than an empty box).
+  const [viewPrompts, setViewPrompts] = useState<
+    { key: string; label: string; prompt: string }[]
+  >([]);
+  const [loadingViews, setLoadingViews] = useState(false);
+  const targetKeysStr = targets.map((t) => t.key).join(',');
 
   // When a single frame is targeted, seed the textarea with that frame's
-  // composed prompt so admins see/edit the exact prompt. For "all frames" we
-  // keep the blank-override behavior (each frame uses its own position prompt).
+  // composed prompt so admins see/edit the exact prompt.
   useEffect(() => {
     if (!isOpen) return;
     if (selectedKey === '') {
@@ -80,6 +86,34 @@ export function RegenerateMediaModal({
       cancelled = true;
     };
   }, [isOpen, selectedKey, exerciseId, getDemoPrompt]);
+
+  // For "all frames", fetch every view's composed prompt so the modal shows the
+  // complete prompts rather than an empty override.
+  useEffect(() => {
+    if (!isOpen || selectedKey !== '' || targets.length === 0) {
+      setViewPrompts([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingViews(true);
+    Promise.all(
+      targets.map(async (t) => ({
+        key: t.key,
+        label: t.label,
+        prompt: await getDemoPrompt(exerciseId, t.key).catch(() => ''),
+      })),
+    )
+      .then((res) => {
+        if (!cancelled) setViewPrompts(res);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingViews(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, selectedKey, exerciseId, getDemoPrompt, targetKeysStr]);
 
   if (!isOpen) return null;
 
@@ -118,8 +152,8 @@ export function RegenerateMediaModal({
       <h2 className="mb-1 text-xl font-semibold text-primary">Regenerate demo media</h2>
       <p className="mb-4 text-sm text-secondary">
         For <span className="font-medium text-primary">{exerciseName}</span>. Each frame is
-        generated from its plan position prompt and the house photography treatment. Add an
-        optional override below to nudge a specific look.
+        generated from its plan position prompt and the house photography treatment. Review the
+        per-view prompts below, or target a single frame to edit its prompt before regenerating.
       </p>
 
       <div className="mb-4 rounded-md border border-warn/40 bg-warn-bg px-3 py-2 text-xs text-warn">
@@ -142,24 +176,65 @@ export function RegenerateMediaModal({
         ))}
       </select>
 
-      <label className="mb-1 block text-xs font-medium text-secondary">
-        {isAll ? 'Prompt override (optional)' : 'Prompt'}
-        {isLoadingPrompt ? (
-          <span className="ml-2 text-tertiary">Loading prompt…</span>
-        ) : null}
-      </label>
-      <textarea
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        disabled={isSubmitting || isLoadingPrompt}
-        rows={10}
-        placeholder={
-          isAll
-            ? "Leave blank to use the plan's position prompt for each frame."
-            : "The composed prompt for this frame. Edit before regenerating."
-        }
-        className="w-full rounded-md border border-border-default bg-canvas px-3 py-2 font-mono text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
-      />
+      {isAll ? (
+        <>
+          <label className="mb-1 block text-xs font-medium text-secondary">
+            Prompts per view
+            {loadingViews ? (
+              <span className="ml-2 text-tertiary">Loading…</span>
+            ) : null}
+          </label>
+          <div className="space-y-1.5">
+            {viewPrompts.length === 0 && !loadingViews ? (
+              <p className="text-xs text-tertiary">
+                No planned views yet — each frame will use its own position
+                prompt.
+              </p>
+            ) : (
+              viewPrompts.map((v, i) => (
+                <details
+                  key={v.key}
+                  open={i === 0}
+                  className="rounded-md border border-border-default bg-canvas"
+                >
+                  <summary className="cursor-pointer px-2.5 py-1.5 text-xs font-medium text-primary">
+                    {v.label}{' '}
+                    <span className="font-normal text-tertiary">({v.key})</span>
+                  </summary>
+                  <textarea
+                    readOnly
+                    value={v.prompt}
+                    rows={8}
+                    className="w-full resize-y rounded-b-md border-t border-border-default bg-surface px-3 py-2 font-mono text-[11px] text-secondary focus:outline-none"
+                  />
+                </details>
+              ))
+            )}
+          </div>
+          <p className="mt-1.5 text-[11px] text-tertiary">
+            These are the exact prompts each view will regenerate with. To tweak
+            one, select it in <span className="font-medium">Target frame</span>{' '}
+            above and edit it there.
+          </p>
+        </>
+      ) : (
+        <>
+          <label className="mb-1 block text-xs font-medium text-secondary">
+            Prompt
+            {isLoadingPrompt ? (
+              <span className="ml-2 text-tertiary">Loading prompt…</span>
+            ) : null}
+          </label>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            disabled={isSubmitting || isLoadingPrompt}
+            rows={10}
+            placeholder="The composed prompt for this frame. Edit before regenerating."
+            className="w-full rounded-md border border-border-default bg-canvas px-3 py-2 font-mono text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+          />
+        </>
+      )}
 
       {exercise ? (
         <div className="mt-4 rounded-md border border-border-default bg-canvas p-3">

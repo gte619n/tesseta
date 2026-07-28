@@ -113,6 +113,49 @@ export function ExerciseDetailDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseId, loadExercise]);
 
+  // Media/plan generation runs asynchronously on the backend (the image model),
+  // so mediaStatus/planStatus sits at PENDING while it works. Poll the exercise
+  // so the drawer reflects progress — new frames appear as each one finishes —
+  // and swaps in the final result (with a toast) once it settles.
+  useEffect(() => {
+    if (!exerciseId || !exercise) return;
+    if (exercise.mediaStatus !== "PENDING" && exercise.planStatus !== "PENDING") {
+      return;
+    }
+    const wasMediaPending = exercise.mediaStatus === "PENDING";
+    const wasPlanPending = exercise.planStatus === "PENDING";
+    let cancelled = false;
+    const startedAt = Date.now();
+    const timer = setInterval(async () => {
+      // Give up after ~3 min so a stuck job doesn't poll forever.
+      if (Date.now() - startedAt > 180_000) {
+        clearInterval(timer);
+        return;
+      }
+      let latest: ExerciseResponse;
+      try {
+        latest = await loadExercise(exerciseId);
+      } catch {
+        return; // transient — keep polling
+      }
+      if (cancelled) return;
+      setExercise(latest);
+      if (wasMediaPending && latest.mediaStatus !== "PENDING") {
+        if (latest.mediaStatus === "FAILED") toast.error("Media generation failed");
+        else toast.success("Demo media ready for review");
+      }
+      if (wasPlanPending && latest.planStatus !== "PENDING") {
+        if (latest.planStatus === "FAILED") toast.error("Plan generation failed");
+        else toast.success("Frame plan ready for review");
+      }
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseId, exercise?.mediaStatus, exercise?.planStatus]);
+
   if (!exerciseId) return null;
 
   async function run(action: () => Promise<void>, ok: string, err: string) {
@@ -285,7 +328,10 @@ export function ExerciseDetailDrawer({
               mediaStatus={exercise.mediaStatus}
               regeneratePlan={async (id, override) => {
                 await regeneratePlan(id, override);
-                router.refresh();
+                // Optimistically flag PENDING so the indicator + polling kick in.
+                setExercise((cur) =>
+                  cur ? { ...cur, planStatus: "PENDING" } : cur,
+                );
               }}
               savePlan={async (id, frames) => {
                 await savePlan(id, frames);
@@ -297,7 +343,10 @@ export function ExerciseDetailDrawer({
               }}
               regenerateFrame={async (id, key) => {
                 await regenerateFrame(id, key);
-                router.refresh();
+                // Optimistically flag PENDING so the indicator + polling kick in.
+                setExercise((cur) =>
+                  cur ? { ...cur, mediaStatus: "PENDING" } : cur,
+                );
               }}
               uploadFrame={async (id, key, file) => {
                 await uploadFrame(id, key, file);
@@ -319,6 +368,11 @@ export function ExerciseDetailDrawer({
               approveMedia={approveMedia}
               regenerateMedia={regenerateMedia}
               getDemoPrompt={getDemoPrompt}
+              onRegenStarted={() =>
+                setExercise((cur) =>
+                  cur ? { ...cur, mediaStatus: "PENDING" } : cur,
+                )
+              }
             />
 
             {/* Grounding photos: upload (drop/paste/click), X to remove, and
@@ -356,6 +410,7 @@ function MediaActions({
   approveMedia,
   regenerateMedia,
   getDemoPrompt,
+  onRegenStarted,
 }: {
   exercise: ExerciseResponse;
   approveMedia: (exerciseId: string) => Promise<void>;
@@ -366,12 +421,16 @@ function MediaActions({
     referenceImageUrls?: string[],
   ) => Promise<void>;
   getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
+  // Called once a regeneration has been kicked off, so the drawer can flag
+  // PENDING and start polling for progress.
+  onRegenStarted: () => void;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
   const [isRegenOpen, setIsRegenOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const generating = exercise.mediaStatus === "PENDING";
 
   async function handleApprove() {
     const ok = await confirm({
@@ -398,10 +457,16 @@ function MediaActions({
     <div className="flex items-center gap-2">
       <button
         onClick={() => setIsRegenOpen(true)}
-        disabled={busy}
-        className="cursor-pointer rounded-md border border-border-default bg-canvas px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-surface disabled:opacity-50"
+        disabled={busy || generating}
+        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border-default bg-canvas px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
       >
-        Regenerate media
+        {generating ? (
+          <span
+            className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+            aria-hidden
+          />
+        ) : null}
+        {generating ? "Generating…" : "Regenerate media"}
       </button>
       {exercise.mediaStatus === "NEEDS_REVIEW" ? (
         <button
@@ -421,7 +486,7 @@ function MediaActions({
         onClose={() => setIsRegenOpen(false)}
         onStarted={() => {
           setIsRegenOpen(false);
-          router.refresh();
+          onRegenStarted();
         }}
         regenerate={regenerateMedia}
         getDemoPrompt={getDemoPrompt}

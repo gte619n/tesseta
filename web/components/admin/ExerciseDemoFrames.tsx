@@ -57,6 +57,19 @@ const PLAN_STATUS_TONE: Record<ExerciseMediaStatus, string> = {
   FAILED: 'border-red-600/40 bg-red-600/10 text-red-700',
 };
 
+// Small dependency-free spinner (Tailwind animate-spin on a ring).
+function Spinner({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={
+        'inline-block animate-spin rounded-full border-2 border-current border-t-transparent ' +
+        className
+      }
+      aria-hidden
+    />
+  );
+}
+
 function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -131,6 +144,16 @@ export function ExerciseDemoFrames({
         savePlan={savePlan}
         approvePlan={approvePlan}
       />
+
+      {mediaStatus === 'PENDING' ? (
+        <div className="mt-3 flex items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-secondary">
+          <Spinner className="h-3.5 w-3.5 text-accent" />
+          <span>
+            Generating demo media… frames appear here as each one finishes. This
+            can take up to a minute — you can keep working.
+          </span>
+        </div>
+      ) : null}
 
       {renderFrames.length > 0 ? (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -308,10 +331,11 @@ function PlanEditor({
           <span className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">Frame plan</span>
           <span
             className={
-              'rounded-full border px-2 py-0.5 text-[10px] font-medium ' +
+              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ' +
               PLAN_STATUS_TONE[planStatus]
             }
           >
+            {planStatus === 'PENDING' ? <Spinner className="h-2.5 w-2.5" /> : null}
             {PLAN_STATUS_LABEL[planStatus]}
           </span>
           <span className="text-[11px] text-tertiary">
@@ -322,10 +346,14 @@ function PlanEditor({
           <button
             type="button"
             onClick={handleRegenerate}
-            disabled={busy}
+            disabled={busy || planStatus === 'PENDING'}
             className="cursor-pointer rounded border border-border-default bg-surface px-2 py-1 text-[11px] font-medium text-primary hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {demoPlan ? 'Regenerate plan' : 'Generate plan'}
+            {planStatus === 'PENDING'
+              ? 'Planning…'
+              : demoPlan
+                ? 'Regenerate plan'
+                : 'Generate plan'}
           </button>
           <button
             type="button"
@@ -551,7 +579,8 @@ function KeyedFrame({
   }
 
   const url = frame.imageUrl;
-  const isZoomable = !!url && mediaStatus !== 'PENDING';
+  const generating = mediaStatus === 'PENDING';
+  const isZoomable = !!url && !generating;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -584,14 +613,33 @@ function KeyedFrame({
               sizes="(max-width: 768px) 50vw, 200px"
               className="object-cover"
             />
+            {generating ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-canvas/60 backdrop-blur-[1px]">
+                <Spinner className="h-5 w-5 text-accent" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-secondary">
+                  Regenerating…
+                </span>
+              </div>
+            ) : null}
           </div>
         )
       ) : (
         <div className="flex aspect-[4/5] w-full flex-col items-center justify-center rounded-md border border-dashed border-border-default bg-canvas text-tertiary">
-          <i className="ti ti-photo text-2xl" aria-hidden />
-          <span className="mt-1 text-[10px] uppercase tracking-wider">
-            {mediaStatus === 'PENDING' ? 'Pending' : mediaStatus === 'FAILED' ? 'Failed' : 'No frame'}
-          </span>
+          {generating ? (
+            <>
+              <Spinner className="h-5 w-5 text-accent" />
+              <span className="mt-1 text-[10px] uppercase tracking-wider">
+                Generating…
+              </span>
+            </>
+          ) : (
+            <>
+              <i className="ti ti-photo text-2xl" aria-hidden />
+              <span className="mt-1 text-[10px] uppercase tracking-wider">
+                {mediaStatus === 'FAILED' ? 'Failed' : 'No frame'}
+              </span>
+            </>
+          )}
         </div>
       )}
 
@@ -646,10 +694,11 @@ function KeyedFrame({
         <button
           type="button"
           onClick={handleRegenerate}
-          disabled={busy}
-          className="cursor-pointer rounded border border-border-default bg-canvas px-1.5 py-1 text-[10px] font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={busy || generating}
+          className="flex cursor-pointer items-center gap-1 rounded border border-border-default bg-canvas px-1.5 py-1 text-[10px] font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Regenerate
+          {generating ? <Spinner className="h-2.5 w-2.5" /> : null}
+          {generating ? 'Regenerating…' : 'Regenerate'}
         </button>
         <button
           type="button"
