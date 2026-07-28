@@ -44,12 +44,16 @@ class GoogleHealthViewModelTest {
         var statusResult: Result<GoogleHealthStatus>,
         var connectResult: Result<Unit> = Result.success(Unit),
         var disconnectResult: Result<Unit> = Result.success(Unit),
+        // The active probe the VM runs on open. Defaults to mirroring
+        // statusResult so existing tests reach the same terminal state.
+        var checkResult: Result<GoogleHealthStatus>? = null,
     ) {
         var lastCode: String? = null
         var statusCalls = 0
         val mock: GoogleHealthRepository = mockk()
         init {
             io.mockk.coEvery { mock.status() } coAnswers { statusCalls++; statusResult }
+            io.mockk.coEvery { mock.check() } coAnswers { checkResult ?: statusResult }
             io.mockk.coEvery { mock.connectWithServerAuthCode(any()) } coAnswers {
                 lastCode = firstArg()
                 connectResult
@@ -164,6 +168,42 @@ class GoogleHealthViewModelTest {
 
             var next = awaitItem()
             while (next !is GoogleHealthViewModel.UiState.Disconnected) next = awaitItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun brokenConnectionMapsToNeedsReconnect() = runTest {
+        // Active probe reports the connection is connected-but-broken.
+        val repo = FakeHealthRepo(
+            statusResult = Result.success(GoogleHealthStatus(true, 1700000000L)),
+            checkResult = Result.success(
+                GoogleHealthStatus(true, 1700000000L, needsReconnect = true, brokenReason = "invalid_grant"),
+            ),
+        )
+        val vm = GoogleHealthViewModel(repo.mock, fakeScope({ HealthAuthFlow.Failed("n/a") }))
+
+        vm.state.test {
+            var s = awaitItem()
+            while (s !is GoogleHealthViewModel.UiState.NeedsReconnect) s = awaitItem()
+            assertEquals("invalid_grant", (s as GoogleHealthViewModel.UiState.NeedsReconnect).brokenReason)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun probeFailureFallsBackToStatus() = runTest {
+        // The /check probe fails, but the plain status read still succeeds and
+        // reports a healthy connection — the VM must not surface an error.
+        val repo = FakeHealthRepo(
+            statusResult = Result.success(GoogleHealthStatus(true, 1700000000L)),
+            checkResult = Result.failure(RuntimeException("check endpoint 500")),
+        )
+        val vm = GoogleHealthViewModel(repo.mock, fakeScope({ HealthAuthFlow.Failed("n/a") }))
+
+        vm.state.test {
+            var s = awaitItem()
+            while (s !is GoogleHealthViewModel.UiState.Connected) s = awaitItem()
             cancelAndIgnoreRemainingEvents()
         }
     }

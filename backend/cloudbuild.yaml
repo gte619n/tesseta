@@ -116,6 +116,21 @@ steps:
           --region=us-central1 \
           --project=$PROJECT_ID || true
 
+  # Keep the gh-health-check Cloud Run Job's image in sync with the deployed
+  # service, same as the goals job above. Bootstrap once per project with
+  # `bash infra/scripts/deploy-gh-health-check-job.sh`; the `|| true` keeps
+  # fresh projects (or a deleted Job) from breaking the service deploy.
+  - id: update-gh-health-check-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run jobs update gh-health-check \
+          --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
+          --region=us-central1 \
+          --project=$PROJECT_ID || true
+
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA
   - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:latest

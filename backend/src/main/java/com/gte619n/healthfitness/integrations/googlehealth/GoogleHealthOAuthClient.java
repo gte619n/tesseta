@@ -54,8 +54,15 @@ public class GoogleHealthOAuthClient {
         try {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() / 100 != 2) {
-                throw new RuntimeException(
-                    "Token exchange failed (" + response.statusCode() + "): " + response.body());
+                String detail = "Token exchange failed (" + response.statusCode() + "): " + response.body();
+                // A dead refresh token (revoked, or expired under Testing-mode's
+                // 7-day life) comes back as 400 invalid_grant. Classify it as a
+                // permanent auth failure so the caller can mark the connection
+                // broken; everything else (5xx, transport) stays transient.
+                if (isInvalidGrant(response.statusCode(), response.body())) {
+                    throw new GoogleHealthAuthException(detail);
+                }
+                throw new RuntimeException(detail);
             }
             JsonNode json = mapper.readTree(response.body());
             return new AccessTokenGrant(
@@ -108,6 +115,15 @@ public class GoogleHealthOAuthClient {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new RuntimeException("Auth code exchange interrupted/failed", e);
         }
+    }
+
+    // A 4xx carrying OAuth's invalid_grant error means the refresh token is no
+    // longer usable. Match on the error code (present in the JSON body) rather
+    // than status alone so a stray 400 from a malformed request isn't misread
+    // as a dead connection.
+    private static boolean isInvalidGrant(int statusCode, String body) {
+        if (statusCode / 100 != 4) return false;
+        return body != null && body.contains("invalid_grant");
     }
 
     private static String formEncode(String... pairs) {

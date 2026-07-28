@@ -22,6 +22,12 @@
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=300" }
         ]
+      },
+      {
+        "source": "/@(privacy|terms)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=300" }
+        ]
       }
     ]
   }

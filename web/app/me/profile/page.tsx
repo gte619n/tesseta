@@ -14,6 +14,9 @@ import type { WhoAmI } from "@/lib/types/profile";
 type Status = {
   connected: boolean;
   connectedAt: string | null;
+  // True when the connection exists but its refresh token has died (revoked or
+  // expired) — the user must reconnect to resume syncing.
+  needsReconnect: boolean;
 };
 
 // Google Health read scopes. Each data-type family needs its own scope:
@@ -128,33 +131,55 @@ export default async function ProfilePage() {
             <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
               Google Health
             </h2>
-            {status.connectedAt && (
-              <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-tertiary">
-                Connected
-              </span>
-            )}
+            {status.connected &&
+              (status.needsReconnect ? (
+                <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-alert">
+                  Reconnect needed
+                </span>
+              ) : (
+                status.connectedAt && (
+                  <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-tertiary">
+                    Connected
+                  </span>
+                )
+              ))}
           </div>
           <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
             Sync weight and body fat from your scale or any device that
             writes to Google Health.
           </p>
+          {status.connected && status.needsReconnect && (
+            <p className="mt-2 text-[13px] leading-[1.5] text-alert">
+              Your connection expired and data has stopped syncing. Reconnect to
+              resume.
+            </p>
+          )}
           <div className="mt-4">
-            {status.connected ? (
-              <form action={disconnect}>
-                <button
-                  type="submit"
-                  className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
-                >
-                  Disconnect Google Health
-                </button>
-              </form>
-            ) : (
+            {!status.connected ? (
               <form action={connect}>
                 <button
                   type="submit"
                   className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse"
                 >
                   Connect Google Health
+                </button>
+              </form>
+            ) : status.needsReconnect ? (
+              <form action={connect}>
+                <button
+                  type="submit"
+                  className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse"
+                >
+                  Reconnect Google Health
+                </button>
+              </form>
+            ) : (
+              <form action={disconnect}>
+                <button
+                  type="submit"
+                  className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
+                >
+                  Disconnect Google Health
                 </button>
               </form>
             )}

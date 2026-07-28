@@ -53,6 +53,30 @@ public class InMemoryUserRepository implements UserRepository {
     }
 
     @Override
+    public void markGoogleHealthBroken(String userId, String reason) {
+        User existing = store.get(userId);
+        if (existing == null || existing.googleHealth() == null) return;
+        GoogleHealthConnection gh = existing.googleHealth();
+        GoogleHealthConnection broken = new GoogleHealthConnection(
+            gh.healthUserId(),
+            gh.refreshTokenCiphertext(),
+            gh.dekCiphertext(),
+            gh.connectedAt(),
+            Instant.now(),
+            reason
+        );
+        store.put(userId, new User(
+            existing.userId(),
+            existing.email(),
+            existing.displayName(),
+            broken,
+            existing.heightCm(),
+            existing.createdAt(),
+            Instant.now()
+        ));
+    }
+
+    @Override
     public void clearGoogleHealthConnection(String userId) {
         User existing = store.get(userId);
         if (existing == null) return;

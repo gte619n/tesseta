@@ -29,6 +29,14 @@ public interface UserRepository {
     void save(User user);
     void recordGoogleHealthConnection(String userId, GoogleHealthConnection connection);
     void clearGoogleHealthConnection(String userId);
+
+    /**
+     * Stamp the user's Google Health connection as broken (a refresh-token
+     * exchange failed permanently), setting brokenAt/brokenReason without
+     * touching the encrypted token fields. Reconnecting via
+     * {@link #recordGoogleHealthConnection} clears these again.
+     */
+    void markGoogleHealthBroken(String userId, String reason);
     // Pass null to clear; an Integer cm value to set.
     void updateHeightCm(String userId, Integer heightCm);
 
