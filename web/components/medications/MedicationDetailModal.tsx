@@ -65,15 +65,16 @@ export function MedicationDetailModal({
   const confirm = useConfirm();
   const toast = useToast();
   const [isPending, startTransition] = useTransition();
-  const [view, setView] = useState<"detail" | "edit" | "changeDose" | "discontinue" | "reactivate">("detail");
+  const [view, setView] = useState<"detail" | "edit" | "discontinue" | "reactivate">("detail");
 
-  // Change-dose form state
-  const [newDose, setNewDose] = useState("");
+  // Dose fields, prefilled with the current dose so an untouched save is a no-op.
+  // A dose change is dispatched separately from the schedule so it keeps a dated
+  // history (see handleSaveEdit).
+  const [newDose, setNewDose] = useState(String(medication.dose));
   const [newDoseUnit, setNewDoseUnit] = useState(medication.unit);
   const [doseEffectiveDate, setDoseEffectiveDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
-  const [doseChangeNotes, setDoseChangeNotes] = useState("");
   const [frequencyType, setFrequencyType] = useState<FrequencyType>(medication.frequency.type);
   const [timesPerPeriod, setTimesPerPeriod] = useState(
     String(medication.frequency.timesPerPeriod ?? 1)
@@ -128,6 +129,19 @@ export function MedicationDetailModal({
   }
 
   function handleSaveEdit() {
+    const parsedDose = Number(newDose);
+    if (newDose.trim() !== "" && (!parsedDose || parsedDose <= 0)) {
+      toast.error("Enter a dose greater than zero");
+      return;
+    }
+    // Dose and schedule are two distinct backend operations: a dose edit posts a
+    // dated change (building history), while the schedule updates in place. Only
+    // dispatch the dose change when it actually differs.
+    const doseChanged =
+      newDose.trim() !== "" &&
+      (parsedDose !== medication.dose || newDoseUnit !== medication.unit);
+    const effectiveDose = doseChanged ? parsedDose : medication.dose;
+
     const newFrequency: FrequencyConfig = {
       type: frequencyType,
       timesPerPeriod: Number(timesPerPeriod) || 1,
@@ -138,15 +152,24 @@ export function MedicationDetailModal({
         : {}),
     };
 
-    // Dose is managed via the dedicated "Change dose" flow so it builds a dated
-    // history; here we only split the current dose across the selected windows.
+    // Split the (possibly new) dose across the selected windows.
     const timeSlots: TimeSlot[] = selectedWindows.map((window) => ({
       window,
-      dose: medication.dose / Math.max(selectedWindows.length, 1),
+      dose: effectiveDose / Math.max(selectedWindows.length, 1),
     }));
 
     startTransition(async () => {
       try {
+        // Post the dose change first so the new dosing period exists before the
+        // schedule update splits it across the time windows.
+        if (doseChanged) {
+          await changeDose(medication.medicationId, {
+            dose: parsedDose,
+            unit: newDoseUnit || undefined,
+            startDate: doseEffectiveDate || undefined,
+            changeNotes: changeNotes || undefined,
+          });
+        }
         await updateMedication(medication.medicationId, {
           frequency: newFrequency,
           timeSlots,
@@ -175,33 +198,6 @@ export function MedicationDetailModal({
         router.refresh();
       } catch (e) {
         toast.error("Failed to resume medication", {
-          description: e instanceof Error ? e.message : "Unknown error",
-        });
-      }
-    });
-  }
-
-  function handleChangeDose() {
-    const parsed = Number(newDose);
-    if (!parsed || parsed <= 0) {
-      toast.error("Enter a dose greater than zero");
-      return;
-    }
-    startTransition(async () => {
-      try {
-        await changeDose(medication.medicationId, {
-          dose: parsed,
-          unit: newDoseUnit || undefined,
-          startDate: doseEffectiveDate || undefined,
-          changeNotes: doseChangeNotes || undefined,
-        });
-        toast.success("Dose updated");
-        setNewDose("");
-        setDoseChangeNotes("");
-        setView("detail");
-        router.refresh();
-      } catch (e) {
-        toast.error("Failed to change dose", {
           description: e instanceof Error ? e.message : "Unknown error",
         });
       }
@@ -271,8 +267,7 @@ export function MedicationDetailModal({
             )}
             <h2 className="text-[16px] font-medium text-primary">
               {view === "detail" && name}
-              {view === "edit" && "Edit medication"}
-              {view === "changeDose" && "Change dose"}
+              {view === "edit" && "Edit dose & schedule"}
               {view === "discontinue" && "Discontinue medication"}
               {view === "reactivate" && "Resume medication"}
             </h2>
@@ -473,14 +468,48 @@ export function MedicationDetailModal({
 
           {view === "edit" && (
             <div className="space-y-4">
-              <p className="rounded-lg bg-canvas-sunken px-3 py-2 text-[12px] text-tertiary">
-                Current dose is{" "}
-                <span className="font-mono text-secondary">
-                  {medication.dose} {medication.unit}
-                </span>
-                . Use <span className="font-medium text-secondary">Change dose</span> to
-                adjust it and keep a dated history.
-              </p>
+              {/* Dose */}
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-secondary">
+                  Dose
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={newDose}
+                    onChange={(e) => setNewDose(e.target.value)}
+                    placeholder="50"
+                    className="flex-1 rounded-lg border border-border-default bg-canvas px-3 py-2 text-[14px] text-primary placeholder:text-tertiary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <input
+                    type="text"
+                    value={newDoseUnit}
+                    onChange={(e) => setNewDoseUnit(e.target.value)}
+                    className="w-20 rounded-lg border border-border-default bg-canvas px-3 py-2 text-[14px] text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+              </div>
+
+              {/* Effective date — only relevant when the dose changes, since it
+                  opens a dated dosing period in the history. */}
+              {(Number(newDose) !== medication.dose || newDoseUnit !== medication.unit) && (
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-secondary">
+                    Dose effective from
+                  </label>
+                  <input
+                    type="date"
+                    value={doseEffectiveDate}
+                    onChange={(e) => setDoseEffectiveDate(e.target.value)}
+                    className="w-full rounded-lg border border-border-default bg-canvas px-3 py-2 text-[14px] text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <p className="mt-1 text-[11px] text-tertiary">
+                    The current dose of{" "}
+                    <span className="font-mono">{medication.dose} {medication.unit}</span> is
+                    recorded up to this date in the dosing history.
+                  </p>
+                </div>
+              )}
 
               {/* Frequency */}
               <div>
@@ -619,68 +648,6 @@ export function MedicationDetailModal({
             </div>
           )}
 
-          {view === "changeDose" && (
-            <div className="space-y-4">
-              <p className="text-[13px] text-secondary">
-                Current dose:{" "}
-                <span className="font-mono text-primary">
-                  {medication.dose} {medication.unit}
-                </span>
-                . The new dose takes effect on the date below; the current dose is
-                recorded up to that date in the dosing history.
-              </p>
-
-              {/* New dose */}
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-secondary">
-                  New dose
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={newDose}
-                    onChange={(e) => setNewDose(e.target.value)}
-                    placeholder="50"
-                    className="flex-1 rounded-lg border border-border-default bg-canvas px-3 py-2 text-[14px] text-primary placeholder:text-tertiary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  <input
-                    type="text"
-                    value={newDoseUnit}
-                    onChange={(e) => setNewDoseUnit(e.target.value)}
-                    className="w-20 rounded-lg border border-border-default bg-canvas px-3 py-2 text-[14px] text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                </div>
-              </div>
-
-              {/* Effective date */}
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-secondary">
-                  Effective from
-                </label>
-                <input
-                  type="date"
-                  value={doseEffectiveDate}
-                  onChange={(e) => setDoseEffectiveDate(e.target.value)}
-                  className="w-full rounded-lg border border-border-default bg-canvas px-3 py-2 text-[14px] text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-              </div>
-
-              {/* Reason */}
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-secondary">
-                  Reason for change (optional)
-                </label>
-                <input
-                  type="text"
-                  value={doseChangeNotes}
-                  onChange={(e) => setDoseChangeNotes(e.target.value)}
-                  placeholder="e.g., Increased per lab results"
-                  className="w-full rounded-lg border border-border-default bg-canvas px-3 py-2 text-[14px] text-primary placeholder:text-tertiary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-              </div>
-            </div>
-          )}
-
           {view === "discontinue" && (
             <div className="space-y-4">
               <p className="text-[13px] text-secondary">
@@ -809,48 +776,21 @@ export function MedicationDetailModal({
                 </button>
               )}
               {status === "ACTIVE" && (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewDose("");
-                      setNewDoseUnit(medication.unit);
-                      setDoseChangeNotes("");
-                      setView("changeDose");
-                    }}
-                    className="rounded-lg border border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-canvas-sunken"
-                  >
-                    Change dose
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setView("edit")}
-                    className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-inverse transition-colors hover:bg-accent-dim"
-                  >
-                    Edit
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Prefill the dose fields so opening the editor shows the
+                    // current dose; a change is only posted if the user edits it.
+                    setNewDose(String(medication.dose));
+                    setNewDoseUnit(medication.unit);
+                    setDoseEffectiveDate(new Date().toISOString().slice(0, 10));
+                    setView("edit");
+                  }}
+                  className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-inverse transition-colors hover:bg-accent-dim"
+                >
+                  Edit
+                </button>
               )}
-            </>
-          )}
-
-          {view === "changeDose" && (
-            <>
-              <button
-                type="button"
-                onClick={() => setView("detail")}
-                className="text-[13px] font-medium text-secondary hover:text-primary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleChangeDose}
-                disabled={isPending}
-                className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-inverse transition-colors hover:bg-accent-dim disabled:opacity-50"
-              >
-                {isPending ? "Saving..." : "Save dose"}
-              </button>
             </>
           )}
 
