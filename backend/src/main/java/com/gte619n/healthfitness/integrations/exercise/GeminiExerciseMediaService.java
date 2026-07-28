@@ -393,6 +393,46 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         return exerciseService.removeFrameCandidate(exerciseId, key, imageUrl);
     }
 
+    // Storage key for admin-uploaded grounding reference photos. Distinct from
+    // any frame/plan key so an uploaded grounding object
+    // (exercises/{id}/grounding-upload_{ts}.ext) is unambiguously identifiable
+    // — only these get permanently deleted on removal.
+    static final String GROUNDING_UPLOAD_KEY = "grounding-upload";
+    private static final String GROUNDING_UPLOAD_MARKER = "/" + GROUNDING_UPLOAD_KEY + "_";
+
+    @Override
+    public Exercise uploadGroundingImage(String exerciseId, byte[] bytes, String contentType) {
+        String url = storage.upload(exerciseId, GROUNDING_UPLOAD_KEY, bytes, contentType);
+        Exercise ex = exerciseService.findById(exerciseId)
+            .orElseThrow(() -> new IllegalArgumentException("Exercise not found: " + exerciseId));
+        List<String> next = new ArrayList<>(
+            ex.groundingImageUrls() == null ? List.of() : ex.groundingImageUrls());
+        if (!next.contains(url)) {
+            next.add(url);
+        }
+        return exerciseService.setGroundingImageUrls(exerciseId, next);
+    }
+
+    @Override
+    public Exercise removeGroundingImage(String exerciseId, String imageUrl) {
+        Exercise ex = exerciseService.findById(exerciseId)
+            .orElseThrow(() -> new IllegalArgumentException("Exercise not found: " + exerciseId));
+        List<String> next = new ArrayList<>(
+            ex.groundingImageUrls() == null ? List.of() : ex.groundingImageUrls());
+        next.remove(imageUrl);
+        Exercise updated = exerciseService.setGroundingImageUrls(exerciseId, next);
+        // Permanent-delete ONLY our own grounding uploads. deleteByUrl re-checks
+        // the bucket prefix, so a candidate/external URL is never touched.
+        if (imageUrl != null && imageUrl.contains(GROUNDING_UPLOAD_MARKER)) {
+            try {
+                storage.deleteByUrl(imageUrl);
+            } catch (Exception e) {
+                log.warn("Failed to delete grounding upload for {}: {}", exerciseId, e.getMessage());
+            }
+        }
+        return updated;
+    }
+
     // ---- internals ----
 
     /** Legacy phase → key reverse lookup for plan-less fallback. */

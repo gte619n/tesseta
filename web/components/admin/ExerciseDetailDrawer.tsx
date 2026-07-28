@@ -6,7 +6,7 @@ import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { ExerciseDemoFrames } from "./ExerciseDemoFrames";
-import { ReferencePicker } from "./ReferencePicker";
+import { GroundingGallery } from "./GroundingGallery";
 import { RegenerateMediaModal } from "./RegenerateMediaModal";
 import { StatusPill, MediaStatusPill } from "./ExercisePills";
 import { ReviewedCheckbox } from "./ReviewedCheckbox";
@@ -22,6 +22,14 @@ export interface DrawerActions extends ExerciseAdminActions {
   merge: (sourceId: string, targetId: string) => Promise<void>;
   setReviewed: (exerciseId: string, reviewed: boolean) => Promise<void>;
   saveGrounding: (exerciseId: string, imageUrls: string[]) => Promise<void>;
+  uploadGroundingImage: (
+    exerciseId: string,
+    file: File,
+  ) => Promise<ExerciseResponse>;
+  removeGroundingImage: (
+    exerciseId: string,
+    imageUrl: string,
+  ) => Promise<ExerciseResponse>;
   loadExercise: (exerciseId: string) => Promise<ExerciseResponse>;
 }
 
@@ -51,6 +59,8 @@ export function ExerciseDetailDrawer({
   merge,
   setReviewed,
   saveGrounding,
+  uploadGroundingImage,
+  removeGroundingImage,
   loadExercise,
   approveMedia,
   regeneratePlan,
@@ -318,14 +328,18 @@ export function ExerciseDetailDrawer({
               }}
             />
 
-            {/* Standalone grounding picker (visible even without opening regen) */}
+            {/* Grounding photos: upload (drop/paste/click), X to remove, and
+                add from existing frame/reference candidates. */}
             <div className="rounded-md border border-border-default bg-canvas p-3">
               <span className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">
                 Pose references (grounding set)
               </span>
               <div className="mt-2">
-                <ReferencePicker
+                <GroundingGallery
                   exercise={exercise}
+                  onExerciseUpdated={(ex) => setExercise(ex)}
+                  uploadGroundingImage={uploadGroundingImage}
+                  removeGroundingImage={removeGroundingImage}
                   saveGrounding={async (id, urls) => {
                     await saveGrounding(id, urls);
                     setExercise((cur) =>

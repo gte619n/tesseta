@@ -18,6 +18,8 @@ import {
   mergeExercise,
   setReviewed,
   saveGrounding,
+  uploadGroundingImage,
+  removeGroundingImage,
   searchEquipment as searchEquipmentApi,
 } from '@/lib/exercise-admin-api';
 import { AdminExerciseCatalog } from '@/components/admin/AdminExerciseCatalog';
@@ -105,6 +107,20 @@ export default async function AdminExerciseCatalogPage({
     revalidatePath(CATALOG_PATH);
   }
 
+  async function uploadGroundingAction(exerciseId: string, file: File) {
+    'use server';
+    const updated = await uploadGroundingImage(exerciseId, file);
+    revalidatePath(CATALOG_PATH);
+    return updated;
+  }
+
+  async function removeGroundingAction(exerciseId: string, imageUrl: string) {
+    'use server';
+    const updated = await removeGroundingImage(exerciseId, imageUrl);
+    revalidatePath(CATALOG_PATH);
+    return updated;
+  }
+
   async function approveMediaAction(exerciseId: string) {
     'use server';
     await approveExerciseMedia(exerciseId);
@@ -189,6 +205,8 @@ export default async function AdminExerciseCatalogPage({
         merge={mergeAction}
         setReviewed={setReviewedAction}
         saveGrounding={saveGroundingAction}
+        uploadGroundingImage={uploadGroundingAction}
+        removeGroundingImage={removeGroundingAction}
         loadExercise={loadExerciseAction}
         approveMedia={approveMediaAction}
         regeneratePlan={regeneratePlanAction}
