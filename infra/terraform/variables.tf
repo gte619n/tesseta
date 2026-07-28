@@ -42,6 +42,7 @@ variable "backend_secrets" {
     "google-health-webhook-secret",
     "gemini_api_key",
     "session-signing-key",
+    "platform-rsa-private-key",
   ]
 }
 

@@ -35,7 +35,10 @@ SECRETS="OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT
 # Mirror the deployed service env (minus PORT/CORS — the job has no HTTP
 # surface). SPRING_PROFILES_ACTIVE=job-sustained is the load-bearing flag
 # that makes ReevaluateSustainedJob's @Profile activate.
-ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@SPRING_PROFILES_ACTIVE=job-sustained"
+# PLATFORM_ALLOW_EPHEMERAL_KEY=true: this job boots the full Spring context but
+# never mints platform OAuth tokens, so it doesn't need the stable RS256 signing
+# key the web service mounts (PlatformKeys fails closed otherwise).
+ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@PLATFORM_ALLOW_EPHEMERAL_KEY=true@SPRING_PROFILES_ACTIVE=job-sustained"
 
 echo "==> Deploying Cloud Run Job ${JOB_NAME} (image=${IMAGE})"
 gcloud run jobs deploy "${JOB_NAME}" \

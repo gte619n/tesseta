@@ -81,7 +81,11 @@ steps:
       # notifications. SESSION_SIGNING_KEY is the HS256 key the backend uses
       # to mint native-client session access tokens (ADR-0010); without it the
       # resource server accepts Google tokens only and /api/auth/exchange 503s.
-      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest,SESSION_SIGNING_KEY=session-signing-key:latest
+      # PLATFORM_RSA_KEY is the RS256 signing key for platform OAuth access tokens
+      # (ADR-0020). PlatformKeys fails closed without it, so the service can't
+      # start unless this is mounted. The runtime + CI service accounts are
+      # granted secretAccessor on the secret.
+      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest,SESSION_SIGNING_KEY=session-signing-key:latest,PLATFORM_RSA_KEY=platform-rsa-private-key:latest
 
   # Smoke-test the candidate revision and only then shift 100% traffic to it. A
   # failed health check leaves the previous revision serving (no bad deploy).

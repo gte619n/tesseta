@@ -38,7 +38,10 @@ SECRETS="OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT
 # surface). SPRING_PROFILES_ACTIVE=job-gh-health-check is the load-bearing
 # flag that makes GoogleHealthHealthCheckJob's @Profile activate.
 # app.fcm.enabled=true so the reconnect push actually delivers.
-ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@APP_FCM_ENABLED=true@SPRING_PROFILES_ACTIVE=job-gh-health-check"
+# PLATFORM_ALLOW_EPHEMERAL_KEY=true: this job boots the full Spring context but
+# never mints platform OAuth tokens, so it doesn't need the stable RS256 signing
+# key the web service mounts (PlatformKeys fails closed otherwise).
+ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@APP_FCM_ENABLED=true@PLATFORM_ALLOW_EPHEMERAL_KEY=true@SPRING_PROFILES_ACTIVE=job-gh-health-check"
 
 echo "==> Deploying Cloud Run Job ${JOB_NAME} (image=${IMAGE})"
 gcloud run jobs deploy "${JOB_NAME}" \
