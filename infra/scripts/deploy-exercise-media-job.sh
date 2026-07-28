@@ -30,7 +30,11 @@ SECRETS="OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT
 # SPRING_PROFILES_ACTIVE=job-exercise-media-backfill activates the job.
 # APP_EXERCISES_MEDIA_ENABLED=true keeps the live Gemini media bean wired (the
 # service web app may disable it per env); the limit caps the batch size.
-ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@SPRING_PROFILES_ACTIVE=job-exercise-media-backfill@APP_EXERCISES_MEDIA_ENABLED=true@APP_EXERCISES_MEDIA_BACKFILL_LIMIT=${LIMIT}"
+# EXERCISE_MEDIA_MODEL pins the image model (Nano Banana Pro). PLATFORM_ALLOW_
+# EPHEMERAL_KEY=true lets the job boot the full Spring context without the
+# platform RSA signing key (it never mints platform tokens; PlatformKeys fails
+# closed otherwise).
+ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@SPRING_PROFILES_ACTIVE=job-exercise-media-backfill@APP_EXERCISES_MEDIA_ENABLED=true@EXERCISE_MEDIA_MODEL=gemini-3-pro-image-preview@PLATFORM_ALLOW_EPHEMERAL_KEY=true@APP_EXERCISES_MEDIA_BACKFILL_LIMIT=${LIMIT}"
 
 echo "==> Deploying Cloud Run Job ${JOB_NAME} (image=${IMAGE}, limit=${LIMIT})"
 gcloud run jobs deploy "${JOB_NAME}" \
