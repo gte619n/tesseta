@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.feature.workouts.program
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,15 +17,18 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,6 +37,7 @@ import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
+import com.gte619n.healthfitness.feature.workouts.R
 import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseDetailSheet
 import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseTile
 import com.gte619n.healthfitness.feature.workouts.program.ui.PrescriptionRow
@@ -51,10 +56,24 @@ private const val TILE_COLUMNS = 3
 @Composable
 fun WorkoutDetailRoute(
     onBack: () -> Unit,
+    onOpenSession: (programId: String, scheduledId: String) -> Unit,
     viewModel: WorkoutDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    WorkoutDetailScreen(state = state, onBack = onBack, onRetry = viewModel::refresh)
+    // Once today's session is materialized, open the logger, then clear the
+    // one-shot signal so returning to this screen doesn't re-navigate.
+    LaunchedEffect(state.startedScheduledId) {
+        state.startedScheduledId?.let { scheduledId ->
+            onOpenSession(viewModel.programId, scheduledId)
+            viewModel.consumeStarted()
+        }
+    }
+    WorkoutDetailScreen(
+        state = state,
+        onBack = onBack,
+        onRetry = viewModel::refresh,
+        onStartToday = viewModel::startToday,
+    )
 }
 
 @Composable
@@ -62,6 +81,7 @@ fun WorkoutDetailScreen(
     state: WorkoutDetailUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onStartToday: () -> Unit = {},
 ) {
     var selectedExercise by remember { mutableStateOf<ExerciseSummary?>(null) }
 
@@ -88,6 +108,16 @@ fun WorkoutDetailScreen(
                 day = day,
                 tiled = currentWidthSizeClass() != WindowWidthSizeClass.Compact,
                 onOpenExercise = { selectedExercise = it },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        // Run this workout "as today" from any program day — the primary action
+        // once a session-log flow is possible (a day with exercises to log).
+        if (day != null && day.blocks.any { it.prescriptions.isNotEmpty() }) {
+            StartTodayBar(
+                starting = state.starting,
+                error = state.error,
+                onStartToday = onStartToday,
             )
         }
     }
@@ -97,15 +127,57 @@ fun WorkoutDetailScreen(
     }
 }
 
+/**
+ * Sticky bottom action to materialize this workout as today's session and open
+ * the logger. Any load failure (e.g. offline — the session is created
+ * server-side) shows inline above the button rather than replacing the screen.
+ */
+@Composable
+private fun StartTodayBar(
+    starting: Boolean,
+    error: String?,
+    onStartToday: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Hf.colors.surface)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+    ) {
+        error?.let {
+            Text(it, style = Hf.type.bodySm, color = Hf.colors.alert)
+            Spacer(Modifier.height(8.dp))
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    if (starting) Hf.colors.muted else Hf.colors.accent,
+                    RoundedCornerShape(8.dp),
+                )
+                .clickable(enabled = !starting) { onStartToday() }
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                stringResource(R.string.workout_start_today).uppercase(),
+                style = Hf.type.capsMd,
+                color = Hf.colors.textInverse,
+            )
+        }
+    }
+}
+
 @Composable
 private fun WorkoutDetailBody(
     day: WorkoutDay,
     tiled: Boolean,
     onOpenExercise: (ExerciseSummary) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val blocks = day.blocks.sortedBy { it.orderIndex }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {

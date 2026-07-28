@@ -88,9 +88,8 @@ fun MedicationDetailScreen(
                 reminder = reminder,
                 onReminderChange = viewModel::onReminderChange,
                 onSaveReminder = viewModel::saveReminder,
-                onChangeDose = viewModel::changeDose,
+                onSaveDoseSchedule = viewModel::saveDoseAndSchedule,
                 onEditStartDate = viewModel::editStartDate,
-                onEditSchedule = viewModel::updateSchedule,
                 onDiscontinue = viewModel::discontinue,
                 onReactivate = viewModel::reactivate,
                 onDelete = viewModel::delete,
@@ -106,19 +105,17 @@ private fun DetailContent(
     reminder: MedicationReminderUiState,
     onReminderChange: (InlineReminderConfig) -> Unit,
     onSaveReminder: () -> Unit,
-    onChangeDose: (dose: Double, unit: String?, startDate: LocalDate?, notes: String?) -> Unit,
+    onSaveDoseSchedule: (dose: Double?, unit: String?, date: LocalDate?, notes: String?, frequency: FrequencyConfig?) -> Unit,
     onEditStartDate: (LocalDate) -> Unit,
-    onEditSchedule: (FrequencyConfig) -> Unit,
     onDiscontinue: (DiscontinueReason, String?, LocalDate) -> Unit,
     onReactivate: (LocalDate?) -> Unit,
     onDelete: () -> Unit,
 ) {
     val med = detail.medication
-    var showChangeDose by remember { mutableStateOf(false) }
+    var showEditDoseSchedule by remember { mutableStateOf(false) }
     var showDiscontinue by remember { mutableStateOf(false) }
     var showResume by remember { mutableStateOf(false) }
     var showEditStart by remember { mutableStateOf(false) }
-    var showEditSchedule by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
 
     Column(
@@ -230,8 +227,7 @@ private fun DetailContent(
         Spacer(Modifier.height(24.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (med.status == MedicationStatus.ACTIVE) {
-                ActionButton("Change dose", enabled = !actionInFlight) { showChangeDose = true }
-                ActionButton("Edit schedule", enabled = !actionInFlight) { showEditSchedule = true }
+                ActionButton("Edit dose & schedule", enabled = !actionInFlight) { showEditDoseSchedule = true }
                 ActionButton("Edit start date", enabled = !actionInFlight) { showEditStart = true }
                 ActionButton("Discontinue", enabled = !actionInFlight, tone = HfTone.Alert) { showDiscontinue = true }
             } else {
@@ -243,15 +239,16 @@ private fun DetailContent(
     }
 
     // ---- dialogs ----
-    if (showChangeDose) {
-        DateDoseDialog(
-            title = "Change dose",
+    if (showEditDoseSchedule) {
+        EditDoseScheduleDialog(
+            currentDose = med.dose,
             currentUnit = med.unit,
-            onConfirm = { dose, unit, date, notes ->
-                showChangeDose = false
-                onChangeDose(dose, unit, date, notes)
+            initialFrequency = med.frequency,
+            onConfirm = { dose, unit, date, notes, frequency ->
+                showEditDoseSchedule = false
+                onSaveDoseSchedule(dose, unit, date, notes, frequency)
             },
-            onDismiss = { showChangeDose = false },
+            onDismiss = { showEditDoseSchedule = false },
         )
     }
     if (showEditStart) {
@@ -263,16 +260,6 @@ private fun DetailContent(
                 onEditStartDate(date)
             },
             onDismiss = { showEditStart = false },
-        )
-    }
-    if (showEditSchedule) {
-        EditScheduleDialog(
-            initial = med.frequency,
-            onConfirm = { frequency ->
-                showEditSchedule = false
-                onEditSchedule(frequency)
-            },
-            onDismiss = { showEditSchedule = false },
         )
     }
     if (showDiscontinue) {

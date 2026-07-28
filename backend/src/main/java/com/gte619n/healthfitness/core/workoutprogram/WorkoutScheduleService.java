@@ -69,6 +69,50 @@ public class WorkoutScheduleService {
         return scheduled.findByProgram(userId, programId, clearFrom, clearFrom.plusYears(1));
     }
 
+    /**
+     * Materialize (or reuse) a single session for one program day on {@code date},
+     * independent of the program's scheduled window. This is how a user runs any
+     * workout "as today" after the 4-week plan has elapsed or a day was missed:
+     * the resulting {@link ScheduledWorkout} is a normal PLANNED row, so it starts,
+     * logs, and fans out (Workout, weekly aggregate, metrics) exactly like a
+     * scheduled session.
+     *
+     * <p>Idempotent by the {@code "{date}_{dayId}"} id convention shared with
+     * {@link #activate}: running the same day on the same date returns the existing
+     * row untouched (a COMPLETED one is not reset — reopen it to review/edit).
+     *
+     * @throws IllegalArgumentException when the program, phase, or day is unknown
+     */
+    public ScheduledWorkout materializeOne(
+        String userId, String programId, String phaseId, String dayId, LocalDate date
+    ) {
+        WorkoutProgram program = programs.findById(userId, programId)
+            .orElseThrow(() -> new IllegalArgumentException("Program not found: " + programId));
+        ProgramPhase phase = program.phases().stream()
+            .filter(p -> p.phaseId().equals(phaseId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Phase not found: " + phaseId));
+        WorkoutDay day = phase.days().stream()
+            .filter(d -> d.dayId().equals(dayId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Day not found: " + dayId));
+
+        String scheduledId = date + "_" + dayId;
+        Optional<ScheduledWorkout> existing = scheduled.findById(userId, programId, scheduledId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        ScheduledWorkout session = new ScheduledWorkout(
+            userId, programId, scheduledId,
+            date, phaseId, dayId, day.label(),
+            1, false, day.locationId(),
+            ScheduledStatus.PLANNED, day,
+            null, null
+        );
+        scheduled.save(session);
+        return session;
+    }
+
     public List<ScheduledWorkout> calendar(String userId, String programId, LocalDate from, LocalDate to) {
         return scheduled.findByProgram(userId, programId, from, to);
     }

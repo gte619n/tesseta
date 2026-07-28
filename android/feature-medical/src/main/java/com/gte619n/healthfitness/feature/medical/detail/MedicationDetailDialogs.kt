@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,48 +30,78 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import java.time.LocalDate
 
-/** Dialog collecting a new dose + unit + effective date + notes ([PR#8]). */
+/**
+ * Combined dose + schedule editor ([PR#8]). Dose and schedule are still two
+ * distinct backend operations (a dated dose change vs. an immediate schedule
+ * update), so [onConfirm] reports each independently: [dose]/[date]/[notes] are
+ * non-null only when the dose actually changed, and [frequency] is non-null only
+ * when the schedule changed. The caller dispatches whichever parts are present.
+ */
 @Composable
-internal fun DateDoseDialog(
-    title: String,
+internal fun EditDoseScheduleDialog(
+    currentDose: Double,
     currentUnit: String,
-    onConfirm: (dose: Double, unit: String?, date: LocalDate?, notes: String?) -> Unit,
+    initialFrequency: FrequencyConfig,
+    onConfirm: (dose: Double?, unit: String?, date: LocalDate?, notes: String?, frequency: FrequencyConfig?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var dose by remember { mutableStateOf("") }
+    // Prefill the dose field with the current value so an untouched save is a no-op.
+    var dose by remember { mutableStateOf(formatDose(currentDose)) }
     var unit by remember { mutableStateOf(currentUnit) }
     var dateText by remember { mutableStateOf(LocalDate.now().toString()) }
     var notes by remember { mutableStateOf("") }
+    var frequency by remember { mutableStateOf(initialFrequency) }
 
     val parsedDose = dose.toDoubleOrNull()
     val parsedDate = runCatching { LocalDate.parse(dateText.trim()) }.getOrNull()
+    val doseChanged = parsedDose != null && (parsedDose != currentDose || unit.trim() != currentUnit)
+    val freqChanged = frequency != initialFrequency
+    // A blank/invalid dose is only a problem if the user is trying to change it.
+    val canSave = parsedDose != null && (!doseChanged || parsedDate != null)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
+        title = { Text("Edit dose & schedule", style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
         text = {
-            Column {
-                CapsLabel("New dose", color = Hf.colors.textSecondary)
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                CapsLabel("Dose", color = Hf.colors.textSecondary)
                 Spacer(Modifier.height(6.dp))
                 DialogField(value = dose, onValueChange = { dose = it }, placeholder = "e.g. 250")
                 Spacer(Modifier.height(10.dp))
                 CapsLabel("Unit", color = Hf.colors.textSecondary)
                 Spacer(Modifier.height(6.dp))
                 DialogField(value = unit, onValueChange = { unit = it }, placeholder = "mg")
-                Spacer(Modifier.height(10.dp))
-                CapsLabel("Effective date", color = Hf.colors.textSecondary)
-                Spacer(Modifier.height(6.dp))
-                DialogField(value = dateText, onValueChange = { dateText = it }, placeholder = "yyyy-MM-dd")
-                Spacer(Modifier.height(10.dp))
-                CapsLabel("Notes", color = Hf.colors.textSecondary)
-                Spacer(Modifier.height(6.dp))
-                DialogField(value = notes, onValueChange = { notes = it }, placeholder = "Optional")
+                // Effective date + notes only matter when the dose actually changes;
+                // they build the dated dosing-history entry.
+                if (doseChanged) {
+                    Spacer(Modifier.height(10.dp))
+                    CapsLabel("Effective date", color = Hf.colors.textSecondary)
+                    Spacer(Modifier.height(6.dp))
+                    DialogField(value = dateText, onValueChange = { dateText = it }, placeholder = "yyyy-MM-dd")
+                    Spacer(Modifier.height(10.dp))
+                    CapsLabel("Change notes", color = Hf.colors.textSecondary)
+                    Spacer(Modifier.height(6.dp))
+                    DialogField(value = notes, onValueChange = { notes = it }, placeholder = "Optional")
+                }
+
+                Spacer(Modifier.height(16.dp))
+                // Reuses the add-flow selector; for weekly meds this exposes the
+                // day-of-week chips so a dose can be pinned to e.g. Monday.
+                FrequencySelector(config = frequency, onChange = { frequency = it })
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(parsedDose!!, unit.ifBlank { null }, parsedDate, notes.ifBlank { null }) },
-                enabled = parsedDose != null && parsedDate != null,
+                onClick = {
+                    onConfirm(
+                        if (doseChanged) parsedDose else null,
+                        unit.ifBlank { null },
+                        if (doseChanged) parsedDate else null,
+                        notes.ifBlank { null },
+                        if (freqChanged) frequency else null,
+                    )
+                },
+                enabled = canSave,
             ) {
                 Text("Save", color = Hf.colors.accent)
             }
@@ -79,6 +111,10 @@ internal fun DateDoseDialog(
         },
     )
 }
+
+/** Render a dose without a trailing ".0" so whole numbers stay tidy in the field. */
+private fun formatDose(dose: Double): String =
+    if (dose % 1.0 == 0.0) dose.toLong().toString() else dose.toString()
 
 /** Simple ISO-date entry dialog. */
 @Composable
@@ -102,32 +138,6 @@ internal fun DatePickerDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(parsed!!) }, enabled = parsed != null) {
-                Text("Save", color = Hf.colors.accent)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = Hf.colors.textSecondary) }
-        },
-    )
-}
-
-@Composable
-internal fun EditScheduleDialog(
-    initial: FrequencyConfig,
-    onConfirm: (FrequencyConfig) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var frequency by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit schedule", style = Hf.type.headingMd, color = Hf.colors.textPrimary) },
-        text = {
-            // Reuses the add-flow selector; for weekly meds this exposes the
-            // day-of-week chips so a dose can be pinned to e.g. Monday.
-            FrequencySelector(config = frequency, onChange = { frequency = it })
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(frequency) }) {
                 Text("Save", color = Hf.colors.accent)
             }
         },

@@ -152,14 +152,35 @@ class MedicationDetailViewModel @Inject constructor(
         }
     }
 
-    /** [PR#8] Change dose effective on a date → rebuilds the detail. */
-    fun changeDose(dose: Double, unit: String?, startDate: LocalDate?, notes: String?) {
+    /**
+     * Save dose and/or schedule from the combined edit dialog in one action.
+     * Only the parts that changed are dispatched: a non-null [dose] posts a dated
+     * dose change ([PR#8] history), a non-null [frequency] updates the schedule.
+     * Callers pass null for a section they left untouched.
+     */
+    fun saveDoseAndSchedule(
+        dose: Double?,
+        unit: String?,
+        effectiveDate: LocalDate?,
+        notes: String?,
+        frequency: FrequencyConfig?,
+    ) {
+        if (dose == null && frequency == null) return
         runAction {
-            medications.changeDose(
-                medicationId,
-                ChangeDoseRequest(dose = dose, unit = unit, startDate = startDate, changeNotes = notes),
-            )
-            "Dose updated"
+            if (dose != null) {
+                medications.changeDose(
+                    medicationId,
+                    ChangeDoseRequest(dose = dose, unit = unit, startDate = effectiveDate, changeNotes = notes),
+                )
+            }
+            if (frequency != null) {
+                medications.update(medicationId, UpdateMedicationRequest(frequency = frequency))
+            }
+            when {
+                dose != null && frequency != null -> "Dose & schedule updated"
+                dose != null -> "Dose updated"
+                else -> "Schedule updated"
+            }
         }
     }
 
@@ -168,14 +189,6 @@ class MedicationDetailViewModel @Inject constructor(
         runAction {
             medications.update(medicationId, UpdateMedicationRequest(startDate = startDate))
             "Start date updated"
-        }
-    }
-
-    /** Edit the schedule (frequency + weekly day-of-week selection). */
-    fun updateSchedule(frequency: FrequencyConfig) {
-        runAction {
-            medications.update(medicationId, UpdateMedicationRequest(frequency = frequency))
-            "Schedule updated"
         }
     }
 
