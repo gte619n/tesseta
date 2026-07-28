@@ -67,7 +67,6 @@ export function ExerciseDetailDrawer({
   savePlan,
   approvePlan,
   regenerateMedia,
-  regenerateFrame,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -80,6 +79,13 @@ export function ExerciseDetailDrawer({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [mergeTarget, setMergeTarget] = useState("");
+  // Regenerate-media modal, hosted here so both the per-frame Regenerate buttons
+  // and the "Regenerate media" (all) button open the same editable modal.
+  // key === "" ⇒ all frames; a key ⇒ that single frame (prefilled prompt).
+  const [regen, setRegen] = useState<{ open: boolean; key: string }>({
+    open: false,
+    key: "",
+  });
 
   // Lazy-load full detail whenever a new exercise opens.
   useEffect(() => {
@@ -341,13 +347,7 @@ export function ExerciseDetailDrawer({
                 await approvePlan(id);
                 router.refresh();
               }}
-              regenerateFrame={async (id, key) => {
-                await regenerateFrame(id, key);
-                // Optimistically flag PENDING so the indicator + polling kick in.
-                setExercise((cur) =>
-                  cur ? { ...cur, mediaStatus: "PENDING" } : cur,
-                );
-              }}
+              onRegenerateFrame={(key) => setRegen({ open: true, key })}
               uploadFrame={async (id, key, file) => {
                 await uploadFrame(id, key, file);
                 router.refresh();
@@ -366,13 +366,27 @@ export function ExerciseDetailDrawer({
             <MediaActions
               exercise={exercise}
               approveMedia={approveMedia}
-              regenerateMedia={regenerateMedia}
-              getDemoPrompt={getDemoPrompt}
-              onRegenStarted={() =>
+              onOpenRegen={() => setRegen({ open: true, key: "" })}
+            />
+
+            {/* One editable Regenerate-media modal for both the per-frame and
+                the all-frames entry points. */}
+            <RegenerateMediaModal
+              exerciseId={exercise.exerciseId}
+              exerciseName={exercise.name}
+              targets={regenTargets(exercise.demoPlan, exercise.demoFrames)}
+              isOpen={regen.open}
+              initialKey={regen.key}
+              onClose={() => setRegen((r) => ({ ...r, open: false }))}
+              onStarted={() => {
+                setRegen((r) => ({ ...r, open: false }));
                 setExercise((cur) =>
                   cur ? { ...cur, mediaStatus: "PENDING" } : cur,
-                )
-              }
+                );
+              }}
+              regenerate={regenerateMedia}
+              getDemoPrompt={getDemoPrompt}
+              exercise={exercise}
             />
 
             {/* Grounding photos: upload (drop/paste/click), X to remove, and
@@ -403,32 +417,21 @@ export function ExerciseDetailDrawer({
   );
 }
 
-// Regenerate-all + approve-media controls. The regen modal previews the saved
-// grounding set (edited in the grounding gallery above) and grounds the run on it.
+// Regenerate-all + approve-media buttons. The Regenerate-media modal itself is
+// hosted by the drawer (shared with the per-frame Regenerate buttons).
 function MediaActions({
   exercise,
   approveMedia,
-  regenerateMedia,
-  getDemoPrompt,
-  onRegenStarted,
+  onOpenRegen,
 }: {
   exercise: ExerciseResponse;
   approveMedia: (exerciseId: string) => Promise<void>;
-  regenerateMedia: (
-    exerciseId: string,
-    promptOverride: string | null,
-    key: string | null,
-    referenceImageUrls?: string[],
-  ) => Promise<void>;
-  getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
-  // Called once a regeneration has been kicked off, so the drawer can flag
-  // PENDING and start polling for progress.
-  onRegenStarted: () => void;
+  // Open the shared Regenerate-media modal targeted at all frames.
+  onOpenRegen: () => void;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
-  const [isRegenOpen, setIsRegenOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const generating = exercise.mediaStatus === "PENDING";
 
@@ -456,7 +459,7 @@ function MediaActions({
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => setIsRegenOpen(true)}
+        onClick={onOpenRegen}
         disabled={busy || generating}
         className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border-default bg-canvas px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
       >
@@ -477,21 +480,6 @@ function MediaActions({
           Approve media
         </button>
       ) : null}
-
-      <RegenerateMediaModal
-        exerciseId={exercise.exerciseId}
-        exerciseName={exercise.name}
-        targets={regenTargets(exercise.demoPlan, exercise.demoFrames)}
-        isOpen={isRegenOpen}
-        onClose={() => setIsRegenOpen(false)}
-        onStarted={() => {
-          setIsRegenOpen(false);
-          onRegenStarted();
-        }}
-        regenerate={regenerateMedia}
-        getDemoPrompt={getDemoPrompt}
-        exercise={exercise}
-      />
     </div>
   );
 }

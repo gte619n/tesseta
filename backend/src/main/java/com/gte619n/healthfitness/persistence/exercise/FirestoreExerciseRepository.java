@@ -226,6 +226,8 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
             m.put("order", f.order());
             m.put("imageUrl", f.imageUrl());
             m.put("imageCandidates", f.imageCandidates() == null ? List.of() : f.imageCandidates());
+            m.put("generationPrompt", f.generationPrompt());
+            m.put("groundingUrls", f.groundingUrls() == null ? List.of() : f.groundingUrls());
             m.put("phase", f.phase() == null ? null : f.phase().name());
             out.add(m);
         }
@@ -326,6 +328,11 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
                     }
                     if (label == null) label = "";
                     if (caption == null) caption = "";
+                    // Absent on pre-existing docs (backward compatible → null/empty).
+                    String generationPrompt = (String) fm.get("generationPrompt");
+                    Object grounding = fm.get("groundingUrls");
+                    List<String> groundingUrls = grounding instanceof List<?> gl
+                        ? gl.stream().map(String::valueOf).toList() : List.of();
                     frames.add(new DemoFrame(
                         key,
                         label,
@@ -333,6 +340,8 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
                         order == null ? 0 : order,
                         (String) fm.get("imageUrl"),
                         cands instanceof List<?> c ? c.stream().map(String::valueOf).toList() : List.of(),
+                        generationPrompt,
+                        groundingUrls,
                         phase
                     ));
                 }

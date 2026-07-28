@@ -84,8 +84,12 @@ public class GroundingImageResolver {
         this.json = JsonSupport.LENIENT;
     }
 
-    /** A resolved reference pose image: raw bytes plus the mime to decode them. */
-    public record RefImage(byte[] bytes, String mime) {}
+    /**
+     * A resolved reference pose image: raw bytes plus the mime to decode them,
+     * and the source URL it came from (recorded per generated frame so admins
+     * can see which grounding image was actually attached).
+     */
+    public record RefImage(byte[] bytes, String mime, String sourceUrl) {}
 
     /**
      * Best-effort ordered list of reference pose image bytes for the exercise.
@@ -102,7 +106,7 @@ public class GroundingImageResolver {
             for (String url : urls) {
                 byte[] bytes = fetchBytes(url);
                 if (bytes != null && bytes.length > 0) {
-                    out.add(new RefImage(bytes, mimeForUrl(url)));
+                    out.add(new RefImage(bytes, mimeForUrl(url), url));
                 }
             }
             return out;
@@ -139,7 +143,7 @@ public class GroundingImageResolver {
             try {
                 byte[] bytes = isOwnObjectUrl(url) ? fetchOwnObjectBytes(url) : fetchBytes(url);
                 if (bytes != null && bytes.length > 0) {
-                    out.add(new RefImage(bytes, mimeForUrl(url)));
+                    out.add(new RefImage(bytes, mimeForUrl(url), url));
                 }
             } catch (Exception e) {
                 log.debug("Grounding URL resolution failed for {}: {}", url, e.getMessage());

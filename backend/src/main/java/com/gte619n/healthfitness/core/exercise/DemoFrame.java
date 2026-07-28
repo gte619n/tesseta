@@ -20,6 +20,8 @@ public record DemoFrame(
     int order,
     String imageUrl,               // nullable
     List<String> imageCandidates,
+    String generationPrompt,       // exact final prompt of the latest generation; nullable
+    List<String> groundingUrls,    // grounding image URLs attached in the latest generation; nullable
     DemoPhase phase                // DEPRECATED, nullable — only to read legacy docs
 ) {
     /** Legacy phase → key mapping: START→"start", MID→"mid", END→"end". */

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useRef, useState } from 'react';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
+import { thumbUrl } from '@/lib/exercise-thumb';
 import { ImageLightbox } from './ImageLightbox';
 import type {
   DemoFrame,
@@ -21,6 +22,8 @@ type RenderFrame = {
   order: number;
   imageUrl: string | null;
   imageCandidates: string[];
+  generationPrompt?: string | null;
+  groundingUrls?: string[] | null;
 };
 
 interface Props {
@@ -35,7 +38,7 @@ interface Props {
   savePlan: (exerciseId: string, frames: FrameSpec[]) => Promise<void>;
   approvePlan: (exerciseId: string) => Promise<void>;
   // Per-frame media actions, keyed to the plan.
-  regenerateFrame: (exerciseId: string, key: string) => Promise<void>;
+  onRegenerateFrame: (key: string) => void;
   uploadFrame: (exerciseId: string, key: string, file: File) => Promise<void>;
   selectFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
   deleteFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
@@ -97,6 +100,8 @@ function joinFrames(
           order: spec.order,
           imageUrl: f?.imageUrl ?? null,
           imageCandidates: f?.imageCandidates ?? [],
+          generationPrompt: f?.generationPrompt ?? null,
+          groundingUrls: f?.groundingUrls ?? [],
         };
       });
   }
@@ -110,6 +115,8 @@ function joinFrames(
       order: f.order,
       imageUrl: f.imageUrl,
       imageCandidates: f.imageCandidates,
+      generationPrompt: f.generationPrompt ?? null,
+      groundingUrls: f.groundingUrls ?? [],
     }));
 }
 
@@ -126,7 +133,7 @@ export function ExerciseDemoFrames({
   regeneratePlan,
   savePlan,
   approvePlan,
-  regenerateFrame,
+  onRegenerateFrame,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -165,7 +172,7 @@ export function ExerciseDemoFrames({
               frame={frame}
               mediaStatus={mediaStatus}
               onZoom={(src) => setLightboxSrc(src)}
-              regenerateFrame={regenerateFrame}
+              onRegenerateFrame={onRegenerateFrame}
               uploadFrame={uploadFrame}
               selectFrame={selectFrame}
               deleteFrame={deleteFrame}
@@ -490,7 +497,7 @@ function KeyedFrame({
   frame,
   mediaStatus,
   onZoom,
-  regenerateFrame,
+  onRegenerateFrame,
   uploadFrame,
   selectFrame,
   deleteFrame,
@@ -500,7 +507,8 @@ function KeyedFrame({
   frame: RenderFrame;
   mediaStatus: ExerciseMediaStatus;
   onZoom: (src: string) => void;
-  regenerateFrame: (exerciseId: string, key: string) => Promise<void>;
+  // Opens the editable Regenerate-media modal targeted at this frame.
+  onRegenerateFrame: (key: string) => void;
   uploadFrame: (exerciseId: string, key: string, file: File) => Promise<void>;
   selectFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
   deleteFrame: (exerciseId: string, key: string, imageUrl: string) => Promise<void>;
@@ -520,20 +528,6 @@ function KeyedFrame({
       toast.success(`${frame.label} frame uploaded`);
     } catch (err) {
       toast.error('Upload failed', {
-        description: err instanceof Error ? err.message : 'Unknown error',
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRegenerate() {
-    setBusy(true);
-    try {
-      await regenerateFrame(exerciseId, frame.key);
-      toast.success(`Regenerating ${frame.label} frame`);
-    } catch (err) {
-      toast.error('Failed to start regeneration', {
         description: err instanceof Error ? err.message : 'Unknown error',
       });
     } finally {
@@ -693,7 +687,7 @@ function KeyedFrame({
       <div className="mt-0.5 flex items-center gap-1">
         <button
           type="button"
-          onClick={handleRegenerate}
+          onClick={() => onRegenerateFrame(frame.key)}
           disabled={busy || generating}
           className="flex cursor-pointer items-center gap-1 rounded border border-border-default bg-canvas px-1.5 py-1 text-[10px] font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -716,6 +710,57 @@ function KeyedFrame({
           onChange={handleUpload}
         />
       </div>
+
+      {/* Exactly what produced the current image: the final prompt + the
+          grounding image(s) attached for this view's latest generation. */}
+      {url ? (
+        <details className="mt-1 rounded border border-border-default bg-canvas">
+          <summary className="cursor-pointer px-1.5 py-1 text-[10px] font-medium text-secondary">
+            Prompt &amp; grounding used
+          </summary>
+          <div className="space-y-1.5 px-1.5 pb-1.5">
+            {frame.generationPrompt ? (
+              <textarea
+                readOnly
+                value={frame.generationPrompt}
+                rows={6}
+                className="w-full resize-y rounded border border-border-default bg-surface px-1.5 py-1 font-mono text-[10px] text-secondary focus:outline-none"
+              />
+            ) : (
+              <p className="text-[10px] text-tertiary">
+                Not recorded — regenerate this frame to capture its prompt.
+              </p>
+            )}
+            {frame.groundingUrls && frame.groundingUrls.length > 0 ? (
+              <div>
+                <span className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
+                  Grounding
+                </span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {frame.groundingUrls.map((g) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={g}
+                      src={thumbUrl(g)}
+                      alt="grounding reference"
+                      loading="lazy"
+                      onError={(e) => {
+                        const i = e.currentTarget;
+                        if (i.src !== g) i.src = g;
+                      }}
+                      className="h-10 w-8 rounded border border-border-default object-cover"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : frame.generationPrompt ? (
+              <p className="text-[10px] text-tertiary">
+                No grounding image was attached.
+              </p>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
