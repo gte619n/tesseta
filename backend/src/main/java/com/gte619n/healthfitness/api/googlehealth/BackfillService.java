@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.api.googlehealth;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionMeasurement;
 import com.gte619n.healthfitness.core.bodycomposition.BodyCompositionRepository;
 import com.gte619n.healthfitness.core.device.DeviceSyncRepository;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthClient;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataPoint;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataType;
@@ -30,6 +31,7 @@ public class BackfillService {
     private final DeviceSyncRepository deviceSyncs;
     private final AccessTokenService tokens;
     private final GoogleHealthClient googleHealth;
+    private final SyncChangeNotifier syncNotifier;
     private final int backfillDays;
     private final int chunkDays;
 
@@ -38,6 +40,7 @@ public class BackfillService {
         DeviceSyncRepository deviceSyncs,
         AccessTokenService tokens,
         GoogleHealthClient googleHealth,
+        SyncChangeNotifier syncNotifier,
         @Value("${app.googlehealth.backfill-days:1460}") int backfillDays,
         @Value("${app.googlehealth.backfill-chunk-days:365}") int chunkDays
     ) {
@@ -45,6 +48,7 @@ public class BackfillService {
         this.deviceSyncs = deviceSyncs;
         this.tokens = tokens;
         this.googleHealth = googleHealth;
+        this.syncNotifier = syncNotifier;
         this.backfillDays = backfillDays;
         this.chunkDays = chunkDays;
     }
@@ -66,6 +70,12 @@ public class BackfillService {
             }
             for (String platform : platforms) {
                 deviceSyncs.recordSync(userId, platform, now);
+            }
+            // Server-originated import (e.g. after a reconnect) — fan out to ALL
+            // devices so the dashboard refreshes now instead of on the next
+            // periodic sync. Matches the webhook path (WebhookHandlerService).
+            if (total > 0) {
+                syncNotifier.changed(userId, null, "bodyComposition");
             }
             log.info("Backfill complete user={} totalStored={}", userId, total);
         } catch (RuntimeException e) {
