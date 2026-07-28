@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.core.workoutprogram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gte619n.healthfitness.core.exercise.BlockType;
@@ -94,6 +95,101 @@ class WorkoutScheduleServiceTest {
         // No PLANNED session was created on a past date (the freeze boundary holds).
         assertTrue(scheduled.findByProgram("u1", pid, LocalDate.MIN, LocalDate.now().minusDays(1))
             .stream().noneMatch(s -> s.status() == ScheduledStatus.PLANNED));
+    }
+
+    @Test
+    void materializeOneCreatesTodaySessionFromAnyDayAndIsIdempotent() {
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        // A 4-week program that started five weeks ago — its scheduled window is
+        // entirely in the past, so nothing is materialized for today.
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Squat", 0, List.of())));
+        ProgramPhase phase = new ProgramPhase(null, "Accumulation", "Hypertrophy", 0, null,
+            4, null, null, null, null, List.of(mon));
+        LocalDate start = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .minusWeeks(5);
+        WorkoutProgram input = new WorkoutProgram("u1", null, "Test", null, null, ProgramStatus.DRAFT,
+            ProgramSource.MANUAL, start, null, null, List.of(phase), null, null, null);
+        WorkoutProgram created = programService.create(input);
+        String pid = created.programId();
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = created.phases().get(0).days().get(0).dayId();
+
+        LocalDate today = LocalDate.now();
+        ScheduledWorkout s = scheduleService.materializeOne("u1", pid, phaseId, dayId, today);
+
+        assertEquals(today, s.date());
+        assertEquals(today + "_" + dayId, s.scheduledId());
+        assertEquals(ScheduledStatus.PLANNED, s.status());
+        assertEquals("Lower", s.dayLabel());
+        assertTrue(s.session() != null, "the day template rides the materialized session");
+        assertTrue(scheduled.findById("u1", pid, today + "_" + dayId).isPresent());
+
+        // Re-running the same day on the same date reuses the row (no duplicate).
+        ScheduledWorkout again = scheduleService.materializeOne("u1", pid, phaseId, dayId, today);
+        assertEquals(s.scheduledId(), again.scheduledId());
+        long count = scheduled.findByProgram("u1", pid, today, today).stream()
+            .filter(x -> x.scheduledId().equals(today + "_" + dayId)).count();
+        assertEquals(1, count);
+    }
+
+    @Test
+    void materializeOneReusesExistingSessionWithoutResettingItsOutcome() {
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Squat", 0, List.of())));
+        ProgramPhase phase = new ProgramPhase(null, "Accumulation", "Hypertrophy", 0, null,
+            4, null, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now(), null, null, List.of(phase), null, null, null));
+        String pid = created.programId();
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = created.phases().get(0).days().get(0).dayId();
+
+        LocalDate today = LocalDate.now();
+        // A session already run today (COMPLETED) must not be reset to PLANNED.
+        ScheduledWorkout done = new ScheduledWorkout("u1", pid, today + "_" + dayId, today,
+            phaseId, dayId, "Lower", 1, false, "home",
+            ScheduledStatus.COMPLETED, mon, java.time.Instant.now(), 3600);
+        scheduled.save(done);
+
+        ScheduledWorkout reused = scheduleService.materializeOne("u1", pid, phaseId, dayId, today);
+        assertEquals(ScheduledStatus.COMPLETED, reused.status());
+    }
+
+    @Test
+    void materializeOneThrowsOnUnknownProgramPhaseOrDay() {
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Squat", 0, List.of())));
+        ProgramPhase phase = new ProgramPhase(null, "Accumulation", "Hypertrophy", 0, null,
+            4, null, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now(), null, null, List.of(phase), null, null, null));
+        String pid = created.programId();
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = created.phases().get(0).days().get(0).dayId();
+        LocalDate today = LocalDate.now();
+
+        assertThrows(IllegalArgumentException.class,
+            () -> scheduleService.materializeOne("u1", "nope", phaseId, dayId, today));
+        assertThrows(IllegalArgumentException.class,
+            () -> scheduleService.materializeOne("u1", pid, "nope", dayId, today));
+        assertThrows(IllegalArgumentException.class,
+            () -> scheduleService.materializeOne("u1", pid, phaseId, "nope", today));
     }
 
     static class FakeProgramRepo implements WorkoutProgramRepository {

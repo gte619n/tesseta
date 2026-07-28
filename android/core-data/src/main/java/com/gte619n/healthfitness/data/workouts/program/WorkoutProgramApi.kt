@@ -64,6 +64,19 @@ interface WorkoutProgramApi {
     ): WorkoutProgramDeepDto
 
     /**
+     * Materialize (or reuse) an ad-hoc session for one program day on a target
+     * date (default today), so any workout can be started and logged "as today"
+     * even after the program's scheduled window has elapsed or a day was missed.
+     * Idempotent by the `"{date}_{dayId}"` session id. Online-only, like
+     * [activate]. Returns the materialized scheduled workout.
+     */
+    @POST("api/me/workout-programs/{id}/sessions")
+    suspend fun runDay(
+        @Path("id") id: String,
+        @Body body: RunDayRequest,
+    ): ScheduledWorkoutDto
+
+    /**
      * ADR-0012 / IMPL-17 D1+D2 — idempotent completion upsert for one
      * scheduled session. Returns the updated scheduled workout.
      */
