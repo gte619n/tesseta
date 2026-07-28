@@ -100,6 +100,55 @@ class GoogleHealthOAuthClientTest {
             .hasMessageContaining("invalid_grant");
     }
 
+    @Test
+    void exchangeRefreshToken_deadToken_throwsAuthException() {
+        // A dead refresh token comes back as 400 invalid_grant — must be
+        // classified as GoogleHealthAuthException so callers mark it broken.
+        responses.add(new Response(400, """
+            { "error": "invalid_grant", "error_description": "Token has been expired or revoked." }
+            """));
+
+        GoogleHealthOAuthClient client =
+            new GoogleHealthOAuthClient(tokenUrl, "web-id", "web-secret");
+
+        assertThatThrownBy(() -> client.exchangeRefreshToken("dead-rt"))
+            .isInstanceOf(GoogleHealthAuthException.class)
+            .hasMessageContaining("invalid_grant");
+    }
+
+    @Test
+    void exchangeRefreshToken_serverError_throwsGenericRuntime() {
+        // A transient 5xx must NOT be classified as an auth failure, so a blip
+        // never marks a healthy connection broken.
+        responses.add(new Response(503, "upstream unavailable"));
+
+        GoogleHealthOAuthClient client =
+            new GoogleHealthOAuthClient(tokenUrl, "web-id", "web-secret");
+
+        assertThatThrownBy(() -> client.exchangeRefreshToken("rt"))
+            .isInstanceOf(RuntimeException.class)
+            .isNotInstanceOf(GoogleHealthAuthException.class)
+            .hasMessageContaining("Token exchange failed (503)");
+    }
+
+    @Test
+    void exchangeRefreshToken_success_returnsAccessToken() {
+        responses.add(new Response(200, """
+            { "access_token": "at-2", "expires_in": 3599 }
+            """));
+
+        GoogleHealthOAuthClient client =
+            new GoogleHealthOAuthClient(tokenUrl, "web-id", "web-secret");
+        GoogleHealthOAuthClient.AccessTokenGrant grant = client.exchangeRefreshToken("rt");
+
+        assertThat(grant.accessToken()).isEqualTo("at-2");
+        assertThat(grant.expiresInSeconds()).isEqualTo(3599);
+        RecordedRequest req = requests.get(0);
+        assertThat(req.form)
+            .containsEntry("grant_type", "refresh_token")
+            .containsEntry("refresh_token", "rt");
+    }
+
     private void handle(HttpExchange exchange) throws IOException {
         Map<String, String> headers = new java.util.HashMap<>();
         exchange.getRequestHeaders().forEach((k, v) -> headers.put(k.toLowerCase(), v.get(0)));

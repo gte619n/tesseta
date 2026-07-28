@@ -7,6 +7,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
+import com.google.firebase.messaging.Notification;
 import com.google.firebase.messaging.SendResponse;
 import java.util.ArrayList;
 import java.util.List;
@@ -73,6 +74,39 @@ public class FirebaseMessagingFcmSender implements FcmSender {
                 // Whole-batch failure (e.g. auth/transport) — log and move on; the
                 // client's periodic floor recovers the missed pull.
                 log.warn("FCM multicast send failed for {} token(s): {}", batch.size(), e.toString());
+            }
+        }
+        return new FcmSendResult(sent, unregistered);
+    }
+
+    @Override
+    public FcmSendResult sendNotification(
+        List<String> tokens, String title, String body, Map<String, String> data) {
+        if (tokens == null || tokens.isEmpty()) {
+            return FcmSendResult.empty();
+        }
+        Notification notification = Notification.builder()
+            .setTitle(title)
+            .setBody(body)
+            .build();
+        Map<String, String> payload = data == null ? Map.of() : data;
+
+        int sent = 0;
+        List<String> unregistered = new ArrayList<>();
+
+        for (int start = 0; start < tokens.size(); start += MAX_BATCH) {
+            List<String> batch = tokens.subList(start, Math.min(start + MAX_BATCH, tokens.size()));
+            MulticastMessage message = MulticastMessage.builder()
+                .setNotification(notification)
+                .putAllData(payload)
+                .addAllTokens(batch)
+                .build();
+            try {
+                BatchResponse response = messaging.sendEachForMulticast(message);
+                sent += response.getSuccessCount();
+                collectUnregistered(batch, response, unregistered);
+            } catch (FirebaseMessagingException e) {
+                log.warn("FCM notification send failed for {} token(s): {}", batch.size(), e.toString());
             }
         }
         return new FcmSendResult(sent, unregistered);

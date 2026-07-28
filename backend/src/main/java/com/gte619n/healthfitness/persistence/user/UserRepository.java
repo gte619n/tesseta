@@ -125,6 +125,25 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         gh.put("refreshTokenCiphertext", Blob.fromBytes(connection.refreshTokenCiphertext()));
         gh.put("dekCiphertext", Blob.fromBytes(connection.dekCiphertext()));
         gh.put("connectedAt", serverTimestamp());
+        // A (re)connect heals a previously-broken connection. Because we merge,
+        // any stale brokenAt/brokenReason would survive unless explicitly deleted.
+        gh.put("brokenAt", com.google.cloud.firestore.FieldValue.delete());
+        gh.put("brokenReason", com.google.cloud.firestore.FieldValue.delete());
+        body.put("googleHealth", gh);
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void markGoogleHealthBroken(String userId, String reason) {
+        // Field-scoped merge: stamp brokenAt/brokenReason without rewriting the
+        // encrypted token fields. No-op-safe if the connection was already cleared.
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> gh = new HashMap<>();
+        gh.put("brokenAt", serverTimestamp());
+        gh.put("brokenReason", reason);
+        Map<String, Object> body = new HashMap<>();
         body.put("googleHealth", gh);
         body.put("updatedAt", serverTimestamp());
         await(docRef.set(body, SetOptions.merge()));
@@ -190,7 +209,9 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
             (String) gh.get("healthUserId"),
             refreshCt instanceof Blob b ? b.toBytes() : null,
             dekCt instanceof Blob b ? b.toBytes() : null,
-            toInstant(gh.get("connectedAt"))
+            toInstant(gh.get("connectedAt")),
+            toInstant(gh.get("brokenAt")),
+            (String) gh.get("brokenReason")
         );
     }
 

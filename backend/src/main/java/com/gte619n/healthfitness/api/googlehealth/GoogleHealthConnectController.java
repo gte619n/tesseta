@@ -94,7 +94,9 @@ public class GoogleHealthConnectController {
             healthUserId,
             encrypted.refreshTokenCiphertext(),
             encrypted.dekCiphertext(),
-            Instant.now()
+            Instant.now(),
+            null,
+            null
         ));
         tokens.invalidate(userId);
         backfill.scheduleBackfill(userId);
@@ -112,17 +114,49 @@ public class GoogleHealthConnectController {
 
     @GetMapping("/status")
     public StatusResponse status() {
+        return statusFor(currentUser.get().userId());
+    }
+
+    // Actively probe the connection: force a token exchange. A dead refresh
+    // token throws GoogleHealthAuthException, which AccessTokenService records
+    // as broken before it reaches us — so we simply swallow it and report the
+    // freshly-updated status. Lets a client verify health on demand (e.g. when
+    // the settings screen opens) instead of waiting for the next webhook.
+    @PostMapping("/check")
+    public StatusResponse check() {
         String userId = currentUser.get().userId();
+        User user = users.findById(userId).orElseThrow(
+            () -> new IllegalStateException("Unknown user: " + userId));
+        if (user.googleHealth() != null) {
+            try {
+                tokens.accessTokenFor(userId);
+            } catch (RuntimeException ignored) {
+                // Broken state (if any) is already persisted by AccessTokenService;
+                // transient errors just leave the connection healthy. Either way,
+                // re-read below reflects the current truth.
+            }
+        }
+        return statusFor(userId);
+    }
+
+    private StatusResponse statusFor(String userId) {
         User user = users.findById(userId).orElseThrow(
             () -> new IllegalStateException("Unknown user: " + userId));
         GoogleHealthConnection gh = user.googleHealth();
         if (gh == null) {
-            return new StatusResponse(false, null);
+            return new StatusResponse(false, null, false, null, null);
         }
-        return new StatusResponse(true, gh.connectedAt());
+        return new StatusResponse(
+            true, gh.connectedAt(), gh.needsReconnect(), gh.brokenAt(), gh.brokenReason());
     }
 
-    public record StatusResponse(boolean connected, Instant connectedAt) {}
+    public record StatusResponse(
+        boolean connected,
+        Instant connectedAt,
+        boolean needsReconnect,
+        Instant brokenAt,
+        String brokenReason
+    ) {}
 
     private String discoverHealthUserId(String accessToken) {
         // Look back ~1 day at a single data type. We only need one record

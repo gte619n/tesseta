@@ -79,6 +79,21 @@ fun GoogleHealthSection(
                     }
                 }
 
+                is GoogleHealthViewModel.UiState.NeedsReconnect -> {
+                    Pill(text = "Reconnect needed", tone = HfTone.Alert)
+                    Text(
+                        "Your Google Health connection expired and data has stopped " +
+                            "syncing. Reconnect to resume.",
+                    )
+                    Button(
+                        onClick = { viewModel.connect() },
+                        enabled = !s.reconnecting,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (s.reconnecting) "Reconnecting…" else "Reconnect Google Health")
+                    }
+                }
+
                 is GoogleHealthViewModel.UiState.Error -> {
                     Pill(text = "Error", tone = HfTone.Alert)
                     Text(s.message)

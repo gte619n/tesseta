@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.core.push;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Transport port for the FCM fan-out (IMPL-AND-20, Phase 2). The interface lives
@@ -26,4 +27,23 @@ public interface FcmSender {
      *         FcmSendResult#empty()}.
      */
     FcmSendResult sendSyncData(List<String> tokens, List<String> collections);
+
+    /**
+     * Deliver a <b>user-visible</b> notification (title + body) plus a small
+     * {@code data} map the client switches on to route the tap. Unlike {@link
+     * #sendSyncData}, this surfaces a notification in the system tray.
+     *
+     * <p>Default is a no-op returning {@link FcmSendResult#empty()}, so the
+     * lambda-based no-op transport (FCM disabled, tests) needs no change; only
+     * the real Firebase transport overrides it.
+     *
+     * @param tokens the FCM registration tokens to address.
+     * @param title  notification title.
+     * @param body   notification body.
+     * @param data   extra key/values delivered alongside (e.g. a routing type).
+     */
+    default FcmSendResult sendNotification(
+        List<String> tokens, String title, String body, Map<String, String> data) {
+        return FcmSendResult.empty();
+    }
 }

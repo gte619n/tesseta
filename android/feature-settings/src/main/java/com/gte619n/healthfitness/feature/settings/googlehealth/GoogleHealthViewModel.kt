@@ -30,6 +30,12 @@ class GoogleHealthViewModel @Inject constructor(
             val connectedAtEpochSeconds: Long?,
             val disconnecting: Boolean = false,
         ) : UiState
+        // Connected but the refresh token has died — the user must reconnect.
+        // Reconnecting reuses the same consent flow as a first-time connect.
+        data class NeedsReconnect(
+            val brokenReason: String? = null,
+            val reconnecting: Boolean = false,
+        ) : UiState
         data class Error(val message: String) : UiState
     }
 
@@ -42,29 +48,49 @@ class GoogleHealthViewModel @Inject constructor(
     val consentRequests: Flow<IntentSender> = _consentRequests.receiveAsFlow()
 
     init {
-        refresh()
+        // Actively probe on open so a silently-dead connection surfaces as
+        // NeedsReconnect immediately, not just after the next webhook. Falls
+        // back to a plain status read if the probe endpoint fails.
+        checkConnection()
     }
 
     fun refresh() {
         _state.value = UiState.Loading
         viewModelScope.launch {
-            repo.status().fold(
-                onSuccess = { status ->
-                    _state.value = if (status.connected) {
-                        UiState.Connected(status.connectedAtEpochSeconds)
-                    } else {
-                        UiState.Disconnected()
-                    }
-                },
-                onFailure = {
-                    _state.value = UiState.Error(it.message ?: "Failed to load status")
-                },
-            )
+            applyStatus(repo.status())
         }
     }
 
+    private fun checkConnection() {
+        _state.value = UiState.Loading
+        viewModelScope.launch {
+            val probed = repo.check()
+            applyStatus(if (probed.isSuccess) probed else repo.status())
+        }
+    }
+
+    private fun applyStatus(result: Result<com.gte619n.healthfitness.domain.googlehealth.GoogleHealthStatus>) {
+        result.fold(
+            onSuccess = { status ->
+                _state.value = when {
+                    !status.connected -> UiState.Disconnected()
+                    status.needsReconnect -> UiState.NeedsReconnect(status.brokenReason)
+                    else -> UiState.Connected(status.connectedAtEpochSeconds)
+                }
+            },
+            onFailure = {
+                _state.value = UiState.Error(it.message ?: "Failed to load status")
+            },
+        )
+    }
+
     fun connect() {
-        _state.value = UiState.Disconnected(connecting = true)
+        // Reflect progress on whichever entry point launched the flow: a
+        // first-time connect (Disconnected) or a heal (NeedsReconnect).
+        _state.value = when (val current = _state.value) {
+            is UiState.NeedsReconnect -> current.copy(reconnecting = true)
+            else -> UiState.Disconnected(connecting = true)
+        }
         viewModelScope.launch {
             when (val flow = scope.requestHealthAuthorization()) {
                 is HealthAuthFlow.Resolved -> submitAuthCode(flow.serverAuthCode)
