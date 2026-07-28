@@ -217,7 +217,12 @@ fun NavGraphBuilder.workoutsGraph(
             navArgument(WorkoutsRoutes.ARG_DAY_ID) { type = NavType.StringType },
         ),
     ) {
-        WorkoutDetailRoute(onBack = { navController.popBackStack() })
+        WorkoutDetailRoute(
+            onBack = { navController.popBackStack() },
+            onOpenSession = { programId, scheduledId ->
+                navController.navigate(WorkoutsRoutes.session(programId, scheduledId))
+            },
+        )
     }
 
     composable(

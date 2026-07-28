@@ -211,6 +211,37 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
+    fun `runDayToday materializes the session and mirrors the returned row`() = runBlocking {
+        val dto = ScheduledWorkoutDto(
+            scheduledId = "2026-07-28_d1",
+            date = java.time.LocalDate.parse("2026-07-28"),
+            phaseId = "ph1", dayId = "d1", dayLabel = "Lower A", status = "PLANNED",
+        )
+        coEvery { api.runDay("p1", RunDayRequest(phaseId = "ph1", dayId = "d1")) } returns dto
+
+        val scheduledId = repo.runDayToday("p1", "ph1", "d1").getOrThrow()
+
+        assertEquals("2026-07-28_d1", scheduledId)
+        // The new row is mirrored so start()/calendars see it without a sync.
+        coVerify(exactly = 1) { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, any()) }
+        coVerify(exactly = 1) { api.runDay("p1", RunDayRequest(phaseId = "ph1", dayId = "d1")) }
+    }
+
+    @Test
+    fun `runDayToday surfaces a clear message when offline`() = runBlocking {
+        coEvery { api.runDay("p1", any()) } throws IOException("no host")
+
+        val result = repo.runDayToday("p1", "ph1", "d1")
+
+        assertEquals(true, result.isFailure)
+        assertEquals(
+            "Connect to the internet once to start this workout.",
+            result.exceptionOrNull()?.message,
+        )
+        coVerify(exactly = 0) { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, any()) }
+    }
+
+    @Test
     fun `get backfills session-only phases from the cached schedule offline`() = runBlocking {
         // Imported-history shape: phases present, but template days are empty —
         // the workouts live in the schedule.

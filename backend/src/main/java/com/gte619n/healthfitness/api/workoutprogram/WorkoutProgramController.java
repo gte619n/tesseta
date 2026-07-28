@@ -160,6 +160,33 @@ public class WorkoutProgramController {
     }
 
     /**
+     * Materialize an ad-hoc session for one program day on a target date
+     * (default: today), so any workout can be started and logged "as today" —
+     * even after the program's scheduled window has elapsed or a day was missed.
+     * Idempotent by the {@code "{date}_{dayId}"} id: re-running the same day on
+     * the same date returns the existing session.
+     */
+    @PostMapping("/{programId}/sessions")
+    public ScheduledWorkoutResponse runDay(
+        @PathVariable String programId,
+        @RequestBody RunDayRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        LocalDate date = body.date() != null ? body.date() : LocalDate.now();
+        ScheduledWorkout created;
+        try {
+            created = schedule.materializeOne(userId, programId, body.phaseId(), body.dayId(), date);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+        syncNotifier.changed(userId, null, "workoutPrograms/scheduled");
+        return assembler.scheduled(userId, List.of(created)).get(0);
+    }
+
+    /**
      * ADR-0012 completion upsert: record a session's outcome (COMPLETED or
      * SKIPPED) with full per-set actuals. Idempotent — outbox retries and
      * after-the-fact edits replay the same PUT and re-run the fan-out.

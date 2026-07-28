@@ -262,6 +262,18 @@ private fun LandingBody(
                         },
                         onClick = onActivate,
                     )
+                    // Past the program's scheduled window there may be nothing left
+                    // to re-materialize — point to the Roadmap, where any workout
+                    // can be started "as today" to catch up.
+                    if (program.status == ProgramStatus.ACTIVE) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Nothing scheduled this week. Pick any workout from the " +
+                                "Roadmap below to do it today — it still counts.",
+                            style = Hf.type.bodySm,
+                            color = Hf.colors.textSecondary,
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
                 }
                 if (state.activationIssues.isNotEmpty()) {

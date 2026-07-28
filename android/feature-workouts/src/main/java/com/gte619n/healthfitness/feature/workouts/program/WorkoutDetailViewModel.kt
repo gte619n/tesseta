@@ -25,6 +25,10 @@ data class WorkoutDetailUiState(
     val phaseTitle: String? = null,
     val day: WorkoutDay? = null,
     val error: String? = null,
+    /** True while a "run this workout today" request is in flight. */
+    val starting: Boolean = false,
+    /** Non-null once today's session is materialized — the route opens the logger. */
+    val startedScheduledId: String? = null,
 )
 
 /**
@@ -40,7 +44,8 @@ class WorkoutDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val programId: String =
+    /** The owning program's id (public so the route can open the materialized session). */
+    val programId: String =
         checkNotNull(savedStateHandle[WorkoutsRoutes.ARG_PROGRAM_ID]) {
             "WorkoutDetailViewModel requires a '${WorkoutsRoutes.ARG_PROGRAM_ID}' nav argument"
         }
@@ -112,4 +117,29 @@ class WorkoutDetailViewModel @Inject constructor(
     }
 
     fun refresh() = refreshToken.update { it + 1 }
+
+    /**
+     * Materialize this workout as a session dated today and open the logger —
+     * the "run any workout as today" path that works even after the program's
+     * scheduled window has elapsed or a day was missed. Online-only; a failure
+     * (e.g. offline) surfaces its message inline without leaving the screen.
+     */
+    fun startToday() {
+        if (_state.value.starting) return
+        viewModelScope.launch {
+            _state.update { it.copy(starting = true, error = null) }
+            repository.runDayToday(programId, phaseId, dayId)
+                .onSuccess { scheduledId ->
+                    _state.update { it.copy(starting = false, startedScheduledId = scheduledId) }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(starting = false, error = e.message ?: "Couldn't start this workout")
+                    }
+                }
+        }
+    }
+
+    /** Clear the one-shot navigation signal once the route has consumed it. */
+    fun consumeStarted() = _state.update { it.copy(startedScheduledId = null) }
 }

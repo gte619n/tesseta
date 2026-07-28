@@ -39,6 +39,18 @@ data class UpdateProgramDetailsRequest(
     val description: String?,
 )
 
+/**
+ * Body of the ad-hoc "run this day now" materialization
+ * (POST .../sessions). Picks any [dayId] out of [phaseId] and gets a session
+ * dated [date] (null → today, resolved server-side) so it can be started and
+ * logged like any scheduled session. Idempotent by the `"{date}_{dayId}"` id.
+ */
+data class RunDayRequest(
+    val phaseId: String,
+    val dayId: String,
+    val date: LocalDate? = null,
+)
+
 data class IntensityDto(
     val kind: String,
     val value: Double? = null,

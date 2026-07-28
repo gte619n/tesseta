@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
+import java.io.IOException
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -257,6 +258,38 @@ class WorkoutProgramRepository @Inject internal constructor(
                     )
                 }
                 sessions.map { it.toDomain() }
+            }
+        }
+
+    /**
+     * Materialize (or reuse) an ad-hoc session for one program day on today's
+     * date and return its scheduledId, so any workout can be run "as today" even
+     * after the program's scheduled window has elapsed or a day was missed. The
+     * returned row is mirrored immediately, so the existing
+     * [com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository.start]
+     * path picks it up without waiting for a sync. Online-only (the session is
+     * created server-side): offline surfaces a clear, actionable message.
+     */
+    suspend fun runDayToday(
+        programId: String,
+        phaseId: String,
+        dayId: String,
+    ): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val dto = try {
+                    api.runDay(programId, RunDayRequest(phaseId = phaseId, dayId = dayId))
+                } catch (e: IOException) {
+                    throw IllegalStateException(
+                        "Connect to the internet once to start this workout.",
+                        e,
+                    )
+                }
+                support.refreshInto(
+                    MirrorTables.WORKOUT_SCHEDULED,
+                    listOf(dto.toRefreshRow(programId)),
+                )
+                dto.scheduledId
             }
         }
 
