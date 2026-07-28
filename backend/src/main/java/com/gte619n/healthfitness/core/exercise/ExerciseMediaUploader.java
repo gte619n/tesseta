@@ -31,4 +31,20 @@ public interface ExerciseMediaUploader {
      * by {@code key} and best-effort delete its backing GCS object.
      */
     Exercise deleteFrame(String exerciseId, String key, String imageUrl);
+
+    /**
+     * Store an admin-uploaded grounding reference photo and append its URL to
+     * the exercise's {@code groundingImageUrls}. Unlike a frame candidate, the
+     * image is stored at a grounding-distinct object path so it can later be
+     * told apart from frame candidates. Returns the updated exercise.
+     */
+    Exercise uploadGroundingImage(String exerciseId, byte[] bytes, String contentType);
+
+    /**
+     * Remove {@code imageUrl} from the exercise's {@code groundingImageUrls}.
+     * If (and only if) the URL is one of our own grounding uploads, its backing
+     * GCS object is permanently deleted; candidate/external URLs are merely
+     * unlinked. Returns the updated exercise.
+     */
+    Exercise removeGroundingImage(String exerciseId, String imageUrl);
 }

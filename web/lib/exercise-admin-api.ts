@@ -228,6 +228,37 @@ export async function uploadFrame(
   return res.json();
 }
 
+// Upload a brand-new grounding reference photo (drag-drop / paste / picker).
+// Stored at a grounding-distinct path and appended to the grounding set.
+export async function uploadGroundingImage(
+  exerciseId: string,
+  file: File,
+): Promise<ExerciseResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await apiFetch(
+    `/api/admin/exercises/${exerciseId}/grounding/upload`,
+    { method: "POST", body: formData },
+  );
+  if (!res.ok) {
+    throw new BackendError(`grounding/upload returned ${res.status}`, res.status);
+  }
+  return res.json();
+}
+
+// Remove one image from the grounding set. Own uploads are permanently deleted
+// from storage; candidate/external URLs are only unlinked.
+export function removeGroundingImage(
+  exerciseId: string,
+  imageUrl: string,
+): Promise<ExerciseResponse> {
+  return send<ExerciseResponse>(
+    `/api/admin/exercises/${exerciseId}/grounding/remove`,
+    "POST",
+    { imageUrl },
+  );
+}
+
 export function selectFrame(
   exerciseId: string,
   key: string,

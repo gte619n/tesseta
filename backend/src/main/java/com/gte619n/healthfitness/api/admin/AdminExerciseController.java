@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.api.admin;
 import com.gte619n.healthfitness.api.exercise.CreateExerciseRequest;
 import com.gte619n.healthfitness.api.exercise.ExerciseResponse;
 import com.gte619n.healthfitness.api.exercise.ExerciseSummaryResponse;
+import com.gte619n.healthfitness.api.exercise.GroundingImageRequest;
 import com.gte619n.healthfitness.api.exercise.GroundingRequest;
 import com.gte619n.healthfitness.api.exercise.SetReviewedRequest;
 import com.gte619n.healthfitness.api.exercise.FrameRequest;
@@ -229,6 +230,63 @@ public class AdminExerciseController {
     ) {
         List<String> imageUrls = body == null ? List.of() : body.imageUrls();
         return ExerciseResponse.fromAdmin(service.setGroundingImageUrls(exerciseId, imageUrls));
+    }
+
+    /**
+     * Upload a brand-new grounding reference photo (drag-drop / paste / picker
+     * from the admin UI). Stored at a grounding-distinct object path and
+     * appended to the exercise's grounding set. Same validation as upload-frame.
+     */
+    @PostMapping(value = "/{exerciseId}/grounding/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ExerciseResponse uploadGrounding(
+        @PathVariable String exerciseId,
+        @RequestParam("file") MultipartFile file
+    ) {
+        byte[] bytes = readImageFile(file);
+        if (mediaUploader.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Media upload is not configured");
+        }
+        return ExerciseResponse.fromAdmin(
+            mediaUploader.get().uploadGroundingImage(exerciseId, bytes, file.getContentType()));
+    }
+
+    /**
+     * Remove one image from the grounding set. Own grounding uploads are
+     * permanently deleted from storage; candidate/external URLs are only unlinked.
+     */
+    @PostMapping("/{exerciseId}/grounding/remove")
+    public ExerciseResponse removeGrounding(
+        @PathVariable String exerciseId,
+        @RequestBody GroundingImageRequest body
+    ) {
+        if (mediaUploader.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Media upload is not configured");
+        }
+        String imageUrl = body == null ? null : body.imageUrl();
+        if (imageUrl == null || imageUrl.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "imageUrl is required");
+        }
+        return ExerciseResponse.fromAdmin(mediaUploader.get().removeGroundingImage(exerciseId, imageUrl));
+    }
+
+    // Validate a multipart image upload (non-empty, ≤10 MB, image/*) and return
+    // its bytes, mirroring the checks used by upload-frame.
+    private byte[] readImageFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty file");
+        }
+        if (file.getSize() > MAX_IMAGE_BYTES) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Image exceeds 10 MB limit");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Expected image file");
+        }
+        try {
+            return file.getBytes();
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Could not read uploaded file", e);
+        }
     }
 
     @PostMapping(value = "/{exerciseId}/upload-frame", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
