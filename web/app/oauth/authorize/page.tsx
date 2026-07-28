@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 import { redirect } from "next/navigation";
 import { apiFetch, send } from "@/lib/api";
 import type { ConsentMetadata, ConsentResult } from "@/lib/types/oauth";
@@ -80,7 +80,9 @@ export default async function AuthorizePage({
         codeChallengeMethod: params.codeChallengeMethod,
       },
     );
-    redirect(result.redirectUri);
+    // The third party's redirect_uri is an arbitrary external URL, so the typed-
+    // routes RouteImpl constraint doesn't apply — cast to satisfy the checker.
+    redirect(result.redirectUri as Route);
   }
   async function approve() {
     "use server";

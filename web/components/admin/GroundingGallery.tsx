@@ -46,7 +46,10 @@ export function GroundingGallery({
   const [showAdd, setShowAdd] = useState(false);
 
   const exerciseId = exercise.exerciseId;
-  const grounding = exercise.groundingImageUrls ?? [];
+  const grounding = useMemo(
+    () => exercise.groundingImageUrls ?? [],
+    [exercise.groundingImageUrls],
+  );
   const groundingSet = useMemo(() => new Set(grounding), [grounding]);
 
   // Frame / external candidates not already in the grounding set.
