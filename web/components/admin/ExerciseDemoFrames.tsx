@@ -33,6 +33,10 @@ interface Props {
   planStatus: ExerciseMediaStatus;
   frames: DemoFrame[];
   mediaStatus: ExerciseMediaStatus;
+  // Frame keys currently regenerating. Only these scrobble — a single-frame
+  // regen must not spin every tile (the exercise-level mediaStatus can't tell
+  // them apart). Empty ⇒ nothing frame-specific is in flight.
+  pendingKeys: string[];
   // Plan editor actions (IMPL-19).
   regeneratePlan: (exerciseId: string, promptOverride?: string) => Promise<void>;
   savePlan: (exerciseId: string, frames: FrameSpec[]) => Promise<void>;
@@ -130,6 +134,7 @@ export function ExerciseDemoFrames({
   planStatus,
   frames,
   mediaStatus,
+  pendingKeys,
   regeneratePlan,
   savePlan,
   approvePlan,
@@ -171,6 +176,7 @@ export function ExerciseDemoFrames({
               exerciseName={exerciseName}
               frame={frame}
               mediaStatus={mediaStatus}
+              regenerating={mediaStatus === 'PENDING' && pendingKeys.includes(frame.key)}
               onZoom={(src) => setLightboxSrc(src)}
               onRegenerateFrame={onRegenerateFrame}
               uploadFrame={uploadFrame}
@@ -496,6 +502,7 @@ function KeyedFrame({
   exerciseName,
   frame,
   mediaStatus,
+  regenerating,
   onZoom,
   onRegenerateFrame,
   uploadFrame,
@@ -506,6 +513,8 @@ function KeyedFrame({
   exerciseName: string;
   frame: RenderFrame;
   mediaStatus: ExerciseMediaStatus;
+  // True only when THIS frame is the one regenerating (scoped scrobbler).
+  regenerating: boolean;
   onZoom: (src: string) => void;
   // Opens the editable Regenerate-media modal targeted at this frame.
   onRegenerateFrame: (key: string) => void;
@@ -573,7 +582,11 @@ function KeyedFrame({
   }
 
   const url = frame.imageUrl;
-  const generating = mediaStatus === 'PENDING';
+  // Only this frame's regen spins its tile; a different frame (or all-frames)
+  // regen leaves stable tiles interactive. `mediaPending` still gates actions so
+  // we never kick off a second regen while one is in flight.
+  const generating = regenerating;
+  const mediaPending = mediaStatus === 'PENDING';
   const isZoomable = !!url && !generating;
 
   return (
@@ -688,7 +701,7 @@ function KeyedFrame({
         <button
           type="button"
           onClick={() => onRegenerateFrame(frame.key)}
-          disabled={busy || generating}
+          disabled={busy || mediaPending}
           className="flex cursor-pointer items-center gap-1 rounded border border-border-default bg-canvas px-1.5 py-1 text-[10px] font-medium text-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
         >
           {generating ? <Spinner className="h-2.5 w-2.5" /> : null}
