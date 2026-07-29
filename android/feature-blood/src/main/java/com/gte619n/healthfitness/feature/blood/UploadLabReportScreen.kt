@@ -19,6 +19,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -44,13 +47,13 @@ fun UploadLabReportScreen(
         contract = ActivityResultContracts.GetContent(),
     ) { uri: Uri? ->
         if (uri == null) {
-            onDismiss()
+            // Picker cancelled (e.g. system back). Stay on the Idle sheet so the
+            // user can retry via "Choose PDF" instead of tearing down the dialog.
             return@rememberLauncherForActivityResult
         }
         val name = context.contentResolver.queryDisplayName(uri) ?: "report.pdf"
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         if (bytes == null) {
-            onDismiss()
             return@rememberLauncherForActivityResult
         }
         viewModel.upload(name, bytes)
@@ -58,7 +61,17 @@ fun UploadLabReportScreen(
 
     // D17: the PDF extraction is an online-only AI flow — only open the picker
     // when online; offline shows a "needs connection" affordance and queues nothing.
-    LaunchedEffect(online) { if (online) picker.launch("application/pdf") }
+    // Auto-open exactly once: launching the picker pauses/resumes the activity,
+    // which re-emits connectivity and would otherwise re-key this effect and
+    // reopen the picker immediately after a pick. The saveable flag survives the
+    // activity recreation that can happen while the picker is in front.
+    var autoLaunched by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(online) {
+        if (online && !autoLaunched) {
+            autoLaunched = true
+            picker.launch("application/pdf")
+        }
+    }
 
     val ui by viewModel.state.collectAsStateWithLifecycle()
 
@@ -86,13 +99,19 @@ fun UploadLabReportScreen(
         return
     }
 
-    UploadLabReportSheet(state = ui, onBack = onBack, onDismiss = { viewModel.cancel(); onDismiss() })
+    UploadLabReportSheet(
+        state = ui,
+        onBack = onBack,
+        onPick = { picker.launch("application/pdf") },
+        onDismiss = { viewModel.cancel(); onDismiss() },
+    )
 }
 
 @Composable
 private fun UploadLabReportSheet(
     state: UploadLabReportViewModel.UiState,
     onBack: (() -> Unit)?,
+    onPick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     HfCard(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -105,8 +124,11 @@ private fun UploadLabReportSheet(
         Spacer(Modifier.height(12.dp))
 
         when (state) {
-            UploadLabReportViewModel.UiState.Idle ->
+            UploadLabReportViewModel.UiState.Idle -> {
                 Text("Choose a PDF to begin.", style = Hf.type.bodyMd, color = Hf.colors.textSecondary)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onPick) { Text("Choose PDF") }
+            }
 
             is UploadLabReportViewModel.UiState.Failed -> {
                 Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
