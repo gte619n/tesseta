@@ -9,6 +9,7 @@ const SECTIONS: { href: Route; label: string; icon: string }[] = [
   { href: '/admin/equipment' as Route, label: 'Equipment', icon: 'barbell' },
   { href: '/admin/exercises' as Route, label: 'Exercises', icon: 'stretching' },
   { href: '/admin/drugs' as Route, label: 'Drugs', icon: 'pill' },
+  { href: '/admin/oauth' as Route, label: 'OAuth clients', icon: 'plug-connected' },
 ];
 
 export function AdminSubNav() {

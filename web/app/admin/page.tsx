@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getPendingEquipment, getAdminCatalog } from '@/lib/gym-api';
 import { listAdminDrugs } from '@/lib/drug-admin-api';
 import { getAdminExerciseCatalog, getAdminExerciseReview } from '@/lib/exercise-admin-api';
+import { listOAuthClients } from '@/lib/oauth-admin-api';
 import { pageMetadata } from '@/lib/page-metadata';
 
 export const metadata = pageMetadata('Admin');
@@ -13,13 +14,15 @@ export const revalidate = 60;
 
 export default async function AdminOverviewPage() {
   // Admin gating handled by app/admin/layout.tsx
-  const [pending, catalog, drugs, exercises, exerciseReview] = await Promise.all([
-    getPendingEquipment().catch(() => []),
-    getAdminCatalog().catch(() => []),
-    listAdminDrugs().catch(() => []),
-    getAdminExerciseCatalog().catch(() => []),
-    getAdminExerciseReview().catch(() => []),
-  ]);
+  const [pending, catalog, drugs, exercises, exerciseReview, oauthClients] =
+    await Promise.all([
+      getPendingEquipment().catch(() => []),
+      getAdminCatalog().catch(() => []),
+      listAdminDrugs().catch(() => []),
+      getAdminExerciseCatalog().catch(() => []),
+      getAdminExerciseReview().catch(() => []),
+      listOAuthClients().catch(() => []),
+    ]);
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -49,6 +52,13 @@ export default async function AdminOverviewPage() {
           title="Drugs"
           line1={`${drugs.length} in catalog`}
           line2="Edit, regenerate, or merge"
+        />
+        <SectionCard
+          href="/admin/oauth"
+          icon="plug-connected"
+          title="OAuth clients"
+          line1={`${oauthClients.length} registered`}
+          line2="Register third-party API access"
         />
       </div>
     </div>
