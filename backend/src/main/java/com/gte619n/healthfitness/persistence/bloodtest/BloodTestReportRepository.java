@@ -32,6 +32,7 @@ import org.springframework.stereotype.Repository;
 public class BloodTestReportRepository implements com.gte619n.healthfitness.core.bloodtest.BloodTestReportRepository {
 
     private static final String SUBCOLLECTION = "bloodTestReports";
+    private static final String DEDUP_SUBCOLLECTION = "bloodTestDedup";
 
     private final Firestore firestore;
 
@@ -95,8 +96,36 @@ public class BloodTestReportRepository implements com.gte619n.healthfitness.core
         await(collection(userId).document(reportId).set(updates, SetOptions.merge()));
     }
 
+    @Override
+    public boolean tryReserveContentHash(String userId, String contentHash) {
+        if (contentHash == null) return true;
+        DocumentReference ref = dedupCollection(userId).document(contentHash);
+        // Read-then-create inside a transaction so concurrent uploads of the
+        // same bytes contend on Firestore's serializable isolation: exactly one
+        // wins the create, the rest observe the existing doc and get false.
+        return await(firestore.runTransaction(tx -> {
+            if (tx.get(ref).get().exists()) return false;
+            Map<String, Object> body = new HashMap<>();
+            body.put("createdAt", serverTimestamp());
+            tx.set(ref, body);
+            return true;
+        }));
+    }
+
+    @Override
+    public void releaseContentHash(String userId, String contentHash) {
+        if (contentHash == null) return;
+        await(dedupCollection(userId).document(contentHash).delete());
+    }
+
     private CollectionReference collection(String userId) {
         return firestore.collection("users").document(userId).collection(SUBCOLLECTION);
+    }
+
+    // Server-internal in-flight upload locks keyed by PDF content hash. Not in
+    // the sync allowlist, so these never reach clients.
+    private CollectionReference dedupCollection(String userId) {
+        return firestore.collection("users").document(userId).collection(DEDUP_SUBCOLLECTION);
     }
 
     private static Map<String, Object> toBody(BloodTestReport r, boolean isNew) {
