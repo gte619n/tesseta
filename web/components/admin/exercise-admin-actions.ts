@@ -8,11 +8,13 @@ export interface ExerciseAdminActions {
   regeneratePlan: (exerciseId: string, promptOverride?: string) => Promise<void>;
   savePlan: (exerciseId: string, frames: FrameSpec[]) => Promise<void>;
   approvePlan: (exerciseId: string) => Promise<void>;
-  // Media. key == null ⇒ all frames.
+  // Media. key == null ⇒ all frames. referenceImageUrls overrides the persisted
+  // grounding set for this run (undefined ⇒ use the saved set).
   regenerateMedia: (
     exerciseId: string,
     promptOverride: string | null,
     key: string | null,
+    referenceImageUrls?: string[],
   ) => Promise<void>;
   regenerateFrame: (exerciseId: string, key: string) => Promise<void>;
   uploadFrame: (exerciseId: string, key: string, file: File) => Promise<void>;

@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ModalBackdrop } from '@/components/ui/ModalBackdrop';
 import { useToast } from '@/components/ui/Toast';
 import { thumbUrl } from '@/lib/exercise-thumb';
+import { collectCandidates } from './ReferencePicker';
 import type { ExerciseResponse } from '@/lib/types/exercise';
 
 // A frame the modal can target. Derived from the plan (preferred) or, for
 // legacy exercises without a plan, the keyed demo frames.
 export type RegenTarget = { key: string; label: string };
+
+// Order-insensitive equality for two URL lists (grounding selections).
+function sameUrlSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(b);
+  return a.every((u) => set.has(u));
+}
 
 interface Props {
   exerciseId: string;
@@ -20,7 +28,9 @@ interface Props {
   // frame (prefills its editable prompt). Applied each time the modal opens.
   initialKey?: string;
   onClose: () => void;
-  onStarted: () => void;
+  // Fired once the regen has been dispatched. The key is the frame that was
+  // targeted ("" ⇒ all frames), so the drawer can scrobble only that frame.
+  onStarted: (key: string) => void;
   // key == null regenerates every frame; a key regenerates that one frame. The
   // optional prompt override is applied to whichever target is selected.
   // IMPL-20: `referenceImageUrls` overrides the persisted grounding set for the
@@ -34,10 +44,19 @@ interface Props {
   // IMPL-19: fetch the composed image prompt for one frame key, so admins can
   // see/edit the exact prompt before regenerating a single frame.
   getDemoPrompt: (exerciseId: string, key: string) => Promise<string>;
-  // IMPL-20: full detail (when loaded) so the modal can preview the saved
-  // grounding set that this run will use. Edit the set in the exercise editor's
-  // grounding gallery; the regen always grounds on the persisted set.
+  // IMPL-20: full detail (when loaded) so the modal can show/select the
+  // grounding images this run will use.
   exercise?: ExerciseResponse | null;
+  // Upload a brand-new grounding photo from the modal (so an admin can add a
+  // pose reference while dialing in one view, not just at the exercise entry).
+  // Appends to the exercise's grounding set and returns the updated exercise.
+  uploadGroundingImage?: (
+    exerciseId: string,
+    file: File,
+  ) => Promise<ExerciseResponse>;
+  // Push the updated exercise back to the host after an in-modal upload so the
+  // grounding pool (and the rest of the drawer) reflect the new photo.
+  onExerciseUpdated?: (ex: ExerciseResponse) => void;
 }
 
 export function RegenerateMediaModal({
@@ -51,6 +70,8 @@ export function RegenerateMediaModal({
   regenerate,
   getDemoPrompt,
   exercise,
+  uploadGroundingImage,
+  onExerciseUpdated,
 }: Props) {
   const toast = useToast();
   // "" sentinel ⇒ all frames; otherwise a specific frame key.
@@ -71,6 +92,93 @@ export function RegenerateMediaModal({
   >([]);
   const [loadingViews, setLoadingViews] = useState(false);
   const targetKeysStr = targets.map((t) => t.key).join(',');
+
+  // Which grounding images this run uses. Seeded from the exercise's persisted
+  // set when the modal opens; toggling / uploading here overrides the set for
+  // this regeneration only (sent as referenceImageUrls). The persisted set is
+  // untouched unless the admin uploads a new photo (which appends to it).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [groundingBusy, setGroundingBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const groundingInputRef = useRef<HTMLInputElement>(null);
+
+  // Seed the selection from the persisted grounding set each time the modal
+  // opens. Keyed on open/exercise only so an in-modal upload (which mutates
+  // groundingImageUrls) doesn't wipe manual toggles — the upload handler adds
+  // the new URL to the selection explicitly.
+  useEffect(() => {
+    if (isOpen) setSelected(new Set(exercise?.groundingImageUrls ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, exerciseId]);
+
+  // Every image the admin can ground on: the persisted grounding set (including
+  // uploads, which aren't frame/reference candidates) plus own-frame / external
+  // reference candidates, de-duplicated.
+  const groundingPool = useMemo(() => {
+    if (!exercise) return [] as { url: string; label: string }[];
+    const seen = new Set<string>();
+    const out: { url: string; label: string }[] = [];
+    for (const url of exercise.groundingImageUrls ?? []) {
+      if (url && !seen.has(url)) {
+        seen.add(url);
+        out.push({ url, label: 'saved' });
+      }
+    }
+    for (const c of collectCandidates(exercise)) {
+      if (!seen.has(c.url)) {
+        seen.add(c.url);
+        out.push({ url: c.url, label: c.group });
+      }
+    }
+    return out;
+  }, [exercise]);
+
+  function toggleGrounding(url: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
+
+  async function handleGroundingUpload(files: File[]) {
+    if (!uploadGroundingImage || !exercise) return;
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (images.length === 0) {
+      toast.error('Unsupported file', {
+        description: 'Please choose JPG, PNG, or WebP images.',
+      });
+      return;
+    }
+    setGroundingBusy(true);
+    try {
+      const prev = new Set(exercise.groundingImageUrls ?? []);
+      let latest = exercise;
+      for (const file of images) {
+        latest = await uploadGroundingImage(exerciseId, file);
+      }
+      onExerciseUpdated?.(latest);
+      // Auto-select whatever was just added so it's used for this run.
+      const added = (latest.groundingImageUrls ?? []).filter((u) => !prev.has(u));
+      setSelected((cur) => {
+        const next = new Set(cur);
+        for (const u of added) next.add(u);
+        return next;
+      });
+      toast.success(
+        images.length > 1
+          ? `${images.length} grounding photos added`
+          : 'Grounding photo added',
+      );
+    } catch (e) {
+      toast.error('Upload failed', {
+        description: e instanceof Error ? e.message : 'Please try again.',
+      });
+    } finally {
+      setGroundingBusy(false);
+    }
+  }
 
   // When a single frame is targeted, seed the textarea with that frame's
   // composed prompt so admins see/edit the exact prompt.
@@ -133,17 +241,22 @@ export function RegenerateMediaModal({
   async function handleSubmit() {
     setIsSubmitting(true);
     try {
-      // Always ground on the exercise's persisted set (curated in the editor's
-      // grounding gallery) — omit referenceImageUrls so the backend uses it.
+      // Only override the grounding set when the admin actually changed it from
+      // the persisted selection — otherwise omit referenceImageUrls so the
+      // backend keeps its "use the saved set (with reference fallback)" default.
+      const persisted = exercise?.groundingImageUrls ?? [];
+      const changed =
+        !!exercise && !sameUrlSet([...selected], persisted);
       await regenerate(
         exerciseId,
         prompt.trim() ? prompt.trim() : null,
         isAll ? null : selectedKey,
+        changed ? [...selected] : undefined,
       );
       toast.success(
         isAll ? 'Regenerating all demo frames' : `Regenerating ${selectedLabel} frame`,
       );
-      onStarted();
+      onStarted(isAll ? '' : selectedKey);
       onClose();
     } catch (e) {
       toast.error('Failed to start regeneration', {
@@ -249,39 +362,122 @@ export function RegenerateMediaModal({
       {exercise ? (
         <div className="mt-4 rounded-md border border-border-default bg-canvas p-3">
           <p className="mb-2 text-xs font-medium text-secondary">
-            Pose references
+            Grounding images
             <span className="ml-1 font-normal text-tertiary">
-              — this run grounds on the exercise&rsquo;s saved grounding set. Edit
-              it in the exercise editor&rsquo;s grounding gallery.
+              —{' '}
+              {isAll
+                ? 'applied to every frame this run'
+                : `pose reference for the ${selectedLabel} view`}
+              . Toggle which apply to this regeneration; the saved set is left
+              untouched unless you upload a new photo.
             </span>
           </p>
-          {exercise.groundingImageUrls.length > 0 ? (
+
+          {uploadGroundingImage ? (
+            <>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => !groundingBusy && groundingInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (!groundingBusy) groundingInputRef.current?.click();
+                  }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!dragOver) setDragOver(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  if (groundingBusy) return;
+                  const files = Array.from(e.dataTransfer.files ?? []);
+                  if (files.length > 0) void handleGroundingUpload(files);
+                }}
+                className={
+                  'mb-2 flex cursor-pointer items-center justify-center rounded-md border border-dashed px-3 py-3 text-center text-[11px] ' +
+                  (dragOver
+                    ? 'border-accent bg-accent/5 text-primary'
+                    : 'border-border-strong bg-surface text-tertiary hover:text-secondary')
+                }
+              >
+                {groundingBusy
+                  ? 'Working…'
+                  : dragOver
+                    ? 'Drop to upload'
+                    : 'Drop or click to add a grounding photo · JPG, PNG, WebP'}
+              </div>
+              <input
+                ref={groundingInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  e.target.value = '';
+                  if (files.length > 0) void handleGroundingUpload(files);
+                }}
+              />
+            </>
+          ) : null}
+
+          {groundingPool.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {exercise.groundingImageUrls.map((url) => (
-                <div
-                  key={url}
-                  className="h-20 w-16 overflow-hidden rounded border border-border-default"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={thumbUrl(url)}
-                    alt="grounding reference"
-                    loading="lazy"
-                    onError={(e) => {
-                      const img = e.currentTarget;
-                      if (img.src !== url) img.src = url;
-                    }}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              ))}
+              {groundingPool.map(({ url, label }) => {
+                const on = selected.has(url);
+                return (
+                  <button
+                    key={url}
+                    type="button"
+                    onClick={() => toggleGrounding(url)}
+                    aria-pressed={on}
+                    title={label}
+                    className={
+                      'relative block h-20 w-16 overflow-hidden rounded border p-0 ' +
+                      (on
+                        ? 'border-accent ring-2 ring-accent'
+                        : 'border-border-default opacity-60 hover:opacity-100')
+                    }
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={thumbUrl(url)}
+                      alt="grounding reference"
+                      loading="lazy"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        if (img.src !== url) img.src = url;
+                      }}
+                      className="h-full w-full object-cover"
+                    />
+                    {on ? (
+                      <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] leading-none text-inverse">
+                        ✓
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <p className="text-[11px] text-tertiary">
-              No saved grounding photos — regeneration falls back to reference
-              images.
+              No grounding images yet — add one above.
             </p>
           )}
+
+          <p className="mt-1.5 text-[11px] text-tertiary">
+            {selected.size} selected.{' '}
+            {selected.size === 0
+              ? 'No pose reference will be attached.'
+              : 'One reference is attached per view (mapped by position).'}
+          </p>
         </div>
       ) : null}
 

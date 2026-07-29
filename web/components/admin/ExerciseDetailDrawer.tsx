@@ -86,17 +86,23 @@ export function ExerciseDetailDrawer({
     open: false,
     key: "",
   });
+  // Which frame keys are actively regenerating, so only those scrobble (the
+  // exercise-level mediaStatus can't tell one frame's regen from all-frames).
+  // Cleared once media generation settles.
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
 
   // Lazy-load full detail whenever a new exercise opens.
   useEffect(() => {
     if (!exerciseId) {
       setExercise(null);
       setMergeTarget("");
+      setPendingKeys([]);
       return;
     }
     let cancelled = false;
     setLoading(true);
     setExercise(null);
+    setPendingKeys([]);
     loadExercise(exerciseId)
       .then((ex) => {
         if (!cancelled) setExercise(ex);
@@ -146,6 +152,7 @@ export function ExerciseDetailDrawer({
       }
       if (cancelled) return;
       setExercise(latest);
+      if (latest.mediaStatus !== "PENDING") setPendingKeys([]);
       if (wasMediaPending && latest.mediaStatus !== "PENDING") {
         if (latest.mediaStatus === "FAILED") toast.error("Media generation failed");
         else toast.success("Demo media ready for review");
@@ -332,6 +339,7 @@ export function ExerciseDetailDrawer({
               planStatus={exercise.planStatus}
               frames={exercise.demoFrames}
               mediaStatus={exercise.mediaStatus}
+              pendingKeys={pendingKeys}
               regeneratePlan={async (id, override) => {
                 await regeneratePlan(id, override);
                 // Optimistically flag PENDING so the indicator + polling kick in.
@@ -378,8 +386,15 @@ export function ExerciseDetailDrawer({
               isOpen={regen.open}
               initialKey={regen.key}
               onClose={() => setRegen((r) => ({ ...r, open: false }))}
-              onStarted={() => {
+              onStarted={(key) => {
                 setRegen((r) => ({ ...r, open: false }));
+                // Scrobble only the frame(s) actually being regenerated: the one
+                // targeted key, or every frame when "all" was chosen.
+                const allKeys = regenTargets(
+                  exercise.demoPlan,
+                  exercise.demoFrames,
+                ).map((t) => t.key);
+                setPendingKeys(key === "" ? allKeys : [key]);
                 setExercise((cur) =>
                   cur ? { ...cur, mediaStatus: "PENDING" } : cur,
                 );
@@ -387,6 +402,8 @@ export function ExerciseDetailDrawer({
               regenerate={regenerateMedia}
               getDemoPrompt={getDemoPrompt}
               exercise={exercise}
+              uploadGroundingImage={uploadGroundingImage}
+              onExerciseUpdated={(ex) => setExercise(ex)}
             />
 
             {/* Grounding photos: upload (drop/paste/click), X to remove, and
