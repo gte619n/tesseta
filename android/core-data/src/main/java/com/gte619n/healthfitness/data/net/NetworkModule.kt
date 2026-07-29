@@ -65,6 +65,10 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideTimeZoneInterceptor(): TimeZoneInterceptor = TimeZoneInterceptor()
+
+    @Provides
+    @Singleton
     fun provideTokenAuthenticator(
         repo: GoogleAuthRepository,
     ): TokenAuthenticator = TokenAuthenticator(repo)
@@ -88,6 +92,7 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(
         auth: AuthInterceptor,
+        timeZone: TimeZoneInterceptor,
         tokenAuthenticator: TokenAuthenticator,
         @Named("logging") logging: HttpLoggingInterceptor,
         cache: Cache,
@@ -95,6 +100,7 @@ object NetworkModule {
         OkHttpClient.Builder()
             .cache(cache)
             .addInterceptor(auth)
+            .addInterceptor(timeZone)
             .addInterceptor(logging)
             .authenticator(tokenAuthenticator)
             .connectTimeout(30, TimeUnit.SECONDS)

@@ -510,6 +510,7 @@ private fun SessionBody(
             CoachActionsBar(
                 page = pagerState.currentPage,
                 count = steps.size,
+                onPrevious = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) } },
                 onNext = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } },
                 onFinish = onRequestFinish,
                 onAbandon = onRequestDiscard,
@@ -1497,6 +1498,7 @@ private fun OverviewRow(step: SessionStep, loggedCount: Int, onClick: () -> Unit
 private fun CoachActionsBar(
     page: Int,
     count: Int,
+    onPrevious: () -> Unit,
     onNext: () -> Unit,
     onFinish: () -> Unit,
     onAbandon: () -> Unit,
@@ -1524,6 +1526,18 @@ private fun CoachActionsBar(
             color = Hf.colors.textTertiary,
         )
         Spacer(Modifier.weight(1f))
+        // Step back to a prior exercise to fix or undo an earlier set — the
+        // pager is otherwise forward-only (swipe is disabled). Hidden on the
+        // first page where there's nowhere to go back to.
+        if (page > 0) {
+            TextButton(onClick = onPrevious, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Text(
+                    stringResource(R.string.workout_session_previous),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textSecondary,
+                )
+            }
+        }
         if (!last) {
             TextButton(onClick = onFinish) {
                 Text(

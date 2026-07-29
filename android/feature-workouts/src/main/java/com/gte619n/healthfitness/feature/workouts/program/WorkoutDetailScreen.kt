@@ -110,7 +110,7 @@ fun WorkoutDetailScreen(
                         contentDescription = "Start workout now",
                         tint = if (state.starting) Hf.colors.muted else Hf.colors.accent,
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(22.dp)
                             .clickable(enabled = !state.starting) { onStartToday() },
                     )
                 }

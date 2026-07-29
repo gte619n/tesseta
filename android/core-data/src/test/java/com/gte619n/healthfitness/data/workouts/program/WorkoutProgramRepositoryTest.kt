@@ -217,6 +217,8 @@ class WorkoutProgramRepositoryTest {
             date = java.time.LocalDate.parse("2026-07-28"),
             phaseId = "ph1", dayId = "d1", dayLabel = "Lower A", status = "PLANNED",
         )
+        // No date in the request: the server resolves "today" from the
+        // X-Timezone header (TimeZoneInterceptor / RequestTimeZone).
         coEvery { api.runDay("p1", RunDayRequest(phaseId = "ph1", dayId = "d1")) } returns dto
 
         val scheduledId = repo.runDayToday("p1", "ph1", "d1").getOrThrow()

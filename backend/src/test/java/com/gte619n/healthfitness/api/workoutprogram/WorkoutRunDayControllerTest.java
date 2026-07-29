@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.api.workoutprogram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,6 +26,7 @@ import com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryScheduledWor
 import com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutProgramRepository;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -93,6 +95,49 @@ class WorkoutRunDayControllerTest {
         ScheduledWorkout done = scheduled.findById(TEST_USER, "p1", scheduledId).orElseThrow();
         assertEquals(ScheduledStatus.COMPLETED, done.status());
         assertEquals(LocalDate.now(), done.date());
+    }
+
+    @Test
+    void runDayDatesTheSessionInTheCallersTimeZone() throws Exception {
+        // Two zones 26h apart: their local calendar day differs at every instant,
+        // so this proves the returned date follows the X-Timezone header rather
+        // than the server's own (UTC) clock — independent of when the test runs.
+        String body = objectMapper.writeValueAsString(new RunDayRequest("ph1", "d1", null));
+
+        String ahead = LocalDate.now(ZoneId.of("Pacific/Kiritimati")).toString(); // UTC+14
+        mvc.perform(post("/api/me/workout-programs/p1/sessions")
+                .header("X-Dev-User", TEST_USER)
+                .header("X-Timezone", "Pacific/Kiritimati")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.date").value(ahead))
+            .andExpect(jsonPath("$.scheduledId").value(ahead + "_d1"));
+
+        String behind = LocalDate.now(ZoneId.of("Etc/GMT+12")).toString(); // UTC-12
+        mvc.perform(post("/api/me/workout-programs/p1/sessions")
+                .header("X-Dev-User", TEST_USER)
+                .header("X-Timezone", "Etc/GMT+12")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.date").value(behind));
+
+        assertNotEquals(ahead, behind);
+    }
+
+    @Test
+    void runDayFallsBackToServerDayWhenTimeZoneHeaderIsInvalid() throws Exception {
+        // A garbage header must not 500; it falls back to the server's own day
+        // (the prior LocalDate.now() behaviour) rather than erroring.
+        String serverToday = LocalDate.now().toString();
+        mvc.perform(post("/api/me/workout-programs/p1/sessions")
+                .header("X-Dev-User", TEST_USER)
+                .header("X-Timezone", "Not/A_Zone")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new RunDayRequest("ph1", "d1", null))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.date").value(serverToday));
     }
 
     @Test

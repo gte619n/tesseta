@@ -269,6 +269,11 @@ class WorkoutProgramRepository @Inject internal constructor(
      * [com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository.start]
      * path picks it up without waiting for a sync. Online-only (the session is
      * created server-side): offline surfaces a clear, actionable message.
+     *
+     * "Today" is the device's local calendar day, resolved server-side from the
+     * `X-Timezone` header (see TimeZoneInterceptor / RequestTimeZone) — the
+     * server clock is UTC and would otherwise date an evening workout to
+     * tomorrow for users behind UTC.
      */
     suspend fun runDayToday(
         programId: String,
