@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.api.workoutprogram;
 
 import com.gte619n.healthfitness.api.nutrition.MacrosDto;
+import com.gte619n.healthfitness.api.support.RequestTimeZone;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -165,17 +167,25 @@ public class WorkoutProgramController {
      * even after the program's scheduled window has elapsed or a day was missed.
      * Idempotent by the {@code "{date}_{dayId}"} id: re-running the same day on
      * the same date returns the existing session.
+     *
+     * <p>"Today" is the caller's <em>local</em> day, derived from the
+     * {@code X-Timezone} header — the server clock is UTC in production, so
+     * defaulting to it would date an evening workout to tomorrow for users
+     * behind UTC. An explicit {@code body.date()} still wins.
      */
     @PostMapping("/{programId}/sessions")
     public ScheduledWorkoutResponse runDay(
         @PathVariable String programId,
-        @RequestBody RunDayRequest body
+        @RequestBody RunDayRequest body,
+        @RequestHeader(value = RequestTimeZone.HEADER, required = false) String timezone
     ) {
         String userId = currentUser.get().userId();
         if (service.findById(userId, programId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        LocalDate date = body.date() != null ? body.date() : LocalDate.now();
+        LocalDate date = body.date() != null
+            ? body.date()
+            : LocalDate.now(RequestTimeZone.resolve(timezone));
         ScheduledWorkout created;
         try {
             created = schedule.materializeOne(userId, programId, body.phaseId(), body.dayId(), date);

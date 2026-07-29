@@ -62,9 +62,6 @@ class WorkoutProgramRepository @Inject internal constructor(
     private val moshi: Moshi,
 ) {
 
-    /** The device's local calendar day; overridable so tests are deterministic. */
-    var today: () -> LocalDate = { LocalDate.now() }
-
     private val listAdapter = moshi.adapter(WorkoutProgramDto::class.java)
     private val deepAdapter = moshi.adapter(WorkoutProgramDeepDto::class.java)
     private val scheduledAdapter = moshi.adapter(ScheduledWorkoutDto::class.java)
@@ -273,9 +270,10 @@ class WorkoutProgramRepository @Inject internal constructor(
      * path picks it up without waiting for a sync. Online-only (the session is
      * created server-side): offline surfaces a clear, actionable message.
      *
-     * "Today" is the device's local calendar day ([LocalDate.now]) — sent
-     * explicitly rather than letting the server default it, whose clock is UTC
-     * and would date an evening workout to tomorrow for users behind UTC.
+     * "Today" is the device's local calendar day, resolved server-side from the
+     * `X-Timezone` header (see TimeZoneInterceptor / RequestTimeZone) — the
+     * server clock is UTC and would otherwise date an evening workout to
+     * tomorrow for users behind UTC.
      */
     suspend fun runDayToday(
         programId: String,
@@ -285,10 +283,7 @@ class WorkoutProgramRepository @Inject internal constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 val dto = try {
-                    api.runDay(
-                        programId,
-                        RunDayRequest(phaseId = phaseId, dayId = dayId, date = today()),
-                    )
+                    api.runDay(programId, RunDayRequest(phaseId = phaseId, dayId = dayId))
                 } catch (e: IOException) {
                     throw IllegalStateException(
                         "Connect to the internet once to start this workout.",

@@ -211,27 +211,22 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
-    fun `runDayToday materializes on the device-local day and mirrors the returned row`() = runBlocking {
-        // Pin "today" so the request carries the device's local date rather than
-        // letting the server default it in UTC (which dates an evening workout to
-        // tomorrow for users behind UTC).
-        val localToday = java.time.LocalDate.parse("2026-07-28")
-        repo.today = { localToday }
+    fun `runDayToday materializes the session and mirrors the returned row`() = runBlocking {
         val dto = ScheduledWorkoutDto(
             scheduledId = "2026-07-28_d1",
-            date = localToday,
+            date = java.time.LocalDate.parse("2026-07-28"),
             phaseId = "ph1", dayId = "d1", dayLabel = "Lower A", status = "PLANNED",
         )
-        val expected = RunDayRequest(phaseId = "ph1", dayId = "d1", date = localToday)
-        coEvery { api.runDay("p1", expected) } returns dto
+        // No date in the request: the server resolves "today" from the
+        // X-Timezone header (TimeZoneInterceptor / RequestTimeZone).
+        coEvery { api.runDay("p1", RunDayRequest(phaseId = "ph1", dayId = "d1")) } returns dto
 
         val scheduledId = repo.runDayToday("p1", "ph1", "d1").getOrThrow()
 
         assertEquals("2026-07-28_d1", scheduledId)
         // The new row is mirrored so start()/calendars see it without a sync.
         coVerify(exactly = 1) { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, any()) }
-        // The local date must be sent explicitly (not null → server UTC default).
-        coVerify(exactly = 1) { api.runDay("p1", expected) }
+        coVerify(exactly = 1) { api.runDay("p1", RunDayRequest(phaseId = "ph1", dayId = "d1")) }
     }
 
     @Test
