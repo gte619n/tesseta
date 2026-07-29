@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/ui/Providers";
 import { IconFonts } from "@/components/ui/IconFonts";
+import { TimezoneCookie } from "@/components/TimezoneCookie";
 
 const instrumentSans = Instrument_Sans({
   subsets: ["latin"],
@@ -51,6 +52,7 @@ export default function RootLayout({
         <IconFonts />
       </head>
       <body className="font-sans antialiased bg-canvas text-primary">
+        <TimezoneCookie />
         <Providers>{children}</Providers>
       </body>
     </html>
