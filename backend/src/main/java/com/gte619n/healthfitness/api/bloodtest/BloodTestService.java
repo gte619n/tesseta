@@ -76,29 +76,43 @@ public class BloodTestService {
                 dup.reportId());
         }
 
-        onPhase.accept("uploading");
-        String reportId = UUID.randomUUID().toString();
-        String pdfPath = pdfStorage.upload(userId, reportId, pdfBytes);
+        // The findByContentHash check above and the save below straddle a slow
+        // Gemini call, so identical bytes uploaded concurrently (e.g. a client
+        // retry storm) would each pass the check and all persist. Reserve the
+        // content hash atomically: only one caller wins, the rest are rejected
+        // before any GCS/Gemini spend. Released in the finally so a genuine
+        // retry after a transient failure isn't permanently blocked.
+        if (!reports.tryReserveContentHash(userId, contentHash)) {
+            throw new BloodTestDuplicateException(
+                "This blood test report is already being uploaded.", null);
+        }
+        try {
+            onPhase.accept("uploading");
+            String reportId = UUID.randomUUID().toString();
+            String pdfPath = pdfStorage.upload(userId, reportId, pdfBytes);
 
-        onPhase.accept("extracting");
-        BloodTestExtraction extracted = extractor.extract(pdfBytes);
+            onPhase.accept("extracting");
+            BloodTestExtraction extracted = extractor.extract(pdfBytes);
 
-        onPhase.accept("saving");
-        BloodTestReport report = new BloodTestReport(
-            userId,
-            reportId,
-            extracted.sampleDate(),
-            extracted.labSource(),
-            pdfPath,
-            contentHash,
-            extracted.markers(),
-            Instant.now(),
-            Instant.now()
-        );
-        reports.save(report);
-        // Publish after save; panel may contain multiple Goal-tracked markers.
-        metricChangedPublisher.publishAll(userId, metricKeysForMarkers(report.markers()));
-        return report;
+            onPhase.accept("saving");
+            BloodTestReport report = new BloodTestReport(
+                userId,
+                reportId,
+                extracted.sampleDate(),
+                extracted.labSource(),
+                pdfPath,
+                contentHash,
+                extracted.markers(),
+                Instant.now(),
+                Instant.now()
+            );
+            reports.save(report);
+            // Publish after save; panel may contain multiple Goal-tracked markers.
+            metricChangedPublisher.publishAll(userId, metricKeysForMarkers(report.markers()));
+            return report;
+        } finally {
+            reports.releaseContentHash(userId, contentHash);
+        }
     }
 
     public List<BloodTestReport> findAllByUserId(String userId) {
