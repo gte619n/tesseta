@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
@@ -63,11 +64,24 @@ export async function apiFetch(
   const method = (init.method ?? "GET").toUpperCase();
   const cacheMode: RequestCache =
     init.cache ?? (READ_METHODS.has(method) ? "default" : "no-store");
+  // Forward the browser's IANA zone (recorded in the `tz` cookie by
+  // <TimezoneCookie/>) so the backend resolves the user's local "today"
+  // rather than this server's UTC clock. Absent on the very first request
+  // before the cookie is set; the backend falls back to its own zone.
+  // cookies() throws outside a request scope (e.g. prerender, unit tests) —
+  // treat that the same as "no tz" rather than failing the fetch.
+  let tz: string | undefined;
+  try {
+    tz = (await cookies()).get("tz")?.value;
+  } catch {
+    tz = undefined;
+  }
   return fetch(url, {
     ...init,
     headers: {
       ...init.headers,
       Authorization: `Bearer ${session.idToken}`,
+      ...(tz ? { "X-Timezone": decodeURIComponent(tz) } : {}),
     },
     cache: cacheMode,
   });
