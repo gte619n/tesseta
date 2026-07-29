@@ -17,6 +17,7 @@
     <string name="workout_session_add_set">Add set</string>
     <string name="workout_session_overview">Workout overview</string>
     <string name="workout_session_next">Next</string>
+    <string name="workout_session_previous">Back</string>
     <string name="workout_session_hold_start">Start hold</string>
     <string name="workout_session_hold_stop">Stop · %1$s</string>
     <string name="workout_session_hold_target">Target %1$s</string>
