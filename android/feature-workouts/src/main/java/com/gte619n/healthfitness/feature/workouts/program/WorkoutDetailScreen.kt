@@ -13,11 +13,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
@@ -92,10 +96,27 @@ fun WorkoutDetailScreen(
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
         val day = state.day
+        val canStart = day != null && day.blocks.any { it.prescriptions.isNotEmpty() }
         HfScreenHeader(
             title = day?.label?.ifBlank { dayOfWeekLabel(day.dayOfWeek) } ?: "Workout",
             subtitle = state.phaseTitle ?: state.programTitle,
             onBack = onBack,
+            trailing = if (canStart) {
+                {
+                    // Start this workout "as today" right from the header — the
+                    // always-visible twin of the sticky bar below.
+                    Icon(
+                        imageVector = Icons.Outlined.PlayCircle,
+                        contentDescription = "Start workout now",
+                        tint = if (state.starting) Hf.colors.muted else Hf.colors.accent,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clickable(enabled = !state.starting) { onStartToday() },
+                    )
+                }
+            } else {
+                null
+            },
         )
         when {
             state.loading -> LoadingState(Modifier.fillMaxSize())
@@ -113,7 +134,7 @@ fun WorkoutDetailScreen(
         }
         // Run this workout "as today" from any program day — the primary action
         // once a session-log flow is possible (a day with exercises to log).
-        if (day != null && day.blocks.any { it.prescriptions.isNotEmpty() }) {
+        if (canStart) {
             StartTodayBar(
                 starting = state.starting,
                 error = state.error,
