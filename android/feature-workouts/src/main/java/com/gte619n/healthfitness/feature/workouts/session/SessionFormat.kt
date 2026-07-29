@@ -32,15 +32,41 @@ fun WorkoutSessionDraft.sessionSteps(): List<SessionStep> {
 }
 
 /**
- * Index of the first exercise that still has unlogged prescribed sets — where
- * the coach should open (and re-open on resume). Falls back to 0 when every
- * exercise is complete or there are none.
+ * Index of the first exercise that still has unlogged prescribed sets. Falls
+ * back to 0 when every exercise is complete or there are none.
  */
 fun WorkoutSessionDraft.firstIncompleteStepIndex(): Int {
     val idx = sessionSteps().indexOfFirst { step ->
         (logged[step.key]?.size ?: 0) < (step.prescription.sets ?: 1)
     }
     return if (idx >= 0) idx else 0
+}
+
+/**
+ * Where the coach should (re)open — used as the pager's initial page whenever the
+ * screen is recreated (resume from the notification, process death, config
+ * change). Unlike [firstIncompleteStepIndex], this never jumps *backward* past
+ * exercises you've already worked: it resumes at the first exercise with sets
+ * still to do, searching from the furthest exercise you've logged anything in.
+ *
+ * That distinction is the fix for the "resume sends me back to the warmup" bug:
+ * the "Next" control advances the pager without logging, so a mobility/stretch
+ * you did but didn't log stays "incomplete" — and [firstIncompleteStepIndex]
+ * would drag focus back to it on every resume, even though you're mid-way
+ * through the lifts. Here a skipped-but-passed step is left behind. With nothing
+ * logged yet we open at the top.
+ */
+fun WorkoutSessionDraft.resumeStepIndex(): Int {
+    val steps = sessionSteps()
+    if (steps.isEmpty()) return 0
+    val furthestTouched = steps.indexOfLast { step -> (logged[step.key]?.size ?: 0) > 0 }
+    if (furthestTouched < 0) return 0
+    val next = (furthestTouched until steps.size).firstOrNull { i ->
+        (logged[steps[i].key]?.size ?: 0) < (steps[i].prescription.sets ?: 1)
+    }
+    // Everything from here on is done → stay on the last exercise you touched
+    // (the finish flow takes over).
+    return next ?: furthestTouched
 }
 
 /**

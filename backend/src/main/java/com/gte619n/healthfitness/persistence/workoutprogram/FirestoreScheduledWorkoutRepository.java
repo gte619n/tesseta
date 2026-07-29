@@ -33,6 +33,17 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
     /** Firestore commits at most 500 writes per batch. */
     private static final int MAX_BATCH = 500;
 
+    /**
+     * Bounds of a storable {@code date} string ("YYYY-MM-DD"). {@code date} is
+     * compared lexicographically, and {@link LocalDate#MIN}/{@link LocalDate#MAX}
+     * stringify to signed 9-digit years ("-999999999-…" / "+999999999-…") whose
+     * sign char sorts <em>outside</em> the digit range — so using them as string
+     * bounds excludes every real date. Callers pass MIN/MAX to mean "unbounded";
+     * we detect that here and drop the offending range clause instead.
+     */
+    private static final LocalDate MIN_STORABLE_DATE = LocalDate.of(1, 1, 1);
+    private static final LocalDate MAX_STORABLE_DATE = LocalDate.of(9999, 12, 31);
+
     private final Firestore firestore;
 
     public FirestoreScheduledWorkoutRepository(Firestore firestore) {
@@ -47,9 +58,17 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
 
     @Override
     public List<ScheduledWorkout> findByProgram(String userId, String programId, LocalDate from, LocalDate to) {
-        List<QueryDocumentSnapshot> docs = await(collection(userId, programId)
-            .whereGreaterThanOrEqualTo("date", from.toString())
-            .whereLessThanOrEqualTo("date", to.toString())
+        // MIN/MAX sentinels mean "unbounded" — applying them as string bounds
+        // would exclude every real date (see MIN_STORABLE_DATE), so drop the
+        // clause instead. Real date ranges (the weekly calendar) are unaffected.
+        Query query = collection(userId, programId);
+        if (!from.isBefore(MIN_STORABLE_DATE)) {
+            query = query.whereGreaterThanOrEqualTo("date", from.toString());
+        }
+        if (!to.isAfter(MAX_STORABLE_DATE)) {
+            query = query.whereLessThanOrEqualTo("date", to.toString());
+        }
+        List<QueryDocumentSnapshot> docs = await(query
             .orderBy("date", Query.Direction.ASCENDING)
             .get()).getDocuments();
         return docs.stream().map(d -> toScheduled(userId, programId, d)).toList();

@@ -106,6 +106,34 @@ class SessionFormatTest {
     }
 
     @Test
+    fun `resume opens at the furthest exercise, not a skipped earlier one`() {
+        // Nothing logged yet -> open at the top.
+        assertEquals(0, ProgramFixtures.activeDraft.copy(logged = emptyMap()).resumeStepIndex())
+
+        // The fixture is squat (index 0, 3 sets) then plank (index 1). Simulate
+        // passing the squat without logging it (via "Next") and starting the
+        // plank: resume must stay on the plank, not snap back to the squat.
+        val squatSkippedPlankStarted = ProgramFixtures.activeDraft.copy(
+            logged = mapOf(
+                PrescriptionKey("b-core", 0) to listOf(LoggedSet(durationSeconds = 45)),
+            ),
+        )
+        assertEquals(1, squatSkippedPlankStarted.resumeStepIndex())
+        // firstIncompleteStepIndex is the buggy behaviour we moved away from: it
+        // would drag focus back to the unlogged squat.
+        assertEquals(0, squatSkippedPlankStarted.firstIncompleteStepIndex())
+
+        // Mid-way through the furthest exercise -> resume on it.
+        val plankMidway = ProgramFixtures.activeDraft.copy(
+            logged = mapOf(
+                PrescriptionKey("b-main", 0) to List(3) { LoggedSet(weightLbs = 185.0, reps = 8) },
+                PrescriptionKey("b-core", 0) to listOf(LoggedSet(durationSeconds = 45)),
+            ),
+        )
+        assertEquals(1, plankMidway.resumeStepIndex())
+    }
+
+    @Test
     fun `session is complete only when every prescribed set is logged`() {
         val draft = ProgramFixtures.activeDraft
         // The fixture has squat (1 of 3) and plank (0 of 3) -> not complete.

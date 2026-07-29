@@ -387,7 +387,9 @@ private fun SessionBody(
         }
 
         val pagerState = rememberPagerState(
-            initialPage = remember(draft.scheduledId) { draft.firstIncompleteStepIndex() },
+            // Resume where the lifter actually is, not the first gap — a warmup
+            // they passed without logging must not drag focus back on resume.
+            initialPage = remember(draft.scheduledId) { draft.resumeStepIndex() },
             pageCount = { steps.size },
         )
         val scope = rememberCoroutineScope()
@@ -483,7 +485,10 @@ private fun SessionBody(
                 state = pagerState,
                 modifier = Modifier.weight(1f),
                 userScrollEnabled = false,
-                contentPadding = PaddingValues(horizontal = 18.dp),
+                // No contentPadding: swipe is disabled, so a horizontal inset only
+                // peeks the neighbouring exercise's card at the screen edge (which
+                // reads as a glitch). Each page fills the width; its own side margin
+                // lives in ExercisePage. pageSpacing only shows mid auto-advance.
                 pageSpacing = 12.dp,
             ) { page ->
                 val step = steps[page]
@@ -604,7 +609,9 @@ private fun ExercisePage(
             modifier = Modifier
                 .fillMaxSize()
                 .then(if (expanded) Modifier.widthIn(max = 560.dp) else Modifier)
-                .padding(vertical = 8.dp),
+                // The page's own side margin (previously the pager's contentPadding,
+                // which caused the next card to peek at the edge).
+                .padding(horizontal = 18.dp, vertical = 8.dp),
         ) {
             SectionTitle(text = BlockTypeLabels.label(step.block.type), compact = true)
             Spacer(Modifier.height(8.dp))
