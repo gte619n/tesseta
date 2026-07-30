@@ -195,9 +195,11 @@ public class SecurityConfig {
                 .requestMatchers("/.well-known/oauth-authorization-server", "/oauth/jwks.json")
                     .permitAll()
                 .requestMatchers("/oauth/token", "/oauth/revoke").permitAll()
-                // Public API documentation (ADR-0020, D16): the OpenAPI JSON and
+                // Public API documentation (ADR-0020, D16): the versioned OpenAPI
+                // doc (/openapi/v1[.yaml], served outside /v1 so this unauthenticated
+                // fetch never hits the /v1 audit/rate-limit/audience filters) and the
                 // Swagger UI for the /v1 surface.
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                .requestMatchers("/openapi/**", "/swagger-ui/**", "/swagger-ui.html")
                     .permitAll()
                 .requestMatchers("/oauth/authorize", "/oauth/authorize/consent").authenticated()
                 .requestMatchers("/oauth/userinfo").authenticated()

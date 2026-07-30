@@ -113,8 +113,11 @@ POST /oauth/token         code→tokens, refresh→tokens (rotating)
 POST /oauth/revoke        RFC 7009
 GET  /oauth/userinfo      granted user's identity
 GET  /.well-known/oauth-authorization-server   RFC 8414 discovery
-GET  /.well-known/jwks.json
+GET  /oauth/jwks.json     RS256 public keys (advertised as `jwks_uri` in discovery)
 ```
+
+The RFC 8414 metadata is the source of truth for endpoint locations: integrators
+read `jwks_uri` from it rather than hard-coding a path.
 
 Resource API, versioned under `/v1` (distinct from the app's `/api/me`), all four
 v1 domains:

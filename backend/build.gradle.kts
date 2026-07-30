@@ -103,6 +103,9 @@ tasks.test {
     // (WorkoutSeedEnrichmentPreviewTest); empty when unset so other tests
     // are unaffected.
     environment("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY") ?: "")
+    // Forward the opt-in regen flag to the forked test JVM so
+    // `-Dopenapi.update=true` reaches V1OpenApiSnapshotTest (ADR-0020, D16).
+    systemProperty("openapi.update", System.getProperty("openapi.update", "false"))
 }
 
 // Emulator-backed integration tests (Firestore repositories, transactions,

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tesseta Platform API — reference</title>
+  <meta name="description" content="Reference for the Tesseta Platform API: read-only, user-delegated third-party access to a user's Tesseta health data over OAuth 2.0 Authorization Code + PKCE." />
+  <meta name="theme-color" content="#F0EBE0" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="canonical" href="https://tesseta.com/api.html" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Tesseta" />
+  <meta property="og:title" content="Tesseta Platform API — reference" />
+  <meta property="og:description" content="Read-only, user-delegated third-party access to Tesseta health data over OAuth 2.0 Authorization Code + PKCE." />
+  <meta property="og:url" content="https://tesseta.com/api.html" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg: #F0EBE0; --ink: #1c1a17; --accent: #7a5c3e; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Inter', system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+    .api-header { border-bottom: 1px solid rgba(28,26,23,0.12); background: var(--bg); }
+    .api-header .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .api-header .brand { display: inline-flex; }
+    .api-header nav { margin-left: auto; display: flex; gap: 20px; align-items: center; font-size: 15px; }
+    .api-header nav a { color: var(--ink); text-decoration: none; }
+    .api-header nav a:hover { text-decoration: underline; }
+    .api-intro { max-width: 1180px; margin: 0 auto; padding: 28px 24px 4px; }
+    .api-intro h1 { font-family: 'Instrument Sans', sans-serif; font-weight: 600; font-size: 30px; margin: 0 0 10px; }
+    .api-intro p { font-size: 16px; line-height: 1.6; max-width: 68ch; margin: 0 0 10px; }
+    .api-intro code { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: rgba(28,26,23,0.06); padding: 1px 5px; border-radius: 4px; }
+    .api-intro a { color: var(--accent); }
+    #redoc { background: #fff; }
+  </style>
+</head>
+<body>
+  <header class="api-header">
+    <div class="wrap">
+      <a class="brand" href="/" aria-label="Tesseta home">
+        <img src="/assets/wordmark-horizontal.svg" alt="Tesseta" width="150" height="38" />
+      </a>
+      <nav aria-label="Primary">
+        <a href="/">Home</a>
+        <a href="/api/tesseta-platform-v1.yaml">openapi.yaml</a>
+        <a href="mailto:api@tesseta.com?subject=Tesseta%20API%20access">Request client credentials</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="api-intro">
+    <h1>Tesseta Platform API</h1>
+    <p>
+      Read-only, user-delegated access to a user's Tesseta data — workouts, nutrition,
+      medications &amp; adherence, labs &amp; metrics. Access is granted by the user over
+      <strong>OAuth 2.0 Authorization Code with PKCE</strong> and scoped per domain
+      (<code>workouts:read</code>, <code>labs:read</code>, …); every grant is individually revocable.
+    </p>
+    <p>
+      Bootstrap your OAuth client from the discovery document at
+      <code>/.well-known/oauth-authorization-server</code> (access tokens are RS256 JWTs;
+      validate against <code>/oauth/jwks.json</code>). Prefer to click through the flow?
+      Use the live <a href="https://api.tesseta.com/swagger-ui.html">Swagger UI</a>. The
+      machine-readable contract is <a href="/api/tesseta-platform-v1.yaml">openapi.yaml</a>
+      — pin it in your codegen.
+    </p>
+  </section>
+
+  <div id="redoc"></div>
+
+  <!-- Redoc pinned to a specific version (not "latest") so the rendered docs are reproducible. -->
+  <redoc spec-url="/api/tesseta-platform-v1.yaml"
+         hide-download-button="false"
+         expand-responses="200,201"
+         theme='{"colors":{"primary":{"main":"#7a5c3e"}},"typography":{"fontFamily":"Inter, system-ui, sans-serif","headings":{"fontFamily":"Instrument Sans, sans-serif"},"code":{"fontFamily":"JetBrains Mono, monospace"}}}'></redoc>
+  <script src="https://cdn.redoc.ly/redoc/v2.5.0/bundles/redoc.standalone.js"></script>
+</body>
+</html>
