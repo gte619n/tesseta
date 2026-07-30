@@ -74,7 +74,12 @@ steps:
       # the allowlist falls back to the application.yml default and the rest of
       # the team can't reach admin endpoints. The custom list delimiter is `|`
       # (not `@`) because the email values themselves contain `@`.
-      - --set-env-vars=^|^GCP_PROJECT_ID=$PROJECT_ID|CORS_ALLOWED_ORIGINS=https://app.tesseta.com,https://health-fitness-web-mbysudfbja-uc.a.run.app|GOOGLE_HEALTH_KMS_KEY=projects/$PROJECT_ID/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens|FIRESTORE_DATABASE_ID=production|ADMIN_EMAILS=evan.ruff@gmail.com,evan.ruff@oxos.com|EXERCISE_MEDIA_MODEL=gemini-3-pro-image-preview
+      # PLATFORM_CONSENT_PAGE_URL (ADR-0020) is the browser-navigable consent
+      # page on the web app, advertised as `authorization_endpoint` in the RFC
+      # 8414 discovery doc. Without it, discovery falls back to the backend's
+      # bearer-only JSON /oauth/authorize, so third-party clients send the user's
+      # browser there and get a 401 (no session bearer on a raw navigation).
+      - --set-env-vars=^|^GCP_PROJECT_ID=$PROJECT_ID|CORS_ALLOWED_ORIGINS=https://app.tesseta.com,https://health-fitness-web-mbysudfbja-uc.a.run.app|GOOGLE_HEALTH_KMS_KEY=projects/$PROJECT_ID/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens|FIRESTORE_DATABASE_ID=production|ADMIN_EMAILS=evan.ruff@gmail.com,evan.ruff@oxos.com|EXERCISE_MEDIA_MODEL=gemini-3-pro-image-preview|PLATFORM_CONSENT_PAGE_URL=https://app.tesseta.com/oauth/authorize
       # OAUTH_* feed the IMPL-02 JWT audience check and the IMPL-04
       # refresh-token exchange. GOOGLE_HEALTH_WEBHOOK_SECRET is the
       # shared secret Google sends in the Authorization header on push

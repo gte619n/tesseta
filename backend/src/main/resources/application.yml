@@ -16,6 +16,12 @@ spring:
 server:
   port: ${PORT:8080}
   shutdown: graceful
+  # Behind the TLS-terminating proxy (Cloud Run), honor X-Forwarded-* so
+  # absolute URLs we build (notably the RFC 8414 discovery document's
+  # authorization/token/jwks endpoints, ADR-0020) reflect the external
+  # https:// origin instead of the internal http:// scheme. Without this,
+  # discovery advertises http:// endpoints that strict OAuth 2.1 clients reject.
+  forward-headers-strategy: framework
 
 # ADR-0020 (D16): OpenAPI/Swagger scoped to the /v1 third-party API only, so the
 # published spec never documents the first-party /api surface. The doc is served
