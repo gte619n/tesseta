@@ -32,6 +32,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import androidx.compose.ui.window.Dialog
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** Weight wheel step (lb) and ceiling. */
@@ -140,6 +142,7 @@ fun WeightPickerDialog(
     val selectedIndex by remember {
         derivedStateOf { listState.firstVisibleItemIndex.coerceIn(0, values.lastIndex) }
     }
+    val scope = rememberCoroutineScope()
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(color = Hf.colors.surface, shape = RoundedCornerShape(16.dp)) {
@@ -166,7 +169,12 @@ fun WeightPickerDialog(
                         itemsIndexed(values) { i, v ->
                             val selected = i == selectedIndex
                             Box(
-                                Modifier.fillMaxWidth().height(itemHeight),
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(itemHeight)
+                                    // Tap a value to pick it (centres it under the
+                                    // band), in addition to scrolling the wheel.
+                                    .clickable { scope.launch { listState.animateScrollToItem(i) } },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(

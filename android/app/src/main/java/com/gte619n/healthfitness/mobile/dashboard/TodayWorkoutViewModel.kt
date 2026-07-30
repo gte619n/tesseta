@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
@@ -29,6 +31,8 @@ sealed interface TodayWorkout {
         val scheduledId: String,
         val label: String?,
         val setsLogged: Int,
+        /** When the session started — the card shows live (paused-aware) elapsed. */
+        val startedAt: Instant,
     ) : TodayWorkout
 
     /**
@@ -54,9 +58,14 @@ sealed interface TodayWorkout {
 class TodayWorkoutViewModel @Inject constructor(
     private val sessionRepository: WorkoutSessionRepository,
     private val programRepository: WorkoutProgramRepository,
+    timers: WorkoutSessionTimers,
 ) : ViewModel() {
 
     private val todaySession = MutableStateFlow<TodayWorkout.Start?>(null)
+
+    /** Away-time / pause state so the card's elapsed matches the coach's (frozen while paused). */
+    val awayMillis: StateFlow<Long> = timers.awayMillis
+    val pausedSince: StateFlow<Instant?> = timers.pausedSince
 
     val state: StateFlow<TodayWorkout> =
         combine(sessionRepository.observeDrafts(), todaySession) { drafts, planned ->
@@ -70,6 +79,7 @@ class TodayWorkoutViewModel @Inject constructor(
                     scheduledId = draft.scheduledId,
                     label = draft.scheduled.dayLabel.ifBlank { null },
                     setsLogged = draft.totalLoggedSets,
+                    startedAt = draft.startedAt,
                 )
                 planned != null -> planned
                 else -> TodayWorkout.Hidden

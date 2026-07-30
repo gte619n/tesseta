@@ -103,6 +103,9 @@ class WorkoutSessionViewModel @Inject constructor(
     /** The shared rest countdown (also rendered by the foreground notification). */
     val restTimer: StateFlow<WorkoutSessionTimers.RestTimer?> = timers.rest
 
+    /** Time already spent with the coach closed — the header subtracts it from elapsed. */
+    val awayMillis: StateFlow<Long> = timers.awayMillis
+
     init {
         // Best-effort prior-performance fetch, independent of the draft load
         // below; surfaced into state so the pending row and coach cue can
@@ -285,6 +288,15 @@ class WorkoutSessionViewModel @Inject constructor(
     /** "Skip rest" — stop the shared countdown early. */
     fun dismissRest() = timers.clearRest()
 
+    /**
+     * Freeze / unfreeze the whole session when the coach is left / re-entered
+     * (IMPL-COACH). Pause banks the running rest and stops the elapsed clock;
+     * resume restores them and excludes the away-time from the workout duration.
+     */
+    fun pauseTimers() = timers.pause(programId, scheduledId)
+
+    fun resumeTimers() = timers.resume(programId, scheduledId)
+
     fun requestFinish() = _state.update { it.copy(prompt = SessionPrompt.FINISH_SUMMARY) }
 
     fun requestSkip() = _state.update { it.copy(prompt = SessionPrompt.SKIP) }
@@ -301,9 +313,9 @@ class WorkoutSessionViewModel @Inject constructor(
      */
     fun confirmFinish() {
         viewModelScope.launch {
-            repository.finish(programId, scheduledId)
+            repository.finish(programId, scheduledId, timers.awayMillis.value)
                 .onSuccess {
-                    timers.clearRest()
+                    timers.clearSession()
                     _state.update { it.copy(prompt = null, completed = true, recapLoading = true) }
                     val recap = repository.fetchRecap(programId, scheduledId)
                     _state.update { it.copy(recap = recap, recapLoading = false) }
@@ -333,7 +345,7 @@ class WorkoutSessionViewModel @Inject constructor(
         viewModelScope.launch {
             action()
                 .onSuccess {
-                    timers.clearRest()
+                    timers.clearSession()
                     _state.update { it.copy(prompt = null, closed = true) }
                 }
                 .onFailure { e ->

@@ -16,7 +16,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +33,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.Instant
 
 /**
  * The home screen's one-tap entry into the workout coach — coaching is the
@@ -45,22 +52,44 @@ fun TodayWorkoutCard(
     val vm: TodayWorkoutViewModel = hiltViewModel()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
     val state by vm.state.collectAsStateWithLifecycle()
+    val awayMillis by vm.awayMillis.collectAsStateWithLifecycle()
+    val pausedSince by vm.pausedSince.collectAsStateWithLifecycle()
 
-    val (programId, scheduledId, title, subtitle) = when (val s = state) {
-        TodayWorkout.Hidden -> return
-        is TodayWorkout.Resume -> CardModel(
-            s.programId,
-            s.scheduledId,
-            "Resume workout",
-            listOfNotNull(s.label, setsLabel(s.setsLogged)).joinToString(" · "),
-        )
+    // One-second ticker for the in-progress card's live elapsed — only runs when
+    // a workout is actually in progress. It reads frozen while the workout is
+    // paused (the coach is closed), which is the state the home screen shows.
+    var now by remember { mutableStateOf(Instant.now()) }
+    val inProgress = state is TodayWorkout.Resume
+    LaunchedEffect(inProgress) {
+        if (!inProgress) return@LaunchedEffect
+        while (true) {
+            now = Instant.now()
+            delay(1_000)
+        }
+    }
+
+    val model = when (val s = state) {
+        TodayWorkout.Hidden -> null
+        is TodayWorkout.Resume -> {
+            val away = awayMillis +
+                (pausedSince?.let { Duration.between(it, now).toMillis().coerceAtLeast(0L) } ?: 0L)
+            val elapsed = (Duration.between(s.startedAt, now).toMillis() - away).coerceAtLeast(0L) / 1000L
+            CardModel(
+                s.programId,
+                s.scheduledId,
+                "Resume workout",
+                listOfNotNull(s.label, "In progress · ${elapsedClock(elapsed)}", setsLabel(s.setsLogged))
+                    .joinToString(" · "),
+            )
+        }
         is TodayWorkout.Start -> CardModel(
             s.programId,
             s.scheduledId,
             if (s.isToday) "Start workout" else "Start next workout",
             s.label ?: if (s.isToday) "Today's session" else "Next session",
         )
-    }
+    } ?: return
+    val (programId, scheduledId, title, subtitle) = model
 
     Spacer(Modifier.height(11.dp))
     Row(
@@ -114,3 +143,12 @@ private data class CardModel(
 )
 
 private fun setsLabel(n: Int): String = if (n == 1) "1 set logged" else "$n sets logged"
+
+/** "MM:SS" / "H:MM:SS" elapsed for the in-progress card. */
+private fun elapsedClock(totalSeconds: Long): String {
+    val s = totalSeconds.coerceAtLeast(0)
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val sec = s % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+}

@@ -46,27 +46,61 @@ object WorkoutSessionNotificationContent {
         }
     }
 
-    fun from(draft: WorkoutSessionDraft, rest: RestTimer?, now: Instant): Content {
+    /**
+     * [awayMillis] is the time already spent with the coach closed (excluded
+     * from elapsed), and [pausedSince] is non-null when the session is currently
+     * paused (the coach is not in the foreground). While paused the chronometer
+     * is frozen — the notification shows a static "Paused · MM:SS" instead of a
+     * ticking clock, so it doesn't run up time the user isn't training.
+     */
+    fun from(
+        draft: WorkoutSessionDraft,
+        rest: RestTimer?,
+        now: Instant,
+        awayMillis: Long = 0L,
+        pausedSince: Instant? = null,
+    ): Content {
         val current = currentSet(draft)
-        return if (rest != null && rest.isRunning(now)) {
-            Content(
+        val next = current?.let { " · ${it.describe()}" } ?: ""
+        return when {
+            pausedSince != null -> {
+                val frozen = (pausedSince.toEpochMilli() - draft.startedAt.toEpochMilli() - awayMillis)
+                    .coerceAtLeast(0L) / 1000L
+                Content(
+                    title = draft.scheduled.dayLabel,
+                    text = "Paused · ${clockLabel(frozen)}$next",
+                    elapsedSinceMillis = null,
+                    countdownToMillis = null,
+                )
+            }
+            rest != null && rest.isRunning(now) -> Content(
                 title = draft.scheduled.dayLabel,
                 text = if (current != null) "Resting — next: ${current.describe()}" else "Resting",
                 elapsedSinceMillis = null,
                 countdownToMillis = rest.endsAt.toEpochMilli(),
             )
-        } else {
-            Content(
+            else -> Content(
                 title = draft.scheduled.dayLabel,
                 text = if (current != null) {
                     "Now: ${current.describe()}"
                 } else {
                     "All sets logged — finish when ready"
                 },
-                elapsedSinceMillis = draft.startedAt.toEpochMilli(),
+                // Anchor the count-up past the already-banked away-time so the
+                // chronometer reads the true active elapsed, not wall-clock.
+                elapsedSinceMillis = draft.startedAt.toEpochMilli() + awayMillis,
                 countdownToMillis = null,
             )
         }
+    }
+
+    /** "MM:SS" / "H:MM:SS" for the frozen paused-elapsed display. */
+    private fun clockLabel(totalSeconds: Long): String {
+        val s = totalSeconds.coerceAtLeast(0)
+        val h = s / 3600
+        val m = (s % 3600) / 60
+        val sec = s % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
     }
 
     /**
