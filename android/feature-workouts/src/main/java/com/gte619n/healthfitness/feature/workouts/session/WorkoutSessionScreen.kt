@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.workouts.session
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.ToneGenerator
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,7 +35,10 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Close
@@ -47,21 +51,26 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -73,6 +82,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
@@ -125,10 +136,24 @@ fun WorkoutSessionRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val restTimer by viewModel.restTimer.collectAsStateWithLifecycle()
+    val awayMillis by viewModel.awayMillis.collectAsStateWithLifecycle()
     val voiceEnabled by audioViewModel.voiceAnnouncements.collectAsStateWithLifecycle()
     val announcer = rememberCoachAnnouncer()
     val playCompletionChime = rememberCompletionChime()
     LaunchedEffect(state.closed) { if (state.closed) onClose() }
+
+    // "Pause the workout timers when you leave the coach": freeze the session on
+    // exit (back out, in-app navigation, or backgrounding) and resume it on
+    // return, so time spent away doesn't run up the elapsed clock or the rest
+    // countdown. Terminal exits (finish/discard) skip the pause — the session is
+    // already ending. Resume/pause are idempotent on the shared timer bus.
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.resumeTimers() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.pauseTimers() }
+    val ending by rememberUpdatedState(state.closed || state.completed)
+    DisposableEffect(Unit) {
+        viewModel.resumeTimers()
+        onDispose { if (!ending) viewModel.pauseTimers() }
+    }
 
     // "Auto complete workout": the final set just landed — chime once (and, if
     // voice is on, say so), then clear the one-shot so a recomposition doesn't
@@ -162,6 +187,7 @@ fun WorkoutSessionRoute(
     WorkoutSessionScreen(
         state = state,
         restTimer = restTimer,
+        awayMillis = awayMillis,
         voiceEnabled = voiceEnabled,
         announce = announcer::speak,
         onBack = onClose,
@@ -192,6 +218,7 @@ fun WorkoutSessionRoute(
 fun WorkoutSessionScreen(
     state: WorkoutSessionUiState,
     restTimer: RestTimer?,
+    awayMillis: Long = 0L,
     voiceEnabled: Boolean = false,
     announce: (String) -> Unit = {},
     substituteOptions: List<ExerciseSummary> = emptyList(),
@@ -240,10 +267,11 @@ fun WorkoutSessionScreen(
             title = draft?.scheduled?.dayLabel?.ifBlank { null }
                 ?: stringResource(R.string.workout_session_title),
             subtitle = draft?.let {
-                stringResource(
-                    R.string.workout_session_elapsed,
-                    elapsedLabel(Duration.between(it.startedAt, now).seconds),
-                )
+                // Elapsed excludes time the coach was closed (paused): subtract
+                // the away-time banked on the shared timer bus.
+                val activeSeconds =
+                    (Duration.between(it.startedAt, now).toMillis() - awayMillis).coerceAtLeast(0L) / 1000L
+                stringResource(R.string.workout_session_elapsed, elapsedLabel(activeSeconds))
             },
             onBack = onBack,
             trailing = if (draft?.scheduled?.session?.blocks?.isNotEmpty() == true) {
@@ -483,13 +511,13 @@ private fun SessionBody(
             // change only via the Next control, auto-advance, and the overview.
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.weight(1f),
+                // clipToBounds so a neighbouring page can never bleed past the
+                // screen edge; pageSpacing 0 + no contentPadding means only the
+                // current page is ever on screen at rest (swipe is disabled, so
+                // pages advance via Next / auto-advance, sliding cleanly).
+                modifier = Modifier.weight(1f).clipToBounds(),
                 userScrollEnabled = false,
-                // No contentPadding: swipe is disabled, so a horizontal inset only
-                // peeks the neighbouring exercise's card at the screen edge (which
-                // reads as a glitch). Each page fills the width; its own side margin
-                // lives in ExercisePage. pageSpacing only shows mid auto-advance.
-                pageSpacing = 12.dp,
+                pageSpacing = 0.dp,
             ) { page ->
                 val step = steps[page]
                 ExercisePage(
@@ -498,6 +526,8 @@ private fun SessionBody(
                     lastSets = lastSets,
                     now = now,
                     restTimer = restTimer,
+                    voiceEnabled = voiceEnabled,
+                    announce = announce,
                     substituteOptions = substituteOptions,
                     substituteLoading = substituteLoading,
                     substituteError = substituteError,
@@ -584,6 +614,8 @@ private fun ExercisePage(
     lastSets: Map<String, List<LoggedSet>>,
     now: Instant,
     restTimer: RestTimer?,
+    voiceEnabled: Boolean,
+    announce: (String) -> Unit,
     substituteOptions: List<ExerciseSummary>,
     substituteLoading: Boolean,
     substituteError: String?,
@@ -671,6 +703,8 @@ private fun ExercisePage(
                     prescription = prescription,
                     logged = logged,
                     now = now,
+                    voiceEnabled = voiceEnabled,
+                    announce = announce,
                     onToggleSet = onToggleSet,
                     onEditSet = onEditSet,
                     onLogTimed = onLogTimed,
@@ -1158,6 +1192,8 @@ private fun TimedSetsSection(
     prescription: Prescription,
     logged: List<LoggedSet>,
     now: Instant,
+    voiceEnabled: Boolean,
+    announce: (String) -> Unit,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
     onLogTimed: (Int) -> Unit,
@@ -1187,7 +1223,13 @@ private fun TimedSetsSection(
                     stringResource(R.string.workout_session_set_of, logged.size + 1, totalRows),
                     color = Hf.colors.accent,
                 )
-                HoldTimer(targetSeconds = prescription.durationSeconds, now = now, onLog = onLogTimed)
+                HoldTimer(
+                    targetSeconds = prescription.durationSeconds,
+                    now = now,
+                    voiceEnabled = voiceEnabled,
+                    announce = announce,
+                    onLog = onLogTimed,
+                )
             }
             UpcomingHint(remaining = totalRows - (logged.size + 1))
         } else {
@@ -1244,35 +1286,112 @@ private fun CompletedTimedRow(
 }
 
 /**
- * A count-up hold timer: tap to start, tap again to log the elapsed seconds as
- * the next timed set. The running start is held in `rememberSaveable` (as epoch
- * millis) so navigating away and back to this exercise — or a config change —
- * does not reset a hold that's already counting.
+ * A count-up hold timer for a timed set (stretch / mobility). Tap to start, tap
+ * again to log the elapsed seconds. Unlike a bare count-up it is *goal-aware*:
+ * it beeps (and, with voice on, speaks) at the halfway mark, at ten seconds to
+ * go, and when the prescribed hold is reached — so a stretch no longer runs past
+ * its target in silence. It keeps counting after the target so the user can hold
+ * longer, then logs whatever they held.
+ *
+ * The running anchor and any banked time are kept in `rememberSaveable` so a
+ * config change doesn't reset a hold in progress. Leaving the coach (the app is
+ * backgrounded) banks the elapsed and stops counting; returning resumes it — the
+ * "pause timers on exit" behaviour, applied to the hold.
  */
 @Composable
-private fun HoldTimer(targetSeconds: Int?, now: Instant, onLog: (Int) -> Unit) {
-    var startedAtMillis by rememberSaveable { mutableStateOf<Long?>(null) }
-    val startedAt = startedAtMillis?.let(Instant::ofEpochMilli)
-    val running = startedAt != null
-    val elapsed = startedAt?.let { Duration.between(it, now).seconds.coerceAtLeast(0) } ?: 0L
+private fun HoldTimer(
+    targetSeconds: Int?,
+    now: Instant,
+    voiceEnabled: Boolean,
+    announce: (String) -> Unit,
+    onLog: (Int) -> Unit,
+) {
+    var runningSinceMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var bankedSeconds by rememberSaveable { mutableStateOf(0L) }
+    var wasRunningBeforePause by rememberSaveable { mutableStateOf(false) }
+    val running = runningSinceMillis != null
+    val elapsed = bankedSeconds +
+        (runningSinceMillis?.let { Duration.between(Instant.ofEpochMilli(it), now).seconds.coerceAtLeast(0L) } ?: 0L)
+    val target = targetSeconds ?: 0
+    val targetReached = target > 0 && elapsed >= target
+
+    // One-shot cue flags for the current hold; reset when a fresh hold starts.
+    var firedHalf by remember { mutableStateOf(false) }
+    var firedTen by remember { mutableStateOf(false) }
+    var firedDone by remember { mutableStateOf(false) }
+    val beep = rememberCoachBeep()
+
+    // Fire the halfway / ten-seconds-left / target-reached cues as the count-up
+    // crosses each mark. Runs each tick (elapsed changes every second) while the
+    // hold is running; the flags stop any cue repeating.
+    LaunchedEffect(elapsed, running) {
+        if (!running || target <= 0) return@LaunchedEffect
+        if (!firedHalf && target >= HALF_CUE_MIN_TARGET && elapsed >= target / 2 && elapsed < target - 10) {
+            firedHalf = true
+            beep(ToneGenerator.TONE_PROP_BEEP)
+            if (voiceEnabled) announce("Halfway")
+        }
+        if (!firedTen && target >= TEN_CUE_MIN_TARGET && elapsed >= target - 10 && elapsed < target) {
+            firedTen = true
+            beep(ToneGenerator.TONE_PROP_BEEP)
+            if (voiceEnabled) announce("10 seconds left")
+        }
+        if (!firedDone && elapsed >= target) {
+            firedDone = true
+            beep(ToneGenerator.TONE_PROP_ACK)
+            if (voiceEnabled) announce("Time's up")
+        }
+    }
+
+    // Pause on exit: bank the elapsed and stop the clock when the app leaves the
+    // foreground; resume it on return. (In-app navigation disposes the page, so
+    // the hold simply starts fresh next time — no runaway either way.)
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        val since = runningSinceMillis
+        if (since != null) {
+            bankedSeconds += Duration.between(Instant.ofEpochMilli(since), Instant.now()).seconds.coerceAtLeast(0L)
+            runningSinceMillis = null
+            wasRunningBeforePause = true
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        if (wasRunningBeforePause) {
+            runningSinceMillis = Instant.now().toEpochMilli()
+            wasRunningBeforePause = false
+        }
+    }
+
     Spacer(Modifier.height(10.dp))
     Button(
         onClick = {
-            val start = startedAt
-            if (start == null) {
-                startedAtMillis = Instant.now().toEpochMilli()
+            if (running) {
+                onLog(elapsed.toInt())
+                runningSinceMillis = null
+                bankedSeconds = 0L
+                firedHalf = false; firedTen = false; firedDone = false
             } else {
-                onLog(Duration.between(start, Instant.now()).seconds.coerceAtLeast(0).toInt())
-                startedAtMillis = null
+                // Fresh start (elapsed is 0 whenever the coach is in the
+                // foreground and not running).
+                bankedSeconds = 0L
+                firedHalf = false; firedTen = false; firedDone = false
+                runningSinceMillis = Instant.now().toEpochMilli()
             }
         },
         modifier = Modifier.fillMaxWidth().height(52.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (running) Hf.colors.alert else Hf.colors.accent,
+            containerColor = when {
+                running && targetReached -> Hf.colors.good
+                running -> Hf.colors.alert
+                else -> Hf.colors.accent
+            },
         ),
     ) {
         Icon(
-            if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+            when {
+                targetReached -> Icons.Filled.CheckCircle
+                running -> Icons.Filled.Stop
+                else -> Icons.Filled.PlayArrow
+            },
             contentDescription = null,
             tint = Hf.colors.textInverse,
             modifier = Modifier.size(18.dp),
@@ -1288,15 +1407,30 @@ private fun HoldTimer(targetSeconds: Int?, now: Instant, onLog: (Int) -> Unit) {
             color = Hf.colors.textInverse,
         )
     }
-    if (!running && targetSeconds != null) {
-        Spacer(Modifier.height(4.dp))
-        Text(
-            stringResource(R.string.workout_session_hold_target, restCountdownLabel(targetSeconds.toLong())),
-            style = Hf.type.bodySm,
-            color = Hf.colors.textTertiary,
-        )
+    when {
+        running && targetReached -> {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.workout_session_hold_reached),
+                style = Hf.type.bodySm,
+                color = Hf.colors.good,
+            )
+        }
+        !running && targetSeconds != null -> {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.workout_session_hold_target, restCountdownLabel(targetSeconds.toLong())),
+                style = Hf.type.bodySm,
+                color = Hf.colors.textTertiary,
+            )
+        }
     }
 }
+
+/** Only announce "halfway" for holds this long or longer (shorter ones just get the finish cue). */
+private const val HALF_CUE_MIN_TARGET = 30
+/** Only announce "10 seconds left" for holds this long or longer. */
+private const val TEN_CUE_MIN_TARGET = 25
 
 // ---- demo strip ----
 
@@ -1500,7 +1634,12 @@ private fun OverviewRow(step: SessionStep, loggedCount: Int, onClick: () -> Unit
 
 // ---- bottom action bars ----
 
-/** Focused-mode bar: abandon, where you are in the workout, advance, or finish. */
+/**
+ * Focused-mode bar. Only the two moves you make constantly — step Back and Next
+ * — sit out on the bar (with direction icons); the whole-workout levers (Finish,
+ * Abandon) are tucked into an overflow "More" menu so they can't be hit by
+ * accident and don't crowd the navigation.
+ */
 @Composable
 private fun CoachActionsBar(
     page: Int,
@@ -1518,26 +1657,18 @@ private fun CoachActionsBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Exit-without-saving lives here so it's reachable on every page, not
-        // only from the overview list.
-        TextButton(onClick = onAbandon, contentPadding = PaddingValues(horizontal = 8.dp)) {
-            Text(
-                stringResource(R.string.workout_session_discard),
-                style = Hf.type.bodyMd,
-                color = Hf.colors.alert,
-            )
-        }
-        Text(
-            "${page + 1} / $count",
-            style = Hf.type.monoSm,
-            color = Hf.colors.textTertiary,
-        )
-        Spacer(Modifier.weight(1f))
         // Step back to a prior exercise to fix or undo an earlier set — the
         // pager is otherwise forward-only (swipe is disabled). Hidden on the
         // first page where there's nowhere to go back to.
         if (page > 0) {
-            TextButton(onClick = onPrevious, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            TextButton(onClick = onPrevious, contentPadding = PaddingValues(horizontal = 10.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = null,
+                    tint = Hf.colors.textSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(2.dp))
                 Text(
                     stringResource(R.string.workout_session_previous),
                     style = Hf.type.bodyMd,
@@ -1545,34 +1676,92 @@ private fun CoachActionsBar(
                 )
             }
         }
+        Text(
+            "${page + 1} / $count",
+            style = Hf.type.monoSm,
+            color = Hf.colors.textTertiary,
+        )
+        Spacer(Modifier.weight(1f))
+        CoachMoreMenu(onFinish = onFinish, onAbandon = onAbandon)
+        // Next auto-advances after the last set is logged, so this is the manual
+        // skip-ahead; hidden on the last exercise (finish via the More menu).
         if (!last) {
-            TextButton(onClick = onFinish) {
-                Text(
-                    stringResource(R.string.workout_session_finish),
-                    style = Hf.type.bodyMd,
-                    color = Hf.colors.textSecondary,
-                )
-            }
-            // Secondary now: logging the last set auto-advances, so Next is only
-            // a manual skip-ahead — a quiet control, not the filled primary.
-            TextButton(onClick = onNext) {
+            Button(
+                onClick = onNext,
+                colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
+                contentPadding = PaddingValues(start = 16.dp, end = 12.dp),
+            ) {
                 Text(
                     stringResource(R.string.workout_session_next),
                     style = Hf.type.bodyMd,
-                    color = Hf.colors.accent,
-                )
-            }
-        } else {
-            Button(
-                onClick = onFinish,
-                colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
-            ) {
-                Text(
-                    stringResource(R.string.workout_session_finish),
-                    style = Hf.type.bodyMd,
                     color = Hf.colors.textInverse,
                 )
+                Spacer(Modifier.width(2.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = Hf.colors.textInverse,
+                    modifier = Modifier.size(20.dp),
+                )
             }
+        }
+    }
+}
+
+/** The overflow menu holding the whole-workout actions: Finish and Abandon. */
+@Composable
+private fun CoachMoreMenu(onFinish: () -> Unit, onAbandon: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Filled.MoreVert,
+                contentDescription = stringResource(R.string.workout_session_more),
+                tint = Hf.colors.textSecondary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = Hf.colors.surface,
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.workout_session_finish),
+                        style = Hf.type.bodyMd,
+                        color = Hf.colors.textPrimary,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = Hf.colors.accent,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                onClick = { expanded = false; onFinish() },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.workout_session_discard),
+                        style = Hf.type.bodyMd,
+                        color = Hf.colors.alert,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = Hf.colors.alert,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                onClick = { expanded = false; onAbandon() },
+            )
         }
     }
 }

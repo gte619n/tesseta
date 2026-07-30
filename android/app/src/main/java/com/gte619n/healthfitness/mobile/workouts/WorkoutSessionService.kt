@@ -125,24 +125,21 @@ class WorkoutSessionService : Service() {
     private suspend fun watchActiveDraft() {
         val repo = withContext(Dispatchers.IO) { sessions.get() }
         // observeDrafts is newest-started-first; only one session is ever
-        // realistically in flight, but if two exist the newest wins.
-        // The endsAt of the last rest we saw — a *new* value means the user
-        // logged the next set, so the previous rest-end alert (if any) is stale.
-        var lastRestEndsAt: Instant? = null
-        combine(repo.observeDrafts().map { it.firstOrNull() }, restWithExpiry()) { draft, rest ->
-            draft to rest
-        }.collect { (draft, rest) ->
+        // realistically in flight, but if two exist the newest wins. Re-posts on
+        // draft edits, rest start/end, and pause/resume (so the notification
+        // freezes when the coach is left).
+        combine(
+            repo.observeDrafts().map { it.firstOrNull() },
+            restWithExpiry(),
+            timers.pausedSince,
+        ) { draft, rest, pausedSince ->
+            Triple(draft, rest, pausedSince)
+        }.collect { (draft, rest, pausedSince) ->
             if (draft == null) {
                 stopSession()
             } else {
-                // Starting the next set (a fresh rest) removes the lingering
-                // "rest complete" heads-up from the rest that just ended (#6).
-                if (rest != null && rest.endsAt != lastRestEndsAt) {
-                    NotificationManagerCompat.from(this).cancel(REST_ALERT_NOTIFICATION_ID)
-                }
-                postNotification(buildNotification(draft, rest))
+                postNotification(buildNotification(draft, rest, pausedSince))
             }
-            lastRestEndsAt = rest?.endsAt
         }
     }
 
@@ -166,14 +163,14 @@ class WorkoutSessionService : Service() {
             }
         }
 
-    /** IMPL-COACH: a rest period ran to zero — beep + buzz + a heads-up alert. */
+    /**
+     * IMPL-COACH: a rest period ran to zero — beep + buzz. There is deliberately
+     * no separate "rest complete" shade notification: the single ongoing workout
+     * notification is enough, and a second heads-up on top of it was redundant.
+     */
     private fun onRestExpired() {
         if (restBeepEnabled) beep()
         vibrate()
-        if (canPostNotifications()) {
-            NotificationManagerCompat.from(this)
-                .notify(REST_ALERT_NOTIFICATION_ID, restAlertNotification())
-        }
     }
 
     /**
@@ -189,27 +186,6 @@ class WorkoutSessionService : Service() {
         }
     }
 
-    private fun restAlertNotification(): Notification =
-        NotificationCompat.Builder(this, REST_ALERT_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_workout)
-            .setContentTitle(getString(R.string.workout_rest_alert_title))
-            .setContentText(getString(R.string.workout_rest_alert_text))
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            // A glanceable nudge, not a persistent entry beside the ongoing timer.
-            .setTimeoutAfter(REST_ALERT_TIMEOUT_MILLIS)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    this,
-                    0,
-                    Intent(this, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                ),
-            )
-            .build()
-
     /** Haptic buzz on rest end — fires even when notifications are denied. */
     private fun vibrate() {
         val pattern = longArrayOf(0, 250, 150, 250)
@@ -223,9 +199,6 @@ class WorkoutSessionService : Service() {
     }
 
     private fun stopSession() {
-        // The ongoing timer is torn down by stopForeground; the separate
-        // rest-end heads-up isn't, so clear it explicitly (#6).
-        NotificationManagerCompat.from(this).cancel(REST_ALERT_NOTIFICATION_ID)
         watchJob?.cancel()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -260,21 +233,41 @@ class WorkoutSessionService : Service() {
             .setContentTitle(getString(R.string.workout_session_notification_title))
             .build()
 
-    private fun buildNotification(draft: WorkoutSessionDraft, rest: WorkoutSessionTimers.RestTimer?): Notification {
-        val content = WorkoutSessionNotificationContent.from(draft, rest, Instant.now())
+    private fun buildNotification(
+        draft: WorkoutSessionDraft,
+        rest: WorkoutSessionTimers.RestTimer?,
+        pausedSince: Instant?,
+    ): Notification {
+        val content = WorkoutSessionNotificationContent.from(
+            draft = draft,
+            rest = rest,
+            now = Instant.now(),
+            awayMillis = timers.awayMillis.value,
+            pausedSince = pausedSince,
+        )
         return baseBuilder()
             // Tapping the ongoing notification jumps back into THIS session's
             // logger (overrides baseBuilder's generic open-app intent).
             .setContentIntent(sessionContentIntent(draft))
             .setContentTitle(content.title)
             .setContentText(content.text)
-            .setUsesChronometer(true)
             .apply {
-                if (content.countdownToMillis != null) {
-                    setChronometerCountDown(true)
-                    setWhen(content.countdownToMillis)
-                } else {
-                    setWhen(checkNotNull(content.elapsedSinceMillis))
+                when {
+                    content.countdownToMillis != null -> {
+                        setUsesChronometer(true)
+                        setChronometerCountDown(true)
+                        setWhen(content.countdownToMillis)
+                    }
+                    content.elapsedSinceMillis != null -> {
+                        setUsesChronometer(true)
+                        setWhen(content.elapsedSinceMillis)
+                    }
+                    // Paused: freeze the clock — the elapsed time is baked into
+                    // the text ("Paused · 12:34"), no live chronometer.
+                    else -> {
+                        setUsesChronometer(false)
+                        setShowWhen(false)
+                    }
                 }
             }
             .build()
@@ -317,10 +310,8 @@ class WorkoutSessionService : Service() {
             )
 
     /**
-     * Idempotent. Two channels: the LOW ongoing-timer channel (never makes a
-     * sound) and a HIGH rest-alert channel that peeks with a sound on rest end.
-     * The alert channel's own vibration is off — we vibrate manually so the buzz
-     * still fires when notifications are denied.
+     * Idempotent. One LOW-importance ongoing-timer channel that never makes a
+     * sound (the rest-end cue is a manual beep + buzz, not a notification).
      */
     private fun createChannel() {
         val manager = getSystemService(NotificationManager::class.java)
@@ -329,16 +320,7 @@ class WorkoutSessionService : Service() {
             getString(R.string.workout_session_channel_name),
             NotificationManager.IMPORTANCE_LOW,
         ).apply { description = getString(R.string.workout_session_channel_description) }
-        val restAlert = NotificationChannel(
-            REST_ALERT_CHANNEL_ID,
-            getString(R.string.workout_rest_alert_channel_name),
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = getString(R.string.workout_rest_alert_channel_description)
-            enableVibration(false)
-        }
         manager.createNotificationChannel(ongoing)
-        manager.createNotificationChannel(restAlert)
     }
 
     companion object {
@@ -347,11 +329,6 @@ class WorkoutSessionService : Service() {
 
         /** Request code for the ongoing-notification deep-link PendingIntent. */
         private const val SESSION_DEEP_LINK_REQUEST_CODE = 0x5E57
-
-        /** IMPL-COACH: HIGH-importance heads-up channel for the rest-end alert. */
-        const val REST_ALERT_CHANNEL_ID = "workout_rest_alert"
-        const val REST_ALERT_NOTIFICATION_ID = 0x5E56 // distinct from the ongoing timer
-        private const val REST_ALERT_TIMEOUT_MILLIS = 10_000L
 
         /** Rest-end beep loudness (0–100) and length. */
         private const val BEEP_VOLUME = 80

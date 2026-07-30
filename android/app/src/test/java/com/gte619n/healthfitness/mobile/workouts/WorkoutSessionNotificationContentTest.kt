@@ -165,6 +165,29 @@ class WorkoutSessionNotificationContentTest {
     }
 
     @Test
+    fun `away-time is excluded from the elapsed chronometer anchor`() {
+        // 2 minutes were spent with the coach closed — the count-up anchor is
+        // pushed forward so the chronometer reads active time, not wall-clock.
+        val content = WorkoutSessionNotificationContent.from(
+            draft(), rest = null, now = now, awayMillis = 120_000L,
+        )
+
+        assertEquals(startedAt.toEpochMilli() + 120_000L, content.elapsedSinceMillis)
+    }
+
+    @Test
+    fun `paused session freezes the clock with a static label`() {
+        // Started 10:00, paused at 10:30 -> a frozen 30:00, no live chronometer.
+        val content = WorkoutSessionNotificationContent.from(
+            draft(), rest = null, now = now.plusSeconds(600), pausedSince = now,
+        )
+
+        assertNull(content.elapsedSinceMillis)
+        assertNull(content.countdownToMillis)
+        assertEquals("Paused · 30:00 · Air Bike · Set 1 of 1", content.text)
+    }
+
+    @Test
     fun `expired rest timer falls back to workout mode`() {
         val rest = RestTimer(totalSeconds = 90, endsAt = now.minusSeconds(1))
 

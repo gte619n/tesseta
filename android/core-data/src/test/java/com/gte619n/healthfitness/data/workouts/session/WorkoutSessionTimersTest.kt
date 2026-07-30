@@ -63,4 +63,69 @@ class WorkoutSessionTimersTest {
 
         assertEquals(now.plusSeconds(130), requireNotNull(timers.rest.value).endsAt)
     }
+
+    // ---- whole-session pause (IMPL-COACH: pause on leaving the coach) --------
+
+    @Test
+    fun `pause then resume accumulates the away-time`() {
+        val timers = WorkoutSessionTimers()
+
+        timers.pause("p", "s", now)
+        assertEquals(now, timers.pausedSince.value)
+        // While paused, the away-time grows with the clock (elapsed is frozen).
+        assertEquals(5_000L, timers.awayMillisAt(now.plusSeconds(5)))
+
+        timers.resume("p", "s", now.plusSeconds(10))
+        assertNull(timers.pausedSince.value)
+        assertEquals(10_000L, timers.awayMillis.value)
+    }
+
+    @Test
+    fun `double pause is idempotent`() {
+        val timers = WorkoutSessionTimers()
+
+        timers.pause("p", "s", now)
+        timers.pause("p", "s", now.plusSeconds(5))
+
+        assertEquals(now, timers.pausedSince.value)
+    }
+
+    @Test
+    fun `pause banks a running rest and resume restores its remaining time`() {
+        val timers = WorkoutSessionTimers()
+        timers.startRest(totalSeconds = 90, now = now)
+
+        timers.pause("p", "s", now.plusSeconds(30)) // 60s remaining
+        assertNull(timers.rest.value)
+
+        timers.resume("p", "s", now.plusSeconds(50))
+        val rest = requireNotNull(timers.rest.value)
+        assertEquals(90, rest.totalSeconds)
+        assertEquals(60L, rest.remainingSeconds(now.plusSeconds(50)))
+    }
+
+    @Test
+    fun `resume for a different session drops stale away-time`() {
+        val timers = WorkoutSessionTimers()
+
+        timers.pause("p", "s", now)
+        timers.resume("p", "other", now.plusSeconds(100))
+
+        assertEquals(0L, timers.awayMillis.value)
+        assertNull(timers.pausedSince.value)
+    }
+
+    @Test
+    fun `clearSession wipes rest and pause state`() {
+        val timers = WorkoutSessionTimers()
+        timers.startRest(totalSeconds = 90, now = now)
+        timers.pause("p", "s", now)
+        timers.resume("p", "s", now.plusSeconds(5))
+
+        timers.clearSession()
+
+        assertNull(timers.rest.value)
+        assertNull(timers.pausedSince.value)
+        assertEquals(0L, timers.awayMillis.value)
+    }
 }

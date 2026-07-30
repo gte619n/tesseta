@@ -50,4 +50,75 @@ class WorkoutSessionTimers @Inject constructor() {
     fun clearRest() {
         _rest.value = null
     }
+
+    // ---- whole-session pause (IMPL-COACH: "pause timers when you leave the coach") ----
+    //
+    // Leaving the coach freezes the session: the elapsed clock stops advancing,
+    // the rest countdown is banked, and time spent away is excluded from the
+    // workout's duration. Returning resumes exactly where it left off. Pause
+    // state is process-scoped like the rest timer (the active session runs a
+    // foreground service, so the process stays alive across backgrounding /
+    // in-app navigation); it is keyed to a session so a stale pause from a
+    // finished workout can never bleed into the next one.
+
+    private val _pausedSince = MutableStateFlow<Instant?>(null)
+
+    /** Non-null while the session is paused (the instant it was paused). */
+    val pausedSince: StateFlow<Instant?> = _pausedSince.asStateFlow()
+
+    private val _awayMillis = MutableStateFlow(0L)
+
+    /** Total time already spent paused this session (completed pauses only). */
+    val awayMillis: StateFlow<Long> = _awayMillis.asStateFlow()
+
+    private var pausedKey: Pair<String, String>? = null
+    /** Rest countdown banked at pause: (original total, seconds still remaining). */
+    private var bankedRest: Pair<Int, Int>? = null
+
+    /** Freeze the session: stop the clock and bank any running rest countdown. */
+    fun pause(programId: String, scheduledId: String, now: Instant = Instant.now()) {
+        if (_pausedSince.value != null) return
+        pausedKey = programId to scheduledId
+        _pausedSince.value = now
+        _rest.value?.let { running ->
+            bankedRest = running.totalSeconds to running.remainingSeconds(now).toInt()
+            _rest.value = null
+        }
+    }
+
+    /**
+     * Resume a paused session: accumulate the away-time and restore the rest
+     * countdown (its original total, re-anchored to the seconds that were left).
+     * A resume for a *different* session (the previous one was never cleanly
+     * ended) starts fresh rather than banking a stale gap.
+     */
+    fun resume(programId: String, scheduledId: String, now: Instant = Instant.now()) {
+        val key = programId to scheduledId
+        val since = _pausedSince.value
+        when {
+            since != null && pausedKey == key -> {
+                _awayMillis.value += Duration.between(since, now).toMillis().coerceAtLeast(0L)
+                bankedRest?.let { (total, remaining) ->
+                    _rest.value = RestTimer(total, now.plusSeconds(remaining.toLong()))
+                }
+            }
+            pausedKey != null && pausedKey != key -> _awayMillis.value = 0L
+        }
+        _pausedSince.value = null
+        bankedRest = null
+        pausedKey = null
+    }
+
+    /** Away-time to exclude from elapsed at [now], including any in-progress pause. */
+    fun awayMillisAt(now: Instant): Long =
+        _awayMillis.value + (_pausedSince.value?.let { Duration.between(it, now).toMillis().coerceAtLeast(0L) } ?: 0L)
+
+    /** Clear rest + pause state when a session ends (finish / skip / discard). */
+    fun clearSession() {
+        _rest.value = null
+        _pausedSince.value = null
+        _awayMillis.value = 0L
+        pausedKey = null
+        bankedRest = null
+    }
 }
