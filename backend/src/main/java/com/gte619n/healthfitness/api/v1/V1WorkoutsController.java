@@ -11,6 +11,9 @@ import com.gte619n.healthfitness.core.workoutprogram.WorkoutDay;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -33,6 +36,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @PreAuthorize("hasAuthority('SCOPE_workouts:read')")
 @ConditionalOnProperty(name = "app.platform.enabled", havingValue = "true", matchIfMissing = true)
+@Tag(name = "Workouts", description = "Training programs and completed workout sessions "
+    + "with logged sets. Requires the `workouts:read` scope.")
 public class V1WorkoutsController {
 
     private final CurrentUserProvider currentUser;
@@ -49,10 +54,16 @@ public class V1WorkoutsController {
         this.scheduled = scheduled;
     }
 
+    @Operation(summary = "List training programs",
+        description = "Programs (the training schedule), newest first, keyset-paginated.")
     @GetMapping("/v1/programs")
     public V1Page<ProgramSummary> listPrograms(
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit,
+        @Parameter(description = "ISO-8601 instant; return only programs updated at or after "
+            + "this time (e.g. 2026-07-01T00:00:00Z). Use for incremental pulls.")
         @RequestParam(required = false) String updatedSince
     ) {
         String userId = currentUser.get().userId();
@@ -64,19 +75,28 @@ public class V1WorkoutsController {
             V1WorkoutsController::toSummary, cursor, V1Params.limit(limit));
     }
 
+    @Operation(summary = "Get one program",
+        description = "A single program with its full phase / day / block / prescription tree.")
     @GetMapping("/v1/programs/{programId}")
-    public ProgramDetail getProgram(@PathVariable String programId) {
+    public ProgramDetail getProgram(
+        @Parameter(description = "Program id.") @PathVariable String programId) {
         String userId = currentUser.get().userId();
         WorkoutProgram program = programs.findById(userId, programId)
             .orElseThrow(() -> new NoSuchElementException("program not found"));
         return toDetail(program);
     }
 
+    @Operation(summary = "List completed workouts",
+        description = "Completed sessions (training history) across all programs, newest first.")
     @GetMapping("/v1/workouts")
     public V1Page<WorkoutSummary> listWorkouts(
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit,
+        @Parameter(description = "Inclusive lower bound on session date (YYYY-MM-DD).")
         @RequestParam(required = false) String from,
+        @Parameter(description = "Inclusive upper bound on session date (YYYY-MM-DD).")
         @RequestParam(required = false) String to
     ) {
         String userId = currentUser.get().userId();
@@ -96,9 +116,13 @@ public class V1WorkoutsController {
             cursor, V1Params.limit(limit));
     }
 
+    @Operation(summary = "Get one completed workout",
+        description = "A single completed session with its logged exercises and sets.")
     @GetMapping("/v1/workouts/{programId}/{scheduledId}")
     public WorkoutDetail getWorkout(
-        @PathVariable String programId, @PathVariable String scheduledId) {
+        @Parameter(description = "Program id.") @PathVariable String programId,
+        @Parameter(description = "Scheduled-session id within the program.")
+        @PathVariable String scheduledId) {
         String userId = currentUser.get().userId();
         ScheduledWorkout session = scheduled.findById(userId, programId, scheduledId)
             .orElseThrow(() -> new NoSuchElementException("workout session not found"));

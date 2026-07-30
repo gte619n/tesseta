@@ -12,6 +12,9 @@ import com.gte619n.healthfitness.core.dexa.DexaScan;
 import com.gte619n.healthfitness.core.dexa.DexaScanRepository;
 import com.gte619n.healthfitness.core.metric.DailyMetric;
 import com.gte619n.healthfitness.core.metric.DailyMetricRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -35,6 +38,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1")
 @PreAuthorize("hasAuthority('SCOPE_labs:read')")
 @ConditionalOnProperty(name = "app.platform.enabled", havingValue = "true", matchIfMissing = true)
+@Tag(name = "Labs & metrics", description = "Blood readings, DEXA scans, body composition, "
+    + "and daily health metrics — the most sensitive slice. Requires the `labs:read` scope.")
 public class V1LabsController {
 
     private static final int MAX_RANGE_DAYS = 3660; // ~10 years of history
@@ -59,13 +64,21 @@ public class V1LabsController {
         this.dailyMetrics = dailyMetrics;
     }
 
+    @Operation(summary = "List blood readings",
+        description = "Blood marker readings, newest first, optionally filtered by marker/date.")
     @GetMapping("/labs/blood")
     public V1Page<BloodDto> bloodReadings(
+        @Parameter(description = "Filter to a single blood marker (enum name, e.g. TESTOSTERONE).")
         @RequestParam(required = false) String marker,
+        @Parameter(description = "Inclusive lower bound on sample date (YYYY-MM-DD).")
         @RequestParam(required = false) String from,
+        @Parameter(description = "Inclusive upper bound on sample date (YYYY-MM-DD).")
         @RequestParam(required = false) String to,
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit,
+        @Parameter(description = "ISO-8601 instant; return only readings updated at or after it.")
         @RequestParam(required = false) String updatedSince
     ) {
         String userId = currentUser.get().userId();
@@ -85,10 +98,15 @@ public class V1LabsController {
             BloodReading::readingId, V1LabsController::toBlood, cursor, V1Params.limit(limit));
     }
 
+    @Operation(summary = "List DEXA scans",
+        description = "DEXA scan summaries, newest first.")
     @GetMapping("/labs/dexa")
     public V1Page<DexaSummary> dexaScans(
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit,
+        @Parameter(description = "ISO-8601 instant; return only scans updated at or after it.")
         @RequestParam(required = false) String updatedSince
     ) {
         String userId = currentUser.get().userId();
@@ -102,19 +120,29 @@ public class V1LabsController {
             DexaScan::scanId, V1LabsController::toDexaSummary, cursor, V1Params.limit(limit));
     }
 
+    @Operation(summary = "Get one DEXA scan",
+        description = "A single DEXA scan with full per-region body-composition detail.")
     @GetMapping("/labs/dexa/{scanId}")
-    public DexaDetail dexaScan(@PathVariable String scanId) {
+    public DexaDetail dexaScan(
+        @Parameter(description = "DEXA scan id.") @PathVariable String scanId) {
         String userId = currentUser.get().userId();
         DexaScan scan = dexa.findById(userId, scanId)
             .orElseThrow(() -> new NoSuchElementException("dexa scan not found"));
         return toDexaDetail(scan);
     }
 
+    @Operation(summary = "List daily metrics",
+        description = "Daily steps / resting HR / sleep / HRV, newest first. Window defaults to "
+            + "the last 90 days (max ~10 years).")
     @GetMapping("/metrics/daily")
     public V1Page<DailyMetricDto> dailyMetrics(
+        @Parameter(description = "Inclusive lower bound date (YYYY-MM-DD).")
         @RequestParam(required = false) String from,
+        @Parameter(description = "Inclusive upper bound date (YYYY-MM-DD).")
         @RequestParam(required = false) String to,
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit
     ) {
         String userId = currentUser.get().userId();
@@ -127,12 +155,20 @@ public class V1LabsController {
             cursor, V1Params.limit(limit));
     }
 
+    @Operation(summary = "List body-composition measurements",
+        description = "Weight / body-fat / lean-mass measurements, newest first, optionally "
+            + "filtered by metric and a `from`/`to` instant window.")
     @GetMapping("/metrics/body-composition")
     public V1Page<BodyCompositionDto> bodyComposition(
+        @Parameter(description = "Filter to a single metric (enum name, e.g. WEIGHT, BODY_FAT).")
         @RequestParam(required = false) String metric,
+        @Parameter(description = "Inclusive lower bound sample time (ISO-8601 instant).")
         @RequestParam(required = false) String from,
+        @Parameter(description = "Inclusive upper bound sample time (ISO-8601 instant).")
         @RequestParam(required = false) String to,
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit
     ) {
         String userId = currentUser.get().userId();

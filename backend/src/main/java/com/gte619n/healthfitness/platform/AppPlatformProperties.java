@@ -41,6 +41,11 @@ public class AppPlatformProperties {
     // GET /oauth/authorize + POST /oauth/authorize/consent APIs. When blank,
     // discovery advertises the backend path directly (fine for API testing).
     private String consentPageUrl = "";
+    // Public base URL advertised as the primary OpenAPI `servers` entry (D16).
+    // Blank -> the published doc emits only a relative "/" server.
+    private String publicBaseUrl = "";
+    // Human-facing API docs page (Redoc), linked from the spec's externalDocs.
+    private String docsUrl = "";
     private Duration accessTtl = Duration.ofMinutes(15);
     private Duration refreshTtl = Duration.ofDays(60);
     private Duration codeTtl = Duration.ofMinutes(5);
@@ -109,6 +114,22 @@ public class AppPlatformProperties {
 
     public void setConsentPageUrl(String consentPageUrl) {
         this.consentPageUrl = consentPageUrl;
+    }
+
+    public String getPublicBaseUrl() {
+        return publicBaseUrl;
+    }
+
+    public void setPublicBaseUrl(String publicBaseUrl) {
+        this.publicBaseUrl = publicBaseUrl;
+    }
+
+    public String getDocsUrl() {
+        return docsUrl;
+    }
+
+    public void setDocsUrl(String docsUrl) {
+        this.docsUrl = docsUrl;
     }
 
     public Duration getAccessTtl() {

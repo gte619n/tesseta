@@ -18,11 +18,21 @@ server:
   shutdown: graceful
 
 # ADR-0020 (D16): OpenAPI/Swagger scoped to the /v1 third-party API only, so the
-# published spec never documents the first-party /api surface.
+# published spec never documents the first-party /api surface. The doc is served
+# at a stable, versioned path OUTSIDE /v1 (`/openapi/v1` JSON, `/openapi/v1.yaml`)
+# so an unauthenticated fetch never trips the /v1 audit/rate-limit/audience
+# filters, which assume a platform principal. order-by-keys + pretty-printer make
+# the generated YAML byte-stable so the committed artifact diffs cleanly and the
+# drift-gate test (V1OpenApiSnapshotTest) is deterministic.
 springdoc:
+  api-docs:
+    path: /openapi/v1
   paths-to-match: /v1/**
+  writer-with-order-by-keys: true
+  writer-with-default-pretty-printer: true
   swagger-ui:
     path: /swagger-ui.html
+    url: /openapi/v1
     oauth:
       use-pkce-with-authorization-code-grant: true
 
@@ -93,6 +103,13 @@ app:
     refresh-ttl: 60d
     code-ttl: 5m
     consent-page-url: ${PLATFORM_CONSENT_PAGE_URL:}
+    # Public base URL advertised as the primary `servers` entry in the published
+    # OpenAPI doc (D16), so an integrator's tooling targets prod out of the box.
+    # Blank -> only the relative "/" server is emitted (fine for local/testing).
+    public-base-url: ${PLATFORM_PUBLIC_BASE_URL:}
+    # Human-facing API docs (Redoc on the marketing site); linked from the spec's
+    # externalDocs and shown on Swagger UI.
+    docs-url: ${PLATFORM_DOCS_URL:https://tesseta.com/api.html}
     # /v1 rate limit (D18): Firestore-backed distributed counters.
     rate-limit-requests: ${PLATFORM_RATE_LIMIT_REQUESTS:600}
     rate-limit-window: ${PLATFORM_RATE_LIMIT_WINDOW:5m}

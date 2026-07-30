@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.api.v1;
 
 import com.gte619n.healthfitness.api.v1.CursorCodec.Position;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -9,7 +10,15 @@ import java.util.function.Function;
 
 // The uniform list envelope for every /v1 collection (ADR-0020, D5):
 // `{ data, nextCursor, hasMore }`, keyset-paginated newest-first.
-public record V1Page<T>(List<T> data, String nextCursor, boolean hasMore) {
+@Schema(description = "Keyset-paginated list envelope, newest first. To page, pass "
+    + "`nextCursor` back as the `cursor` query parameter until `hasMore` is false.")
+public record V1Page<T>(
+    @Schema(description = "The results for this page, newest first.")
+    List<T> data,
+    @Schema(description = "Opaque cursor for the next page; pass as `cursor`. Null on the last page.")
+    String nextCursor,
+    @Schema(description = "True when more results exist beyond this page.")
+    boolean hasMore) {
 
     // Sort `items` newest-first by (sortKey desc, id desc), resume after
     // `cursor`, and take `limit`. Items are mapped to the wire shape by `mapFn`

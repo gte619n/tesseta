@@ -7,6 +7,9 @@ import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetRepository;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -27,6 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/nutrition")
 @PreAuthorize("hasAuthority('SCOPE_nutrition:read')")
 @ConditionalOnProperty(name = "app.platform.enabled", havingValue = "true", matchIfMissing = true)
+@Tag(name = "Nutrition", description = "Logged food entries and daily macro totals vs "
+    + "targets. Requires the `nutrition:read` scope.")
 public class V1NutritionController {
 
     private static final int MAX_RANGE_DAYS = 92;
@@ -45,13 +50,22 @@ public class V1NutritionController {
         this.targets = targets;
     }
 
+    @Operation(summary = "List food entries",
+        description = "Logged food entries, newest first. Pass `date` for a single day, or a "
+            + "`from`/`to` window (default last 7 days, max 92).")
     @GetMapping("/entries")
     public V1Page<EntryDto> entries(
+        @Parameter(description = "Single day to fetch (YYYY-MM-DD). Overrides from/to.")
         @RequestParam(required = false) String date,
+        @Parameter(description = "Inclusive lower bound date (YYYY-MM-DD) when `date` is omitted.")
         @RequestParam(required = false) String from,
+        @Parameter(description = "Inclusive upper bound date (YYYY-MM-DD) when `date` is omitted.")
         @RequestParam(required = false) String to,
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit,
+        @Parameter(description = "ISO-8601 instant; return only entries updated at or after it.")
         @RequestParam(required = false) String updatedSince
     ) {
         String userId = currentUser.get().userId();
@@ -75,8 +89,11 @@ public class V1NutritionController {
             cursor, V1Params.limit(limit));
     }
 
+    @Operation(summary = "Get a day's nutrition totals",
+        description = "Daily macro totals for the given date alongside the active macro target.")
     @GetMapping("/days/{date}")
-    public DayResponse day(@PathVariable String date) {
+    public DayResponse day(
+        @Parameter(description = "The day to fetch (YYYY-MM-DD).") @PathVariable String date) {
         String userId = currentUser.get().userId();
         LocalDate day = V1Params.date(date);
         NutritionDailyLog log = nutrition.findByDate(userId, day)

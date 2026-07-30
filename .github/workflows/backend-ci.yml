@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'website/public/api/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'website/public/api/**'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -53,3 +55,37 @@ jobs:
           name: backend-jacoco
           path: backend/build/reports/jacoco/test/jacocoTestReport.xml
           if-no-files-found: warn
+
+  # Fail a PR that changes the published /v1 contract in a backward-incompatible
+  # way (ADR-0020, D16). The drift gate (V1OpenApiSnapshotTest, run in `build`)
+  # already guarantees the committed artifact matches the code; this compares that
+  # artifact against the base branch's and blocks removals / tightened params /
+  # incompatible type changes. Skipped on the first introduction (no base spec).
+  openapi-breaking-change:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether the base branch has a spec yet
+        id: base
+        env:
+          SPEC: website/public/api/tesseta-platform-v1.yaml
+        run: |
+          git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+          if git cat-file -e "origin/$GITHUB_BASE_REF:$SPEC" 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No spec on $GITHUB_BASE_REF yet — first introduction, nothing to diff."
+          fi
+
+      - name: Detect breaking changes in the /v1 OpenAPI spec
+        if: steps.base.outputs.exists == 'true'
+        uses: oasdiff/oasdiff-action/breaking@v0
+        with:
+          base: 'origin/${{ github.base_ref }}:website/public/api/tesseta-platform-v1.yaml'
+          revision: 'HEAD:website/public/api/tesseta-platform-v1.yaml'
+          fail-on: ERR

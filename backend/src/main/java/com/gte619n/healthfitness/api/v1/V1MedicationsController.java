@@ -12,6 +12,9 @@ import com.gte619n.healthfitness.core.medication.MedicationRepository;
 import com.gte619n.healthfitness.core.medication.MedicationStatus;
 import com.gte619n.healthfitness.core.medication.TimeSlot;
 import com.gte619n.healthfitness.core.medication.TodaysDosesService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -37,6 +40,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1")
 @PreAuthorize("hasAuthority('SCOPE_medications:read')")
 @ConditionalOnProperty(name = "app.medications.enabled", havingValue = "true", matchIfMissing = true)
+@Tag(name = "Medications", description = "Medications, schedules, today's doses, and "
+    + "adherence — the highest-value monitoring signal. Requires the `medications:read` scope.")
 public class V1MedicationsController {
 
     private static final int MAX_ADHERENCE_DAYS = 366;
@@ -61,11 +66,17 @@ public class V1MedicationsController {
         this.todaysDoses = todaysDoses;
     }
 
+    @Operation(summary = "List medications",
+        description = "The user's medications, newest first. Optionally filter by status.")
     @GetMapping("/medications")
     public V1Page<MedicationDto> listMedications(
+        @Parameter(description = "Filter by status: ACTIVE or DISCONTINUED. Omit for all.")
         @RequestParam(required = false) String status,
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit,
+        @Parameter(description = "ISO-8601 instant; return only medications updated at or after it.")
         @RequestParam(required = false) String updatedSince
     ) {
         String userId = currentUser.get().userId();
@@ -82,8 +93,11 @@ public class V1MedicationsController {
             m -> toMedication(m, drugsById), cursor, V1Params.limit(limit));
     }
 
+    @Operation(summary = "Get one medication",
+        description = "A single medication with its schedule and dosing.")
     @GetMapping("/medications/{medicationId}")
-    public MedicationDto getMedication(@PathVariable String medicationId) {
+    public MedicationDto getMedication(
+        @Parameter(description = "Medication id.") @PathVariable String medicationId) {
         String userId = currentUser.get().userId();
         Medication med = medications.findById(userId, medicationId)
             .orElseThrow(() -> new NoSuchElementException("medication not found"));
@@ -92,8 +106,12 @@ public class V1MedicationsController {
         return toMedication(med, drugsById);
     }
 
+    @Operation(summary = "List a day's doses",
+        description = "Scheduled doses for the given day (default today) with taken status.")
     @GetMapping("/doses")
-    public List<DoseDto> doses(@RequestParam(required = false) String date) {
+    public List<DoseDto> doses(
+        @Parameter(description = "The day to fetch (YYYY-MM-DD). Defaults to today.")
+        @RequestParam(required = false) String date) {
         String userId = currentUser.get().userId();
         LocalDate day = date == null || date.isBlank() ? LocalDate.now() : V1Params.date(date);
         return todaysDoses.forDate(userId, day).stream()
@@ -102,11 +120,18 @@ public class V1MedicationsController {
             .toList();
     }
 
+    @Operation(summary = "List adherence logs",
+        description = "Per-day taken/skipped adherence across all medications, newest first. "
+            + "Window defaults to the last 30 days (max 366).")
     @GetMapping("/adherence")
     public V1Page<AdherenceDto> adherence(
+        @Parameter(description = "Inclusive lower bound date (YYYY-MM-DD).")
         @RequestParam(required = false) String from,
+        @Parameter(description = "Inclusive upper bound date (YYYY-MM-DD).")
         @RequestParam(required = false) String to,
+        @Parameter(description = "Opaque pagination cursor from a prior page's `nextCursor`.")
         @RequestParam(required = false) String cursor,
+        @Parameter(description = "Max items per page (default 50, max 200).")
         @RequestParam(required = false) Integer limit
     ) {
         String userId = currentUser.get().userId();

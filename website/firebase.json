@@ -28,6 +28,13 @@
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=300" }
         ]
+      },
+      {
+        "source": "/api/*.yaml",
+        "headers": [
+          { "key": "Content-Type", "value": "application/yaml; charset=utf-8" },
+          { "key": "Cache-Control", "value": "public, max-age=300" }
+        ]
       }
     ]
   }
