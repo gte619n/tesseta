@@ -87,6 +87,11 @@ fun FoldableDashboardScreen(
                 ) { summary ->
                     BodyCompositionHero(summary = summary, weightUnit = weightUnit)
                 }
+                // Coaching card: start/resume today's session, or — once finished —
+                // a recap of what was done (volume/time/sets/calories). Renders
+                // nothing on a rest day; its own leading spacer supplies the top
+                // gap only when present, so the layout stays tight otherwise.
+                TodayWorkoutCard(onNavigate = onNavigate, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
