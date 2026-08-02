@@ -58,13 +58,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,8 +80,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
@@ -136,24 +132,10 @@ fun WorkoutSessionRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val restTimer by viewModel.restTimer.collectAsStateWithLifecycle()
-    val awayMillis by viewModel.awayMillis.collectAsStateWithLifecycle()
     val voiceEnabled by audioViewModel.voiceAnnouncements.collectAsStateWithLifecycle()
     val announcer = rememberCoachAnnouncer()
     val playCompletionChime = rememberCompletionChime()
     LaunchedEffect(state.closed) { if (state.closed) onClose() }
-
-    // "Pause the workout timers when you leave the coach": freeze the session on
-    // exit (back out, in-app navigation, or backgrounding) and resume it on
-    // return, so time spent away doesn't run up the elapsed clock or the rest
-    // countdown. Terminal exits (finish/discard) skip the pause — the session is
-    // already ending. Resume/pause are idempotent on the shared timer bus.
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.resumeTimers() }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.pauseTimers() }
-    val ending by rememberUpdatedState(state.closed || state.completed)
-    DisposableEffect(Unit) {
-        viewModel.resumeTimers()
-        onDispose { if (!ending) viewModel.pauseTimers() }
-    }
 
     // "Auto complete workout": the final set just landed — chime once (and, if
     // voice is on, say so), then clear the one-shot so a recomposition doesn't
@@ -187,7 +169,6 @@ fun WorkoutSessionRoute(
     WorkoutSessionScreen(
         state = state,
         restTimer = restTimer,
-        awayMillis = awayMillis,
         voiceEnabled = voiceEnabled,
         announce = announcer::speak,
         onBack = onClose,
@@ -218,7 +199,6 @@ fun WorkoutSessionRoute(
 fun WorkoutSessionScreen(
     state: WorkoutSessionUiState,
     restTimer: RestTimer?,
-    awayMillis: Long = 0L,
     voiceEnabled: Boolean = false,
     announce: (String) -> Unit = {},
     substituteOptions: List<ExerciseSummary> = emptyList(),
@@ -267,11 +247,9 @@ fun WorkoutSessionScreen(
             title = draft?.scheduled?.dayLabel?.ifBlank { null }
                 ?: stringResource(R.string.workout_session_title),
             subtitle = draft?.let {
-                // Elapsed excludes time the coach was closed (paused): subtract
-                // the away-time banked on the shared timer bus.
-                val activeSeconds =
-                    (Duration.between(it.startedAt, now).toMillis() - awayMillis).coerceAtLeast(0L) / 1000L
-                stringResource(R.string.workout_session_elapsed, elapsedLabel(activeSeconds))
+                val elapsedSeconds =
+                    Duration.between(it.startedAt, now).toMillis().coerceAtLeast(0L) / 1000L
+                stringResource(R.string.workout_session_elapsed, elapsedLabel(elapsedSeconds))
             },
             onBack = onBack,
             trailing = if (draft?.scheduled?.session?.blocks?.isNotEmpty() == true) {
@@ -1293,10 +1271,10 @@ private fun CompletedTimedRow(
  * its target in silence. It keeps counting after the target so the user can hold
  * longer, then logs whatever they held.
  *
- * The running anchor and any banked time are kept in `rememberSaveable` so a
- * config change doesn't reset a hold in progress. Leaving the coach (the app is
- * backgrounded) banks the elapsed and stops counting; returning resumes it — the
- * "pause timers on exit" behaviour, applied to the hold.
+ * The running anchor is kept in `rememberSaveable` so a config change doesn't
+ * reset a hold in progress. The count-up is anchored to wall-clock time, so it
+ * keeps running while the app is backgrounded or the coach is left — the hold
+ * only stops when the user logs it.
  */
 @Composable
 private fun HoldTimer(
@@ -1307,11 +1285,9 @@ private fun HoldTimer(
     onLog: (Int) -> Unit,
 ) {
     var runningSinceMillis by rememberSaveable { mutableStateOf<Long?>(null) }
-    var bankedSeconds by rememberSaveable { mutableStateOf(0L) }
-    var wasRunningBeforePause by rememberSaveable { mutableStateOf(false) }
     val running = runningSinceMillis != null
-    val elapsed = bankedSeconds +
-        (runningSinceMillis?.let { Duration.between(Instant.ofEpochMilli(it), now).seconds.coerceAtLeast(0L) } ?: 0L)
+    val elapsed =
+        runningSinceMillis?.let { Duration.between(Instant.ofEpochMilli(it), now).seconds.coerceAtLeast(0L) } ?: 0L
     val target = targetSeconds ?: 0
     val targetReached = target > 0 && elapsed >= target
 
@@ -1343,36 +1319,14 @@ private fun HoldTimer(
         }
     }
 
-    // Pause on exit: bank the elapsed and stop the clock when the app leaves the
-    // foreground; resume it on return. (In-app navigation disposes the page, so
-    // the hold simply starts fresh next time — no runaway either way.)
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        val since = runningSinceMillis
-        if (since != null) {
-            bankedSeconds += Duration.between(Instant.ofEpochMilli(since), Instant.now()).seconds.coerceAtLeast(0L)
-            runningSinceMillis = null
-            wasRunningBeforePause = true
-        }
-    }
-    LifecycleEventEffect(Lifecycle.Event.ON_START) {
-        if (wasRunningBeforePause) {
-            runningSinceMillis = Instant.now().toEpochMilli()
-            wasRunningBeforePause = false
-        }
-    }
-
     Spacer(Modifier.height(10.dp))
     Button(
         onClick = {
             if (running) {
                 onLog(elapsed.toInt())
                 runningSinceMillis = null
-                bankedSeconds = 0L
                 firedHalf = false; firedTen = false; firedDone = false
             } else {
-                // Fresh start (elapsed is 0 whenever the coach is in the
-                // foreground and not running).
-                bankedSeconds = 0L
                 firedHalf = false; firedTen = false; firedDone = false
                 runningSinceMillis = Instant.now().toEpochMilli()
             }
