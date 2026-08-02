@@ -6,7 +6,6 @@ import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
-import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,14 +57,9 @@ sealed interface TodayWorkout {
 class TodayWorkoutViewModel @Inject constructor(
     private val sessionRepository: WorkoutSessionRepository,
     private val programRepository: WorkoutProgramRepository,
-    timers: WorkoutSessionTimers,
 ) : ViewModel() {
 
     private val todaySession = MutableStateFlow<TodayWorkout.Start?>(null)
-
-    /** Away-time / pause state so the card's elapsed matches the coach's (frozen while paused). */
-    val awayMillis: StateFlow<Long> = timers.awayMillis
-    val pausedSince: StateFlow<Instant?> = timers.pausedSince
 
     val state: StateFlow<TodayWorkout> =
         combine(sessionRepository.observeDrafts(), todaySession) { drafts, planned ->

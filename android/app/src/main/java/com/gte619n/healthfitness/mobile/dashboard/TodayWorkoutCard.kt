@@ -52,12 +52,9 @@ fun TodayWorkoutCard(
     val vm: TodayWorkoutViewModel = hiltViewModel()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
     val state by vm.state.collectAsStateWithLifecycle()
-    val awayMillis by vm.awayMillis.collectAsStateWithLifecycle()
-    val pausedSince by vm.pausedSince.collectAsStateWithLifecycle()
 
     // One-second ticker for the in-progress card's live elapsed — only runs when
-    // a workout is actually in progress. It reads frozen while the workout is
-    // paused (the coach is closed), which is the state the home screen shows.
+    // a workout is actually in progress.
     var now by remember { mutableStateOf(Instant.now()) }
     val inProgress = state is TodayWorkout.Resume
     LaunchedEffect(inProgress) {
@@ -71,9 +68,7 @@ fun TodayWorkoutCard(
     val model = when (val s = state) {
         TodayWorkout.Hidden -> null
         is TodayWorkout.Resume -> {
-            val away = awayMillis +
-                (pausedSince?.let { Duration.between(it, now).toMillis().coerceAtLeast(0L) } ?: 0L)
-            val elapsed = (Duration.between(s.startedAt, now).toMillis() - away).coerceAtLeast(0L) / 1000L
+            val elapsed = Duration.between(s.startedAt, now).toMillis().coerceAtLeast(0L) / 1000L
             CardModel(
                 s.programId,
                 s.scheduledId,

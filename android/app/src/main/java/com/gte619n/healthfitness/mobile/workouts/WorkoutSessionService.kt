@@ -126,19 +126,17 @@ class WorkoutSessionService : Service() {
         val repo = withContext(Dispatchers.IO) { sessions.get() }
         // observeDrafts is newest-started-first; only one session is ever
         // realistically in flight, but if two exist the newest wins. Re-posts on
-        // draft edits, rest start/end, and pause/resume (so the notification
-        // freezes when the coach is left).
+        // draft edits and rest start/end.
         combine(
             repo.observeDrafts().map { it.firstOrNull() },
             restWithExpiry(),
-            timers.pausedSince,
-        ) { draft, rest, pausedSince ->
-            Triple(draft, rest, pausedSince)
-        }.collect { (draft, rest, pausedSince) ->
+        ) { draft, rest ->
+            draft to rest
+        }.collect { (draft, rest) ->
             if (draft == null) {
                 stopSession()
             } else {
-                postNotification(buildNotification(draft, rest, pausedSince))
+                postNotification(buildNotification(draft, rest))
             }
         }
     }
@@ -236,14 +234,11 @@ class WorkoutSessionService : Service() {
     private fun buildNotification(
         draft: WorkoutSessionDraft,
         rest: WorkoutSessionTimers.RestTimer?,
-        pausedSince: Instant?,
     ): Notification {
         val content = WorkoutSessionNotificationContent.from(
             draft = draft,
             rest = rest,
             now = Instant.now(),
-            awayMillis = timers.awayMillis.value,
-            pausedSince = pausedSince,
         )
         return baseBuilder()
             // Tapping the ongoing notification jumps back into THIS session's

@@ -209,16 +209,13 @@ class WorkoutSessionRepository(
     suspend fun finish(
         programId: String,
         scheduledId: String,
-        pausedMillis: Long = 0L,
     ): Result<Unit> =
         withContext(io) {
             runCatching {
                 val entity = draftDao.getByKey(programId, scheduledId)
                     ?: error("No active draft for $programId/$scheduledId")
                 val completedAt = Instant.ofEpochMilli(clock())
-                // Time spent with the coach closed is excluded from the recorded
-                // workout duration (IMPL-COACH: pause on exit).
-                uploadCompleted(entity, completedAt, pausedMillis)
+                uploadCompleted(entity, completedAt)
                 draftDao.delete(programId, scheduledId)
             }
         }
@@ -554,9 +551,8 @@ class WorkoutSessionRepository(
     private suspend fun uploadCompleted(
         entity: WorkoutSessionDraftEntity,
         completedAt: Instant,
-        pausedMillis: Long = 0L,
     ) {
-        val durationSeconds = ((completedAt.toEpochMilli() - entity.startedAt - pausedMillis) / 1000L)
+        val durationSeconds = ((completedAt.toEpochMilli() - entity.startedAt) / 1000L)
             .coerceAtLeast(0L)
             .toInt()
         // Attach the exercise actually performed for each slot from the draft
