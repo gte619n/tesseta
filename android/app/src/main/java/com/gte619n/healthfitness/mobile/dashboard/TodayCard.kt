@@ -141,16 +141,9 @@ fun TodayCard(
                     )
                 }
             }
-            Spacer(Modifier.height(13.dp))
-            HRule()
-            Spacer(Modifier.height(11.dp))
-            // Workouts aren't wired to a data source yet, so we say so plainly
-            // rather than showing a fabricated session.
-            Text(
-                text = "No workout data available",
-                style = Hf.type.bodySm.copy(fontSize = 12.sp),
-                color = Hf.colors.textTertiary,
-            )
+            // Completed/planned workout data lives in its own dedicated card
+            // (TodayWorkoutCard) above this nutrition card, so nothing workout-
+            // related belongs here.
         }
     }
 }
