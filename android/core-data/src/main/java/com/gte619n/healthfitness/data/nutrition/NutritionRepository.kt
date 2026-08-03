@@ -225,7 +225,7 @@ class NutritionRepository @Inject constructor(
         // AI image generation (online-only per D17): create on the network, then
         // refresh this date's mirror so the new composite entry renders from Room.
         val entry = api.addCompositeMeal(date, body)
-        fillDay(date)
+        fillDayAndSignal(date)
         return entry
     }
 
@@ -252,7 +252,7 @@ class NutritionRepository @Inject constructor(
             date,
             DescribeMealLogRequest(mealId = mealId, meal = meal),
         )
-        fillDay(date)
+        fillDayAndSignal(date)
         return entry
     }
 
@@ -268,7 +268,7 @@ class NutritionRepository @Inject constructor(
             date,
             DescribeMealLogRequest(description = description, meal = meal),
         )
-        fillDay(date)
+        fillDayAndSignal(date)
         return entry
     }
 
@@ -325,7 +325,7 @@ class NutritionRepository @Inject constructor(
         // Re-portioning a composite ingredient re-runs server-side macro math; keep
         // it on the network and refresh the mirror for the date.
         val entry = api.updateIngredient(date, entryId, index, body)
-        fillDay(date)
+        fillDayAndSignal(date)
         return entry
     }
 
@@ -357,6 +357,20 @@ class NutritionRepository @Inject constructor(
         api.getRange(from, to)
 
     // ---- mirror assembly --------------------------------------------------
+
+    /**
+     * Like [fillDay], but also emits a local-write signal so non-reactive
+     * consumers — notably the dashboard's nutrition card — refresh. Used by the
+     * network-path user logs (composite meal, saved-meal / described-meal log,
+     * ingredient re-portion) whose new entries reach the mirror via [refreshInto],
+     * which — unlike an optimistic [MirrorRepositorySupport.createLocal] — does not
+     * itself signal. Plain reads ([day]/[refreshDay]) keep calling [fillDay]
+     * directly so a background settle-poll or sync pull never triggers a refresh.
+     */
+    private suspend fun fillDayAndSignal(date: String) {
+        fillDay(date)
+        support.signalLocalWrite(MirrorTables.NUTRITION_ENTRIES)
+    }
 
     private suspend fun fillDay(date: String) {
         val day = api.getDay(date)

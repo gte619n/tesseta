@@ -181,6 +181,20 @@ class MirrorRepositorySupport @Inject constructor(
     }
 
     /**
+     * Emit a local-write signal for [table] without an accompanying optimistic
+     * mirror write. For user actions whose new state reaches the mirror via a
+     * network refresh ([refreshInto]) rather than a [createLocal]/[updateLocal] —
+     * e.g. the AI-backed nutrition logs (composite meal, describe, saved-meal log)
+     * that create server-side then re-pull the day. [refreshInto] deliberately
+     * stays silent so background sync pulls don't storm the non-reactive consumers,
+     * so the user-write method signals explicitly. Without this, the dashboard
+     * nutrition card misses the change until the next resume/TTL.
+     */
+    fun signalLocalWrite(table: String) {
+        localWriteBus.signal(table)
+    }
+
+    /**
      * Replace the mirror contents for a freshly-fetched network list. Each row is
      * stored SYNCED+clean with the supplied per-item payload + lastUpdate.
      * Does NOT touch rows that are locally dirty (a pending optimistic edit must
