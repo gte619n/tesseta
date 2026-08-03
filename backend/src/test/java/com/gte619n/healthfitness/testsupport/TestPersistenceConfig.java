@@ -173,6 +173,11 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.workoutprogram.WorkoutSettingsRepository workoutSettingsRepository() {
+        return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutSettingsRepository();
+    }
+
+    @Bean
     GoalRepository goalRepository() {
         return new InMemoryGoalRepository();
     }

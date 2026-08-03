@@ -15,9 +15,12 @@ version = "0.0.1-SNAPSHOT"
 //   netty 4.1.136.Final — CVE-2026-42583 / -33870 / -44249 (codec) + CVE-2026-59901
 //     / -55831 / -55833 / -56745 (codec-http DoS); Boot 3.5.x ships 4.1.12x.
 //   tomcat 10.1.55 — CVE-2026-41293 (CRITICAL); Boot 3.5.14 ships 10.1.54.
+//   spring-framework 6.2.19 — CVE-2026-41850 (SpEL DoS), CVE-2026-41842 (static
+//     resource DoS), CVE-2026-41845 (webmvc XSS); Boot 3.5.x ships 6.2.18.
 extra["jackson-bom.version"] = "2.21.4"
 extra["netty.version"] = "4.1.136.Final"
 extra["tomcat.version"] = "10.1.55"
+extra["spring-framework.version"] = "6.2.19"
 
 repositories {
     mavenCentral()
