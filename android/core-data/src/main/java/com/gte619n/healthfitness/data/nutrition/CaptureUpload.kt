@@ -122,7 +122,13 @@ class CaptureUploadWorker @AssistedInject constructor(
 
         return try {
             capture.captureMeal(date, meal, file.readBytes())
-            runCatching { nutrition.refreshDay(date) }
+            // Pull the server's ANALYZING placeholder into the mirror BEFORE
+            // clearing the synthetic row: the Today page reloads when the pending
+            // list shrinks, and it must find the real entry already there or the
+            // row briefly vanishes. If the refresh fails, retry the whole unit
+            // rather than removing the row into that gap — captureMeal dedupes by
+            // photo hash server-side, so the re-post returns the same entry.
+            nutrition.refreshDay(date)
             file.delete()
             store.remove(id)
             Result.success()

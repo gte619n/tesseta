@@ -512,6 +512,35 @@ public class NutritionService {
     }
 
     /**
+     * Flip a {@code FAILED} photo placeholder back to {@code ANALYZING} so its
+     * analysis can be retried from the stored photo (see
+     * {@code MealCaptureService.reanalyze}). Resets the placeholder name and
+     * re-stamps {@code createdAt} to now so the stale-analysis sweep timer
+     * restarts (otherwise the already-old timestamp would trip
+     * {@link #sweepStaleAnalyzing} on the very next read). Returns the reopened
+     * entry; throws if it isn't a retriable failed photo entry.
+     */
+    public FoodEntry reopenAnalysis(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        FoodEntry e = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        if (e.analysisStatus() != EntryAnalysisStatus.FAILED) {
+            throw new IllegalStateException("entry is not in a failed analysis state: " + entryId);
+        }
+        if (e.photoRef() == null || e.photoRef().isBlank()) {
+            throw new IllegalStateException("entry has no photo to reanalyze: " + entryId);
+        }
+        FoodEntry reopened = new FoodEntry(
+            e.userId(), e.date(), e.entryId(), e.meal(), null, "Analyzing photo…",
+            null, null, 1.0, Macros.zero(), e.photoRef(), e.contentHash(), e.source(),
+            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING,
+            Instant.now(), null);
+        entries.save(reopened);
+        return reopened;
+    }
+
+    /**
      * Self-heal orphaned photo placeholders: fail any entry that has been
      * {@code ANALYZING} longer than {@link #ANALYSIS_STALE_AFTER}. The analysis
      * runs in an in-memory task with no retry, so an instance OOM/restart/deploy

@@ -314,7 +314,11 @@ private fun LandingBody(
                     onNextMonth = onNextMonth,
                 )
                 Spacer(Modifier.height(10.dp))
-                StreakRow(streak = state.streak)
+                StreakRow(
+                    weekStreak = state.weekStreak,
+                    completedThisWeek = state.completedThisWeek,
+                    weeklyTarget = state.weeklyStreakTarget,
+                )
                 Spacer(Modifier.height(20.dp))
             }
         }
@@ -359,19 +363,35 @@ private fun IconAction(
 }
 
 @Composable
-private fun StreakRow(streak: Int) {
+private fun StreakRow(weekStreak: Int, completedThisWeek: Int, weeklyTarget: Int) {
+    val active = weekStreak > 0
+    // Primary line is the streak; the secondary line always shows this week's
+    // progress toward the target so the user knows what keeps it alive.
+    val headline = when {
+        active && weekStreak == 1 -> "1-week streak"
+        active -> "$weekStreak-week streak"
+        completedThisWeek >= weeklyTarget -> "Streak started — keep it going next week"
+        else -> "No streak yet — hit $weeklyTarget workouts this week to start one"
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Icon(
             Icons.Outlined.LocalFireDepartment,
             contentDescription = null,
-            tint = if (streak > 0) Hf.colors.accent else Hf.colors.textTertiary,
+            tint = if (active) Hf.colors.accent else Hf.colors.textTertiary,
             modifier = Modifier.size(18.dp),
         )
-        Text(
-            if (streak > 0) "$streak-day streak" else "No streak yet — log today's workout",
-            style = Hf.type.bodyMd.copy(fontSize = 13.sp),
-            color = if (streak > 0) Hf.colors.textPrimary else Hf.colors.textTertiary,
-        )
+        Column {
+            Text(
+                headline,
+                style = Hf.type.bodyMd.copy(fontSize = 13.sp),
+                color = if (active) Hf.colors.textPrimary else Hf.colors.textTertiary,
+            )
+            Text(
+                "$completedThisWeek of $weeklyTarget workouts this week",
+                style = Hf.type.capsSm,
+                color = Hf.colors.textTertiary,
+            )
+        }
     }
 }
 
@@ -407,7 +427,9 @@ private fun WorkoutsLandingPreview() {
                 program = ProgramFixtures.deepProgram,
                 thisWeek = ProgramFixtures.thisWeek,
                 monthDays = ProgramFixtures.thisWeek,
-                streak = 3,
+                weekStreak = 3,
+                completedThisWeek = 2,
+                weeklyStreakTarget = 4,
                 today = LocalDate.parse("2026-06-03"),
                 visibleMonth = java.time.YearMonth.of(2026, 6),
             ),

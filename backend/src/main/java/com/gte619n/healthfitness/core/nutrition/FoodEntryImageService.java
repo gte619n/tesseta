@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -28,17 +29,20 @@ public class FoodEntryImageService {
     private final ObjectProvider<FoodImageGenerator> generator;
     private final ObjectProvider<FoodImageStore> store;
     private final ObjectProvider<MealPhotoReader> photoReader;
+    private final SyncChangeNotifier syncNotifier;
 
     public FoodEntryImageService(
         FoodEntryRepository entries,
         ObjectProvider<FoodImageGenerator> generator,
         ObjectProvider<FoodImageStore> store,
-        ObjectProvider<MealPhotoReader> photoReader
+        ObjectProvider<MealPhotoReader> photoReader,
+        SyncChangeNotifier syncNotifier
     ) {
         this.entries = entries;
         this.generator = generator;
         this.store = store;
         this.photoReader = photoReader;
+        this.syncNotifier = syncNotifier;
     }
 
     /**
@@ -77,15 +81,30 @@ public class FoodEntryImageService {
             Optional<byte[]> image = gen.generate(mealSubject(entryId, mealName), refBytes, refMime);
             if (image.isEmpty() || image.get().length == 0) {
                 markStatus(userId, date, entryId, FoodImageStatus.FAILED, null);
+                notifyDone(userId);
                 return;
             }
             String url = storage.upload(entryId, image.get());
             markStatus(userId, date, entryId, FoodImageStatus.READY, url);
+            notifyDone(userId);
         } catch (RuntimeException e) {
             System.err.println(
                 "Composite meal image generation failed for " + entryId + ": " + e.getMessage());
             markStatus(userId, date, entryId, FoodImageStatus.FAILED, null);
+            notifyDone(userId);
         }
+    }
+
+    /**
+     * Wake the user's devices once the finished-meal image reaches a terminal
+     * state. Image generation runs well after the entry itself finalizes (which
+     * sent the only earlier push), so without this the image lands silently and
+     * the foreground screen only shows it if its short settle-poll happens to
+     * still be running — the root of "sometimes the image comes back, sometimes
+     * it doesn't". Origin is {@code null} so every device refreshes.
+     */
+    private void notifyDone(String userId) {
+        syncNotifier.changed(userId, null, "nutritionDays/entries");
     }
 
     /** A transient catalog-food subject so the plated-dish generator has a name. */

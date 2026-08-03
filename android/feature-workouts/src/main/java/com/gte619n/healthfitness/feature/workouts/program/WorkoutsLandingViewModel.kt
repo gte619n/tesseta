@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.settings.WorkoutSettingsRepository
+import com.gte619n.healthfitness.domain.workouts.WorkoutStreakSettings
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
@@ -44,8 +46,12 @@ data class WorkoutsLandingUiState(
     /** Scheduled sessions within [visibleMonth], for the compliance grid. */
     val monthDays: List<ScheduledWorkout> = emptyList(),
     val visibleMonth: YearMonth = YearMonth.now(),
-    /** Consecutive-completed-scheduled-days streak, in schedule compliance. */
-    val streak: Int = 0,
+    /** Consecutive weeks that each met [weeklyStreakTarget] completed workouts. */
+    val weekStreak: Int = 0,
+    /** Completed workouts logged so far in the current (Mon–today) week. */
+    val completedThisWeek: Int = 0,
+    /** Weekly completed-workout target that keeps the streak alive (from settings). */
+    val weeklyStreakTarget: Int = WorkoutStreakSettings.DEFAULT_WEEKLY_TARGET,
     /** Materialized sessions on/before today, newest first — the past-workouts pool. */
     val pastSessions: List<ScheduledWorkout> = emptyList(),
     val showPastSessions: Boolean = false,
@@ -66,6 +72,7 @@ data class WorkoutsLandingUiState(
 class WorkoutsLandingViewModel @Inject constructor(
     private val repository: WorkoutProgramRepository,
     private val sessionRepository: WorkoutSessionRepository,
+    private val settingsRepository: WorkoutSettingsRepository,
 ) : ViewModel() {
 
     /** Overridable in tests so the "this week" range and streak are deterministic. */
@@ -84,6 +91,10 @@ class WorkoutsLandingViewModel @Inject constructor(
 
     init {
         load()
+        // Sync the weekly streak target from the backend into the DataStore cache.
+        // The reactive [settingsRepository.weeklyStreakTarget] flow the load
+        // observes emits the fresh value once it lands, recomputing the streak.
+        viewModelScope.launch { settingsRepository.refresh() }
         // The active local draft + newest parked upload for the featured program
         // drive the Resume / recovery banners; both reactive off Room.
         viewModelScope.launch {
@@ -178,7 +189,7 @@ class WorkoutsLandingViewModel @Inject constructor(
 
     private fun load() {
         viewModelScope.launch {
-            combine(refreshToken, visibleMonth) { _, month -> month }
+            val loads = combine(refreshToken, visibleMonth) { _, month -> month }
                 .flatMapLatest { navMonth ->
                     val month = navMonth ?: YearMonth.from(today)
                     _state.update {
@@ -207,9 +218,12 @@ class WorkoutsLandingViewModel @Inject constructor(
                         .map { Result.success(it) }
                         .catch { emit(Result.failure(it)) }
                 }
-                .collect { result ->
+            // Fold in the weekly streak target so the streak recomputes both on a
+            // calendar change and on a settings change (local save or sync push).
+            combine(loads, settingsRepository.weeklyStreakTarget) { result, target -> result to target }
+                .collect { (result, target) ->
                     result
-                        .onSuccess { applyLoad(it) }
+                        .onSuccess { applyLoad(it, target) }
                         .onFailure { e ->
                             _state.update {
                                 it.copy(loading = false, error = e.message ?: "Failed to load your training")
@@ -219,7 +233,7 @@ class WorkoutsLandingViewModel @Inject constructor(
         }
     }
 
-    private fun applyLoad(data: LandingLoad) {
+    private fun applyLoad(data: LandingLoad, weeklyTarget: Int) {
         val program = data.program
         if (program == null) {
             _state.update {
@@ -230,7 +244,9 @@ class WorkoutsLandingViewModel @Inject constructor(
                     thisWeek = emptyList(),
                     monthDays = emptyList(),
                     pastSessions = emptyList(),
-                    streak = 0,
+                    weekStreak = 0,
+                    completedThisWeek = 0,
+                    weeklyStreakTarget = weeklyTarget,
                     visibleMonth = data.month,
                     error = null,
                 )
@@ -249,7 +265,9 @@ class WorkoutsLandingViewModel @Inject constructor(
                 thisWeek = cal.filter { s -> s.date in weekStart..weekEnd }.sortedBy { s -> s.date },
                 monthDays = cal.filter { s -> YearMonth.from(s.date) == data.month },
                 pastSessions = cal.filter { s -> s.date <= today }.sortedByDescending { s -> s.date },
-                streak = computeStreak(cal, today),
+                weekStreak = computeWeeklyStreak(cal, today, weeklyTarget),
+                completedThisWeek = completedThisWeek(cal, today),
+                weeklyStreakTarget = weeklyTarget,
                 error = null,
             )
         }

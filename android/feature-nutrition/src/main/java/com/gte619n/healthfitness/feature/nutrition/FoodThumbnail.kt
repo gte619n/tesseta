@@ -26,14 +26,27 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import com.gte619n.healthfitness.ui.image.ImageZoomDialog
 import com.gte619n.healthfitness.ui.theme.Hf
 
 /**
  * Thumbnail for a food's generated studio image, shared by the add-food sheet
- * and the logged-entry rows. Renders the image when READY, a spinner while the
- * image is PENDING (still generating), and a utensil placeholder for NONE /
- * FAILED / not-yet-created food (or a load error).
+ * and the logged-entry rows.
+ *
+ * One deliberate state machine so a logged meal reads as a single smooth
+ * progression instead of a pile of loaders:
+ *  - [analyzing] true → a spinner: the whole entry is still being computed
+ *    server-side (a freshly captured photo, no name/macros yet). This is the
+ *    ONLY spinner state.
+ *  - READY + url → the image, crossfaded in so it swaps calmly.
+ *  - PENDING → a quiet static placeholder (NOT a spinner): the entry's text is
+ *    already on screen; its image is merely still generating and will crossfade
+ *    in when the next refresh flips it to READY. A second spinner here was a
+ *    big part of the old "pending → loading → analysis loader" churn.
+ *  - FAILED (+ onRetry) → a tappable retry chip.
+ *  - otherwise → a utensil placeholder.
  */
 @Composable
 fun FoodThumbnail(
@@ -41,6 +54,9 @@ fun FoodThumbnail(
     imageStatus: String,
     size: Dp = 44.dp,
     zoomable: Boolean = true,
+    // True while the server is still analyzing a captured photo (no macros yet).
+    // Drives the single busy spinner; overrides the image-status states.
+    analyzing: Boolean = false,
     // IMPL-STAB (Workstream E): when set, a FAILED image renders a tappable retry
     // chip instead of a silent utensil placeholder, so a missing picture is
     // recoverable rather than permanent.
@@ -48,11 +64,26 @@ fun FoodThumbnail(
 ) {
     val shape = RoundedCornerShape(6.dp)
     when {
+        analyzing -> Box(
+            modifier = Modifier.size(size).clip(shape).background(Hf.colors.canvasSunken),
+            contentAlignment = Alignment.Center,
+        ) {
+            // The photo is still being itemized — the one place a spinner belongs.
+            CircularProgressIndicator(
+                color = Hf.colors.accent,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(size * 0.4f),
+            )
+        }
         imageStatus == "READY" && imageUrl != null -> {
             // Long-press a ready photo to open it full-screen for a closer look.
             var showZoom by remember(imageUrl) { mutableStateOf(false) }
+            val model = ImageRequest.Builder(LocalContext.current)
+                .data(imageUrl)
+                .crossfade(true)
+                .build()
             SubcomposeAsyncImage(
-                model = imageUrl,
+                model = model,
                 contentDescription = null,
                 modifier = Modifier
                     .size(size)
@@ -80,17 +111,7 @@ fun FoodThumbnail(
                 ImageZoomDialog(model = imageUrl, onDismiss = { showZoom = false })
             }
         }
-        imageStatus == "PENDING" -> Box(
-            modifier = Modifier.size(size).clip(shape).background(Hf.colors.canvasSunken),
-            contentAlignment = Alignment.Center,
-        ) {
-            // Image is generating — show a spinner so the row reads as "working".
-            CircularProgressIndicator(
-                color = Hf.colors.accent,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(size * 0.4f),
-            )
-        }
+        imageStatus == "PENDING" -> FoodThumbnailFallback(size)
         imageStatus == "FAILED" && onRetry != null -> Box(
             modifier = Modifier
                 .size(size)

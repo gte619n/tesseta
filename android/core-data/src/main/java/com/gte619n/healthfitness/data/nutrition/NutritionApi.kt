@@ -57,6 +57,14 @@ interface NutritionApi {
         @Path("entryId") entryId: String,
     ): Entry
 
+    // Retry a FAILED photo analysis from the photo stored at capture time (no
+    // re-upload). The entry flips back to ANALYZING and re-runs server-side.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/reanalyze")
+    suspend fun reanalyzeEntry(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+    ): Entry
+
     // Composite (photo-logged) meal: one entry with ingredients + a generated
     // finished-meal image.
     @POST("api/me/nutrition/{date}/composite-meal")

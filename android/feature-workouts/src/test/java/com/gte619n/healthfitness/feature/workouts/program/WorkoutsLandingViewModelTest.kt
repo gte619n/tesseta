@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.feature.workouts.program
 
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
+import com.gte619n.healthfitness.data.workouts.settings.WorkoutSettingsRepository
 import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
@@ -35,6 +36,7 @@ class WorkoutsLandingViewModelTest {
 
     private val repo: WorkoutProgramRepository = mockk()
     private val sessionRepo: WorkoutSessionRepository = mockk()
+    private val settingsRepo: WorkoutSettingsRepository = mockk(relaxed = true)
     private val drafts = MutableStateFlow<List<WorkoutSessionDraft>>(emptyList())
     private val parked = MutableStateFlow<List<ParkedCompletion>>(emptyList())
 
@@ -66,6 +68,7 @@ class WorkoutsLandingViewModelTest {
     private fun vm(
         programs: List<WorkoutProgram>,
         calendar: List<ScheduledWorkout> = emptyList(),
+        weeklyTarget: Int = 4,
     ): WorkoutsLandingViewModel {
         every { sessionRepo.observeDrafts() } returns drafts
         every { sessionRepo.observeParkedCompletions() } returns parked
@@ -75,7 +78,8 @@ class WorkoutsLandingViewModelTest {
             flowOf(programs.firstOrNull { it.programId == id })
         }
         every { repo.observeCalendar(any(), any(), any()) } returns flowOf(calendar)
-        return WorkoutsLandingViewModel(repo, sessionRepo).also { it.today = today }
+        every { settingsRepo.weeklyStreakTarget } returns flowOf(weeklyTarget)
+        return WorkoutsLandingViewModel(repo, sessionRepo, settingsRepo).also { it.today = today }
     }
 
     @Test
@@ -115,17 +119,17 @@ class WorkoutsLandingViewModelTest {
     }
 
     @Test
-    fun `slices this week, month, past and streak from one calendar`() = runTest {
+    fun `slices this week, month, past and weekly streak from one calendar`() = runTest {
         val calendar = listOf(
-            sched("2026-05-29", ScheduledStatus.COMPLETED), // previous month
-            sched("2026-06-01", ScheduledStatus.COMPLETED),
-            sched("2026-06-03", ScheduledStatus.COMPLETED),
+            sched("2026-05-29", ScheduledStatus.COMPLETED), // week -2 (05-25..05-31): 1 → short
+            sched("2026-06-01", ScheduledStatus.COMPLETED), // week -1 (06-01..06-07)
+            sched("2026-06-03", ScheduledStatus.COMPLETED), // week -1
             sched("2026-06-08", ScheduledStatus.COMPLETED), // this week (Mon)
             sched("2026-06-10", ScheduledStatus.COMPLETED), // this week (today)
-            sched("2026-06-12", ScheduledStatus.PLANNED), // this week (future)
+            sched("2026-06-12", ScheduledStatus.PLANNED), // this week (future, not completed)
         )
         val programs = listOf(program("p1", ProgramStatus.ACTIVE, "2026-05-01T00:00:00Z"))
-        val vm = vm(programs, calendar)
+        val vm = vm(programs, calendar, weeklyTarget = 2)
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -137,8 +141,11 @@ class WorkoutsLandingViewModelTest {
         // On/before today, newest first.
         assertEquals("2026-06-10", state.pastSessions.first().date.toString())
         assertEquals(5, state.pastSessions.size)
-        // Five consecutive completed scheduled days up to today.
-        assertEquals(5, state.streak)
+        // Current week (2 completed) + week -1 (2 completed) meet the target of 2;
+        // week -2 has only one, ending the streak at two weeks.
+        assertEquals(2, state.weekStreak)
+        assertEquals(2, state.completedThisWeek)
+        assertEquals(2, state.weeklyStreakTarget)
         assertEquals(YearMonth.of(2026, 6), state.visibleMonth)
     }
 

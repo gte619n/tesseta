@@ -304,6 +304,32 @@ public class NutritionController {
         return ResponseEntity.accepted().body(toResponse(refreshed));
     }
 
+    /**
+     * Retry a FAILED photo analysis from the photo stored at capture time — the
+     * user taps "retry" on the "Couldn't read photo" row and the client does not
+     * re-upload. The entry flips back to ANALYZING and the analysis re-runs
+     * async, so this returns 202 with the reopened (ANALYZING) entry; the
+     * client's settle-poll (and the completion push) swap in the result.
+     */
+    @PostMapping("/{date}/entries/{entryId}/reanalyze")
+    public ResponseEntity<EntryResponse> reanalyzeEntry(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry reopened;
+        try {
+            reopened = mealCapture.reanalyze(userId, date, entryId);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            // Not a retriable failed-photo entry, or the photo/analyzer is gone.
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return ResponseEntity.accepted().body(toResponse(reopened));
+    }
+
     // ----- Composite meal (photo-logged) -------------------------------
 
     /**

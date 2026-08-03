@@ -61,70 +61,139 @@ class ComplianceMathTest {
         assertNull(resolveActiveProgram(emptyList()))
     }
 
-    // ---- computeStreak ----
+    // ---- computeWeeklyStreak ----
+    //
+    // today = 2026-06-10 (Wednesday). Monday-start weeks:
+    //   current week : 2026-06-08 .. 06-14 (today is Wed 06-10)
+    //   week -1      : 2026-06-01 .. 06-07
+    //   week -2      : 2026-05-25 .. 05-31
 
     @Test
-    fun `computeStreak counts a run of completed days back from the latest`() {
+    fun `computeWeeklyStreak counts consecutive weeks meeting the target`() {
         val scheduled = listOf(
+            // current week: 3 completed
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-09", ScheduledStatus.COMPLETED),
+            sched("2026-06-10", ScheduledStatus.COMPLETED),
+            // week -1: 3 completed
             sched("2026-06-01", ScheduledStatus.COMPLETED),
+            sched("2026-06-02", ScheduledStatus.COMPLETED),
             sched("2026-06-03", ScheduledStatus.COMPLETED),
-            sched("2026-06-05", ScheduledStatus.COMPLETED),
+            // week -2: 3 completed
+            sched("2026-05-25", ScheduledStatus.COMPLETED),
+            sched("2026-05-26", ScheduledStatus.COMPLETED),
+            sched("2026-05-27", ScheduledStatus.COMPLETED),
         )
-        assertEquals(3, computeStreak(scheduled, today))
+        assertEquals(3, computeWeeklyStreak(scheduled, today, weeklyTarget = 3))
     }
 
     @Test
-    fun `computeStreak breaks on a past planned day`() {
+    fun `computeWeeklyStreak does not break on an in-progress current week below target`() {
         val scheduled = listOf(
+            // current week: only 1 so far — still in progress, mustn't break
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            // week -1: 3 completed
             sched("2026-06-01", ScheduledStatus.COMPLETED),
-            sched("2026-06-03", ScheduledStatus.PLANNED), // missed
-            sched("2026-06-05", ScheduledStatus.COMPLETED),
+            sched("2026-06-02", ScheduledStatus.COMPLETED),
+            sched("2026-06-03", ScheduledStatus.COMPLETED),
+            // week -2: 3 completed
+            sched("2026-05-25", ScheduledStatus.COMPLETED),
+            sched("2026-05-26", ScheduledStatus.COMPLETED),
+            sched("2026-05-27", ScheduledStatus.COMPLETED),
         )
-        // Only the latest completed day counts; the earlier planned day stops it.
-        assertEquals(1, computeStreak(scheduled, today))
+        // Current week is skipped (not yet at target) but the two prior weeks count.
+        assertEquals(2, computeWeeklyStreak(scheduled, today, weeklyTarget = 3))
     }
 
     @Test
-    fun `computeStreak breaks on a past skipped day`() {
+    fun `computeWeeklyStreak counts the current week once it meets the target`() {
         val scheduled = listOf(
-            sched("2026-06-05", ScheduledStatus.COMPLETED),
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-09", ScheduledStatus.COMPLETED),
+            sched("2026-06-01", ScheduledStatus.COMPLETED),
+            sched("2026-06-02", ScheduledStatus.COMPLETED),
+        )
+        assertEquals(2, computeWeeklyStreak(scheduled, today, weeklyTarget = 2))
+    }
+
+    @Test
+    fun `computeWeeklyStreak ends at the first past week below target`() {
+        val scheduled = listOf(
+            // current week meets target 3
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-09", ScheduledStatus.COMPLETED),
+            sched("2026-06-10", ScheduledStatus.COMPLETED),
+            // week -1: only 2 — falls short, ends the streak
+            sched("2026-06-01", ScheduledStatus.COMPLETED),
+            sched("2026-06-02", ScheduledStatus.COMPLETED),
+            // week -2 would qualify but is unreachable past the broken week
+            sched("2026-05-25", ScheduledStatus.COMPLETED),
+            sched("2026-05-26", ScheduledStatus.COMPLETED),
+            sched("2026-05-27", ScheduledStatus.COMPLETED),
+        )
+        assertEquals(1, computeWeeklyStreak(scheduled, today, weeklyTarget = 3))
+    }
+
+    @Test
+    fun `computeWeeklyStreak breaks on a week with no completed workouts`() {
+        val scheduled = listOf(
+            // current week meets target 2
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-09", ScheduledStatus.COMPLETED),
+            // week -1: nothing completed (a whole week missed)
             sched("2026-06-03", ScheduledStatus.SKIPPED),
+            // week -2 qualifies but is unreachable
+            sched("2026-05-25", ScheduledStatus.COMPLETED),
+            sched("2026-05-26", ScheduledStatus.COMPLETED),
         )
-        assertEquals(1, computeStreak(scheduled, today))
+        assertEquals(1, computeWeeklyStreak(scheduled, today, weeklyTarget = 2))
     }
 
     @Test
-    fun `computeStreak ignores future scheduled days`() {
+    fun `computeWeeklyStreak is zero when no week meets the target`() {
         val scheduled = listOf(
-            sched("2026-06-05", ScheduledStatus.COMPLETED),
-            sched("2026-06-12", ScheduledStatus.PLANNED), // future — ignored
-            sched("2026-06-15", ScheduledStatus.PLANNED),
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
         )
-        assertEquals(1, computeStreak(scheduled, today))
+        assertEquals(0, computeWeeklyStreak(scheduled, today, weeklyTarget = 3))
     }
 
     @Test
-    fun `computeStreak is zero when the latest past day is not completed`() {
+    fun `computeWeeklyStreak is zero for a non-positive target`() {
         val scheduled = listOf(
-            sched("2026-06-05", ScheduledStatus.PLANNED),
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-09", ScheduledStatus.COMPLETED),
         )
-        assertEquals(0, computeStreak(scheduled, today))
+        assertEquals(0, computeWeeklyStreak(scheduled, today, weeklyTarget = 0))
     }
 
     @Test
-    fun `computeStreak is zero for an empty calendar`() {
-        assertEquals(0, computeStreak(emptyList(), today))
+    fun `computeWeeklyStreak is zero for an empty calendar`() {
+        assertEquals(0, computeWeeklyStreak(emptyList(), today, weeklyTarget = 3))
     }
 
     @Test
-    fun `computeStreak collapses duplicate dates keeping the completed outcome`() {
-        // Two rows for the same date; the completed one is the surviving outcome.
+    fun `computeWeeklyStreak does not let duplicate dates inflate a week to target`() {
+        // Same date logged twice must count once, so this week has 2 distinct
+        // completed days — below the target of 3 — and contributes no streak.
         val scheduled = listOf(
-            sched("2026-06-05", ScheduledStatus.COMPLETED),
-            sched("2026-06-05", ScheduledStatus.COMPLETED),
-            sched("2026-06-03", ScheduledStatus.COMPLETED),
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-09", ScheduledStatus.COMPLETED),
         )
-        assertEquals(2, computeStreak(scheduled, today))
+        assertEquals(0, computeWeeklyStreak(scheduled, today, weeklyTarget = 3))
+    }
+
+    // ---- completedThisWeek ----
+
+    @Test
+    fun `completedThisWeek counts only this week's completed workouts`() {
+        val scheduled = listOf(
+            sched("2026-06-08", ScheduledStatus.COMPLETED), // this week
+            sched("2026-06-09", ScheduledStatus.COMPLETED), // this week
+            sched("2026-06-10", ScheduledStatus.PLANNED), // today, not completed
+            sched("2026-06-01", ScheduledStatus.COMPLETED), // last week — excluded
+        )
+        assertEquals(2, completedThisWeek(scheduled, today))
     }
 
     // ---- cellKind ----
