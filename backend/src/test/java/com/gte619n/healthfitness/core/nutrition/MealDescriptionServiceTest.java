@@ -190,7 +190,8 @@ class MealDescriptionServiceTest {
         final SavedMealImageService mealImages =
             new SavedMealImageService(meals, empty(), empty());
         final FoodEntryImageService entryImages =
-            new FoodEntryImageService(entries, empty(), empty(), empty());
+            new FoodEntryImageService(entries, empty(), empty(), empty(),
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
         final MealDescriptionService svc;
 
         Fixture(MealDescriptionAnalyzer analyzer) {

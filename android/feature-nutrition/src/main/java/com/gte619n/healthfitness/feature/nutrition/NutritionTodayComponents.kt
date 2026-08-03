@@ -110,6 +110,7 @@ internal fun MealSection(
     onBounds: (Float, Float) -> Unit,
     onDeleteEntry: (String) -> Unit,
     onRetryImage: (String) -> Unit,
+    onReanalyze: (String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
     onDragStart: (Entry, Offset) -> Unit,
     onDrag: (Offset) -> Unit,
@@ -161,6 +162,7 @@ internal fun MealSection(
                         onClick = { onOpenEditSheet(entry) },
                         onDelete = { onDeleteEntry(entry.entryId) },
                         onRetryImage = { onRetryImage(entry.entryId) },
+                        onReanalyze = { onReanalyze(entry.entryId) },
                         onDragStart = onDragStart,
                         onDrag = onDrag,
                         onDragEnd = onDragEnd,
@@ -180,11 +182,15 @@ internal fun EntryRow(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onRetryImage: () -> Unit,
+    onReanalyze: () -> Unit,
     onDragStart: (Entry, Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
 ) {
+    // A photo whose analysis failed still has its captured image server-side, so
+    // tapping the row retries the analysis instead of opening the (empty) editor.
+    val failedAnalysis = entry.analysisStatus == "FAILED"
     // Track this row's window origin so drag offsets (which arrive relative to
     // the row) can be reported in window space for hit-testing meal sections.
     var rowOriginInWindow by remember { mutableStateOf(Offset.Zero) }
@@ -207,16 +213,18 @@ internal fun EntryRow(
                     onDragCancel = { onDragCancel() },
                 )
             }
-            .clickable(enabled = !pending) { onClick() },
+            .clickable(enabled = !pending) { if (failedAnalysis) onReanalyze() else onClick() },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // An entry still being analyzed shows the generating spinner; its real
-        // name/macros/image arrive via polling once the backend finishes.
+        // An entry still being analyzed shows the single busy spinner; once macros
+        // land, the row shows them immediately and the image (still generating)
+        // crossfades in on a later refresh — no second loader.
         FoodThumbnail(
             imageUrl = entry.imageUrl,
-            imageStatus = if (entry.isAnalyzing) "PENDING" else entry.imageStatus,
+            imageStatus = entry.imageStatus,
             size = 40.dp,
+            analyzing = entry.isAnalyzing,
             onRetry = onRetryImage,
         )
         Spacer(Modifier.width(10.dp))
@@ -230,7 +238,7 @@ internal fun EntryRow(
             Text(
                 when {
                     entry.isAnalyzing -> "Analyzing your photo…"
-                    entry.analysisStatus == "FAILED" -> "Couldn’t read photo · delete and retry"
+                    failedAnalysis -> "Couldn’t read photo · tap to retry"
                     else -> {
                         val qtyPrefix = if (entry.quantity != 1.0) "${formatQuantity(entry.quantity)} × " else ""
                         "$qtyPrefix${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"

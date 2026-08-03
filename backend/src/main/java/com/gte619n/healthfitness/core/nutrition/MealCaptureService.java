@@ -38,6 +38,7 @@ public class MealCaptureService {
 
     private final ObjectProvider<MealPhotoAnalyzer> mealAnalyzer;
     private final ObjectProvider<MealPhotoStore> photoStore;
+    private final ObjectProvider<MealPhotoReader> photoReader;
     private final FoodCatalogService catalog;
     private final NutritionService nutrition;
     private final FoodEntryImageService foodEntryImages;
@@ -46,6 +47,7 @@ public class MealCaptureService {
     public MealCaptureService(
         ObjectProvider<MealPhotoAnalyzer> mealAnalyzer,
         ObjectProvider<MealPhotoStore> photoStore,
+        ObjectProvider<MealPhotoReader> photoReader,
         FoodCatalogService catalog,
         NutritionService nutrition,
         FoodEntryImageService foodEntryImages,
@@ -53,10 +55,43 @@ public class MealCaptureService {
     ) {
         this.mealAnalyzer = mealAnalyzer;
         this.photoStore = photoStore;
+        this.photoReader = photoReader;
         this.catalog = catalog;
         this.nutrition = nutrition;
         this.foodEntryImages = foodEntryImages;
         this.syncNotifier = syncNotifier;
+    }
+
+    /**
+     * Retry a {@code FAILED} photo analysis from the photo already stored at
+     * capture time — the user taps "retry" on the "Couldn't read photo" row and
+     * the client doesn't re-upload. Reopens the entry to {@code ANALYZING}, reads
+     * the stored photo back, and re-runs the same analysis off-thread. Returns the
+     * reopened placeholder so the caller can respond immediately.
+     */
+    public FoodEntry reanalyze(String userId, LocalDate date, String entryId) {
+        MealPhotoAnalyzer analyzer = mealAnalyzer.getIfAvailable();
+        if (analyzer == null) {
+            throw new IllegalStateException("meal photo analysis is not available");
+        }
+        MealPhotoReader reader = photoReader.getIfAvailable();
+        if (reader == null) {
+            throw new IllegalStateException("meal photo store is not available");
+        }
+        FoodEntry entry = nutrition.findEntry(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        String photoRef = entry.photoRef();
+        if (photoRef == null || photoRef.isBlank()) {
+            throw new IllegalStateException("entry has no photo to reanalyze: " + entryId);
+        }
+        MealPhotoReader.Photo photo = reader.read(photoRef)
+            .orElseThrow(() -> new IllegalStateException("original photo is no longer available"));
+        // reopenAnalysis enforces the FAILED precondition and restarts the stale
+        // timer; only then do we kick the (idempotent) analysis.
+        FoodEntry reopened = nutrition.reopenAnalysis(userId, date, entryId);
+        CompletableFuture.runAsync(() -> analyzeAndFinalize(
+            userId, date, entryId, photo.bytes(), photo.mimeType(), photoRef, analyzer));
+        return reopened;
     }
 
     /**

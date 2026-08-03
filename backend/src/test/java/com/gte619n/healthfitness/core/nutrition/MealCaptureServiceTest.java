@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.core.nutrition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -172,6 +173,35 @@ class MealCaptureServiceTest {
             "a failed capture doesn't block re-uploading the same image to retry");
     }
 
+    @Test
+    void reanalyze_reopensAFailedPhotoEntryToAnalyzing() {
+        Fixture f = new Fixture(analyzer(new MealAnalysis(
+            "Greek yogurt", true, List.of(
+                new MealItem("Greek yogurt", 170.0,
+                    new Macros(59.0, 10.0, 3.6, 0.4, 0.0, 3.2), 0.9)))));
+        FoodEntry e = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.LUNCH, "ref://x", "hash-x");
+        f.nutrition.markAnalysisFailed(USER, DATE, e.entryId());
+        assertEquals(EntryAnalysisStatus.FAILED,
+            f.entries.findById(USER, DATE, e.entryId()).orElseThrow().analysisStatus());
+
+        FoodEntry reopened = f.svc.reanalyze(USER, DATE, e.entryId());
+
+        assertEquals(EntryAnalysisStatus.ANALYZING, reopened.analysisStatus(),
+            "retry flips the failed entry back to analyzing from the stored photo");
+        assertEquals("ref://x", reopened.photoRef(), "the stored photo ref is preserved");
+    }
+
+    @Test
+    void reanalyze_rejectsAnEntryThatDidNotFail() {
+        Fixture f = new Fixture(analyzer(new MealAnalysis(
+            "Greek yogurt", true, List.of(
+                new MealItem("Greek yogurt", 170.0,
+                    new Macros(59.0, 10.0, 3.6, 0.4, 0.0, 3.2), 0.9)))));
+        // Still ANALYZING (never failed) → not a retriable state.
+        FoodEntry e = f.nutrition.beginAnalyzingEntry(USER, DATE, MealType.LUNCH, "ref://x", "hash-x");
+        assertThrows(IllegalStateException.class, () -> f.svc.reanalyze(USER, DATE, e.entryId()));
+    }
+
     // ---- fixture + fakes ----
 
     private static final class Fixture {
@@ -181,7 +211,14 @@ class MealCaptureServiceTest {
         final FoodCatalogService catalog =
             new FoodCatalogService(new FakeCatalogRepo(), 1, empty(), empty());
         final FoodEntryImageService images =
-            new FoodEntryImageService(entries, empty(), empty(), empty());
+            new FoodEntryImageService(entries, empty(), empty(), empty(),
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
+        // A reader that returns bytes for any non-blank ref, so the reanalyze
+        // path (which reads the stored photo back) can be driven.
+        final ObjectProvider<MealPhotoReader> reader = provider((MealPhotoReader) ref ->
+            (ref == null || ref.isBlank())
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(new MealPhotoReader.Photo("stored-bytes".getBytes(), "image/jpeg")));
         final MealCaptureService svc;
 
         Fixture() { this(null); }
@@ -191,7 +228,7 @@ class MealCaptureServiceTest {
         // can be driven end to end.
         Fixture(MealPhotoAnalyzer analyzer) {
             this.svc = new MealCaptureService(
-                analyzer != null ? provider(analyzer) : empty(), empty(),
+                analyzer != null ? provider(analyzer) : empty(), empty(), reader,
                 catalog, nutrition, images,
                 new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
         }

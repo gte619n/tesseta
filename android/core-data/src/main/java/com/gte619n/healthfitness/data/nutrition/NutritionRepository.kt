@@ -209,6 +209,18 @@ class NutritionRepository @Inject constructor(
         return entry
     }
 
+    /**
+     * Retry a FAILED photo analysis from the stored capture photo. The backend
+     * flips the entry back to ANALYZING and re-runs async; refresh the day so the
+     * row shows the analyzing state and the settle-poll (plus the completion
+     * push) swaps in the result. Online-only, like the original capture.
+     */
+    suspend fun reanalyzeEntry(date: String, entryId: String): Entry {
+        val entry = api.reanalyzeEntry(date, entryId)
+        fillDay(date)
+        return entry
+    }
+
     suspend fun addCompositeMeal(date: String, body: CompositeMealRequest): Entry {
         // AI image generation (online-only per D17): create on the network, then
         // refresh this date's mirror so the new composite entry renders from Room.

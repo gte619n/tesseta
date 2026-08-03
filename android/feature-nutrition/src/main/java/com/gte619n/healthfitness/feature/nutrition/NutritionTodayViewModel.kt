@@ -28,12 +28,14 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 // Photo-meal analysis (itemize + generate the finished-meal/ingredient images)
-// can take a few minutes. FCM normally wakes the app the instant the server
-// finalizes the entry, but the foreground screen still needs to keep checking
-// in case the push is missed — so the settle-poll runs generously (120 × 2.5s ≈
-// 5 min) rather than the old ~50 s, which gave up long before image-bearing
-// meals finished and left the row stuck on "Analyzing photo…".
-private const val MAX_SETTLE_POLL_ATTEMPTS = 120
+// can take a few minutes. The backend now pushes an FCM sync wakeup at BOTH
+// terminal steps — when the entry finalizes AND when its finished-meal image
+// lands (see FoodEntryImageService) — so a straggler no longer depends on the
+// foreground poll still running. The settle-poll is therefore just a short
+// fast-feedback fallback (≈50 s) for the first moments after logging, in case
+// an early push is missed; anything slower is caught by the push handler and
+// the on-resume refresh, not by polling for five minutes.
+private const val MAX_SETTLE_POLL_ATTEMPTS = 20
 
 // A run of consecutive failed poll fetches (offline, or a persistent server
 // error) stops the settle-poll — but a single flaky fetch does NOT count against
@@ -301,6 +303,26 @@ class NutritionTodayViewModel @Inject constructor(
                 pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Couldn't retry the image") }
+            }
+        }
+    }
+
+    /**
+     * Retry a FAILED photo analysis: the backend re-runs the analysis from the
+     * photo it stored at capture time (no re-upload). Refresh so the row swaps to
+     * the analyzing state, then poll for the finalized entry.
+     */
+    fun reanalyzeEntry(entryId: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                repository.reanalyzeEntry(date, entryId)
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, error = null) }
+                pollWhileImagesGenerate(_state.value.date)
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Couldn't retry the photo") }
             }
         }
     }
