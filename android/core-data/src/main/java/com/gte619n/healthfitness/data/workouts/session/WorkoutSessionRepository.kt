@@ -594,11 +594,19 @@ class WorkoutSessionRepository(
         val base = scheduledDao.getById(id)?.let { decodeScheduled(it.payloadJson) }
             ?: fallbackSessionJson?.let { decodeScheduled(it) }
             ?: error("No local scheduled session for $id")
+        // Carry the session's day reference so the server can materialize a
+        // client-minted ad-hoc session (offline-first run-as-today) on first
+        // contact; a no-op for sessions it already has.
+        val wire = request.copy(
+            phaseId = base.phaseId.takeIf { it.isNotBlank() },
+            dayId = base.dayId.takeIf { it.isNotBlank() },
+            date = base.date,
+        )
         support.updateLocalWithWire(
             table = MirrorTables.WORKOUT_SCHEDULED,
             id = id,
             payloadJson = scheduledAdapter.toJson(base.withOutcome(request)),
-            wirePayloadJson = requestAdapter.toJson(request),
+            wirePayloadJson = requestAdapter.toJson(wire),
             lastUpdate = clock(),
         )
     }

@@ -200,6 +200,13 @@ public class WorkoutProgramController {
      * ADR-0012 completion upsert: record a session's outcome (COMPLETED or
      * SKIPPED) with full per-set actuals. Idempotent — outbox retries and
      * after-the-fact edits replay the same PUT and re-run the fan-out.
+     *
+     * <p>Offline-first run-as-today: an ad-hoc session is minted client-side
+     * (shared {@code "{date}_{dayId}"} id) and this PUT is the first the server
+     * hears of it. When the body carries the day reference
+     * ({@code phaseId}/{@code dayId}/{@code date}) and the session was never
+     * materialized, it is materialized here before the outcome lands — the
+     * create+complete arrive as one idempotent, outbox-replayable call.
      */
     @PutMapping("/{programId}/sessions/{scheduledId}")
     public ScheduledWorkoutResponse logSession(
@@ -211,6 +218,7 @@ public class WorkoutProgramController {
         if (service.findById(userId, programId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
+        materializeIfMissing(userId, programId, scheduledId, body);
         ScheduledWorkout updated;
         try {
             updated = completion.complete(userId, programId, scheduledId,
@@ -227,6 +235,37 @@ public class WorkoutProgramController {
         // (transient — not persisted, null when the coach is unavailable).
         ScheduledWorkoutResponse response = assembler.scheduled(userId, List.of(updated)).get(0);
         return response.withAiRecap(coach.recapFor(response));
+    }
+
+    /**
+     * Materialize a client-minted ad-hoc session (offline-first run-as-today)
+     * the first time its completion PUT arrives. A no-op when the day reference
+     * is absent or the session already exists; a reference that contradicts the
+     * shared {@code "{date}_{dayId}"} id convention is a 400 (materializing it
+     * would create a row the PUT then couldn't find).
+     */
+    private void materializeIfMissing(
+        String userId, String programId, String scheduledId, LogSessionRequest body
+    ) {
+        if (body.phaseId() == null || body.dayId() == null || body.date() == null) {
+            return;
+        }
+        if (schedule.session(userId, programId, scheduledId).isPresent()) {
+            return;
+        }
+        String expectedId = body.date() + "_" + body.dayId();
+        if (!expectedId.equals(scheduledId)) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "scheduledId must be \"{date}_{dayId}\" (" + expectedId + "), got: " + scheduledId
+            );
+        }
+        try {
+            schedule.materializeOne(userId, programId, body.phaseId(), body.dayId(), body.date());
+        } catch (IllegalArgumentException e) {
+            // Unknown program/phase/day — same contract as the run-day POST.
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
     }
 
     @GetMapping("/{programId}/calendar")

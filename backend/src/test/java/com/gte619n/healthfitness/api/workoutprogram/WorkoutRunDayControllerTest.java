@@ -157,6 +157,71 @@ class WorkoutRunDayControllerTest {
     }
 
     @Test
+    void completionWithDayReferenceMaterializesAClientMintedSession() throws Exception {
+        // Offline-first run-as-today: the client minted "{date}_{dayId}" locally
+        // and the server first hears of the session via the completion PUT — it
+        // must materialize the row from the day reference, then apply the outcome.
+        String scheduledId = TODAY + "_d1";
+        String log = objectMapper.writeValueAsString(new LogSessionRequest(
+            ScheduledStatus.COMPLETED, Instant.now(), 1800, List.of(),
+            "ph1", "d1", LocalDate.now()));
+
+        // Replay-safe: the outbox may deliver the same PUT more than once.
+        for (int i = 0; i < 2; i++) {
+            mvc.perform(put("/api/me/workout-programs/p1/sessions/" + scheduledId)
+                    .header("X-Dev-User", TEST_USER)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(log))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scheduledId").value(scheduledId))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+        }
+
+        ScheduledWorkout done = scheduled.findById(TEST_USER, "p1", scheduledId).orElseThrow();
+        assertEquals(ScheduledStatus.COMPLETED, done.status());
+        assertEquals(LocalDate.now(), done.date());
+    }
+
+    @Test
+    void completionRejectsADayReferenceContradictingTheScheduledId() throws Exception {
+        // The id and the reference must agree on the "{date}_{dayId}" convention,
+        // else materialization would create a row the PUT then couldn't find.
+        String log = objectMapper.writeValueAsString(new LogSessionRequest(
+            ScheduledStatus.COMPLETED, Instant.now(), 1800, List.of(),
+            "ph1", "d1", LocalDate.now()));
+        mvc.perform(put("/api/me/workout-programs/p1/sessions/" + TODAY + "_other")
+                .header("X-Dev-User", TEST_USER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(log))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void completionWithoutDayReferenceStill404sOnAnUnknownSession() throws Exception {
+        // Older clients / normal scheduled sessions: no materialization fields ⇒
+        // the pre-existing contract holds.
+        String log = objectMapper.writeValueAsString(new LogSessionRequest(
+            ScheduledStatus.COMPLETED, Instant.now(), 1800, List.of()));
+        mvc.perform(put("/api/me/workout-programs/p1/sessions/" + TODAY + "_d1")
+                .header("X-Dev-User", TEST_USER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(log))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void completionWithDayReferenceForAnUnknownDayReturns404() throws Exception {
+        String log = objectMapper.writeValueAsString(new LogSessionRequest(
+            ScheduledStatus.COMPLETED, Instant.now(), 1800, List.of(),
+            "ph1", "nope", LocalDate.now()));
+        mvc.perform(put("/api/me/workout-programs/p1/sessions/" + TODAY + "_nope")
+                .header("X-Dev-User", TEST_USER)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(log))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
     void runDayWithUnknownDayReturns404() throws Exception {
         mvc.perform(post("/api/me/workout-programs/p1/sessions")
                 .header("X-Dev-User", TEST_USER)
