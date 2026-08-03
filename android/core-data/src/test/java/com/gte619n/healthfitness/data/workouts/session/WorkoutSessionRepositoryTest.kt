@@ -289,6 +289,22 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun `completion wire carries the day reference for server-side materialization`() = runTest {
+        mirrorScheduled()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        now = T0 + 1_800_000
+        repo.finish(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        // Offline-first run-as-today: a client-minted ad-hoc session reaches the
+        // server first through this PUT, which materializes the missing row from
+        // the phaseId/dayId/date reference before applying the outcome.
+        val body = outboxDao.listAll().single().payloadJson!!
+        assertTrue(body.contains("\"phaseId\":\"ph1\""))
+        assertTrue(body.contains("\"dayId\":\"d1\""))
+        assertTrue(body.contains("\"date\":\"2026-06-08\""))
+    }
+
+    @Test
     fun `substituteExercise swaps the slot and finish records the performed exercise`() = runTest {
         mirrorScheduled()
         repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()

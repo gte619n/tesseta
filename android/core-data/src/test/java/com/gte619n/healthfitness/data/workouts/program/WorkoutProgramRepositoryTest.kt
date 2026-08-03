@@ -15,6 +15,7 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -211,33 +212,78 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
-    fun `runDayToday materializes the session and mirrors the returned row`() = runBlocking {
-        val dto = ScheduledWorkoutDto(
-            scheduledId = "2026-07-28_d1",
-            date = java.time.LocalDate.parse("2026-07-28"),
-            phaseId = "ph1", dayId = "d1", dayLabel = "Lower A", status = "PLANNED",
-        )
-        // No date in the request: the server resolves "today" from the
-        // X-Timezone header (TimeZoneInterceptor / RequestTimeZone).
-        coEvery { api.runDay("p1", RunDayRequest(phaseId = "ph1", dayId = "d1")) } returns dto
+    fun `runDayToday mints the session locally from the cached deep tree`() = runBlocking {
+        // Fully cached program, no session for today yet: the mint must be
+        // local — no network at all (the completion upload syncs it later).
+        coEvery { programDao.getById("p1") } returns entity("p1", deepAdapter.toJson(assembledDeep()))
+        coEvery { scheduledDao.getById(any()) } returns null
+        val rows = slot<List<MirrorRepositorySupport.RefreshRow>>()
+        coEvery { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, capture(rows)) } returns Unit
 
+        val today = java.time.LocalDate.now()
         val scheduledId = repo.runDayToday("p1", "ph1", "d1").getOrThrow()
 
-        assertEquals("2026-07-28_d1", scheduledId)
-        // The new row is mirrored so start()/calendars see it without a sync.
-        coVerify(exactly = 1) { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, any()) }
-        coVerify(exactly = 1) { api.runDay("p1", RunDayRequest(phaseId = "ph1", dayId = "d1")) }
+        // The server's materializeOne id convention, derived client-side.
+        assertEquals("${today}_d1", scheduledId)
+        coVerify(exactly = 0) { api.runDay(any(), any()) }
+        coVerify(exactly = 0) { api.get(any()) }
+        // The minted row is mirrored so start()/calendars see it immediately.
+        val row = rows.captured.single()
+        assertEquals("p1/${today}_d1", row.id)
+        val minted = scheduledAdapter.fromJson(row.payloadJson)!!
+        assertEquals("PLANNED", minted.status)
+        assertEquals(today, minted.date)
+        assertEquals("ph1", minted.phaseId)
+        assertEquals("d1", minted.dayId)
+        assertEquals("d1", minted.session?.dayId)
     }
 
     @Test
-    fun `runDayToday surfaces a clear message when offline`() = runBlocking {
-        coEvery { api.runDay("p1", any()) } throws IOException("no host")
+    fun `runDayToday reuses an already-mirrored session for the same day`() = runBlocking {
+        val today = java.time.LocalDate.now()
+        val existing = ScheduledWorkoutDto(
+            scheduledId = "${today}_d1", date = today,
+            phaseId = "ph1", dayId = "d1", status = "COMPLETED",
+        )
+        coEvery { scheduledDao.getById("p1/${today}_d1") } returns WorkoutScheduledEntity(
+            "p1/${today}_d1", scheduledAdapter.toJson(existing),
+            now.toEpochMilli(), "ACTIVE", false, "SYNCED",
+        )
+
+        val scheduledId = repo.runDayToday("p1", "ph1", "d1").getOrThrow()
+
+        // A COMPLETED session is not reset (materializeOne parity) — it is
+        // reopened untouched for review/edit.
+        assertEquals("${today}_d1", scheduledId)
+        coVerify(exactly = 0) { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, any()) }
+        coVerify(exactly = 0) { api.runDay(any(), any()) }
+    }
+
+    @Test
+    fun `runDayToday fills the deep tree from network only on a cold miss`() = runBlocking {
+        coEvery { programDao.getById("p1") } returns null
+        coEvery { scheduledDao.getById(any()) } returns null
+        coEvery { api.get("p1") } returns assembledDeep()
+
+        val scheduledId = repo.runDayToday("p1", "ph1", "d1").getOrThrow()
+
+        assertEquals("${java.time.LocalDate.now()}_d1", scheduledId)
+        coVerify(exactly = 1) { api.get("p1") }
+        coVerify(exactly = 0) { api.runDay(any(), any()) }
+    }
+
+    @Test
+    fun `runDayToday surfaces a clear message when offline and nothing cached`() = runBlocking {
+        coEvery { programDao.getById("p1") } returns null
+        coEvery { scheduledDao.getById(any()) } returns null
+        coEvery { api.get("p1") } throws IOException("no host")
 
         val result = repo.runDayToday("p1", "ph1", "d1")
 
         assertEquals(true, result.isFailure)
         assertEquals(
-            "Connect to the internet once to start this workout.",
+            "This program hasn't been downloaded yet. " +
+                "Connect to the internet once to start this workout.",
             result.exceptionOrNull()?.message,
         )
         coVerify(exactly = 0) { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, any()) }

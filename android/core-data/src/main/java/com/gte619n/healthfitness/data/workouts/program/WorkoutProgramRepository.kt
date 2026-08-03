@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
+import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutHistoryPage
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
@@ -20,7 +21,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
-import java.io.IOException
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -264,16 +264,22 @@ class WorkoutProgramRepository @Inject internal constructor(
     /**
      * Materialize (or reuse) an ad-hoc session for one program day on today's
      * date and return its scheduledId, so any workout can be run "as today" even
-     * after the program's scheduled window has elapsed or a day was missed. The
-     * returned row is mirrored immediately, so the existing
-     * [com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository.start]
-     * path picks it up without waiting for a sync. Online-only (the session is
-     * created server-side): offline surfaces a clear, actionable message.
+     * after the program's scheduled window has elapsed or a day was missed.
      *
-     * "Today" is the device's local calendar day, resolved server-side from the
-     * `X-Timezone` header (see TimeZoneInterceptor / RequestTimeZone) — the
-     * server clock is UTC and would otherwise date an evening workout to
-     * tomorrow for users behind UTC.
+     * Offline-first: the session row is minted **locally** from the cached deep
+     * program tree, using the same deterministic `"{date}_{dayId}"` id the
+     * server's materializeOne derives, and mirrored immediately — so the
+     * existing [com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository.start]
+     * path picks it up with no network round-trip. The server first learns of
+     * the session when its completion PUT replays through the outbox: the
+     * request carries the day reference (phaseId/dayId/date) and the backend
+     * materializes the missing row before applying the outcome. The network is
+     * touched only when the deep tree isn't cached yet (cold miss); offline with
+     * nothing cached surfaces a clear, actionable message.
+     *
+     * "Today" is the device's local calendar day — the id and the uploaded
+     * `date` are minted client-side, so a delayed outbox replay still dates the
+     * session to the day it was actually run.
      */
     suspend fun runDayToday(
         programId: String,
@@ -282,19 +288,60 @@ class WorkoutProgramRepository @Inject internal constructor(
     ): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val dto = try {
-                    api.runDay(programId, RunDayRequest(phaseId = phaseId, dayId = dayId))
-                } catch (e: IOException) {
-                    throw IllegalStateException(
-                        "Connect to the internet once to start this workout.",
-                        e,
-                    )
+                if (support.killSwitchOn()) {
+                    // D13: Room isn't the source of truth — create server-side.
+                    return@runCatching api
+                        .runDay(programId, RunDayRequest(phaseId = phaseId, dayId = dayId))
+                        .scheduledId
                 }
+                val date = LocalDate.now()
+                val scheduledId = "${date}_$dayId"
+                // Idempotent reuse, matching the server's materializeOne: running
+                // the same day again today reopens the existing session untouched
+                // (a COMPLETED one is not reset — it opens for review/edit).
+                scheduledDao.getById("$programId/$scheduledId")
+                    ?.let { decodeScheduled(it.payloadJson) }
+                    ?.let { return@runCatching scheduledId }
+                // The day template comes from the cached deep tree; fetch it only
+                // on a cold miss (never cached / still shallow).
+                val cached = mirroredDeep(programId)
+                val program = if (cached.isAssembledDeep()) {
+                    cached!!
+                } else {
+                    runCatching { refreshDeep(programId) }.getOrNull() ?: cached
+                }
+                val day = program?.phases
+                    ?.firstOrNull { it.phaseId == phaseId }
+                    ?.days?.firstOrNull { it.dayId == dayId }
+                    ?: error(
+                        if (program.isAssembledDeep()) {
+                            "This workout no longer exists in the program."
+                        } else {
+                            "This program hasn't been downloaded yet. " +
+                                "Connect to the internet once to start this workout."
+                        },
+                    )
+                val dto = ScheduledWorkoutDto(
+                    scheduledId = scheduledId,
+                    date = date,
+                    phaseId = phaseId,
+                    dayId = dayId,
+                    dayLabel = day.label,
+                    weekIndexInPhase = 1,
+                    isDeload = false,
+                    locationId = day.locationId,
+                    locationName = day.locationName,
+                    status = ScheduledStatus.PLANNED.name,
+                    session = day,
+                )
+                // Mirrored clean+SYNCED, exactly like the server-returned row the
+                // online path used to store: the eventual completion upload owns
+                // the sync to the backend.
                 support.refreshInto(
                     MirrorTables.WORKOUT_SCHEDULED,
                     listOf(dto.toRefreshRow(programId)),
                 )
-                dto.scheduledId
+                scheduledId
             }
         }
 

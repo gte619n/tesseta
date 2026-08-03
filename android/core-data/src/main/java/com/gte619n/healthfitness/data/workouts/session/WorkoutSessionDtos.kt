@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.data.workouts.session
 
 import com.gte619n.healthfitness.data.workouts.program.LoggedSetDto
 import java.time.Instant
+import java.time.LocalDate
 
 // ADR-0012 / IMPL-17 D2 — the wire contract for the idempotent completion
 // upsert: PUT /api/me/workout-programs/{programId}/sessions/{scheduledId}.
@@ -19,6 +20,17 @@ data class CompleteSessionRequest(
     val completedAt: Instant? = null,
     val durationSeconds: Int? = null,
     val logged: List<LoggedPrescriptionDto> = emptyList(),
+    /**
+     * Day reference of the session (offline-first run-as-today): an ad-hoc
+     * session is minted client-side with the shared `"{date}_{dayId}"` id, so
+     * the server may first hear of it via this PUT — when all three are present
+     * and the session was never materialized, the server materializes it before
+     * applying the outcome. Attached from the mirrored session on every upload
+     * (harmless for already-materialized sessions).
+     */
+    val phaseId: String? = null,
+    val dayId: String? = null,
+    val date: LocalDate? = null,
 )
 
 /**

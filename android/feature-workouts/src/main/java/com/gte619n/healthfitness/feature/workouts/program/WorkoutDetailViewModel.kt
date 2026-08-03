@@ -121,8 +121,10 @@ class WorkoutDetailViewModel @Inject constructor(
     /**
      * Materialize this workout as a session dated today and open the logger —
      * the "run any workout as today" path that works even after the program's
-     * scheduled window has elapsed or a day was missed. Online-only; a failure
-     * (e.g. offline) surfaces its message inline without leaving the screen.
+     * scheduled window has elapsed or a day was missed. Offline-first: the
+     * session is minted locally from the cached program and synced on
+     * completion; a failure (offline with the program never downloaded)
+     * surfaces its message inline without leaving the screen.
      */
     fun startToday() {
         if (_state.value.starting) return
