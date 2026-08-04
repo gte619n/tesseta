@@ -157,12 +157,10 @@ private fun PhoneHeader(user: DashboardUser?, lastUpdated: java.time.Instant?) {
 
 @Composable
 private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetryWeight: () -> Unit) {
-    // Tile order: Weight (live), Resting HR, HRV, Sleep, Steps.
+    // Tile order: Weight (live), Sleep, Steps.
     val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
     // Each vital does a sort + mapNotNull + sparkline pass; memoise on `metrics`
     // so they only recompute when the underlying series actually changes.
-    val rhr = remember(metrics) { restingHrVital(metrics) }
-    val hrv = remember(metrics) { hrvVital(metrics) }
     val sleep = remember(metrics) { sleepVital(metrics) }
     val steps = remember(metrics) { stepsVital(metrics) }
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -177,10 +175,6 @@ private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetr
                     StatCard(stat = weightVital(summary, weightUnit), modifier = Modifier.fillMaxWidth())
                 }
             }
-            StatCard(stat = rhr, modifier = Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            StatCard(stat = hrv, modifier = Modifier.weight(1f))
             StatCard(stat = sleep, modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {

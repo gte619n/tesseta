@@ -270,14 +270,12 @@ private fun FoldableVitalsRow(
     weightUnit: WeightUnit,
     onRetryWeight: () -> Unit,
 ) {
-    // Tile order: Weight (live), Resting HR, HRV, Sleep, Steps.
+    // Tile order: Weight (live), Sleep, Steps.
     val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
     // Each vital does a sort + mapNotNull + sparkline pass; memoise on `metrics`
     // so they only recompute when the underlying series actually changes.
     val tiles = remember(metrics) {
         listOf(
-            restingHrVital(metrics) to "RHR",
-            hrvVital(metrics) to "HRV",
             sleepVital(metrics) to "Sleep",
             stepsVital(metrics) to "Steps",
         )

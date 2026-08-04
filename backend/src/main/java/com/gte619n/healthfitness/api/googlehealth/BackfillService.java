@@ -57,9 +57,18 @@ public class BackfillService {
         Executors.newVirtualThreadPerTaskExecutor().submit(() -> runBackfill(userId));
     }
 
+    // Full-history backfill run once when a user first connects.
     void runBackfill(String userId) {
+        runBackfill(userId, backfillDays);
+    }
+
+    // Re-pull body-composition over a bounded recent window. Used both by the
+    // full-history connect backfill (windowDays = backfillDays) and by the
+    // periodic refresh job, which passes a short window as a safety net for
+    // missed webhooks or a lapsed subscription. Returns the stored count.
+    int runBackfill(String userId, int windowDays) {
         Instant now = Instant.now();
-        Instant windowStart = now.minus(Duration.ofDays(backfillDays));
+        Instant windowStart = now.minus(Duration.ofDays(windowDays));
         log.info("Backfill start user={} window=[{},{}]", userId, windowStart, now);
         int total = 0;
         Set<String> platforms = new LinkedHashSet<>();
@@ -82,6 +91,7 @@ public class BackfillService {
             log.error("Backfill failed user={} totalStored={} cause={}",
                 userId, total, e.getMessage(), e);
         }
+        return total;
     }
 
     private int backfillType(
