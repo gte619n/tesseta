@@ -481,7 +481,11 @@ class NutritionTodayViewModel @Inject constructor(
         _state.update { it.copy(addSheetOpen = false) }
         viewModelScope.launch {
             try {
-                repository.logDescribedMeal(date, result.mealId, meal.wire)
+                repository.logDescribedMeal(
+                    date, result.mealId, meal.wire,
+                    knownImageUrl = result.imageUrl,
+                    knownImageStatus = result.imageStatus,
+                )
                 val day = repository.day(date)
                 _state.update { it.copy(day = day, error = null) }
                 pollWhileImagesGenerate(_state.value.date)
