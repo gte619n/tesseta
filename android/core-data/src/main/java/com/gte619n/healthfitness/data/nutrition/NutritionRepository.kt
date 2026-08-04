@@ -245,15 +245,68 @@ class NutritionRepository @Inject constructor(
     suspend fun describeMeal(description: String): DescribedMeal =
         api.describeMeal(DescribeMealRequest(description))
 
-    suspend fun logDescribedMeal(date: String, mealId: String, meal: String): Entry {
-        // Like addCompositeMeal: drives AI image work (online-only per D17), so
-        // create on the network, then refresh this date's mirror to render it.
+    /**
+     * Log a saved meal by [mealId] onto [date]/[meal]. Like addCompositeMeal it
+     * drives AI image work (online-only per D17): create on the network, then
+     * refresh this date's mirror to render it.
+     *
+     * [knownImageUrl]/[knownImageStatus] carry the saved meal's already-generated
+     * plated photo (the one the add-sheet search row shows). The server reuses that
+     * exact photo, but the fresh day pull can briefly land the new entry without it
+     * — the reuse attach and this date's read aren't ordered, and the row is neither
+     * ANALYZING nor image-PENDING, so nothing (settle-poll or day() re-fetch) would
+     * converge it until a manual refresh. So we overlay the known-READY image onto
+     * the new row here, and the picture appears with the row instead of after a
+     * refresh. A no-op when the pull already carried the image, or the saved meal's
+     * own photo isn't READY yet (a brand-new meal generating its first photo, which
+     * lands PENDING and settles via the poll).
+     */
+    suspend fun logDescribedMeal(
+        date: String,
+        mealId: String,
+        meal: String,
+        knownImageUrl: String? = null,
+        knownImageStatus: String = "NONE",
+    ): Entry {
         val entry = api.logDescribedMeal(
             date,
             DescribeMealLogRequest(mealId = mealId, meal = meal),
         )
-        fillDayAndSignal(date)
+        fillDay(date)
+        if (knownImageStatus == "READY" && knownImageUrl != null) {
+            overlayEntryImage(date, entry.entryId, knownImageUrl, knownImageStatus)
+        }
+        support.signalLocalWrite(MirrorTables.NUTRITION_ENTRIES)
         return entry
+    }
+
+    /**
+     * Attach [imageUrl]/[imageStatus] to the mirror row for [entryId] on [date]
+     * when the freshly-pulled entry doesn't already carry a READY image. Written
+     * SYNCED+clean via [MirrorRepositorySupport.refreshInto] (this is a local
+     * render hint reflecting the authoritative server photo, not a user edit — no
+     * outbox mutation), so it survives day()/refreshDay re-reads until the server's
+     * own READY entry supersedes it with the same picture.
+     */
+    private suspend fun overlayEntryImage(
+        date: String,
+        entryId: String,
+        imageUrl: String,
+        imageStatus: String,
+    ) {
+        val current = entriesForDate(date).firstOrNull { it.entryId == entryId } ?: return
+        if (current.imageStatus == "READY" && current.imageUrl != null) return
+        val merged = current.copy(imageUrl = imageUrl, imageStatus = imageStatus)
+        support.refreshInto(
+            MirrorTables.NUTRITION_ENTRIES,
+            listOf(
+                MirrorRepositorySupport.RefreshRow(
+                    id = composite(date, entryId),
+                    payloadJson = rowAdapter.toJson(NutritionEntryRow(date, merged)),
+                    lastUpdate = System.currentTimeMillis(),
+                ),
+            ),
+        )
     }
 
     /**
