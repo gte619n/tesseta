@@ -113,6 +113,19 @@ interface WorkoutProgramApi {
         @Path("scheduledId") scheduledId: String,
     ): Map<String, List<LoggedSetDto>>
 
+    /**
+     * Resilient variant of [sessionLastSets]: the client supplies the exerciseIds
+     * it already holds in its local draft, so prefill resolves even before the
+     * session exists server-side (offline-first / ad-hoc sessions past the
+     * materialized schedule — [sessionLastSets] 404s until the session persists).
+     * Best-effort; the logger computes the same map from its local mirror first.
+     */
+    @POST("api/me/workout-programs/{id}/last-sets")
+    suspend fun lastSetsForExercises(
+        @Path("id") id: String,
+        @Body body: LastSetsRequest,
+    ): Map<String, List<LoggedSetDto>>
+
     // The program's effective nutrition guidance (active phase's, else
     // program-level); 204 → null body.
     @GET("api/me/workout-programs/{id}/nutrition-guidance")

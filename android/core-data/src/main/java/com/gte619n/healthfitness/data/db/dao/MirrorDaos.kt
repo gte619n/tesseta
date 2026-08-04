@@ -550,6 +550,10 @@ interface WorkoutScheduledDao {
     @Query("SELECT * FROM workoutScheduled WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
     fun observeActive(): Flow<List<WorkoutScheduledEntity>>
 
+    /** One-shot snapshot of the mirror (non-archived) — folded for local prefill. */
+    @Query("SELECT * FROM workoutScheduled WHERE status != 'ARCHIVED'")
+    suspend fun listActive(): List<WorkoutScheduledEntity>
+
     @Query("SELECT * FROM workoutScheduled WHERE id = :id")
     suspend fun getById(id: String): WorkoutScheduledEntity?
 

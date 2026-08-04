@@ -337,6 +337,35 @@ public class WorkoutProgramController {
     }
 
     /**
+     * Resilient sibling of {@link #sessionLastSets}: the client passes the
+     * exerciseIds it already holds in its local session draft, so the "same as
+     * last time" prefill resolves even before the current session exists
+     * server-side. The GET-by-scheduledId variant {@code orElseThrow(404)}s
+     * until the session is persisted — which for an offline-first / ad-hoc
+     * session run past the program's materialized schedule is only at completion
+     * — so a brand-new session's prefill would silently blank out. Strictly
+     * user-scoped history (only the caller's own logged sets, for the ids they
+     * name); the path {@code programId} is for route consistency, not a filter.
+     */
+    @PostMapping("/{programId}/last-sets")
+    public Map<String, List<LastSetView>> lastSetsForExercises(
+        @PathVariable String programId,
+        @RequestBody LastSetsRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        Set<String> exerciseIds = new LinkedHashSet<>();
+        if (body != null && body.exerciseIds() != null) {
+            for (String id : body.exerciseIds()) {
+                if (id != null && !id.isBlank()) exerciseIds.add(id);
+            }
+        }
+        Map<String, List<LoggedSet>> last = digests.lastSessionSets(userId, exerciseIds);
+        Map<String, List<LastSetView>> out = new LinkedHashMap<>();
+        last.forEach((id, sets) -> out.put(id, sets.stream().map(LastSetView::from).toList()));
+        return out;
+    }
+
+    /**
      * The program's effective nutrition guidance (active phase's, else
      * program-level), used to show/enable an "Apply as nutrition target" action
      * and preview the macros. 204 when the program carries no guidance OR the
