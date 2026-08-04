@@ -33,6 +33,17 @@ TIME_ZONE="America/New_York"
 PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
 URI="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_NUMBER}/jobs/${JOB_NAME}:run"
 
+# Cloud Scheduler fires as the runtime SA against the Cloud Run Admin API's
+# jobs:run endpoint. Without run.invoker on the job the trigger returns
+# PERMISSION_DENIED (code 7) and silently creates no execution, so grant it
+# up front. Idempotent — re-adding an existing binding is a no-op.
+echo "==> Granting roles/run.invoker on job ${JOB_NAME} to ${RUNTIME_SA}"
+gcloud run jobs add-iam-policy-binding "${JOB_NAME}" \
+  --region="${REGION}" \
+  --member="serviceAccount:${RUNTIME_SA}" \
+  --role="roles/run.invoker" \
+  --project="${PROJECT_ID}"
+
 echo "==> Cloud Scheduler entry ${SCHEDULER_NAME}"
 echo "    schedule=${SCHEDULE} ${TIME_ZONE}"
 echo "    target=${URI}"
