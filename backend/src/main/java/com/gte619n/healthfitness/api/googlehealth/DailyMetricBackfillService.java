@@ -60,8 +60,16 @@ public class DailyMetricBackfillService {
     // failed are absent from the map; an empty map means the backfill could
     // not start (e.g. token exchange failed).
     java.util.Map<String, Integer> runBackfill(String userId) {
+        return runBackfill(userId, backfillDays);
+    }
+
+    // Re-pull the daily metrics over a bounded recent window. The connect
+    // flow passes the full history (windowDays = backfillDays); the periodic
+    // refresh job passes a short window as a safety net for missed webhooks or
+    // a lapsed subscription.
+    java.util.Map<String, Integer> runBackfill(String userId, int windowDays) {
         Instant now = Instant.now();
-        Instant windowStart = now.minus(Duration.ofDays(backfillDays));
+        Instant windowStart = now.minus(Duration.ofDays(windowDays));
         log.info("Daily-metric backfill start user={} window=[{},{}]", userId, windowStart, now);
         java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
         int total = 0;

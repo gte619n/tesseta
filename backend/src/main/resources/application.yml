@@ -155,6 +155,12 @@ app:
     oauth-token-url: https://oauth2.googleapis.com/token
     backfill-days: 1460
     backfill-chunk-days: 365
+    # Trailing window the periodic refresh job (gh-refresh Cloud Run Job)
+    # re-pulls per connected user, as a safety net for missed webhooks or a
+    # lapsed subscription. Wide enough to cover the gap between scheduled runs
+    # plus any backdated/edited readings. Connect-time backfill still uses the
+    # full backfill-days history.
+    refresh-window-days: ${GOOGLE_HEALTH_REFRESH_WINDOW_DAYS:14}
     webhook-secret: ${GOOGLE_HEALTH_WEBHOOK_SECRET:}
     # Defense-in-depth on top of the webhook-secret: verify the ECDSA
     # X-HEALTHAPI-SIGNATURE Google stamps on each notification, against its
