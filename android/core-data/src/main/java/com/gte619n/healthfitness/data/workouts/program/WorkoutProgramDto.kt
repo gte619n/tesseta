@@ -51,6 +51,15 @@ data class RunDayRequest(
     val date: LocalDate? = null,
 )
 
+/**
+ * Body of the resilient POST .../last-sets: the exerciseIds the client already
+ * holds locally, so "same as last time" prefill resolves without the current
+ * session existing server-side.
+ */
+data class LastSetsRequest(
+    val exerciseIds: List<String>,
+)
+
 data class IntensityDto(
     val kind: String,
     val value: Double? = null,

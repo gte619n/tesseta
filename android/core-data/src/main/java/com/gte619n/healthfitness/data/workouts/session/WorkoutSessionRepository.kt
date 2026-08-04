@@ -9,6 +9,8 @@ import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutSessionDraftEntity
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.data.sync.OutboxRepository
+import com.gte619n.healthfitness.data.workouts.program.LastSetsRequest
+import com.gte619n.healthfitness.data.workouts.program.RunDayRequest
 import com.gte619n.healthfitness.data.workouts.program.ScheduledWorkoutDto
 import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
 import com.gte619n.healthfitness.data.workouts.program.toDomain
@@ -271,16 +273,88 @@ class WorkoutSessionRepository(
             null
         }
 
+    /**
+     * "The sets performed last time each exercise was done", keyed by exerciseId
+     * — what the logger's pending row prefills from (IMPL-COACH PR2).
+     *
+     * Client-side first: fold the device's local mirror of COMPLETED sessions,
+     * which works offline and — crucially — before this (possibly ad-hoc)
+     * session exists server-side. The by-scheduledId network variant 404s in
+     * that window, which is exactly how a fresh session past the program's
+     * materialized schedule silently lost its prefill. Then best-effort overlay
+     * the server's answer (via the exerciseId-driven endpoint, which never 404s)
+     * to fill exercises whose history the device hasn't mirrored — older or
+     * imported rows, or another device — with the local fold winning where both
+     * have data.
+     */
     suspend fun lastSets(
         programId: String,
         scheduledId: String,
     ): Map<String, List<LoggedSet>> = withContext(io) {
-        // Best-effort: any network error (offline, session not yet COMPLETED on
-        // the server) leaves the logger on its designed-target prefill.
-        runCatching {
-            api.sessionLastSets(programId, scheduledId)
-                .mapValues { (_, sets) -> sets.map { it.toDomain() } }
+        val local = runCatching {
+            lastSessionSets(
+                scheduledDao.listActive().mapNotNull { decodeScheduled(it.payloadJson)?.toDomain() },
+            )
         }.getOrDefault(emptyMap())
+
+        val exerciseIds = currentSessionExerciseIds(programId, scheduledId)
+        val remote = if (exerciseIds.isEmpty()) {
+            emptyMap()
+        } else {
+            runCatching {
+                api.lastSetsForExercises(programId, LastSetsRequest(exerciseIds.toList()))
+                    .mapValues { (_, sets) -> sets.map { it.toDomain() } }
+            }.getOrDefault(emptyMap())
+        }
+
+        // Right side wins on key collision → the local fold takes precedence.
+        remote + local
+    }
+
+    /**
+     * Best-effort: register an ad-hoc / past-schedule session on the server the
+     * moment the logger opens it, so features keyed off the persisted session
+     * (the recap, the by-scheduledId last-sets, cross-device) work mid-session
+     * rather than only after completion. Idempotent server-side (materializeOne
+     * by `"{date}_{dayId}"`) and a cheap no-op for a session the schedule already
+     * materialized. Purely best-effort — offline / kill-switched / failure is
+     * swallowed; the offline-first completion still persists it via the outbox.
+     */
+    suspend fun ensureServerSession(programId: String, scheduledId: String) = withContext(io) {
+        if (support.killSwitchOn()) return@withContext
+        val json = draftDao.getByKey(programId, scheduledId)?.sessionJson
+            ?: scheduledDao.getById(mirrorId(programId, scheduledId))?.payloadJson
+            ?: return@withContext
+        val dto = decodeScheduled(json) ?: return@withContext
+        // A COMPLETED/SKIPPED session already rode (or will ride) the completion
+        // outbox, which materializes it from the same day reference.
+        if (dto.status != ScheduledStatus.PLANNED.name) return@withContext
+        val phaseId = dto.phaseId.takeIf { it.isNotBlank() } ?: return@withContext
+        val dayId = dto.dayId.takeIf { it.isNotBlank() } ?: return@withContext
+        runCatching {
+            api.runDay(programId, RunDayRequest(phaseId = phaseId, dayId = dayId, date = dto.date))
+        }
+        Unit
+    }
+
+    /**
+     * The exerciseIds of the current session, read from the local draft (or the
+     * mirror snapshot) — used to ask the server's exerciseId-driven last-sets
+     * without needing the session to exist server-side.
+     */
+    private suspend fun currentSessionExerciseIds(
+        programId: String,
+        scheduledId: String,
+    ): Set<String> {
+        val json = draftDao.getByKey(programId, scheduledId)?.sessionJson
+            ?: scheduledDao.getById(mirrorId(programId, scheduledId))?.payloadJson
+            ?: return emptySet()
+        val dto = decodeScheduled(json) ?: return emptySet()
+        return dto.session?.blocks.orEmpty()
+            .flatMap { it.prescriptions }
+            .map { it.exerciseId }
+            .filter { it.isNotBlank() }
+            .toSet()
     }
 
     // ---- IMPL-17 Q3: "restore into logger" recovery for parked completions ----

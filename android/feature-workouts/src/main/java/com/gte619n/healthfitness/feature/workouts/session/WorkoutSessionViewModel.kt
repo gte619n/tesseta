@@ -111,6 +111,13 @@ class WorkoutSessionViewModel @Inject constructor(
             val last = repository.lastSets(programId, scheduledId)
             _state.update { it.copy(lastSets = last) }
         }
+        // Best-effort: register an ad-hoc / past-schedule session on the server
+        // as soon as it's opened (idempotent), so it's first-class mid-session
+        // rather than only after completion. Never blocks the offline-first
+        // logger; failure is swallowed.
+        viewModelScope.launch {
+            runCatching { repository.ensureServerSession(programId, scheduledId) }
+        }
         // #9 — owner gating for the demo-image flag affordance. Best-effort:
         // read the cached profile first (instant), then refresh; any failure
         // just leaves the flag hidden.

@@ -798,6 +798,9 @@ private class FakeWorkoutScheduledDao : WorkoutScheduledDao {
     override fun observeActive(): Flow<List<WorkoutScheduledEntity>> =
         rows.map { all -> all.values.filter { it.status != "ARCHIVED" } }
 
+    override suspend fun listActive(): List<WorkoutScheduledEntity> =
+        rows.value.values.filter { it.status != "ARCHIVED" }
+
     override suspend fun getById(id: String): WorkoutScheduledEntity? = rows.value[id]
 
     override suspend fun upsert(row: WorkoutScheduledEntity) {
