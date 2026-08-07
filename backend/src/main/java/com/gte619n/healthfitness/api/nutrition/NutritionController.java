@@ -495,12 +495,24 @@ public class NutritionController {
         }
         String userId = currentUser.get().userId();
         MealType resolved = body.meal() != null ? body.meal() : mealForHour(LocalTime.now().getHour());
+        // Client-minted entry id + idempotent replay (D7): a durable client retry
+        // (a background op worker replaying this create) reuses the same entry id
+        // instead of logging a duplicate composite meal.
+        String entryId = syncWrite.resolveId(body.id());
         try {
-            FoodEntry entry = (body.mealId() != null && !body.mealId().isBlank())
-                ? mealDescription.logResolvedMeal(userId, date, resolved, body.mealId())
-                : mealDescription.logDescribed(userId, date, resolved, body.description());
-            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
-            return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
+            EntryResponse response = syncWrite.idempotentCreate(
+                "nutritionDescribeMeal:create",
+                userId,
+                () -> {
+                    FoodEntry entry = (body.mealId() != null && !body.mealId().isBlank())
+                        ? mealDescription.logResolvedMeal(userId, date, resolved, body.mealId(), entryId)
+                        : mealDescription.logDescribed(userId, date, resolved, body.description(), entryId);
+                    syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+                    return new SyncWriteContext.Created<>(entry.entryId(), toResponse(entry));
+                },
+                id -> nutrition.findEntry(userId, date, id).map(this::toResponse)
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(
                 HttpStatus.UNPROCESSABLE_ENTITY, "meal description analysis is unavailable");
@@ -524,11 +536,22 @@ public class NutritionController {
         }
         String userId = currentUser.get().userId();
         MealType resolved = body.meal() != null ? body.meal() : mealForHour(LocalTime.now().getHour());
+        // Client-minted entry id + idempotent replay (D7): a durable client retry
+        // replays the same ANALYZING placeholder id rather than logging a second row.
+        String entryId = syncWrite.resolveId(body.id());
         try {
-            FoodEntry entry = mealDescription.describeMealAsync(
-                userId, date, resolved, body.description());
-            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
+            EntryResponse response = syncWrite.idempotentCreate(
+                "nutritionDescribeMealAsync:create",
+                userId,
+                () -> {
+                    FoodEntry entry = mealDescription.describeMealAsync(
+                        userId, date, resolved, body.description(), entryId);
+                    syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+                    return new SyncWriteContext.Created<>(entry.entryId(), toResponse(entry));
+                },
+                id -> nutrition.findEntry(userId, date, id).map(this::toResponse)
+            );
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(
                 HttpStatus.UNPROCESSABLE_ENTITY, "meal description analysis is unavailable");
@@ -753,7 +776,9 @@ public class NutritionController {
     public record DescribeMealRequest(
         String mealId,
         String description,
-        MealType meal
+        MealType meal,
+        /** Optional client-minted entry UUID for idempotent replay; null ⇒ server-generated. */
+        String id
     ) {}
 
     /** Request for {@code POST /{date}/relog}: copy a past entry onto this day. */

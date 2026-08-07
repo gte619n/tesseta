@@ -56,7 +56,13 @@ class FoodRepository @Inject constructor(
             if (e.code() == 404) null else throw e
         }
 
-    suspend fun create(body: FoodCreateRequest): Food = api.create(body).also { cache(it) }
+    /**
+     * Create a catalog food. [idempotencyKey] + the client-minted [FoodCreateRequest.id]
+     * make a replay from the durable op worker safe: the backend returns the same
+     * food instead of duplicating it (and re-running image generation).
+     */
+    suspend fun create(body: FoodCreateRequest, idempotencyKey: String): Food =
+        api.create(body, idempotencyKey).also { cache(it) }
 
     suspend fun confirm(foodId: String): Food = api.confirm(foodId).also { cache(it) }
 

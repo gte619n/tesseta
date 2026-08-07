@@ -131,7 +131,7 @@ fun NutritionTodayScreen(
                 Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
             }
             else -> DayContent(
-                day = state.day.withPendingCaptures(state.pendingCaptures, state.date),
+                day = state.day.withPendingOps(state.pendingOps, state.date),
                 pendingEntryIds = state.pendingEntryIds,
                 isRefreshing = state.isRefreshing,
                 onRefresh = onRefresh,

@@ -94,6 +94,15 @@ data class Entry(
      * source entry for a one-tap re-log. Null on day-view reads.
      */
     val date: String? = null,
+    /**
+     * Transient, client-only path to the user's just-captured photo (a device
+     * cache file). Set while a photographed meal is uploading/analyzing/generating
+     * its image, so the row shows the real photo (with a loader over it) instead of
+     * a spinner — until the server's generated [imageUrl] lands READY. Never
+     * persisted to the mirror as a real value or sent to the server; injected at
+     * day-assembly time from the capture-preview store and dropped once READY.
+     */
+    val localImagePath: String? = null,
 ) {
     val isComposite: Boolean get() = !ingredients.isNullOrEmpty()
 
@@ -197,6 +206,8 @@ data class FoodCreateRequest(
     val macrosPer100g: Macros,
     val servingSizes: List<ServingSize> = emptyList(),
     val defaultServingIndex: Int = 0,
+    /** Client-minted food id for idempotent replay from a durable op worker; null ⇒ server-generated. */
+    val id: String? = null,
 )
 
 // ---- Describe a meal ------------------------------------------------------
@@ -237,6 +248,8 @@ data class DescribeMealLogRequest(
     val mealId: String? = null,
     val description: String? = null,
     val meal: String? = null,
+    /** Client-minted entry id for idempotent replay from a durable op worker; null ⇒ server-generated. */
+    val id: String? = null,
 )
 
 // ---- Capture (multipart) proposals ---------------------------------------

@@ -8,7 +8,6 @@ import com.gte619n.healthfitness.data.nutrition.NutritionCaptureRepository
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Food
-import com.gte619n.healthfitness.domain.nutrition.FoodCreateRequest
 import com.gte619n.healthfitness.domain.nutrition.LabelCaptureFood
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.MealCaptureItem
@@ -67,11 +66,16 @@ class NutritionCaptureViewModel @Inject constructor(
     private val foods: FoodRepository,
     private val capture: NutritionCaptureRepository,
     private val nutrition: NutritionRepository,
-    private val captureUploader: com.gte619n.healthfitness.data.nutrition.CaptureUploader,
+    private val ops: com.gte619n.healthfitness.data.nutrition.NutritionOpEnqueuer,
     private val snackbar: SnackbarController,
     connectivity: com.gte619n.healthfitness.data.net.Connectivity,
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
+    moshi: com.squareup.moshi.Moshi,
 ) : ViewModel() {
+
+    // A resolved label draft is persisted here so a process death mid-review
+    // resumes the proposal instead of losing the user's scanned label.
+    private val labelDraftAdapter = moshi.adapter(LabelCaptureFood::class.java)
 
     // IMPL-AND-20 (Phase 6, D17): meal-photo analysis is an online-only AI flow.
     // The capture screen disables the shutter + shows "needs connection" offline.
@@ -96,7 +100,19 @@ class NutritionCaptureViewModel @Inject constructor(
     // never asks the user which meal it is (the web client doesn't either).
     private fun currentMeal(): Meal = Meal.forHour(java.time.LocalTime.now().hour)
 
-    fun reset() = _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
+    init {
+        // Resume a label draft that a process death interrupted mid-review.
+        savedStateHandle.get<String>(DRAFT_LABEL)?.let { json ->
+            runCatching { labelDraftAdapter.fromJson(json) }.getOrNull()?.let { food ->
+                _state.update { it.copy(stage = CaptureStage.LabelDraft(food)) }
+            }
+        }
+    }
+
+    fun reset() {
+        savedStateHandle.remove<String>(DRAFT_LABEL)
+        _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
+    }
 
     // ---- Barcode --------------------------------------------------------
 
@@ -190,17 +206,23 @@ class NutritionCaptureViewModel @Inject constructor(
 
     /**
      * Capture a meal/product photo and pop straight back to the nutrition page —
-     * before the upload even starts. The JPEG is parked in a cache file and a
-     * WorkManager worker uploads it in the background (surviving process death
-     * and retrying across connectivity blips); the Today page shows a synthetic
-     * "Uploading photo…" row from [PendingCaptureStore] until the server's
-     * ANALYZING placeholder lands, then the existing settle-poll fills it in.
+     * before the upload even starts. The JPEG is parked in a cache file and the
+     * durable NutritionOpWorker uploads it in the background (surviving process
+     * death and retrying across connectivity blips); the Today page shows a
+     * synthetic "Analyzing photo…" row from the persistent op store until the
+     * server's ANALYZING placeholder lands, then the settle-poll fills it in.
      */
     fun analyzeMeal(jpeg: ByteArray) {
-        captureUploader.enqueue(captureDate, currentMeal().wire, jpeg)
         snackbar.show("Analyzing your photo…")
         _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
-        viewModelScope.launch { _events.send(CaptureEvent.NavigateBack) }
+        viewModelScope.launch {
+            // Durable: the JPEG is parked in a cache file and a NutritionOpWorker
+            // uploads it (surviving process death / connectivity blips); the Today
+            // page shows a synthetic "Analyzing photo…" row from the op store until
+            // the server's ANALYZING placeholder lands.
+            ops.enqueueCapturePhoto(captureDate, currentMeal().wire, jpeg)
+            _events.send(CaptureEvent.NavigateBack)
+        }
     }
 
     /**
@@ -211,40 +233,12 @@ class NutritionCaptureViewModel @Inject constructor(
     fun confirmMealItems(items: List<MealCaptureItem>) {
         _state.update { it.copy(stage = CaptureStage.Working, error = null) }
         viewModelScope.launch {
-            try {
-                for (item in items) {
-                    val foodId = item.matchedFoodId ?: foods.create(
-                        FoodCreateRequest(
-                            name = item.name,
-                            macrosPer100g = item.macrosPer100g,
-                            servingSizes = listOf(
-                                com.gte619n.healthfitness.domain.nutrition.ServingSize(
-                                    label = item.suggestedServingLabel,
-                                    grams = item.estimatedPortionGrams,
-                                ),
-                            ),
-                            defaultServingIndex = 0,
-                        ),
-                    ).foodId
-                    nutrition.addEntry(
-                        captureDate,
-                        EntryRequest(
-                            meal = currentMeal().wire,
-                            foodId = foodId,
-                            foodName = item.name,
-                            servingLabel = item.suggestedServingLabel,
-                            servingGrams = item.estimatedPortionGrams,
-                            quantity = 1.0,
-                            macros = item.macrosForPortion,
-                            source = "PHOTO",
-                        ),
-                    )
-                }
-                _state.update {
-                    it.copy(stage = CaptureStage.Done("${items.size} item(s) logged."))
-                }
-            } catch (e: Exception) {
-                _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Save failed") }
+            // Durable: a NutritionOpWorker creates any unmatched catalog foods and
+            // logs each entry with client-minted ids, so a process death mid-confirm
+            // replays safely (idempotent) instead of dropping or double-logging.
+            ops.enqueueConfirmMealItems(captureDate, currentMeal().wire, items)
+            _state.update {
+                it.copy(stage = CaptureStage.Done("${items.size} item(s) logged."))
             }
         }
     }
@@ -256,6 +250,8 @@ class NutritionCaptureViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val proposal = capture.analyzeLabel(jpeg, barcode)
+                // Persist the draft so a process death mid-review resumes it.
+                savedStateHandle[DRAFT_LABEL] = labelDraftAdapter.toJson(proposal.food)
                 _state.update { it.copy(stage = CaptureStage.LabelDraft(proposal.food)) }
             } catch (e: Exception) {
                 _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Analysis failed") }
@@ -263,47 +259,25 @@ class NutritionCaptureViewModel @Inject constructor(
         }
     }
 
-    /** Confirm the label draft: create the catalog food, then log an entry. */
+    /** Confirm the label draft: durably create the catalog food + log an entry. */
     fun confirmLabelDraft(draft: LabelCaptureFood, servingIndex: Int, quantity: Double) {
+        savedStateHandle.remove<String>(DRAFT_LABEL)
         _state.update { it.copy(stage = CaptureStage.Working, error = null) }
         viewModelScope.launch {
-            try {
-                val created = foods.create(
-                    FoodCreateRequest(
-                        name = draft.name,
-                        brand = draft.brand,
-                        barcode = draft.barcode,
-                        macrosPer100g = draft.macrosPer100g,
-                        servingSizes = draft.servingSizes,
-                        defaultServingIndex = draft.defaultServingIndex,
-                    ),
-                )
-                val serving = created.servingSizes.getOrNull(servingIndex)
-                    ?: draft.servingSizes.getOrNull(servingIndex)
-                val grams = serving?.grams ?: 100.0
-                val label = serving?.label ?: "1 serving"
-                val macros = created.macrosPer100g.forPortion(grams, quantity)
-                nutrition.addEntry(
-                    captureDate,
-                    EntryRequest(
-                        meal = currentMeal().wire,
-                        foodId = created.foodId,
-                        foodName = created.name,
-                        servingLabel = label,
-                        servingGrams = grams,
-                        quantity = quantity,
-                        macros = macros,
-                        source = "LABEL",
-                    ),
-                )
-                _state.update { it.copy(stage = CaptureStage.Done("${created.name} logged.")) }
-            } catch (e: Exception) {
-                _state.update { it.copy(stage = CaptureStage.Scanning, error = e.message ?: "Save failed") }
-            }
+            // Durable: a NutritionOpWorker creates the catalog food (client-minted
+            // id + Idempotency-Key) then logs the entry, so a process death after
+            // the user taps "log" replays safely instead of dropping the food.
+            ops.enqueueConfirmLabel(captureDate, currentMeal().wire, draft, servingIndex, quantity)
+            _state.update { it.copy(stage = CaptureStage.Done("${draft.name} logged.")) }
         }
     }
 
     // ---- shared ---------------------------------------------------------
+
+    private companion object {
+        /** SavedStateHandle key for a persisted label-scan draft (process-death resume). */
+        const val DRAFT_LABEL = "capture_draft_label"
+    }
 
     private fun logEntry(body: EntryRequest, doneMessage: String) {
         _state.update { it.copy(stage = CaptureStage.Working, error = null) }

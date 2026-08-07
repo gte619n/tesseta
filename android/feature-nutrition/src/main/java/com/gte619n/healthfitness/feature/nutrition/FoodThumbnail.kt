@@ -30,6 +30,7 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.gte619n.healthfitness.ui.image.ImageZoomDialog
 import com.gte619n.healthfitness.ui.theme.Hf
+import java.io.File
 
 /**
  * Thumbnail for a food's generated studio image, shared by the add-food sheet
@@ -61,20 +62,14 @@ fun FoodThumbnail(
     // chip instead of a silent utensil placeholder, so a missing picture is
     // recoverable rather than permanent.
     onRetry: (() -> Unit)? = null,
+    // The user's just-captured photo (a local cache file), shown with a loader
+    // over it through upload → analysis → image generation, so a photographed meal
+    // reads as "your photo, working on it" rather than a bare spinner — until the
+    // generated [imageUrl] lands READY and supersedes it.
+    localImagePath: String? = null,
 ) {
     val shape = RoundedCornerShape(6.dp)
     when {
-        analyzing -> Box(
-            modifier = Modifier.size(size).clip(shape).background(Hf.colors.canvasSunken),
-            contentAlignment = Alignment.Center,
-        ) {
-            // The photo is still being itemized — the one place a spinner belongs.
-            CircularProgressIndicator(
-                color = Hf.colors.accent,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(size * 0.4f),
-            )
-        }
         imageStatus == "READY" && imageUrl != null -> {
             // Long-press a ready photo to open it full-screen for a closer look.
             var showZoom by remember(imageUrl) { mutableStateOf(false) }
@@ -111,6 +106,21 @@ fun FoodThumbnail(
                 ImageZoomDialog(model = imageUrl, onDismiss = { showZoom = false })
             }
         }
+        // The user's own photo, with a loader over it, while the entry is still
+        // uploading / analyzing / generating its studio image. Takes precedence
+        // over the bare analyzing spinner and the PENDING placeholder.
+        localImagePath != null -> CapturePreviewThumbnail(localImagePath, size, shape)
+        analyzing -> Box(
+            modifier = Modifier.size(size).clip(shape).background(Hf.colors.canvasSunken),
+            contentAlignment = Alignment.Center,
+        ) {
+            // The photo is still being itemized — the one place a bare spinner belongs.
+            CircularProgressIndicator(
+                color = Hf.colors.accent,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(size * 0.4f),
+            )
+        }
         imageStatus == "PENDING" -> FoodThumbnailFallback(size)
         imageStatus == "FAILED" && onRetry != null -> Box(
             modifier = Modifier
@@ -130,6 +140,45 @@ fun FoodThumbnail(
             )
         }
         else -> FoodThumbnailFallback(size)
+    }
+}
+
+/**
+ * The user's captured JPEG (a local cache file) with a translucent scrim + spinner
+ * over it — "your photo, still working on it". Shown from capture through analysis
+ * and image generation; the row swaps to the generated studio image once READY.
+ */
+@Composable
+private fun CapturePreviewThumbnail(path: String, size: Dp, shape: androidx.compose.ui.graphics.Shape) {
+    Box(modifier = Modifier.size(size).clip(shape), contentAlignment = Alignment.Center) {
+        val model = ImageRequest.Builder(LocalContext.current)
+            .data(File(path))
+            .crossfade(true)
+            .build()
+        SubcomposeAsyncImage(
+            model = model,
+            contentDescription = null,
+            modifier = Modifier.size(size).clip(shape),
+            contentScale = ContentScale.Crop,
+        ) {
+            when (painter.state) {
+                is AsyncImagePainter.State.Error -> FoodThumbnailFallback(size)
+                else -> SubcomposeAsyncImageContent()
+            }
+        }
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(shape)
+                .background(Hf.colors.canvasSunken.copy(alpha = 0.4f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(
+                color = Hf.colors.accent,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(size * 0.4f),
+            )
+        }
     }
 }
 

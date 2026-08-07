@@ -53,6 +53,8 @@ class NutritionRepository @Inject constructor(
     private val entryDao: NutritionEntryDao,
     private val targetDao: NutritionTargetDao,
     private val support: MirrorRepositorySupport,
+    private val ops: NutritionOpEnqueuer,
+    private val previews: CapturePreviewStore,
     moshi: Moshi,
 ) {
     private val rowAdapter = moshi.adapter(NutritionEntryRow::class.java)
@@ -147,8 +149,16 @@ class NutritionRepository @Inject constructor(
         fillDay(date)
     }
 
-    suspend fun addEntry(date: String, body: EntryRequest): Entry {
-        val entryId = UUID.randomUUID().toString()
+    suspend fun addEntry(date: String, body: EntryRequest): Entry =
+        addEntry(date, body, UUID.randomUUID().toString())
+
+    /**
+     * Log an entry with a caller-supplied [entryId]. The durable op worker uses
+     * this so a replayed confirm (label / meal-items) reuses the same entry id —
+     * the create rides the outbox exactly like [addEntry], and a same-id re-create
+     * overwrites the one server document instead of duplicating it.
+     */
+    suspend fun addEntry(date: String, body: EntryRequest, entryId: String): Entry {
         val entry = Entry(
             entryId = entryId,
             meal = body.meal,
@@ -265,19 +275,37 @@ class NutritionRepository @Inject constructor(
         date: String,
         mealId: String,
         meal: String,
+        label: String,
         knownImageUrl: String? = null,
         knownImageStatus: String = "NONE",
-    ): Entry {
+    ) {
+        ops.enqueueLogSavedMeal(date, meal, mealId, label, knownImageUrl, knownImageStatus)
+    }
+
+    /**
+     * Worker body for a LOG_SAVED_MEAL op: POST the saved-meal log idempotently
+     * (client entry id + Idempotency-Key), refresh the day, and overlay the saved
+     * meal's known-READY photo when the fresh pull didn't carry it yet.
+     */
+    suspend fun runLogSavedMeal(
+        date: String,
+        meal: String,
+        mealId: String,
+        clientEntryId: String,
+        idempotencyKey: String,
+        knownImageUrl: String?,
+        knownImageStatus: String,
+    ) {
         val entry = api.logDescribedMeal(
             date,
-            DescribeMealLogRequest(mealId = mealId, meal = meal),
+            DescribeMealLogRequest(mealId = mealId, meal = meal, id = clientEntryId),
+            idempotencyKey,
         )
         fillDay(date)
         if (knownImageStatus == "READY" && knownImageUrl != null) {
             overlayEntryImage(date, entry.entryId, knownImageUrl, knownImageStatus)
         }
         support.signalLocalWrite(MirrorTables.NUTRITION_ENTRIES)
-        return entry
     }
 
     /**
@@ -310,19 +338,34 @@ class NutritionRepository @Inject constructor(
     }
 
     /**
-     * Fire-and-forget describe: the server logs an ANALYZING placeholder named
-     * with the description and resolves it in the background (the camera
-     * pattern). The quick 202 POST is the only wait; the mirror refresh pulls
-     * the placeholder so the day renders it immediately and the settle-poll
-     * takes over. Online-only (AI flow, D17).
+     * Fire-and-forget describe, now durable: enqueues a DESCRIBE_ASYNC op instead
+     * of POSTing inline, so a process death / backgrounding before the request
+     * lands no longer loses the log. Returns immediately; [NutritionOpWorker] runs
+     * [runDescribeAsync] (surviving process death), a synthetic row shows via the
+     * op store, and the settle-poll takes over once the real placeholder lands.
      */
-    suspend fun describeMealAsync(date: String, description: String, meal: String): Entry {
-        val entry = api.describeMealAsync(
+    suspend fun describeMealAsync(date: String, description: String, meal: String) {
+        ops.enqueueDescribeAsync(date, meal, description)
+    }
+
+    /**
+     * Worker body for a DESCRIBE_ASYNC op: POST the describe idempotently (client
+     * entry id + Idempotency-Key), then refresh the mirror so the ANALYZING
+     * placeholder renders and the settle-poll takes over.
+     */
+    suspend fun runDescribeAsync(
+        date: String,
+        meal: String,
+        description: String,
+        clientEntryId: String,
+        idempotencyKey: String,
+    ) {
+        api.describeMealAsync(
             date,
-            DescribeMealLogRequest(description = description, meal = meal),
+            DescribeMealLogRequest(description = description, meal = meal, id = clientEntryId),
+            idempotencyKey,
         )
         fillDayAndSignal(date)
-        return entry
     }
 
     /**
@@ -452,7 +495,7 @@ class NutritionRepository @Inject constructor(
     }
 
     private suspend fun assembleDay(date: String): NutritionDay {
-        val entries = entriesForDate(date)
+        val entries = entriesForDate(date).map { it.withCapturePreview() }
         val groups = Meal.entries.mapNotNull { meal ->
             val mealEntries = entries.filter { it.meal.equals(meal.wire, ignoreCase = true) }
             if (mealEntries.isEmpty()) null
@@ -468,6 +511,22 @@ class NutritionRepository @Inject constructor(
             target = mirroredTarget(),
             meals = groups,
         )
+    }
+
+    /**
+     * Attach the user's just-captured photo (from [CapturePreviewStore]) to a
+     * photographed entry while its server image is still generating, so the row
+     * shows the real photo (with a loader over it) instead of a spinner. Once the
+     * generated image is READY the preview is dropped (and its cache file deleted)
+     * and the row shows the studio image.
+     */
+    private fun Entry.withCapturePreview(): Entry {
+        val preview = previews.path(entryId) ?: return this
+        if (imageStatus == "READY" && imageUrl != null) {
+            previews.remove(entryId)
+            return this
+        }
+        return copy(localImagePath = preview)
     }
 
     private suspend fun entriesForDate(date: String): List<Entry> =

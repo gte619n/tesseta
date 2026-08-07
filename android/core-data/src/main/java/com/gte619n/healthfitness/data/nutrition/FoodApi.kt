@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.FoodCreateRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -23,7 +24,12 @@ interface FoodApi {
     suspend fun barcodeLookup(@Path("code") code: String): Food
 
     @POST("api/foods")
-    suspend fun create(@Body body: FoodCreateRequest): Food
+    suspend fun create(
+        @Body body: FoodCreateRequest,
+        // The durable op worker sends a replay-guard key + a client-minted food id
+        // in the body so a retried create reuses the same catalog food.
+        @Header("Idempotency-Key") idempotencyKey: String,
+    ): Food
 
     @POST("api/foods/{foodId}/confirm")
     suspend fun confirm(@Path("foodId") foodId: String): Food

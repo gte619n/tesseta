@@ -254,16 +254,56 @@ public class TestPersistenceConfig {
     // context needs these beans to wire even in tests that don't exercise them.
     @Bean
     FoodCatalogRepository foodCatalogRepository() {
+        // Real in-memory map (keyed by foodId) so catalog CRUD round-trips in
+        // MockMvc tests — the idempotent-replay path for POST /api/foods depends on
+        // findById returning the originally-saved food on an Idempotency-Key replay
+        // (else the reload falls through to a second create and duplicates).
         return new FoodCatalogRepository() {
-            @Override public Optional<CatalogFood> findById(String foodId) { return Optional.empty(); }
-            @Override public List<CatalogFood> searchByNamePrefix(String prefixLower, int limit) { return List.of(); }
-            @Override public List<CatalogFood> searchByTokens(List<String> queryWords, int limit) { return List.of(); }
-            @Override public Optional<CatalogFood> findByBarcode(String code) { return Optional.empty(); }
+            private final java.util.Map<String, CatalogFood> store =
+                new java.util.concurrent.ConcurrentHashMap<>();
+            private final java.util.Map<String, java.util.Set<String>> confirmations =
+                new java.util.concurrent.ConcurrentHashMap<>();
+
+            @Override public Optional<CatalogFood> findById(String foodId) {
+                return Optional.ofNullable(store.get(foodId));
+            }
+
+            @Override public List<CatalogFood> searchByNamePrefix(String prefixLower, int limit) {
+                return store.values().stream()
+                    .filter(f -> f.nameLower() != null && prefixLower != null
+                        && f.nameLower().startsWith(prefixLower))
+                    .limit(limit)
+                    .toList();
+            }
+
+            @Override public List<CatalogFood> searchByTokens(List<String> queryWords, int limit) {
+                return List.of();
+            }
+
+            @Override public Optional<CatalogFood> findByBarcode(String code) {
+                return store.values().stream()
+                    .filter(f -> code != null && code.equals(f.barcode()))
+                    .findFirst();
+            }
+
             @Override public List<CatalogFood> findByImageStatus(
-                com.gte619n.healthfitness.core.nutrition.FoodImageStatus status, int limit) { return List.of(); }
-            @Override public void save(CatalogFood food) {}
-            @Override public void saveConfirmation(String foodId, String userId) {}
-            @Override public int countConfirmations(String foodId) { return 0; }
+                com.gte619n.healthfitness.core.nutrition.FoodImageStatus status, int limit) {
+                return store.values().stream()
+                    .filter(f -> f.imageStatus() == status)
+                    .limit(limit)
+                    .toList();
+            }
+
+            @Override public void save(CatalogFood food) { store.put(food.foodId(), food); }
+
+            @Override public void saveConfirmation(String foodId, String userId) {
+                confirmations.computeIfAbsent(foodId,
+                    k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(userId);
+            }
+
+            @Override public int countConfirmations(String foodId) {
+                return confirmations.getOrDefault(foodId, java.util.Set.of()).size();
+            }
         };
     }
 

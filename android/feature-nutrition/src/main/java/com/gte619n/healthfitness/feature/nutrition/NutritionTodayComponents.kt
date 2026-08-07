@@ -191,6 +191,8 @@ internal fun EntryRow(
     // A photo whose analysis failed still has its captured image server-side, so
     // tapping the row retries the analysis instead of opening the (empty) editor.
     val failedAnalysis = entry.analysisStatus == "FAILED"
+    // A synthetic row for an in-flight durable op (not yet a real server entry).
+    val isPendingOp = entry.entryId.startsWith(PENDING_CAPTURE_PREFIX)
     // Track this row's window origin so drag offsets (which arrive relative to
     // the row) can be reported in window space for hit-testing meal sections.
     var rowOriginInWindow by remember { mutableStateOf(Offset.Zero) }
@@ -226,6 +228,7 @@ internal fun EntryRow(
             size = 40.dp,
             analyzing = entry.isAnalyzing,
             onRetry = onRetryImage,
+            localImagePath = entry.localImagePath,
         )
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -235,14 +238,22 @@ internal fun EntryRow(
                 SyncBadge(syncState = entry.syncState)
             }
             Spacer(Modifier.height(2.dp))
+            // Secondary line follows the logging stages: analyzing → creating the
+            // studio image → the settled macros line.
+            val macrosLine = run {
+                val qtyPrefix = if (entry.quantity != 1.0) "${formatQuantity(entry.quantity)} × " else ""
+                "$qtyPrefix${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"
+            }
             Text(
                 when {
+                    // Synthetic in-flight op row: a photo is uploading, anything
+                    // else (describe / saved-meal) is being logged.
+                    isPendingOp && entry.localImagePath != null -> "Uploading…"
+                    isPendingOp -> "Logging…"
                     entry.isAnalyzing -> "Analyzing your photo…"
                     failedAnalysis -> "Couldn’t read photo · tap to retry"
-                    else -> {
-                        val qtyPrefix = if (entry.quantity != 1.0) "${formatQuantity(entry.quantity)} × " else ""
-                        "$qtyPrefix${entry.servingLabel.orEmpty()} · ${formatKcal(entry.macros.caloriesKcal)}"
-                    }
+                    entry.imageStatus == "PENDING" -> "Creating image… · $macrosLine"
+                    else -> macrosLine
                 },
                 style = Hf.type.capsSm,
                 color = Hf.colors.textTertiary,

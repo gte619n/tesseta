@@ -207,11 +207,35 @@ public class FoodCatalogService {
         FoodSource source,
         String referencePhotoRef
     ) {
+        return create(createdByUserId, name, brand, barcode, category, macrosPer100g,
+            servingSizes, defaultServingIndex, source, referencePhotoRef, null);
+    }
+
+    /**
+     * As above, but with a caller-supplied {@code foodId} so a create can be made
+     * idempotent — a durable client retry (e.g. a label/meal-item confirm replayed
+     * from a background worker) reuses the same food id instead of minting a
+     * duplicate catalog food. A null/blank id falls back to a server-generated
+     * UUID — the previous behaviour.
+     */
+    public CatalogFood create(
+        String createdByUserId,
+        String name,
+        String brand,
+        String barcode,
+        String category,
+        Macros macrosPer100g,
+        List<ServingSize> servingSizes,
+        int defaultServingIndex,
+        FoodSource source,
+        String referencePhotoRef,
+        String foodId
+    ) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name is required");
         }
         CatalogFood food = new CatalogFood(
-            UUID.randomUUID().toString(),
+            (foodId != null && !foodId.isBlank()) ? foodId : UUID.randomUUID().toString(),
             name,
             name.toLowerCase(),
             brand,
