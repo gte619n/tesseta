@@ -32,14 +32,17 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 // Photo-meal analysis (itemize + generate the finished-meal/ingredient images)
-// can take a few minutes. The backend now pushes an FCM sync wakeup at BOTH
-// terminal steps — when the entry finalizes AND when its finished-meal image
-// lands (see FoodEntryImageService) — so a straggler no longer depends on the
-// foreground poll still running. The settle-poll is therefore just a short
-// fast-feedback fallback (≈50 s) for the first moments after logging, in case
-// an early push is missed; anything slower is caught by the push handler and
-// the on-resume refresh, not by polling for five minutes.
-private const val MAX_SETTLE_POLL_ATTEMPTS = 20
+// can take a couple of minutes. The backend does push an FCM wakeup when the
+// entry finalizes AND when its image lands (FoodEntryImageService), but a
+// data push can be delayed or dropped, so a FOREGROUND screen must not depend
+// on it — a slow generation past a short cap left the row stuck on its loader
+// forever ("generated on web, never popped in on mobile"). The settle-poll
+// therefore keeps converging on its own for a generous budget while the screen
+// is open, backing off so a long generation isn't hammered; the push and the
+// on-resume refresh remain the path for anything still pending after that.
+private const val SETTLE_POLL_BUDGET_MILLIS = 4 * 60 * 1000L // keep converging up to ~4 min
+private const val SETTLE_POLL_MIN_DELAY_MILLIS = 2_500L // fast first, for snappy early feedback
+private const val SETTLE_POLL_MAX_DELAY_MILLIS = 10_000L // then ease off while it keeps generating
 
 // A run of consecutive failed poll fetches (offline, or a persistent server
 // error) stops the settle-poll — but a single flaky fetch does NOT count against
@@ -280,28 +283,30 @@ class NutritionTodayViewModel @Inject constructor(
         imagePollJob?.cancel()
         if (!_state.value.day.hasGeneratingImage()) return
         imagePollJob = viewModelScope.launch {
-            var attempts = 0
+            val startedAt = System.currentTimeMillis()
+            var delayMillis = SETTLE_POLL_MIN_DELAY_MILLIS
             var consecutiveFailures = 0
-            while (attempts < MAX_SETTLE_POLL_ATTEMPTS &&
+            while (System.currentTimeMillis() - startedAt < SETTLE_POLL_BUDGET_MILLIS &&
                 consecutiveFailures < MAX_SETTLE_POLL_FAILURES &&
                 _state.value.date == date &&
                 _state.value.day.hasGeneratingImage()
             ) {
-                delay(2500)
+                delay(delayMillis)
                 if (_state.value.date != date) return@launch
                 val day = runCatching { repository.day(date.format(ISO_DATE)) }.getOrNull()
                 if (day == null) {
-                    // A flaky fetch must not consume the generation-settle budget:
-                    // keep the last-known day on screen and retry, giving up only
-                    // after a run of consecutive failures (offline / persistent).
+                    // A flaky fetch must not burn the budget faster: keep the
+                    // last-known day on screen and retry, giving up only after a run
+                    // of consecutive failures (offline / persistent server error).
                     consecutiveFailures++
                     continue
                 }
                 consecutiveFailures = 0
-                attempts++
                 if (_state.value.date == date) {
                     _state.update { it.copy(day = day) }
                 }
+                // Ease off so a multi-minute generation isn't re-fetched every 2.5s.
+                delayMillis = (delayMillis + 2_500L).coerceAtMost(SETTLE_POLL_MAX_DELAY_MILLIS)
             }
         }
     }
