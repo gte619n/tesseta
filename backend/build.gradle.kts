@@ -17,10 +17,13 @@ version = "0.0.1-SNAPSHOT"
 //   tomcat 10.1.55 — CVE-2026-41293 (CRITICAL); Boot 3.5.14 ships 10.1.54.
 //   spring-framework 6.2.19 — CVE-2026-41850 (SpEL DoS), CVE-2026-41842 (static
 //     resource DoS), CVE-2026-41845 (webmvc XSS); Boot 3.5.x ships 6.2.18.
+//   micrometer 1.15.12 — CVE-2026-40983 (gRPC DoS), CVE-2026-40984 (HTTP DoS);
+//     Boot 3.5.x ships 1.15.11. Patch bump on the same minor line.
 extra["jackson-bom.version"] = "2.21.4"
 extra["netty.version"] = "4.1.136.Final"
 extra["tomcat.version"] = "10.1.55"
 extra["spring-framework.version"] = "6.2.19"
+extra["micrometer.version"] = "1.15.12"
 
 repositories {
     mavenCentral()
