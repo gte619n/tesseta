@@ -4,12 +4,14 @@ import com.gte619n.healthfitness.data.db.entity.MirrorRow
 import com.gte619n.healthfitness.data.db.entity.OutboxOp
 import com.gte619n.healthfitness.data.db.entity.SyncRowState
 import com.gte619n.healthfitness.data.db.entity.SyncRowStatus
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -135,21 +137,31 @@ class MirrorRepositorySupport @Inject constructor(
             .collect { send(it) }
     }
 
-    /** Optimistic CREATE: write a PENDING mirror row, enqueue, drain. */
-    suspend fun createLocal(table: String, id: String, payloadJson: String, lastUpdate: Long) {
-        mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
-        outbox.enqueue(OutboxOp.CREATE, table, id, payloadJson)
-        localWriteBus.signal(table)
-        drainTrigger.requestDrain()
-    }
+    /**
+     * Optimistic CREATE: write a PENDING mirror row, enqueue, drain.
+     *
+     * The mirror upsert + outbox enqueue run under [NonCancellable] so a caller
+     * whose scope is cancelled mid-write (e.g. a ViewModel cleared the instant the
+     * user navigates away right after logging) can't leave a half-written local
+     * state — the durable write always completes and drains, which is the whole
+     * point of the offline-first rail.
+     */
+    suspend fun createLocal(table: String, id: String, payloadJson: String, lastUpdate: Long) =
+        withContext(NonCancellable) {
+            mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
+            outbox.enqueue(OutboxOp.CREATE, table, id, payloadJson)
+            localWriteBus.signal(table)
+            drainTrigger.requestDrain()
+        }
 
     /** Optimistic UPDATE: replace the mirror row (PENDING), enqueue, drain. */
-    suspend fun updateLocal(table: String, id: String, payloadJson: String, lastUpdate: Long) {
-        mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
-        outbox.enqueue(OutboxOp.UPDATE, table, id, payloadJson)
-        localWriteBus.signal(table)
-        drainTrigger.requestDrain()
-    }
+    suspend fun updateLocal(table: String, id: String, payloadJson: String, lastUpdate: Long) =
+        withContext(NonCancellable) {
+            mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
+            outbox.enqueue(OutboxOp.UPDATE, table, id, payloadJson)
+            localWriteBus.signal(table)
+            drainTrigger.requestDrain()
+        }
 
     /**
      * Optimistic UPDATE whose replayed wire body differs from the mirrored read
@@ -165,7 +177,7 @@ class MirrorRepositorySupport @Inject constructor(
         payloadJson: String,
         wirePayloadJson: String,
         lastUpdate: Long,
-    ) {
+    ) = withContext(NonCancellable) {
         mirror.upsert(table, pendingRow(id, payloadJson, lastUpdate))
         outbox.enqueue(OutboxOp.UPDATE, table, id, wirePayloadJson)
         localWriteBus.signal(table)
@@ -173,12 +185,13 @@ class MirrorRepositorySupport @Inject constructor(
     }
 
     /** Optimistic DELETE: tombstone the mirror row, enqueue, drain. */
-    suspend fun deleteLocal(table: String, id: String, lastUpdate: Long) {
-        mirror.markArchived(table, id, lastUpdate)
-        outbox.enqueue(OutboxOp.DELETE, table, id, null)
-        localWriteBus.signal(table)
-        drainTrigger.requestDrain()
-    }
+    suspend fun deleteLocal(table: String, id: String, lastUpdate: Long) =
+        withContext(NonCancellable) {
+            mirror.markArchived(table, id, lastUpdate)
+            outbox.enqueue(OutboxOp.DELETE, table, id, null)
+            localWriteBus.signal(table)
+            drainTrigger.requestDrain()
+        }
 
     /**
      * Emit a local-write signal for [table] without an accompanying optimistic

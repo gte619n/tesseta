@@ -24,6 +24,7 @@ import com.gte619n.healthfitness.data.db.dao.MedicationDao
 import com.gte619n.healthfitness.data.db.dao.MedicationHistoryDao
 import com.gte619n.healthfitness.data.db.dao.NutritionDailyLogDao
 import com.gte619n.healthfitness.data.db.dao.NutritionEntryDao
+import com.gte619n.healthfitness.data.db.dao.NutritionOpDao
 import com.gte619n.healthfitness.data.db.dao.NutritionTargetDao
 import com.gte619n.healthfitness.data.db.dao.OutboxDao
 import com.gte619n.healthfitness.data.db.dao.ProtocolDao
@@ -51,6 +52,7 @@ import com.gte619n.healthfitness.data.db.entity.MedicationEntity
 import com.gte619n.healthfitness.data.db.entity.MedicationHistoryEntity
 import com.gte619n.healthfitness.data.db.entity.NutritionDailyLogEntity
 import com.gte619n.healthfitness.data.db.entity.NutritionEntryEntity
+import com.gte619n.healthfitness.data.db.entity.NutritionOpEntity
 import com.gte619n.healthfitness.data.db.entity.NutritionTargetEntity
 import com.gte619n.healthfitness.data.db.entity.OutboxEntity
 import com.gte619n.healthfitness.data.db.entity.ProtocolEntity
@@ -107,6 +109,9 @@ import net.sqlcipher.database.SupportFactory
         // offline-fix: shared read cache for fetched catalog entities (ADR-0018) —
         // NOT a mirror table, NOT wired into the sync engine.
         CatalogCacheEntity::class,
+        // durable queue of in-flight nutrition AI-create ops (describe / saved-meal
+        // / meal-items / label). Device-local, its own drain rail — NOT a mirror.
+        NutritionOpEntity::class,
     ],
     // v3: bumped to force a destructive wipe + full resync so rows pulled before
     // the delta-doc id injection (which lacked their document id) are re-fetched
@@ -118,7 +123,11 @@ import net.sqlcipher.database.SupportFactory
     // v5: adds the catalog_cache table (offline-fix, ADR-0018) — a bounded read
     // cache of fetched reference entities (equipment/food/drug). Additive
     // MIGRATION_4_5; a plain local cache, not a mirror and not synced.
-    version = 5,
+    // v6: adds the nutritionOps table — the durable queue backing the hardened
+    // nutrition AI-create flows (describe / saved-meal / meal-items / label).
+    // Additive MIGRATION_5_6; device-local (holds an in-flight op that a wipe
+    // would drop), not a mirror and not synced.
+    version = 6,
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {
@@ -152,6 +161,8 @@ abstract class HfDatabase : RoomDatabase() {
     abstract fun workoutSessionDraftDao(): WorkoutSessionDraftDao
 
     abstract fun catalogCacheDao(): CatalogCacheDao
+
+    abstract fun nutritionOpDao(): NutritionOpDao
 
     companion object {
         const val DB_NAME = "hf-offline.db"
@@ -196,6 +207,30 @@ abstract class HfDatabase : RoomDatabase() {
         }
 
         /**
+         * v5 → v6: add the nutritionOps table — the durable queue backing the
+         * hardened nutrition AI-create flows. Additive; keyed by op `id` with an
+         * index on `nextAttemptAt` (the drain's "due now" query). Must match the
+         * exported schema 6.json exactly so Room's identity-hash validation passes.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `nutritionOps` (" +
+                        "`id` TEXT NOT NULL, `type` TEXT NOT NULL, `date` TEXT NOT NULL, " +
+                        "`mealWire` TEXT NOT NULL, `clientEntryId` TEXT NOT NULL, " +
+                        "`idempotencyKey` TEXT NOT NULL, `payloadJson` TEXT, `jpegPath` TEXT, " +
+                        "`label` TEXT NOT NULL, `attempts` INTEGER NOT NULL, " +
+                        "`nextAttemptAt` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_nutritionOps_nextAttemptAt` " +
+                        "ON `nutritionOps` (`nextAttemptAt`)",
+                )
+            }
+        }
+
+        /**
          * Builds the encrypted database. Loads the SQLCipher native libs, fetches
          * the Keystore-wrapped passphrase, and hands it to [SupportFactory]
          * (which copies then zeroes the byte array).
@@ -216,7 +251,7 @@ abstract class HfDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 // Known upgrades run additive migrations (the drafts table holds
                 // device-only data that a wipe would destroy)…
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 // …while schemaVersion bumps (D13) trigger an explicit wipe+resync
                 // at the sync layer, not a Room migration; fall back destructively
                 // so a mismatched on-disk schema can never wedge the app.

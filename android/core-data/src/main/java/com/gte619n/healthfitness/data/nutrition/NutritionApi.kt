@@ -16,6 +16,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -84,6 +85,9 @@ interface NutritionApi {
     suspend fun logDescribedMeal(
         @Path("date") date: String,
         @Body body: DescribeMealLogRequest,
+        // Sent by the durable op worker so a replayed log reuses the same entry
+        // instead of duplicating it (backend keys idempotentCreate on this).
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): Entry
 
     // Fire-and-forget describe: returns the ANALYZING placeholder immediately
@@ -92,6 +96,7 @@ interface NutritionApi {
     suspend fun describeMealAsync(
         @Path("date") date: String,
         @Body body: DescribeMealLogRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): Entry
 
     // Name-prefix search over the shared saved-meal catalog (user's own first) —

@@ -392,12 +392,27 @@ public class NutritionService {
     public FoodEntry beginAnalyzingEntry(
         String userId, LocalDate date, MealType meal, String photoRef, String contentHash,
         String placeholderName, EntrySource source) {
+        return beginAnalyzingEntry(
+            userId, date, meal, photoRef, contentHash, placeholderName, source, null);
+    }
+
+    /**
+     * As above, but with a caller-supplied {@code entryId} so an async-analysis
+     * create can be made idempotent (a durable client retry replays the same id
+     * rather than minting a duplicate placeholder). A null/blank id falls back to
+     * a server-generated UUID — the previous behaviour.
+     */
+    public FoodEntry beginAnalyzingEntry(
+        String userId, LocalDate date, MealType meal, String photoRef, String contentHash,
+        String placeholderName, EntrySource source, String entryId) {
         requireUser(userId);
         requireDate(date);
         if (meal == null) {
             throw new IllegalArgumentException("meal is required");
         }
-        String entryId = UUID.randomUUID().toString();
+        if (entryId == null || entryId.isBlank()) {
+            entryId = UUID.randomUUID().toString();
+        }
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, placeholderName,
             null, null, 1.0, Macros.zero(), photoRef, contentHash, source,

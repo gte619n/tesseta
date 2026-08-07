@@ -35,9 +35,9 @@ import org.junit.Test
  * The server reuses the saved meal's READY photo, but the fresh day pull can
  * briefly return the new entry without it (the reuse attach and this date's read
  * aren't ordered), and the entry is neither ANALYZING nor image-PENDING — so
- * nothing (settle-poll or day() re-fetch) converges it. logDescribedMeal overlays
- * the client-known READY image (the one the add-sheet search row shows) so the
- * picture appears with the row.
+ * nothing (settle-poll or day() re-fetch) converges it. runLogSavedMeal (the
+ * durable op worker's body) overlays the client-known READY image (the one the
+ * add-sheet search row shows) so the picture appears with the row.
  */
 class NutritionRepositoryLogMealTest {
 
@@ -69,6 +69,8 @@ class NutritionRepositoryLogMealTest {
             entryDao = FakeNutritionEntryDao(mirror),
             targetDao = FakeNutritionTargetDao(mirror),
             support = support,
+            ops = mockk(relaxed = true),
+            previews = CapturePreviewStore(),
             moshi = SyncTestMoshi.instance,
         )
     }
@@ -98,11 +100,11 @@ class NutritionRepositoryLogMealTest {
     @Test
     fun log_overlaysKnownReadyPhoto_whenThePullLacksIt() = runBlocking {
         // POST returns the pre-image entry; the day pull also lacks the photo.
-        coEvery { api.logDescribedMeal(date, any()) } returns entry(null, "NONE")
+        coEvery { api.logDescribedMeal(date, any(), any()) } returns entry(null, "NONE")
         coEvery { api.getDay(date) } returns dayWith(entry(null, "NONE"))
 
-        repository.logDescribedMeal(
-            date, "meal-1", "dinner",
+        repository.runLogSavedMeal(
+            date, "dinner", "meal-1", "e1", "key-1",
             knownImageUrl = "http://img/salmon.png",
             knownImageStatus = "READY",
         )
@@ -115,11 +117,11 @@ class NutritionRepositoryLogMealTest {
     @Test
     fun log_keepsServerPhoto_whenThePullAlreadyCarriesIt() = runBlocking {
         // The pull already has the reused photo — the overlay must not clobber it.
-        coEvery { api.logDescribedMeal(date, any()) } returns entry(null, "NONE")
+        coEvery { api.logDescribedMeal(date, any(), any()) } returns entry(null, "NONE")
         coEvery { api.getDay(date) } returns dayWith(entry("http://server/salmon.png", "READY"))
 
-        repository.logDescribedMeal(
-            date, "meal-1", "dinner",
+        repository.runLogSavedMeal(
+            date, "dinner", "meal-1", "e1", "key-1",
             knownImageUrl = "http://img/salmon.png",
             knownImageStatus = "READY",
         )
@@ -133,11 +135,11 @@ class NutritionRepositoryLogMealTest {
     fun log_leavesGeneratingPhotoAlone_whenTheSavedMealHasNoReadyPhotoYet() = runBlocking {
         // A brand-new saved meal generating its first photo lands PENDING; with no
         // known-READY image the settle-poll owns it, so we must not force anything.
-        coEvery { api.logDescribedMeal(date, any()) } returns entry(null, "NONE")
+        coEvery { api.logDescribedMeal(date, any(), any()) } returns entry(null, "NONE")
         coEvery { api.getDay(date) } returns dayWith(entry(null, "PENDING"))
 
-        repository.logDescribedMeal(
-            date, "meal-1", "dinner",
+        repository.runLogSavedMeal(
+            date, "dinner", "meal-1", "e1", "key-1",
             knownImageUrl = null,
             knownImageStatus = "NONE",
         )

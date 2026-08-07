@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.api.nutrition;
 
 import com.gte619n.healthfitness.api.security.AdminOnly;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.nutrition.CatalogFood;
 import com.gte619n.healthfitness.core.nutrition.FoodCatalogService;
@@ -26,10 +27,13 @@ public class FoodController {
 
     private final CurrentUserProvider currentUser;
     private final FoodCatalogService catalog;
+    private final SyncWriteContext syncWrite;
 
-    public FoodController(CurrentUserProvider currentUser, FoodCatalogService catalog) {
+    public FoodController(
+        CurrentUserProvider currentUser, FoodCatalogService catalog, SyncWriteContext syncWrite) {
         this.currentUser = currentUser;
         this.catalog = catalog;
+        this.syncWrite = syncWrite;
     }
 
     @GetMapping("/search")
@@ -79,19 +83,32 @@ public class FoodController {
             ? List.of()
             : body.servingSizes().stream().map(ServingSizeDto::toServingSize).toList();
         int defaultIndex = body.defaultServingIndex() != null ? body.defaultServingIndex() : 0;
-        CatalogFood food = catalog.create(
+        // Client-minted food id + idempotent replay (D7): a durable client retry
+        // (a label / meal-item confirm replayed from a background op worker) reuses
+        // the same catalog food id instead of creating a duplicate food.
+        String foodId = syncWrite.resolveId(body.id());
+        FoodResponse response = syncWrite.idempotentCreate(
+            "foods:create",
             userId,
-            body.name(),
-            body.brand(),
-            body.barcode(),
-            body.category(),
-            body.macrosPer100g() != null ? body.macrosPer100g().toMacros() : null,
-            servings,
-            defaultIndex,
-            FoodSource.USER,
-            body.referencePhotoRef()
+            () -> {
+                CatalogFood food = catalog.create(
+                    userId,
+                    body.name(),
+                    body.brand(),
+                    body.barcode(),
+                    body.category(),
+                    body.macrosPer100g() != null ? body.macrosPer100g().toMacros() : null,
+                    servings,
+                    defaultIndex,
+                    FoodSource.USER,
+                    body.referencePhotoRef(),
+                    foodId
+                );
+                return new SyncWriteContext.Created<>(food.foodId(), FoodResponse.from(food));
+            },
+            id -> catalog.find(id).map(FoodResponse::from)
         );
-        return ResponseEntity.status(HttpStatus.CREATED).body(FoodResponse.from(food));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/{foodId}/confirm")
@@ -130,6 +147,8 @@ public class FoodController {
          * from a capture proposal). When present, the studio image is generated
          * using that photo as a visual reference; otherwise from the name.
          */
-        String referencePhotoRef
+        String referencePhotoRef,
+        /** Optional client-minted food UUID for idempotent replay; null ⇒ server-generated. */
+        String id
     ) {}
 }

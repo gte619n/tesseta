@@ -105,6 +105,17 @@ public class MealDescriptionService {
      * image (a brand-new meal whose saved-meal photo is still generating).
      */
     public FoodEntry logResolvedMeal(String userId, LocalDate date, MealType meal, String mealId) {
+        return logResolvedMeal(userId, date, meal, mealId, null);
+    }
+
+    /**
+     * As above, but with a caller-supplied {@code entryId} so the log can be made
+     * idempotent — a durable client retry reuses the same entry id instead of
+     * creating a duplicate composite entry. A null/blank id falls back to a
+     * server-generated UUID (via {@code addCompositeMeal}).
+     */
+    public FoodEntry logResolvedMeal(
+        String userId, LocalDate date, MealType meal, String mealId, String entryId) {
         requireUser(userId);
         SavedMeal saved = savedMeals.findById(mealId)
             .orElseThrow(() -> new IllegalArgumentException("saved meal not found: " + mealId));
@@ -113,7 +124,7 @@ public class MealDescriptionService {
             throw new IllegalArgumentException("saved meal has no ingredients: " + mealId);
         }
         FoodEntry entry = nutrition.addCompositeMeal(
-            userId, date, meal, saved.name(), ingredients, EntrySource.MANUAL);
+            userId, date, meal, saved.name(), ingredients, EntrySource.MANUAL, entryId);
 
         if (saved.imageStatus() == FoodImageStatus.READY && saved.imageUrl() != null) {
             // Reuse: the photo already exists — attach it, no regeneration.
@@ -129,8 +140,14 @@ public class MealDescriptionService {
 
     /** One-shot: resolve the description then log it onto {@code date}. */
     public FoodEntry logDescribed(String userId, LocalDate date, MealType meal, String description) {
+        return logDescribed(userId, date, meal, description, null);
+    }
+
+    /** One-shot resolve+log with a caller-supplied {@code entryId} for idempotency. */
+    public FoodEntry logDescribed(
+        String userId, LocalDate date, MealType meal, String description, String entryId) {
         MealResolution resolution = resolve(userId, description);
-        return logResolvedMeal(userId, date, meal, resolution.mealId());
+        return logResolvedMeal(userId, date, meal, resolution.mealId(), entryId);
     }
 
     /**
@@ -142,6 +159,17 @@ public class MealDescriptionService {
      */
     public FoodEntry describeMealAsync(
         String userId, LocalDate date, MealType meal, String description) {
+        return describeMealAsync(userId, date, meal, description, null);
+    }
+
+    /**
+     * As above, but with a caller-supplied {@code entryId} so the placeholder
+     * create is idempotent — a durable client retry replays the same id instead
+     * of logging a second ANALYZING row. A null/blank id falls back to a
+     * server-generated UUID.
+     */
+    public FoodEntry describeMealAsync(
+        String userId, LocalDate date, MealType meal, String description, String entryId) {
         requireUser(userId);
         if (description == null || description.isBlank()) {
             throw new IllegalArgumentException("description is required");
@@ -151,7 +179,7 @@ public class MealDescriptionService {
         }
         FoodEntry placeholder = nutrition.beginAnalyzingEntry(
             userId, date, meal, null, null,
-            placeholderName(description), EntrySource.MANUAL);
+            placeholderName(description), EntrySource.MANUAL, entryId);
         CompletableFuture.runAsync(
             () -> resolveAndFinalize(userId, date, placeholder.entryId(), description));
         return placeholder;

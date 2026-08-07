@@ -100,6 +100,41 @@ class MealDescriptionServiceTest {
     }
 
     @Test
+    void logResolvedMeal_honoursCallerSuppliedEntryId_forIdempotentReplay() {
+        SavedMeal saved = new SavedMeal(
+            "meal-3", "Eggs", "eggs", USER,
+            List.of(new CompositeIngredient("Eggs", null,
+                new Macros(155.0, 13.0, 1.1, 11.0, 0.0, 1.1), 100.0, "100 g", 1.0,
+                new Macros(155.0, 13.0, 1.1, 11.0, 0.0, 1.1))),
+            100.0, new Macros(155.0, 13.0, 1.1, 11.0, 0.0, 1.1),
+            FoodSource.GEMINI_DESCRIPTION, null, FoodImageStatus.NONE, null, null);
+        Fixture f = new Fixture(analyzer(new MealAnalysis(null, false, List.of()), Optional.empty()));
+        f.meals.save(saved);
+
+        FoodEntry entry = f.svc.logResolvedMeal(
+            USER, DATE, MealType.DINNER, "meal-3", "client-entry-123");
+
+        assertEquals("client-entry-123", entry.entryId(),
+            "the composite entry uses the caller-minted id so a replay reuses it");
+        assertTrue(f.entries.findById(USER, DATE, "client-entry-123").isPresent());
+    }
+
+    @Test
+    void describeAsync_honoursCallerSuppliedEntryId_forIdempotentReplay() {
+        Fixture f = new Fixture(analyzer(
+            new MealAnalysis("Oatmeal", false, List.of(
+                new MealItem("Oatmeal", 250.0,
+                    new Macros(68.0, 2.4, 12.0, 1.4, 1.7, 0.5), 0.9))),
+            Optional.empty()));
+
+        FoodEntry placeholder = f.svc.describeMealAsync(
+            USER, DATE, MealType.BREAKFAST, "a bowl of oatmeal", "client-entry-async-9");
+
+        assertEquals("client-entry-async-9", placeholder.entryId(),
+            "the ANALYZING placeholder uses the caller-minted id so a replay reuses it");
+    }
+
+    @Test
     void logDescribed_oneShot_resolvesThenLogs() {
         Fixture f = new Fixture(analyzer(
             new MealAnalysis("Oatmeal", false, List.of(

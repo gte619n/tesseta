@@ -1640,21 +1640,17 @@ private fun CoachActionsBar(
         // Next auto-advances after the last set is logged, so this is the manual
         // skip-ahead; hidden on the last exercise (finish via the More menu).
         if (!last) {
-            Button(
-                onClick = onNext,
-                colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
-                contentPadding = PaddingValues(start = 16.dp, end = 12.dp),
-            ) {
+            TextButton(onClick = onNext, contentPadding = PaddingValues(horizontal = 10.dp)) {
                 Text(
                     stringResource(R.string.workout_session_next),
                     style = Hf.type.bodyMd,
-                    color = Hf.colors.textInverse,
+                    color = Hf.colors.textSecondary,
                 )
                 Spacer(Modifier.width(2.dp))
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = Hf.colors.textInverse,
+                    tint = Hf.colors.textSecondary,
                     modifier = Modifier.size(20.dp),
                 )
             }

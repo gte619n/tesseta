@@ -2,8 +2,11 @@ package com.gte619n.healthfitness.feature.nutrition
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.data.db.entity.NutritionOpEntity
+import com.gte619n.healthfitness.data.db.entity.NutritionOpType
+import com.gte619n.healthfitness.data.nutrition.CapturePreviewStore
+import com.gte619n.healthfitness.data.nutrition.NutritionOpStore
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
-import com.gte619n.healthfitness.data.nutrition.PendingCaptureStore
 import com.gte619n.healthfitness.data.sync.SyncSignals
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
@@ -22,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -64,18 +68,19 @@ data class NutritionTodayUiState(
     /** true while a user-initiated pull-to-refresh is in flight. */
     val isRefreshing: Boolean = false,
     /**
-     * Capture photos still uploading in the background (B2 instant capture).
-     * The screen renders one synthetic "Uploading photo…" row per item, in the
-     * meal group the capture targeted, until the server's ANALYZING placeholder
-     * replaces it.
+     * In-flight durable nutrition ops (photo capture, describe, saved-meal,
+     * label / meal-items confirm). The screen renders one synthetic "logging…"
+     * row per op, in the meal group it targets, until the real entry lands. These
+     * survive process death (they're Room-backed), unlike the old in-memory rows.
      */
-    val pendingCaptures: List<PendingCaptureStore.PendingCapture> = emptyList(),
+    val pendingOps: List<NutritionOpEntity> = emptyList(),
 )
 
 @HiltViewModel
 class NutritionTodayViewModel @Inject constructor(
     private val repository: NutritionRepository,
-    pendingCaptures: PendingCaptureStore,
+    pendingOps: NutritionOpStore,
+    capturePreviews: CapturePreviewStore,
     syncSignals: SyncSignals,
 ) : ViewModel() {
 
@@ -106,17 +111,30 @@ class NutritionTodayViewModel @Inject constructor(
                 }
             }
         }
-        // Mirror the in-flight capture uploads into state. When an upload
-        // completes (the list shrinks) the worker has already pulled the
-        // server's ANALYZING placeholder into the mirror — re-load so the
-        // synthetic row swaps for the real one and the settle-poll engages.
+        // Mirror the in-flight durable ops into state. When one completes (the
+        // list shrinks) the worker has already pulled the server's real entry into
+        // the mirror — re-load so the synthetic row swaps for the real one and the
+        // settle-poll engages.
         viewModelScope.launch {
-            var previous = emptyList<PendingCaptureStore.PendingCapture>()
-            pendingCaptures.pending.collect { captures ->
-                val completed = previous.size > captures.size
-                previous = captures
-                _state.update { it.copy(pendingCaptures = captures) }
+            var previous = emptyList<NutritionOpEntity>()
+            pendingOps.observeAll().collect { list ->
+                val completed = previous.size > list.size
+                previous = list
+                _state.update { it.copy(pendingOps = list) }
                 if (completed) refresh()
+            }
+        }
+        // A just-captured photo becomes available for its entry the moment the
+        // upload worker associates it (CapturePreviewStore), and is dropped again
+        // when the generated image lands. Re-assemble from the mirror (NO network)
+        // on each change so the row swaps in the real photo — and later the studio
+        // image — immediately, rather than waiting on the next settle-poll tick.
+        viewModelScope.launch {
+            capturePreviews.previews.drop(1).collect {
+                val cached = runCatching {
+                    repository.cachedDay(_state.value.date.format(ISO_DATE))
+                }.getOrNull()
+                if (cached != null) _state.update { it.copy(day = cached) }
             }
         }
     }
@@ -440,11 +458,11 @@ class NutritionTodayViewModel @Inject constructor(
         val date = _state.value.date.format(ISO_DATE)
         _state.update { it.copy(addSheetOpen = false) }
         viewModelScope.launch {
+            // Durable: enqueues a DESCRIBE_ASYNC op that survives process death. A
+            // synthetic row appears via the pendingOps flow; when the worker's POST
+            // lands the op clears and the flow re-loads the real ANALYZING entry.
             try {
                 repository.describeMealAsync(date, text, meal.wire)
-                val day = repository.day(date)
-                _state.update { it.copy(day = day, error = null) }
-                pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Describe failed") }
             }
@@ -461,9 +479,19 @@ class NutritionTodayViewModel @Inject constructor(
         _state.update { it.copy(addSheetOpen = false) }
         viewModelScope.launch {
             try {
-                repository.relog(date, entry, meal.wire)
+                val created = repository.relog(date, entry, meal.wire)
+                // Snap the row in immediately (like moveEntry) instead of waiting on
+                // day()'s Room re-read / network re-pull — that round-trip was the
+                // lag. Then revalidate in the background to reconcile totals + badge.
+                _state.update {
+                    it.copy(
+                        day = it.day.withEntryAppended(created.copy(syncState = "PENDING"), date),
+                        error = null,
+                    )
+                }
                 val day = repository.day(date)
                 _state.update { it.copy(day = day, error = null) }
+                pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Add failed") }
             }
@@ -480,15 +508,15 @@ class NutritionTodayViewModel @Inject constructor(
         val date = _state.value.date.format(ISO_DATE)
         _state.update { it.copy(addSheetOpen = false) }
         viewModelScope.launch {
+            // Durable: enqueues a LOG_SAVED_MEAL op. The synthetic row (and, on
+            // completion, the real entry) come through the pendingOps flow.
             try {
                 repository.logDescribedMeal(
                     date, result.mealId, meal.wire,
+                    label = result.name,
                     knownImageUrl = result.imageUrl,
                     knownImageStatus = result.imageStatus,
                 )
-                val day = repository.day(date)
-                _state.update { it.copy(day = day, error = null) }
-                pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(error = e.message ?: "Add failed") }
             }
@@ -510,39 +538,44 @@ class NutritionTodayViewModel @Inject constructor(
     }
 }
 
-/** Id prefix of the synthetic rows shown while a capture photo uploads. */
+/** Id prefix of the synthetic rows shown while a durable nutrition op runs. */
 const val PENDING_CAPTURE_PREFIX = "pending-capture-"
 
 /**
- * Merge the in-flight capture uploads into the day for display: one synthetic
- * "Uploading photo…" row (ANALYZING, zero macros) per capture targeting [date],
- * appended to its target meal group. Pure presentation — totals are untouched
- * (an uploading photo contributes nothing yet, same as a server placeholder).
+ * Merge the in-flight durable ops into the day for display: one synthetic
+ * "logging…" row (ANALYZING, zero macros) per op targeting [date], appended to
+ * its target meal group. Pure presentation — totals are untouched (a pending op
+ * contributes nothing yet, same as a server placeholder). These rows survive
+ * process death because the ops are Room-backed, not in-memory.
  */
-fun NutritionDay?.withPendingCaptures(
-    captures: List<PendingCaptureStore.PendingCapture>,
+fun NutritionDay?.withPendingOps(
+    ops: List<NutritionOpEntity>,
     date: LocalDate,
 ): NutritionDay? {
-    val forDate = captures.filter { it.date == date.format(ISO_DATE) }
+    val forDate = ops.filter { it.date == date.format(ISO_DATE) }
     if (forDate.isEmpty()) return this
     val base = this ?: NutritionDay(date = date.format(ISO_DATE), totals = Macros.EMPTY)
     var meals = base.meals
-    forDate.forEach { capture ->
+    forDate.forEach { op ->
+        val isCapture = op.type == NutritionOpType.CAPTURE_PHOTO.name
         val synthetic = Entry(
-            entryId = PENDING_CAPTURE_PREFIX + capture.id,
-            meal = capture.mealWire,
-            foodName = "Uploading photo…",
+            entryId = PENDING_CAPTURE_PREFIX + op.id,
+            meal = op.mealWire,
+            foodName = if (isCapture) "New photo" else op.label,
             quantity = 1.0,
             macros = Macros.EMPTY,
             source = "PHOTO",
             analysisStatus = "ANALYZING",
+            // The just-captured JPEG shows as the thumbnail (with a loader) while
+            // the upload runs; non-photo ops (describe/saved-meal) get the spinner.
+            localImagePath = if (isCapture) op.jpegPath else null,
         )
-        meals = if (meals.any { it.meal == capture.mealWire }) {
+        meals = if (meals.any { it.meal == op.mealWire }) {
             meals.map { g ->
-                if (g.meal == capture.mealWire) g.copy(entries = g.entries + synthetic) else g
+                if (g.meal == op.mealWire) g.copy(entries = g.entries + synthetic) else g
             }
         } else {
-            meals + MealGroup(meal = capture.mealWire, subtotal = Macros.EMPTY, entries = listOf(synthetic))
+            meals + MealGroup(meal = op.mealWire, subtotal = Macros.EMPTY, entries = listOf(synthetic))
         }
     }
     return base.copy(meals = meals)
@@ -577,6 +610,30 @@ private fun NutritionDay.withEntryMoved(entry: Entry, targetMeal: String): Nutri
         withoutEntry + MealGroup(meal = targetMeal, subtotal = listOf(moved).sumMacros(), entries = listOf(moved))
     }
     return copy(meals = withTarget)
+}
+
+/**
+ * Return a copy of this day with [entry] appended to its meal group (created if
+ * absent), with that group's subtotal and the day totals re-summed. Used for the
+ * optimistic one-tap re-log so the row appears instantly, before the background
+ * `day()` revalidation reconciles it.
+ */
+private fun NutritionDay?.withEntryAppended(entry: Entry, date: String): NutritionDay {
+    val base = this ?: NutritionDay(date = date, totals = Macros.EMPTY)
+    val hasGroup = base.meals.any { it.meal.equals(entry.meal, ignoreCase = true) }
+    val meals = if (hasGroup) {
+        base.meals.map { g ->
+            if (g.meal.equals(entry.meal, ignoreCase = true)) {
+                val entries = g.entries + entry
+                g.copy(entries = entries, subtotal = entries.sumMacros())
+            } else {
+                g
+            }
+        }
+    } else {
+        base.meals + MealGroup(meal = entry.meal, subtotal = listOf(entry).sumMacros(), entries = listOf(entry))
+    }
+    return base.copy(meals = meals, totals = meals.flatMap { it.entries }.sumMacros())
 }
 
 /** Sum a list of entries' macros into a single subtotal snapshot. */
