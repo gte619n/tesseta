@@ -44,6 +44,24 @@ class SessionFormatTest {
     }
 
     @Test
+    fun `prefill anchors on the last set of the previous session, not the first`() {
+        // Last session ramped 100x10 -> 160x8. Opening fresh, every pending set
+        // anchors on the final (heaviest) set, not the warm-up first set.
+        val prefill = prefillFor(
+            squat,
+            logged = emptyList(),
+            lastSets = mapOf(
+                "ex-squat" to listOf(
+                    LoggedSet(weightLbs = 100.0, reps = 10),
+                    LoggedSet(weightLbs = 160.0, reps = 8),
+                ),
+            ),
+        )
+        assertEquals(160.0, prefill.weightLbs)
+        assertEquals(8, prefill.reps)
+    }
+
+    @Test
     fun `prefill for a timed exercise carries the held duration, not weight`() {
         val prefill = prefillFor(plank, logged = emptyList(), lastSets = emptyMap())
         assertEquals(45, prefill.durationSeconds)
