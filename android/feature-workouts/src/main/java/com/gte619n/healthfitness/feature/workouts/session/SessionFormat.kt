@@ -72,8 +72,9 @@ fun WorkoutSessionDraft.resumeStepIndex(): Int {
 /**
  * The prefill for the next, not-yet-logged set of a prescription — the value
  * the logger shows on the pending row and the coach announces. Precedence:
- * what was carried within this session (the last logged set), then the literal
- * previous session ([lastSets], IMPL-COACH PR2), then the designed target.
+ * what was carried within this session (the last logged set), then the final
+ * set of the previous session ([lastSets], IMPL-COACH PR2), then the designed
+ * target.
  * Shared by the UI (display) and the ViewModel (the actual logged set) so both
  * agree on "what to lift next". A timed exercise carries a held duration
  * instead of weight/reps.
@@ -90,8 +91,11 @@ fun prefillFor(
     lastSets: Map<String, List<LoggedSet>>,
 ): SetPrefill {
     val previous = logged.lastOrNull()
-    // The matching set (by index) from the last time this exercise was done.
-    val lastTime = lastSets[prescription.exerciseId]?.getOrNull(logged.size)
+    // The final set from the last time this exercise was done. We anchor every
+    // pending set on that top working set ("start where you left off") rather
+    // than index-matching set-for-set, so opening the exercise fresh proposes
+    // last session's heaviest/last load, not its warm-up first set.
+    val lastTime = lastSets[prescription.exerciseId]?.lastOrNull()
     return if (prescription.isTimed) {
         SetPrefill(
             durationSeconds = previous?.durationSeconds
