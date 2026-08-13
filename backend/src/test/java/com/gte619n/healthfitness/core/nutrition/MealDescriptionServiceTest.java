@@ -215,11 +215,50 @@ class MealDescriptionServiceTest {
         assertEquals(1, f.meals.all().size(), "no duplicate meal is created on a match");
     }
 
+    @Test
+    void searchSavedMeals_dedupesDuplicatesKeepingMostSpecific_andHidesArchived() {
+        Fixture f = new Fixture(analyzer(new MealAnalysis(null, false, List.of()), Optional.empty()));
+        // Three "Vanilla Protein Shake" rows minted by repeated describes — same
+        // name, same calories. Only "vshake-b" has a photo, both ingredients and
+        // a full macro breakdown, so it's the most specific.
+        f.meals.save(shake("vshake-a", 1, FoodImageStatus.NONE, null,
+            new Macros(250.0, null, null, null, null, null)));
+        f.meals.save(shake("vshake-b", 2, FoodImageStatus.READY, "http://img/b.png",
+            new Macros(250.0, 30.0, 12.0, 8.0, 1.0, 20.0)));
+        f.meals.save(shake("vshake-c", 1, FoodImageStatus.NONE, null,
+            new Macros(250.0, null, null, null, null, null)));
+
+        List<SavedMeal> results = f.svc.searchSavedMeals(USER, "Vanilla Protein Shake");
+
+        assertEquals(1, results.size(), "the five-way duplicate collapses to one");
+        assertEquals("vshake-b", results.get(0).mealId(), "the most complete row wins");
+
+        // Archiving the survivor hides the whole dish; the catalog docs remain.
+        f.svc.archiveMeal(USER, "vshake-b");
+        List<SavedMeal> afterArchive = f.svc.searchSavedMeals(USER, "Vanilla Protein Shake");
+        assertEquals(1, afterArchive.size(), "a lesser duplicate takes over once the survivor is hidden");
+        assertFalse(afterArchive.get(0).mealId().equals("vshake-b"), "the archived meal no longer shows");
+        assertEquals(3, f.meals.all().size(), "archiving never deletes the shared catalog docs");
+    }
+
+    private static SavedMeal shake(
+        String id, int ingredientCount, FoodImageStatus imageStatus, String imageUrl, Macros macros) {
+        List<CompositeIngredient> ingredients = new java.util.ArrayList<>();
+        for (int i = 0; i < ingredientCount; i++) {
+            ingredients.add(new CompositeIngredient("ingredient-" + i, null,
+                new Macros(100.0, 10.0, 5.0, 3.0, 0.0, 5.0), 100.0, "100 g", 1.0,
+                new Macros(100.0, 10.0, 5.0, 3.0, 0.0, 5.0)));
+        }
+        return new SavedMeal(id, "Vanilla Protein Shake", "vanilla protein shake", USER,
+            ingredients, null, macros, FoodSource.GEMINI_DESCRIPTION, imageUrl, imageStatus, null, null);
+    }
+
     // ---- fixture + fakes ----
 
     private static final class Fixture {
         final InMemEntries entries = new InMemEntries();
         final InMemSavedMeals meals = new InMemSavedMeals();
+        final InMemArchivedMeals archived = new InMemArchivedMeals();
         final NutritionService nutrition =
             new NutritionService(new InMemNutrition(), entries, new MetricChangedPublisher(e -> { }));
         final SavedMealImageService mealImages =
@@ -231,7 +270,7 @@ class MealDescriptionServiceTest {
 
         Fixture(MealDescriptionAnalyzer analyzer) {
             this.svc = new MealDescriptionService(
-                provider(analyzer), meals, mealImages, nutrition, entryImages,
+                provider(analyzer), meals, archived, mealImages, nutrition, entryImages,
                 new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
         }
     }
@@ -305,6 +344,16 @@ class MealDescriptionServiceTest {
         @Override public void save(SavedMeal meal) { rows.put(meal.mealId(), meal); }
         @Override public List<SavedMeal> findByImageStatus(FoodImageStatus status, int limit) {
             return rows.values().stream().filter(m -> m.imageStatus() == status).limit(limit).toList();
+        }
+    }
+
+    private static final class InMemArchivedMeals implements ArchivedMealRepository {
+        private final Map<String, java.util.Set<String>> rows = new ConcurrentHashMap<>();
+        @Override public void archive(String userId, String mealId) {
+            rows.computeIfAbsent(userId, k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(mealId);
+        }
+        @Override public java.util.Set<String> archivedMealIds(String userId) {
+            return rows.getOrDefault(userId, java.util.Set.of());
         }
     }
 }

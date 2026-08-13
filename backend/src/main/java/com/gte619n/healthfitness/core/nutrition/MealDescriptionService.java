@@ -3,8 +3,10 @@ package com.gte619n.healthfitness.core.nutrition;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,6 +43,7 @@ public class MealDescriptionService {
 
     private final ObjectProvider<MealDescriptionAnalyzer> analyzer;
     private final SavedMealRepository savedMeals;
+    private final ArchivedMealRepository archivedMeals;
     private final SavedMealImageService savedMealImages;
     private final NutritionService nutrition;
     private final FoodEntryImageService foodEntryImages;
@@ -49,6 +52,7 @@ public class MealDescriptionService {
     public MealDescriptionService(
         ObjectProvider<MealDescriptionAnalyzer> analyzer,
         SavedMealRepository savedMeals,
+        ArchivedMealRepository archivedMeals,
         SavedMealImageService savedMealImages,
         NutritionService nutrition,
         FoodEntryImageService foodEntryImages,
@@ -56,6 +60,7 @@ public class MealDescriptionService {
     ) {
         this.analyzer = analyzer;
         this.savedMeals = savedMeals;
+        this.archivedMeals = archivedMeals;
         this.savedMealImages = savedMealImages;
         this.nutrition = nutrition;
         this.foodEntryImages = foodEntryImages;
@@ -241,9 +246,95 @@ public class MealDescriptionService {
      * user's own meals first. Reuses the same leading-token prefix search the
      * describe matcher uses, so the add flow surfaces full meals alongside
      * catalog ingredients. Empty when the query has no usable prefix.
+     *
+     * <p>Two extra passes keep the list clean: meals the user has archived are
+     * hidden, and near-identical dishes (same name + calories — e.g. five
+     * "Vanilla Protein Shake" rows minted by repeated describes) collapse to the
+     * single most complete one (a READY photo, more ingredients, fuller macros).
+     * The describe/log matcher ({@link #findMatch}) is intentionally left on the
+     * raw catalog so archiving only affects what the search surfaces.
      */
     public List<SavedMeal> searchSavedMeals(String userId, String query) {
-        return searchUserFirst(userId, query);
+        List<SavedMeal> candidates = searchUserFirst(userId, query);
+        if (candidates.isEmpty()) {
+            return candidates;
+        }
+        Set<String> archived = archivedMeals.archivedMealIds(userId);
+        List<SavedMeal> visible = new ArrayList<>(candidates.size());
+        for (SavedMeal m : candidates) {
+            if (!archived.contains(m.mealId())) {
+                visible.add(m);
+            }
+        }
+        return dedupeByNameAndNutrition(visible);
+    }
+
+    /**
+     * Hide {@code mealId} from {@code userId}'s meal search. The shared catalog
+     * document is untouched — only a per-user marker is written — so other users
+     * and already-logged entries are unaffected.
+     */
+    public void archiveMeal(String userId, String mealId) {
+        requireUser(userId);
+        if (mealId == null || mealId.isBlank()) {
+            throw new IllegalArgumentException("mealId is required");
+        }
+        archivedMeals.archive(userId, mealId);
+    }
+
+    /**
+     * Collapse duplicates sharing a normalized name and (bucketed) calories,
+     * keeping the most specific of each group. Insertion order is preserved so
+     * the user-first ranking survives.
+     */
+    private static List<SavedMeal> dedupeByNameAndNutrition(List<SavedMeal> meals) {
+        LinkedHashMap<String, SavedMeal> best = new LinkedHashMap<>();
+        for (SavedMeal m : meals) {
+            String key = dedupeKey(m);
+            SavedMeal current = best.get(key);
+            if (current == null || specificity(m) > specificity(current)) {
+                best.put(key, m);
+            }
+        }
+        return List.copyOf(best.values());
+    }
+
+    /** Normalized name + a 10-kcal calorie bucket — the "same dish" signature. */
+    private static String dedupeKey(SavedMeal m) {
+        String name = m.nameLower() != null ? m.nameLower()
+            : (m.name() == null ? "" : m.name().toLowerCase());
+        name = name.strip().replaceAll("\\s+", " ");
+        Double kcal = m.macros() != null ? m.macros().caloriesKcal() : null;
+        long bucket = kcal != null ? Math.round(kcal / 10.0) : -1;
+        return name + '|' + bucket;
+    }
+
+    /** How complete a saved meal is — the tie-breaker when collapsing duplicates. */
+    private static int specificity(SavedMeal m) {
+        int score = 0;
+        if (m.imageStatus() == FoodImageStatus.READY && m.imageUrl() != null) {
+            score += 8;
+        }
+        if (m.ingredients() != null) {
+            score += m.ingredients().size();
+        }
+        if (m.totalGrams() != null && m.totalGrams() > 0) {
+            score += 1;
+        }
+        score += macroFieldsPresent(m.macros());
+        return score;
+    }
+
+    private static int macroFieldsPresent(Macros macros) {
+        if (macros == null) return 0;
+        int n = 0;
+        if (macros.caloriesKcal() != null) n++;
+        if (macros.proteinGrams() != null) n++;
+        if (macros.carbsGrams() != null) n++;
+        if (macros.fatGrams() != null) n++;
+        if (macros.fiberGrams() != null) n++;
+        if (macros.sugarGrams() != null) n++;
+        return n;
     }
 
     /**

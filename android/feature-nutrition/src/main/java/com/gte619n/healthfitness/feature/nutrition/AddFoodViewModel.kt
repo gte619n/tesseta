@@ -102,6 +102,19 @@ class AddFoodViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Archive a saved meal from the search results. Drops it from the visible
+     * list right away (optimistic) and tells the backend to hide it from future
+     * searches; already-logged entries are unaffected. A network failure just
+     * means it may reappear on the next search — no user-facing error.
+     */
+    fun onArchiveMeal(mealId: String) {
+        _state.update { it.copy(mealResults = it.mealResults.filterNot { m -> m.mealId == mealId }) }
+        viewModelScope.launch {
+            runCatching { nutrition.archiveMeal(mealId) }
+        }
+    }
+
     fun reset() {
         searchJob?.cancel()
         _state.value = AddFoodUiState(
