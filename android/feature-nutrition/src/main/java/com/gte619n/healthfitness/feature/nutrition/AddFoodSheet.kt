@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -127,6 +128,7 @@ fun AddFoodSheet(
                     onPick = { picked = it },
                     onRelogRecent = { onRelogRecent(meal, it) },
                     onLogMeal = { onLogMeal(meal, it) },
+                    onArchiveMeal = { viewModel.onArchiveMeal(it.mealId) },
                     onDescribe = { onDescribeAsync(meal, it) },
                     onQuickAdd = { quickMode = true },
                 )
@@ -156,6 +158,7 @@ private fun SearchPane(
     onPick: (Food) -> Unit,
     onRelogRecent: (Entry) -> Unit,
     onLogMeal: (MealSearchResult) -> Unit,
+    onArchiveMeal: (MealSearchResult) -> Unit,
     onDescribe: (String) -> Unit,
     onQuickAdd: () -> Unit,
 ) {
@@ -201,36 +204,44 @@ private fun SearchPane(
 
     val screenH = LocalConfiguration.current.screenHeightDp.dp
     val noResults = state.results.isEmpty() && state.mealResults.isEmpty()
-    when {
-        state.error != null -> Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
-        // First search shows skeleton rows; later keystrokes keep the prior
-        // results visible (with the inline spinner) to avoid flicker.
-        state.searching && noResults -> SkeletonRows()
-        !state.searching && noResults -> Text(
-            "No matches.", style = Hf.type.bodyMd, color = Hf.colors.textTertiary,
-        )
-        // Saved meals first (full dishes the user logged before), then catalog
-        // foods — combined into one scroll area to avoid nested scrolling.
-        else -> LazyColumn(
-            modifier = Modifier.heightIn(max = screenH * 0.45f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (state.mealResults.isNotEmpty()) {
-                item(key = "meals-header") {
-                    Text("SAVED MEALS", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-                }
-                items(state.mealResults, key = { "meal/${it.mealId}" }) { m ->
-                    MealRow(meal = m, onClick = { onLogMeal(m) })
-                }
-            }
-            if (state.results.isNotEmpty()) {
+    // Reserve a stable height for the results area so the sheet — and the search
+    // field above it — stays put instead of jumping up and down as the result
+    // count changes on every keystroke.
+    Box(
+        modifier = Modifier.fillMaxWidth().height(screenH * 0.45f),
+        contentAlignment = Alignment.TopStart,
+    ) {
+        when {
+            state.error != null -> Text(state.error, style = Hf.type.bodyMd, color = Hf.colors.alert)
+            // First search shows skeleton rows; later keystrokes keep the prior
+            // results visible (with the inline spinner) to avoid flicker.
+            state.searching && noResults -> SkeletonRows()
+            !state.searching && noResults -> Text(
+                "No matches.", style = Hf.type.bodyMd, color = Hf.colors.textTertiary,
+            )
+            // Saved meals first (full dishes the user logged before), then catalog
+            // foods — combined into one scroll area to avoid nested scrolling.
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 if (state.mealResults.isNotEmpty()) {
-                    item(key = "foods-header") {
-                        Text("FOODS", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+                    item(key = "meals-header") {
+                        Text("SAVED MEALS", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+                    }
+                    items(state.mealResults, key = { "meal/${it.mealId}" }) { m ->
+                        MealRow(meal = m, onClick = { onLogMeal(m) }, onArchive = { onArchiveMeal(m) })
                     }
                 }
-                items(state.results, key = { it.foodId }) { food ->
-                    FoodRow(food = food, onClick = { onPick(food) })
+                if (state.results.isNotEmpty()) {
+                    if (state.mealResults.isNotEmpty()) {
+                        item(key = "foods-header") {
+                            Text("FOODS", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
+                        }
+                    }
+                    items(state.results, key = { it.foodId }) { food ->
+                        FoodRow(food = food, onClick = { onPick(food) })
+                    }
                 }
             }
         }
@@ -349,7 +360,7 @@ private fun RecentRow(entry: Entry, onClick: () -> Unit) {
 }
 
 @Composable
-private fun MealRow(meal: MealSearchResult, onClick: () -> Unit) {
+private fun MealRow(meal: MealSearchResult, onClick: () -> Unit, onArchive: () -> Unit) {
     HfCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Row(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
@@ -368,6 +379,15 @@ private fun MealRow(meal: MealSearchResult, onClick: () -> Unit) {
                     style = Hf.type.monoSm,
                     color = Hf.colors.textSecondary,
                 )
+            }
+            // Subtle archive: hides this saved meal from future searches. Its own
+            // clickable consumes the tap so the row's log action doesn't fire.
+            Box(
+                modifier = Modifier
+                    .clickable { onArchive() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                Text("✕", style = Hf.type.bodySm, color = Hf.colors.textTertiary)
             }
             Text("+", style = Hf.type.headingMd, color = Hf.colors.accentDim)
         }

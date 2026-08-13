@@ -248,6 +248,15 @@ class NutritionRepository @Inject constructor(
         if (query.isBlank()) emptyList() else api.searchMeals(query)
 
     /**
+     * Archive a saved meal so it stops surfacing in [searchMeals]. Per-user and
+     * non-destructive: the shared catalog row and any already-logged entries are
+     * untouched (entries carry their own copy of the meal's data).
+     */
+    suspend fun archiveMeal(mealId: String) {
+        api.archiveMeal(mealId)
+    }
+
+    /**
      * Resolve a free-text description to a saved meal (a previous match, or a
      * freshly created+saved one). Pure network read — nothing is logged or
      * mirrored yet; the UI previews it, then logs via [logDescribedMeal].

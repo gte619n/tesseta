@@ -475,6 +475,18 @@ public class NutritionController {
     }
 
     /**
+     * Archive a saved meal: hide it from this user's meal search (e.g. a
+     * duplicate the dedup pass didn't catch). Per-user only — the shared catalog
+     * document and any already-logged entries are untouched, since entries copy
+     * their own ingredients/macros and hold no reference to the meal.
+     */
+    @PostMapping("/meals/{mealId}/archive")
+    public ResponseEntity<Void> archiveMeal(@PathVariable String mealId) {
+        mealDescription.archiveMeal(currentUser.get().userId(), mealId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Log a described meal onto {@code date}. Either {@code mealId} (a meal
      * already resolved via {@code POST /api/nutrition/describe}) or a raw
      * {@code description} (one-shot: resolve then log) must be supplied. The entry

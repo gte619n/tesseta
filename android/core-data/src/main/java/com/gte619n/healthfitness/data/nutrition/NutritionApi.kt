@@ -105,6 +105,11 @@ interface NutritionApi {
     @GET("api/me/nutrition/meals/search")
     suspend fun searchMeals(@Query("q") q: String): List<MealSearchResult>
 
+    // Archive a saved meal: hide it from this user's future searches. Per-user
+    // only — already-logged entries (which copy their own data) are untouched.
+    @POST("api/me/nutrition/meals/{mealId}/archive")
+    suspend fun archiveMeal(@Path("mealId") mealId: String): Response<Unit>
+
     // Distinct foods/meals logged recently, deduped, newest first — the
     // add-flow's one-tap "recent meals" list. Each row carries `date`, the id
     // of its source entry and everything needed to re-log it. When `meal` is
