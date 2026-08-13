@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import java.time.LocalTime
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -94,6 +95,11 @@ class AddFoodViewModel @Inject constructor(
                         error = null,
                     )
                 }
+            } catch (e: CancellationException) {
+                // A newer keystroke cancelled this search; it isn't an error —
+                // let the replacement job drive the UI. (Rethrow to preserve
+                // structured concurrency rather than surface the cancellation.)
+                throw e
             } catch (e: Exception) {
                 _state.update {
                     it.copy(searching = false, error = e.message ?: "Search failed")
