@@ -114,22 +114,40 @@ fun AddFoodSheet(
             when {
                 quickMode -> QuickAddForm(
                     onCancel = { quickMode = false },
-                    onSave = { name, macros -> onAddQuick(meal, name, macros) },
+                    onSave = { name, macros ->
+                        onAddQuick(meal, name, macros)
+                        viewModel.reset()
+                    },
                 )
                 selected != null -> FoodDetail(
                     food = selected,
                     onBack = { picked = null },
-                    onSave = { idx, qty -> onAddCatalog(meal, selected, idx, qty) },
+                    onSave = { idx, qty ->
+                        onAddCatalog(meal, selected, idx, qty)
+                        viewModel.reset()
+                    },
                 )
+                // Logging is terminal — it closes the sheet. Reset the search so
+                // reopening starts clean instead of restoring the last query and
+                // its results (the view model outlives the sheet).
                 else -> SearchPane(
                     state = state,
                     meal = meal,
                     onQueryChange = viewModel::onQueryChange,
                     onPick = { picked = it },
-                    onRelogRecent = { onRelogRecent(meal, it) },
-                    onLogMeal = { onLogMeal(meal, it) },
+                    onRelogRecent = {
+                        onRelogRecent(meal, it)
+                        viewModel.reset()
+                    },
+                    onLogMeal = {
+                        onLogMeal(meal, it)
+                        viewModel.reset()
+                    },
                     onArchiveMeal = { viewModel.onArchiveMeal(it.mealId) },
-                    onDescribe = { onDescribeAsync(meal, it) },
+                    onDescribe = {
+                        onDescribeAsync(meal, it)
+                        viewModel.reset()
+                    },
                     onQuickAdd = { quickMode = true },
                 )
             }
@@ -204,11 +222,15 @@ private fun SearchPane(
 
     val screenH = LocalConfiguration.current.screenHeightDp.dp
     val noResults = state.results.isEmpty() && state.mealResults.isEmpty()
-    // Reserve a stable height for the results area so the sheet — and the search
-    // field above it — stays put instead of jumping up and down as the result
-    // count changes on every keystroke.
+    // Reserve a stable height once there ARE results, so the sheet — and the
+    // search field above it — stays put instead of jumping up and down as the
+    // result count changes on every keystroke. While there's nothing to show
+    // (loading skeleton or "No matches"), let the area collapse so the describe
+    // button rides up near the search field for an easy tap.
     Box(
-        modifier = Modifier.fillMaxWidth().height(screenH * 0.45f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (noResults) Modifier else Modifier.height(screenH * 0.45f)),
         contentAlignment = Alignment.TopStart,
     ) {
         when {
