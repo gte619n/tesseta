@@ -11,3 +11,12 @@ package com.gte619n.healthfitness.domain.common
  * `Map`-key usages without registering two conflicting adapters.
  */
 enum class DayOfWeek { MON, TUE, WED, THU, FRI, SAT, SUN }
+
+/**
+ * Sunday-first ordering for day-picker / calendar UI. Kept separate from the
+ * enum's own Monday-first declaration so the wire order (ordinal) stays stable.
+ */
+val weekDisplayOrder: List<DayOfWeek> = listOf(
+    DayOfWeek.SUN, DayOfWeek.MON, DayOfWeek.TUE, DayOfWeek.WED,
+    DayOfWeek.THU, DayOfWeek.FRI, DayOfWeek.SAT,
+)

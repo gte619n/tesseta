@@ -9,13 +9,13 @@ type Props = {
 };
 
 const DAYS: { key: DayOfWeek; label: string }[] = [
+  { key: "sun", label: "Sunday" },
   { key: "mon", label: "Monday" },
   { key: "tue", label: "Tuesday" },
   { key: "wed", label: "Wednesday" },
   { key: "thu", label: "Thursday" },
   { key: "fri", label: "Friday" },
   { key: "sat", label: "Saturday" },
-  { key: "sun", label: "Sunday" },
 ];
 
 // Default hours applied when a closed day is toggled open.

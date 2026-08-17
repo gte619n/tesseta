@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.gte619n.healthfitness.domain.common.DayOfWeek
+import com.gte619n.healthfitness.domain.common.weekDisplayOrder
 import com.gte619n.healthfitness.domain.workouts.HoursSlot
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
@@ -55,7 +56,7 @@ fun HoursMatrix(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val days = DayOfWeek.entries
+    val days = weekDisplayOrder
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         days.forEachIndexed { index, day ->
             val slot = state[day]

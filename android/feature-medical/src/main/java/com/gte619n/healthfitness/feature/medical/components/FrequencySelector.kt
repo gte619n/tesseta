@@ -24,7 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.gte619n.healthfitness.domain.common.DayOfWeek
+import com.gte619n.healthfitness.domain.common.weekDisplayOrder
 import com.gte619n.healthfitness.domain.medications.FrequencyConfig
 import com.gte619n.healthfitness.domain.medications.FrequencyType
 import com.gte619n.healthfitness.ui.components.CapsLabel
@@ -100,7 +100,7 @@ fun FrequencySelector(
             CapsLabel("On days", color = Hf.colors.textSecondary)
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                DayOfWeek.entries.forEach { day ->
+                weekDisplayOrder.forEach { day ->
                     val selectedDays = config.specificDays.orEmpty()
                     val on = day in selectedDays
                     Box(

@@ -140,14 +140,15 @@ export const FREQUENCY_LABELS: Record<FrequencyType, string> = {
   CYCLE: "Cycling",
 };
 
+// Sunday-first ordering; the rendered day pickers iterate this map's keys.
 export const DAY_LABELS: Record<DayOfWeek, string> = {
+  SUN: "Sun",
   MON: "Mon",
   TUE: "Tue",
   WED: "Wed",
   THU: "Thu",
   FRI: "Fri",
   SAT: "Sat",
-  SUN: "Sun",
 };
 
 export const DISCONTINUE_LABELS: Record<DiscontinueReason, string> = {

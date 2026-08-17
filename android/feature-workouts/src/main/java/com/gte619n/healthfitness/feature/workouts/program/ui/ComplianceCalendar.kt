@@ -97,7 +97,7 @@ fun ComplianceCalendar(
         }
         Spacer(Modifier.height(10.dp))
 
-        // Weekday header (Monday-start, matching the app's week convention).
+        // Weekday header (Sunday-start).
         Row(modifier = Modifier.fillMaxWidth()) {
             WEEK_DAYS.forEach { dow ->
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -112,7 +112,7 @@ fun ComplianceCalendar(
 
         // Build the padded cell list: leading blanks + each day + trailing blanks.
         val firstOfMonth = month.atDay(1)
-        val lead = (firstOfMonth.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7
+        val lead = firstOfMonth.dayOfWeek.value % 7
         val cells = buildList<LocalDate?> {
             repeat(lead) { add(null) }
             for (d in 1..month.lengthOfMonth()) add(month.atDay(d))
@@ -135,8 +135,8 @@ fun ComplianceCalendar(
 }
 
 private val WEEK_DAYS = listOf(
-    DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
-    DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,
+    DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
 )
 
 @Composable
