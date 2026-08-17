@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import javax.inject.Inject
 
 data class AddFoodUiState(
@@ -81,19 +82,27 @@ class AddFoodViewModel @Inject constructor(
             // Saved meals and catalog foods are searched in parallel; a failure in
             // the meal search just leaves that group empty (catalog still works).
             try {
-                val mealsDeferred = async {
-                    runCatching { nutrition.searchMeals(query) }.getOrDefault(emptyList())
-                }
-                val foodsDeferred = async { foods.search(query) }
-                val meals = mealsDeferred.await()
-                val results = foodsDeferred.await()
-                _state.update {
-                    it.copy(
-                        searching = false,
-                        results = results,
-                        mealResults = meals,
-                        error = null,
-                    )
+                // supervisorScope so a failing child surfaces ONLY through await()
+                // (caught below), instead of propagating up the Job hierarchy to
+                // the uncaught-exception handler and force-closing the app. Under a
+                // plain coroutineScope, a throw from the foods async would crash
+                // even though await() is wrapped in try/catch — the exception has
+                // already cancelled the parent by the time await() rethrows it.
+                supervisorScope {
+                    val mealsDeferred = async {
+                        runCatching { nutrition.searchMeals(query) }.getOrDefault(emptyList())
+                    }
+                    val foodsDeferred = async { foods.search(query) }
+                    val meals = mealsDeferred.await()
+                    val results = foodsDeferred.await()
+                    _state.update {
+                        it.copy(
+                            searching = false,
+                            results = results,
+                            mealResults = meals,
+                            error = null,
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 // A newer keystroke cancelled this search; it isn't an error —
