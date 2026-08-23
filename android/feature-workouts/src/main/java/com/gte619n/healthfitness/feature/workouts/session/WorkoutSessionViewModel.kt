@@ -189,8 +189,10 @@ class WorkoutSessionViewModel @Inject constructor(
 
     /**
      * Log a timed exercise's set with the measured [durationSeconds] (from the
-     * hold timer) rather than the prescribed default, and start the prescribed
-     * rest countdown — the timed counterpart to checking off a rep set.
+     * hold timer) rather than the prescribed default — the timed counterpart to
+     * checking off a rep set. Unlike a rep set it starts *no* rest countdown: the
+     * guided stretch flow paces the next hold with its own "get ready" pre-roll
+     * (or jumps straight to the next lift), so a rest overlay would only fight it.
      */
     fun logTimedSet(key: PrescriptionKey, durationSeconds: Int) {
         val draft = _state.value.draft ?: return
@@ -203,7 +205,7 @@ class WorkoutSessionViewModel @Inject constructor(
         )
         val updated = current + set
         persistSets(key, updated)
-        startRestOrComplete(draft, key, updated, at)
+        startRestOrComplete(draft, key, updated, at, startRest = false)
     }
 
     /** Replace one logged set after an inline weight/reps/duration edit. */
@@ -220,18 +222,21 @@ class WorkoutSessionViewModel @Inject constructor(
      * finish summary (the "auto complete workout" behaviour: no dangling rest
      * after the last set, straight to the summary + completion chime).
      * [updated] is the sets list about to land on the draft, tested before the
-     * Room round-trip so the check doesn't lag a frame behind.
+     * Room round-trip so the check doesn't lag a frame behind. [startRest] is
+     * false for timed holds, which pace themselves through the guided flow rather
+     * than a rest countdown; completion detection still runs either way.
      */
     private fun startRestOrComplete(
         draft: WorkoutSessionDraft,
         key: PrescriptionKey,
         updated: List<LoggedSet>,
         at: Instant,
+        startRest: Boolean = true,
     ) {
         if (draft.isComplete(draft.logged + (key to updated))) {
             timers.clearRest()
             _state.update { it.copy(prompt = SessionPrompt.FINISH_SUMMARY, autoCompleted = true) }
-        } else {
+        } else if (startRest) {
             draft.prescription(key)?.restSeconds?.let { timers.startRest(it, at) }
         }
     }

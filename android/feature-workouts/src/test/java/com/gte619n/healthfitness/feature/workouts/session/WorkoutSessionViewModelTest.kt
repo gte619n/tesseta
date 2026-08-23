@@ -160,7 +160,7 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
-    fun `logTimedSet records the measured hold and starts the rest timer`() = runTest {
+    fun `logTimedSet records the measured hold and starts no rest`() = runTest {
         val sets = slot<List<LoggedSet>>()
         coEvery {
             repo.updateSets("p1", "s2", plankKey, capture(sets))
@@ -178,7 +178,9 @@ class WorkoutSessionViewModelTest {
         assertEquals(38, appended.durationSeconds)
         assertNull(appended.weightLbs)
         assertEquals(120, appended.restSeconds)
-        assertEquals(30, timers.rest.value!!.totalSeconds)
+        // Holds pace themselves through the guided "get ready" flow, so no rest
+        // countdown starts on the shared bus.
+        assertNull(timers.rest.value)
     }
 
     @Test
@@ -247,7 +249,7 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
-    fun `a non-final set still starts the prescribed rest`() = runTest {
+    fun `a non-final timed set starts no rest and does not auto-complete`() = runTest {
         coEvery {
             repo.updateSets("p1", "s2", plankKey, any())
         } returns Result.success(ProgramFixtures.activeDraft)
@@ -264,7 +266,9 @@ class WorkoutSessionViewModelTest {
         vm.logTimedSet(plankKey, 40)
         advanceUntilIdle()
 
-        assertEquals(30, timers.rest.value!!.totalSeconds)
+        // No rest overlay competes with the guided hold flow, and with a set
+        // still to go the session hasn't auto-completed.
+        assertNull(timers.rest.value)
         assertNull(vm.state.value.prompt)
         assertFalse(vm.state.value.autoCompleted)
     }

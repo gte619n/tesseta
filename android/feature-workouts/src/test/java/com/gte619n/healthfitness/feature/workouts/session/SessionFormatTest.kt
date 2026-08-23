@@ -81,6 +81,11 @@ class SessionFormatTest {
     }
 
     @Test
+    fun `get ready announcement names the upcoming hold and its duration`() {
+        assertEquals("Get ready for Plank. 45 second hold.", getReadyAnnouncement(plank))
+    }
+
+    @Test
     fun `elapsed label is mm-ss under an hour and h-mm-ss above`() {
         assertEquals("0:00", elapsedLabel(0))
         assertEquals("0:05", elapsedLabel(5))

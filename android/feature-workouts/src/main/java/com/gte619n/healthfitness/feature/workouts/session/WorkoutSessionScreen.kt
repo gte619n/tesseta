@@ -60,6 +60,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -400,6 +401,12 @@ private fun SessionBody(
         )
         val scope = rememberCoroutineScope()
 
+        // The destination page a completed hold hands off to: when a hold
+        // auto-completes into another hold, that page's timer runs a "get ready"
+        // pre-roll and auto-starts (a hold into a lift just advances, no
+        // auto-start). Consumed by the destination page once it picks it up.
+        var autoStartStep by remember { mutableStateOf<Int?>(null) }
+
         // ---- coach voice cues (PR2, refined) --------------------------------
         // Speak only when the coach *changes* exercise, never on the first
         // settle after (re)entering the composition — coming back into the app
@@ -412,7 +419,10 @@ private fun SessionBody(
             val page = settledPage ?: return@LaunchedEffect
             val step = steps.getOrNull(page)
             if (voiceEnabled && !overview && step != null &&
-                lastAnnounced != -1 && page != lastAnnounced
+                lastAnnounced != -1 && page != lastAnnounced &&
+                // An auto-started hold announces its own "get ready for X" — let
+                // the pre-roll speak instead of double-announcing here.
+                autoStartStep != page
             ) {
                 announceStep(step, draft.logged[step.key].orEmpty(), lastSets, announce)
             }
@@ -457,11 +467,18 @@ private fun SessionBody(
             if ((draft.logged[step.key]?.size ?: 0) >= target &&
                 pagerState.currentPage < steps.size - 1
             ) {
+                val nextIndex = pagerState.currentPage + 1
+                // Hand off to the next page's guided "get ready" pre-roll only
+                // when a completed hold flows into another hold; a hold into a
+                // lift just advances and waits for the user to log manually.
+                autoStartStep = if (step.prescription.isTimed &&
+                    steps.getOrNull(nextIndex)?.prescription?.isTimed == true
+                ) nextIndex else null
                 // Run the scroll on [scope], not this effect's coroutine: the
                 // pager flips currentPage at the animation's midpoint, which
                 // re-keys this LaunchedEffect and would otherwise cancel the
                 // scroll half-way (leaving two half-pages on screen).
-                scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                scope.launch { pagerState.animateScrollToPage(nextIndex) }
             }
         }
 
@@ -518,6 +535,8 @@ private fun SessionBody(
                     onLogTimed = { seconds -> onLogTimed(step.key, seconds) },
                     onLogSet = { set -> onLogSet(step.key, set) },
                     onDismissRest = onDismissRest,
+                    autoStart = autoStartStep == page,
+                    onAutoStartConsumed = { if (autoStartStep == page) autoStartStep = null },
                 )
             }
             CoachActionsBar(
@@ -606,6 +625,8 @@ private fun ExercisePage(
     onLogTimed: (Int) -> Unit,
     onLogSet: (LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
+    autoStart: Boolean = false,
+    onAutoStartConsumed: () -> Unit = {},
 ) {
     val prescription = step.prescription
     var showSwap by remember(step.key) { mutableStateOf(false) }
@@ -683,6 +704,8 @@ private fun ExercisePage(
                     now = now,
                     voiceEnabled = voiceEnabled,
                     announce = announce,
+                    autoStart = autoStart,
+                    onAutoStartConsumed = onAutoStartConsumed,
                     onToggleSet = onToggleSet,
                     onEditSet = onEditSet,
                     onLogTimed = onLogTimed,
@@ -1172,12 +1195,20 @@ private fun TimedSetsSection(
     now: Instant,
     voiceEnabled: Boolean,
     announce: (String) -> Unit,
+    autoStart: Boolean,
+    onAutoStartConsumed: () -> Unit,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
     onLogTimed: (Int) -> Unit,
 ) {
     val totalRows = maxOf(prescription.sets ?: 1, logged.size)
     val hasPending = logged.size < totalRows
+    // Which pending-set index should auto-start its hold. Seeded from the
+    // cross-exercise hand-off (the first set of a hold reached from another
+    // completed hold), then advanced by each auto-completed hold so a multi-set
+    // hold chains itself through the same "get ready" pre-roll.
+    var autoStartSet by remember { mutableStateOf(-1) }
+    LaunchedEffect(autoStart) { if (autoStart) autoStartSet = logged.size }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         logged.forEachIndexed { index, set ->
             CompletedTimedRow(
@@ -1189,6 +1220,7 @@ private fun TimedSetsSection(
             )
         }
         if (hasPending) {
+            val pendingIndex = logged.size
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1198,16 +1230,29 @@ private fun TimedSetsSection(
                     .padding(16.dp),
             ) {
                 CapsLabel(
-                    stringResource(R.string.workout_session_set_of, logged.size + 1, totalRows),
+                    stringResource(R.string.workout_session_set_of, pendingIndex + 1, totalRows),
                     color = Hf.colors.accent,
                 )
-                HoldTimer(
-                    targetSeconds = prescription.durationSeconds,
-                    now = now,
-                    voiceEnabled = voiceEnabled,
-                    announce = announce,
-                    onLog = onLogTimed,
-                )
+                // Fresh timer per pending set so its running/pre-roll state can't
+                // bleed across sets.
+                key(pendingIndex) {
+                    HoldTimer(
+                        prescription = prescription,
+                        now = now,
+                        voiceEnabled = voiceEnabled,
+                        announce = announce,
+                        autoStart = autoStartSet == pendingIndex,
+                        onAutoStartConsumed = {
+                            autoStartSet = -1
+                            onAutoStartConsumed()
+                        },
+                        onLog = onLogTimed,
+                        // Reaching the target auto-logs; queue the next set of this
+                        // same hold to auto-start (the last set instead advances the
+                        // page, where the section unmounts and this is a no-op).
+                        onAutoComplete = { autoStartSet = pendingIndex + 1 },
+                    )
+                }
             }
             UpcomingHint(remaining = totalRows - (logged.size + 1))
         } else {
@@ -1264,32 +1309,43 @@ private fun CompletedTimedRow(
 }
 
 /**
- * A count-up hold timer for a timed set (stretch / mobility). Tap to start, tap
- * again to log the elapsed seconds. Unlike a bare count-up it is *goal-aware*:
- * it beeps (and, with voice on, speaks) at the halfway mark, at ten seconds to
- * go, and when the prescribed hold is reached — so a stretch no longer runs past
- * its target in silence. It keeps counting after the target so the user can hold
- * longer, then logs whatever they held.
+ * A goal-aware hold timer for a timed set (stretch / mobility). It counts up to
+ * the prescribed hold, beeping (and, with voice on, speaking) at the halfway
+ * mark and at ten seconds to go, and — reaching the target — auto-logs the hold
+ * and marks the set complete rather than waiting for a tap. The user can still
+ * start a hold by hand and stop it early, but a finished hold no longer needs a
+ * second tap.
  *
- * The running anchor is kept in `rememberSaveable` so a config change doesn't
- * reset a hold in progress. The count-up is anchored to wall-clock time, so it
- * keeps running while the app is backgrounded or the coach is left — the hold
- * only stops when the user logs it.
+ * When the previous hold auto-completed into this one ([autoStart]), the timer
+ * first runs a [GET_READY_SECONDS] "get ready for X" pre-roll before starting
+ * itself, so a stretch block plays hands-free from one hold to the next. Tapping
+ * during the pre-roll starts immediately.
+ *
+ * Both the running anchor and the pre-roll anchor are kept in `rememberSaveable`
+ * and measured against wall-clock time, so a config change / backgrounding
+ * doesn't reset a hold (or its pre-roll) in progress.
  */
 @Composable
 private fun HoldTimer(
-    targetSeconds: Int?,
+    prescription: Prescription,
     now: Instant,
     voiceEnabled: Boolean,
     announce: (String) -> Unit,
+    autoStart: Boolean,
+    onAutoStartConsumed: () -> Unit,
     onLog: (Int) -> Unit,
+    onAutoComplete: () -> Unit,
 ) {
+    val targetSeconds = prescription.durationSeconds
     var runningSinceMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var getReadySinceMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     val running = runningSinceMillis != null
     val elapsed =
         runningSinceMillis?.let { Duration.between(Instant.ofEpochMilli(it), now).seconds.coerceAtLeast(0L) } ?: 0L
     val target = targetSeconds ?: 0
-    val targetReached = target > 0 && elapsed >= target
+    val getReadyRemaining = getReadySinceMillis?.let {
+        (GET_READY_SECONDS - Duration.between(Instant.ofEpochMilli(it), now).seconds).coerceAtLeast(0L)
+    }
 
     // One-shot cue flags for the current hold; reset when a fresh hold starts.
     var firedHalf by remember { mutableStateOf(false) }
@@ -1297,9 +1353,32 @@ private fun HoldTimer(
     var firedDone by remember { mutableStateOf(false) }
     val beep = rememberCoachBeep()
 
-    // Fire the halfway / ten-seconds-left / target-reached cues as the count-up
-    // crosses each mark. Runs each tick (elapsed changes every second) while the
-    // hold is running; the flags stop any cue repeating.
+    fun startHold() {
+        getReadySinceMillis = null
+        firedHalf = false; firedTen = false; firedDone = false
+        runningSinceMillis = Instant.now().toEpochMilli()
+    }
+
+    // Enter the "get ready" pre-roll when handed off from a completed hold, then
+    // consume the signal so a later recomposition / return to this page can't
+    // re-arm it. Announces the upcoming hold once, up front.
+    LaunchedEffect(autoStart) {
+        if (autoStart && runningSinceMillis == null && getReadySinceMillis == null) {
+            getReadySinceMillis = Instant.now().toEpochMilli()
+            if (voiceEnabled) getReadyAnnouncement(prescription)?.let(announce)
+            onAutoStartConsumed()
+        }
+    }
+
+    // The pre-roll elapsing auto-starts the hold.
+    LaunchedEffect(getReadyRemaining) {
+        if (getReadyRemaining != null && getReadyRemaining <= 0L) startHold()
+    }
+
+    // Fire the halfway / ten-seconds-left cues as the count-up crosses each mark,
+    // and auto-log the moment the target is reached. Runs each tick (elapsed
+    // changes every second) while the hold is running; the flags stop any cue
+    // repeating.
     LaunchedEffect(elapsed, running) {
         if (!running || target <= 0) return@LaunchedEffect
         if (!firedHalf && target >= HALF_CUE_MIN_TARGET && elapsed >= target / 2 && elapsed < target - 10) {
@@ -1316,58 +1395,63 @@ private fun HoldTimer(
             firedDone = true
             beep(ToneGenerator.TONE_PROP_ACK)
             if (voiceEnabled) announce("Time's up")
+            // Mark the set complete automatically and hand the block on.
+            onLog(target)
+            onAutoComplete()
+            runningSinceMillis = null
         }
     }
+
+    val getReady = getReadySinceMillis != null
 
     Spacer(Modifier.height(10.dp))
     Button(
         onClick = {
-            if (running) {
-                onLog(elapsed.toInt())
-                runningSinceMillis = null
-                firedHalf = false; firedTen = false; firedDone = false
-            } else {
-                firedHalf = false; firedTen = false; firedDone = false
-                runningSinceMillis = Instant.now().toEpochMilli()
+            when {
+                // Tap during the pre-roll skips the wait and starts now.
+                getReady -> startHold()
+                // Tap while holding logs early (user stays in control; no
+                // hand-off to the next set's pre-roll).
+                running -> {
+                    onLog(elapsed.toInt())
+                    runningSinceMillis = null
+                    firedHalf = false; firedTen = false; firedDone = false
+                }
+                else -> startHold()
             }
         },
         modifier = Modifier.fillMaxWidth().height(52.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = when {
-                running && targetReached -> Hf.colors.good
-                running -> Hf.colors.alert
-                else -> Hf.colors.accent
-            },
+            containerColor = if (running) Hf.colors.alert else Hf.colors.accent,
         ),
     ) {
         Icon(
-            when {
-                targetReached -> Icons.Filled.CheckCircle
-                running -> Icons.Filled.Stop
-                else -> Icons.Filled.PlayArrow
-            },
+            if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow,
             contentDescription = null,
             tint = Hf.colors.textInverse,
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            if (running) {
-                stringResource(R.string.workout_session_hold_stop, restCountdownLabel(elapsed))
-            } else {
-                stringResource(R.string.workout_session_hold_start)
+            when {
+                getReady -> stringResource(R.string.workout_session_get_ready_start_now)
+                running -> stringResource(R.string.workout_session_hold_stop, restCountdownLabel(elapsed))
+                else -> stringResource(R.string.workout_session_hold_start)
             },
             style = Hf.type.bodyMd,
             color = Hf.colors.textInverse,
         )
     }
     when {
-        running && targetReached -> {
+        getReady -> {
             Spacer(Modifier.height(4.dp))
             Text(
-                stringResource(R.string.workout_session_hold_reached),
+                stringResource(
+                    R.string.workout_session_get_ready_countdown,
+                    restCountdownLabel(getReadyRemaining ?: 0L),
+                ),
                 style = Hf.type.bodySm,
-                color = Hf.colors.good,
+                color = Hf.colors.accent,
             )
         }
         !running && targetSeconds != null -> {
@@ -1380,6 +1464,9 @@ private fun HoldTimer(
         }
     }
 }
+
+/** The guided pre-roll before a hand-off hold auto-starts ("get ready for X"). */
+private const val GET_READY_SECONDS = 10L
 
 /** Only announce "halfway" for holds this long or longer (shorter ones just get the finish cue). */
 private const val HALF_CUE_MIN_TARGET = 30

@@ -194,6 +194,18 @@ fun coachAnnouncement(
     return if (pieces.isEmpty()) "$name." else "$name. ${pieces.joinToString(", ")}."
 }
 
+/**
+ * The spoken pre-roll before a hold auto-starts in the guided stretch flow, e.g.
+ * "Get ready for Pigeon Pose. 45 second hold." Announced as the coach advances
+ * from one completed hold into the next. Returns null when there's no exercise
+ * name to announce.
+ */
+fun getReadyAnnouncement(prescription: Prescription): String? {
+    val name = prescription.exercise?.name?.takeIf { it.isNotBlank() } ?: return null
+    val seconds = prescription.durationSeconds
+    return if (seconds != null) "Get ready for $name. $seconds second hold." else "Get ready for $name."
+}
+
 /** "47:32" / "1:02:10" count-up label for the session's elapsed header. */
 fun elapsedLabel(totalSeconds: Long): String {
     val s = totalSeconds.coerceAtLeast(0)
