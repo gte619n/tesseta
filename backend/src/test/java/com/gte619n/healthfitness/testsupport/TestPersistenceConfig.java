@@ -383,6 +383,28 @@ public class TestPersistenceConfig {
     }
 
     @Bean
+    com.gte619n.healthfitness.core.nutrition.ArchivedMealRepository archivedMealRepository() {
+        // Per-user "hidden from search" set over the shared saved-meal catalog.
+        // Real in-memory impl so MealDescriptionService (and thus the full app
+        // context) can wire in MockMvc tests where firestore-enabled=false leaves
+        // the Firestore-backed repo unregistered.
+        return new com.gte619n.healthfitness.core.nutrition.ArchivedMealRepository() {
+            private final java.util.Map<String, java.util.Set<String>> store =
+                new java.util.concurrent.ConcurrentHashMap<>();
+
+            @Override public void archive(String userId, String mealId) {
+                store.computeIfAbsent(userId, k -> java.util.concurrent.ConcurrentHashMap.newKeySet())
+                    .add(mealId);
+            }
+
+            @Override public java.util.Set<String> archivedMealIds(String userId) {
+                return java.util.Set.copyOf(
+                    store.getOrDefault(userId, java.util.Set.of()));
+            }
+        };
+    }
+
+    @Bean
     MacroTargetRepository macroTargetRepository() {
         return new MacroTargetRepository() {
             @Override public Optional<MacroTarget> findActive(String userId) { return Optional.empty(); }
