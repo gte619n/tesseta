@@ -266,6 +266,52 @@ export default async function WorkoutsPage() {
               </div>
             )}
           </Link>
+
+          {/* Preferences Card */}
+          <Link
+            href="/me/workouts/preferences"
+            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-accent"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                  <h2 className="text-[16px] font-medium text-primary">
+                    Preferences
+                  </h2>
+                </div>
+                <p className="mt-2 text-[13px] text-secondary">
+                  Standing notes the program builder follows every time.
+                </p>
+              </div>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-tertiary transition-colors group-hover:text-accent"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </div>
+          </Link>
         </section>
       </div>
     </main>

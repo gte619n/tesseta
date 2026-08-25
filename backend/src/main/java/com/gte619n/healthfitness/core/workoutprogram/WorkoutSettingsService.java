@@ -21,11 +21,29 @@ public class WorkoutSettingsService {
             .orElseGet(() -> WorkoutSettings.defaults(userId));
     }
 
-    /** Replace the settings (PUT set-semantics). Returns the stored value. */
+    /**
+     * Set the weekly streak target, preserving the standing preferences. Returns
+     * the stored value.
+     */
     public WorkoutSettings setWeeklyStreakTarget(String userId, int weeklyStreakTarget) {
         requireUser(userId);
+        WorkoutSettings current = get(userId);
         WorkoutSettings settings = new WorkoutSettings(
-            userId, WorkoutSettings.clampTarget(weeklyStreakTarget), null);
+            userId, WorkoutSettings.clampTarget(weeklyStreakTarget), current.preferences(), null);
+        repository.save(settings);
+        return settings;
+    }
+
+    /**
+     * Set the free-text standing preferences, preserving the streak target. A null
+     * or blank value clears them. Returns the stored value.
+     */
+    public WorkoutSettings setPreferences(String userId, String preferences) {
+        requireUser(userId);
+        WorkoutSettings current = get(userId);
+        WorkoutSettings settings = new WorkoutSettings(
+            userId, current.weeklyStreakTarget(),
+            WorkoutSettings.normalizePreferences(preferences), null);
         repository.save(settings);
         return settings;
     }

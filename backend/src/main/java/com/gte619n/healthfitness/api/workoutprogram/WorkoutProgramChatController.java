@@ -25,6 +25,8 @@ import com.gte619n.healthfitness.core.workoutprogram.ProgramPhase;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutDay;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramService;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutSettings;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutSettingsService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramValidator;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService;
 import com.gte619n.healthfitness.core.workoutprogram.chat.WorkoutProgramChatMessage;
@@ -84,6 +86,7 @@ public class WorkoutProgramChatController {
     private final WorkoutScheduleService scheduleService;
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
+    private final WorkoutSettingsService workoutSettings;
     private final SseStreamer sseStreamer;
 
     public WorkoutProgramChatController(
@@ -100,6 +103,7 @@ public class WorkoutProgramChatController {
         WorkoutScheduleService scheduleService,
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
+        WorkoutSettingsService workoutSettings,
         SseStreamer sseStreamer
     ) {
         this.currentUser = currentUser;
@@ -115,6 +119,7 @@ public class WorkoutProgramChatController {
         this.scheduleService = scheduleService;
         this.validator = validator;
         this.assembler = assembler;
+        this.workoutSettings = workoutSettings;
         this.sseStreamer = sseStreamer;
     }
 
@@ -348,6 +353,23 @@ public class WorkoutProgramChatController {
             }
         } catch (Exception e) {
             log.warn("Health snapshot unavailable for {}: {}", userId, e.getMessage());
+        }
+
+        // Standing, cross-program preferences the user set once and expects the
+        // designer to honor on every build (e.g. exercises to avoid for a bad back).
+        try {
+            WorkoutSettings settings = workoutSettings.get(userId);
+            String preferences = settings.preferences();
+            if (preferences != null && !preferences.isBlank()) {
+                sb.append("USER WORKOUT PREFERENCES (standing instructions the user set — "
+                    + "honor these on every program you design; treat exercise-avoidance and "
+                    + "injury notes as hard constraints and substitute safer alternatives. If a "
+                    + "preference conflicts with safety or the fixed schedule, say so rather than "
+                    + "silently ignoring it):\n")
+                  .append(preferences).append("\n\n");
+            }
+        } catch (Exception e) {
+            log.warn("Workout preferences unavailable for {}: {}", userId, e.getMessage());
         }
 
         Map<DayOfWeek, String> dayLocations = schedule == null || schedule.dayLocations() == null
