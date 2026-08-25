@@ -22,6 +22,7 @@ import com.gte619n.healthfitness.feature.settings.about.AboutSection
 import com.gte619n.healthfitness.feature.settings.coach.CoachAudioSection
 import com.gte619n.healthfitness.feature.settings.googlehealth.GoogleHealthSection
 import com.gte619n.healthfitness.feature.settings.units.UnitsSection
+import com.gte619n.healthfitness.feature.settings.workout.WorkoutPreferencesSection
 import com.gte619n.healthfitness.feature.settings.workout.WorkoutStreakSection
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
@@ -73,6 +74,9 @@ fun SettingsScreen(
 
         // Workout streak (weekly target).
         WorkoutStreakSection()
+
+        // Workout preferences (free-text standing notes for the program designer).
+        WorkoutPreferencesSection()
 
         // Google Health connection.
         GoogleHealthSection()

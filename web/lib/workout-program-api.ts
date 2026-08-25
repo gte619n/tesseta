@@ -194,6 +194,30 @@ export function getTrtContext(): Promise<TrtContext> {
   return apiJson<TrtContext>("/api/me/workout-programs/chat/trt-context");
 }
 
+// ── Workout settings (streak target + standing designer preferences) ──
+//
+// The settings document at users/{userId}/settings/workout. PUT merges: each
+// field is applied only when present, so updating the free-text preferences
+// leaves the streak target untouched and vice-versa.
+
+export type WorkoutSettings = {
+  weeklyStreakTarget: number | null;
+  preferences: string | null;
+};
+
+export function getWorkoutSettings(): Promise<WorkoutSettings> {
+  return apiJson<WorkoutSettings>("/api/me/workout-programs/settings");
+}
+
+/** Persist the free-text standing preferences (blank clears them). */
+export function saveWorkoutPreferences(
+  preferences: string,
+): Promise<WorkoutSettings> {
+  return send<WorkoutSettings>("/api/me/workout-programs/settings", "PUT", {
+    preferences,
+  });
+}
+
 // ── Chat commit ──────────────────────────────────────────────────────
 //
 // The backend returns 201 with the deep program on success, or 422 with

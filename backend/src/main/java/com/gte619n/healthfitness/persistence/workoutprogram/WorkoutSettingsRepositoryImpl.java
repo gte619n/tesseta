@@ -48,12 +48,14 @@ public class WorkoutSettingsRepositoryImpl implements WorkoutSettingsRepository 
         DocumentSnapshot existing = await(docRef.get());
         Map<String, Object> body = new HashMap<>();
         body.put("weeklyStreakTarget", settings.weeklyStreakTarget());
+        // Written even when null so clearing the box erases the stored text.
+        body.put("preferences", settings.preferences());
         body.put("updatedAt", serverTimestamp());
         if (!existing.exists()) {
             body.put("createdAt", serverTimestamp());
         }
         await(docRef.set(body, SetOptions.mergeFields(
-            "weeklyStreakTarget", "updatedAt", "createdAt")));
+            "weeklyStreakTarget", "preferences", "updatedAt", "createdAt")));
     }
 
     private DocumentReference document(String userId) {
@@ -66,6 +68,7 @@ public class WorkoutSettingsRepositoryImpl implements WorkoutSettingsRepository 
         int resolved = target != null
             ? WorkoutSettings.clampTarget(target.intValue())
             : WorkoutSettings.DEFAULT_TARGET;
-        return new WorkoutSettings(userId, resolved, toInstant(snapshot.get("updatedAt")));
+        String preferences = WorkoutSettings.normalizePreferences(snapshot.getString("preferences"));
+        return new WorkoutSettings(userId, resolved, preferences, toInstant(snapshot.get("updatedAt")));
     }
 }

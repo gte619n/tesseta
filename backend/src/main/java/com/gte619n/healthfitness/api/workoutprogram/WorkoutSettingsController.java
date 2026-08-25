@@ -43,22 +43,34 @@ public class WorkoutSettingsController {
         return WorkoutSettingsDto.from(settings.get(currentUser.get().userId()));
     }
 
-    /** PUT set-semantics (idempotent): replaces the whole settings document. */
+    /**
+     * Merge-update the settings: each field is applied only when present, so the
+     * streak stepper and the preferences editor can each PUT just their own field
+     * without clobbering the other. An omitted (null) field is left unchanged; a
+     * blank {@code preferences} string clears the stored text.
+     */
     @PutMapping
     public WorkoutSettingsDto put(@RequestBody WorkoutSettingsDto body) {
-        if (body == null || body.weeklyStreakTarget() == null) {
-            throw new IllegalArgumentException("weeklyStreakTarget is required");
+        if (body == null || (body.weeklyStreakTarget() == null && body.preferences() == null)) {
+            throw new IllegalArgumentException(
+                "at least one of weeklyStreakTarget or preferences is required");
         }
         String userId = currentUser.get().userId();
-        WorkoutSettings stored = settings.setWeeklyStreakTarget(userId, body.weeklyStreakTarget());
-        // Wake the user's other devices so their landing streak recomputes.
+        WorkoutSettings stored = settings.get(userId);
+        if (body.weeklyStreakTarget() != null) {
+            stored = settings.setWeeklyStreakTarget(userId, body.weeklyStreakTarget());
+        }
+        if (body.preferences() != null) {
+            stored = settings.setPreferences(userId, body.preferences());
+        }
+        // Wake the user's other devices so their landing streak + preferences refresh.
         syncNotifier.changed(userId, syncWrite.originDeviceId(), "workoutSettings");
         return WorkoutSettingsDto.from(stored);
     }
 
-    public record WorkoutSettingsDto(Integer weeklyStreakTarget) {
+    public record WorkoutSettingsDto(Integer weeklyStreakTarget, String preferences) {
         static WorkoutSettingsDto from(WorkoutSettings s) {
-            return new WorkoutSettingsDto(s.weeklyStreakTarget());
+            return new WorkoutSettingsDto(s.weeklyStreakTarget(), s.preferences());
         }
     }
 }
