@@ -88,7 +88,7 @@ steps:
       # 8414 discovery doc. Without it, discovery falls back to the backend's
       # bearer-only JSON /oauth/authorize, so third-party clients send the user's
       # browser there and get a 401 (no session bearer on a raw navigation).
-      - --set-env-vars=^|^GCP_PROJECT_ID=$PROJECT_ID|CORS_ALLOWED_ORIGINS=https://app.tesseta.com,https://health-fitness-web-mbysudfbja-uc.a.run.app|GOOGLE_HEALTH_KMS_KEY=projects/$PROJECT_ID/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens|FIRESTORE_DATABASE_ID=production|ADMIN_EMAILS=evan.ruff@gmail.com,evan.ruff@oxos.com|EXERCISE_MEDIA_MODEL=gemini-3-pro-image-preview|PLATFORM_CONSENT_PAGE_URL=https://app.tesseta.com/oauth/authorize
+      - --set-env-vars=^|^GCP_PROJECT_ID=$PROJECT_ID|CORS_ALLOWED_ORIGINS=https://app.tesseta.com,https://health-fitness-web-mbysudfbja-uc.a.run.app|GOOGLE_HEALTH_KMS_KEY=projects/$PROJECT_ID/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens|FIRESTORE_DATABASE_ID=production|ADMIN_EMAILS=evan.ruff@gmail.com,evan.ruff@oxos.com|EXERCISE_MEDIA_MODEL=gemini-3-pro-image-preview|PLATFORM_CONSENT_PAGE_URL=https://app.tesseta.com/oauth/authorize|NUTRITION_JOBS_MODE=cloud-tasks|NUTRITION_JOBS_HANDLER_URL=https://api.tesseta.com/internal/nutrition/jobs
       # OAUTH_* feed the IMPL-02 JWT audience check and the IMPL-04
       # refresh-token exchange. GOOGLE_HEALTH_WEBHOOK_SECRET is the
       # shared secret Google sends in the Authorization header on push
@@ -99,16 +99,14 @@ steps:
       # (ADR-0020). PlatformKeys fails closed without it, so the service can't
       # start unless this is mounted. The runtime + CI service accounts are
       # granted secretAccessor on the secret.
-      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest,SESSION_SIGNING_KEY=session-signing-key:latest,PLATFORM_RSA_KEY=platform-rsa-private-key:latest
-      # Tier 3 durable nutrition jobs (Cloud Tasks). The service defaults to the
-      # in-process bounded executor (mode=local) so this deploy is safe as-is. To
-      # turn on durable mode: run infra/scripts/bootstrap-nutrition-jobs.sh once
-      # (creates the queue + nutrition-jobs-secret), then ADD to the two lines
-      # above and redeploy:
-      #   --set-env-vars: |NUTRITION_JOBS_MODE=cloud-tasks|NUTRITION_JOBS_HANDLER_URL=https://api.tesseta.com/internal/nutrition/jobs
-      #   --set-secrets:  ,NUTRITION_JOBS_SECRET=nutrition-jobs-secret:latest
-      # Do NOT set mode=cloud-tasks before the queue + secret exist, or enqueues
-      # will fail (the day-read reconcile sweep is the backstop, but jobs stall).
+      - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest,SESSION_SIGNING_KEY=session-signing-key:latest,PLATFORM_RSA_KEY=platform-rsa-private-key:latest,NUTRITION_JOBS_SECRET=nutrition-jobs-secret:latest
+      # Tier 3 durable nutrition jobs run on Cloud Tasks (enabled above via
+      # NUTRITION_JOBS_MODE=cloud-tasks + the handler URL + the shared secret).
+      # The queue + nutrition-jobs-secret + runtime-SA IAM are provisioned by
+      # infra/scripts/bootstrap-nutrition-jobs.sh (run once per project). Keep the
+      # queue's --max-attempts in sync with app.nutrition.jobs.max-attempts. To
+      # roll back to the in-process executor, drop NUTRITION_JOBS_MODE (defaults
+      # to local); the day-read reconcile sweep is the backstop either way.
 
   # Smoke-test the candidate revision and only then shift 100% traffic to it. A
   # failed health check leaves the previous revision serving (no bad deploy).
