@@ -170,6 +170,16 @@ export const DISCONTINUE_LABELS: Record<DiscontinueReason, string> = {
 // Alias for backward compatibility
 export const DISCONTINUE_REASON_LABELS = DISCONTINUE_LABELS;
 
+/**
+ * Format a dose for display: up to two decimals, trailing zeros trimmed.
+ * 200 -> "200", 0.5 -> "0.5", 0.25 -> "0.25". Two decimals so a dose like 0.25
+ * isn't rounded to "0.3"; the round also tidies floating-point artifacts that
+ * dose-splitting division introduces (1/3 -> "0.33").
+ */
+export function formatDose(dose: number): string {
+  return parseFloat(dose.toFixed(2)).toString();
+}
+
 export function formatFrequency(freq: FrequencyConfig): string {
   switch (freq.type) {
     case "DAILY":

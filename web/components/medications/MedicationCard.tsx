@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Medication, Drug } from "@/lib/types/medication";
-import { formatFrequency, TIME_WINDOW_LABELS, CATEGORY_LABELS } from "@/lib/types/medication";
+import { formatDose, formatFrequency, TIME_WINDOW_LABELS, CATEGORY_LABELS } from "@/lib/types/medication";
 import { DrugImage } from "./DrugImage";
 import { AdherenceSparkline } from "./AdherenceSparkline";
 
@@ -49,8 +49,8 @@ export function MedicationCard({ medication, onClick }: MedicationCardProps) {
 
   // Format dose display
   const doseDisplay = timeSlots.length > 1
-    ? `${timeSlots.map(s => s.dose).join("/")} ${unit}`
-    : `${dose} ${unit}`;
+    ? `${timeSlots.map(s => formatDose(s.dose)).join("/")} ${unit}`
+    : `${formatDose(dose)} ${unit}`;
 
   // Format time slots
   const timesDisplay = timeSlots.length > 0

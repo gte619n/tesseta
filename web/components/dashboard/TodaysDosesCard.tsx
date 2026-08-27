@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
-import { TIME_WINDOW_LABELS } from "@/lib/types/medication";
+import { formatDose, TIME_WINDOW_LABELS } from "@/lib/types/medication";
 
 interface TodaysDosesCardProps {
   doses: TodaysDose[];
@@ -136,7 +136,7 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
                   </div>
                   <div className="flex-shrink-0 text-right">
                     <span className={`font-mono text-[11px] ${dose.taken ? "text-tertiary" : "text-secondary"}`}>
-                      {dose.dose} {dose.unit}
+                      {formatDose(dose.dose)} {dose.unit}
                     </span>
                     <span className="ml-1.5 text-[10px] text-tertiary">
                       {TIME_WINDOW_LABELS[dose.window]}
@@ -199,7 +199,7 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
                     {dose.drugName}
                   </div>
                   <div className="text-[12px] text-tertiary">
-                    {dose.dose} {dose.unit} · {TIME_WINDOW_LABELS[dose.window]}
+                    {formatDose(dose.dose)} {dose.unit} · {TIME_WINDOW_LABELS[dose.window]}
                   </div>
                 </div>
               </div>

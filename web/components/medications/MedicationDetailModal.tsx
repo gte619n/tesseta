@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Medication, DosagePeriod, FrequencyConfig, TimeSlot, TimeWindow, FrequencyType, DayOfWeek } from "@/lib/types/medication";
 import {
+  formatDose,
   formatFrequency,
   TIME_WINDOW_LABELS,
   CATEGORY_LABELS,
@@ -329,7 +330,7 @@ export function MedicationDetailModal({
                     </div>
                   )}
                   <div className="text-[14px] text-secondary">
-                    <span className="font-mono">{medication.dose} {medication.unit}</span>
+                    <span className="font-mono">{formatDose(medication.dose)} {medication.unit}</span>
                     <span className="mx-1.5 text-tertiary">·</span>
                     <span>{formatFrequency(medication.frequency)}</span>
                   </div>
@@ -351,7 +352,7 @@ export function MedicationDetailModal({
                           className="flex items-center justify-between rounded-lg bg-canvas-sunken px-2.5 py-1.5"
                         >
                           <span className="font-mono text-[13px] text-primary">
-                            {p.dose} {p.unit}
+                            {formatDose(p.dose)} {p.unit}
                           </span>
                           <span className="flex items-center text-[12px] text-tertiary">
                             {formatPeriodRange(p)}
@@ -382,7 +383,7 @@ export function MedicationDetailModal({
                         {TIME_WINDOW_LABELS[slot.window]}
                         {slot.dose !== medication.dose && (
                           <span className="ml-1 font-mono text-tertiary">
-                            ({slot.dose} {medication.unit})
+                            ({formatDose(slot.dose)} {medication.unit})
                           </span>
                         )}
                       </span>
@@ -521,7 +522,7 @@ export function MedicationDetailModal({
                   />
                   <p className="mt-1 text-[11px] text-tertiary">
                     The current dose of{" "}
-                    <span className="font-mono">{medication.dose} {medication.unit}</span> is
+                    <span className="font-mono">{formatDose(medication.dose)} {medication.unit}</span> is
                     recorded up to this date in the dosing history.
                   </p>
                 </div>
@@ -745,7 +746,7 @@ export function MedicationDetailModal({
                 Resume <span className="font-medium text-primary">{name}</span> at its last
                 dose of{" "}
                 <span className="font-mono text-primary">
-                  {medication.dose} {medication.unit}
+                  {formatDose(medication.dose)} {medication.unit}
                 </span>
                 . A new dosing period opens from the date below; the pause stays in the
                 dosing history.
