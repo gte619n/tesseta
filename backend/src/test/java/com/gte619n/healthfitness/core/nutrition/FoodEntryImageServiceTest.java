@@ -35,7 +35,7 @@ class FoodEntryImageServiceTest {
         RecordingNotifier notifier = new RecordingNotifier();
         FoodEntryImageService svc = new FoodEntryImageService(
             entries, provider(gen(Optional.of(PNG))), provider(store("https://img/e1.png")),
-            empty(), notifier.asNotifier());
+            empty(), notifier.asNotifier(), empty());
 
         svc.generateNow(USER, DATE, "e1", "Chicken bowl", null);
 
@@ -50,7 +50,7 @@ class FoodEntryImageServiceTest {
         RecordingNotifier notifier = new RecordingNotifier();
         FoodEntryImageService svc = new FoodEntryImageService(
             entries, provider(gen(Optional.empty())), provider(store("https://img/e1.png")),
-            empty(), notifier.asNotifier());
+            empty(), notifier.asNotifier(), empty());
 
         svc.generateNow(USER, DATE, "e1", "Chicken bowl", null);
 

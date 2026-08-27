@@ -212,7 +212,7 @@ class MealCaptureServiceTest {
             new FoodCatalogService(new FakeCatalogRepo(), 1, empty(), empty());
         final FoodEntryImageService images =
             new FoodEntryImageService(entries, empty(), empty(), empty(),
-                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }), empty());
         // A reader that returns bytes for any non-blank ref, so the reanalyze
         // path (which reads the stored photo back) can be driven.
         final ObjectProvider<MealPhotoReader> reader = provider((MealPhotoReader) ref ->
@@ -230,7 +230,7 @@ class MealCaptureServiceTest {
             this.svc = new MealCaptureService(
                 analyzer != null ? provider(analyzer) : empty(), empty(), reader,
                 catalog, nutrition, images,
-                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }), empty());
         }
     }
 

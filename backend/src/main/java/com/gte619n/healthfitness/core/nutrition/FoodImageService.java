@@ -1,10 +1,15 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobException;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +40,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class FoodImageService {
 
+    private static final Logger log = LoggerFactory.getLogger(FoodImageService.class);
+
     private static final int BACKFILL_LIMIT = 500;
 
     // A catalog image PENDING past this age is presumed orphaned — its bare
@@ -50,17 +57,20 @@ public class FoodImageService {
     private final ObjectProvider<FoodImageGenerator> generator;
     private final ObjectProvider<FoodImageStore> store;
     private final ObjectProvider<MealPhotoReader> photoReader;
+    private final ObjectProvider<NutritionJobQueue> jobQueue;
 
     public FoodImageService(
         FoodCatalogRepository repository,
         ObjectProvider<FoodImageGenerator> generator,
         ObjectProvider<FoodImageStore> store,
-        ObjectProvider<MealPhotoReader> photoReader
+        ObjectProvider<MealPhotoReader> photoReader,
+        ObjectProvider<NutritionJobQueue> jobQueue
     ) {
         this.repository = repository;
         this.generator = generator;
         this.store = store;
         this.photoReader = photoReader;
+        this.jobQueue = jobQueue;
     }
 
     /**
@@ -82,17 +92,39 @@ public class FoodImageService {
             return;
         }
         // Flip to PENDING synchronously so the create response reflects it, then
-        // run generation off the request thread.
+        // hand the work to the durable queue (or, with no queue bean, run it off
+        // the request thread as before).
         markStatus(foodId, FoodImageStatus.PENDING, null);
-        CompletableFuture.runAsync(() -> generateNow(foodId, referencePhotoRef));
+        NutritionJobQueue queue = jobQueue.getIfAvailable();
+        if (queue != null) {
+            queue.enqueue(NutritionJob.foodImage(foodId, referencePhotoRef));
+        } else {
+            CompletableFuture.runAsync(() -> generateNow(foodId, referencePhotoRef));
+        }
     }
 
     /**
-     * Run generation synchronously (used by the background task and by the
-     * backfill job). Resolves the food, generates + uploads the image, and walks
-     * the status to {@code READY} or {@code FAILED}. Never throws.
+     * Run generation synchronously and walk the food to {@code READY} or
+     * {@code FAILED} — the single-attempt entry point used by the backfill job and
+     * the local executor. Never throws; a failure is recorded as {@code FAILED}.
      */
     public void generateNow(String foodId, String referencePhotoRef) {
+        try {
+            generateOrThrow(foodId, referencePhotoRef);
+        } catch (RuntimeException e) {
+            log.warn("Food studio image generation failed for {}: {}", foodId, e.getMessage());
+            markFailed(foodId);
+        }
+    }
+
+    /**
+     * Generate + upload the image, marking the food {@code READY} on success.
+     * Throws {@link NutritionJobException} when generation produced nothing (or an
+     * upstream call errored) so the durable queue can retry. Idempotent: a
+     * redelivered job whose image already landed, or whose subject is already in
+     * the shared cache, completes without another Gemini call.
+     */
+    public void generateOrThrow(String foodId, String referencePhotoRef) {
         FoodImageGenerator gen = generator.getIfAvailable();
         FoodImageStore storage = store.getIfAvailable();
         if (gen == null || storage == null) {
@@ -103,23 +135,42 @@ public class FoodImageService {
             return;
         }
         CatalogFood food = found.get();
-        try {
-            MealPhotoReader.Photo reference = loadReference(referencePhotoRef);
-            byte[] refBytes = reference == null ? null : reference.bytes();
-            String refMime = reference == null ? null : reference.mimeType();
+        // Idempotent: a redelivered job whose image already landed is a no-op.
+        if (food.imageStatus() == FoodImageStatus.READY && food.imageUrl() != null) {
+            return;
+        }
 
-            Optional<byte[]> image = gen.generate(food, refBytes, refMime);
-            if (image.isEmpty() || image.get().length == 0) {
-                markStatus(foodId, FoodImageStatus.FAILED, null);
+        MealPhotoReader.Photo reference = loadReference(referencePhotoRef);
+        byte[] refBytes = reference == null ? null : reference.bytes();
+        String refMime = reference == null ? null : reference.mimeType();
+
+        // Name-only images (no user photo) are identical for the same subject,
+        // so reuse an already-generated one instead of paying Gemini again.
+        // Reference-based images depend on the user's capture, so skip the cache.
+        boolean cacheable = refBytes == null || refBytes.length == 0;
+        String cacheKey = cacheable ? FoodImageCacheKey.of(food) : null;
+        if (cacheable) {
+            Optional<String> cached = storage.findCachedUrl(cacheKey);
+            if (cached.isPresent()) {
+                markStatus(foodId, FoodImageStatus.READY, cached.get());
                 return;
             }
-            String url = storage.upload(foodId, image.get());
-            markStatus(foodId, FoodImageStatus.READY, url);
-        } catch (RuntimeException e) {
-            System.err.println(
-                "Food studio image generation failed for " + foodId + ": " + e.getMessage());
-            markStatus(foodId, FoodImageStatus.FAILED, null);
         }
+
+        Optional<byte[]> image = gen.generate(food, refBytes, refMime);
+        if (image.isEmpty() || image.get().length == 0) {
+            throw new NutritionJobException("food image generation returned no image for " + foodId);
+        }
+        String url = storage.upload(foodId, image.get());
+        if (cacheable) {
+            storage.putCachedUrl(cacheKey, url);
+        }
+        markStatus(foodId, FoodImageStatus.READY, url);
+    }
+
+    /** Record a terminal image-generation failure (queue retries exhausted). */
+    public void markFailed(String foodId) {
+        markStatus(foodId, FoodImageStatus.FAILED, null);
     }
 
     /**

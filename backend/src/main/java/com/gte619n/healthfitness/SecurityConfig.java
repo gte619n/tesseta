@@ -178,6 +178,10 @@ public class SecurityConfig {
                 // Authorization header, not via Google ID token, so it
                 // bypasses the JWT filter entirely.
                 .requestMatchers("/api/webhooks/**").permitAll()
+                // Internal Cloud Tasks handler (Tier 3 nutrition jobs) authenticates
+                // via a shared-secret header the queue attaches, not a Google ID
+                // token, so it bypasses the JWT filter and is gated in-controller.
+                .requestMatchers("/internal/**").permitAll()
                 // Session-token endpoints (ADR-0010). `refresh`/`logout` carry
                 // an opaque refresh token in the body, not a Google JWT, so they
                 // are public; `exchange` requires a valid Google ID token.
@@ -239,6 +243,7 @@ public class SecurityConfig {
                     // from eagerly JWT-decoding (and 401-ing on) a stray header
                     // before the controller runs.
                     if (uri.startsWith("/api/webhooks/")
+                        || uri.startsWith("/internal/")
                         || uri.equals("/api/auth/refresh")
                         || uri.equals("/api/auth/logout")
                         || uri.equals("/api/auth/dev-login")

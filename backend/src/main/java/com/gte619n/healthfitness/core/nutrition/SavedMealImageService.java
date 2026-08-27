@@ -1,8 +1,13 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobException;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -22,20 +27,25 @@ import org.springframework.stereotype.Service;
 @Service
 public class SavedMealImageService {
 
+    private static final Logger log = LoggerFactory.getLogger(SavedMealImageService.class);
+
     private static final int BACKFILL_LIMIT = 500;
 
     private final SavedMealRepository repository;
     private final ObjectProvider<FoodImageGenerator> generator;
     private final ObjectProvider<FoodImageStore> store;
+    private final ObjectProvider<NutritionJobQueue> jobQueue;
 
     public SavedMealImageService(
         SavedMealRepository repository,
         ObjectProvider<FoodImageGenerator> generator,
-        ObjectProvider<FoodImageStore> store
+        ObjectProvider<FoodImageStore> store,
+        ObjectProvider<NutritionJobQueue> jobQueue
     ) {
         this.repository = repository;
         this.generator = generator;
         this.store = store;
+        this.jobQueue = jobQueue;
     }
 
     /**
@@ -51,11 +61,35 @@ public class SavedMealImageService {
             return;
         }
         markStatus(mealId, FoodImageStatus.PENDING, null);
-        CompletableFuture.runAsync(() -> generateNow(mealId));
+        NutritionJobQueue queue = jobQueue.getIfAvailable();
+        if (queue != null) {
+            queue.enqueue(NutritionJob.savedMealImage(mealId));
+        } else {
+            CompletableFuture.runAsync(() -> generateNow(mealId));
+        }
     }
 
-    /** Synchronous generation; walks the meal to READY or FAILED. Never throws. */
+    /**
+     * Single-attempt generation (backfill / local executor): walks the meal to
+     * {@code READY} or {@code FAILED}. Never throws.
+     */
     public void generateNow(String mealId) {
+        try {
+            generateOrThrow(mealId);
+        } catch (RuntimeException e) {
+            log.warn("Saved meal image generation failed for {}: {}", mealId, e.getMessage());
+            markFailed(mealId);
+        }
+    }
+
+    /**
+     * Generate + upload the plated-dish image, marking the meal {@code READY} on
+     * success. Throws {@link NutritionJobException} when generation produced
+     * nothing so the durable queue can retry. Idempotent: a redelivered job whose
+     * image already landed (or whose name is cached) completes without another
+     * Gemini call.
+     */
+    public void generateOrThrow(String mealId) {
         FoodImageGenerator gen = generator.getIfAvailable();
         FoodImageStore storage = store.getIfAvailable();
         if (gen == null || storage == null) {
@@ -66,19 +100,33 @@ public class SavedMealImageService {
             return;
         }
         SavedMeal meal = found.get();
-        try {
-            Optional<byte[]> image = gen.generate(mealSubject(meal), null, null);
-            if (image.isEmpty() || image.get().length == 0) {
-                markStatus(mealId, FoodImageStatus.FAILED, null);
-                return;
-            }
-            String url = storage.upload(mealId, image.get());
-            markStatus(mealId, FoodImageStatus.READY, url);
-        } catch (RuntimeException e) {
-            System.err.println(
-                "Saved meal image generation failed for " + mealId + ": " + e.getMessage());
-            markStatus(mealId, FoodImageStatus.FAILED, null);
+        // Idempotent: a redelivered job whose image already landed is a no-op.
+        if (meal.imageStatus() == FoodImageStatus.READY && meal.imageUrl() != null) {
+            return;
         }
+
+        // Described meals are plated dishes generated from the name alone, so
+        // meals with the same name reuse one image instead of regenerating.
+        CatalogFood subject = mealSubject(meal);
+        String cacheKey = FoodImageCacheKey.of(subject);
+        Optional<String> cached = storage.findCachedUrl(cacheKey);
+        if (cached.isPresent()) {
+            markStatus(mealId, FoodImageStatus.READY, cached.get());
+            return;
+        }
+
+        Optional<byte[]> image = gen.generate(subject, null, null);
+        if (image.isEmpty() || image.get().length == 0) {
+            throw new NutritionJobException("saved meal image generation returned no image for " + mealId);
+        }
+        String url = storage.upload(mealId, image.get());
+        storage.putCachedUrl(cacheKey, url);
+        markStatus(mealId, FoodImageStatus.READY, url);
+    }
+
+    /** Record a terminal image-generation failure (queue retries exhausted). */
+    public void markFailed(String mealId) {
+        markStatus(mealId, FoodImageStatus.FAILED, null);
     }
 
     /** Enqueue generation for every saved meal still at {@code NONE}. */

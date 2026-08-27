@@ -8,6 +8,9 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobException;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -43,6 +46,7 @@ public class MealCaptureService {
     private final NutritionService nutrition;
     private final FoodEntryImageService foodEntryImages;
     private final SyncChangeNotifier syncNotifier;
+    private final ObjectProvider<NutritionJobQueue> jobQueue;
 
     public MealCaptureService(
         ObjectProvider<MealPhotoAnalyzer> mealAnalyzer,
@@ -51,7 +55,8 @@ public class MealCaptureService {
         FoodCatalogService catalog,
         NutritionService nutrition,
         FoodEntryImageService foodEntryImages,
-        SyncChangeNotifier syncNotifier
+        SyncChangeNotifier syncNotifier,
+        ObjectProvider<NutritionJobQueue> jobQueue
     ) {
         this.mealAnalyzer = mealAnalyzer;
         this.photoStore = photoStore;
@@ -60,6 +65,7 @@ public class MealCaptureService {
         this.nutrition = nutrition;
         this.foodEntryImages = foodEntryImages;
         this.syncNotifier = syncNotifier;
+        this.jobQueue = jobQueue;
     }
 
     /**
@@ -89,8 +95,9 @@ public class MealCaptureService {
         // reopenAnalysis enforces the FAILED precondition and restarts the stale
         // timer; only then do we kick the (idempotent) analysis.
         FoodEntry reopened = nutrition.reopenAnalysis(userId, date, entryId);
-        CompletableFuture.runAsync(() -> analyzeAndFinalize(
-            userId, date, entryId, photo.bytes(), photo.mimeType(), photoRef, analyzer));
+        enqueueAnalysis(userId, date, entryId, photoRef, photo.mimeType(),
+            () -> analyzeAndFinalize(
+                userId, date, entryId, photo.bytes(), photo.mimeType(), photoRef, analyzer));
         return reopened;
     }
 
@@ -121,9 +128,64 @@ public class MealCaptureService {
         }
         String photoRef = storePhoto(userId, imageBytes, mimeType);
         FoodEntry placeholder = nutrition.beginAnalyzingEntry(userId, date, meal, photoRef, contentHash);
-        CompletableFuture.runAsync(() -> analyzeAndFinalize(
-            userId, date, placeholder.entryId(), imageBytes, mimeType, photoRef, analyzer));
+        enqueueAnalysis(userId, date, placeholder.entryId(), photoRef, mimeType,
+            () -> analyzeAndFinalize(
+                userId, date, placeholder.entryId(), imageBytes, mimeType, photoRef, analyzer));
         return placeholder;
+    }
+
+    /**
+     * Hand the analysis to the durable queue (which re-reads the photo from
+     * {@code photoRef} on a fresh instance), or run the supplied in-process
+     * fallback when no queue bean is present (dev / core-only tests). The fallback
+     * already holds the photo bytes, so it need not re-read them.
+     */
+    private void enqueueAnalysis(
+        String userId, LocalDate date, String entryId, String photoRef, String mime, Runnable fallback) {
+        NutritionJobQueue queue = jobQueue.getIfAvailable();
+        if (queue != null) {
+            queue.enqueue(NutritionJob.mealAnalysis(userId, date.toString(), entryId, photoRef, mime));
+        } else {
+            CompletableFuture.runAsync(fallback);
+        }
+    }
+
+    /**
+     * Durable-queue entry point: re-read the stored photo from {@code photoRef} and
+     * run the analysis. Idempotent — skips an entry no longer {@code ANALYZING}
+     * (already finalized, failed or reopened), so a redelivered job is a no-op.
+     * Throws {@link NutritionJobException} only when the pipeline can't run at all
+     * (reader unavailable), so the queue retries; a photo that is simply gone, or
+     * an unreadable meal, is a terminal {@code FAILED} rather than a retry.
+     */
+    public void analyzeFromRefOrThrow(
+        String userId, LocalDate date, String entryId, String photoRef, String mime) {
+        MealPhotoAnalyzer analyzer = mealAnalyzer.getIfAvailable();
+        if (analyzer == null) {
+            return;
+        }
+        Optional<FoodEntry> entry = nutrition.findEntry(userId, date, entryId);
+        if (entry.isEmpty() || entry.get().analysisStatus() != EntryAnalysisStatus.ANALYZING) {
+            return;
+        }
+        MealPhotoReader reader = photoReader.getIfAvailable();
+        if (reader == null) {
+            throw new NutritionJobException("meal photo reader unavailable for entry " + entryId);
+        }
+        MealPhotoReader.Photo photo = reader.read(photoRef).orElse(null);
+        if (photo == null) {
+            // The stored photo is gone — no point retrying. Terminal failure.
+            markFailed(userId, date, entryId);
+            return;
+        }
+        analyzeAndFinalize(userId, date, entryId, photo.bytes(),
+            mime != null ? mime : photo.mimeType(), photoRef, analyzer);
+    }
+
+    /** Record a terminal analysis failure and wake the user's devices. */
+    public void markFailed(String userId, LocalDate date, String entryId) {
+        nutrition.markAnalysisFailed(userId, date, entryId);
+        syncNotifier.changed(userId, null, "nutritionDays/entries");
     }
 
     /**

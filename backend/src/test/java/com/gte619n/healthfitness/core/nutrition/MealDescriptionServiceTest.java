@@ -262,16 +262,16 @@ class MealDescriptionServiceTest {
         final NutritionService nutrition =
             new NutritionService(new InMemNutrition(), entries, new MetricChangedPublisher(e -> { }));
         final SavedMealImageService mealImages =
-            new SavedMealImageService(meals, empty(), empty());
+            new SavedMealImageService(meals, empty(), empty(), empty());
         final FoodEntryImageService entryImages =
             new FoodEntryImageService(entries, empty(), empty(), empty(),
-                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }), empty());
         final MealDescriptionService svc;
 
         Fixture(MealDescriptionAnalyzer analyzer) {
             this.svc = new MealDescriptionService(
                 provider(analyzer), meals, archived, mealImages, nutrition, entryImages,
-                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }));
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(event -> { }), empty());
         }
     }
 

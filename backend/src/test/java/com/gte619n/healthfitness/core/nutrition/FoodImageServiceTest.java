@@ -3,7 +3,10 @@ package com.gte619n.healthfitness.core.nutrition;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -42,7 +45,7 @@ class FoodImageServiceTest {
             return Optional.of(PNG);
         };
         FoodImageService svc = new FoodImageService(
-            repo, provider(blocking), provider(new FakeStore("u")), empty());
+            repo, provider(blocking), provider(new FakeStore("u")), empty(), empty());
 
         svc.enqueueGeneration("f1", null);
         // enqueue flips to PENDING synchronously before dispatching async work.
@@ -55,7 +58,7 @@ class FoodImageServiceTest {
         FakeGenerator gen = new FakeGenerator(Optional.of(PNG));
         FakeStore store = new FakeStore("https://img/f1.png");
         FoodImageService svc2 = new FoodImageService(
-            repo2, provider(gen), provider(store), empty());
+            repo2, provider(gen), provider(store), empty(), empty());
 
         svc2.generateNow("f1b", null);
 
@@ -75,7 +78,7 @@ class FoodImageServiceTest {
         FakeStore store = new FakeStore("unused");
 
         FoodImageService svc = new FoodImageService(
-            repo, provider(gen), provider(store), empty());
+            repo, provider(gen), provider(store), empty(), empty());
 
         svc.generateNow("f2", null);
 
@@ -92,7 +95,7 @@ class FoodImageServiceTest {
             throw new RuntimeException("gemini down");
         };
         FoodImageService svc = new FoodImageService(
-            repo, provider(throwing), provider(new FakeStore("x")), empty());
+            repo, provider(throwing), provider(new FakeStore("x")), empty(), empty());
 
         svc.generateNow("f3", null);
 
@@ -110,7 +113,7 @@ class FoodImageServiceTest {
             : Optional.empty();
 
         FoodImageService svc = new FoodImageService(
-            repo, provider(gen), provider(new FakeStore("u")), provider(reader));
+            repo, provider(gen), provider(new FakeStore("u")), provider(reader), empty());
 
         svc.generateNow("f4", "ref://meal/4");
 
@@ -123,7 +126,7 @@ class FoodImageServiceTest {
     void enqueue_withoutGeneratorPort_isNoOp() {
         FakeRepo repo = new FakeRepo();
         repo.add(food("f5", FoodImageStatus.NONE));
-        FoodImageService svc = new FoodImageService(repo, empty(), empty(), empty());
+        FoodImageService svc = new FoodImageService(repo, empty(), empty(), empty(), empty());
 
         svc.enqueueGeneration("f5", null);
 
@@ -144,7 +147,7 @@ class FoodImageServiceTest {
             return Optional.empty();
         };
         FoodImageService svc = new FoodImageService(
-            repo, provider(blocking), provider(new FakeStore("u")), empty());
+            repo, provider(blocking), provider(new FakeStore("u")), empty(), empty());
 
         int enqueued = svc.backfillMissing();
 
@@ -171,7 +174,7 @@ class FoodImageServiceTest {
             return Optional.empty();
         };
         FoodImageService svc = new FoodImageService(
-            repo, provider(blocking), provider(new FakeStore("u")), empty());
+            repo, provider(blocking), provider(new FakeStore("u")), empty(), empty());
 
         int reenqueued = svc.sweepStalePending();
 
@@ -189,13 +192,88 @@ class FoodImageServiceTest {
     void sweepStalePending_withoutPipeline_isNoOp() {
         FakeRepo repo = new FakeRepo();
         repo.add(foodAt("p", FoodImageStatus.PENDING, Instant.now().minus(Duration.ofMinutes(10))));
-        FoodImageService svc = new FoodImageService(repo, empty(), empty(), empty());
+        FoodImageService svc = new FoodImageService(repo, empty(), empty(), empty(), empty());
 
         assertEquals(0, svc.sweepStalePending());
         assertEquals(FoodImageStatus.PENDING, repo.get("p").imageStatus());
     }
 
+    @Test
+    void generate_reusesCachedImage_forIdenticalSubject_withoutRegenerating() {
+        FakeRepo repo = new FakeRepo();
+        // Same name + category => same cache key, but distinct food ids (the
+        // catalog mints a new food per capture). The second must reuse the first.
+        repo.add(food("first", FoodImageStatus.NONE));
+        repo.add(food("second", FoodImageStatus.NONE));
+        CachingStore store = new CachingStore("https://img/shared.png");
+        CountingGenerator gen = new CountingGenerator(Optional.of(PNG));
+        FoodImageService svc = new FoodImageService(repo, provider(gen), provider(store), empty(), empty());
+
+        svc.generateNow("first", null);
+        svc.generateNow("second", null);
+
+        assertEquals(FoodImageStatus.READY, repo.get("first").imageStatus());
+        assertEquals(FoodImageStatus.READY, repo.get("second").imageStatus());
+        assertEquals("https://img/shared.png", repo.get("second").imageUrl(),
+            "identical subject reuses the first image url");
+        assertEquals(1, gen.calls, "generator runs once — the second subject is served from cache");
+        assertEquals(1, store.uploads, "only the first subject is uploaded");
+    }
+
+    @Test
+    void generate_withReferencePhoto_bypassesCache() {
+        FakeRepo repo = new FakeRepo();
+        repo.add(food("ref1", FoodImageStatus.NONE));
+        CachingStore store = new CachingStore("https://img/ref1.png");
+        CountingGenerator gen = new CountingGenerator(Optional.of(PNG));
+        byte[] refBytes = "meal-photo".getBytes();
+        MealPhotoReader reader = r -> Optional.of(new MealPhotoReader.Photo(refBytes, "image/jpeg"));
+        FoodImageService svc = new FoodImageService(repo, provider(gen), provider(store), provider(reader), empty());
+
+        svc.generateNow("ref1", "ref://meal/1");
+
+        assertEquals(FoodImageStatus.READY, repo.get("ref1").imageStatus());
+        assertTrue(store.index.isEmpty(), "reference-based images are unique and never cached");
+    }
+
+    @Test
+    void generateOrThrow_throwsWhenGeneratorReturnsEmpty_soQueueCanRetry() {
+        FakeRepo repo = new FakeRepo();
+        repo.add(food("g", FoodImageStatus.PENDING));
+        FoodImageService svc = new FoodImageService(
+            repo, provider(new FakeGenerator(Optional.empty())), provider(new FakeStore("u")),
+            empty(), empty());
+
+        assertThrows(NutritionJobException.class, () -> svc.generateOrThrow("g", null));
+        // generateOrThrow does NOT mark FAILED — the queue owns the terminal
+        // decision (retry, then markFailed only when the budget is exhausted).
+        assertEquals(FoodImageStatus.PENDING, repo.get("g").imageStatus());
+    }
+
+    @Test
+    void generateOrThrow_isIdempotent_skipsWhenAlreadyReady() {
+        FakeRepo repo = new FakeRepo();
+        repo.add(readyFood("done"));
+        CountingGenerator gen = new CountingGenerator(Optional.of(PNG));
+        FoodImageService svc = new FoodImageService(
+            repo, provider(gen), provider(new FakeStore("u")), empty(), empty());
+
+        // A redelivered at-least-once job for a food whose image already landed.
+        svc.generateOrThrow("done", null);
+
+        assertEquals(0, gen.calls, "an already-READY food is not regenerated on redelivery");
+    }
+
     // ---- fakes ----
+
+    private static CatalogFood readyFood(String id) {
+        return new CatalogFood(
+            id, "Grilled chicken", "grilled chicken", null, null, "Protein",
+            new Macros(165.0, 31.0, 0.0, 3.6, 0.0, 0.0),
+            List.of(new ServingSize("100 g", 100.0)), 0,
+            FoodSource.GEMINI_PHOTO, null, FoodStatus.UNVERIFIED, 0, null,
+            "https://img/existing.png", FoodImageStatus.READY, "creator", Instant.now(), Instant.now());
+    }
 
     private static CatalogFood food(String id, FoodImageStatus imageStatus) {
         return foodAt(id, imageStatus, Instant.now());
@@ -250,6 +328,34 @@ class FoodImageServiceTest {
             this.lastFoodId = foodId;
             this.lastBytes = imageBytes;
             return url;
+        }
+    }
+
+    /** Store that honours the content cache, so reuse across subjects is observable. */
+    private static final class CachingStore implements FoodImageStore {
+        private final String url;
+        final java.util.Map<String, String> index = new java.util.concurrent.ConcurrentHashMap<>();
+        int uploads;
+        CachingStore(String url) { this.url = url; }
+        @Override public String upload(String foodId, byte[] imageBytes) {
+            uploads++;
+            return url;
+        }
+        @Override public Optional<String> findCachedUrl(String cacheKey) {
+            return Optional.ofNullable(index.get(cacheKey));
+        }
+        @Override public void putCachedUrl(String cacheKey, String url) {
+            index.put(cacheKey, url);
+        }
+    }
+
+    private static final class CountingGenerator implements FoodImageGenerator {
+        private final Optional<byte[]> result;
+        int calls;
+        CountingGenerator(Optional<byte[]> result) { this.result = result; }
+        @Override public Optional<byte[]> generate(CatalogFood food, byte[] ref, String mime) {
+            calls++;
+            return result;
         }
     }
 
