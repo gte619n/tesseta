@@ -11,12 +11,22 @@ class DoseFormatterTest {
     }
 
     @Test
-    fun `fractional dose renders one decimal`() {
+    fun `fractional dose renders without trailing zeros`() {
         assertEquals("0.5 mg", DoseFormatter.format(0.5, "mg"))
     }
 
     @Test
-    fun `trailing-zero fraction rounds to one decimal`() {
+    fun `two-decimal dose keeps both digits`() {
+        assertEquals("0.25 mg", DoseFormatter.format(0.25, "mg"))
+    }
+
+    @Test
+    fun `dose beyond two decimals rounds to two`() {
+        assertEquals("0.13 mg", DoseFormatter.format(0.125, "mg"))
+    }
+
+    @Test
+    fun `trailing-zero fraction trims to shortest form`() {
         assertEquals("12.5 mg", DoseFormatter.format(12.50, "mg"))
     }
 

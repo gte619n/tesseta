@@ -11,10 +11,14 @@ import java.time.temporal.ChronoUnit
  */
 
 object DoseFormatter {
-    /** Format a dose as integer when whole, else one decimal. e.g. "200 mg", "0.5 mg". */
+    /**
+     * Format a dose as integer when whole, else up to two decimals with trailing
+     * zeros trimmed. e.g. "200 mg", "0.5 mg", "0.25 mg". Two decimals so a dose
+     * like 0.25 mg is no longer rounded to "0.3 mg".
+     */
     fun format(dose: Double, unit: String): String {
         val isWhole = dose % 1.0 == 0.0
-        val n = if (isWhole) dose.toInt().toString() else "%.1f".format(dose)
+        val n = if (isWhole) dose.toInt().toString() else "%.2f".format(dose).trimEnd('0').trimEnd('.')
         return "$n $unit"
     }
 }
