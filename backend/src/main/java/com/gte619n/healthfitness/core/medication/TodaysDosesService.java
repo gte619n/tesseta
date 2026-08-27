@@ -46,8 +46,10 @@ public class TodaysDosesService {
         List<Medication> activeMeds = medications.findByUserAndStatus(userId, MedicationStatus.ACTIVE);
         List<AdherenceLog> todayLogs = adherence.findByUserAndDateRange(userId, today, today);
 
+        // IMPL-21: a dose counts as taken only when its log is NOT a missed marker.
         Set<String> taken = todayLogs.stream()
             .flatMap(log -> log.doses().stream()
+                .filter(dose -> !dose.missed())
                 .map(dose -> log.medicationId() + ":" + dose.window().name()))
             .collect(Collectors.toSet());
 

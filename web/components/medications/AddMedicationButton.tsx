@@ -32,6 +32,8 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
   const [frequencyType, setFrequencyType] = useState<FrequencyType>("DAILY");
   const [timesPerPeriod, setTimesPerPeriod] = useState("1");
   const [selectedWindows, setSelectedWindows] = useState<TimeWindow[]>(["MORNING"]);
+  // IMPL-21: optional explicit "HH:mm" reminder time per window; blank ⇒ window default.
+  const [slotTimes, setSlotTimes] = useState<Partial<Record<TimeWindow, string>>>({});
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([]); // For weekly
   const [dayOfMonth, setDayOfMonth] = useState("1"); // For monthly
   const [notes, setNotes] = useState("");
@@ -201,6 +203,22 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
     );
   }
 
+  function setSlotTime(window: TimeWindow, value: string) {
+    setSlotTimes((prev) => ({ ...prev, [window]: value }));
+  }
+
+  // IMPL-21: build slots carrying the optional explicit time (blank ⇒ omit).
+  function buildTimeSlots(totalDose: number): TimeSlot[] {
+    return selectedWindows.map((window) => {
+      const time = slotTimes[window]?.trim();
+      return {
+        window,
+        dose: totalDose / selectedWindows.length,
+        ...(time ? { time } : {}),
+      };
+    });
+  }
+
   function handleSubmit() {
     if (!selectedDrug) return;
     if (!dose || Number(dose) <= 0) {
@@ -225,12 +243,8 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
       formData.set("dayOfMonth", dayOfMonth);
     }
 
-    // Build time slots from selected windows
-    const timeSlots: TimeSlot[] = selectedWindows.map((window) => ({
-      window,
-      dose: Number(dose) / selectedWindows.length,
-    }));
-    formData.set("timeSlots", JSON.stringify(timeSlots));
+    // Build time slots from selected windows (with optional explicit times)
+    formData.set("timeSlots", JSON.stringify(buildTimeSlots(Number(dose))));
     formData.set("correlatedMarkers", JSON.stringify(selectedDrug.suggestedMarkers || []));
     if (notes) formData.set("notes", notes);
     if (prescribedBy) formData.set("prescribedBy", prescribedBy);
@@ -578,6 +592,27 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
                           </button>
                         ))}
                       </div>
+                      {/* IMPL-21: optional explicit reminder time per selected window. */}
+                      {selectedWindows.length > 0 && (
+                        <div className="mt-2 space-y-1.5">
+                          {selectedWindows.map((window) => (
+                            <div key={window} className="flex items-center gap-2">
+                              <span className="w-24 text-[12px] text-secondary">
+                                {TIME_WINDOW_LABELS[window]}
+                              </span>
+                              <input
+                                type="time"
+                                value={slotTimes[window] ?? ""}
+                                onChange={(e) => setSlotTime(window, e.target.value)}
+                                className="rounded-md border border-default bg-canvas px-2 py-1 text-[13px] text-primary"
+                              />
+                              <span className="text-[11px] text-tertiary">
+                                {slotTimes[window]?.trim() ? "custom" : "default"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -740,6 +775,27 @@ export function AddMedicationButton({ addMedication, lookupDrug, drugs }: AddMed
                           </button>
                         ))}
                       </div>
+                      {/* IMPL-21: optional explicit reminder time per selected window. */}
+                      {selectedWindows.length > 0 && (
+                        <div className="mt-2 space-y-1.5">
+                          {selectedWindows.map((window) => (
+                            <div key={window} className="flex items-center gap-2">
+                              <span className="w-24 text-[12px] text-secondary">
+                                {TIME_WINDOW_LABELS[window]}
+                              </span>
+                              <input
+                                type="time"
+                                value={slotTimes[window] ?? ""}
+                                onChange={(e) => setSlotTime(window, e.target.value)}
+                                className="rounded-md border border-default bg-canvas px-2 py-1 text-[13px] text-primary"
+                              />
+                              <span className="text-[11px] text-tertiary">
+                                {slotTimes[window]?.trim() ? "custom" : "default"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 

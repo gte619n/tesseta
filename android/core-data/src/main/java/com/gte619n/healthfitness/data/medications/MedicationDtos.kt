@@ -45,6 +45,7 @@ data class FrequencyConfigDto(
 data class TimeSlotDto(
     val window: String,
     val dose: Double,
+    val time: String? = null,   // IMPL-21: optional explicit "HH:mm" slot time
 )
 
 /** [PR#8] Dated dose history entry. */

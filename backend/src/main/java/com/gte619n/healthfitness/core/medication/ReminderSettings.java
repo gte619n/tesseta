@@ -56,6 +56,18 @@ public record ReminderSettings(
         return new ReminderSettings(userId, true, defaultWindowTimes(), Map.of(), null);
     }
 
+    /**
+     * IMPL-21: the resolved fire time for a specific dose slot, applying the full
+     * precedence — drug-setup explicit slot time → per-medication settings override
+     * → user window time → built-in default.
+     */
+    public LocalTime resolveDoseTime(String medicationId, TimeSlot slot) {
+        if (slot != null && slot.time() != null) {
+            return slot.time();
+        }
+        return timeFor(medicationId, slot != null ? slot.window() : TimeWindow.MORNING);
+    }
+
     /** The resolved fire time for one medication's window slot. */
     public LocalTime timeFor(String medicationId, TimeWindow window) {
         MedicationOverride override = perMedication != null

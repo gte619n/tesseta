@@ -61,6 +61,14 @@ data class FrequencyConfig(
 data class TimeSlot(
     val window: TimeWindow,
     val dose: Double,
+    /**
+     * IMPL-21: optional explicit reminder time for this slot, set in drug setup.
+     * When non-null it is the highest-precedence reminder time for the slot
+     * (drug-setup explicit → per-med settings override → global window default);
+     * when null the window's configured time applies. Windows remain the backbone
+     * for grouping and adherence keying.
+     */
+    val time: java.time.LocalTime? = null,
 )
 
 /**

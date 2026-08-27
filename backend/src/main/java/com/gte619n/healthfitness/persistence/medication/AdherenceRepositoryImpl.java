@@ -178,10 +178,12 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
     }
 
     private DoseLog parseDoseLog(Map<String, Object> map) {
+        Object missed = map.get("missed");
         return new DoseLog(
             TimeWindow.valueOf((String) map.get("window")),
             toInstant(map.get("takenAt")),
-            ((Number) map.get("dose")).doubleValue()
+            ((Number) map.get("dose")).doubleValue(),
+            missed instanceof Boolean b && b
         );
     }
 
@@ -196,11 +198,15 @@ public class AdherenceRepositoryImpl implements AdherenceRepository {
             for (DoseLog dose : log.doses()) {
                 Map<String, Object> doseMap = new HashMap<>();
                 doseMap.put("window", dose.window().name());
-                doseMap.put("takenAt", com.google.cloud.Timestamp.ofTimeSecondsAndNanos(
-                    dose.takenAt().getEpochSecond(),
-                    dose.takenAt().getNano()
-                ));
+                // takenAt is null for a missed dose (IMPL-21) — only stamp a real take.
+                if (dose.takenAt() != null) {
+                    doseMap.put("takenAt", com.google.cloud.Timestamp.ofTimeSecondsAndNanos(
+                        dose.takenAt().getEpochSecond(),
+                        dose.takenAt().getNano()
+                    ));
+                }
                 doseMap.put("dose", dose.dose());
+                doseMap.put("missed", dose.missed());
                 dosesMap.add(doseMap);
             }
         }

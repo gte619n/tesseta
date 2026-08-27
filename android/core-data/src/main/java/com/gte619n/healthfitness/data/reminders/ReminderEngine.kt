@@ -1,313 +1,165 @@
 package com.gte619n.healthfitness.data.reminders
 
-import android.annotation.SuppressLint
-import android.app.AlarmManager
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.NotificationCompat
-import com.gte619n.healthfitness.data.R
 import com.gte619n.healthfitness.data.medications.AdherenceRepository
 import com.gte619n.healthfitness.data.medications.MedicationRepository
+import com.gte619n.healthfitness.domain.medications.DueDose
 import com.gte619n.healthfitness.domain.medications.MedicationStatus
-import com.gte619n.healthfitness.domain.medications.PlannedReminder
-import com.gte619n.healthfitness.domain.medications.ReminderDose
-import com.gte619n.healthfitness.domain.medications.ReminderPlanner
+import com.gte619n.healthfitness.domain.medications.OutstandingDoses
+import com.gte619n.healthfitness.domain.medications.ReminderSettings
 import com.gte619n.healthfitness.domain.medications.TimeWindow
-import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.Clock
+import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Device-side medication reminders (IMPL-16 Part A). The backend stores only
- * the configuration; this engine does the rest locally so reminders work
- * offline:
+ * IMPL-21 — the single rolling medication reminder engine.
  *
- *  - [replan] computes the upcoming reminders from the medication mirror +
- *    cached settings ([ReminderPlanner]) and sets ONE exact alarm for the
- *    soonest — an alarm chain, re-armed after each firing, boot, time change
- *    and config edit (plus a periodic safety-net worker).
- *  - [onAlarmFired] re-resolves what is due at the fired time (doses logged
- *    in-app since planning drop out), posts a single grouped notification with
- *    per-medication "Took it" actions (≤3 meds) or one "Take all", then chains
- *    the next alarm.
- *  - [onDosesTaken] logs adherence through the offline outbox and re-posts the
- *    notification minus the taken meds — clearing it automatically when every
- *    dose is checked off.
+ * Replaces the IMPL-16 per-window notification chain: there is now exactly ONE
+ * reminder in the shade at a time, showing only the **overdue + currently-due**
+ * doses (computed by the pure [OutstandingDoses] reducer), and it updates live as
+ * doses are marked off anywhere (notification action, in-app Today screen via the
+ * [ReminderReplanCoordinator] observer, or a remote sync).
+ *
+ * All entry points funnel through [refresh]:
+ *  - [replan] / [onAlarmFired] — recompute + re-post + re-arm the DUE alarm.
+ *  - [onDosesTaken] — log the take, then recompute (the notification decrements
+ *    silently, or clears when the last dose is checked off).
+ *  - [onMidnight] — record the just-ended day's untaken scheduled doses as MISSED
+ *    (spec D5/D11), clear the notification, then recompute for the new day.
+ *  - [reconcileMissed] — boot/launch catch-up for a skipped midnight (spec D15).
+ *
+ * Framework I/O is behind [ReminderNotifier] / [ReminderScheduler] and time behind
+ * [Clock], so the orchestration here is covered by fast JVM tests (decision D-5).
  */
 @Singleton
 class ReminderEngine @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val medications: MedicationRepository,
     private val adherence: AdherenceRepository,
     private val settings: ReminderSettingsRepository,
+    private val notifier: ReminderNotifier,
+    private val scheduler: ReminderScheduler,
+    private val clock: Clock,
 ) {
-    private val alarmManager: AlarmManager
-        get() = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    private val notificationManager: NotificationManager
-        get() = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    /**
+     * The `(med:window)` keys posted on the last notification, for the alert-vs-silent
+     * diff (spec D4): a post re-alerts iff it introduces a key that wasn't shown before
+     * (a new batch crossed into due, or the first post of the session); a pure decrement
+     * is silent. In-memory on the singleton — process death simply makes the next post
+     * alert once, which matches "reappears with re-alert" (spec D6 / decision D-7).
+     */
+    @Volatile private var lastPostedKeys: Set<String> = emptySet()
 
-    /** Recompute the schedule and arm an exact alarm for the next reminder. */
-    suspend fun replan() {
-        val next = nextReminder() ?: run {
-            alarmManager.cancel(alarmIntent())
+    /** Recompute the single reminder and re-arm the alarms. */
+    suspend fun replan() = refresh()
+
+    /** A DUE alarm fired — the same recompute path (a new batch may have crossed into due). */
+    suspend fun onAlarmFired() = refresh()
+
+    /**
+     * The notification's "✓" action was tapped: log each dose through the offline
+     * outbox, then recompute — the reminder decrements silently or clears.
+     */
+    suspend fun onDosesTaken(taken: List<Pair<String, TimeWindow>>) {
+        for ((medicationId, window) in taken) runCatching { adherence.logDose(medicationId, window) }
+        refresh()
+    }
+
+    /**
+     * Local midnight rolled over: mark the just-ended day's untaken scheduled doses
+     * MISSED (synced for stats, spec D11), clear the notification, then recompute for
+     * the new day (which re-arms the next midnight alarm).
+     */
+    suspend fun onMidnight() {
+        val endedDay = LocalDateTime.now(clock).toLocalDate().minusDays(1)
+        markMissedFor(endedDay)
+        notifier.cancel()
+        lastPostedKeys = emptySet()
+        refresh()
+    }
+
+    /**
+     * Boot / app-start catch-up (spec D15 / decision D-9): mark yesterday's untaken
+     * scheduled doses missed in case the device was off across midnight. Idempotent —
+     * [markMissedFor] skips any dose already taken or already missed — then recompute.
+     */
+    suspend fun reconcileMissed() {
+        val yesterday = LocalDateTime.now(clock).toLocalDate().minusDays(1)
+        markMissedFor(yesterday)
+        refresh()
+    }
+
+    // ---- core -----------------------------------------------------------------
+
+    private suspend fun refresh() {
+        val now = LocalDateTime.now(clock)
+        val config = settings.getCached()
+        if (!config.enabled) {
+            notifier.cancel()
+            lastPostedKeys = emptySet()
+            scheduler.cancelDue()
             return
         }
-        val at = next.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        scheduleExact(at)
+        val meds = runCatching { medications.list(MedicationStatus.ACTIVE) }.getOrElse { return }
+        val takenToday = takenTodaySet()
+        val outstanding = OutstandingDoses.outstanding(meds, config, takenToday, now)
+        postOrCancel(outstanding)
+        armAlarms(meds, config, now)
     }
 
-    /**
-     * An alarm fired (scheduled for [plannedAtMillis]). Re-resolve the doses
-     * due at that time, post the grouped notification, then chain the next
-     * alarm. Quietly no-ops when everything due was already taken in-app.
-     */
-    suspend fun onAlarmFired(plannedAtMillis: Long) {
-        val plannedAt = LocalDateTime.ofInstant(
-            java.time.Instant.ofEpochMilli(plannedAtMillis), ZoneId.systemDefault())
-        // Re-plan from just before the fire time so the fired reminder itself
-        // is the first in the list (plan() returns strictly-after reminders).
-        val due = plan(from = plannedAt.minusSeconds(1))
-            .firstOrNull { !it.at.isAfter(plannedAt) }
-        if (due != null && due.doses.isNotEmpty()) {
-            postNotification(plannedAtMillis, due.doses)
+    private fun postOrCancel(outstanding: List<DueDose>) {
+        if (outstanding.isEmpty()) {
+            notifier.cancel()
+            lastPostedKeys = emptySet()
+            return
         }
-        replan()
+        val keys = outstanding.map { it.key }.toSet()
+        val alert = keys.any { it !in lastPostedKeys }
+        notifier.post(outstanding, alert)
+        lastPostedKeys = keys
     }
 
-    /**
-     * "Took it" tapped on the notification: log each dose through the offline
-     * outbox, then refresh the notification — re-posted minus the taken meds,
-     * cancelled once none remain.
-     */
-    suspend fun onDosesTaken(
-        plannedAtMillis: Long,
-        taken: List<Pair<String, TimeWindow>>,
-        remaining: List<ReminderDose>,
-    ) {
-        for ((medicationId, window) in taken) {
-            runCatching { adherence.logDose(medicationId, window) }
-        }
-        if (remaining.isEmpty()) {
-            notificationManager.cancel(notificationId(plannedAtMillis))
-        } else {
-            postNotification(plannedAtMillis, remaining)
-        }
+    private fun armAlarms(meds: List<com.gte619n.healthfitness.domain.medications.Medication>, config: ReminderSettings, now: LocalDateTime) {
+        val nextDue = OutstandingDoses.nextDueTime(meds, config, now)
+        if (nextDue != null) scheduler.armDue(nextDue.toEpochMillis()) else scheduler.cancelDue()
+        // Always keep a midnight alarm so the day rolls over even with no doses due.
+        val midnight = now.toLocalDate().plusDays(1).atStartOfDay()
+        scheduler.armMidnight(midnight.toEpochMillis())
     }
 
-    // ---- planning -------------------------------------------------------
-
-    private suspend fun nextReminder(): PlannedReminder? =
-        plan(from = LocalDateTime.now()).firstOrNull()
-
-    private suspend fun plan(from: LocalDateTime): List<PlannedReminder> {
+    private suspend fun markMissedFor(day: LocalDate) {
         val config = settings.getCached()
-        if (!config.enabled) return emptyList()
-        val meds = runCatching { medications.list(MedicationStatus.ACTIVE) }
-            .getOrElse { return emptyList() }
-        val takenToday = runCatching { medications.todaysDoses() }
-            .getOrElse { emptyList() }
+        val meds = runCatching { medications.list(MedicationStatus.ACTIVE) }.getOrElse { return }
+        val scheduled = OutstandingDoses.scheduledFor(meds, config, day)
+        if (scheduled.isEmpty()) return
+        val recorded = runCatching { adherence.recordedWindowsFor(day) }.getOrElse { emptySet() }
+        for (dose in scheduled) {
+            if ((dose.medicationId to dose.window) in recorded) continue
+            runCatching { adherence.markMissed(dose.medicationId, day, dose.window, dose.dose) }
+        }
+    }
+
+    private suspend fun takenTodaySet(): Set<Pair<String, TimeWindow>> =
+        runCatching { medications.todaysDoses() }.getOrElse { emptyList() }
             .filter { it.taken }
             .map { it.medicationId to it.window }
             .toSet()
-        return ReminderPlanner.plan(meds, config, takenToday, from)
-    }
 
-    // ---- alarms ---------------------------------------------------------
-
-    @SuppressLint("MissingPermission")
-    private fun scheduleExact(atMillis: Long) {
-        val pending = alarmIntent(atMillis)
-        // Dose reminders qualify for exact alarms; fall back to a windowed
-        // alarm if the user revoked the special access (Android 12+).
-        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            alarmManager.canScheduleExactAlarms()
-        if (canExact) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMillis, pending)
-        } else {
-            alarmManager.setWindow(
-                AlarmManager.RTC_WAKEUP, atMillis, FALLBACK_WINDOW_MILLIS, pending)
-        }
-    }
-
-    private fun alarmIntent(atMillis: Long = 0L): PendingIntent {
-        val intent = Intent(context, ReminderAlarmReceiver::class.java)
-            .setAction(ACTION_REMINDER_FIRE)
-            .putExtra(EXTRA_PLANNED_AT, atMillis)
-        // One fixed requestCode: re-arming always replaces the previous alarm
-        // (the chain only ever has a single next firing).
-        return PendingIntent.getBroadcast(
-            context, RC_ALARM, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-    }
-
-    // ---- notification ---------------------------------------------------
-
-    private fun postNotification(plannedAtMillis: Long, doses: List<ReminderDose>) {
-        if (!canPostNotifications()) return
-        ensureChannel()
-        val timeLabel = LocalDateTime.ofInstant(
-            java.time.Instant.ofEpochMilli(plannedAtMillis), ZoneId.systemDefault())
-            .toLocalTime()
-            .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
-
-        val lines = doses.map { "${it.name} — ${formatDose(it.dose)} ${it.unit}" }
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_reminder_pill)
-            .setContentTitle(
-                if (doses.size == 1) "Medication — $timeLabel"
-                else "${doses.size} medications — $timeLabel",
-            )
-            .setContentText(lines.joinToString(", "))
-            .setStyle(
-                NotificationCompat.InboxStyle().also { style ->
-                    lines.forEach { style.addLine(it) }
-                },
-            )
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setOnlyAlertOnce(true)
-            .setOngoing(false)
-            .setAutoCancel(false)
-            .setContentIntent(launchAppIntent())
-
-        // Notifications cap out at 3 actions: one "Took it" per medication when
-        // they fit, otherwise a single "Take all".
-        if (doses.size <= MAX_PER_MED_ACTIONS) {
-            doses.forEachIndexed { index, dose ->
-                builder.addAction(
-                    0, "✓ ${dose.name}",
-                    actionIntent(plannedAtMillis, listOf(dose), doses - dose, RC_ACTION_BASE + index),
-                )
-            }
-        } else {
-            builder.addAction(
-                0, "✓ Take all",
-                actionIntent(plannedAtMillis, doses, emptyList(), RC_ACTION_BASE),
-            )
-        }
-        notificationManager.notify(notificationId(plannedAtMillis), builder.build())
-    }
-
-    private fun actionIntent(
-        plannedAtMillis: Long,
-        take: List<ReminderDose>,
-        remaining: List<ReminderDose>,
-        requestCode: Int,
-    ): PendingIntent {
-        val intent = Intent(context, ReminderActionReceiver::class.java)
-            .setAction(ACTION_DOSE_TAKEN)
-            .putExtra(EXTRA_PLANNED_AT, plannedAtMillis)
-            .putExtra(EXTRA_TAKE_MEDS, take.map { it.medicationId }.toTypedArray())
-            .putExtra(EXTRA_TAKE_WINDOWS, take.map { it.window.name }.toTypedArray())
-            .putExtra(EXTRA_REMAINING, encodeDoses(remaining))
-        return PendingIntent.getBroadcast(
-            context, requestCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-    }
-
-    /**
-     * Content intent for the notification (IMPL-STAB Workstream F item 4):
-     * deep-links to the medications dose checklist instead of app home. An
-     * explicit `ACTION_VIEW` on the [DEEP_LINK_DOSE_CHECKLIST] URI, scoped to
-     * this package so it always resolves to the launcher activity, whose
-     * NavHost matches the URI to the medications destination (building the
-     * synthetic back stack to the dashboard). Falls back to a plain launch
-     * intent if, for any reason, the deep link can't be resolved.
-     */
-    private fun launchAppIntent(): PendingIntent? {
-        val deepLink = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DEEP_LINK_DOSE_CHECKLIST))
-            .setPackage(context.packageName)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val resolvable = deepLink.resolveActivity(context.packageManager) != null
-        val intent = if (resolvable) {
-            deepLink
-        } else {
-            context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
-        }
-        return PendingIntent.getActivity(
-            context, RC_LAUNCH, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-    }
-
-    private fun canPostNotifications(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-
-    private fun ensureChannel() {
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                "Medication reminders",
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply { description = "Reminders to take your scheduled medications" },
-        )
-    }
-
-    private fun formatDose(dose: Double): String =
-        if (dose == dose.toLong().toDouble()) dose.toLong().toString() else dose.toString()
+    private fun LocalDateTime.toEpochMillis(): Long =
+        atZone(clock.zone).toInstant().toEpochMilli()
 
     companion object {
         const val ACTION_REMINDER_FIRE = "com.gte619n.healthfitness.REMINDER_FIRE"
+        const val ACTION_MIDNIGHT = "com.gte619n.healthfitness.REMINDER_MIDNIGHT"
         const val ACTION_DOSE_TAKEN = "com.gte619n.healthfitness.REMINDER_DOSE_TAKEN"
-        const val EXTRA_PLANNED_AT = "plannedAt"
         const val EXTRA_TAKE_MEDS = "takeMeds"
         const val EXTRA_TAKE_WINDOWS = "takeWindows"
-        const val EXTRA_REMAINING = "remaining"
 
         /**
-         * Deep-link URI the notification opens (IMPL-STAB Workstream F item 4),
-         * matched by the medications LIST destination's `navDeepLink` in
-         * `MedicationRoutes` and the `MainActivity` `ACTION_VIEW` intent-filter.
-         * Kept as a literal here so core-data needn't depend on feature-medical;
-         * the two ends are documented to match.
+         * Deep-link URI the notification opens, matched by the medications LIST
+         * destination's `navDeepLink` and the `MainActivity` `ACTION_VIEW` filter.
          */
         const val DEEP_LINK_DOSE_CHECKLIST = "healthfitness://medications/today"
-
-        private const val CHANNEL_ID = "medication_reminders"
-        private const val MAX_PER_MED_ACTIONS = 3
-        private const val RC_ALARM = 41001
-        private const val RC_LAUNCH = 41002
-        private const val RC_ACTION_BASE = 41100
-        private const val FALLBACK_WINDOW_MILLIS = 15L * 60 * 1000
-
-        /** Stable per-firing id so morning/evening reminders coexist in the shade. */
-        fun notificationId(plannedAtMillis: Long): Int =
-            (plannedAtMillis / 60_000L % Int.MAX_VALUE).toInt()
-
-        /** Compact "med|window|name|dose|unit" rows for the remaining-doses extra. */
-        fun encodeDoses(doses: List<ReminderDose>): Array<String> =
-            doses.map {
-                listOf(it.medicationId, it.window.name, it.name, it.dose.toString(), it.unit)
-                    .joinToString("|")
-            }.toTypedArray()
-
-        fun decodeDoses(rows: Array<String>?): List<ReminderDose> =
-            rows.orEmpty().mapNotNull { row ->
-                val parts = row.split("|")
-                if (parts.size < 5) return@mapNotNull null
-                val window = runCatching { TimeWindow.valueOf(parts[1]) }.getOrNull()
-                    ?: return@mapNotNull null
-                ReminderDose(
-                    medicationId = parts[0],
-                    window = window,
-                    name = parts[2],
-                    dose = parts[3].toDoubleOrNull() ?: 0.0,
-                    unit = parts[4],
-                )
-            }
     }
 }

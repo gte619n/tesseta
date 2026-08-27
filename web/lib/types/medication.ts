@@ -27,6 +27,14 @@ export interface Drug {
 export interface TimeSlot {
   window: TimeWindow;
   dose: number;
+  /**
+   * IMPL-21: optional explicit reminder time for this slot ("HH:mm"). When set it
+   * is the highest-precedence time for the Android reminder (drug-setup explicit
+   * time → per-med settings override → window default); when absent the window's
+   * default time applies. Web shows no notifications, but stores the value so the
+   * schedule it feeds stays in parity with the phone.
+   */
+  time?: string | null;
 }
 
 export interface DosagePeriod {

@@ -52,7 +52,12 @@ class AdherenceRepositoryTest {
             killSwitch = KillSwitchGate { false },
             drainTrigger = DrainTrigger { drains++ },
         )
-        repository = AdherenceRepository(support, MedsTestMoshi.instance, Dispatchers.Unconfined)
+        repository = AdherenceRepository(
+            support,
+            io.mockk.mockk(relaxed = true),   // MedicationAdherenceDao (unused by log/undo)
+            MedsTestMoshi.instance,
+            Dispatchers.Unconfined,
+        )
     }
 
     @Test

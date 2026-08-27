@@ -85,6 +85,13 @@ export function MedicationDetailModal({
   const [selectedWindows, setSelectedWindows] = useState<TimeWindow[]>(
     medication.timeSlots.map(s => s.window)
   );
+  // IMPL-21: preserve/edit the optional explicit "HH:mm" reminder time per window so
+  // editing the schedule doesn't silently drop a slot's drug-setup time.
+  const [slotTimes, setSlotTimes] = useState<Partial<Record<TimeWindow, string>>>(
+    Object.fromEntries(
+      medication.timeSlots.filter(s => s.time).map(s => [s.window, s.time as string])
+    )
+  );
   const [notes, setNotes] = useState(medication.notes ?? "");
   const [prescribedBy, setPrescribedBy] = useState(medication.prescribedBy ?? "");
   const [changeNotes, setChangeNotes] = useState("");
@@ -122,6 +129,10 @@ export function MedicationDetailModal({
     );
   }
 
+  function setSlotTime(window: TimeWindow, value: string) {
+    setSlotTimes((prev) => ({ ...prev, [window]: value }));
+  }
+
   function toggleDay(day: DayOfWeek) {
     setSelectedDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
@@ -152,11 +163,16 @@ export function MedicationDetailModal({
         : {}),
     };
 
-    // Split the (possibly new) dose across the selected windows.
-    const timeSlots: TimeSlot[] = selectedWindows.map((window) => ({
-      window,
-      dose: effectiveDose / Math.max(selectedWindows.length, 1),
-    }));
+    // Split the (possibly new) dose across the selected windows, preserving any
+    // explicit per-slot time (IMPL-21).
+    const timeSlots: TimeSlot[] = selectedWindows.map((window) => {
+      const time = slotTimes[window]?.trim();
+      return {
+        window,
+        dose: effectiveDose / Math.max(selectedWindows.length, 1),
+        ...(time ? { time } : {}),
+      };
+    });
 
     startTransition(async () => {
       try {
@@ -588,6 +604,27 @@ export function MedicationDetailModal({
                       </button>
                     ))}
                   </div>
+                  {/* IMPL-21: optional explicit reminder time per selected window. */}
+                  {selectedWindows.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {selectedWindows.map((window) => (
+                        <div key={window} className="flex items-center gap-2">
+                          <span className="w-24 text-[12px] text-secondary">
+                            {TIME_WINDOW_LABELS[window]}
+                          </span>
+                          <input
+                            type="time"
+                            value={slotTimes[window] ?? ""}
+                            onChange={(e) => setSlotTime(window, e.target.value)}
+                            className="rounded-md border border-default bg-canvas px-2 py-1 text-[13px] text-primary"
+                          />
+                          <span className="text-[11px] text-tertiary">
+                            {slotTimes[window]?.trim() ? "custom" : "default"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
