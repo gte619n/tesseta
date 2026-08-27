@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.gte619n.healthfitness"
-version = "0.0.1-SNAPSHOT"
+version = "0.0.2-SNAPSHOT"
 
 // Override two BOM-managed transitive versions whose CVE fixes land ahead of the
 // Spring Boot 3.5.x line (the image scan gate blocks HIGH/CRITICAL with a fix

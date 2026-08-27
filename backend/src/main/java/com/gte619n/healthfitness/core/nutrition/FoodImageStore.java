@@ -22,4 +22,25 @@ public interface FoodImageStore {
      * @return the public URL of the uploaded image
      */
     String upload(String foodId, byte[] imageBytes);
+
+    /**
+     * Look up a previously generated image for a content cache key (IMPL-13 M4
+     * image reuse). Returns the public URL of an image generated for an identical
+     * subject, or empty on a miss.
+     *
+     * <p>Default: always a miss, so stubs and core-only contexts simply
+     * regenerate (no behavioural change without a caching store).
+     */
+    default java.util.Optional<String> findCachedUrl(String cacheKey) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Record that {@code url} is the generated image for {@code cacheKey}, so a
+     * later identical subject reuses it instead of regenerating. Best-effort — a
+     * failed write just means the next identical subject regenerates. Default
+     * no-op.
+     */
+    default void putCachedUrl(String cacheKey, String url) {
+    }
 }

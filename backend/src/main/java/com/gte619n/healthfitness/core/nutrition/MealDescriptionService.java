@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -48,6 +50,7 @@ public class MealDescriptionService {
     private final NutritionService nutrition;
     private final FoodEntryImageService foodEntryImages;
     private final SyncChangeNotifier syncNotifier;
+    private final ObjectProvider<NutritionJobQueue> jobQueue;
 
     public MealDescriptionService(
         ObjectProvider<MealDescriptionAnalyzer> analyzer,
@@ -56,7 +59,8 @@ public class MealDescriptionService {
         SavedMealImageService savedMealImages,
         NutritionService nutrition,
         FoodEntryImageService foodEntryImages,
-        SyncChangeNotifier syncNotifier
+        SyncChangeNotifier syncNotifier,
+        ObjectProvider<NutritionJobQueue> jobQueue
     ) {
         this.analyzer = analyzer;
         this.savedMeals = savedMeals;
@@ -65,6 +69,7 @@ public class MealDescriptionService {
         this.nutrition = nutrition;
         this.foodEntryImages = foodEntryImages;
         this.syncNotifier = syncNotifier;
+        this.jobQueue = jobQueue;
     }
 
     /**
@@ -185,9 +190,40 @@ public class MealDescriptionService {
         FoodEntry placeholder = nutrition.beginAnalyzingEntry(
             userId, date, meal, null, null,
             placeholderName(description), EntrySource.MANUAL, entryId);
-        CompletableFuture.runAsync(
-            () -> resolveAndFinalize(userId, date, placeholder.entryId(), description));
+        NutritionJobQueue queue = jobQueue.getIfAvailable();
+        if (queue != null) {
+            queue.enqueue(NutritionJob.descriptionAnalysis(
+                userId, date.toString(), placeholder.entryId(), description));
+        } else {
+            CompletableFuture.runAsync(
+                () -> resolveAndFinalize(userId, date, placeholder.entryId(), description));
+        }
         return placeholder;
+    }
+
+    /**
+     * Durable-queue entry point: resolve the description and finalize the entry.
+     * Idempotent — skips an entry no longer {@code ANALYZING} (already finalized,
+     * failed or reopened), so a redelivered job is a no-op. Delegates to
+     * {@link #resolveAndFinalize}, which records a terminal {@code FAILED} on error
+     * (matching the pre-Tier-3 single-attempt behaviour; the user can retry).
+     */
+    public void resolveAndFinalizeOrThrow(
+        String userId, LocalDate date, String entryId, String description) {
+        if (analyzer.getIfAvailable() == null) {
+            return;
+        }
+        Optional<FoodEntry> entry = nutrition.findEntry(userId, date, entryId);
+        if (entry.isEmpty() || entry.get().analysisStatus() != EntryAnalysisStatus.ANALYZING) {
+            return;
+        }
+        resolveAndFinalize(userId, date, entryId, description);
+    }
+
+    /** Record a terminal analysis failure and wake the user's devices. */
+    public void markFailed(String userId, LocalDate date, String entryId) {
+        nutrition.markAnalysisFailed(userId, date, entryId);
+        syncNotifier.changed(userId, null, "nutritionDays/entries");
     }
 
     /**

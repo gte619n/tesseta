@@ -1,11 +1,16 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobException;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -25,24 +30,29 @@ import org.springframework.stereotype.Service;
 @Service
 public class FoodEntryImageService {
 
+    private static final Logger log = LoggerFactory.getLogger(FoodEntryImageService.class);
+
     private final FoodEntryRepository entries;
     private final ObjectProvider<FoodImageGenerator> generator;
     private final ObjectProvider<FoodImageStore> store;
     private final ObjectProvider<MealPhotoReader> photoReader;
     private final SyncChangeNotifier syncNotifier;
+    private final ObjectProvider<NutritionJobQueue> jobQueue;
 
     public FoodEntryImageService(
         FoodEntryRepository entries,
         ObjectProvider<FoodImageGenerator> generator,
         ObjectProvider<FoodImageStore> store,
         ObjectProvider<MealPhotoReader> photoReader,
-        SyncChangeNotifier syncNotifier
+        SyncChangeNotifier syncNotifier,
+        ObjectProvider<NutritionJobQueue> jobQueue
     ) {
         this.entries = entries;
         this.generator = generator;
         this.store = store;
         this.photoReader = photoReader;
         this.syncNotifier = syncNotifier;
+        this.jobQueue = jobQueue;
     }
 
     /**
@@ -58,41 +68,88 @@ public class FoodEntryImageService {
             return;
         }
         markStatus(userId, date, entryId, FoodImageStatus.PENDING, null);
-        CompletableFuture.runAsync(
-            () -> generateNow(userId, date, entryId, mealName, referencePhotoRef));
+        NutritionJobQueue queue = jobQueue.getIfAvailable();
+        if (queue != null) {
+            queue.enqueue(NutritionJob.entryImage(
+                userId, date.toString(), entryId, mealName, referencePhotoRef));
+        } else {
+            CompletableFuture.runAsync(
+                () -> generateNow(userId, date, entryId, mealName, referencePhotoRef));
+        }
     }
 
-    /** Synchronous generation; walks the entry to READY or FAILED. Never throws. */
+    /**
+     * Single-attempt generation (backfill / local executor): walks the entry to
+     * {@code READY} or {@code FAILED}. Never throws.
+     */
     public void generateNow(
+        String userId, LocalDate date, String entryId, String mealName, String referencePhotoRef) {
+        try {
+            generateOrThrow(userId, date, entryId, mealName, referencePhotoRef);
+        } catch (RuntimeException e) {
+            log.warn("Composite meal image generation failed for {}: {}", entryId, e.getMessage());
+            markFailed(userId, date, entryId);
+        }
+    }
+
+    /**
+     * Generate + upload the finished-meal image, marking the entry {@code READY}
+     * and waking the user's devices on success. Throws {@link NutritionJobException}
+     * when generation produced nothing so the durable queue can retry. Idempotent:
+     * a redelivered job whose image already landed (or whose subject is cached)
+     * completes without another Gemini call.
+     */
+    public void generateOrThrow(
         String userId, LocalDate date, String entryId, String mealName, String referencePhotoRef) {
         FoodImageGenerator gen = generator.getIfAvailable();
         FoodImageStore storage = store.getIfAvailable();
         if (gen == null || storage == null) {
             return;
         }
-        if (entries.findById(userId, date, entryId).isEmpty()) {
+        Optional<FoodEntry> found = entries.findById(userId, date, entryId);
+        if (found.isEmpty()) {
             return;
         }
-        try {
-            MealPhotoReader.Photo reference = loadReference(referencePhotoRef);
-            byte[] refBytes = reference == null ? null : reference.bytes();
-            String refMime = reference == null ? null : reference.mimeType();
+        // Idempotent: a redelivered job whose image already landed is a no-op.
+        if (found.get().mealImageStatus() == FoodImageStatus.READY
+            && found.get().mealImageUrl() != null) {
+            return;
+        }
 
-            Optional<byte[]> image = gen.generate(mealSubject(entryId, mealName), refBytes, refMime);
-            if (image.isEmpty() || image.get().length == 0) {
-                markStatus(userId, date, entryId, FoodImageStatus.FAILED, null);
+        MealPhotoReader.Photo reference = loadReference(referencePhotoRef);
+        byte[] refBytes = reference == null ? null : reference.bytes();
+        String refMime = reference == null ? null : reference.mimeType();
+
+        CatalogFood subject = mealSubject(entryId, mealName);
+        // A described meal (no capture photo) is a plated dish keyed by name,
+        // so identical meals reuse one image; a photo-referenced meal is unique.
+        boolean cacheable = refBytes == null || refBytes.length == 0;
+        String cacheKey = cacheable ? FoodImageCacheKey.of(subject) : null;
+        if (cacheable) {
+            Optional<String> cached = storage.findCachedUrl(cacheKey);
+            if (cached.isPresent()) {
+                markStatus(userId, date, entryId, FoodImageStatus.READY, cached.get());
                 notifyDone(userId);
                 return;
             }
-            String url = storage.upload(entryId, image.get());
-            markStatus(userId, date, entryId, FoodImageStatus.READY, url);
-            notifyDone(userId);
-        } catch (RuntimeException e) {
-            System.err.println(
-                "Composite meal image generation failed for " + entryId + ": " + e.getMessage());
-            markStatus(userId, date, entryId, FoodImageStatus.FAILED, null);
-            notifyDone(userId);
         }
+
+        Optional<byte[]> image = gen.generate(subject, refBytes, refMime);
+        if (image.isEmpty() || image.get().length == 0) {
+            throw new NutritionJobException("meal image generation returned no image for " + entryId);
+        }
+        String url = storage.upload(entryId, image.get());
+        if (cacheable) {
+            storage.putCachedUrl(cacheKey, url);
+        }
+        markStatus(userId, date, entryId, FoodImageStatus.READY, url);
+        notifyDone(userId);
+    }
+
+    /** Record a terminal failure (queue retries exhausted) and wake the devices. */
+    public void markFailed(String userId, LocalDate date, String entryId) {
+        markStatus(userId, date, entryId, FoodImageStatus.FAILED, null);
+        notifyDone(userId);
     }
 
     /**

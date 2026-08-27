@@ -6,6 +6,10 @@ import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStore;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoReader;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +42,10 @@ public class FoodImageStorage implements FoodImageStore, MealPhotoReader {
 
     private static final Logger log = LoggerFactory.getLogger(FoodImageStorage.class);
     private static final String PREFIX = "food-images/";
+    /** Tiny key→url pointer objects backing the content cache (IMPL-13 M4 reuse). */
+    private static final String INDEX_PREFIX = "food-images/index/";
+    /** A generated image is expensive; retry a transient upload blip before losing it. */
+    private static final int UPLOAD_ATTEMPTS = 3;
 
     private final Storage storage;
     private final String bucket;
@@ -53,16 +61,100 @@ public class FoodImageStorage implements FoodImageStore, MealPhotoReader {
             throw new FoodImageStorageException("image bytes are empty");
         }
         String objectName = PREFIX + safeId(foodId) + ".png";
+        BlobInfo info = BlobInfo.newBuilder(BlobId.of(bucket, objectName))
+            .setContentType("image/png")
+            .setCacheControl("public, max-age=31536000, immutable")
+            .build();
         try {
-            BlobInfo info = BlobInfo.newBuilder(BlobId.of(bucket, objectName))
-                .setContentType("image/png")
-                .setCacheControl("public, max-age=31536000, immutable")
-                .build();
-            storage.create(info, imageBytes);
+            createWithRetry(info, imageBytes);
             return publicUrl(objectName);
         } catch (RuntimeException e) {
             log.warn("Failed to store food image at {}: {}", objectName, e.getMessage());
             throw new FoodImageStorageException("failed to store food image", e);
+        }
+    }
+
+    @Override
+    public Optional<String> findCachedUrl(String cacheKey) {
+        if (cacheKey == null || cacheKey.isBlank()) {
+            return Optional.empty();
+        }
+        String objectName = INDEX_PREFIX + sha256Hex(cacheKey) + ".txt";
+        try {
+            Blob blob = storage.get(BlobId.of(bucket, objectName));
+            if (blob == null || !blob.exists()) {
+                return Optional.empty();
+            }
+            byte[] bytes = blob.getContent();
+            if (bytes == null || bytes.length == 0) {
+                return Optional.empty();
+            }
+            String url = new String(bytes, StandardCharsets.UTF_8).trim();
+            return url.isBlank() ? Optional.empty() : Optional.of(url);
+        } catch (RuntimeException e) {
+            log.warn("Food image cache lookup failed for {}: {}", objectName, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public void putCachedUrl(String cacheKey, String url) {
+        if (cacheKey == null || cacheKey.isBlank() || url == null || url.isBlank()) {
+            return;
+        }
+        String objectName = INDEX_PREFIX + sha256Hex(cacheKey) + ".txt";
+        try {
+            BlobInfo info = BlobInfo.newBuilder(BlobId.of(bucket, objectName))
+                .setContentType("text/plain; charset=utf-8")
+                .build();
+            storage.create(info, url.getBytes(StandardCharsets.UTF_8));
+        } catch (RuntimeException e) {
+            // Best-effort: a failed pointer write just means the next identical
+            // subject regenerates instead of reusing this image.
+            log.warn("Food image cache write failed for {}: {}", objectName, e.getMessage());
+        }
+    }
+
+    /**
+     * Upload with a couple of quick retries. Generation runs on a detached
+     * background thread, so a transient connection reset mid-upload ("Broken
+     * pipe" / "Error writing request body to server") would otherwise discard an
+     * image we already paid Gemini to produce. The durable fix for background-
+     * thread starvation is running the service with CPU always allocated (backend
+     * cloudbuild {@code --no-cpu-throttling}); this is cheap extra insurance.
+     */
+    private void createWithRetry(BlobInfo info, byte[] bytes) {
+        RuntimeException last = null;
+        for (int attempt = 1; attempt <= UPLOAD_ATTEMPTS; attempt++) {
+            try {
+                storage.create(info, bytes);
+                return;
+            } catch (RuntimeException e) {
+                last = e;
+                if (attempt < UPLOAD_ATTEMPTS) {
+                    log.warn("Food image upload attempt {}/{} failed ({}); retrying",
+                        attempt, UPLOAD_ATTEMPTS, e.getMessage());
+                    sleepQuietly(200L * attempt);
+                }
+            }
+        }
+        throw last;
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
 

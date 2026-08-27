@@ -59,6 +59,15 @@ steps:
       # forever) and breaking image stores ("Broken pipe"). 2Gi gives headroom.
       - --memory=2Gi
       - --cpu=2
+      # Studio-image generation runs on a detached CompletableFuture.runAsync
+      # thread that outlives the triggering request. With the default CPU
+      # throttling (CPU only allocated during a request) this low-traffic service
+      # starves that thread the moment the request returns — the in-flight Gemini
+      # call + multi-MB GCS upload stall until the socket resets ("Broken pipe" /
+      # "Error writing request body to server"), so we pay Gemini for an image
+      # that never gets stored. Always-allocated CPU lets the background work
+      # finish during the instance's post-request cooldown.
+      - --no-cpu-throttling
       # Cap requests per instance well below the default 80: each meal capture
       # marshals multi-MB images (and spawns background image generation), so
       # packing dozens onto one instance is what blew past memory. At 16, Cloud
@@ -91,6 +100,15 @@ steps:
       # start unless this is mounted. The runtime + CI service accounts are
       # granted secretAccessor on the secret.
       - --set-secrets=OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT_ID=oauth-web-client-id:latest,OAUTH_WEB_CLIENT_SECRET=oauth-web-client-secret:latest,GOOGLE_HEALTH_WEBHOOK_SECRET=google-health-webhook-secret:latest,GEMINI_API_KEY=gemini_api_key:latest,SESSION_SIGNING_KEY=session-signing-key:latest,PLATFORM_RSA_KEY=platform-rsa-private-key:latest
+      # Tier 3 durable nutrition jobs (Cloud Tasks). The service defaults to the
+      # in-process bounded executor (mode=local) so this deploy is safe as-is. To
+      # turn on durable mode: run infra/scripts/bootstrap-nutrition-jobs.sh once
+      # (creates the queue + nutrition-jobs-secret), then ADD to the two lines
+      # above and redeploy:
+      #   --set-env-vars: |NUTRITION_JOBS_MODE=cloud-tasks|NUTRITION_JOBS_HANDLER_URL=https://api.tesseta.com/internal/nutrition/jobs
+      #   --set-secrets:  ,NUTRITION_JOBS_SECRET=nutrition-jobs-secret:latest
+      # Do NOT set mode=cloud-tasks before the queue + secret exist, or enqueues
+      # will fail (the day-read reconcile sweep is the backstop, but jobs stall).
 
   # Smoke-test the candidate revision and only then shift 100% traffic to it. A
   # failed health check leaves the previous revision serving (no bad deploy).

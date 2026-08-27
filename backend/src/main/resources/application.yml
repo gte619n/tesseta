@@ -205,6 +205,31 @@ app:
     images:
       enabled: ${NUTRITION_IMAGES_ENABLED:true}
       model: ${NUTRITION_IMAGE_MODEL:gemini-3.1-flash-image-preview}
+    # Tier 3: background work (image generation + photo/description analysis) runs
+    # on a durable job queue instead of a detached CompletableFuture.runAsync, so a
+    # Cloud Run throttle / scale-in / redeploy mid-flight no longer loses it.
+    #   mode=local (default): in-process bounded executor — dev/tests, and a safe
+    #     fallback that at least caps concurrency (no unbounded ForkJoinPool).
+    #   mode=cloud-tasks (prod): persist each job to a Cloud Tasks queue that POSTs
+    #     it back to the internal handler, retrying with backoff until 2xx.
+    jobs:
+      mode: ${NUTRITION_JOBS_MODE:local}
+      # Shared secret the queue attaches and the handler verifies (Cloud Tasks
+      # mode). Fail-closed: the handler rejects everything until this is set.
+      secret: ${NUTRITION_JOBS_SECRET:}
+      # Terminal after this many delivery attempts — must match the queue's
+      # maxAttempts so the handler marks the record FAILED on the last try.
+      max-attempts: ${NUTRITION_JOBS_MAX_ATTEMPTS:5}
+      local:
+        threads: ${NUTRITION_JOBS_LOCAL_THREADS:4}
+        queue-capacity: ${NUTRITION_JOBS_LOCAL_QUEUE_CAPACITY:500}
+      cloud-tasks:
+        project: ${GCP_PROJECT_ID:}
+        location: ${NUTRITION_JOBS_LOCATION:us-central1}
+        queue: ${NUTRITION_JOBS_QUEUE:nutrition-jobs}
+        # Public URL of this service's internal handler, e.g.
+        # https://api.tesseta.com/internal/nutrition/jobs
+        handler-url: ${NUTRITION_JOBS_HANDLER_URL:}
     # Extraction runs on the SHARED gemini-3.5-flash model (NOT the Goals Pro
     # model). Direct Gemini API, same key/model env vars as dexa/bloodtest.
     gemini-api-key: ${GEMINI_API_KEY:}
