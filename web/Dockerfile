@@ -18,6 +18,12 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 
+# Patch the base image's OpenSSL: node:22-alpine shipped libssl3/libcrypto3
+# 3.5.7-r0, which the Trivy image-scan gate flags for CVE-2026-14456 (HIGH,
+# OpenSSL DoS via unbounded memory). Pull the fixed 3.5.8-r0 from Alpine so the
+# HIGH/CRITICAL gate passes (deploy-web-on-main was stuck on this).
+RUN apk upgrade --no-cache libssl3 libcrypto3
+
 # The production image runs `node server.js` and needs neither npm nor corepack.
 # The base image's bundled npm/corepack ship CVE-prone transitive deps (tar,
 # sigstore, brace-expansion, picomatch, …) that the image scan gate flags even
