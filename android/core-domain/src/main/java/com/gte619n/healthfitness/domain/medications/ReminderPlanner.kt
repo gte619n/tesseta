@@ -2,59 +2,18 @@ package com.gte619n.healthfitness.domain.medications
 
 import com.gte619n.healthfitness.domain.common.DayOfWeek
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
 /**
- * Pure scheduling logic for medication reminders: given the user's active
- * medications, their reminder settings and what's already been taken, compute
- * the upcoming reminders — grouped so every dose resolving to the same local
- * time shares one notification. No framework dependencies; the device-side
- * engine turns the first [PlannedReminder] into an exact alarm.
+ * Pure "is this medication due on this date?" scheduling rule — the frequency /
+ * day-of-week / cycle / start-end logic shared by the reminder feature.
+ *
+ * IMPL-21: the old per-window `plan()` that produced a grouped list of future
+ * reminders was removed with the multi-notification engine (decision D-6/D12). The
+ * single rolling reminder computes what's outstanding via [OutstandingDoses], which
+ * reuses [isDueOn] here so the due-date rule lives in exactly one place.
  */
 object ReminderPlanner {
-
-    /**
-     * All reminders strictly after [from] within the next [days] days,
-     * soonest first.
-     *
-     * @param takenToday `(medicationId, window)` pairs already logged for
-     *   [from]'s date — those doses are dropped from today's reminders.
-     */
-    fun plan(
-        medications: List<Medication>,
-        settings: ReminderSettings,
-        takenToday: Set<Pair<String, TimeWindow>>,
-        from: LocalDateTime,
-        days: Int = 2,
-    ): List<PlannedReminder> {
-        if (!settings.enabled) return emptyList()
-        val reminders = mutableMapOf<LocalDateTime, MutableList<ReminderDose>>()
-        for (offset in 0 until days) {
-            val date = from.toLocalDate().plusDays(offset.toLong())
-            for (med in medications) {
-                if (!settings.enabledFor(med.medicationId)) continue
-                if (!isDueOn(med, date)) continue
-                for (slot in slotsOf(med)) {
-                    if (offset == 0 && (med.medicationId to slot.window) in takenToday) continue
-                    val at = date.atTime(settings.timeFor(med.medicationId, slot.window))
-                    if (!at.isAfter(from)) continue
-                    reminders.getOrPut(at) { mutableListOf() }.add(
-                        ReminderDose(
-                            medicationId = med.medicationId,
-                            name = med.displayName,
-                            window = slot.window,
-                            dose = slot.dose,
-                            unit = med.unit,
-                        ),
-                    )
-                }
-            }
-        }
-        return reminders.entries
-            .sortedBy { it.key }
-            .map { (at, doses) -> PlannedReminder(at, doses.sortedBy { it.name }) }
-    }
 
     /**
      * Whether [med] has scheduled doses on [date]. PRN ("as needed") never
@@ -85,10 +44,6 @@ object ReminderPlanner {
             }
         }
     }
-
-    /** A medication with no explicit slots defaults to one MORNING dose. */
-    private fun slotsOf(med: Medication): List<TimeSlot> =
-        med.timeSlots.ifEmpty { listOf(TimeSlot(TimeWindow.MORNING, med.dose)) }
 
     private fun java.time.DayOfWeek.toDomain(): DayOfWeek = when (this) {
         java.time.DayOfWeek.MONDAY -> DayOfWeek.MON

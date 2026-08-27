@@ -223,6 +223,7 @@ private fun DoseForm(
             slots = slots,
             defaultDose = dose.toDoubleOrNull() ?: 0.0,
             onChange = { slots = it },
+            windowDefaults = globalWindowTimes,
         )
         Spacer(Modifier.height(16.dp))
 
@@ -346,6 +347,7 @@ private fun CustomEntryForm(
             slots = slots,
             defaultDose = dose.toDoubleOrNull() ?: 0.0,
             onChange = { slots = it },
+            windowDefaults = globalWindowTimes,
         )
         Spacer(Modifier.height(16.dp))
 

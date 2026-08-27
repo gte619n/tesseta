@@ -102,11 +102,16 @@ public class AdherenceController {
             userId,
             () -> {
                 Instant writtenAt = Instant.now();
+                // IMPL-21: a missed dose (auto-recorded at day's end) carries no
+                // takenAt and does NOT count as taken; a genuine take stamps writtenAt.
+                boolean missed = body.missed() != null && body.missed();
+                DoseLog doseLog = missed
+                    ? new DoseLog(window, null, dose, true)
+                    : new DoseLog(window, writtenAt, dose, false);
                 // Atomic add-or-replace for this window — a plain findByDate +
                 // save loses concurrent doses for other windows on the same day.
                 AdherenceLog log = adherence.upsertDose(
-                    userId, medicationId, date,
-                    new DoseLog(window, writtenAt, dose), body.notes());
+                    userId, medicationId, date, doseLog, body.notes());
                 metricChangedPublisher.publish(userId, MetricKey.MEDS_ADHERENCE_30D);
                 syncNotifier.changed(userId, syncWrite.originDeviceId(), "medicationAdherence");
                 return new SyncWriteContext.Created<>(
@@ -156,7 +161,8 @@ public class AdherenceController {
         LocalDate date,
         TimeWindow window,
         Double dose,
-        String notes
+        String notes,
+        Boolean missed      // IMPL-21: true ⇒ auto-recorded miss (not a take); null/false ⇒ taken
     ) {}
 
     public record AdherenceLogResponse(
@@ -178,10 +184,11 @@ public class AdherenceController {
     public record DoseLogResponse(
         TimeWindow window,
         Instant takenAt,
-        double dose
+        double dose,
+        boolean missed
     ) {
         public static DoseLogResponse from(DoseLog d) {
-            return new DoseLogResponse(d.window(), d.takenAt(), d.dose());
+            return new DoseLogResponse(d.window(), d.takenAt(), d.dose(), d.missed());
         }
     }
 }

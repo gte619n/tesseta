@@ -215,9 +215,11 @@ public class MedicationRepositoryImpl implements MedicationRepository {
     }
 
     private TimeSlot parseTimeSlot(Map<String, Object> map) {
+        Object time = map.get("time");
         return new TimeSlot(
             TimeWindow.valueOf((String) map.get("window")),
-            ((Number) map.get("dose")).doubleValue()
+            ((Number) map.get("dose")).doubleValue(),
+            time != null ? java.time.LocalTime.parse((String) time) : null
         );
     }
 
@@ -271,6 +273,9 @@ public class MedicationRepositoryImpl implements MedicationRepository {
             Map<String, Object> map = new HashMap<>();
             map.put("window", slot.window().name());
             map.put("dose", slot.dose());
+            if (slot.time() != null) {
+                map.put("time", slot.time().toString());   // ISO "HH:mm"
+            }
             result.add(map);
         }
         return result;

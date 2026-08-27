@@ -48,18 +48,3 @@ data class MedicationReminderOverride(
     val enabled: Boolean = true,
     val times: Map<TimeWindow, String> = emptyMap(),
 )
-
-/** One medication dose included in a reminder. */
-data class ReminderDose(
-    val medicationId: String,
-    val name: String,
-    val window: TimeWindow,
-    val dose: Double,
-    val unit: String,
-)
-
-/** One scheduled reminder: every dose that fires at the same local time. */
-data class PlannedReminder(
-    val at: java.time.LocalDateTime,
-    val doses: List<ReminderDose>,
-)
