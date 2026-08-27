@@ -94,9 +94,11 @@ public class MedicationController {
     ) {
         List<AdherenceLog> logs = adherence.findByDateRange(userId, medicationId, from, to);
 
-        // Build set of dates with recorded doses
+        // Build set of dates with a genuine (non-missed) taken dose. IMPL-21: a
+        // day with only missed markers is NOT adherent.
         Set<LocalDate> datesWithDoses = logs.stream()
-            .filter(log -> log.doses() != null && !log.doses().isEmpty())
+            .filter(log -> log.doses() != null
+                && log.doses().stream().anyMatch(d -> !d.missed()))
             .map(AdherenceLog::date)
             .collect(Collectors.toSet());
 

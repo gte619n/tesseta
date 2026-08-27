@@ -78,6 +78,21 @@ class TodaysDosesServiceTest {
     }
 
     @Test
+    void missedDoseDoesNotCountAsTaken() {
+        // IMPL-21: an auto-recorded missed marker must NOT flip the dose to taken.
+        when(meds.findByUserAndStatus(USER, MedicationStatus.ACTIVE))
+            .thenReturn(List.of(daily("m1")));
+        when(adherence.findByUserAndDateRange(USER, TODAY, TODAY)).thenReturn(List.of(
+            new AdherenceLog(USER, "m1", TODAY,
+                List.of(new DoseLog(TimeWindow.MORNING, null, 100, true)), null)));
+
+        List<TodaysDose> doses = service.forDate(USER, TODAY);
+
+        assertThat(doses).hasSize(1);
+        assertThat(doses.get(0).taken()).isFalse();
+    }
+
+    @Test
     void weeklyMedicationOnlyAppearsOnItsDays() {
         // TODAY is a Monday; schedule only Tuesday -> not today.
         Medication tueOnly = Medication.create(USER, "m3", "drug-3", 10, "mg",

@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.data.reminders
 
+import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
 import com.gte619n.healthfitness.data.db.dao.MedicationDao
+import com.gte619n.healthfitness.data.db.entity.MedicationAdherenceEntity
 import com.gte619n.healthfitness.data.db.entity.MedicationEntity
 import com.gte619n.healthfitness.data.sync.SyncSignals
 import kotlinx.coroutines.CoroutineScope
@@ -24,16 +26,33 @@ import java.util.concurrent.atomic.AtomicInteger
 class ReminderReplanCoordinatorTest {
 
     private val rows = MutableStateFlow<List<MedicationEntity>>(emptyList())
+    private val adherenceRows = MutableStateFlow<List<MedicationAdherenceEntity>>(emptyList())
     private val dao = FakeMedicationDao(rows)
+    private val adherenceDao = FakeAdherenceDao(adherenceRows)
     private val signals = SyncSignals()
     private val replans = AtomicInteger(0)
 
     private fun coordinator(scope: CoroutineScope) = ReminderReplanCoordinator(
         medicationDao = dao,
+        adherenceDao = adherenceDao,
         syncSignals = signals,
         scope = scope,
         replan = { replans.incrementAndGet() },
     ).also { it.start() }
+
+    @Test
+    fun replansOnAdherenceMirrorChange_butNotInitialEmission() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        coordinator(CoroutineScope(dispatcher))
+        advanceUntilIdle()
+        assertEquals(0, replans.get())
+
+        // A logged/undone dose lands in the adherence mirror → one refresh (IMPL-21 D-10).
+        adherenceRows.value = listOf(adherenceRow("m1/2026-06-08/MORNING", 1L))
+        advanceTimeBy(ReminderReplanCoordinator.DEBOUNCE_MILLIS + 50)
+        advanceUntilIdle()
+        assertEquals(1, replans.get())
+    }
 
     @Test
     fun replansOnMedicationMirrorChange_butNotInitialEmission() = runTest {
@@ -105,6 +124,27 @@ class ReminderReplanCoordinatorTest {
         dirty = false,
         syncState = "SYNCED",
     )
+
+    private fun adherenceRow(id: String, lastUpdate: Long) = MedicationAdherenceEntity(
+        id = id,
+        payloadJson = "{}",
+        lastUpdate = lastUpdate,
+        status = "ACTIVE",
+        dirty = false,
+        syncState = "SYNCED",
+    )
+
+    private class FakeAdherenceDao(
+        private val flow: MutableStateFlow<List<MedicationAdherenceEntity>>,
+    ) : MedicationAdherenceDao {
+        override fun observeActive(): Flow<List<MedicationAdherenceEntity>> = flow
+        override fun observeAll(): Flow<List<MedicationAdherenceEntity>> = flow
+        override suspend fun getById(id: String): MedicationAdherenceEntity? = flow.value.firstOrNull { it.id == id }
+        override suspend fun upsert(row: MedicationAdherenceEntity) = error("unused")
+        override suspend fun upsertAll(rows: List<MedicationAdherenceEntity>) = error("unused")
+        override suspend fun markArchived(id: String, lastUpdate: Long) = error("unused")
+        override suspend fun delete(id: String) = error("unused")
+    }
 
     private class FakeMedicationDao(
         private val flow: MutableStateFlow<List<MedicationEntity>>,

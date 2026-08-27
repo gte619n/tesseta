@@ -1,11 +1,13 @@
 package com.gte619n.healthfitness.data.medications
 
+import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.medications.TimeWindow
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
@@ -39,6 +41,7 @@ import javax.inject.Singleton
 @Singleton
 class AdherenceRepository @Inject internal constructor(
     private val support: MirrorRepositorySupport,
+    private val adherenceDao: MedicationAdherenceDao,
     moshi: Moshi,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
@@ -82,6 +85,60 @@ class AdherenceRepository @Inject internal constructor(
         support.deleteLocal(MirrorTables.MEDICATION_ADHERENCE, id, System.currentTimeMillis())
     }
 
+    /**
+     * IMPL-21: record a dose as MISSED (the day ended without it being taken). Writes
+     * an optimistic mirror row (taken=false, missed=true) + outbox → `POST .../adherence`
+     * with `missed:true`, so the miss syncs to the backend for adherence history/stats
+     * (spec D11) without counting as a take. No-op semantics for the today overlay: a
+     * missed row surfaces as not-taken.
+     */
+    suspend fun markMissed(
+        medicationId: String,
+        date: LocalDate,
+        window: TimeWindow,
+        dose: Double? = null,
+    ) = withContext(io) {
+        val id = adherenceId(medicationId, date, window)
+        val payload = AdherenceMirrorPayload(
+            medicationId = medicationId,
+            date = date,
+            window = window.name,
+            taken = false,
+            takenAt = null,
+            dose = dose,
+            missed = true,
+        )
+        support.createLocal(
+            table = MirrorTables.MEDICATION_ADHERENCE,
+            id = id,
+            payloadJson = payloadAdapter.toJson(payload),
+            lastUpdate = System.currentTimeMillis(),
+        )
+    }
+
+    /**
+     * IMPL-21: `(medicationId, window)` pairs that already have ANY adherence record
+     * (taken OR missed, non-tombstoned) for [date], read from the local mirror. Used by
+     * the midnight/boot missed-rollover so a dose that was taken — or already marked
+     * missed — is never (re-)marked missed. Local-only by design (spec D15).
+     */
+    suspend fun recordedWindowsFor(date: LocalDate): Set<Pair<String, TimeWindow>> =
+        withContext(io) {
+            adherenceDao.observeAll().first()
+                .filter { it.status != "ARCHIVED" }
+                .mapNotNull { row ->
+                    val payload = decodePayload(row.payloadJson)?.takeIf { it.date == date }
+                        ?: return@mapNotNull null
+                    val window = runCatching { TimeWindow.valueOf(payload.window) }.getOrNull()
+                        ?: return@mapNotNull null
+                    payload.medicationId to window
+                }
+                .toSet()
+        }
+
+    private fun decodePayload(json: String): AdherenceMirrorPayload? =
+        runCatching { payloadAdapter.fromJson(json) }.getOrNull()
+
     companion object {
         /** Composite mirror id `"<med>/<date>/<window>"` (date as ISO yyyy-MM-dd). */
         fun adherenceId(medicationId: String, date: LocalDate, window: TimeWindow): String =
@@ -100,4 +157,7 @@ data class AdherenceMirrorPayload(
     val taken: Boolean,
     val takenAt: Instant? = null,
     val dose: Double? = null,
+    // IMPL-21: an auto-recorded miss (taken=false, missed=true). Replays to the
+    // backend log endpoint as `missed:true`; the today-overlay treats it as not-taken.
+    val missed: Boolean = false,
 )

@@ -1,5 +1,14 @@
 # IMPL-16: Medication Reminders & Nutrition Entry UX
 
+> **⚠️ Part A (medication reminders) superseded by
+> [IMPL-21](../plans/IMPL-21-single-rolling-medication-reminder.md).** The
+> per-window multi-notification scheduling described here (a separate reminder
+> per window; one notification id per fire time) is replaced by a single rolling
+> reminder that shows only overdue+due doses and updates live as doses are marked
+> off. `TimeSlot` now carries an optional explicit time (drug setup), and untaken
+> doses are recorded "missed" at local midnight. Parts B–E (nutrition UX) are
+> unaffected.
+
 > **Status: implemented** (all seven sequencing steps, on
 > `feature/ui_ux_improvement`). Implementation deviations and the decisions
 > made along the way are recorded in

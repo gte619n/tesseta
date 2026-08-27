@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.data.reminders
 
+import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
 import com.gte619n.healthfitness.data.db.dao.MedicationDao
 import com.gte619n.healthfitness.data.sync.SyncSignals
 import kotlinx.coroutines.CoroutineScope
@@ -38,18 +39,21 @@ import javax.inject.Singleton
 @Singleton
 class ReminderReplanCoordinator internal constructor(
     private val medicationDao: MedicationDao,
+    private val adherenceDao: MedicationAdherenceDao,
     private val syncSignals: SyncSignals,
     private val scope: CoroutineScope,
-    /** The replan action — the engine in production; a probe in tests. */
+    /** The replan/refresh action — the engine in production; a probe in tests. */
     private val replan: suspend () -> Unit,
 ) {
     @Inject
     constructor(
         engine: ReminderEngine,
         medicationDao: MedicationDao,
+        adherenceDao: MedicationAdherenceDao,
         syncSignals: SyncSignals,
     ) : this(
         medicationDao = medicationDao,
+        adherenceDao = adherenceDao,
         syncSignals = syncSignals,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         replan = { engine.replan() },
@@ -82,6 +86,19 @@ class ReminderReplanCoordinator internal constructor(
         // A null hint (collections absent) is treated as "could be relevant".
         syncSignals.pushes
             .filter { hint -> hint == null || reminderTags.any { hint.contains(it) } }
+            .onEach { runCatching { replan() } }
+            .launchIn(scope)
+
+        // 3. IMPL-21 (spec D7 / decision D-10): re-post the single rolling notification
+        // the instant a dose is logged/undone in-app — even backgrounded — so it
+        // decrements live. Observes the adherence mirror (every log/undo lands there
+        // optimistically); debounced to coalesce bursts. refresh() reads only cached
+        // config + the local mirror, so this stays offline-safe.
+        adherenceDao.observeAll()
+            .map { rows -> rows.map { it.id to it.lastUpdate }.toSet() }
+            .distinctUntilChanged()
+            .drop(1)
+            .debounce(DEBOUNCE_MILLIS)
             .onEach { runCatching { replan() } }
             .launchIn(scope)
     }

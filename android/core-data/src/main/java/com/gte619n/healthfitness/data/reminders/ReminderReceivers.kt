@@ -32,12 +32,15 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
     @Inject lateinit var engine: ReminderEngine
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != ReminderEngine.ACTION_REMINDER_FIRE) return
-        val plannedAt = intent.getLongExtra(ReminderEngine.EXTRA_PLANNED_AT, 0L)
+        // IMPL-21: one receiver, two alarm kinds. DUE recomputes the rolling
+        // notification; MIDNIGHT rolls the day over (mark missed + reset).
+        val action = intent.action
+        if (action != ReminderEngine.ACTION_REMINDER_FIRE && action != ReminderEngine.ACTION_MIDNIGHT) return
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
-                engine.onAlarmFired(plannedAt)
+                if (action == ReminderEngine.ACTION_MIDNIGHT) engine.onMidnight()
+                else engine.onAlarmFired()
             } finally {
                 pending.finish()
             }
@@ -53,19 +56,15 @@ class ReminderActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ReminderEngine.ACTION_DOSE_TAKEN) return
-        val plannedAt = intent.getLongExtra(ReminderEngine.EXTRA_PLANNED_AT, 0L)
         val meds = intent.getStringArrayExtra(ReminderEngine.EXTRA_TAKE_MEDS).orEmpty()
         val windows = intent.getStringArrayExtra(ReminderEngine.EXTRA_TAKE_WINDOWS).orEmpty()
         val taken = meds.zip(windows.toList()).mapNotNull { (med, window) ->
             runCatching { TimeWindow.valueOf(window) }.getOrNull()?.let { med to it }
         }
-        val remaining = ReminderEngine.decodeDoses(
-            intent.getStringArrayExtra(ReminderEngine.EXTRA_REMAINING),
-        )
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
-                engine.onDosesTaken(plannedAt, taken, remaining)
+                engine.onDosesTaken(taken)
             } finally {
                 pending.finish()
             }
@@ -91,7 +90,10 @@ class ReminderBootReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
                     try {
-                        engine.replan()
+                        // IMPL-21: on boot also reconcile a possibly-skipped midnight
+                        // (mark yesterday's untaken doses missed); this re-plans too.
+                        if (intent.action == Intent.ACTION_BOOT_COMPLETED) engine.reconcileMissed()
+                        else engine.replan()
                     } finally {
                         pending.finish()
                     }

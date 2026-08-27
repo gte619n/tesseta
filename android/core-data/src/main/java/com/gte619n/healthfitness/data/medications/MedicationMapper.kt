@@ -71,6 +71,7 @@ internal object MedicationMapper {
     fun toDomain(dto: TimeSlotDto): TimeSlot = TimeSlot(
         window = decode(dto.window, TimeWindow.MORNING),
         dose = dto.dose,
+        time = dto.time?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() },
     )
 
     fun toDomain(dto: DosagePeriodDto): DosagePeriod = DosagePeriod(
@@ -178,6 +179,7 @@ internal object MedicationMapper {
     fun toDto(slot: TimeSlot): TimeSlotDto = TimeSlotDto(
         window = slot.window.name,
         dose = slot.dose,
+        time = slot.time?.toString(),   // ISO "HH:mm"
     )
 
     fun toDto(request: CreateMedicationRequest): CreateMedicationDto = CreateMedicationDto(
