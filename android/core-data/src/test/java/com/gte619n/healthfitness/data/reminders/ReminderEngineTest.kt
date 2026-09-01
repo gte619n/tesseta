@@ -48,6 +48,10 @@ class ReminderEngineTest {
     // Mutable "taken today" the fake todaysDoses reflects, so an in-app mark is observable.
     private val taken = mutableSetOf<Pair<String, TimeWindow>>()
     private val recorded = mutableSetOf<Pair<String, TimeWindow>>()
+    // Doses logged to the local adherence mirror on THIS device (the reminder's
+    // "✓"/"Take all" path) — distinct from `taken` so a test can model the server
+    // `today` projection lagging behind a just-logged dose.
+    private val takenLocally = mutableSetOf<Pair<String, TimeWindow>>()
 
     private val fiveMorning = (1..5).map { med("m$it", "Morning$it", TimeWindow.MORNING, "07:00") }
     private val twoAfternoon = (1..2).map { med("a$it", "Afternoon$it", TimeWindow.AFTERNOON, "13:00") }
@@ -62,6 +66,7 @@ class ReminderEngineTest {
             taken.map { (id, w) -> TodaysDose(id, id, w, 1.0, "mg", true, null) }
         }
         coEvery { adherence.recordedWindowsFor(any()) } answers { recorded.toSet() }
+        coEvery { adherence.takenWindowsFor(any()) } answers { takenLocally.toSet() }
     }
 
     // ---- F1: rolling decrement + single-notification invariant ----------------
@@ -114,6 +119,26 @@ class ReminderEngineTest {
 
         allMeds.forEach { taken += it.medicationId to it.timeSlots.first().window }
         engine.replan()
+
+        assertEquals(0, notifier.activeCount)
+        assertTrue(notifier.cancelled)
+    }
+
+    // ---- F3b: "Take all" clears even when the server projection lags ----------
+
+    @Test
+    fun f3b_takeAll_clearsFromLocalMirror_whenProjectionLags() = runTest {
+        stubRepos()
+        // The reminder's action logs each dose to the local mirror; the server `today`
+        // projection is NOT updated (stays empty) — the regression: a just-logged dose
+        // the projection doesn't list must still count as taken and clear the reminder.
+        coEvery { adherence.logDose(any(), any(), any(), any()) } answers {
+            takenLocally += firstArg<String>() to secondArg<TimeWindow>()
+        }
+        clock.set(monday.atTime(13, 30)); engine.onAlarmFired()
+        assertEquals(1, notifier.activeCount)
+
+        engine.onDosesTaken(allMeds.map { it.medicationId to it.timeSlots.first().window })
 
         assertEquals(0, notifier.activeCount)
         assertTrue(notifier.cancelled)
