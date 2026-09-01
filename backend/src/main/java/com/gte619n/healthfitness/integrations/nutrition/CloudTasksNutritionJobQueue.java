@@ -65,7 +65,10 @@ public class CloudTasksNutritionJobQueue implements NutritionJobQueue {
         this.objectMapper = objectMapper;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
         this.handlerUrl = handlerUrl;
-        this.secret = secret;
+        // Trim: a Secret Manager value created with `echo` has a trailing newline,
+        // which is illegal in an HTTP header value and gets stripped in transit —
+        // so the handler (which trims too) would otherwise never see a match.
+        this.secret = secret == null ? "" : secret.trim();
         this.tasksEndpoint = String.format(
             "https://cloudtasks.googleapis.com/v2/projects/%s/locations/%s/queues/%s/tasks",
             project, location, queue);

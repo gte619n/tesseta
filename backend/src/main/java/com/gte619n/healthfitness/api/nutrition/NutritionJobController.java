@@ -50,7 +50,11 @@ public class NutritionJobController {
         @Value("${app.nutrition.jobs.max-attempts:5}") int maxAttempts
     ) {
         this.dispatcher = dispatcher;
-        this.secret = secret;
+        // Trim the configured secret: a Secret Manager value created with `echo`
+        // carries a trailing newline, which the HTTP layer strips from the header
+        // the queue sends — so the raw env value would never match the delivered
+        // token and every job 401s. Compare on the trimmed value both sides.
+        this.secret = secret == null ? "" : secret.trim();
         this.maxAttempts = Math.max(1, maxAttempts);
     }
 
@@ -60,7 +64,8 @@ public class NutritionJobController {
         @RequestHeader(value = RETRY_COUNT_HEADER, required = false) Integer retryCount,
         @RequestBody NutritionJob job
     ) {
-        if (secret == null || secret.isBlank() || !Objects.equals(secret, token)) {
+        String presented = token == null ? "" : token.trim();
+        if (secret.isBlank() || !Objects.equals(secret, presented)) {
             // Fail closed: an unset secret (misconfig) or a mismatch is rejected.
             log.warn("Nutrition job rejected — secret missing or mismatched");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
