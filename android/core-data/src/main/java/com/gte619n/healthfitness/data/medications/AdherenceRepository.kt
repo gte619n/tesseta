@@ -136,6 +136,30 @@ class AdherenceRepository @Inject internal constructor(
                 .toSet()
         }
 
+    /**
+     * IMPL-21: `(medicationId, window)` pairs recorded as TAKEN (taken=true, not a
+     * miss, non-tombstoned) for [date], read from the local mirror. This is the
+     * authoritative record of what the user actually checked off on THIS device —
+     * including a dose just logged from the rolling reminder's "✓"/"Take all" action
+     * that the server `today` projection hasn't caught up to yet. The reminder engine
+     * unions this with the projection so an outstanding dose the user just tapped
+     * always clears from the notification, independent of the projection round-trip.
+     */
+    suspend fun takenWindowsFor(date: LocalDate): Set<Pair<String, TimeWindow>> =
+        withContext(io) {
+            adherenceDao.observeAll().first()
+                .filter { it.status != "ARCHIVED" }
+                .mapNotNull { row ->
+                    val payload = decodePayload(row.payloadJson)
+                        ?.takeIf { it.date == date && it.taken && !it.missed }
+                        ?: return@mapNotNull null
+                    val window = runCatching { TimeWindow.valueOf(payload.window) }.getOrNull()
+                        ?: return@mapNotNull null
+                    payload.medicationId to window
+                }
+                .toSet()
+        }
+
     private fun decodePayload(json: String): AdherenceMirrorPayload? =
         runCatching { payloadAdapter.fromJson(json) }.getOrNull()
 

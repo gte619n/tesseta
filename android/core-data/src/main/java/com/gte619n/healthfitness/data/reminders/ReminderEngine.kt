@@ -140,11 +140,31 @@ class ReminderEngine @Inject constructor(
         }
     }
 
-    private suspend fun takenTodaySet(): Set<Pair<String, TimeWindow>> =
-        runCatching { medications.todaysDoses() }.getOrElse { emptyList() }
+    /**
+     * The `(med:window)` doses to treat as taken for today, as the UNION of two
+     * sources — because they are computed from divergent snapshots and either alone
+     * can miss a take:
+     *  - the server `today` projection ([MedicationRepository.todaysDoses]) picks up
+     *    doses taken on another device / the web that never touched this mirror; but
+     *    its overlay only marks doses the projection already lists, so a just-logged
+     *    dose whose `(med,window)` isn't in that projection (a stale/slow/offline
+     *    projection, or a local-vs-server schedule gap) is silently dropped.
+     *  - the local adherence mirror ([AdherenceRepository.takenWindowsFor]) is the
+     *    authoritative record of what THIS device just checked off, so the dose the
+     *    notification's "✓"/"Take all" action logged always counts here.
+     *
+     * Unioning guarantees a tapped dose clears the reminder while still reflecting
+     * remote takes — the bug where "Take all" marked the doses but left the reminder
+     * on screen was this taken-set missing the just-logged doses.
+     */
+    private suspend fun takenTodaySet(): Set<Pair<String, TimeWindow>> {
+        val today = LocalDateTime.now(clock).toLocalDate()
+        val fromProjection = runCatching { medications.todaysDoses() }.getOrElse { emptyList() }
             .filter { it.taken }
             .map { it.medicationId to it.window }
-            .toSet()
+        val fromMirror = runCatching { adherence.takenWindowsFor(today) }.getOrElse { emptySet() }
+        return fromProjection.toSet() + fromMirror
+    }
 
     private fun LocalDateTime.toEpochMillis(): Long =
         atZone(clock.zone).toInstant().toEpochMilli()
