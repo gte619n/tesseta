@@ -125,7 +125,7 @@ A metric the resolver can't compute returns `MetricValue.unavailable()`
 
 All Gemini clients live in the backend `integrations` package (Google GenAI SDK,
 `GEMINI_API_KEY`). The project rule (root `CLAUDE.md`): general work uses
-**`gemini-3.5-flash`**, image generation uses **`gemini-3.1-flash-image-preview`**,
+**`gemini-3.8-flash`**, image generation uses **`gemini-3.1-flash-image-preview`**,
 and no other model without an ADR.
 
 The feature services below share **one** `Client` bean (`GeminiConfig`,
@@ -136,14 +136,14 @@ is intentionally absent).
 
 | Job | Client | Model |
 |---|---|---|
-| Drug lookup (grounded) | `DrugLookupService` | `gemini-3.5-flash` |
-| Blood-test extraction | `BloodTestExtractor` | `gemini-3.5-flash` |
-| DEXA extraction | `DexaExtractor` | `gemini-3.5-flash` |
-| Nutrition label / meal photo / description | `NutritionLabelExtractor`, `MealPhotoExtractor`, `MealDescriptionExtractor` | `gemini-3.5-flash` |
-| Equipment parsing | `EquipmentParserService` | `gemini-3.5-flash` |
-| Exercise frame plan / metadata (IMPL-14/19) | `GeminiExerciseFramePlanner` (`EXERCISE_PLAN_MODEL`), `GeminiExerciseMetadataEnricher` | `gemini-3.5-flash` |
-| Workout post-session recap (IMPL-COACH) | `GeminiWorkoutCoachClient` (`WORKOUT_COACH_GEMINI_MODEL`) | `gemini-3.5-flash` |
-| Workout block classifier (split job) | `GeminiWorkoutBlockClassifier` (`APP_WORKOUTS_SPLIT_MODEL`) | `gemini-3.5-flash` |
+| Drug lookup (grounded) | `DrugLookupService` | `gemini-3.8-flash` |
+| Blood-test extraction | `BloodTestExtractor` | `gemini-3.8-flash` |
+| DEXA extraction | `DexaExtractor` | `gemini-3.8-flash` |
+| Nutrition label / meal photo / description | `NutritionLabelExtractor`, `MealPhotoExtractor`, `MealDescriptionExtractor` | `gemini-3.8-flash` |
+| Equipment parsing | `EquipmentParserService` | `gemini-3.8-flash` |
+| Exercise frame plan / metadata (IMPL-14/19) | `GeminiExerciseFramePlanner` (`EXERCISE_PLAN_MODEL`), `GeminiExerciseMetadataEnricher` | `gemini-3.8-flash` |
+| Workout post-session recap (IMPL-COACH) | `GeminiWorkoutCoachClient` (`WORKOUT_COACH_GEMINI_MODEL`) | `gemini-3.8-flash` |
+| Workout block classifier (split job) | `GeminiWorkoutBlockClassifier` (`APP_WORKOUTS_SPLIT_MODEL`) | `gemini-3.8-flash` |
 | Drug / food / equipment / exercise images | `DrugImageGenerator` (`IMAGEN_MODEL`), `GeminiFoodImageGenerator`, `EquipmentImageService`, `GeminiExerciseMediaService` (`EXERCISE_MEDIA_MODEL`) | `gemini-3.1-flash-image-preview` |
 | **Goal chat** | `GeminiGoalChatClient` | **`gemini-3.1-pro-preview`** — a documented Pro exception (ADR-0005), via env `GOALS_GEMINI_MODEL`. |
 | **Workout-program designer** | `GeminiWorkoutProgramChatClient` | **`gemini-3.1-pro-preview`** — a documented Pro exception (ADR-0013), via env `WORKOUT_PROGRAM_GEMINI_MODEL`. |

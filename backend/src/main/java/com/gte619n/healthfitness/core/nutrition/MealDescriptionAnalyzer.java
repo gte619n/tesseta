@@ -11,7 +11,7 @@ import java.util.Optional;
  * <p>Defined in {@code core} so {@link MealDescriptionService} depends on the
  * abstraction without pulling {@code integrations} (and its Gemini SDK) into the
  * {@code core} layer. The concrete implementation ({@code MealDescriptionExtractor},
- * {@code gemini-3.5-flash} tool calling) lives in {@code integrations} and is
+ * {@code gemini-3.8-flash} tool calling) lives in {@code integrations} and is
  * injected via {@code ObjectProvider}, mirroring the {@link MealPhotoAnalyzer}
  * seam so core unit tests construct the service without it.
  *

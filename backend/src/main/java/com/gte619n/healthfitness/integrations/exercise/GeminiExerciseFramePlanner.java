@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Derives the reviewable frame plan ({@code demoPlan}) for an exercise with
- * {@code gemini-3.5-flash} (IMPL-19) — the approved general-work text model. The
+ * {@code gemini-3.8-flash} (IMPL-19) — the approved general-work text model. The
  * planner reads the exercise's structured metadata plus, when an
  * {@link ExerciseReference} with a URL is present, the fetched readable text of
  * that public-library page, and emits the distinct teaching positions: 1 for a
@@ -95,7 +95,7 @@ public class GeminiExerciseFramePlanner implements ExerciseFramePlanner {
 
     public GeminiExerciseFramePlanner(
         Optional<Client> client,
-        @Value("${app.exercises.plan.model:gemini-3.5-flash}") String model
+        @Value("${app.exercises.plan.model:gemini-3.8-flash}") String model
     ) {
         this.client = client;
         this.model = model;

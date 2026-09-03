@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Gemini-backed {@link MealPhotoAnalyzer}: itemizes a full-meal photo into its
- * food components via {@code gemini-3.5-flash} tool calling
+ * food components via {@code gemini-3.8-flash} tool calling
  * ({@code extract_meal_items}), mirroring {@code GeminiGoalChatClient}'s
  * tool-calling style and {@code DexaExtractor}'s multimodal image input.
  *
@@ -96,7 +96,7 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
 
     public MealPhotoExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.5-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model
     ) {
         this.client = client;
         this.model = model;

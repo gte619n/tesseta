@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Gemini-backed post-workout coach (IMPL-COACH). Generates a short, encouraging
- * recap with {@code gemini-3.5-flash} (the approved general-work text model,
+ * recap with {@code gemini-3.8-flash} (the approved general-work text model,
  * same as the frame planner). Mirrors {@link GeminiExerciseFramePlanner}: it
  * shares the single google-genai {@link Client} bean (present only when
  * {@code GEMINI_API_KEY} is set) injected as {@link Optional}, so the bean wires
@@ -50,7 +50,7 @@ public class GeminiWorkoutCoachClient implements WorkoutCoachClient {
 
     public GeminiWorkoutCoachClient(
         Optional<Client> client,
-        @Value("${app.workout-coach.gemini-model:gemini-3.5-flash}") String model,
+        @Value("${app.workout-coach.gemini-model:gemini-3.8-flash}") String model,
         @Value("${app.workout-coach.enabled:true}") boolean enabled
     ) {
         this.client = client;

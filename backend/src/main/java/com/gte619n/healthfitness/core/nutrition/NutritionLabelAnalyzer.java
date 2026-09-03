@@ -6,7 +6,7 @@ package com.gte619n.healthfitness.core.nutrition;
  * <p>Defined in {@code core} so {@link NutritionCaptureService} can depend on
  * the abstraction without pulling {@code integrations} into {@code core}. The
  * concrete implementation ({@code NutritionLabelExtractor},
- * {@code gemini-3.5-flash} tool calling) lives in {@code integrations} and is
+ * {@code gemini-3.8-flash} tool calling) lives in {@code integrations} and is
  * injected via {@code ObjectProvider}, mirroring the {@link BarcodeLookup} seam.
  *
  * <p>The implementation normalizes the label's per-serving panel to

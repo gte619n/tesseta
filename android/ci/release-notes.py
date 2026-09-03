@@ -11,7 +11,7 @@ Env:
                   gemini_api_key) — the same key the backend uses.
   COMMITS         required; the commit log to summarize (one entry per commit,
                   subject + body).
-  GEMINI_MODEL    optional; defaults to gemini-3.5-flash (project standard for
+  GEMINI_MODEL    optional; defaults to gemini-3.8-flash (project standard for
                   text work, per CLAUDE.md).
 
 This calls the public Generative Language API (generativelanguage.googleapis.com)
@@ -50,7 +50,7 @@ Commits:
 def main() -> int:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     commits = os.environ.get("COMMITS", "").strip()
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
     if not api_key or not commits:
         return 1
 
@@ -59,7 +59,7 @@ def main() -> int:
             "contents": [
                 {"role": "user", "parts": [{"text": PROMPT + commits}]}
             ],
-            # gemini-3.5-flash is a thinking model; thoughtsTokenCount counts
+            # gemini-3.8-flash is a thinking model; thoughtsTokenCount counts
             # against maxOutputTokens, so keep ample headroom (~800 thinking
             # tokens observed) to avoid truncating the notes mid-sentence.
             "generationConfig": {"temperature": 0.4, "maxOutputTokens": 8192},

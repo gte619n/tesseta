@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Enriches a name-only exercise into structured catalog metadata with
- * {@code gemini-3.5-flash} (the approved general-work model). Pure structured
+ * {@code gemini-3.8-flash} (the approved general-work model). Pure structured
  * extraction — no grounding. Used by the IMPL-15 workout-history import to make
  * the 352 seeded movements usable (gym availability + image prompts depend on
  * the metadata). Mirrors {@code EquipmentParserService}.
@@ -74,7 +74,7 @@ public class GeminiExerciseMetadataEnricher implements ExerciseMetadataEnricher 
 
     public GeminiExerciseMetadataEnricher(
         Client client,
-        @Value("${app.exercises.enrich-model:gemini-3.5-flash}") String model
+        @Value("${app.exercises.enrich-model:gemini-3.8-flash}") String model
     ) {
         this.client = client;
         this.model = model;
