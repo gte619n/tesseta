@@ -302,7 +302,7 @@ public class WorkoutHistoryImporter {
                 userId, PROGRAM_ID, date + "_" + dayId, date, s.phaseId(), dayId,
                 s.workoutName(), Math.max(1, weekIndex), isDeload(s.workoutName()),
                 null, ScheduledStatus.COMPLETED, session,
-                instantOf(s), s.durationSec()));
+                instantOf(s), s.durationSec(), null));
         }
         scheduled.saveAll(out);
         return new int[] {out.size(), skippedExercises};

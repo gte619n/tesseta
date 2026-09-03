@@ -23,6 +23,11 @@
     <string name="workout_session_hold_target">Target %1$s</string>
     <string name="workout_session_get_ready_start_now">Start now</string>
     <string name="workout_session_get_ready_countdown">Get ready · starting in %1$s</string>
+    <string name="workout_session_get_ready_paused">Paused · %1$s to go</string>
+    <string name="workout_session_hold_pause">Pause</string>
+    <string name="workout_session_hold_resume">Resume</string>
+    <string name="workout_session_hold_reset">Reset</string>
+    <string name="workout_session_hold_paused">Paused · %1$s</string>
     <string name="workout_session_more">More</string>
     <string name="workout_session_check_set">Log set %1$d</string>
     <string name="workout_session_uncheck_set">Remove set %1$d</string>
@@ -45,6 +50,7 @@
     <string name="workout_session_finish">Finish</string>
     <string name="workout_session_finish_title">Finish workout?</string>
     <string name="workout_session_finish_confirm">Complete workout</string>
+    <string name="workout_session_feeling_prompt">How did that feel?</string>
     <string name="workout_session_summary_elapsed">Elapsed</string>
     <string name="workout_session_summary_sets">Sets logged</string>
     <string name="workout_session_summary_exercises">Exercises</string>

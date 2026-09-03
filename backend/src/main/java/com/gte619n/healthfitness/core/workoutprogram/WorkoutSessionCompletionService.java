@@ -109,6 +109,7 @@ public class WorkoutSessionCompletionService {
      *         (bad status, missing COMPLETED fields, unknown logged keys,
      *         out-of-range per-set actuals)
      */
+    /** Back-compat: complete a session without a post-workout mood check. */
     public ScheduledWorkout complete(
         String userId,
         String programId,
@@ -118,11 +119,24 @@ public class WorkoutSessionCompletionService {
         Integer durationSeconds,
         List<LoggedPrescription> logged
     ) {
+        return complete(userId, programId, scheduledId, status, completedAt, durationSeconds, logged, null);
+    }
+
+    public ScheduledWorkout complete(
+        String userId,
+        String programId,
+        String scheduledId,
+        ScheduledStatus status,
+        Instant completedAt,
+        Integer durationSeconds,
+        List<LoggedPrescription> logged,
+        Integer feeling
+    ) {
         ScheduledWorkout sw = scheduled.findById(userId, programId, scheduledId)
             .orElseThrow(() -> new IllegalArgumentException("Scheduled workout not found: " + scheduledId));
 
         List<LoggedPrescription> entries = logged == null ? List.of() : logged;
-        List<String> issues = validate(sw, status, completedAt, durationSeconds, entries);
+        List<String> issues = validate(sw, status, completedAt, durationSeconds, feeling, entries);
         if (!issues.isEmpty()) {
             throw new InvalidSessionLogException(issues);
         }
@@ -147,7 +161,9 @@ public class WorkoutSessionCompletionService {
             sw.isDeload(), sw.locationId(), status,
             withLoggedSets(sw.session(), setsByKey, substituteByKey),
             completed ? completedAt : null,
-            completed ? durationSeconds : null
+            completed ? durationSeconds : null,
+            // The mood check rides the COMPLETED upsert; un-completing drops it.
+            completed ? feeling : null
         );
         scheduled.save(updated);
 
@@ -173,12 +189,18 @@ public class WorkoutSessionCompletionService {
         ScheduledStatus status,
         Instant completedAt,
         Integer durationSeconds,
+        Integer feeling,
         List<LoggedPrescription> logged
     ) {
         List<String> issues = new ArrayList<>();
         if (status == null) {
             issues.add("Status must be COMPLETED, SKIPPED, or PLANNED.");
             return issues;
+        }
+        // The mood check is optional, but when present it's the 1..5 scale the
+        // finish screen sends — reject anything off it so trends stay clean.
+        if (feeling != null && (feeling < 1 || feeling > 5)) {
+            issues.add("feeling must be between 1 and 5.");
         }
         if (status == ScheduledStatus.COMPLETED) {
             if (completedAt == null) {

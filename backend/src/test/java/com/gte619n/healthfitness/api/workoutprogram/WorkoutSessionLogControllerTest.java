@@ -250,7 +250,7 @@ class WorkoutSessionLogControllerTest {
             new Block("b1", BlockType.MAIN, "Main", 0, List.of(rx("ohp", 0)))));
         scheduled.save(new ScheduledWorkout(
             TEST_USER, "p2", p2ScheduledId, fridayDate, "ph1", "d1", "Upper",
-            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null));
+            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null, null));
 
         mvc.perform(put("/api/me/workout-programs/p2/sessions/" + p2ScheduledId)
                 .header("X-Dev-User", TEST_USER)
@@ -349,7 +349,7 @@ class WorkoutSessionLogControllerTest {
             new Block("b1", BlockType.MAIN, "Main", 0, List.of(rx("sq", 0), rx("bp", 1)))));
         scheduled.save(new ScheduledWorkout(
             TEST_USER, "p1", SCHEDULED_ID, DATE, "ph1", "d1", "Lower",
-            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null));
+            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null, null));
     }
 
     private static Prescription rx(String exerciseId, int orderIndex) {

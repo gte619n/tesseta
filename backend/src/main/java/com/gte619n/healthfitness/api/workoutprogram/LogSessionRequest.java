@@ -29,13 +29,22 @@ public record LogSessionRequest(
     List<LoggedPrescription> logged,  // full replacement of previous actuals
     String phaseId,                   // ad-hoc materialization day reference…
     String dayId,                     // …
-    LocalDate date                    // …the client-local day the session ran
+    LocalDate date,                   // …the client-local day the session ran
+    Integer feeling                   // post-workout mood 1..5 (COMPLETED only), or null
 ) {
     /** Back-compat: an outcome for an already-materialized session. */
     public LogSessionRequest(
         ScheduledStatus status, Instant completedAt, Integer durationSeconds,
         List<LoggedPrescription> logged
     ) {
-        this(status, completedAt, durationSeconds, logged, null, null, null);
+        this(status, completedAt, durationSeconds, logged, null, null, null, null);
+    }
+
+    /** Back-compat: an ad-hoc session outcome without a mood check. */
+    public LogSessionRequest(
+        ScheduledStatus status, Instant completedAt, Integer durationSeconds,
+        List<LoggedPrescription> logged, String phaseId, String dayId, LocalDate date
+    ) {
+        this(status, completedAt, durationSeconds, logged, phaseId, dayId, date, null);
     }
 }

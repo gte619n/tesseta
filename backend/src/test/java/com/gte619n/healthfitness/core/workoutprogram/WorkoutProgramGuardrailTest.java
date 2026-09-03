@@ -135,7 +135,7 @@ class WorkoutProgramGuardrailTest {
                         TODAY.minusDays(7).atTime(18, 0).toInstant(ZoneOffset.UTC))))))));
         scheduled.save(new ScheduledWorkout(USER, "hist", TODAY.minusDays(7) + "_d1", TODAY.minusDays(7),
             "ph1", "d1", "Day", 1, false, GYM, ScheduledStatus.COMPLETED, day,
-            TODAY.minusDays(7).atTime(18, 0).toInstant(ZoneOffset.UTC), 3600));
+            TODAY.minusDays(7).atTime(18, 0).toInstant(ZoneOffset.UTC), 3600, null));
     }
 
     private static Prescription rx(String exerciseId, int sets, Double targetWeightLbs) {
