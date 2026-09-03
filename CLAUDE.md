@@ -52,6 +52,23 @@
 - Introduce a new Gemini model or AI provider without an ADR (the sanctioned
   Pro exceptions today are ADR-0005 and ADR-0013).
 
+## Deploys
+- Prod deploy = merge to `main`. Cloud Build triggers (`deploy-backend-on-main`,
+  `deploy-web-on-main`, `release-android-on-main`) fire on merge and are
+  **path-filtered** — a component with no changed files no-ops (shows
+  `neutral`/`skipped`). To redeploy an unchanged component, run its trigger
+  manually.
+- **CI does not gate deploys.** GitHub PR checks and the Cloud Build deploy are
+  independent; a green PR can still fail to deploy. The failure shows only in the
+  `deploy-*-on-main` check-runs on the merge commit — watch those after every
+  merge.
+- The backend deploy runs a **Trivy image scan** at deploy time
+  (`--severity=HIGH,CRITICAL --ignore-unfixed --exit-code=1`) that blocks
+  promotion on any *fixable* HIGH/CRITICAL CVE. Fix by overriding the
+  BOM-managed transitive version via an `extra["<lib>.version"]` property in
+  `backend/build.gradle.kts` (see the existing block there). This runs only at
+  deploy time, not in PR CI, so it can silently keep prod on a stale revision.
+
 ## Local Development
 Run `bash infra/scripts/dev.sh` to start both backend and web servers locally.
 This script:

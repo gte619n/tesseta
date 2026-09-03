@@ -14,7 +14,11 @@ version = "0.0.2-SNAPSHOT"
 //   jackson 2.21.4 — CVE-2026-54512 (databind RCE); Boot 3.5.x ships 2.19.
 //   netty 4.1.136.Final — CVE-2026-42583 / -33870 / -44249 (codec) + CVE-2026-59901
 //     / -55831 / -55833 / -56745 (codec-http DoS); Boot 3.5.x ships 4.1.12x.
-//   tomcat 10.1.55 — CVE-2026-41293 (CRITICAL); Boot 3.5.14 ships 10.1.54.
+//   tomcat 10.1.59 — CVE-2026-65182 / -65905 / -68525 (CRITICAL: security
+//     constraint bypass, auth bypass, unauthorized access); fixed upstream in
+//     10.1.58 but that tag was never published to Maven Central, so we take the
+//     next available 10.1.59. Boot 3.5.14 ships 10.1.54. (Previously 10.1.55
+//     for CVE-2026-41293, also CRITICAL.)
 //   spring-framework 6.2.19 — CVE-2026-41850 (SpEL DoS), CVE-2026-41842 (static
 //     resource DoS), CVE-2026-41845 (webmvc XSS); Boot 3.5.x ships 6.2.18.
 //   micrometer 1.15.12 — CVE-2026-40983 (gRPC DoS), CVE-2026-40984 (HTTP DoS);
@@ -23,7 +27,7 @@ version = "0.0.2-SNAPSHOT"
 //     both HIGH; Boot 3.5.x pins 5.3.6. The property versions both core5 artifacts.
 extra["jackson-bom.version"] = "2.21.4"
 extra["netty.version"] = "4.1.136.Final"
-extra["tomcat.version"] = "10.1.55"
+extra["tomcat.version"] = "10.1.59"
 extra["spring-framework.version"] = "6.2.19"
 extra["micrometer.version"] = "1.15.12"
 extra["httpcore5.version"] = "5.4.3"
