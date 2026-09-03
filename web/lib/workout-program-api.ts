@@ -8,6 +8,7 @@ import type {
   CreateProgramRequest,
   UpdateProgramRequest,
   CompleteSessionRequest,
+  CustomizePrescriptionRequest,
   WorkoutProgramChatThread,
   WorkoutProgramChatMessage,
   NutritionGuidance,
@@ -153,6 +154,22 @@ export function completeSession(
   return send<ScheduledWorkoutResponse>(
     `/api/me/workout-programs/${programId}/sessions/${scheduledId}`,
     "PUT",
+    input,
+  );
+}
+
+// In-workout exercise swap / rep-set edit (#4). Retargets one prescription slot
+// on this session's snapshot; `applyToProgram` also pushes the change to the
+// program template and future PLANNED sessions of that day. Separate from the
+// completion upsert (different endpoint, different semantics).
+export function customizePrescription(
+  programId: string,
+  scheduledId: string,
+  input: CustomizePrescriptionRequest,
+): Promise<ScheduledWorkoutResponse> {
+  return send<ScheduledWorkoutResponse>(
+    `/api/me/workout-programs/${programId}/sessions/${scheduledId}/prescription`,
+    "POST",
     input,
   );
 }

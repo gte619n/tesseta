@@ -58,8 +58,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -181,7 +184,7 @@ fun WorkoutSessionRoute(
         substituteLoading = state.substituteLoading,
         substituteError = state.substituteError,
         onLoadSubstitutes = viewModel::loadSubstituteOptions,
-        onSubstitute = viewModel::substituteExercise,
+        onAdjust = viewModel::applyAdjustment,
         isOwner = state.isOwner,
         onFlagFrame = viewModel::flagFrame,
         onToggleSet = viewModel::toggleSet,
@@ -209,8 +212,8 @@ fun WorkoutSessionScreen(
     substituteOptions: List<ExerciseSummary> = emptyList(),
     substituteLoading: Boolean = false,
     substituteError: String? = null,
-    onLoadSubstitutes: () -> Unit = {},
-    onSubstitute: (PrescriptionKey, ExerciseSummary) -> Unit = { _, _ -> },
+    onLoadSubstitutes: (String) -> Unit = {},
+    onAdjust: (PrescriptionKey, PrescriptionAdjustment) -> Unit = { _, _ -> },
     isOwner: Boolean = false,
     onFlagFrame: (String, String) -> Unit = { _, _ -> },
     onBack: () -> Unit,
@@ -291,7 +294,7 @@ fun WorkoutSessionScreen(
                 substituteLoading = substituteLoading,
                 substituteError = substituteError,
                 onLoadSubstitutes = onLoadSubstitutes,
-                onSubstitute = onSubstitute,
+                onAdjust = onAdjust,
                 isOwner = isOwner,
                 onFlagFrame = onFlagFrame,
                 onShowOverview = { overview = it },
@@ -364,8 +367,8 @@ private fun SessionBody(
     substituteOptions: List<ExerciseSummary>,
     substituteLoading: Boolean,
     substituteError: String?,
-    onLoadSubstitutes: () -> Unit,
-    onSubstitute: (PrescriptionKey, ExerciseSummary) -> Unit,
+    onLoadSubstitutes: (String) -> Unit,
+    onAdjust: (PrescriptionKey, PrescriptionAdjustment) -> Unit,
     isOwner: Boolean,
     onFlagFrame: (String, String) -> Unit,
     onShowOverview: (Boolean) -> Unit,
@@ -544,7 +547,7 @@ private fun SessionBody(
                     substituteLoading = substituteLoading,
                     substituteError = substituteError,
                     onLoadSubstitutes = onLoadSubstitutes,
-                    onSubstitute = { exercise -> onSubstitute(step.key, exercise) },
+                    onAdjust = { adjustment -> onAdjust(step.key, adjustment) },
                     isOwner = isOwner,
                     onFlagFrame = onFlagFrame,
                     onToggleSet = { index -> onToggleSet(step.key, index) },
@@ -633,8 +636,8 @@ private fun ExercisePage(
     substituteOptions: List<ExerciseSummary>,
     substituteLoading: Boolean,
     substituteError: String?,
-    onLoadSubstitutes: () -> Unit,
-    onSubstitute: (ExerciseSummary) -> Unit,
+    onLoadSubstitutes: (String) -> Unit,
+    onAdjust: (PrescriptionAdjustment) -> Unit,
     isOwner: Boolean,
     onFlagFrame: (String, String) -> Unit,
     onToggleSet: (Int) -> Unit,
@@ -673,8 +676,9 @@ private fun ExercisePage(
                 Spacer(Modifier.height(4.dp))
                 Text(target, style = Hf.type.monoMd.copy(fontSize = 16.sp), color = Hf.colors.textSecondary)
             }
-            // #4: swap this movement for one the current gym can actually do
-            // (e.g. no barbell). Loads options lazily when the picker opens.
+            // #4: swap this movement for a muscle-matched one the current gym can
+            // do, and/or adjust its sets/reps — for just this workout or the whole
+            // program. Loads ranked options lazily when the picker opens.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Outlined.SwapHoriz,
@@ -689,7 +693,7 @@ private fun ExercisePage(
                     color = Hf.colors.accent,
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable { showSwap = true; onLoadSubstitutes() }
+                        .clickable { showSwap = true; onLoadSubstitutes(prescription.exerciseId) }
                         .padding(horizontal = 6.dp, vertical = 4.dp),
                 )
             }
@@ -740,13 +744,13 @@ private fun ExercisePage(
         }
     }
     if (showSwap) {
-        SwapExerciseDialog(
-            currentExerciseId = prescription.exerciseId,
+        AdjustExerciseDialog(
+            prescription = prescription,
             options = substituteOptions,
             loading = substituteLoading,
             error = substituteError,
-            onPick = { exercise ->
-                onSubstitute(exercise)
+            onApply = { adjustment ->
+                onAdjust(adjustment)
                 showSwap = false
             },
             onDismiss = { showSwap = false },
@@ -755,22 +759,43 @@ private fun ExercisePage(
 }
 
 /**
- * #4 — the mid-session exercise-swap picker: pick a movement the current gym can
- * actually do in place of the prescribed one. Lists the location's executable
- * exercises (the current one filtered out), with loading/empty/error states.
+ * #4 — the mid-session swap / adjust picker: pick a muscle-matched movement the
+ * current gym can do (ranked, searchable) and/or edit the prescribed sets & rep
+ * range, applied to just this workout or the whole program. The list filters
+ * client-side over the pre-ranked options; loading/empty/error states cover the
+ * fetch.
  */
 @Composable
-private fun SwapExerciseDialog(
-    currentExerciseId: String,
+private fun AdjustExerciseDialog(
+    prescription: Prescription,
     options: List<ExerciseSummary>,
     loading: Boolean,
     error: String?,
-    onPick: (ExerciseSummary) -> Unit,
+    onApply: (PrescriptionAdjustment) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val choices = remember(options, currentExerciseId) {
-        options.filter { it.exerciseId != currentExerciseId }
+    var search by remember { mutableStateOf("") }
+    var picked by remember { mutableStateOf<ExerciseSummary?>(null) }
+    var setsStr by remember { mutableStateOf(prescription.sets?.toString().orEmpty()) }
+    var repsMinStr by remember { mutableStateOf(prescription.repsMin?.toString().orEmpty()) }
+    var repsMaxStr by remember { mutableStateOf(prescription.repsMax?.toString().orEmpty()) }
+    var applyToProgram by remember { mutableStateOf(false) }
+
+    val currentId = prescription.exerciseId
+    val choices = remember(options, currentId, search) {
+        val q = search.trim().lowercase()
+        options
+            .filter { it.exerciseId != currentId }
+            .filter {
+                q.isBlank() || it.name.lowercase().contains(q) ||
+                    it.primaryMuscles.any { m -> m.lowercase().contains(q) }
+            }
     }
+    val targetsChanged = setsStr != prescription.sets?.toString().orEmpty() ||
+        repsMinStr != prescription.repsMin?.toString().orEmpty() ||
+        repsMaxStr != prescription.repsMax?.toString().orEmpty()
+    val hasChange = picked != null || targetsChanged
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -781,29 +806,92 @@ private fun SwapExerciseDialog(
             )
         },
         text = {
-            when {
-                loading -> Text(
-                    stringResource(R.string.workout_session_swap_loading),
-                    style = Hf.type.bodyMd,
-                    color = Hf.colors.textTertiary,
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    singleLine = true,
+                    placeholder = {
+                        Text(stringResource(R.string.workout_session_swap_search), style = Hf.type.bodyMd)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                error != null -> Text(error, style = Hf.type.bodyMd, color = Hf.colors.alert)
-                choices.isEmpty() -> Text(
-                    stringResource(R.string.workout_session_swap_empty),
-                    style = Hf.type.bodyMd,
-                    color = Hf.colors.textTertiary,
-                )
-                else -> LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(choices, key = { it.exerciseId }) { exercise ->
-                        SwapExerciseRow(exercise = exercise, onClick = { onPick(exercise) })
+                when {
+                    loading -> Text(
+                        stringResource(R.string.workout_session_swap_loading),
+                        style = Hf.type.bodyMd,
+                        color = Hf.colors.textTertiary,
+                    )
+                    error != null -> Text(error, style = Hf.type.bodyMd, color = Hf.colors.alert)
+                    choices.isEmpty() -> Text(
+                        stringResource(
+                            if (search.isBlank()) R.string.workout_session_swap_empty
+                            else R.string.workout_session_swap_none,
+                        ),
+                        style = Hf.type.bodyMd,
+                        color = Hf.colors.textTertiary,
+                    )
+                    else -> LazyColumn(
+                        modifier = Modifier.heightIn(max = 220.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(choices, key = { it.exerciseId }) { exercise ->
+                            SwapExerciseRow(
+                                exercise = exercise,
+                                selected = picked?.exerciseId == exercise.exerciseId,
+                                onClick = {
+                                    picked = if (picked?.exerciseId == exercise.exerciseId) null else exercise
+                                },
+                            )
+                        }
                     }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    NumberField(setsStr, { setsStr = it },
+                        stringResource(R.string.workout_session_adjust_sets), Modifier.weight(1f))
+                    NumberField(repsMinStr, { repsMinStr = it },
+                        stringResource(R.string.workout_session_adjust_reps_min), Modifier.weight(1f))
+                    NumberField(repsMaxStr, { repsMaxStr = it },
+                        stringResource(R.string.workout_session_adjust_reps_max), Modifier.weight(1f))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ScopeToggle(!applyToProgram,
+                        stringResource(R.string.workout_session_scope_workout),
+                        { applyToProgram = false }, Modifier.weight(1f))
+                    ScopeToggle(applyToProgram,
+                        stringResource(R.string.workout_session_scope_program),
+                        { applyToProgram = true }, Modifier.weight(1f))
                 }
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onApply(
+                        PrescriptionAdjustment(
+                            exercise = picked,
+                            sets = setsStr.toIntOrNull()?.takeIf { it != prescription.sets },
+                            repsMin = repsMinStr.toIntOrNull()?.takeIf { it != prescription.repsMin },
+                            repsMax = repsMaxStr.toIntOrNull()?.takeIf { it != prescription.repsMax },
+                            applyToProgram = applyToProgram,
+                        ),
+                    )
+                },
+                enabled = hasChange,
+            ) {
+                Text(
+                    stringResource(R.string.workout_session_adjust_apply),
+                    style = Hf.type.bodyMd,
+                    color = if (hasChange) Hf.colors.accent else Hf.colors.textTertiary,
+                )
+            }
+        },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(
@@ -817,13 +905,58 @@ private fun SwapExerciseDialog(
     )
 }
 
+/** Compact numeric field for the sets / rep-range edits. */
 @Composable
-private fun SwapExerciseRow(exercise: ExerciseSummary, onClick: () -> Unit) {
+private fun NumberField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onValueChange(it.filter(Char::isDigit)) },
+        label = { Text(label, style = Hf.type.bodySm) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = modifier,
+    )
+}
+
+/** Segmented "this workout / whole program" scope choice. */
+@Composable
+private fun ScopeToggle(
+    selected: Boolean,
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (selected) {
+        Button(onClick = onClick, modifier = modifier) {
+            Text(text, style = Hf.type.bodySm)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
+            Text(text, style = Hf.type.bodySm, color = Hf.colors.textSecondary)
+        }
+    }
+}
+
+@Composable
+private fun SwapExerciseRow(
+    exercise: ExerciseSummary,
+    selected: Boolean = false,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
+            .border(
+                if (selected) 1.5.dp else 0.5.dp,
+                if (selected) Hf.colors.accent else Hf.colors.borderDefault,
+                RoundedCornerShape(10.dp),
+            )
             .background(Hf.colors.surface, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),

@@ -21,6 +21,19 @@ interface ExerciseApi {
     suspend fun available(@Query("locationId") locationId: String): List<AvailableExerciseDto>
 
     /**
+     * The swap picker's ranked suggestions (#4): exercises executable at
+     * [locationId], ordered so ones that train the same muscles / movement as
+     * [similarTo] (the prescribed exercise) come first, optionally narrowed by a
+     * name/alias [search]. The reference exercise is excluded server-side.
+     */
+    @GET("api/exercises/suggestions")
+    suspend fun suggestions(
+        @Query("locationId") locationId: String,
+        @Query("similarTo") similarTo: String? = null,
+        @Query("search") search: String? = null,
+    ): List<AvailableExerciseDto>
+
+    /**
      * Flag a demo frame as bad (#9). Owner-only server-side (403 otherwise);
      * the client also hides the affordance from non-owners. 204 on success.
      */

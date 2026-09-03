@@ -25,6 +25,20 @@ import javax.inject.Inject
 /** Which confirmation the logger is showing (finish summary, skip, discard). */
 enum class SessionPrompt { FINISH_SUMMARY, SKIP, DISCARD }
 
+/**
+ * #4 — one applied swap / rep-set edit from the adjust dialog. [exercise] is the
+ * chosen replacement (null = keep the current movement); [sets]/[repsMin]/
+ * [repsMax] are the edited targets (null = unchanged). [applyToProgram] pushes
+ * the change to the program template + future sessions of this day.
+ */
+data class PrescriptionAdjustment(
+    val exercise: ExerciseSummary?,
+    val sets: Int?,
+    val repsMin: Int?,
+    val repsMax: Int?,
+    val applyToProgram: Boolean,
+)
+
 data class WorkoutSessionUiState(
     val loading: Boolean = true,
     /** The local draft this screen logs against (ADR-0012 Decision 1). */
@@ -245,11 +259,12 @@ class WorkoutSessionViewModel @Inject constructor(
     fun consumeAutoCompleted() = _state.update { it.copy(autoCompleted = false) }
 
     /**
-     * #4 — load the movements executable at this session's gym for the swap
-     * picker. Reloads on each open so a just-updated gym is reflected; the
-     * options stay until the next load so re-opening is instant.
+     * #4 — load the swap picker's ranked suggestions: movements executable at
+     * this session's gym, ordered by muscle/movement similarity to [similarTo]
+     * (the prescribed exercise). Reloads on each open so a just-updated gym is
+     * reflected; the options stay until the next load so re-opening is instant.
      */
-    fun loadSubstituteOptions() {
+    fun loadSubstituteOptions(similarTo: String) {
         val locationId = _state.value.draft?.scheduled?.locationId
         if (locationId.isNullOrBlank()) {
             _state.update { it.copy(substituteError = "This session has no gym to swap within.") }
@@ -257,7 +272,7 @@ class WorkoutSessionViewModel @Inject constructor(
         }
         _state.update { it.copy(substituteLoading = true, substituteError = null) }
         viewModelScope.launch {
-            repository.availableExercises(locationId)
+            repository.suggestedExercises(locationId, similarTo, null)
                 .onSuccess { options ->
                     _state.update { it.copy(substituteLoading = false, substituteOptions = options) }
                 }
@@ -272,14 +287,23 @@ class WorkoutSessionViewModel @Inject constructor(
         }
     }
 
-    /** #4 — swap the exercise at [key] for [exercise] in the live draft. */
-    fun substituteExercise(key: PrescriptionKey, exercise: ExerciseSummary) {
+    /**
+     * #4 — apply a swap and/or a rep-set edit to the slot at [key], to just this
+     * workout or (when [PrescriptionAdjustment.applyToProgram]) the whole
+     * program. The live draft always changes so the card updates immediately;
+     * the program leg rides the repository's backend call.
+     */
+    fun applyAdjustment(key: PrescriptionKey, adjustment: PrescriptionAdjustment) {
         _state.value.draft ?: return
         // A swap starts the slot fresh — drop any rest tied to the old movement.
-        timers.clearRest()
+        if (adjustment.exercise != null) timers.clearRest()
         viewModelScope.launch {
-            repository.substituteExercise(programId, scheduledId, key, exercise).onFailure { e ->
-                _state.update { it.copy(error = e.message ?: "Couldn't swap the exercise") }
+            repository.customizePrescription(
+                programId, scheduledId, key,
+                adjustment.exercise, adjustment.sets, adjustment.repsMin, adjustment.repsMax,
+                adjustment.applyToProgram,
+            ).onFailure { e ->
+                _state.update { it.copy(error = e.message ?: "Couldn't update the exercise") }
             }
         }
     }

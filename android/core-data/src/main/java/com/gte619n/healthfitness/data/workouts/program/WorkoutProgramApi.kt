@@ -88,6 +88,19 @@ interface WorkoutProgramApi {
     ): ScheduledWorkoutDto
 
     /**
+     * In-workout swap / rep-set edit (#4). Retargets one prescription slot on
+     * this session's snapshot; [CustomizePrescriptionRequest.applyToProgram]
+     * also pushes the change to the program template and future PLANNED sessions
+     * of that day. Returns the updated scheduled workout.
+     */
+    @POST("api/me/workout-programs/{id}/sessions/{scheduledId}/prescription")
+    suspend fun customizePrescription(
+        @Path("id") id: String,
+        @Path("scheduledId") scheduledId: String,
+        @Body body: CustomizePrescriptionRequest,
+    ): ScheduledWorkoutDto
+
+    /**
      * IMPL-COACH — best-effort AI post-workout recap for a completed session.
      * Fetched separately from [completeSession] because the phone's completion
      * is offline-first (the outbox replays the PUT asynchronously). `recap` is

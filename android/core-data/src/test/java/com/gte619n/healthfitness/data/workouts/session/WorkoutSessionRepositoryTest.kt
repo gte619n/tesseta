@@ -338,6 +338,65 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun `customizePrescription edits targets locally without a network call`() = runTest {
+        mirrorScheduled()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        repo.updateSets(PROGRAM_ID, SCHEDULED_ID, KEY_0, listOf(loggedSet())).getOrThrow()
+
+        val updated = repo.customizePrescription(
+            PROGRAM_ID, SCHEDULED_ID, KEY_0,
+            exercise = null, sets = 5, repsMin = 4, repsMax = 6, applyToProgram = false,
+        ).getOrThrow()
+
+        val rx0 = updated.scheduled.session!!.blocks.single().prescriptions[0]
+        assertEquals("ex1", rx0.exerciseId)  // no swap
+        assertEquals(5, rx0.sets)
+        assertEquals(4, rx0.repsMin)
+        assertEquals(6, rx0.repsMax)
+        // A targets-only edit keeps the logged sets.
+        assertEquals(1, updated.logged.getValue(KEY_0).size)
+        // Session scope never touches the backend.
+        coVerify(exactly = 0) { api.customizePrescription(any(), any(), any()) }
+    }
+
+    @Test
+    fun `customizePrescription with applyToProgram swaps locally and calls the backend`() = runTest {
+        mirrorScheduled()
+        repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+        repo.updateSets(PROGRAM_ID, SCHEDULED_ID, KEY_0, listOf(loggedSet())).getOrThrow()
+        coEvery { api.customizePrescription(any(), any(), any()) } returns scheduledDto()
+
+        val goblet = com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary(
+            exerciseId = "ex-goblet",
+            name = "Goblet Squat",
+            primaryMuscles = emptyList(),
+            formCues = emptyList(),
+            demoFrames = emptyList(),
+        )
+        val updated = repo.customizePrescription(
+            PROGRAM_ID, SCHEDULED_ID, KEY_0,
+            exercise = goblet, sets = null, repsMin = null, repsMax = null, applyToProgram = true,
+        ).getOrThrow()
+
+        // Local draft reflects the swap and drops the old movement's logged sets.
+        val rx0 = updated.scheduled.session!!.blocks.single().prescriptions[0]
+        assertEquals("ex-goblet", rx0.exerciseId)
+        assertNull(updated.logged[KEY_0])
+
+        // The backend leg carries the slot + the day reference for materialization.
+        coVerify(exactly = 1) {
+            api.customizePrescription(
+                PROGRAM_ID, SCHEDULED_ID,
+                match {
+                    it.applyToProgram && it.exerciseId == "ex-goblet" &&
+                        it.blockId == "b1" && it.orderIndex == 0 &&
+                        it.phaseId == "ph1" && it.dayId == "d1"
+                },
+            )
+        }
+    }
+
+    @Test
     fun `finish without a draft fails`() = runTest {
         mirrorScheduled()
         assertTrue(repo.finish(PROGRAM_ID, SCHEDULED_ID).isFailure)

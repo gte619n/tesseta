@@ -371,36 +371,42 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
-    fun `loadSubstituteOptions fetches alternatives for the session's gym`() = runTest {
+    fun `loadSubstituteOptions fetches ranked alternatives for the session's gym`() = runTest {
         val squat = ProgramFixtures.activeDraft.sessionSteps()[0].prescription.exercise!!
-        coEvery { repo.availableExercises(any()) } returns Result.success(listOf(squat))
+        coEvery { repo.suggestedExercises(any(), any(), any()) } returns Result.success(listOf(squat))
         val vm = vm()
         advanceUntilIdle()
 
-        vm.loadSubstituteOptions()
+        vm.loadSubstituteOptions(squat.exerciseId)
         advanceUntilIdle()
 
-        // The draft's location drives the lookup.
+        // The draft's location drives the lookup; the current exercise ranks it.
         val locationId = ProgramFixtures.activeDraft.scheduled.locationId
-        coVerify(exactly = 1) { repo.availableExercises(locationId) }
+        coVerify(exactly = 1) { repo.suggestedExercises(locationId, squat.exerciseId, null) }
         assertEquals(listOf(squat), vm.state.value.substituteOptions)
         assertFalse(vm.state.value.substituteLoading)
     }
 
     @Test
-    fun `substituteExercise swaps via the repository and clears any rest`() = runTest {
+    fun `applyAdjustment swaps via the repository and clears any rest`() = runTest {
         val replacement = ProgramFixtures.activeDraft.sessionSteps()[0].prescription.exercise!!
             .copy(exerciseId = "ex-goblet", name = "Goblet Squat")
-        coEvery { repo.substituteExercise("p1", "s2", squatKey, replacement) } returns
-            Result.success(ProgramFixtures.activeDraft)
+        coEvery {
+            repo.customizePrescription("p1", "s2", squatKey, replacement, null, null, null, false)
+        } returns Result.success(ProgramFixtures.activeDraft)
         val vm = vm()
         advanceUntilIdle()
         timers.startRest(90)
 
-        vm.substituteExercise(squatKey, replacement)
+        vm.applyAdjustment(
+            squatKey,
+            PrescriptionAdjustment(replacement, null, null, null, applyToProgram = false),
+        )
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { repo.substituteExercise("p1", "s2", squatKey, replacement) }
+        coVerify(exactly = 1) {
+            repo.customizePrescription("p1", "s2", squatKey, replacement, null, null, null, false)
+        }
         // A swap starts the slot fresh, so the old movement's rest is dropped.
         assertNull(timers.rest.value)
     }

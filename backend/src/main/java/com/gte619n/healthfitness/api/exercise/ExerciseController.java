@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.exercise.BlockType;
 import com.gte619n.healthfitness.core.exercise.ExerciseAvailabilityService;
 import com.gte619n.healthfitness.core.exercise.ExerciseService;
+import com.gte619n.healthfitness.core.exercise.ExerciseSuggestionService;
 import com.gte619n.healthfitness.core.exercise.MovementPattern;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -25,15 +26,18 @@ public class ExerciseController {
 
     private final ExerciseService service;
     private final ExerciseAvailabilityService availability;
+    private final ExerciseSuggestionService suggestions;
     private final CurrentUserProvider currentUser;
 
     public ExerciseController(
         ExerciseService service,
         ExerciseAvailabilityService availability,
+        ExerciseSuggestionService suggestions,
         CurrentUserProvider currentUser
     ) {
         this.service = service;
         this.availability = availability;
+        this.suggestions = suggestions;
         this.currentUser = currentUser;
     }
 
@@ -53,6 +57,26 @@ public class ExerciseController {
     public List<ExerciseResponse> available(@RequestParam String locationId) {
         String userId = currentUser.get().userId();
         return availability.executableAt(userId, locationId).stream()
+            .map(ExerciseResponse::from)
+            .toList();
+    }
+
+    /**
+     * The in-workout swap picker (#4): the movements executable at {@code
+     * locationId}, ranked by muscle/movement similarity to {@code similarTo}
+     * (the prescribed exercise) so same-muscle alternatives come first, and
+     * optionally narrowed by a name/alias {@code search}. Unlike {@link
+     * #available} this ranks rather than just filters, and excludes the
+     * reference exercise itself.
+     */
+    @GetMapping("/suggestions")
+    public List<ExerciseResponse> suggestions(
+        @RequestParam String locationId,
+        @RequestParam(required = false) String similarTo,
+        @RequestParam(required = false) String search
+    ) {
+        String userId = currentUser.get().userId();
+        return suggestions.rankedFor(userId, locationId, similarTo, search).stream()
             .map(ExerciseResponse::from)
             .toList();
     }

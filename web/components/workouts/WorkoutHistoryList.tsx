@@ -6,8 +6,10 @@ import type {
   ScheduledWorkoutResponse,
   PrescriptionExercise,
   CompleteSessionRequest,
+  CustomizePrescriptionRequest,
   WorkoutHistoryPage,
 } from "@/lib/types/workout-program";
+import type { ExerciseResponse } from "@/lib/types/exercise";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
 import { LogSessionModal } from "./LogSessionModal";
 import { BLOCK_TYPE_LABEL } from "@/lib/types/exercise";
@@ -52,6 +54,8 @@ export function WorkoutHistoryList({
   firstPage,
   loadMore,
   logSession,
+  customizeSession,
+  suggestExercises,
 }: {
   firstPage: WorkoutHistoryPage;
   // Server action: fetch the next page of history (25 rows, newest first).
@@ -64,6 +68,18 @@ export function WorkoutHistoryList({
     scheduledId: string,
     input: CompleteSessionRequest,
   ) => Promise<void>;
+  // Server action: swap / rep-set edit addressed by program + scheduled id (#4).
+  customizeSession: (
+    programId: string,
+    scheduledId: string,
+    input: CustomizePrescriptionRequest,
+  ) => Promise<void>;
+  // Server action: ranked, gym-scoped swap suggestions for the picker.
+  suggestExercises: (
+    locationId: string,
+    similarTo: string | null,
+    search: string | null,
+  ) => Promise<ExerciseResponse[]>;
 }) {
   const router = useRouter();
   const [sheetExercise, setSheetExercise] = useState<PrescriptionExercise | null>(
@@ -150,6 +166,11 @@ export function WorkoutHistoryList({
         save={(input) =>
           logSession(editTarget!.programId!, editTarget!.scheduledId, input)
         }
+        customize={(input) =>
+          customizeSession(editTarget!.programId!, editTarget!.scheduledId, input)
+        }
+        suggestExercises={suggestExercises}
+        onCustomized={() => router.refresh()}
       />
     </>
   );

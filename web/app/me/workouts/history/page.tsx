@@ -1,11 +1,18 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { revalidatePath } from "next/cache";
-import { getWorkoutHistory, completeSession } from "@/lib/workout-program-api";
+import {
+  getWorkoutHistory,
+  completeSession,
+  customizePrescription,
+} from "@/lib/workout-program-api";
+import { getExerciseSuggestions } from "@/lib/exercise-admin-api";
 import type {
   WorkoutHistoryPage,
   CompleteSessionRequest,
+  CustomizePrescriptionRequest,
 } from "@/lib/types/workout-program";
+import type { ExerciseResponse } from "@/lib/types/exercise";
 import { WorkoutHistoryList } from "@/components/workouts/WorkoutHistoryList";
 import { pageMetadata } from "@/lib/page-metadata";
 
@@ -52,6 +59,28 @@ export default async function WorkoutHistoryPage() {
     revalidatePath(`/me/workouts/programs/${programId}`);
   }
 
+  // Swap / rep-set edit on a past session (#4) — e.g. record that a substitute
+  // was actually performed, or push the change forward across the program.
+  async function customizeSession(
+    programId: string,
+    scheduledId: string,
+    input: CustomizePrescriptionRequest,
+  ) {
+    "use server";
+    await customizePrescription(programId, scheduledId, input);
+    revalidatePath("/me/workouts/history");
+    revalidatePath(`/me/workouts/programs/${programId}`);
+  }
+
+  async function suggestExercises(
+    locationId: string,
+    similarTo: string | null,
+    search: string | null,
+  ): Promise<ExerciseResponse[]> {
+    "use server";
+    return getExerciseSuggestions(locationId, similarTo, search);
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[860px] space-y-6">
@@ -77,6 +106,8 @@ export default async function WorkoutHistoryPage() {
             firstPage={firstPage}
             loadMore={loadMore}
             logSession={logSession}
+            customizeSession={customizeSession}
+            suggestExercises={suggestExercises}
           />
         </section>
       </div>
