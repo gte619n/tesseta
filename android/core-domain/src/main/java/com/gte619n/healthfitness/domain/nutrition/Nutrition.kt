@@ -108,6 +108,25 @@ data class Entry(
 
     /** True while the server is still analyzing the captured photo. */
     val isAnalyzing: Boolean get() = analysisStatus == "ANALYZING"
+
+    /**
+     * True when this entry is supposed to have a generated picture: a composite
+     * meal (its own finished-meal image) or a catalog-backed food (its studio
+     * image, joined server-side). A pure "quick add" (no [foodId], no
+     * ingredients) legitimately has no image, so it never shows a retry — just
+     * the neutral placeholder.
+     */
+    val isImageEligible: Boolean get() = isComposite || foodId != null
+
+    /**
+     * True when an image is expected but absent and not currently being produced
+     * — i.e. NONE (never generated) or FAILED, and not mid-analysis or PENDING.
+     * Drives the in-card retry affordance and keeps the day re-fetching/polling so
+     * a server-side self-heal converges the picture without user action.
+     */
+    val isImageMissing: Boolean
+        get() = isImageEligible && !isAnalyzing &&
+            imageStatus != "READY" && imageStatus != "PENDING"
 }
 
 /** One ingredient of a composite meal, with its generated raw-ingredient image. */

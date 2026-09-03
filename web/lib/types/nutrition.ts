@@ -56,6 +56,35 @@ export type EntryIngredient = {
   imageStatus: ImageStatus;
 };
 
+/**
+ * An entry is supposed to have a generated picture when it's a composite meal
+ * (its own finished-meal image) or catalog-backed (its studio image, joined
+ * server-side). A pure "quick add" (no foodId, no ingredients) legitimately has
+ * none — so it never offers a retry.
+ */
+export function isImageEligible(
+  e: Pick<Entry, "foodId" | "ingredients">,
+): boolean {
+  return e.foodId != null || (e.ingredients?.length ?? 0) > 0;
+}
+
+/**
+ * True when a picture is expected but absent and not currently being produced —
+ * NONE (never generated) or FAILED, and not mid-analysis or PENDING. Drives the
+ * always-visible retry control and keeps the page polling so the server's
+ * self-heal converges the image without user action.
+ */
+export function isImageMissing(
+  e: Pick<Entry, "foodId" | "ingredients" | "imageStatus" | "analysisStatus">,
+): boolean {
+  return (
+    isImageEligible(e) &&
+    e.analysisStatus !== "ANALYZING" &&
+    e.imageStatus !== "READY" &&
+    e.imageStatus !== "PENDING"
+  );
+}
+
 export type MealGroup = {
   meal: Meal;
   subtotal: Macros;

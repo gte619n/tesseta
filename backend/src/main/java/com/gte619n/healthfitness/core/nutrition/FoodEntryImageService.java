@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
 import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobException;
 import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -31,6 +32,18 @@ import org.springframework.stereotype.Service;
 public class FoodEntryImageService {
 
     private static final Logger log = LoggerFactory.getLogger(FoodEntryImageService.class);
+
+    // A composite meal image PENDING/FAILED past this age is presumed orphaned —
+    // its background job died with the instance (OOM/restart/deploy) or exhausted
+    // its retries — so a day read re-enqueues it. Kept well above a normal
+    // generation time so a healthy in-flight job is never disturbed. A NONE
+    // composite (image never even enqueued, e.g. the create-time enqueue was a
+    // no-op or a sync delta dropped the status) is healed immediately, since a
+    // real create always leaves the entry PENDING, not NONE.
+    private static final Duration STALE_AFTER = Duration.ofMinutes(3);
+    // Cap the work one day read triggers so a large day can't fan out unbounded
+    // Gemini calls; the rest heal on the next read.
+    private static final int SWEEP_LIMIT = 25;
 
     private final FoodEntryRepository entries;
     private final ObjectProvider<FoodImageGenerator> generator;
@@ -150,6 +163,53 @@ public class FoodEntryImageService {
     public void markFailed(String userId, LocalDate date, String entryId) {
         markStatus(userId, date, entryId, FoodImageStatus.FAILED, null);
         notifyDone(userId);
+    }
+
+    /**
+     * Self-heal missing finished-meal images across a day's entries — the entry
+     * mirror of {@link FoodImageService#sweepStalePending()}, which only covers
+     * catalog foods. A composite meal whose image job died (leaving it PENDING),
+     * failed for good (FAILED), or was never enqueued (NONE) otherwise shows a
+     * permanent utensil placeholder with no recovery. Re-enqueuing flips it back
+     * to PENDING (re-stamping {@code updatedAt}) so the client's settle-poll swaps
+     * in the finished picture. NONE is healed immediately (a real create always
+     * leaves the entry PENDING, so a lingering NONE is genuinely stuck);
+     * PENDING/FAILED are healed only once past {@link #STALE_AFTER}, so a healthy
+     * in-flight job or a subject that simply keeps failing is retried at most once
+     * per window rather than on every read. Called on the day-read path so the day
+     * heals on the next fetch/poll. Returns the count re-enqueued; a no-op when the
+     * image pipeline is unavailable.
+     */
+    public int sweepStale(String userId, LocalDate date, List<FoodEntry> dayEntries) {
+        if (generator.getIfAvailable() == null || store.getIfAvailable() == null) {
+            return 0;
+        }
+        Instant cutoff = Instant.now().minus(STALE_AFTER);
+        int reenqueued = 0;
+        for (FoodEntry e : dayEntries) {
+            if (reenqueued >= SWEEP_LIMIT) {
+                break;
+            }
+            // Only composite meals carry their own finished-meal image; a
+            // single-food entry's picture is joined from its catalog food and
+            // heals via FoodImageService instead.
+            if (!e.isComposite()) {
+                continue;
+            }
+            FoodImageStatus status = e.mealImageStatus();
+            if (status == FoodImageStatus.READY && e.mealImageUrl() != null) {
+                continue;
+            }
+            boolean stale = e.updatedAt() == null || e.updatedAt().isBefore(cutoff);
+            boolean shouldHeal = status == FoodImageStatus.NONE
+                || ((status == FoodImageStatus.PENDING || status == FoodImageStatus.FAILED) && stale);
+            if (!shouldHeal) {
+                continue;
+            }
+            enqueueGeneration(userId, date, e.entryId(), e.foodName(), e.photoRef());
+            reenqueued++;
+        }
+        return reenqueued;
     }
 
     /**

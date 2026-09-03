@@ -108,6 +108,21 @@ export function regenerateEntryImage(date: string, entryId: string): Promise<Ent
   );
 }
 
+/**
+ * Lazy "typical serving" explanation for an entry (e.g. "About ¾ cup of
+ * blueberries (110 g)"), shown in the edit/ingredients modal. Generated on first
+ * view and cached server-side; returns null when none could be produced.
+ */
+export async function servingHint(
+  date: string,
+  entryId: string,
+): Promise<string | null> {
+  const res = await apiJson<{ hint: string | null }>(
+    `/api/me/nutrition/${date}/entries/${entryId}/serving-hint`,
+  );
+  return res.hint ?? null;
+}
+
 /** Re-portion one ingredient of a composite meal (by index). */
 export function updateIngredient(
   date: string,

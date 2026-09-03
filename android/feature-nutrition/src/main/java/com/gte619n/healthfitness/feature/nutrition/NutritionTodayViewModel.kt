@@ -268,7 +268,11 @@ class NutritionTodayViewModel @Inject constructor(
     private fun NutritionDay?.hasGeneratingImage(): Boolean =
         this?.meals?.any { group ->
             group.entries.any {
-                it.imageStatus == "PENDING" || it.isAnalyzing || it.syncState == "PENDING"
+                it.imageStatus == "PENDING" || it.isAnalyzing || it.syncState == "PENDING" ||
+                    // A missing-but-expected image keeps the poll alive so the
+                    // server's self-heal (which flips it PENDING on the next read)
+                    // converges the picture without the user tapping retry.
+                    it.isImageMissing
             }
         } == true
 
@@ -348,6 +352,16 @@ class NutritionTodayViewModel @Inject constructor(
                 _state.update { it.copy(error = e.message ?: "Couldn't retry the photo") }
             }
         }
+    }
+
+    /**
+     * Lazy "typical serving" hint for the edit sheet, fetched when the sheet opens.
+     * Suspends and returns null on any failure, so the sheet simply shows nothing.
+     * A synthetic in-flight row (no server entry yet) has no hint.
+     */
+    suspend fun servingHint(entryId: String): String? {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return null
+        return repository.servingHint(_state.value.date.format(ISO_DATE), entryId)
     }
 
     fun deleteEntry(entryId: String) {

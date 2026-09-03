@@ -71,6 +71,7 @@ fun NutritionTodayRoute(
         onOpenEditSheet = viewModel::openEditSheet,
         onCloseEditSheet = viewModel::closeEditSheet,
         onUpdateEntry = viewModel::updateEntry,
+        onFetchServingHint = viewModel::servingHint,
         onSaveComposite = viewModel::saveCompositeMeal,
         onOpenAddSheet = viewModel::openAddSheet,
         onCloseAddSheet = viewModel::closeAddSheet,
@@ -98,6 +99,7 @@ fun NutritionTodayScreen(
     onOpenEditSheet: (Entry) -> Unit,
     onCloseEditSheet: () -> Unit,
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
+    onFetchServingHint: suspend (String) -> String?,
     onSaveComposite: (String, String, Double, List<Double>) -> Unit,
     onOpenAddSheet: () -> Unit,
     onCloseAddSheet: () -> Unit,
@@ -162,6 +164,7 @@ fun NutritionTodayScreen(
             saving = state.savingEdit,
             onDismiss = onCloseEditSheet,
             onSave = onUpdateEntry,
+            fetchServingHint = onFetchServingHint,
         )
     }
 
@@ -174,6 +177,7 @@ fun NutritionTodayScreen(
             onSave = { title, portion, quantities ->
                 onSaveComposite(composite.entryId, title, portion, quantities)
             },
+            fetchServingHint = onFetchServingHint,
         )
     }
 }
@@ -299,6 +303,7 @@ private fun NutritionTodayPreview() {
             onRefresh = {},
             onPrevDay = {}, onNextDay = {}, onDeleteEntry = {}, onRetryImage = {}, onReanalyze = {}, onMoveEntry = { _, _ -> },
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
+            onFetchServingHint = { null },
             onSaveComposite = { _, _, _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },

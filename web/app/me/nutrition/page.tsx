@@ -10,6 +10,7 @@ import {
   updateIngredient,
   deleteEntry,
   regenerateEntryImage,
+  servingHint,
   searchFoods,
   searchMeals,
   describeMealAsync,
@@ -25,7 +26,7 @@ import type {
   LogDescribedMealBody,
   RelogBody,
 } from "@/lib/types/nutrition";
-import { MEALS, mealForHour } from "@/lib/types/nutrition";
+import { MEALS, mealForHour, isImageMissing } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
 import { NutritionMeals } from "@/components/nutrition/NutritionMeals";
 import { PendingImageRefresher } from "@/components/nutrition/PendingImageRefresher";
@@ -176,6 +177,11 @@ export default async function NutritionPage(props: {
     revalidatePath("/me/nutrition");
   }
 
+  async function servingHintAction(entryDate: string, entryId: string) {
+    "use server";
+    return servingHint(entryDate, entryId);
+  }
+
   async function searchFoodsAction(q: string) {
     "use server";
     return searchFoods(q);
@@ -214,10 +220,14 @@ export default async function NutritionPage(props: {
   const nextDate = addDays(date, 1);
   const canGoForward = date < today();
   // Keep refreshing while anything is still settling server-side: a generating
-  // image OR an async capture/describe still ANALYZING.
+  // image, an async capture/describe still ANALYZING, OR a missing-but-expected
+  // image the day-read self-heal will flip to PENDING and regenerate.
   const hasSettlingEntry = day.meals.some((m) =>
     m.entries.some(
-      (e) => e.imageStatus === "PENDING" || e.analysisStatus === "ANALYZING",
+      (e) =>
+        e.imageStatus === "PENDING" ||
+        e.analysisStatus === "ANALYZING" ||
+        isImageMissing(e),
     ),
   );
 
@@ -320,6 +330,7 @@ export default async function NutritionPage(props: {
           updateIngredient={updateIngredientAction}
           deleteEntry={deleteEntryAction}
           regenerateImage={regenerateImageAction}
+          servingHint={servingHintAction}
           searchFoods={searchFoodsAction}
           searchMeals={searchMealsAction}
           describeMealAsync={describeMealAsyncAction}

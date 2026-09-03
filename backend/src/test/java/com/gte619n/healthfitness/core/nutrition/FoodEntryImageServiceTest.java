@@ -1,10 +1,12 @@
 package com.gte619n.healthfitness.core.nutrition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import com.gte619n.healthfitness.core.push.SyncChangedEvent;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -58,13 +60,70 @@ class FoodEntryImageServiceTest {
         assertTrue(notifier.notifiedNutritionFor(USER), "a FAILED image must also wake devices so the row stops spinning");
     }
 
+    @Test
+    void sweepStale_healsNoneCompositeImmediately() {
+        InMemEntries entries = new InMemEntries();
+        // A composite meal whose image was never generated (NONE) — the "Blueberries"
+        // dead-end: a permanent placeholder with no recovery.
+        entries.save(composite("e1", FoodImageStatus.NONE, Instant.now()));
+        FoodEntryImageService svc = svc(entries);
+
+        int healed = svc.sweepStale(USER, DATE, entries.findByDate(USER, DATE));
+
+        assertEquals(1, healed);
+        assertNotEquals(FoodImageStatus.NONE, entries.findById(USER, DATE, "e1").orElseThrow().mealImageStatus(),
+            "a NONE composite must be re-enqueued (flipped off NONE) so its picture generates");
+    }
+
+    @Test
+    void sweepStale_reenqueuesStalePendingButNotFresh() {
+        InMemEntries entries = new InMemEntries();
+        entries.save(composite("fresh", FoodImageStatus.PENDING, Instant.now()));
+        entries.save(composite("stale", FoodImageStatus.PENDING, Instant.now().minus(Duration.ofMinutes(5))));
+        FoodEntryImageService svc = svc(entries);
+
+        int healed = svc.sweepStale(USER, DATE, entries.findByDate(USER, DATE));
+
+        // Only the orphaned (stale) PENDING is re-enqueued; a healthy in-flight job is left alone.
+        assertEquals(1, healed);
+    }
+
+    @Test
+    void sweepStale_ignoresSingleFoodAndReadyEntries() {
+        InMemEntries entries = new InMemEntries();
+        entries.save(entry("single", FoodImageStatus.NONE));          // single food: image joins from catalog
+        entries.save(composite("ready", FoodImageStatus.READY, Instant.now().minus(Duration.ofMinutes(5))));
+        FoodEntryImageService svc = svc(entries);
+
+        int healed = svc.sweepStale(USER, DATE, entries.findByDate(USER, DATE));
+
+        assertEquals(0, healed);
+    }
+
     // ---- fakes ----
+
+    private FoodEntryImageService svc(InMemEntries entries) {
+        return new FoodEntryImageService(
+            entries, provider(gen(Optional.of(PNG))), provider(store("https://img/e.png")),
+            empty(), new RecordingNotifier().asNotifier(), empty());
+    }
 
     private static FoodEntry entry(String entryId, FoodImageStatus imageStatus) {
         return new FoodEntry(
             USER, DATE, entryId, MealType.LUNCH, null, "Chicken bowl", "1 bowl", 400.0, 1.0,
             new Macros(500.0, 40.0, 30.0, 20.0, 0.0, 0.0), null, null, EntrySource.PHOTO,
             List.of(), null, imageStatus, EntryAnalysisStatus.READY, Instant.now(), Instant.now());
+    }
+
+    /** A composite (ingredient-bearing) meal entry with an explicit updatedAt. */
+    private static FoodEntry composite(String entryId, FoodImageStatus imageStatus, Instant updatedAt) {
+        return new FoodEntry(
+            USER, DATE, entryId, MealType.LUNCH, null, "Chicken bowl", "1 bowl", 400.0, 1.0,
+            new Macros(500.0, 40.0, 30.0, 20.0, 0.0, 0.0), null, null, EntrySource.PHOTO,
+            List.of(new CompositeIngredient(
+                "Chicken", null, new Macros(165.0, 31.0, 0.0, 3.6, 0.0, 0.0), 200.0, "100 g", 1.0,
+                new Macros(330.0, 62.0, 0.0, 7.2, 0.0, 0.0))),
+            null, imageStatus, EntryAnalysisStatus.READY, Instant.now(), updatedAt);
     }
 
     private static FoodImageGenerator gen(Optional<byte[]> result) {

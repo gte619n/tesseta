@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import type { Entry, Meal, Macros, UpdateEntryBody } from "@/lib/types/nutrition";
 import {
@@ -22,6 +22,8 @@ type Props = {
     entryId: string,
     body: UpdateEntryBody,
   ) => Promise<void>;
+  // Lazy "typical serving" explanation, fetched when the modal opens.
+  servingHint: (date: string, entryId: string) => Promise<string | null>;
 };
 
 // Calories are NOT an editable field: they derive from the macros (4/4/9,
@@ -80,9 +82,28 @@ export function EditEntryModal({
   entry,
   date,
   updateEntry,
+  servingHint,
 }: Props) {
   const toast = useToast();
   const per100g = useMemo(() => derivedPer100g(entry), [entry]);
+
+  // Lazy, best-effort "typical serving" explanation — generated + cached
+  // server-side on first view. Shown once it lands; never blocks the modal.
+  const [hint, setHint] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    servingHint(date, entry.entryId)
+      .then((h) => {
+        if (!cancelled) setHint(h);
+      })
+      .catch(() => {
+        if (!cancelled) setHint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, date, entry.entryId, servingHint]);
 
   const [name, setName] = useState(entry.foodName);
   const [meal, setMeal] = useState<Meal>(entry.meal);
@@ -216,6 +237,11 @@ export function EditEntryModal({
               <div className="mt-1 font-mono text-[12px] tabular-nums text-secondary">
                 {amountLabel}
               </div>
+              {hint && (
+                <div className="mt-1 text-[12px] leading-snug text-secondary">
+                  {hint}
+                </div>
+              )}
             </div>
           </div>
           <button
