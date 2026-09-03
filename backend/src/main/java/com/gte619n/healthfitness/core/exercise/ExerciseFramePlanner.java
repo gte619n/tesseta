@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Derives the reviewable frame plan ({@code demoPlan}) for an exercise (IMPL-19).
- * A {@code gemini-3.5-flash} pass reads the exercise plus, when present, the
+ * A {@code gemini-3.8-flash} pass reads the exercise plus, when present, the
  * fetched text of its {@link ExerciseReference} page, and returns the distinct
  * positions a learner must see — 1 for a hold, 2 for a standard lift, 3–5 for a
  * skill/flow movement — each with a label, teaching caption, and a per-frame

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 /**
  * IMPL-19 live preview: for 25 real exercises, run the reference-grounded frame
- * PLANNER ({@code gemini-3.5-flash}) and then GENERATE the planned demo frames
+ * PLANNER ({@code gemini-3.8-flash}) and then GENERATE the planned demo frames
  * with the real image model ({@code gemini-3.1-flash-image-preview}), writing
  * everything to disk for human review. No production Firestore/GCS mutation —
  * repo/storage are null and bytes are written to
@@ -46,7 +46,7 @@ class Impl19FramePreviewTest {
         Client client = Client.builder().apiKey(apiKey).build();
 
         GeminiExerciseFramePlanner planner =
-            new GeminiExerciseFramePlanner(Optional.of(client), "gemini-3.5-flash");
+            new GeminiExerciseFramePlanner(Optional.of(client), "gemini-3.8-flash");
 
         GroundingImageResolver grounding = new GroundingImageResolver(null, "test-exercise-media", true);
 
@@ -293,7 +293,7 @@ class Impl19FramePreviewTest {
         long groundedExercises = rows.stream().filter(r -> r.usedGrounding).count();
         StringBuilder sb = new StringBuilder();
         sb.append("# IMPL-19 dynamic demo-frame preview\n\n");
-        sb.append("Live planner (`gemini-3.5-flash`) + grounded image generation ")
+        sb.append("Live planner (`gemini-3.8-flash`) + grounded image generation ")
             .append("(`gemini-3.1-flash-image-preview`) over ").append(total)
             .append(" real exercises. No production Firestore/GCS mutation.\n\n");
         sb.append("- **Planned:** ").append(planned).append('/').append(total).append('\n');

@@ -20,7 +20,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 /**
  * Live-Gemini preview of exercise metadata enrichment (IMPL-15, ADR-0008).
  * Disabled in CI — only runs when {@code GEMINI_API_KEY} is set. Enriches a few
- * representative exercises with the real {@code gemini-3.5-flash} enricher and
+ * representative exercises with the real {@code gemini-3.8-flash} enricher and
  * writes {@code docs/test_reports/workout_logs/enrichment_preview.json} so the
  * AI output quality (and cost) can be judged before the full 352× job run.
  *
@@ -48,10 +48,10 @@ class WorkoutSeedEnrichmentPreviewTest {
     @Test
     void previewRealEnrichment() throws Exception {
         ExerciseMetadataEnricher enricher = new GeminiExerciseMetadataEnricher(
-            Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(), "gemini-3.5-flash");
+            Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(), "gemini-3.8-flash");
 
         Map<String, Object> preview = new LinkedHashMap<>();
-        preview.put("model", "gemini-3.5-flash");
+        preview.put("model", "gemini-3.8-flash");
         Map<String, Enrichment> results = new LinkedHashMap<>();
         for (String name : SAMPLES) {
             results.put(name, enricher.enrich(name, CATALOG));

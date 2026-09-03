@@ -177,13 +177,13 @@ app:
     # Direct Gemini API (not Vertex). API key in Secret Manager → env at
     # deploy time. Local dev reads it from the same env var.
     gemini-api-key: ${GEMINI_API_KEY:}
-    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
+    gemini-model: ${GEMINI_MODEL:gemini-3.8-flash}
   bloodtest:
     bucket: ${BLOODTEST_BUCKET:health-fitness-160-blood-tests}
     # Direct Gemini API (not Vertex). API key in Secret Manager → env at
     # deploy time. Local dev reads it from the same env var.
     gemini-api-key: ${GEMINI_API_KEY:}
-    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
+    gemini-model: ${GEMINI_MODEL:gemini-3.8-flash}
   nutrition:
     # IMPL-13: distinct-user confirmations promote a catalog food from
     # UNVERIFIED -> VERIFIED. Threshold is 1 today (confirming at log time
@@ -230,10 +230,10 @@ app:
         # Public URL of this service's internal handler, e.g.
         # https://api.tesseta.com/internal/nutrition/jobs
         handler-url: ${NUTRITION_JOBS_HANDLER_URL:}
-    # Extraction runs on the SHARED gemini-3.5-flash model (NOT the Goals Pro
+    # Extraction runs on the SHARED gemini-3.8-flash model (NOT the Goals Pro
     # model). Direct Gemini API, same key/model env vars as dexa/bloodtest.
     gemini-api-key: ${GEMINI_API_KEY:}
-    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
+    gemini-model: ${GEMINI_MODEL:gemini-3.8-flash}
     # IMPL-13 Milestone 2 / ADR-0006: runtime barcode lookup falls back to the
     # Open Food Facts read API on a local catalog miss, then caches the result
     # back. Base URL is configurable so tests can point at a local stub.
@@ -253,7 +253,7 @@ app:
     # without an API key by providing a fake GoalChatClient bean.
     enabled: ${GOALS_CHAT_ENABLED:true}
     gemini-api-key: ${GEMINI_API_KEY:}
-    # Goals chat is the ONE deliberate exception to the gemini-3.5-flash-only
+    # Goals chat is the ONE deliberate exception to the gemini-3.8-flash-only
     # convention: multi-phase roadmap design + reasoning over a full health
     # snapshot benefits materially from the stronger model, and goals planning
     # is low-volume/user-initiated so the cost impact is small. See
@@ -269,7 +269,7 @@ app:
     gemini-model: ${GEMINI_IMAGE_MODEL:gemini-3.1-flash-image-preview}
     gemini-quality: ${GEMINI_IMAGE_QUALITY:nano}
     parser-api-key: ${GEMINI_API_KEY:}
-    parser-model: ${EQUIPMENT_PARSER_MODEL:gemini-3.5-flash}
+    parser-model: ${EQUIPMENT_PARSER_MODEL:gemini-3.8-flash}
     parser-enabled: ${EQUIPMENT_PARSER_ENABLED:true}
   # IMPL-14: global exercise catalog. Demo media (phase stills) uses the
   # project image model; never auto-published (admin review gate).
@@ -283,7 +283,7 @@ app:
     # IMPL-19: bound for the frame-plan backfill job, and the planner model.
     plan-backfill-limit: ${app.exercises.plan-backfill-limit:50}
     plan:
-      model: ${EXERCISE_PLAN_MODEL:gemini-3.5-flash}
+      model: ${EXERCISE_PLAN_MODEL:gemini-3.8-flash}
     media:
       enabled: ${EXERCISE_MEDIA_ENABLED:true}
       model: ${EXERCISE_MEDIA_MODEL:gemini-3.1-flash-image-preview}
@@ -297,29 +297,29 @@ app:
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${WORKOUT_PROGRAM_GEMINI_MODEL:gemini-3.1-pro-preview}
   # IMPL-COACH: best-effort AI post-workout recap on the session-completion
-  # response. Uses gemini-3.5-flash (the approved general-work text model) via
+  # response. Uses gemini-3.8-flash (the approved general-work text model) via
   # the shared client; absent without GEMINI_API_KEY, so the recap is simply
   # null and completion is unaffected.
   workout-coach:
     enabled: ${WORKOUT_COACH_ENABLED:true}
-    gemini-model: ${WORKOUT_COACH_GEMINI_MODEL:gemini-3.5-flash}
+    gemini-model: ${WORKOUT_COACH_GEMINI_MODEL:gemini-3.8-flash}
   # One-time job (profile job-split-blocks) that rewrites the imported-history
   # program's flat sessions into warm-up/main/cool-down blocks. Strength is
   # placed deterministically; warm-up vs cool-down for mobility uses
-  # gemini-3.5-flash (the approved general-work model). Safe defaults: no
+  # gemini-3.8-flash (the approved general-work model). Safe defaults: no
   # user-id → no-op; dry-run on until explicitly disabled.
   workouts:
     split:
       user-id: ${APP_WORKOUTS_SPLIT_USER_ID:}
       dry-run: ${APP_WORKOUTS_SPLIT_DRY_RUN:true}
       gemini-enabled: ${APP_WORKOUTS_SPLIT_GEMINI_ENABLED:true}
-      model: ${APP_WORKOUTS_SPLIT_MODEL:gemini-3.5-flash}
+      model: ${APP_WORKOUTS_SPLIT_MODEL:gemini-3.8-flash}
   gym:
     bucket: ${GYM_BUCKET:health-fitness-160-gym-photos}
   medications:
     bucket: ${MEDICATIONS_BUCKET:health-fitness-160-medication-images}
     # Gemini with Google Search grounding for drug lookup
     gemini-api-key: ${GEMINI_API_KEY:}
-    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash}
+    gemini-model: ${GEMINI_MODEL:gemini-3.8-flash}
     # Imagen for medication image generation
     imagen-model: ${IMAGEN_MODEL:gemini-3.1-flash-image-preview}

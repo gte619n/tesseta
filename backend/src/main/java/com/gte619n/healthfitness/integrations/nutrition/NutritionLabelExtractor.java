@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Gemini-backed {@link NutritionLabelAnalyzer}: OCRs a packaged nutrition-label
- * photo into a structured food via {@code gemini-3.5-flash} tool calling
+ * photo into a structured food via {@code gemini-3.8-flash} tool calling
  * ({@code extract_nutrition_label}). The model reports macros PER SERVING (as
  * the panel prints them); this extractor normalizes to PER 100 G via
  * {@link #toPer100g(Macros, Double)} so the result maps directly onto
@@ -63,7 +63,7 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
 
     public NutritionLabelExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.5-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model
     ) {
         this.client = client;
         this.model = model;

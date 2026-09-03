@@ -96,7 +96,7 @@ public class EquipmentParserService implements EquipmentParser {
 
     public EquipmentParserService(
         @Value("${app.equipment.parser-api-key:}") String apiKey,
-        @Value("${app.equipment.parser-model:gemini-3.5-flash}") String model
+        @Value("${app.equipment.parser-model:gemini-3.8-flash}") String model
     ) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * Exercise frame-plan backfill Cloud Run Job (IMPL-19). Mirrors
  * {@link BackfillExerciseMediaJob}: finds exercises whose frame plan is still at
  * {@code planStatus = NONE} and runs the {@link ExerciseFramePlanner}
- * ({@code gemini-3.5-flash}) for a bounded batch per run
+ * ({@code gemini-3.8-flash}) for a bounded batch per run
  * ({@code app.exercises.plan-backfill-limit}, default 50). The planner result is
  * saved via {@link ExerciseService#savePlan}, which lands the plan at
  * {@code NEEDS_REVIEW} (the cheap human plan-review gate that precedes the

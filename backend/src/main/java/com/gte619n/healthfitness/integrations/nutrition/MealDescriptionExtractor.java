@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 /**
  * Gemini-backed {@link MealDescriptionAnalyzer}: the text-input sibling of
  * {@link MealPhotoExtractor}. Itemizes a free-text meal description into its food
- * components via {@code gemini-3.5-flash} tool calling ({@code extract_meal_items}),
+ * components via {@code gemini-3.8-flash} tool calling ({@code extract_meal_items}),
  * and picks the best existing saved-meal match via a second tool
  * ({@code choose_meal_match}).
  *
@@ -106,7 +106,7 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
 
     public MealDescriptionExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.5-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model
     ) {
         this.client = client;
         this.model = model;

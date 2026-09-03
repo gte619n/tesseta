@@ -180,7 +180,7 @@ class WorkoutHistorySeedMappingTest {
         summary.put("sessions", result.sessions());
         summary.put("sessionExercisesSkipped", result.sessionExercisesSkipped());
         summary.put("unresolvedEquipmentNames", result.unresolvedEquipmentNames());
-        summary.put("note", "Enrichment here is the deterministic offline fake; the real job uses gemini-3.5-flash.");
+        summary.put("note", "Enrichment here is the deterministic offline fake; the real job uses gemini-3.8-flash.");
         preview.put("summary", summary);
         preview.put("sampleExercises", sampleExercises);
         preview.put("program", program);

@@ -37,7 +37,7 @@
 
 ## AI Models
 - **General AI work** (text generation, parsing, extraction, lookup):
-  `gemini-3.5-flash`
+  `gemini-3.8-flash`
 - **Image generation**: `gemini-3.1-flash-image-preview`
 - **Documented Gemini Pro exceptions** (each sanctioned by an ADR): Goals chat
   (`gemini-3.1-pro-preview`, ADR-0005) and the workout-program designer

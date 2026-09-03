@@ -8,7 +8,7 @@ import java.util.List;
  * <p>Defined in {@code core} so {@link NutritionCaptureService} can depend on
  * the abstraction without pulling {@code integrations} (and its Gemini SDK
  * dependency) into the {@code core} layer. The concrete implementation
- * ({@code MealPhotoExtractor}, {@code gemini-3.5-flash} tool calling) lives in
+ * ({@code MealPhotoExtractor}, {@code gemini-3.8-flash} tool calling) lives in
  * {@code integrations} and is injected via {@code ObjectProvider} so core unit
  * tests construct the service without it — mirroring the {@link BarcodeLookup}
  * seam.

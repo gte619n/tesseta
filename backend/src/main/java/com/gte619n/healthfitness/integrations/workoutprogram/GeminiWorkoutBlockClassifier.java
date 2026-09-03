@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  * deterministic rule can't place, whether each is a <b>warm-up</b> or a
  * <b>cool-down</b> (or actually a working set → MAIN). Used by the one-time
  * import block-split job; the logged order is not warm-up→main→cool-down, so a
- * positional rule can't recover this — hence {@code gemini-3.5-flash}.
+ * positional rule can't recover this — hence {@code gemini-3.8-flash}.
  *
  * <p>Classifies per unique exercise (not per session): cheap, reviewable, and
  * deterministic to apply (same exercise → same section in every session). On any
@@ -68,7 +68,7 @@ public class GeminiWorkoutBlockClassifier {
 
     public GeminiWorkoutBlockClassifier(
         Client client,
-        @Value("${app.workouts.split.model:gemini-3.5-flash}") String model
+        @Value("${app.workouts.split.model:gemini-3.8-flash}") String model
     ) {
         this.client = client;
         this.model = model;

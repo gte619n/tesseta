@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * Workout-history seeding Cloud Run Job (IMPL-15, ADR-0008). Imports
  * {@code future_workouts.json} — the name-only exercise catalog, the program +
  * 20 phases, and the completed-session history with logged weights — for one
- * user, enriching exercises via Gemini ({@code gemini-3.5-flash}).
+ * user, enriching exercises via Gemini ({@code gemini-3.8-flash}).
  *
  * <p>Activation mirrors {@link SeedFoodCatalogJob}: this component only loads
  * under the Spring profile {@code job-seed-workouts}. The deployed Cloud Run Job
