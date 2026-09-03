@@ -31,6 +31,12 @@ data class CompleteSessionRequest(
     val phaseId: String? = null,
     val dayId: String? = null,
     val date: LocalDate? = null,
+    /**
+     * Post-workout mood check (1 = worst … 5 = best), captured on the finish
+     * screen for future trending. Null when the user skipped it or the session
+     * isn't COMPLETED. Rides the same idempotent upsert; a retry replays it.
+     */
+    val feeling: Int? = null,
 )
 
 /**

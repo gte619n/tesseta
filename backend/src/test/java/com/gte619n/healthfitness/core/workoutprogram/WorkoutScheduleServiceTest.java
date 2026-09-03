@@ -76,7 +76,7 @@ class WorkoutScheduleServiceTest {
         // when the program first started, then logged COMPLETED).
         ScheduledWorkout done = new ScheduledWorkout("u1", pid, start + "_wd_done",
             start, created.phases().get(0).phaseId(), "wd_done", "Lower", 1, false, "home",
-            ScheduledStatus.COMPLETED, mon, java.time.Instant.now(), 3600);
+            ScheduledStatus.COMPLETED, mon, java.time.Instant.now(), 3600, null);
         scheduled.save(done);
 
         // First activation materializes the remaining (future) weeks.
@@ -159,7 +159,7 @@ class WorkoutScheduleServiceTest {
         // A session already run today (COMPLETED) must not be reset to PLANNED.
         ScheduledWorkout done = new ScheduledWorkout("u1", pid, today + "_" + dayId, today,
             phaseId, dayId, "Lower", 1, false, "home",
-            ScheduledStatus.COMPLETED, mon, java.time.Instant.now(), 3600);
+            ScheduledStatus.COMPLETED, mon, java.time.Instant.now(), 3600, null);
         scheduled.save(done);
 
         ScheduledWorkout reused = scheduleService.materializeOne("u1", pid, phaseId, dayId, today);

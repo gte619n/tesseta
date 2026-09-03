@@ -28,6 +28,9 @@ public record ScheduledWorkoutResponse(
     DayResponse session,
     Instant completedAt,
     Integer durationSeconds,
+    // Post-workout mood check (1..5), captured on the finish screen for trending.
+    // Null when skipped or the session isn't COMPLETED.
+    Integer feeling,
     // IMPL-COACH: a short AI-generated post-workout recap, populated only on the
     // completion upsert response (never persisted, null on calendar/history reads
     // and when the coach is disabled or unavailable).
@@ -38,6 +41,6 @@ public record ScheduledWorkoutResponse(
         return new ScheduledWorkoutResponse(
             programId, programTitle, scheduledId, date, phaseId, phaseTitle, dayId, dayLabel,
             weekIndexInPhase, isDeload, locationId, locationName, status, session, completedAt,
-            durationSeconds, recap);
+            durationSeconds, feeling, recap);
     }
 }

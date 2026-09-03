@@ -211,13 +211,14 @@ class WorkoutSessionRepository(
     suspend fun finish(
         programId: String,
         scheduledId: String,
+        feeling: Int? = null,
     ): Result<Unit> =
         withContext(io) {
             runCatching {
                 val entity = draftDao.getByKey(programId, scheduledId)
                     ?: error("No active draft for $programId/$scheduledId")
                 val completedAt = Instant.ofEpochMilli(clock())
-                uploadCompleted(entity, completedAt)
+                uploadCompleted(entity, completedAt, feeling)
                 draftDao.delete(programId, scheduledId)
             }
         }
@@ -625,6 +626,7 @@ class WorkoutSessionRepository(
     private suspend fun uploadCompleted(
         entity: WorkoutSessionDraftEntity,
         completedAt: Instant,
+        feeling: Int? = null,
     ) {
         val durationSeconds = ((completedAt.toEpochMilli() - entity.startedAt) / 1000L)
             .coerceAtLeast(0L)
@@ -639,6 +641,7 @@ class WorkoutSessionRepository(
             logged = decodeLogged(entity.loggedJson).filter { it.sets.isNotEmpty() }.map { entry ->
                 entry.copy(exerciseId = performedExercise[PrescriptionKey(entry.blockId, entry.orderIndex)])
             },
+            feeling = feeling,
         )
         uploadOutcome(
             programId = entity.programId,

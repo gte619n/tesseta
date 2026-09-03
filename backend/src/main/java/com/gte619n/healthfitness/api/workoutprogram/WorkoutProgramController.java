@@ -222,7 +222,7 @@ public class WorkoutProgramController {
         ScheduledWorkout updated;
         try {
             updated = completion.complete(userId, programId, scheduledId,
-                body.status(), body.completedAt(), body.durationSeconds(), body.logged());
+                body.status(), body.completedAt(), body.durationSeconds(), body.logged(), body.feeling());
         } catch (IllegalArgumentException e) {
             // The core service signals a missing session this way (no Spring Web there).
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());

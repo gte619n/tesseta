@@ -192,7 +192,7 @@ class ExercisePerformanceDigestServiceTest {
         WorkoutDay day = day("plan", List.of(new LoggedSet(500.0, 1, null, null, null)));
         scheduled.save(new ScheduledWorkout(
             USER, "p1", TODAY.minusDays(1) + "_d1", TODAY.minusDays(1), "ph1", "d1", "Plan",
-            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null));
+            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null, null));
 
         assertTrue(service.digestAll(USER).isEmpty());
     }
@@ -211,7 +211,7 @@ class ExercisePerformanceDigestServiceTest {
         scheduled.save(new ScheduledWorkout(
             USER, programId, date + "_d1", date, "ph1", "d1", "Day",
             1, false, "gym-1", ScheduledStatus.COMPLETED, day,
-            instant(date), 3600));
+            instant(date), 3600, null));
     }
 
     private static WorkoutDay day(String exerciseId, List<LoggedSet> sets) {

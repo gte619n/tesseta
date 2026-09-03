@@ -104,6 +104,38 @@ class WorkoutSessionCompletionServiceTest {
     }
 
     @Test
+    void feelingPersistsOnCompleteAndClearsWhenUnlogged() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        ScheduledWorkout done = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0, List.of(new LoggedSet(135.0, 8, null, null, null)))),
+            4);
+        assertEquals(4, done.feeling());
+        assertEquals(4, scheduled.findById(USER, "p1", sw.scheduledId()).orElseThrow().feeling());
+
+        // Un-logging back to PLANNED drops the mood check with the actuals.
+        ScheduledWorkout reverted = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.PLANNED, null, null, List.of(), null);
+        assertNull(reverted.feeling());
+    }
+
+    @Test
+    void feelingOutOfRangeIsRejected() {
+        ScheduledWorkout sw = seedPlanned("p1");
+
+        InvalidSessionLogException ex = assertThrows(InvalidSessionLogException.class,
+            () -> service.complete(USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+                List.of(new LoggedPrescription("b1", 0, List.of(new LoggedSet(135.0, 8, null, null, null)))),
+                6));
+
+        assertTrue(ex.issues().stream().anyMatch(i -> i.contains("feeling")));
+        // Nothing was upserted.
+        assertEquals(ScheduledStatus.PLANNED,
+            scheduled.findById(USER, "p1", sw.scheduledId()).orElseThrow().status());
+    }
+
+    @Test
     void weightOnlySetsCountTowardSessionButNotTonnage() {
         ScheduledWorkout sw = seedPlanned("p1");
 
@@ -406,7 +438,7 @@ class WorkoutSessionCompletionServiceTest {
             new Block("b1", BlockType.MAIN, "Main", 0, List.of(rx("sq", 0), rx("bp", 1)))));
         ScheduledWorkout sw = new ScheduledWorkout(
             USER, programId, date + "_d1", date, "ph1", "d1", "Lower",
-            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null);
+            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null, null);
         scheduled.save(sw);
         return sw;
     }

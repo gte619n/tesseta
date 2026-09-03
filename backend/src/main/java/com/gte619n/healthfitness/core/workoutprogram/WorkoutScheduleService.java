@@ -59,7 +59,7 @@ public class WorkoutScheduleService {
                         date, phase.phaseId(), day.dayId(), day.label(),
                         week, isDeload, day.locationId(),
                         ScheduledStatus.PLANNED, day,
-                        null, null
+                        null, null, null
                     ));
                 }
             }
@@ -107,7 +107,7 @@ public class WorkoutScheduleService {
             date, phaseId, dayId, day.label(),
             1, false, day.locationId(),
             ScheduledStatus.PLANNED, day,
-            null, null
+            null, null, null
         );
         scheduled.save(session);
         return session;

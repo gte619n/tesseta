@@ -111,7 +111,7 @@ class WorkoutLastSetsControllerTest {
         scheduled.save(new ScheduledWorkout(
             TEST_USER, programId, date + "_d1", date, "ph1", "d1", "Day",
             1, false, "gym-1", ScheduledStatus.COMPLETED, day,
-            instant(date), 3600));
+            instant(date), 3600, null));
     }
 
     private static Instant instant(LocalDate date) {

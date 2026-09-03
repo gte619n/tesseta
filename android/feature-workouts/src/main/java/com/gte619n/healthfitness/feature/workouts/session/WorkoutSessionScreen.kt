@@ -39,7 +39,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
@@ -55,6 +57,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -218,7 +222,7 @@ fun WorkoutSessionScreen(
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
     onRequestDiscard: () -> Unit,
-    onConfirmFinish: () -> Unit,
+    onConfirmFinish: (Int?) -> Unit,
     onConfirmSkip: () -> Unit,
     onConfirmDiscard: () -> Unit,
     onDismissPrompt: () -> Unit,
@@ -445,6 +449,19 @@ private fun SessionBody(
             steps.getOrNull(pagerState.currentPage)?.let { step ->
                 announceStep(step, draft.logged[step.key].orEmpty(), lastSets, announce)
             }
+        }
+        // Feature 3: blow the whistle the instant a rep set's rest countdown runs
+        // out — the "start your set" cue. Only rep sets start a rest, so any
+        // natural expiry is a set start; skipping rest clears the timer and
+        // re-keys this effect to null, cancelling the pending blast. Independent
+        // of the voice toggle (it's a sound cue, like the coach beep).
+        val whistle = rememberWhistle()
+        LaunchedEffect(restTimer) {
+            val timer = restTimer ?: return@LaunchedEffect
+            val remaining = timer.remainingSeconds(Instant.now())
+            if (remaining <= 0) return@LaunchedEffect
+            delay(remaining * 1_000)
+            whistle()
         }
 
         // ---- auto-advance to the next exercise when all its sets are logged --
@@ -1316,14 +1333,19 @@ private fun CompletedTimedRow(
  * start a hold by hand and stop it early, but a finished hold no longer needs a
  * second tap.
  *
- * When the previous hold auto-completed into this one ([autoStart]), the timer
- * first runs a [GET_READY_SECONDS] "get ready for X" pre-roll before starting
- * itself, so a stretch block plays hands-free from one hold to the next. Tapping
- * during the pre-roll starts immediately.
+ * Before the hold's clock runs there's a "get ready" pre-roll that counts down
+ * the prescribed rest between sets ([Prescription.restSeconds], falling back to
+ * [GET_READY_SECONDS] when none is set) — so the rest is folded into the guided
+ * flow rather than left out. The pre-roll runs on the cross-exercise hand-off
+ * ([autoStart]) and between a hold's own sets; tapping "Start now" skips it. A
+ * [rememberWhistle] blast plays the instant the clock starts (pre-roll → hold,
+ * or a manual start), the "go" cue.
  *
- * Both the running anchor and the pre-roll anchor are kept in `rememberSaveable`
- * and measured against wall-clock time, so a config change / backgrounding
- * doesn't reset a hold (or its pre-roll) in progress.
+ * Both the pre-roll and the running hold can be paused and reset ("sometimes
+ * you're just not ready"): pause freezes the clock, reset returns the pre-roll to
+ * the full rest or the hold to idle. State is kept as an accumulated-seconds base
+ * plus a wall-clock anchor in `rememberSaveable`, so a config change /
+ * backgrounding doesn't lose a paused or in-progress timer.
  */
 @Composable
 private fun HoldTimer(
@@ -1337,50 +1359,80 @@ private fun HoldTimer(
     onAutoComplete: () -> Unit,
 ) {
     val targetSeconds = prescription.durationSeconds
-    var runningSinceMillis by rememberSaveable { mutableStateOf<Long?>(null) }
-    var getReadySinceMillis by rememberSaveable { mutableStateOf<Long?>(null) }
-    val running = runningSinceMillis != null
-    val elapsed =
-        runningSinceMillis?.let { Duration.between(Instant.ofEpochMilli(it), now).seconds.coerceAtLeast(0L) } ?: 0L
     val target = targetSeconds ?: 0
-    val getReadyRemaining = getReadySinceMillis?.let {
-        (GET_READY_SECONDS - Duration.between(Instant.ofEpochMilli(it), now).seconds).coerceAtLeast(0L)
-    }
+    // The pre-roll counts down the prescribed rest between sets; fall back to a
+    // short fixed lead-in when the prescription sets none.
+    val prerollTotal = (prescription.restSeconds?.takeIf { it > 0 } ?: GET_READY_SECONDS.toInt()).toLong()
+
+    // Pre-roll and hold both use an accumulated-seconds base + a running anchor
+    // (epoch millis, null when paused) so pause/reset survive recomposition.
+    var prerollBase by rememberSaveable { mutableStateOf(0L) }
+    var prerollAnchor by rememberSaveable { mutableStateOf<Long?>(null) }
+    var prerollArmed by rememberSaveable { mutableStateOf(false) }
+    var holdBase by rememberSaveable { mutableStateOf(0L) }
+    var holdAnchor by rememberSaveable { mutableStateOf<Long?>(null) }
+    var holdArmed by rememberSaveable { mutableStateOf(false) }
+
+    fun secondsSince(anchorMillis: Long): Long =
+        Duration.between(Instant.ofEpochMilli(anchorMillis), now).seconds.coerceAtLeast(0L)
+
+    val prerollElapsed = prerollBase + (prerollAnchor?.let { secondsSince(it) } ?: 0L)
+    val prerollRemaining = (prerollTotal - prerollElapsed).coerceAtLeast(0L)
+    val prerollRunning = prerollArmed && prerollAnchor != null
+    val prerollPaused = prerollArmed && prerollAnchor == null
+
+    val elapsed = holdBase + (holdAnchor?.let { secondsSince(it) } ?: 0L)
+    val holdRunning = holdArmed && holdAnchor != null
+    val holdPaused = holdArmed && holdAnchor == null
 
     // One-shot cue flags for the current hold; reset when a fresh hold starts.
     var firedHalf by remember { mutableStateOf(false) }
     var firedTen by remember { mutableStateOf(false) }
     var firedDone by remember { mutableStateOf(false) }
     val beep = rememberCoachBeep()
+    val whistle = rememberWhistle()
 
-    fun startHold() {
-        getReadySinceMillis = null
-        firedHalf = false; firedTen = false; firedDone = false
-        runningSinceMillis = Instant.now().toEpochMilli()
+    fun nowMillis() = Instant.now().toEpochMilli()
+
+    fun startPreroll() {
+        prerollArmed = true
+        prerollBase = 0L
+        prerollAnchor = nowMillis()
     }
 
-    // Enter the "get ready" pre-roll when handed off from a completed hold, then
-    // consume the signal so a later recomposition / return to this page can't
-    // re-arm it. Announces the upcoming hold once, up front.
+    fun startHold() {
+        prerollArmed = false
+        prerollAnchor = null
+        firedHalf = false; firedTen = false; firedDone = false
+        holdArmed = true
+        holdBase = 0L
+        holdAnchor = nowMillis()
+        // Feature 3: the "go" whistle fires right as the clock starts.
+        whistle()
+    }
+
+    // Enter the rest pre-roll when handed off from a completed hold, then consume
+    // the signal so a later recomposition / return to this page can't re-arm it.
+    // Announces the upcoming hold once, up front.
     LaunchedEffect(autoStart) {
-        if (autoStart && runningSinceMillis == null && getReadySinceMillis == null) {
-            getReadySinceMillis = Instant.now().toEpochMilli()
+        if (autoStart && !holdArmed && !prerollArmed) {
+            startPreroll()
             if (voiceEnabled) getReadyAnnouncement(prescription)?.let(announce)
             onAutoStartConsumed()
         }
     }
 
-    // The pre-roll elapsing auto-starts the hold.
-    LaunchedEffect(getReadyRemaining) {
-        if (getReadyRemaining != null && getReadyRemaining <= 0L) startHold()
+    // The pre-roll running out auto-starts the hold (a paused pre-roll waits).
+    LaunchedEffect(prerollRemaining, prerollRunning) {
+        if (prerollRunning && prerollRemaining <= 0L) startHold()
     }
 
     // Fire the halfway / ten-seconds-left cues as the count-up crosses each mark,
     // and auto-log the moment the target is reached. Runs each tick (elapsed
     // changes every second) while the hold is running; the flags stop any cue
     // repeating.
-    LaunchedEffect(elapsed, running) {
-        if (!running || target <= 0) return@LaunchedEffect
+    LaunchedEffect(elapsed, holdRunning) {
+        if (!holdRunning || target <= 0) return@LaunchedEffect
         if (!firedHalf && target >= HALF_CUE_MIN_TARGET && elapsed >= target / 2 && elapsed < target - 10) {
             firedHalf = true
             beep(ToneGenerator.TONE_PROP_BEEP)
@@ -1398,23 +1450,23 @@ private fun HoldTimer(
             // Mark the set complete automatically and hand the block on.
             onLog(target)
             onAutoComplete()
-            runningSinceMillis = null
+            holdArmed = false
+            holdAnchor = null
         }
     }
-
-    val getReady = getReadySinceMillis != null
 
     Spacer(Modifier.height(10.dp))
     Button(
         onClick = {
             when {
-                // Tap during the pre-roll skips the wait and starts now.
-                getReady -> startHold()
-                // Tap while holding logs early (user stays in control; no
-                // hand-off to the next set's pre-roll).
-                running -> {
+                // During the pre-roll (running or paused), skip straight to the hold.
+                prerollArmed -> startHold()
+                // Tap while holding (or paused mid-hold) logs early with whatever
+                // time is on the clock; no hand-off to the next set's pre-roll.
+                holdArmed -> {
                     onLog(elapsed.toInt())
-                    runningSinceMillis = null
+                    holdArmed = false
+                    holdAnchor = null
                     firedHalf = false; firedTen = false; firedDone = false
                 }
                 else -> startHold()
@@ -1422,11 +1474,11 @@ private fun HoldTimer(
         },
         modifier = Modifier.fillMaxWidth().height(52.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (running) Hf.colors.alert else Hf.colors.accent,
+            containerColor = if (holdArmed) Hf.colors.alert else Hf.colors.accent,
         ),
     ) {
         Icon(
-            if (running) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+            if (holdArmed) Icons.Filled.Stop else Icons.Filled.PlayArrow,
             contentDescription = null,
             tint = Hf.colors.textInverse,
             modifier = Modifier.size(18.dp),
@@ -1434,38 +1486,102 @@ private fun HoldTimer(
         Spacer(Modifier.width(6.dp))
         Text(
             when {
-                getReady -> stringResource(R.string.workout_session_get_ready_start_now)
-                running -> stringResource(R.string.workout_session_hold_stop, restCountdownLabel(elapsed))
+                prerollArmed -> stringResource(R.string.workout_session_get_ready_start_now)
+                holdArmed -> stringResource(R.string.workout_session_hold_stop, restCountdownLabel(elapsed))
                 else -> stringResource(R.string.workout_session_hold_start)
             },
             style = Hf.type.bodyMd,
             color = Hf.colors.textInverse,
         )
     }
-    when {
-        getReady -> {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(
-                    R.string.workout_session_get_ready_countdown,
-                    restCountdownLabel(getReadyRemaining ?: 0L),
+    // Pause/Resume + Reset controls, shown whenever a pre-roll or hold is armed.
+    if (prerollArmed || holdArmed) {
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val paused = prerollPaused || holdPaused
+            HoldControlButton(
+                label = stringResource(
+                    if (paused) R.string.workout_session_hold_resume else R.string.workout_session_hold_pause,
                 ),
-                style = Hf.type.bodySm,
-                color = Hf.colors.accent,
+                icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    when {
+                        prerollRunning -> { prerollBase = prerollElapsed; prerollAnchor = null }
+                        prerollPaused -> prerollAnchor = nowMillis()
+                        holdRunning -> { holdBase = elapsed; holdAnchor = null }
+                        holdPaused -> holdAnchor = nowMillis()
+                    }
+                },
             )
-        }
-        !running && targetSeconds != null -> {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(R.string.workout_session_hold_target, restCountdownLabel(targetSeconds.toLong())),
-                style = Hf.type.bodySm,
-                color = Hf.colors.textTertiary,
+            HoldControlButton(
+                label = stringResource(R.string.workout_session_hold_reset),
+                icon = Icons.Filled.Refresh,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    if (prerollArmed) {
+                        // Restart the rest countdown from the top; keep running/paused.
+                        prerollBase = 0L
+                        if (prerollAnchor != null) prerollAnchor = nowMillis()
+                    } else {
+                        // Reset the hold all the way back to idle ("not ready yet").
+                        holdArmed = false
+                        holdAnchor = null
+                        holdBase = 0L
+                        firedHalf = false; firedTen = false; firedDone = false
+                    }
+                },
             )
         }
     }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        when {
+            prerollRunning -> stringResource(
+                R.string.workout_session_get_ready_countdown,
+                restCountdownLabel(prerollRemaining),
+            )
+            prerollPaused -> stringResource(
+                R.string.workout_session_get_ready_paused,
+                restCountdownLabel(prerollRemaining),
+            )
+            holdPaused -> stringResource(
+                R.string.workout_session_hold_paused,
+                restCountdownLabel(elapsed),
+            )
+            !holdArmed && targetSeconds != null -> stringResource(
+                R.string.workout_session_hold_target,
+                restCountdownLabel(targetSeconds.toLong()),
+            )
+            else -> ""
+        },
+        style = Hf.type.bodySm,
+        color = if (prerollArmed) Hf.colors.accent else Hf.colors.textTertiary,
+    )
 }
 
-/** The guided pre-roll before a hand-off hold auto-starts ("get ready for X"). */
+/** One secondary control (Pause/Resume or Reset) on the hold timer. */
+@Composable
+private fun HoldControlButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(44.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = Hf.colors.accent, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = Hf.type.bodySm, color = Hf.colors.accent)
+    }
+}
+
+/** Fallback pre-roll length when a timed prescription sets no rest between sets. */
 private const val GET_READY_SECONDS = 10L
 
 /** Only announce "halfway" for holds this long or longer (shorter ones just get the finish cue). */
@@ -1845,15 +1961,18 @@ private fun SessionActionsBar(
     }
 }
 
-/** "Finish → summary → complete": total sets, exercises, and elapsed time. */
+/** "Finish → summary → complete": total sets, exercises, elapsed time, and a mood check. */
 @Composable
 private fun FinishSummaryDialog(
     draft: WorkoutSessionDraft,
     now: Instant,
-    onConfirm: () -> Unit,
+    onConfirm: (Int?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val (loggedExercises, totalExercises) = loggedExerciseCounts(draft)
+    // The post-workout mood check (1..5), captured for trending. Optional — the
+    // lifter can finish without picking one (feeling stays null).
+    var feeling by rememberSaveable { mutableStateOf<Int?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -1881,10 +2000,12 @@ private fun FinishSummaryDialog(
                     label = stringResource(R.string.workout_session_summary_exercises),
                     value = "$loggedExercises / $totalExercises",
                 )
+                Spacer(Modifier.height(6.dp))
+                FeelingPicker(selected = feeling, onSelect = { feeling = it })
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = { onConfirm(feeling) }) {
                 Text(
                     stringResource(R.string.workout_session_finish_confirm),
                     style = Hf.type.bodyMd,
@@ -1988,6 +2109,59 @@ private fun SummaryRow(label: String, value: String) {
         Text(value, style = Hf.type.monoMd, color = Hf.colors.textPrimary)
     }
 }
+
+/**
+ * The post-workout mood check: five emoji faces mapped to a 1..5 score, captured
+ * on finish for future trending. Optional — nothing is preselected, and a tap
+ * toggles (tapping the chosen face again clears it back to null).
+ */
+@Composable
+private fun FeelingPicker(selected: Int?, onSelect: (Int?) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        CapsLabel(stringResource(R.string.workout_session_feeling_prompt))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FEELING_FACES.forEach { (value, emoji) ->
+                val isSelected = selected == value
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(
+                            if (isSelected) Hf.colors.accentBg else Hf.colors.surface,
+                            RoundedCornerShape(24.dp),
+                        )
+                        .border(
+                            width = if (isSelected) 1.5.dp else 0.5.dp,
+                            color = if (isSelected) Hf.colors.accent else Hf.colors.borderDefault,
+                            shape = RoundedCornerShape(24.dp),
+                        )
+                        .clickable { onSelect(if (isSelected) null else value) },
+                ) {
+                    Text(
+                        emoji,
+                        style = Hf.type.bodyLg.copy(fontSize = 26.sp),
+                        // Dim the unchosen faces so the selection reads at a glance.
+                        modifier = Modifier.alpha(if (selected == null || isSelected) 1f else 0.45f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The 1..5 mood scale: worst → best, paired with its face. */
+private val FEELING_FACES = listOf(
+    1 to "😫",
+    2 to "🙁",
+    3 to "😐",
+    4 to "🙂",
+    5 to "😄",
+)
 
 @Preview(showBackground = true, backgroundColor = 0xFFF0EBE0, heightDp = 900)
 @Composable

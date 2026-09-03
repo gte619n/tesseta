@@ -131,7 +131,7 @@ public class SplitImportedWorkoutBlocksJob implements CommandLineRunner {
             updated.add(new ScheduledWorkout(
                 sw.userId(), sw.programId(), sw.scheduledId(), sw.date(), sw.phaseId(), sw.dayId(),
                 sw.dayLabel(), sw.weekIndexInPhase(), sw.isDeload(), sw.locationId(), sw.status(),
-                newDay, sw.completedAt(), sw.durationSeconds()));
+                newDay, sw.completedAt(), sw.durationSeconds(), sw.feeling()));
         }
 
         logSectionSummary(sectionById);

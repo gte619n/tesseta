@@ -13,6 +13,10 @@ import java.time.LocalDate;
  * performed sessions (e.g. the IMPL-15 history import), where they carry the
  * wall-clock finish time and elapsed duration the Workout History view shows.
  * They are null for PLANNED sessions materialized from a template.
+ *
+ * <p>{@code feeling} is the lifter's post-workout mood check (1 = worst … 5 =
+ * best), captured on the finish screen for future trending. Null when the user
+ * skipped the check or the session isn't COMPLETED.
  */
 public record ScheduledWorkout(
     String userId,
@@ -28,5 +32,6 @@ public record ScheduledWorkout(
     ScheduledStatus status,
     WorkoutDay session,             // snapshot
     Instant completedAt,            // when the session was performed (history only)
-    Integer durationSeconds         // elapsed workout time (history only)
+    Integer durationSeconds,        // elapsed workout time (history only)
+    Integer feeling                 // post-workout mood 1..5 (COMPLETED only), or null
 ) {}

@@ -311,9 +311,9 @@ class WorkoutSessionViewModel @Inject constructor(
      * afterward (IMPL-COACH) — it never blocks finishing, and the summary shows
      * with or without it. [dismissCompleted] pops the route.
      */
-    fun confirmFinish() {
+    fun confirmFinish(feeling: Int? = null) {
         viewModelScope.launch {
-            repository.finish(programId, scheduledId)
+            repository.finish(programId, scheduledId, feeling)
                 .onSuccess {
                     timers.clearSession()
                     _state.update { it.copy(prompt = null, completed = true, recapLoading = true) }

@@ -149,6 +149,7 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
         body.put("status", sw.status() == null ? ScheduledStatus.PLANNED.name() : sw.status().name());
         body.put("completedAt", sw.completedAt() == null ? null : sw.completedAt().toString());
         body.put("durationSeconds", sw.durationSeconds());
+        body.put("feeling", sw.feeling());
         List<Map<String, Object>> sessionDays =
             FirestoreWorkoutProgramRepository.daysToWire(sw.session() == null ? List.of() : List.of(sw.session()));
         body.put("session", sessionDays.isEmpty() ? null : sessionDays.get(0));
@@ -206,6 +207,7 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
         Long week = s.getLong("weekIndexInPhase");
         String completedAtStr = s.getString("completedAt");
         Long duration = s.getLong("durationSeconds");
+        Long feeling = s.getLong("feeling");
         return new ScheduledWorkout(
             userId, programId, s.getId(),
             dateStr == null ? null : LocalDate.parse(dateStr),
@@ -216,7 +218,8 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
             statusStr == null ? ScheduledStatus.PLANNED : ScheduledStatus.valueOf(statusStr),
             day,
             completedAtStr == null ? null : Instant.parse(completedAtStr),
-            duration == null ? null : duration.intValue()
+            duration == null ? null : duration.intValue(),
+            feeling == null ? null : feeling.intValue()
         );
     }
 
