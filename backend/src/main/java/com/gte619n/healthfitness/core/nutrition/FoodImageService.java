@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobException;
 import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -212,6 +213,42 @@ public class FoodImageService {
             if (food.updatedAt() != null && food.updatedAt().isBefore(cutoff)) {
                 // enqueueGeneration re-flips PENDING (fresh updatedAt) then re-runs
                 // generation off-thread — the same path the original create took.
+                enqueueGeneration(food.foodId(), null);
+                reenqueued++;
+            }
+        }
+        return reenqueued;
+    }
+
+    /**
+     * Heal the studio images of a specific set of catalog foods — the ones backing
+     * a day's single-food entries. Unlike {@link #sweepStalePending()} (a global
+     * PENDING-only sweep) this also re-enqueues foods stuck at {@code NONE} (image
+     * never generated — created before the pipeline existed, or the create-time
+     * enqueue was a no-op) and {@code FAILED} (generation gave up), so a single
+     * food logged from search still gets its picture. NONE is healed immediately;
+     * PENDING/FAILED only once past {@link #PENDING_STALE_AFTER}, bounding retries
+     * on a subject that keeps failing. Returns the count re-enqueued; a no-op when
+     * the image pipeline is unavailable.
+     */
+    public int healImages(Collection<CatalogFood> foods) {
+        if (generator.getIfAvailable() == null || store.getIfAvailable() == null) {
+            return 0;
+        }
+        Instant cutoff = Instant.now().minus(PENDING_STALE_AFTER);
+        int reenqueued = 0;
+        for (CatalogFood food : foods) {
+            if (food == null) {
+                continue;
+            }
+            FoodImageStatus status = food.imageStatus();
+            if (status == FoodImageStatus.READY && food.imageUrl() != null) {
+                continue;
+            }
+            boolean stale = food.updatedAt() == null || food.updatedAt().isBefore(cutoff);
+            boolean shouldHeal = status == FoodImageStatus.NONE
+                || ((status == FoodImageStatus.PENDING || status == FoodImageStatus.FAILED) && stale);
+            if (shouldHeal) {
                 enqueueGeneration(food.foodId(), null);
                 reenqueued++;
             }

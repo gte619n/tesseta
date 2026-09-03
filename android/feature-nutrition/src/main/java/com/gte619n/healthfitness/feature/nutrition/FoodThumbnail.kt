@@ -58,9 +58,10 @@ fun FoodThumbnail(
     // True while the server is still analyzing a captured photo (no macros yet).
     // Drives the single busy spinner; overrides the image-status states.
     analyzing: Boolean = false,
-    // IMPL-STAB (Workstream E): when set, a FAILED image renders a tappable retry
-    // chip instead of a silent utensil placeholder, so a missing picture is
-    // recoverable rather than permanent.
+    // When set, a missing image (FAILED or NONE) renders a tappable retry chip
+    // instead of a silent utensil placeholder, so a picture that never generated
+    // — or generation that failed — is recoverable rather than permanent. The
+    // caller only wires this for image-eligible logged rows (see EntryRow).
     onRetry: (() -> Unit)? = null,
     // The user's just-captured photo (a local cache file), shown with a loader
     // over it through upload → analysis → image generation, so a photographed meal
@@ -122,7 +123,7 @@ fun FoodThumbnail(
             )
         }
         imageStatus == "PENDING" -> FoodThumbnailFallback(size)
-        imageStatus == "FAILED" && onRetry != null -> Box(
+        (imageStatus == "FAILED" || imageStatus == "NONE") && onRetry != null -> Box(
             modifier = Modifier
                 .size(size)
                 .clip(RoundedCornerShape(6.dp))
@@ -130,8 +131,8 @@ fun FoodThumbnail(
                 .clickable { onRetry() },
             contentAlignment = Alignment.Center,
         ) {
-            // Image generation failed — offer a one-tap retry rather than a silent
-            // (permanent) placeholder.
+            // Image is missing — generation failed, or never ran — so offer a
+            // one-tap retry rather than a silent (permanent) placeholder.
             Icon(
                 Icons.Outlined.Refresh,
                 contentDescription = "Retry image",

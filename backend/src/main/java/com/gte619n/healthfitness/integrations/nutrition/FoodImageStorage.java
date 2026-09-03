@@ -115,6 +115,53 @@ public class FoodImageStorage implements FoodImageStore, MealPhotoReader {
         }
     }
 
+    @Override
+    public Optional<String> findCachedText(String namespace, String cacheKey) {
+        if (namespace == null || namespace.isBlank() || cacheKey == null || cacheKey.isBlank()) {
+            return Optional.empty();
+        }
+        String objectName = textCachePath(namespace, cacheKey);
+        try {
+            Blob blob = storage.get(BlobId.of(bucket, objectName));
+            if (blob == null || !blob.exists()) {
+                return Optional.empty();
+            }
+            byte[] bytes = blob.getContent();
+            if (bytes == null || bytes.length == 0) {
+                return Optional.empty();
+            }
+            String value = new String(bytes, StandardCharsets.UTF_8).trim();
+            return value.isBlank() ? Optional.empty() : Optional.of(value);
+        } catch (RuntimeException e) {
+            log.warn("Text cache lookup failed for {}: {}", objectName, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public void putCachedText(String namespace, String cacheKey, String value) {
+        if (namespace == null || namespace.isBlank()
+            || cacheKey == null || cacheKey.isBlank()
+            || value == null || value.isBlank()) {
+            return;
+        }
+        String objectName = textCachePath(namespace, cacheKey);
+        try {
+            BlobInfo info = BlobInfo.newBuilder(BlobId.of(bucket, objectName))
+                .setContentType("text/plain; charset=utf-8")
+                .build();
+            storage.create(info, value.getBytes(StandardCharsets.UTF_8));
+        } catch (RuntimeException e) {
+            // Best-effort: a failed write just means the next identical subject
+            // regenerates the value.
+            log.warn("Text cache write failed for {}: {}", objectName, e.getMessage());
+        }
+    }
+
+    private static String textCachePath(String namespace, String cacheKey) {
+        return namespace + "/index/" + sha256Hex(cacheKey) + ".txt";
+    }
+
     /**
      * Upload with a couple of quick retries. Generation runs on a detached
      * background thread, so a transient connection reset mid-upload ("Broken

@@ -19,6 +19,7 @@ import com.gte619n.healthfitness.core.nutrition.MealDescriptionService;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.gte619n.healthfitness.core.nutrition.NutritionDailyLog;
 import com.gte619n.healthfitness.core.nutrition.NutritionService;
+import com.gte619n.healthfitness.core.nutrition.ServingHintService;
 import com.gte619n.healthfitness.core.nutrition.ServingSize;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.io.IOException;
@@ -58,6 +59,7 @@ public class NutritionController {
     private final SyncChangeNotifier syncNotifier;
     private final MealCaptureService mealCapture;
     private final MealDescriptionService mealDescription;
+    private final ServingHintService servingHints;
 
     public NutritionController(
         CurrentUserProvider currentUser,
@@ -68,7 +70,8 @@ public class NutritionController {
         SyncWriteContext syncWrite,
         SyncChangeNotifier syncNotifier,
         MealCaptureService mealCapture,
-        MealDescriptionService mealDescription
+        MealDescriptionService mealDescription,
+        ServingHintService servingHints
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
@@ -79,6 +82,7 @@ public class NutritionController {
         this.syncNotifier = syncNotifier;
         this.mealCapture = mealCapture;
         this.mealDescription = mealDescription;
+        this.servingHints = servingHints;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -165,6 +169,12 @@ public class NutritionController {
         foodCatalog.sweepStalePendingImages();
         List<FoodEntry> entries = nutrition.listEntries(userId, date);
 
+        // Self-heal missing pictures so a food photo isn't a permanent dead-end:
+        // re-enqueue composite meals AND the catalog foods behind single-food
+        // entries whose image is stuck (orphaned PENDING / FAILED) or never
+        // generated (NONE). Healing flips them to PENDING, so the response below
+        // reports "generating" and the client's settle-poll swaps in the finished
+        // image without the user having to do anything.
         Macros totals = nutrition.findByDate(userId, date)
             .map(NutritionController::macrosOf)
             .orElseGet(Macros::zero);
@@ -176,6 +186,13 @@ public class NutritionController {
         // Join in each entry's catalog food once, so we can surface the
         // generated studio image without an N+1 lookup per meal group.
         Map<String, CatalogFood> foods = loadFoods(entries);
+        int healed = foodEntryImages.sweepStale(userId, date, entries)
+            + foodCatalog.healReferencedImages(foods.values());
+        if (healed > 0) {
+            // Re-read so the response reflects the just-flipped PENDING statuses.
+            entries = nutrition.listEntries(userId, date);
+            foods = loadFoods(entries);
+        }
 
         List<MealGroup> meals = new ArrayList<>();
         for (MealType meal : MealType.values()) {
@@ -328,6 +345,24 @@ public class NutritionController {
         }
         syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
         return ResponseEntity.accepted().body(toResponse(reopened));
+    }
+
+    /**
+     * A short, everyday-language "typical serving" explanation for a logged entry
+     * (e.g. "About ¾ cup of blueberries (110 g)"), so the amount is easy to
+     * picture. Generated lazily the first time the entry's edit sheet is opened
+     * and cached by subject, so repeat views — and identical foods — cost nothing.
+     * Returns {@code {"hint": null}} when unavailable rather than an error, so the
+     * sheet simply shows no hint.
+     */
+    @GetMapping("/{date}/entries/{entryId}/serving-hint")
+    public ServingHintResponse servingHint(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        return new ServingHintResponse(
+            servingHints.hintForEntry(userId, date, entryId).orElse(null));
     }
 
     // ----- Composite meal (photo-logged) -------------------------------

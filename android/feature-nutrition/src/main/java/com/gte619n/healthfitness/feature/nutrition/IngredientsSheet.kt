@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,9 +51,15 @@ fun IngredientsSheet(
     saving: Boolean,
     onDismiss: () -> Unit,
     onSave: (title: String, portion: Double, quantities: List<Double>) -> Unit,
+    // Lazy "typical serving" explanation for the whole meal, fetched on open.
+    fetchServingHint: suspend (String) -> String? = { null },
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val ingredients = entry.ingredients.orEmpty()
+    // Generated + cached server-side on first view; absent for un-synced rows.
+    val servingHint by produceState<String?>(initialValue = null, entry.entryId) {
+        value = fetchServingHint(entry.entryId)
+    }
     var title by remember(entry.entryId) { mutableStateOf(entry.foodName) }
     val quantities = remember(entry.entryId) {
         mutableStateListOf(*ingredients.map { trimAmount(it.quantity ?: 1.0) }.toTypedArray())
@@ -100,6 +107,12 @@ fun IngredientsSheet(
                         color = Hf.colors.textSecondary,
                     )
                 }
+            }
+            // Generated everyday-terms explanation of the meal's portion so the
+            // amount is easy to picture. Lazy + best-effort; shown once it lands.
+            servingHint?.takeIf { it.isNotBlank() }?.let { hint ->
+                Spacer(Modifier.height(10.dp))
+                Text(hint, style = Hf.type.bodySm, color = Hf.colors.textSecondary)
             }
             Spacer(Modifier.height(14.dp))
 

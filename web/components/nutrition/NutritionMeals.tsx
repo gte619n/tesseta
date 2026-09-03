@@ -56,6 +56,7 @@ type Props = {
   ) => Promise<void>;
   deleteEntry: (date: string, entryId: string) => Promise<void>;
   regenerateImage: (date: string, entryId: string) => Promise<void>;
+  servingHint: (date: string, entryId: string) => Promise<string | null>;
   searchFoods: (q: string) => Promise<
     {
       foodId: string;
@@ -116,6 +117,7 @@ export function NutritionMeals({
   updateIngredient,
   deleteEntry,
   regenerateImage,
+  servingHint,
   searchFoods,
   searchMeals,
   describeMealAsync,
@@ -203,6 +205,7 @@ export function NutritionMeals({
             updateIngredient={updateIngredient}
             deleteEntry={deleteEntry}
             regenerateImage={regenerateImage}
+            servingHint={servingHint}
             searchFoods={searchFoods}
             searchMeals={searchMeals}
             describeMealAsync={describeMealAsync}

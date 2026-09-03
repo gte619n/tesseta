@@ -19,6 +19,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,8 +49,15 @@ fun EditEntrySheet(
     saving: Boolean,
     onDismiss: () -> Unit,
     onSave: (String, EntryPatchRequest) -> Unit,
+    // Lazy "typical serving" explanation, fetched once when the sheet opens.
+    // Returns null when unavailable, in which case no hint line is shown.
+    fetchServingHint: suspend (String) -> String? = { null },
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Generated + cached server-side on first view; absent for un-synced rows.
+    val servingHint by produceState<String?>(initialValue = null, entry.entryId) {
+        value = fetchServingHint(entry.entryId)
+    }
     val per100g = remember(entry.entryId) { entry.derivedPer100g() }
 
     var name by remember(entry.entryId) { mutableStateOf(entry.foodName) }
@@ -124,6 +132,17 @@ fun EditEntrySheet(
                         color = Hf.colors.textSecondary,
                     )
                 }
+            }
+            // A generated, everyday-terms explanation of the portion so the amount
+            // is easy to picture (e.g. "About ¾ cup of blueberries (110 g)"). Lazy
+            // and best-effort: shown only once it lands, never blocks the sheet.
+            servingHint?.takeIf { it.isNotBlank() }?.let { hint ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    hint,
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textSecondary,
+                )
             }
             Spacer(Modifier.height(16.dp))
 

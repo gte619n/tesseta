@@ -193,6 +193,10 @@ internal fun EntryRow(
     val failedAnalysis = entry.analysisStatus == "FAILED"
     // A synthetic row for an in-flight durable op (not yet a real server entry).
     val isPendingOp = entry.entryId.startsWith(PENDING_CAPTURE_PREFIX)
+    // An image that should exist but is missing (FAILED or never generated), on a
+    // real server entry we can ask the backend to regenerate. Gated off synthetic
+    // in-flight rows and un-synced offline creates (no server entry to hit yet).
+    val canRetryImage = entry.isImageMissing && !isPendingOp && entry.syncState != "PENDING"
     // Track this row's window origin so drag offsets (which arrive relative to
     // the row) can be reported in window space for hit-testing meal sections.
     var rowOriginInWindow by remember { mutableStateOf(Offset.Zero) }
@@ -227,7 +231,7 @@ internal fun EntryRow(
             imageStatus = entry.imageStatus,
             size = 40.dp,
             analyzing = entry.isAnalyzing,
-            onRetry = onRetryImage,
+            onRetry = if (canRetryImage) onRetryImage else null,
             localImagePath = entry.localImagePath,
         )
         Spacer(Modifier.width(10.dp))
@@ -253,6 +257,8 @@ internal fun EntryRow(
                     entry.isAnalyzing -> "Analyzing your photo…"
                     failedAnalysis -> "Couldn’t read photo · tap to retry"
                     entry.imageStatus == "PENDING" -> "Creating image… · $macrosLine"
+                    // A picture is expected but missing — point at the retry chip.
+                    canRetryImage -> "Photo unavailable · tap ⟳ to retry · $macrosLine"
                     else -> macrosLine
                 },
                 style = Hf.type.capsSm,

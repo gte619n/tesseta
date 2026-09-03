@@ -118,7 +118,11 @@ class NutritionRepository @Inject constructor(
         // otherwise just re-read the stale placeholder forever. Re-fetching while
         // settling is the same source the web reads and converges the row.
         val local = entriesForDate(date)
-        val settling = local.any { it.isAnalyzing || it.imageStatus == "PENDING" }
+        // Re-pull while an entry is settling (analyzing / image PENDING) OR its
+        // image is missing (NONE/FAILED but expected): the day read triggers the
+        // server's self-heal, which flips the row to PENDING, and this fresh pull
+        // lets that — then the finished image — reach the mirror.
+        val settling = local.any { it.isAnalyzing || it.imageStatus == "PENDING" || it.isImageMissing }
         if (local.isEmpty() || settling) fillDay(date)
         return assembleDay(date)
     }
@@ -230,6 +234,14 @@ class NutritionRepository @Inject constructor(
         fillDay(date)
         return entry
     }
+
+    /**
+     * Lazy "typical serving" explanation for an entry, for the edit sheet. Online
+     * read (generated + cached server-side on first view); returns null when the
+     * backend has no hint or the call fails, so the sheet just shows nothing.
+     */
+    suspend fun servingHint(date: String, entryId: String): String? =
+        runCatching { api.servingHint(date, entryId).hint }.getOrNull()
 
     suspend fun addCompositeMeal(date: String, body: CompositeMealRequest): Entry {
         // AI image generation (online-only per D17): create on the network, then

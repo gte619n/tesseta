@@ -13,7 +13,7 @@ import type {
   MealSearchResult,
   RelogBody,
 } from "@/lib/types/nutrition";
-import { MEAL_LABELS, MEAL_ICONS } from "@/lib/types/nutrition";
+import { MEAL_LABELS, MEAL_ICONS, isImageMissing } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { AddFoodModal } from "@/components/nutrition/AddFoodModal";
@@ -50,6 +50,7 @@ type Props = {
   ) => Promise<void>;
   deleteEntry: (date: string, entryId: string) => Promise<void>;
   regenerateImage: (date: string, entryId: string) => Promise<void>;
+  servingHint: (date: string, entryId: string) => Promise<string | null>;
   searchFoods: (q: string) => Promise<
     {
       foodId: string;
@@ -82,6 +83,7 @@ export function MealSection({
   updateIngredient,
   deleteEntry,
   regenerateImage,
+  servingHint,
   searchFoods,
   searchMeals,
   describeMealAsync,
@@ -232,6 +234,7 @@ export function MealSection({
           entry={editing}
           date={date}
           updateEntry={updateEntry}
+          servingHint={servingHint}
         />
       )}
 
@@ -243,6 +246,7 @@ export function MealSection({
           date={date}
           updateEntry={updateEntry}
           updateIngredient={updateIngredient}
+          servingHint={servingHint}
         />
       )}
     </div>
@@ -335,9 +339,10 @@ function EntryRow({
             kcal
           </span>
         </span>
-        {entry.imageStatus === "FAILED" && (
-          // Image generation failed — offer a retry. Kept always-visible (not
-          // hover-gated like edit/delete) since it flags a recoverable error.
+        {isImageMissing(entry) && (
+          // Image is missing — generation failed, or never ran — so offer a
+          // retry. Kept always-visible (not hover-gated like edit/delete) since
+          // it flags a recoverable, otherwise-permanent gap.
           <button
             type="button"
             onClick={() => startRetry(() => onRetryImage())}

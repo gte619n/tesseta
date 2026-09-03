@@ -43,4 +43,23 @@ public interface FoodImageStore {
      */
     default void putCachedUrl(String cacheKey, String url) {
     }
+
+    /**
+     * General-purpose content cache for small text values (e.g. a food's generated
+     * "typical serving" hint), namespaced so it never collides with the image
+     * pointer index. Returns empty on a miss. Default: always a miss, so core-only
+     * contexts simply regenerate. Reuses the same durable store as the image cache
+     * rather than introducing new infrastructure.
+     */
+    default java.util.Optional<String> findCachedText(String namespace, String cacheKey) {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Cache {@code value} under {@code namespace}/{@code cacheKey}. Best-effort —
+     * a failed write just means the next identical subject regenerates. Default
+     * no-op.
+     */
+    default void putCachedText(String namespace, String cacheKey, String value) {
+    }
 }

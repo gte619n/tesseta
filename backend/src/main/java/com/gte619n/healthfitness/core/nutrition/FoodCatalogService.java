@@ -290,6 +290,17 @@ public class FoodCatalogService {
     }
 
     /**
+     * Heal the images of specific catalog foods (a day's single-food entries),
+     * covering NONE/FAILED as well as stale PENDING — see
+     * {@link FoodImageService#healImages(java.util.Collection)}. A no-op when the
+     * image pipeline is unavailable. Returns the count re-enqueued.
+     */
+    public int healReferencedImages(java.util.Collection<CatalogFood> foods) {
+        FoodImageService images = foodImages.getIfAvailable();
+        return images != null ? images.healImages(foods) : 0;
+    }
+
+    /**
      * Record one distinct user's confirmation. Recomputes the denormalized
      * count and promotes the food to {@code VERIFIED} once it reaches the
      * configured threshold.

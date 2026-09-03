@@ -66,6 +66,15 @@ interface NutritionApi {
         @Path("entryId") entryId: String,
     ): Entry
 
+    // Lazy "typical serving" explanation for an entry, shown in the edit sheet.
+    // Generated on first view and cached server-side; `hint` is null when none
+    // could be produced.
+    @GET("api/me/nutrition/{date}/entries/{entryId}/serving-hint")
+    suspend fun servingHint(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+    ): ServingHintResponse
+
     // Composite (photo-logged) meal: one entry with ingredients + a generated
     // finished-meal image.
     @POST("api/me/nutrition/{date}/composite-meal")

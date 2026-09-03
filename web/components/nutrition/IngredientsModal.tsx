@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import {
   QUANTITY_STEPS,
@@ -25,6 +25,8 @@ type Props = {
     index: number,
     body: UpdateIngredientBody,
   ) => Promise<void>;
+  // Lazy "typical serving" explanation for the meal, fetched when the modal opens.
+  servingHint: (date: string, entryId: string) => Promise<string | null>;
 };
 
 function num(n: number | null | undefined): number {
@@ -52,9 +54,28 @@ export function IngredientsModal({
   date,
   updateEntry,
   updateIngredient,
+  servingHint,
 }: Props) {
   const toast = useToast();
   const ingredients = entry.ingredients ?? [];
+
+  // Lazy, best-effort "typical serving" explanation of the whole meal — generated
+  // + cached server-side on first view. Shown once it lands; never blocks.
+  const [hint, setHint] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    servingHint(date, entry.entryId)
+      .then((h) => {
+        if (!cancelled) setHint(h);
+      })
+      .catch(() => {
+        if (!cancelled) setHint(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, date, entry.entryId, servingHint]);
   const [title, setTitle] = useState(entry.foodName);
   const [qtys, setQtys] = useState<string[]>(
     ingredients.map((i) => String(i.quantity ?? 1)),
@@ -127,6 +148,11 @@ export function IngredientsModal({
               <div className="mt-1 font-mono text-[12px] tabular-nums text-secondary">
                 {liveKcal} kcal · {ingredients.length} ingredients
               </div>
+              {hint && (
+                <div className="mt-1 text-[12px] leading-snug text-secondary">
+                  {hint}
+                </div>
+              )}
             </div>
           </div>
           <button

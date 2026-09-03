@@ -189,6 +189,35 @@ class FoodImageServiceTest {
     }
 
     @Test
+    void healImages_reenqueuesMissingAndStaleButNotHealthy() {
+        FakeRepo repo = new FakeRepo();
+        repo.add(food("none", FoodImageStatus.NONE));                                        // never generated
+        repo.add(foodAt("failedStale", FoodImageStatus.FAILED, Instant.now().minus(Duration.ofMinutes(10)))); // gave up → retry
+        repo.add(foodAt("failedFresh", FoodImageStatus.FAILED, Instant.now()));              // just failed → wait
+        repo.add(foodAt("pendingFresh", FoodImageStatus.PENDING, Instant.now()));            // healthy in-flight
+        repo.add(readyFood("done"));                                                         // done
+        // Block dispatched async work so re-enqueued foods stay at the synchronous
+        // PENDING flip (no runAsync race).
+        FoodImageGenerator blocking = (f, ref, mime) -> {
+            try { Thread.sleep(60_000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return Optional.empty();
+        };
+        FoodImageService svc = new FoodImageService(
+            repo, provider(blocking), provider(new FakeStore("u")), empty(), empty());
+
+        int healed = svc.healImages(List.of(
+            repo.get("none"), repo.get("failedStale"), repo.get("failedFresh"),
+            repo.get("pendingFresh"), repo.get("done")));
+
+        assertEquals(2, healed, "only the NONE and the stale FAILED are re-enqueued");
+        assertEquals(FoodImageStatus.PENDING, repo.get("none").imageStatus());
+        assertEquals(FoodImageStatus.PENDING, repo.get("failedStale").imageStatus());
+        assertEquals(FoodImageStatus.FAILED, repo.get("failedFresh").imageStatus(), "a just-failed image waits for the stale window");
+        assertEquals(FoodImageStatus.PENDING, repo.get("pendingFresh").imageStatus());
+        assertEquals(FoodImageStatus.READY, repo.get("done").imageStatus());
+    }
+
+    @Test
     void sweepStalePending_withoutPipeline_isNoOp() {
         FakeRepo repo = new FakeRepo();
         repo.add(foodAt("p", FoodImageStatus.PENDING, Instant.now().minus(Duration.ofMinutes(10))));
