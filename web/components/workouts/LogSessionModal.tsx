@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -8,9 +8,11 @@ import type {
   ScheduledWorkoutResponse,
   Prescription,
   CompleteSessionRequest,
+  CustomizePrescriptionRequest,
   LoggedPrescriptionInput,
   LoggedSetInput,
 } from "@/lib/types/workout-program";
+import type { ExerciseResponse } from "@/lib/types/exercise";
 import { BLOCK_TYPE_LABEL } from "@/lib/types/exercise";
 import { formatPrescription, totalLoggedSets } from "@/lib/workout-format";
 
@@ -28,9 +30,27 @@ type Props = {
   onSaved: () => void;
   /** Server action: PUT the completion upsert for this session. */
   save: (input: CompleteSessionRequest) => Promise<void>;
+  /** Server action: swap / rep-set edit for one prescription slot (#4). */
+  customize: (input: CustomizePrescriptionRequest) => Promise<void>;
+  /** Server action: ranked, gym-scoped swap suggestions for the picker. */
+  suggestExercises: (
+    locationId: string,
+    similarTo: string | null,
+    search: string | null,
+  ) => Promise<ExerciseResponse[]>;
+  /** Called after a successful customize so the underlying list revalidates. */
+  onCustomized: () => void;
 };
 
-export function LogSessionModal({ session, onClose, onSaved, save }: Props) {
+export function LogSessionModal({
+  session,
+  onClose,
+  onSaved,
+  save,
+  customize,
+  suggestExercises,
+  onCustomized,
+}: Props) {
   if (!session) return null;
   // Key by session so the form state resets whenever a different session opens.
   return (
@@ -40,9 +60,22 @@ export function LogSessionModal({ session, onClose, onSaved, save }: Props) {
       onClose={onClose}
       onSaved={onSaved}
       save={save}
+      customize={customize}
+      suggestExercises={suggestExercises}
+      onCustomized={onCustomized}
     />
   );
 }
+
+// A slot's applied swap / target edit, kept locally so the open modal reflects
+// the change (the server snapshot behind `session` is stale until reopen).
+type SlotOverride = {
+  exerciseId: string;
+  name: string;
+  sets: number | null;
+  repsMin: number | null;
+  repsMax: number | null;
+};
 
 // One editable set as form state. Strings so partially-typed numbers don't
 // fight the user; parsed to nullable numbers on save. `completedAt` is the
@@ -109,10 +142,16 @@ function LogSessionForm({
   onClose,
   onSaved,
   save,
+  customize,
+  suggestExercises,
+  onCustomized,
 }: Omit<Props, "session"> & { session: ScheduledWorkoutResponse }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [isSaving, setIsSaving] = useState(false);
+  // Locally-applied swaps / target edits, keyed by (blockId, orderIndex), so a
+  // just-applied change shows immediately without waiting for a reopen.
+  const [overrides, setOverrides] = useState<Record<string, SlotOverride>>({});
 
   const [rows, setRows] = useState<Record<string, SetRow[]>>(() => {
     const init: Record<string, SetRow[]> = {};
@@ -156,6 +195,60 @@ function LogSessionForm({
       ...prev,
       [key]: (prev[key] ?? []).filter((_, i) => i !== idx),
     }));
+  }
+
+  // Apply a swap / target edit for one slot via the customize server action,
+  // then record it locally so the row updates in place (and revalidate the
+  // list underneath). Returns whether it succeeded so the panel can collapse.
+  async function applyCustomize(
+    block: { blockId: string },
+    p: Prescription,
+    change: {
+      exerciseId: string | null;
+      name: string | null;
+      sets: number | null;
+      repsMin: number | null;
+      repsMax: number | null;
+      applyToProgram: boolean;
+    },
+  ): Promise<boolean> {
+    try {
+      await customize({
+        blockId: block.blockId,
+        orderIndex: p.orderIndex,
+        applyToProgram: change.applyToProgram,
+        exerciseId: change.exerciseId,
+        sets: change.sets,
+        repsMin: change.repsMin,
+        repsMax: change.repsMax,
+        // Day reference lets the server materialize an ad-hoc session first.
+        phaseId: session.phaseId,
+        dayId: session.dayId,
+        date: session.date,
+      });
+      const key = rowKey(block.blockId, p.orderIndex);
+      const prev = overrides[key];
+      setOverrides((o) => ({
+        ...o,
+        [key]: {
+          exerciseId: change.exerciseId ?? prev?.exerciseId ?? p.exerciseId,
+          name: change.name ?? prev?.name ?? p.exercise?.name ?? p.exerciseId,
+          sets: change.sets ?? prev?.sets ?? p.sets,
+          repsMin: change.repsMin ?? prev?.repsMin ?? p.repsMin,
+          repsMax: change.repsMax ?? prev?.repsMax ?? p.repsMax,
+        },
+      }));
+      toast.success(
+        change.applyToProgram ? "Updated across the program" : "Updated this workout",
+      );
+      onCustomized();
+      return true;
+    } catch (e) {
+      toast.error("Couldn't apply the change", {
+        description: e instanceof Error ? e.message : "Try again.",
+      });
+      return false;
+    }
   }
 
   // Full-replace semantics: every prescription is sent, with whatever rows
@@ -284,6 +377,7 @@ function LogSessionForm({
                 const list = rows[key] ?? [];
                 const autoFocusHere = firstInput && list.length > 0;
                 if (autoFocusHere) firstInput = false;
+                const ov = overrides[key];
                 return (
                   <div
                     key={key}
@@ -291,10 +385,10 @@ function LogSessionForm({
                   >
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span className="text-[13px] font-medium text-primary">
-                        {p.exercise?.name ?? p.exerciseId}
+                        {ov?.name ?? p.exercise?.name ?? p.exerciseId}
                       </span>
                       <span className="text-[11px] text-tertiary">
-                        {formatPrescription(p)}
+                        {ov ? overrideSummary(ov) : formatPrescription(p)}
                       </span>
                     </div>
 
@@ -360,6 +454,16 @@ function LogSessionForm({
                     >
                       + Add set
                     </button>
+
+                    <PrescriptionAdjuster
+                      locationId={session.locationId}
+                      currentExerciseId={ov?.exerciseId ?? p.exerciseId}
+                      sets={ov?.sets ?? p.sets}
+                      repsMin={ov?.repsMin ?? p.repsMin}
+                      repsMax={ov?.repsMax ?? p.repsMax}
+                      suggestExercises={suggestExercises}
+                      onApply={(change) => applyCustomize(block, p, change)}
+                    />
                   </div>
                 );
               })}
@@ -450,5 +554,261 @@ function SetInput({
       onChange={(e) => onChange(e.target.value)}
       className="w-full rounded-md border border-border-default bg-surface px-2 py-1 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
     />
+  );
+}
+
+// "3 × 5–8" style summary for a locally-applied override (the source
+// prescription's intensity/rest are unchanged by a swap/target edit).
+function overrideSummary(ov: SlotOverride): string {
+  const reps =
+    ov.repsMin != null && ov.repsMax != null && ov.repsMin !== ov.repsMax
+      ? `${ov.repsMin}–${ov.repsMax}`
+      : ov.repsMax != null || ov.repsMin != null
+        ? `${ov.repsMax ?? ov.repsMin}`
+        : "";
+  if (ov.sets != null && reps) return `${ov.sets} × ${reps}`;
+  if (ov.sets != null) return `${ov.sets} sets`;
+  return reps;
+}
+
+type AdjustChange = {
+  exerciseId: string | null;
+  name: string | null;
+  sets: number | null;
+  repsMin: number | null;
+  repsMax: number | null;
+  applyToProgram: boolean;
+};
+
+// Per-prescription "swap / adjust" panel: pick a muscle-matched replacement
+// and/or edit sets & rep range, applied to just this workout or the whole
+// program (#4). Collapsed by default so the logging grid stays uncluttered.
+function PrescriptionAdjuster({
+  locationId,
+  currentExerciseId,
+  sets,
+  repsMin,
+  repsMax,
+  suggestExercises,
+  onApply,
+}: {
+  locationId: string;
+  currentExerciseId: string;
+  sets: number | null;
+  repsMin: number | null;
+  repsMax: number | null;
+  suggestExercises: (
+    locationId: string,
+    similarTo: string | null,
+    search: string | null,
+  ) => Promise<ExerciseResponse[]>;
+  onApply: (change: AdjustChange) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
+  const [setsStr, setSetsStr] = useState(sets != null ? `${sets}` : "");
+  const [repsMinStr, setRepsMinStr] = useState(repsMin != null ? `${repsMin}` : "");
+  const [repsMaxStr, setRepsMaxStr] = useState(repsMax != null ? `${repsMax}` : "");
+  const [applyToProgram, setApplyToProgram] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  const targetsChanged =
+    setsStr !== (sets != null ? `${sets}` : "") ||
+    repsMinStr !== (repsMin != null ? `${repsMin}` : "") ||
+    repsMaxStr !== (repsMax != null ? `${repsMax}` : "");
+  const hasChange = picked != null || targetsChanged;
+
+  async function apply() {
+    setApplying(true);
+    const ok = await onApply({
+      exerciseId: picked?.id ?? null,
+      name: picked?.name ?? null,
+      sets: setsStr.trim() ? int(setsStr) : null,
+      repsMin: repsMinStr.trim() ? int(repsMinStr) : null,
+      repsMax: repsMaxStr.trim() ? int(repsMaxStr) : null,
+      applyToProgram,
+    });
+    setApplying(false);
+    if (ok) {
+      setOpen(false);
+      setShowPicker(false);
+      setPicked(null);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="caps-mono mt-2 ml-3 cursor-pointer text-[10px] tracking-[0.06em] text-accent hover:opacity-80"
+      >
+        Swap / adjust
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-[8px] border-[0.5px] border-border-subtle bg-surface px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] font-medium text-primary">
+          {picked ? `Swapping to ${picked.name}` : "Swap or adjust"}
+        </span>
+        <button
+          type="button"
+          onClick={() => setShowPicker((v) => !v)}
+          className="caps-mono cursor-pointer text-[10px] tracking-[0.06em] text-accent hover:opacity-80"
+        >
+          {showPicker ? "Hide options" : "Swap exercise"}
+        </button>
+      </div>
+
+      {showPicker ? (
+        <SwapPicker
+          locationId={locationId}
+          currentExerciseId={currentExerciseId}
+          suggestExercises={suggestExercises}
+          onPick={(ex) => {
+            setPicked({ id: ex.exerciseId, name: ex.name });
+            setShowPicker(false);
+          }}
+        />
+      ) : null}
+
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <label className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">
+          Sets
+          <SetInput value={setsStr} onChange={setSetsStr} step="1" />
+        </label>
+        <label className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">
+          Reps min
+          <SetInput value={repsMinStr} onChange={setRepsMinStr} step="1" />
+        </label>
+        <label className="caps-mono text-[9px] tracking-[0.06em] text-tertiary">
+          Reps max
+          <SetInput value={repsMaxStr} onChange={setRepsMaxStr} step="1" />
+        </label>
+      </div>
+
+      <label className="mt-2 flex cursor-pointer items-center gap-2 text-[12px] text-secondary">
+        <input
+          type="checkbox"
+          checked={applyToProgram}
+          onChange={(e) => setApplyToProgram(e.target.checked)}
+          className="h-3.5 w-3.5 cursor-pointer accent-accent"
+        />
+        Apply to the whole program (this day, future weeks)
+      </label>
+
+      <div className="mt-2.5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setShowPicker(false);
+            setPicked(null);
+          }}
+          disabled={applying}
+          className="cursor-pointer rounded-md border border-border-default bg-canvas px-3 py-1 text-[12px] text-primary hover:bg-surface disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={apply}
+          disabled={applying || !hasChange}
+          className="cursor-pointer rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {applying ? "Applying…" : "Apply"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The swap picker: loads the gym's ranked, muscle-matched suggestions once, then
+// filters that list client-side by name/alias (the list holds the full gym
+// catalog, so no per-keystroke server round-trips).
+function SwapPicker({
+  locationId,
+  currentExerciseId,
+  suggestExercises,
+  onPick,
+}: {
+  locationId: string;
+  currentExerciseId: string;
+  suggestExercises: (
+    locationId: string,
+    similarTo: string | null,
+    search: string | null,
+  ) => Promise<ExerciseResponse[]>;
+  onPick: (ex: ExerciseResponse) => void;
+}) {
+  const [all, setAll] = useState<ExerciseResponse[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    suggestExercises(locationId, currentExerciseId, null)
+      .then((list) => {
+        if (alive) setAll(list);
+      })
+      .catch((e) => {
+        if (alive) setError(e instanceof Error ? e.message : "Couldn't load alternatives");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [locationId, currentExerciseId, suggestExercises]);
+
+  const filtered = useMemo(() => {
+    if (!all) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.aliases.some((a) => a.toLowerCase().includes(q)),
+    );
+  }, [all, search]);
+
+  return (
+    <div className="mt-2">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search exercises…"
+        className="w-full rounded-md border border-border-default bg-canvas px-2.5 py-1.5 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+      {error ? (
+        <p className="mt-2 text-[12px] text-alert">{error}</p>
+      ) : all == null ? (
+        <p className="mt-2 text-[12px] text-tertiary">Loading alternatives…</p>
+      ) : filtered.length === 0 ? (
+        <p className="mt-2 text-[12px] text-tertiary">No matching exercises.</p>
+      ) : (
+        <ul className="mt-2 max-h-[220px] space-y-1 overflow-y-auto">
+          {filtered.map((ex) => (
+            <li key={ex.exerciseId}>
+              <button
+                type="button"
+                onClick={() => onPick(ex)}
+                className="w-full rounded-md border-[0.5px] border-border-default bg-canvas px-2.5 py-1.5 text-left hover:bg-canvas-muted"
+              >
+                <span className="text-[13px] text-primary">{ex.name}</span>
+                {ex.primaryMuscles.length > 0 ? (
+                  <span className="ml-2 text-[11px] text-tertiary">
+                    {ex.primaryMuscles.join(", ")}
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

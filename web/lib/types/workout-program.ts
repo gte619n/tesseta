@@ -225,6 +225,27 @@ export type CompleteSessionRequest = {
   logged: LoggedPrescriptionInput[]; // SKIPPED clears actuals (send [])
 };
 
+// ── In-workout swap / rep-set edit (#4) ──────────────────────────────
+//
+// POST /api/me/workout-programs/{programId}/sessions/{scheduledId}/prescription
+// Retargets one prescription slot (by blockId + orderIndex) on this session's
+// snapshot; `applyToProgram` also pushes the change to the program template's
+// matching day and every future PLANNED session of that day. Any change field
+// left null is untouched. `phaseId`/`dayId`/`date` let the server materialize a
+// not-yet-persisted session, mirroring the completion PUT.
+export type CustomizePrescriptionRequest = {
+  blockId: string;
+  orderIndex: number;
+  applyToProgram: boolean;
+  exerciseId?: string | null;
+  sets?: number | null;
+  repsMin?: number | null;
+  repsMax?: number | null;
+  phaseId?: string | null;
+  dayId?: string | null;
+  date?: string | null;
+};
+
 // ── Create / update request shapes (mirror backend records) ──────────
 
 export type PrescriptionInput = {

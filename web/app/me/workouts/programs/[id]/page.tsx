@@ -10,13 +10,17 @@ import {
   deleteProgram,
   updateProgram,
   completeSession,
+  customizePrescription,
   getProgramNutritionGuidance,
   applyProgramNutrition,
 } from "@/lib/workout-program-api";
+import { getExerciseSuggestions } from "@/lib/exercise-admin-api";
 import type {
   ScheduledWorkoutResponse,
   CompleteSessionRequest,
+  CustomizePrescriptionRequest,
 } from "@/lib/types/workout-program";
+import type { ExerciseResponse } from "@/lib/types/exercise";
 import { ProgramRoadmap } from "@/components/workouts/ProgramRoadmap";
 import { ProgramThisWeek } from "@/components/workouts/ProgramThisWeek";
 import { ProgramDetailActions } from "@/components/workouts/ProgramDetailActions";
@@ -123,6 +127,28 @@ export default async function ProgramDetailPage(props: {
     revalidatePath("/me/workouts");
   }
 
+  // In-workout swap / rep-set edit (#4). `applyToProgram` also rewrites the
+  // template + future sessions, so revalidate the roadmap-bearing detail page.
+  async function customizeSession(
+    scheduledId: string,
+    input: CustomizePrescriptionRequest,
+  ) {
+    "use server";
+    await customizePrescription(id, scheduledId, input);
+    revalidatePath(detailPath);
+    revalidatePath("/me/workouts/history");
+  }
+
+  // Ranked, gym-scoped swap suggestions for the picker (server-only fetch).
+  async function suggestExercises(
+    locationId: string,
+    similarTo: string | null,
+    search: string | null,
+  ): Promise<ExerciseResponse[]> {
+    "use server";
+    return getExerciseSuggestions(locationId, similarTo, search);
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[860px] space-y-6">
@@ -178,6 +204,8 @@ export default async function ProgramDetailPage(props: {
             sessions={weekSessions}
             today={todayIso()}
             logSession={logSession}
+            customizeSession={customizeSession}
+            suggestExercises={suggestExercises}
           />
         </section>
 

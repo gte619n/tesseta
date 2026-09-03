@@ -60,6 +60,27 @@ data class LastSetsRequest(
     val exerciseIds: List<String>,
 )
 
+/**
+ * Body of the in-workout swap / rep-set edit (POST .../prescription, #4).
+ * Identifies one prescription slot by ([blockId], [orderIndex]); any change
+ * field left null is untouched. [applyToProgram] pushes the edit to the program
+ * template's matching day and to future PLANNED sessions of that day.
+ * [phaseId]/[dayId]/[date] let the server materialize a not-yet-persisted
+ * (ad-hoc / offline-first) session first, mirroring the completion PUT.
+ */
+data class CustomizePrescriptionRequest(
+    val blockId: String,
+    val orderIndex: Int,
+    val applyToProgram: Boolean,
+    val exerciseId: String? = null,
+    val sets: Int? = null,
+    val repsMin: Int? = null,
+    val repsMax: Int? = null,
+    val phaseId: String? = null,
+    val dayId: String? = null,
+    val date: LocalDate? = null,
+)
+
 data class IntensityDto(
     val kind: String,
     val value: Double? = null,

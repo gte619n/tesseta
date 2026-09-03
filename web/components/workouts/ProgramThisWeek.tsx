@@ -6,7 +6,9 @@ import type {
   ScheduledWorkoutResponse,
   PrescriptionExercise,
   CompleteSessionRequest,
+  CustomizePrescriptionRequest,
 } from "@/lib/types/workout-program";
+import type { ExerciseResponse } from "@/lib/types/exercise";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
 import { LogSessionModal } from "./LogSessionModal";
 import { BLOCK_TYPE_LABEL } from "@/lib/types/exercise";
@@ -24,6 +26,8 @@ export function ProgramThisWeek({
   sessions,
   today,
   logSession,
+  customizeSession,
+  suggestExercises,
 }: {
   sessions: ScheduledWorkoutResponse[];
   // Today as YYYY-MM-DD, computed by the server page on the same request
@@ -35,6 +39,18 @@ export function ProgramThisWeek({
     scheduledId: string,
     input: CompleteSessionRequest,
   ) => Promise<void>;
+  // Server action: in-workout swap / rep-set edit (#4), current session or
+  // whole program.
+  customizeSession: (
+    scheduledId: string,
+    input: CustomizePrescriptionRequest,
+  ) => Promise<void>;
+  // Server action: ranked, gym-scoped swap suggestions for the picker.
+  suggestExercises: (
+    locationId: string,
+    similarTo: string | null,
+    search: string | null,
+  ) => Promise<ExerciseResponse[]>;
 }) {
   const router = useRouter();
   const [sheetExercise, setSheetExercise] = useState<PrescriptionExercise | null>(null);
@@ -72,6 +88,9 @@ export function ProgramThisWeek({
           router.refresh();
         }}
         save={(input) => logSession(logTarget!.scheduledId, input)}
+        customize={(input) => customizeSession(logTarget!.scheduledId, input)}
+        suggestExercises={suggestExercises}
+        onCustomized={() => router.refresh()}
       />
     </>
   );

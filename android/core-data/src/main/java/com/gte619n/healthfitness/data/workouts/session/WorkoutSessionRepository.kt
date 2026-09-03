@@ -9,6 +9,7 @@ import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutSessionDraftEntity
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.data.sync.OutboxRepository
+import com.gte619n.healthfitness.data.workouts.program.CustomizePrescriptionRequest
 import com.gte619n.healthfitness.data.workouts.program.LastSetsRequest
 import com.gte619n.healthfitness.data.workouts.program.RunDayRequest
 import com.gte619n.healthfitness.data.workouts.program.ScheduledWorkoutDto
@@ -162,6 +163,23 @@ class WorkoutSessionRepository(
         }
 
     /**
+     * Ranked swap suggestions for [locationId] (#4): the same executable set as
+     * [availableExercises], but ordered by muscle/movement similarity to
+     * [similarTo] (the prescribed exercise), with the reference excluded
+     * server-side. [search] optionally narrows by name/alias. Best-effort:
+     * offline / kill-switched surfaces the failure so the UI can say "couldn't
+     * load alternatives" rather than showing an empty list as "none".
+     */
+    suspend fun suggestedExercises(
+        locationId: String,
+        similarTo: String?,
+        search: String? = null,
+    ): Result<List<com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary>> =
+        withContext(io) {
+            runCatching { exerciseApi.suggestions(locationId, similarTo, search).map { it.toSummary() } }
+        }
+
+    /**
      * Swap the exercise at [key] for [exercise] in the draft's snapshot (#4).
      * The coach re-renders the replacement immediately (name, cues, demo). Any
      * sets already logged for that slot are dropped — they were a different
@@ -190,6 +208,71 @@ class WorkoutSessionRepository(
                 lastActivityAt = clock(),
             )
             draftDao.upsert(updated)
+            updated.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
+        }
+    }
+
+    /**
+     * In-workout swap / rep-set edit (#4). Always applies to the live draft so
+     * the current card re-renders immediately: an [exercise] swap re-points the
+     * slot (dropping the old movement's logged sets + history-grounded load,
+     * like [substituteExercise]); [sets]/[repsMin]/[repsMax] edit the prescribed
+     * targets in place. When [applyToProgram] is set, the same edit is pushed to
+     * the backend (program template + future PLANNED sessions of this day) —
+     * that leg needs the network, so its failure surfaces even though the local
+     * draft already changed.
+     */
+    suspend fun customizePrescription(
+        programId: String,
+        scheduledId: String,
+        key: PrescriptionKey,
+        exercise: com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary?,
+        sets: Int?,
+        repsMin: Int?,
+        repsMax: Int?,
+        applyToProgram: Boolean,
+    ): Result<WorkoutSessionDraft> = withContext(io) {
+        runCatching {
+            val entity = draftDao.getByKey(programId, scheduledId)
+                ?: error("No active draft for $programId/$scheduledId")
+            val dto = decodeScheduled(entity.sessionJson)
+                ?: error("Draft snapshot for $programId/$scheduledId is undecodable")
+            val currentExerciseId = dto.exerciseIdByKey()[key]
+            val swapped = exercise != null && exercise.exerciseId != currentExerciseId
+
+            val adjusted = dto.withAdjustedPrescription(key, exercise, sets, repsMin, repsMax)
+            // A swap starts the slot fresh; a targets-only edit keeps the logged sets.
+            val logged = if (swapped) {
+                decodeLogged(entity.loggedJson).filterNot {
+                    it.blockId == key.blockId && it.orderIndex == key.orderIndex
+                }
+            } else {
+                decodeLogged(entity.loggedJson)
+            }
+            val updated = entity.copy(
+                sessionJson = scheduledAdapter.toJson(adjusted),
+                loggedJson = loggedAdapter.toJson(logged),
+                lastActivityAt = clock(),
+            )
+            draftDao.upsert(updated)
+
+            if (applyToProgram) {
+                api.customizePrescription(
+                    programId, scheduledId,
+                    CustomizePrescriptionRequest(
+                        blockId = key.blockId,
+                        orderIndex = key.orderIndex,
+                        applyToProgram = true,
+                        exerciseId = exercise?.exerciseId,
+                        sets = sets,
+                        repsMin = repsMin,
+                        repsMax = repsMax,
+                        phaseId = dto.phaseId.takeIf { it.isNotBlank() },
+                        dayId = dto.dayId.takeIf { it.isNotBlank() },
+                        date = dto.date,
+                    ),
+                )
+            }
             updated.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
         }
     }
@@ -521,6 +604,50 @@ class WorkoutSessionRepository(
                                         loggedSets = emptyList(),
                                         targetWeightLbs = null,
                                         loadBasis = null,
+                                    )
+                                }
+                            },
+                        )
+                    }
+                },
+            )
+        },
+    )
+
+    /**
+     * Apply a swap and/or a rep-set edit to the prescription at [key] (#4): swap
+     * its exerciseId + embedded summary when [exercise] is given (dropping the
+     * old logged sets + history-grounded load), and overlay any non-null
+     * [sets]/[repsMin]/[repsMax]. A targets-only edit keeps the logged sets.
+     */
+    private fun ScheduledWorkoutDto.withAdjustedPrescription(
+        key: PrescriptionKey,
+        exercise: com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary?,
+        sets: Int?,
+        repsMin: Int?,
+        repsMax: Int?,
+    ): ScheduledWorkoutDto = copy(
+        session = session?.let { day ->
+            day.copy(
+                blocks = day.blocks.map { block ->
+                    if (block.blockId != key.blockId) {
+                        block
+                    } else {
+                        block.copy(
+                            prescriptions = block.prescriptions.map { rx ->
+                                if (rx.orderIndex != key.orderIndex) {
+                                    rx
+                                } else {
+                                    val swapped = exercise != null && exercise.exerciseId != rx.exerciseId
+                                    rx.copy(
+                                        exerciseId = exercise?.exerciseId ?: rx.exerciseId,
+                                        exercise = exercise?.toDto() ?: rx.exercise,
+                                        sets = sets ?: rx.sets,
+                                        repsMin = repsMin ?: rx.repsMin,
+                                        repsMax = repsMax ?: rx.repsMax,
+                                        loggedSets = if (swapped) emptyList() else rx.loggedSets,
+                                        targetWeightLbs = if (swapped) null else rx.targetWeightLbs,
+                                        loadBasis = if (swapped) null else rx.loadBasis,
                                     )
                                 }
                             },

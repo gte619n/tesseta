@@ -28,6 +28,21 @@ export function getAvailableExercises(
   );
 }
 
+// The in-workout swap picker (#4): exercises executable at `locationId`, ranked
+// by muscle/movement similarity to `similarTo` (the prescribed exercise), and
+// optionally narrowed by a name/alias `search`. The reference exercise is
+// excluded from the results.
+export function getExerciseSuggestions(
+  locationId: string,
+  similarTo?: string | null,
+  search?: string | null,
+): Promise<ExerciseResponse[]> {
+  const qs = new URLSearchParams({ locationId });
+  if (similarTo) qs.set("similarTo", similarTo);
+  if (search?.trim()) qs.set("search", search.trim());
+  return apiJson<ExerciseResponse[]>(`/api/exercises/suggestions?${qs}`);
+}
+
 // ── Admin reads ──────────────────────────────────────────────────────
 
 export function getAdminExerciseCatalog(): Promise<ExerciseResponse[]> {

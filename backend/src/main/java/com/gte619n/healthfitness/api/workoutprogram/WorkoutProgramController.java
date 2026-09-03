@@ -14,6 +14,9 @@ import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramService;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutPrescriptionCustomizationService;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutPrescriptionCustomizationService.InvalidPrescriptionEditException;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutPrescriptionCustomizationService.PrescriptionEdit;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramValidator;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutSessionCompletionService;
@@ -48,6 +51,7 @@ public class WorkoutProgramController {
     private final WorkoutProgramService service;
     private final WorkoutScheduleService schedule;
     private final WorkoutSessionCompletionService completion;
+    private final WorkoutPrescriptionCustomizationService customization;
     private final WorkoutProgramValidator validator;
     private final WorkoutProgramAssembler assembler;
     private final WorkoutSessionCoach coach;
@@ -60,6 +64,7 @@ public class WorkoutProgramController {
         WorkoutProgramService service,
         WorkoutScheduleService schedule,
         WorkoutSessionCompletionService completion,
+        WorkoutPrescriptionCustomizationService customization,
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
         WorkoutSessionCoach coach,
@@ -71,6 +76,7 @@ public class WorkoutProgramController {
         this.service = service;
         this.schedule = schedule;
         this.completion = completion;
+        this.customization = customization;
         this.validator = validator;
         this.assembler = assembler;
         this.coach = coach;
@@ -247,13 +253,20 @@ public class WorkoutProgramController {
     private void materializeIfMissing(
         String userId, String programId, String scheduledId, LogSessionRequest body
     ) {
-        if (body.phaseId() == null || body.dayId() == null || body.date() == null) {
+        materializeIfMissing(userId, programId, scheduledId, body.phaseId(), body.dayId(), body.date());
+    }
+
+    private void materializeIfMissing(
+        String userId, String programId, String scheduledId,
+        String phaseId, String dayId, LocalDate date
+    ) {
+        if (phaseId == null || dayId == null || date == null) {
             return;
         }
         if (schedule.session(userId, programId, scheduledId).isPresent()) {
             return;
         }
-        String expectedId = body.date() + "_" + body.dayId();
+        String expectedId = date + "_" + dayId;
         if (!expectedId.equals(scheduledId)) {
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
@@ -261,11 +274,49 @@ public class WorkoutProgramController {
             );
         }
         try {
-            schedule.materializeOne(userId, programId, body.phaseId(), body.dayId(), body.date());
+            schedule.materializeOne(userId, programId, phaseId, dayId, date);
         } catch (IllegalArgumentException e) {
             // Unknown program/phase/day — same contract as the run-day POST.
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         }
+    }
+
+    /**
+     * In-workout exercise swap / rep-set edit (#4). Retargets one prescription
+     * slot on this session's snapshot; with {@code applyToProgram} it also pushes
+     * the change to the program template's matching day and every future PLANNED
+     * session of that day (past/COMPLETED sessions and other days untouched).
+     * Materializes an ad-hoc session first when the day reference is supplied,
+     * mirroring the completion PUT.
+     */
+    @PostMapping("/{programId}/sessions/{scheduledId}/prescription")
+    public ScheduledWorkoutResponse customizePrescription(
+        @PathVariable String programId,
+        @PathVariable String scheduledId,
+        @RequestBody CustomizePrescriptionRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        materializeIfMissing(userId, programId, scheduledId, body.phaseId(), body.dayId(), body.date());
+        ScheduledWorkout updated;
+        try {
+            updated = customization.apply(userId, programId, scheduledId,
+                body.blockId(), body.orderIndex(), body.applyToProgram(),
+                new PrescriptionEdit(body.exerciseId(), body.sets(), body.repsMin(), body.repsMax()));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (InvalidPrescriptionEditException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        // A program-wide edit touches the template + future sessions too.
+        if (body.applyToProgram()) {
+            syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
+        } else {
+            syncNotifier.changed(userId, null, "workoutPrograms/scheduled");
+        }
+        return assembler.scheduled(userId, List.of(updated)).get(0);
     }
 
     @GetMapping("/{programId}/calendar")
