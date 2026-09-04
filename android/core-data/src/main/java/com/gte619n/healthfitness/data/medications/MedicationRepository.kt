@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.data.medications
 
 import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
 import com.gte619n.healthfitness.data.db.dao.MedicationDao
+import com.gte619n.healthfitness.data.db.entity.MedicationAdherenceEntity
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
@@ -20,6 +21,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -246,7 +248,37 @@ class MedicationRepository @Inject internal constructor(
         // #24: overlay the offline adherence mirror so a just-logged/undone dose
         // shows immediately, before the server projection reconciles on the next
         // pull. An ACTIVE mirror row ⇒ taken; a tombstoned (undone) row ⇒ not taken.
-        overlayMirroredAdherence(base, today)
+        overlayMirroredAdherence(base, today, adherenceDao.observeAll().first())
+    }
+
+    /**
+     * State-management Phase 1: the single reactive source of truth for today's
+     * doses, consumed by both the medical card and the dashboard. It combines the
+     * cached server projection (the authoritative window/dose layout) with the
+     * adherence mirror, re-emitting whenever EITHER changes — so a dose logged/
+     * undone anywhere (the reminder notification's "Take all", an in-app toggle,
+     * or a sync from another device) updates every observer live, without a
+     * network round-trip or an imperative refresh. [refreshTodaysDoses] revalidates
+     * the projection in the background; its cache write flows straight back in here.
+     */
+    fun observeTodaysDoses(): Flow<List<TodaysDose>> {
+        val today = LocalDate.now()
+        return combine(
+            dosesCache.observe(today.toString()),
+            adherenceDao.observeAll(),
+        ) { base, rows ->
+            overlayMirroredAdherence(base ?: emptyList(), today, rows)
+        }.flowOn(io)
+    }
+
+    /**
+     * Background revalidation of the server projection behind [observeTodaysDoses]:
+     * fetches the live checklist and writes it to the cache, which the reactive
+     * read re-emits. Errors are swallowed (the reactive read keeps showing the
+     * cached + mirror-overlaid state offline).
+     */
+    suspend fun refreshTodaysDoses() {
+        withContext(io) { runCatching { todaysDoses() } }
     }
 
     /**
@@ -261,7 +293,7 @@ class MedicationRepository @Inject internal constructor(
     suspend fun cachedTodaysDoses(): List<TodaysDose>? = withContext(io) {
         val today = LocalDate.now()
         val base = dosesCache.read(today.toString()) ?: return@withContext null
-        overlayMirroredAdherence(base, today)
+        overlayMirroredAdherence(base, today, adherenceDao.observeAll().first())
     }
 
     /**
@@ -271,11 +303,12 @@ class MedicationRepository @Inject internal constructor(
      * INCLUDING tombstones (`observeAll`) so an undo is visible. Rows for other
      * dates are ignored.
      */
-    private suspend fun overlayMirroredAdherence(
+    private fun overlayMirroredAdherence(
         base: List<TodaysDose>,
         today: LocalDate,
+        rows: List<MedicationAdherenceEntity>,
     ): List<TodaysDose> {
-        val overrides = adherenceDao.observeAll().first()
+        val overrides = rows
             .mapNotNull { row ->
                 val payload = decodeAdherence(row.payloadJson)?.takeIf { it.date == today }
                     ?: return@mapNotNull null

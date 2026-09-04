@@ -147,13 +147,20 @@ present.
 - **Phase 0 — motivating bug fixes (this branch, `reminder-fixes`).**
   - Today's doses reactive off `LocalWriteBus` (Bug 2). ✅
   - `USE_EXACT_ALARM` for precise background delivery (Bug 1). ✅
-- **Phase 1 — unify "today's doses" into one reactive read.** A single
-  mirror-overlaid Flow (adherence ⊗ medications ⊗ cached projection) consumed by
-  both the medical card and the dashboard card; delete the overlay-less
-  `DashboardTodaysDosesRepository` REST path.
+- **Phase 1 — unify "today's doses" into one reactive read. ✅ (this branch)**
+  `MedicationRepository.observeTodaysDoses()` is now a single reactive source —
+  `combine(TodaysDosesCache.observe(today), adherenceDao.observeAll())` overlaid —
+  and `TodaysDosesViewModel` collects it (with `refreshTodaysDoses()` as background
+  revalidation). Every observer of the rendered card (home, foldable, full screen)
+  updates live on any dose write. The vestigial, never-rendered
+  `DashboardViewModel.todaysDoses` / `DashboardTodaysDosesRepository` (overlay-less
+  REST) is removed in Phase 2, alongside the other dashboard cache cleanup and its
+  ViewModel test / sign-out wiring.
 - **Phase 2 — dashboard cards → observe reactive repos** where a mirror exists
   (nutrition already does); migrate blood/body-composition/daily-metrics off
-  DataStore snapshots or make `LocalWriteBus` invalidation domain-complete.
+  DataStore snapshots or make `LocalWriteBus` invalidation domain-complete; and
+  delete the dead `DashboardTodaysDosesRepository` path (now superseded by the
+  Phase 1 reactive source).
 - **Phase 3 — standardize ViewModel state** on `stateIn(WhileSubscribed)` derived
   from repository Flows; drop redundant `ON_RESUME` refreshes where a reactive
   source makes them unnecessary.
