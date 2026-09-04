@@ -73,6 +73,8 @@ fun NutritionTodayRoute(
         onUpdateEntry = viewModel::updateEntry,
         onFetchServingHint = viewModel::servingHint,
         onSaveComposite = viewModel::saveCompositeMeal,
+        onPreviewAdjustment = viewModel::previewAdjustment,
+        onApplyAdjustment = viewModel::applyAdjustment,
         onOpenAddSheet = viewModel::openAddSheet,
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
@@ -101,6 +103,8 @@ fun NutritionTodayScreen(
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
     onFetchServingHint: suspend (String) -> String?,
     onSaveComposite: (String, String, Double, List<Double>) -> Unit,
+    onPreviewAdjustment: suspend (String, String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
+    onApplyAdjustment: (String, com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
     onOpenAddSheet: () -> Unit,
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
@@ -165,6 +169,9 @@ fun NutritionTodayScreen(
             onDismiss = onCloseEditSheet,
             onSave = onUpdateEntry,
             fetchServingHint = onFetchServingHint,
+            previewAdjustment = { instruction -> onPreviewAdjustment(editing.entryId, instruction) },
+            onApplyAdjustment = { request -> onApplyAdjustment(editing.entryId, request) },
+            applyingAdjustment = state.savingAdjust,
         )
     }
 
@@ -178,6 +185,9 @@ fun NutritionTodayScreen(
                 onSaveComposite(composite.entryId, title, portion, quantities)
             },
             fetchServingHint = onFetchServingHint,
+            previewAdjustment = { instruction -> onPreviewAdjustment(composite.entryId, instruction) },
+            onApplyAdjustment = { request -> onApplyAdjustment(composite.entryId, request) },
+            applyingAdjustment = state.savingAdjust,
         )
     }
 }
@@ -305,6 +315,8 @@ private fun NutritionTodayPreview() {
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
             onFetchServingHint = { null },
             onSaveComposite = { _, _, _, _ -> },
+            onPreviewAdjustment = { _, _ -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse("") },
+            onApplyAdjustment = { _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
             onDescribeAsync = { _, _ -> }, onRelogRecent = { _, _ -> },

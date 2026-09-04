@@ -11,6 +11,7 @@ import com.google.genai.types.Schema;
 import com.google.genai.types.Tool;
 import com.google.genai.types.Type;
 import com.gte619n.healthfitness.core.nutrition.Macros;
+import com.gte619n.healthfitness.core.nutrition.MealAdjustmentAnalyzer;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,11 +39,41 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "app.nutrition.capture.enabled", havingValue = "true", matchIfMissing = true)
-public class MealPhotoExtractor implements MealPhotoAnalyzer {
+public class MealPhotoExtractor implements MealPhotoAnalyzer, MealAdjustmentAnalyzer {
 
     private static final Logger log = LoggerFactory.getLogger(MealPhotoExtractor.class);
 
     static final String TOOL_NAME = "extract_meal_items";
+
+    private static final String ADJUST_PROMPT = """
+        You are a nutrition assistant CORRECTING a meal that was previously
+        identified, possibly incorrectly. You are given, as text, the current
+        identification — a meal name and its food components, each with a portion
+        in grams and macros per 100 g — followed by the user's correction
+        instruction. When the meal was logged from a photo you are ALSO given that
+        original photo as a visual reference.
+
+        Decide what the instruction means and act accordingly:
+        - A TARGETED fix names or implies specific changes — e.g. "that's pearl
+          couscous, not lentils", "remove the bread", "add a fried egg", "the
+          chicken was about 200 g". Apply ONLY those changes: swap/add/remove/
+          re-portion the items referred to, and keep EVERY other item, its portion
+          and its per-100 g macros EXACTLY as given. Do not re-estimate untouched
+          items.
+        - A FULL re-identification says the whole thing is wrong (e.g. "this is
+          actually a chicken burrito bowl, not a salad"). Re-identify the meal from
+          scratch.
+
+        When both the photo and the instruction are available and they conflict,
+        the user's instruction WINS — they are correcting what the photo analysis
+        got wrong. Use the photo only to fill in details the instruction doesn't
+        specify (e.g. the portion of a newly named item).
+
+        Return the corrected meal by calling the extract_meal_items tool with the
+        SAME rules as a fresh analysis: per-100 g macros for each item, a gram
+        portion for each item, isPackagedProduct set correctly, and a short natural
+        mealName (not a comma-joined ingredient list). Do not reply in prose.
+        """;
 
     private static final String SYSTEM_PROMPT = """
         You are a nutrition vision assistant. You are given ONE photo of food.
@@ -139,6 +170,80 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer {
                 "Gemini did not return an extract_meal_items tool call");
         }
         return toAnalysis(args);
+    }
+
+    @Override
+    public MealAnalysis adjust(
+        MealContext current, String instruction, byte[] photoBytes, String mimeType) {
+        if (instruction == null || instruction.isBlank()) {
+            throw new NutritionExtractionException("adjustment instruction is empty");
+        }
+
+        List<Part> parts = new ArrayList<>();
+        parts.add(Part.fromText(ADJUST_PROMPT));
+        parts.add(Part.fromText(renderCurrentMeal(current)));
+        parts.add(Part.fromText("User correction: " + instruction.strip()));
+        if (photoBytes != null && photoBytes.length > 0) {
+            String contentType = (mimeType == null || mimeType.isBlank()) ? "image/jpeg" : mimeType;
+            parts.add(Part.fromText("Original photo of the meal:"));
+            parts.add(Part.fromBytes(photoBytes, contentType));
+        }
+        Content content = Content.fromParts(parts.toArray(new Part[0]));
+        GenerateContentConfig config = GenerateContentConfig.builder()
+            .tools(List.of(tool))
+            .build();
+
+        GenerateContentResponse response;
+        try {
+            response = client.models.generateContent(model, content, config);
+        } catch (RuntimeException e) {
+            log.warn("Meal adjustment call failed: {}", e.getMessage());
+            throw new NutritionExtractionException("meal adjustment failed", e);
+        }
+
+        Map<String, Object> args = toolArgs(response);
+        if (args == null) {
+            throw new NutritionExtractionException(
+                "Gemini did not return an extract_meal_items tool call");
+        }
+        return toAnalysis(args);
+    }
+
+    /** Render the current identification as the text the model corrects. */
+    private static String renderCurrentMeal(MealContext current) {
+        StringBuilder sb = new StringBuilder("Current identification:\n");
+        if (current != null) {
+            sb.append("mealName: ").append(current.mealName() == null ? "" : current.mealName())
+                .append('\n');
+            sb.append("isPackagedProduct: ").append(current.packagedProduct()).append('\n');
+            sb.append("items:\n");
+            List<MealContext.Item> items = current.items();
+            if (items != null) {
+                for (MealContext.Item it : items) {
+                    if (it == null) continue;
+                    sb.append("  - name: ").append(it.name() == null ? "" : it.name());
+                    if (it.portionGrams() != null) {
+                        sb.append(", portionGrams: ").append(round(it.portionGrams()));
+                    }
+                    Macros m = it.macrosPer100g();
+                    if (m != null) {
+                        sb.append(", macrosPer100g: {")
+                            .append("kcal ").append(round(m.caloriesKcal()))
+                            .append(", protein ").append(round(m.proteinGrams()))
+                            .append(", carbs ").append(round(m.carbsGrams()))
+                            .append(", fat ").append(round(m.fatGrams()))
+                            .append('}');
+                    }
+                    sb.append('\n');
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String round(Double v) {
+        if (v == null) return "?";
+        return String.valueOf(Math.round(v));
     }
 
     private Map<String, Object> toolArgs(GenerateContentResponse response) {

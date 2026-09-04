@@ -8,6 +8,8 @@ import com.gte619n.healthfitness.data.nutrition.CapturePreviewStore
 import com.gte619n.healthfitness.data.nutrition.NutritionOpStore
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.data.sync.SyncSignals
+import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
@@ -68,6 +70,8 @@ data class NutritionTodayUiState(
     val editingComposite: Entry? = null,
     /** true while an ingredient portion is being saved. */
     val savingIngredient: Boolean = false,
+    /** true while an accepted AI adjustment is being applied to an entry. */
+    val savingAdjust: Boolean = false,
     /** true while a user-initiated pull-to-refresh is in flight. */
     val isRefreshing: Boolean = false,
     /**
@@ -221,6 +225,44 @@ class NutritionTodayViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _state.update { it.copy(savingIngredient = false, error = e.message ?: "Save failed") }
+            }
+        }
+    }
+
+    /**
+     * Adjust with AI — preview: run a free-text correction against the entry and
+     * return the revised meal as a proposal. Suspends for the model round-trip and
+     * throws on failure so the sheet can surface the error; nothing is persisted.
+     */
+    suspend fun previewAdjustment(entryId: String, instruction: String): AdjustPreviewResponse {
+        return repository.adjustPreview(_state.value.date.format(ISO_DATE), entryId, instruction)
+    }
+
+    /**
+     * Adjust with AI — apply the accepted proposal onto the entry, then reload and
+     * close the sheet. Runs on the ViewModel scope (not the sheet's) so closing the
+     * sheet can't cancel the in-flight apply. A composite meal's image regenerates
+     * server-side, so the settle-poll swaps it in.
+     */
+    fun applyAdjustment(entryId: String, request: AdjustApplyRequest) {
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingAdjust = true) }
+        viewModelScope.launch {
+            try {
+                repository.adjustApply(date, entryId, request)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(
+                        day = day,
+                        savingAdjust = false,
+                        editingEntry = null,
+                        editingComposite = null,
+                        error = null,
+                    )
+                }
+                pollWhileImagesGenerate(_state.value.date)
+            } catch (e: Exception) {
+                _state.update { it.copy(savingAdjust = false, error = e.message ?: "Couldn't adjust the meal") }
             }
         }
     }

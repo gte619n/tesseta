@@ -12,6 +12,8 @@ import type {
   LogDescribedMealBody,
   MealSearchResult,
   RelogBody,
+  AdjustApplyBody,
+  AdjustPreviewResponse,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS, MEAL_ICONS, isImageMissing } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -69,6 +71,12 @@ type Props = {
   ) => Promise<void>;
   logMeal: (date: string, body: LogDescribedMealBody) => Promise<void>;
   relogEntry: (date: string, body: RelogBody) => Promise<void>;
+  adjustPreview: (
+    date: string,
+    entryId: string,
+    instruction: string,
+  ) => Promise<AdjustPreviewResponse>;
+  adjustApply: (date: string, entryId: string, body: AdjustApplyBody) => Promise<void>;
   recents: Entry[];
   // The entryId currently being dragged (lifted by the DnD context), so this
   // section can suppress its drop highlight when the entry already lives here.
@@ -89,6 +97,8 @@ export function MealSection({
   describeMealAsync,
   logMeal,
   relogEntry,
+  adjustPreview,
+  adjustApply,
   recents,
   activeId,
 }: Props) {
@@ -235,6 +245,8 @@ export function MealSection({
           date={date}
           updateEntry={updateEntry}
           servingHint={servingHint}
+          adjustPreview={adjustPreview}
+          adjustApply={adjustApply}
         />
       )}
 
@@ -247,6 +259,8 @@ export function MealSection({
           updateEntry={updateEntry}
           updateIngredient={updateIngredient}
           servingHint={servingHint}
+          adjustPreview={adjustPreview}
+          adjustApply={adjustApply}
         />
       )}
     </div>

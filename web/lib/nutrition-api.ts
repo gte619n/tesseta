@@ -14,6 +14,8 @@ import type {
   MealSearchResult,
   RelogBody,
   Meal,
+  AdjustPreviewResponse,
+  AdjustApplyBody,
 } from "./types/nutrition";
 
 // Server-only HTTP helpers for the Nutrition module (IMPL-13).
@@ -121,6 +123,37 @@ export async function servingHint(
     `/api/me/nutrition/${date}/entries/${entryId}/serving-hint`,
   );
   return res.hint ?? null;
+}
+
+/**
+ * Adjust with AI — preview a free-text correction of a logged meal (e.g.
+ * "that's pearl couscous, not lentils"). Runs the model server-side against the
+ * entry (+ its stored photo when there is one) and returns the revised meal as a
+ * proposal. Nothing is persisted; the client shows the diff before confirming.
+ */
+export function adjustPreview(
+  date: string,
+  entryId: string,
+  instruction: string,
+): Promise<AdjustPreviewResponse> {
+  return send<AdjustPreviewResponse>(
+    `/api/me/nutrition/${date}/entries/${entryId}/adjust/preview`,
+    "POST",
+    { instruction },
+  );
+}
+
+/** Adjust with AI — apply an accepted proposal onto the entry. */
+export function adjustApply(
+  date: string,
+  entryId: string,
+  body: AdjustApplyBody,
+): Promise<Entry> {
+  return send<Entry>(
+    `/api/me/nutrition/${date}/entries/${entryId}/adjust/apply`,
+    "POST",
+    body,
+  );
 }
 
 /** Re-portion one ingredient of a composite meal (by index). */

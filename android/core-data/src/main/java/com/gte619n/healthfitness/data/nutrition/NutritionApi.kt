@@ -1,5 +1,8 @@
 package com.gte619n.healthfitness.data.nutrition
 
+import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
 import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
 import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
@@ -64,6 +67,25 @@ interface NutritionApi {
     suspend fun reanalyzeEntry(
         @Path("date") date: String,
         @Path("entryId") entryId: String,
+    ): Entry
+
+    // Adjust with AI — preview: re-runs the model against the entry (+ its photo
+    // when there is one) from a free-text correction and returns the revised meal
+    // as a proposal. Nothing is persisted; the client shows the diff and confirms.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/adjust/preview")
+    suspend fun adjustPreview(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+        @Body body: AdjustPreviewRequest,
+    ): AdjustPreviewResponse
+
+    // Adjust with AI — apply the accepted proposal onto the entry (regenerating
+    // the finished-meal image for a composite meal). Returns the updated entry.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/adjust/apply")
+    suspend fun adjustApply(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+        @Body body: AdjustApplyRequest,
     ): Entry
 
     // Lazy "typical serving" explanation for an entry, shown in the edit sheet.

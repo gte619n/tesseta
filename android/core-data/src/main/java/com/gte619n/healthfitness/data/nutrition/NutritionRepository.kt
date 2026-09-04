@@ -4,6 +4,9 @@ import com.gte619n.healthfitness.data.db.dao.NutritionEntryDao
 import com.gte619n.healthfitness.data.db.dao.NutritionTargetDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
+import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
 import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
 import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
@@ -231,6 +234,30 @@ class NutritionRepository @Inject constructor(
      */
     suspend fun reanalyzeEntry(date: String, entryId: String): Entry {
         val entry = api.reanalyzeEntry(date, entryId)
+        fillDay(date)
+        return entry
+    }
+
+    /**
+     * Adjust with AI — preview a free-text correction of a logged meal. Online
+     * read: runs the model server-side against the entry (+ its stored photo when
+     * there is one) and returns the revised meal as a proposal. Nothing is
+     * persisted, so the client can show the diff before the user confirms.
+     */
+    suspend fun adjustPreview(
+        date: String,
+        entryId: String,
+        instruction: String,
+    ): AdjustPreviewResponse = api.adjustPreview(date, entryId, AdjustPreviewRequest(instruction))
+
+    /**
+     * Adjust with AI — apply the accepted proposal onto the entry, then refresh
+     * this date's mirror so the row re-renders with the corrected name/macros and
+     * the settle-poll swaps in the regenerated finished-meal image. Online-only,
+     * like composite-meal generation.
+     */
+    suspend fun adjustApply(date: String, entryId: String, body: AdjustApplyRequest): Entry {
+        val entry = api.adjustApply(date, entryId, body)
         fillDay(date)
         return entry
     }
