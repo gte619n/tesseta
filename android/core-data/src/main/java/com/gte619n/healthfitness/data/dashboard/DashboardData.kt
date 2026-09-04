@@ -5,12 +5,10 @@ import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.domain.dashboard.BloodMarkerSummary
 import com.gte619n.healthfitness.domain.dashboard.ChartXLabel
 import com.gte619n.healthfitness.domain.dashboard.DailyMetricPoint
-import com.gte619n.healthfitness.domain.dashboard.DoseWindow
 import com.gte619n.healthfitness.domain.dashboard.HistoryPoint
 import com.gte619n.healthfitness.domain.dashboard.MarkerTone
 import com.gte619n.healthfitness.domain.dashboard.RecentActivityEntry
 import com.gte619n.healthfitness.domain.dashboard.RecentActivityKind
-import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import android.content.Context
@@ -47,9 +45,6 @@ internal interface DashboardApi {
 
     @GET("api/me/blood")
     suspend fun bloodReadings(): List<BloodReadingDto>
-
-    @GET("api/me/medications/today")
-    suspend fun todaysDoses(@Query("date") date: String? = null): List<TodaysDoseDto>
 
     @GET("api/me/daily-metrics")
     suspend fun dailyMetrics(
@@ -89,17 +84,6 @@ internal data class ReferenceDto(
     val goodThreshold: Double,
     val displayMin: Double,
     val displayMax: Double,
-)
-
-internal data class TodaysDoseDto(
-    val medicationId: String,
-    val drugName: String,
-    val imageUrl: String?,
-    val window: String,
-    val dose: Double,
-    val unit: String?,
-    val taken: Boolean,
-    val takenAt: Instant?,
 )
 
 internal data class DailyMetricDto(
@@ -243,17 +227,6 @@ internal object BloodMarkerSummaryMapper {
         }
     }
 }
-
-internal fun TodaysDoseDto.toDomain(): TodaysDoseSummary = TodaysDoseSummary(
-    medicationId = medicationId,
-    drugName = drugName,
-    imageUrl = imageUrl,
-    window = runCatching { DoseWindow.valueOf(window.uppercase()) }.getOrDefault(DoseWindow.MORNING),
-    dose = dose,
-    unit = unit,
-    taken = taken,
-    takenAt = takenAt,
-)
 
 internal fun RecentActivityDto.toDomain(): RecentActivityEntry = RecentActivityEntry(
     // Unknown kinds degrade to UNKNOWN rather than dropping the row, so an older
@@ -473,29 +446,6 @@ class DashboardBloodMarkerRepository @Inject internal constructor(
     }
 }
 
-// offline-fix: today's doses are a server-derived projection (no syncable Room
-// entity), so — like the recent-activity feed — they get a single-slot DataStore
-// cache. Every successful load overwrites the cache; the dashboard seeds the card
-// from the cache instantly on a cold/offline open (only for the current day) and
-// then revalidates. Cleared on sign-out via SignOutSideEffects.
-class DashboardTodaysDosesRepository @Inject internal constructor(
-    private val api: DashboardApi,
-    private val cache: DashboardDosesCache,
-    @IoDispatcher private val io: CoroutineDispatcher,
-) {
-    suspend fun loadToday(): List<TodaysDoseSummary> = withContext(io) {
-        // Device-local date so the dashboard dose card resets on the user's day.
-        val today = LocalDate.now().toString()
-        val doses = api.todaysDoses(today).map { it.toDomain() }
-        cache.write(today, doses)
-        doses
-    }
-
-    suspend fun cachedToday(): List<TodaysDoseSummary>? = withContext(io) {
-        cache.read(LocalDate.now().toString())
-    }
-}
-
 // Reuses the feature NutritionRepository (same getDay endpoint as the nutrition
 // Today screen) so the dashboard card and the full screen never disagree. The
 // returned day carries both totals and the macro target.
@@ -551,53 +501,6 @@ class RecentActivityCache @Inject constructor(
 
     suspend fun clear() {
         context.recentActivityStore.edit { it.remove(key) }
-    }
-}
-
-private val Context.dashboardDosesStore by preferencesDataStore("hf-dashboard-doses")
-
-/**
- * offline-fix: single-slot persistent cache for the dashboard "Today's doses" card.
- *
- * Today's doses are a server-derived projection (medication schedule × adherence)
- * with no stable syncable entity to mirror in Room, so — like [RecentActivityCache]
- * — they live in their own small DataStore. It holds only the latest day's list,
- * tagged with the device-local date, so a cold/offline open renders the last-known
- * doses instantly while a fresh pull runs. A cache from a previous day is ignored
- * (returns null) so the card never shows yesterday's checklist.
- *
- * Cleared on sign-out via [com.gte619n.healthfitness.data.db.DbWipe]'s sibling hook
- * (this DataStore is NOT the encrypted Room DB) to avoid leaking one account's
- * doses to the next on a shared device.
- */
-@Singleton
-class DashboardDosesCache @Inject constructor(
-    @ApplicationContext private val context: Context,
-    moshi: Moshi,
-) {
-    private val keyDate = stringPreferencesKey("date")
-    private val keyList = stringPreferencesKey("doses")
-    private val adapter = moshi.adapter<List<TodaysDoseSummary>>(
-        Types.newParameterizedType(List::class.java, TodaysDoseSummary::class.java),
-    )
-
-    /** Cached doses for [date], or null if the cache is empty or for another day. */
-    suspend fun read(date: String): List<TodaysDoseSummary>? {
-        val prefs = context.dashboardDosesStore.data.first()
-        if (prefs[keyDate] != date) return null
-        val json = prefs[keyList] ?: return null
-        return runCatching { adapter.fromJson(json) }.getOrNull()
-    }
-
-    suspend fun write(date: String, doses: List<TodaysDoseSummary>) {
-        context.dashboardDosesStore.edit {
-            it[keyDate] = date
-            it[keyList] = adapter.toJson(doses)
-        }
-    }
-
-    suspend fun clear() {
-        context.dashboardDosesStore.edit { it.clear() }
     }
 }
 

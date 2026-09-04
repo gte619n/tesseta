@@ -189,6 +189,48 @@ class GoalsRepositoryTest {
         // The payload preserves the server-derived done flag (never clobbered).
         assertTrue(row.payloadJson.contains("\"done\":true"))
     }
+
+    @Test
+    fun `setStepDone optimistically flips the step in the mirror`() = runBlocking {
+        seedGoal()
+        // Start not-done, so the toggle flips it on.
+        val notDone = Step(
+            stepId = "s1", phaseId = "p1", goalId = "g1", title = "Walk 1mi",
+            orderIndex = 0, kind = StepKind.MANUAL, done = false,
+        )
+        mirror.upsert(
+            MirrorTables.GOAL_STEPS,
+            MirrorRowData("g1/p1/s1", stepAdapter.toJson(notDone), 1L, "ACTIVE", false, "SYNCED"),
+        )
+        // The deep refresh is unavailable, so refreshedDeep() falls back to the
+        // mirror — proving the flip was written locally before/independent of the
+        // server cascade.
+        io.mockk.coEvery { api.getGoalDeep("g1") } throws RuntimeException("offline")
+
+        val deep = repository.setStepDone("g1", "p1", "s1", true)
+
+        val row = mirror.getRow(MirrorTables.GOAL_STEPS, "g1/p1/s1")!!
+        assertTrue(row.payloadJson.contains("\"done\":true"))
+        assertTrue(deep.phases.single().steps.single().done)
+    }
+
+    @Test
+    fun `setStepDone reverts the optimistic flip when the server rejects it`() = runBlocking {
+        seedGoal() // step s1 starts done=true
+        io.mockk.coEvery { api.patchStep(any(), any(), any(), any()) } throws RuntimeException("rejected")
+
+        var threw = false
+        try {
+            repository.setStepDone("g1", "p1", "s1", false)
+        } catch (e: RuntimeException) {
+            threw = true
+        }
+
+        assertTrue(threw)
+        // The optimistic un-complete was rolled back to the previous state.
+        val row = mirror.getRow(MirrorTables.GOAL_STEPS, "g1/p1/s1")!!
+        assertTrue(row.payloadJson.contains("\"done\":true"))
+    }
 }
 
 // --- In-memory DAOs over a shared FakeMirrorOps ---

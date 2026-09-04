@@ -8,7 +8,9 @@ import com.gte619n.healthfitness.domain.medications.TodaysDose
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,6 +55,21 @@ class TodaysDosesCache @Inject constructor(
         val json = prefs[keyList] ?: return null
         return runCatching { adapter.fromJson(json) }.getOrNull()
     }
+
+    /**
+     * Reactive counterpart to [read]: emits the cached doses for [date] and
+     * re-emits whenever [write] updates them, so a mirror-overlaid reactive read
+     * recomputes the moment a fresh projection lands. Emits null for a cold cache
+     * or a previous day's data.
+     */
+    fun observe(date: String): Flow<List<TodaysDose>?> =
+        context.todaysDosesStore.data.map { prefs ->
+            if (prefs[keyDate] != date) {
+                null
+            } else {
+                prefs[keyList]?.let { runCatching { adapter.fromJson(it) }.getOrNull() }
+            }
+        }
 
     suspend fun write(date: String, doses: List<TodaysDose>) {
         context.todaysDosesStore.edit {

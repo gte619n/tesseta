@@ -1,6 +1,5 @@
 package com.gte619n.healthfitness.mobile.auth
 
-import com.gte619n.healthfitness.data.dashboard.DashboardDosesCache
 import com.gte619n.healthfitness.data.dashboard.RecentActivityCache
 import com.gte619n.healthfitness.data.db.DbWipe
 import com.gte619n.healthfitness.data.medications.TodaysDosesCache
@@ -40,8 +39,6 @@ class SignOutSideEffects @Inject constructor(
     private val tokenRegistration: Lazy<TokenRegistration>,
     private val dbWipe: DbWipe,
     private val recentActivityCache: RecentActivityCache,
-    // offline-fix: the dashboard doses card's own DataStore cache (not the Room DB).
-    private val dashboardDosesCache: DashboardDosesCache,
     // offline-fix: the full Today's Doses screen's own DataStore cache (not the Room DB).
     private val todaysDosesCache: TodaysDosesCache,
 ) {
@@ -52,7 +49,6 @@ class SignOutSideEffects @Inject constructor(
         dbWipe.wipe()
         // 3. Clear the side caches (their own DataStores, not the Room DB).
         runCatching { recentActivityCache.clear() }
-        runCatching { dashboardDosesCache.clear() }
         runCatching { todaysDosesCache.clear() }
     }
 }

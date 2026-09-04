@@ -104,9 +104,15 @@ class ReminderBootReceiver : BroadcastReceiver() {
 }
 
 /**
- * Periodic safety net (~12h): replans even if every other trigger was missed
- * (e.g. medications changed on another device while this one slept). Also
- * keeps the chain alive across the 48h planning horizon.
+ * Periodic safety net: replans even if every other trigger was missed (medications
+ * changed on another device while this one slept) AND — critically — re-arms a DUE
+ * alarm that was silently dropped without a reboot. Exact alarms don't survive a
+ * force-stop / aggressive OEM battery-kill, and the boot receiver only fires on an
+ * actual reboot, so a dropped morning alarm would otherwise not re-arm until the
+ * user next opened the app ("morning reminder only showed when I opened the app").
+ * An hourly cadence self-heals that within the hour; replan() is cheap and
+ * offline-safe (cached settings + local mirrors + re-arm), so the battery cost is
+ * negligible. WorkManager still Doze-batches these into maintenance windows.
  */
 @HiltWorker
 class ReminderPlanWorker @AssistedInject constructor(
@@ -121,12 +127,15 @@ class ReminderPlanWorker @AssistedInject constructor(
     companion object {
         const val NAME = "hf-reminder-plan"
 
-        /** Idempotent registration (KEEP), mirroring the sync periodic worker. */
+        /**
+         * Idempotent registration. UPDATE (not KEEP) so existing installs adopt the
+         * tightened cadence instead of staying on a previously-enqueued interval.
+         */
         fun register(workManager: WorkManager) {
-            val request = PeriodicWorkRequestBuilder<ReminderPlanWorker>(12, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<ReminderPlanWorker>(1, TimeUnit.HOURS)
                 .build()
             workManager.enqueueUniquePeriodicWork(
-                NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+                NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
         }
     }
 }

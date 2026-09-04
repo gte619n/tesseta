@@ -642,6 +642,46 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun `parked completion clears once the server reconciles the session as terminal`() = runTest {
+        finishAndPark()
+        // A pull reconciled the session to COMPLETED (finished on another device,
+        // or a later upload of the same session landed): the row is now the
+        // server's truth (dirty=false), so the parked payload is superseded and
+        // the stale recovery banner must clear.
+        scheduledDao.upsert(
+            WorkoutScheduledEntity(
+                id = ENTITY_ID,
+                payloadJson = scheduledAdapter.toJson(scheduledDto().copy(status = "COMPLETED")),
+                lastUpdate = T0 + 3_000_000,
+                status = "ACTIVE",
+                dirty = false,
+                syncState = "SYNCED",
+            ),
+        )
+
+        assertTrue(repo.observeParkedCompletions().first().isEmpty())
+    }
+
+    @Test
+    fun `a completed row that is still our dirty optimistic write keeps the recovery banner`() = runTest {
+        finishAndPark()
+        // Same terminal status, but the row is still OUR un-uploaded optimistic
+        // completion (dirty=true) — genuinely parked, so recovery must remain.
+        scheduledDao.upsert(
+            WorkoutScheduledEntity(
+                id = ENTITY_ID,
+                payloadJson = scheduledAdapter.toJson(scheduledDto().copy(status = "COMPLETED")),
+                lastUpdate = T0 + 3_000_000,
+                status = "ACTIVE",
+                dirty = true,
+                syncState = "PENDING",
+            ),
+        )
+
+        assertEquals(1, repo.observeParkedCompletions().first().size)
+    }
+
+    @Test
     fun `missing mirror row surfaces as session-unavailable`() = runTest {
         finishAndPark()
         scheduledDao.delete(ENTITY_ID)

@@ -271,6 +271,48 @@ data class DescribeMealLogRequest(
     val id: String? = null,
 )
 
+// ---- Adjust with AI -------------------------------------------------------
+
+/**
+ * One component of an AI meal correction — a proposed item on preview, or an
+ * accepted item echoed back on apply. Mirrors the backend AdjustItemDto.
+ */
+data class AdjustItem(
+    val name: String,
+    val servingLabel: String? = null,
+    val servingGrams: Double? = null,
+    val macrosPer100g: Macros? = null,
+    val macros: Macros? = null,
+)
+
+/** Body for POST api/me/nutrition/{date}/entries/{entryId}/adjust/preview. */
+data class AdjustPreviewRequest(
+    val instruction: String,
+)
+
+/**
+ * POST …/adjust/preview response: the revised meal as a non-persisted proposal,
+ * plus the before/after day-total macros so the client can render the diff.
+ */
+data class AdjustPreviewResponse(
+    val mealName: String,
+    val packagedProduct: Boolean = false,
+    val items: List<AdjustItem> = emptyList(),
+    val newTotals: Macros = Macros.EMPTY,
+    val oldTotals: Macros = Macros.EMPTY,
+)
+
+/**
+ * Body for POST …/adjust/apply: the accepted proposal echoed back, plus whether
+ * to also save the corrected meal to the shared catalog for reuse.
+ */
+data class AdjustApplyRequest(
+    val mealName: String,
+    val packagedProduct: Boolean = false,
+    val items: List<AdjustItem> = emptyList(),
+    val saveAsMeal: Boolean = false,
+)
+
 // ---- Capture (multipart) proposals ---------------------------------------
 
 /** One itemized component of a meal photo (POST capture/meal). */

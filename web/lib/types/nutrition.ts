@@ -224,6 +224,36 @@ export type LogDescribedMealBody = {
   meal: Meal;
 };
 
+// ── Adjust with AI ───────────────────────────────────────────────────
+// One component of an AI meal correction — a proposed item on preview, or an
+// accepted item echoed back on apply. Mirrors the backend AdjustItemDto.
+export type AdjustItem = {
+  name: string;
+  servingLabel: string | null;
+  servingGrams: number | null;
+  macrosPer100g: Macros | null;
+  macros: Macros | null;
+};
+
+// Result of POST …/adjust/preview: the revised meal as a non-persisted proposal
+// plus the before/after day-total macros so the client can render the diff.
+export type AdjustPreviewResponse = {
+  mealName: string;
+  packagedProduct: boolean;
+  items: AdjustItem[];
+  newTotals: Macros;
+  oldTotals: Macros;
+};
+
+// Body for POST …/adjust/apply: the accepted proposal echoed back, plus whether
+// to also save the corrected meal to the shared catalog for reuse.
+export type AdjustApplyBody = {
+  mealName: string;
+  packagedProduct: boolean;
+  items: AdjustItem[];
+  saveAsMeal: boolean;
+};
+
 // Body for POST /api/me/nutrition/{date}/relog: one-tap copy of a past entry.
 export type RelogBody = {
   sourceDate: string;

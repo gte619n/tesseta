@@ -414,6 +414,14 @@ private fun SessionBody(
         // auto-start). Consumed by the destination page once it picks it up.
         var autoStartStep by remember { mutableStateOf<Int?>(null) }
 
+        // The very first action in a fresh session is "Start workout" rather than
+        // a bare "Log set 1": tapping it announces the opening exercise (the coach
+        // cue is otherwise silent on the first settle) and then the card reverts to
+        // the normal per-set "Log set N". Once the lifter has started — or anything
+        // is already logged (a resumed session) — there's nothing to start.
+        var started by rememberSaveable(draft.scheduledId) { mutableStateOf(false) }
+        val showStart = !started && draft.logged.values.all { it.isEmpty() }
+
         // ---- coach voice cues (PR2, refined) --------------------------------
         // Speak only when the coach *changes* exercise, never on the first
         // settle after (re)entering the composition — coming back into the app
@@ -502,10 +510,30 @@ private fun SessionBody(
             }
         }
 
-        if (overview) {
-            if (restTimer != null && restTimer.isRunning(now)) {
-                RestTimerBar(restTimer = restTimer, now = now, onDismiss = onDismissRest)
+        // Rest countdown, ticked off the shared restTimer flow on its OWN
+        // sub-second loop — deliberately independent of the elapsed-clock `now`
+        // above. The old gate depended on both `restTimer` AND `now` staying in
+        // lockstep; keying the countdown straight to the flow (the same one the
+        // foreground notification renders) makes the on-screen timer appear
+        // whenever a rest is running and clear exactly when it ends, as reliably
+        // as the notification. Null ⇒ no active rest.
+        var restRemaining by remember { mutableStateOf<Long?>(null) }
+        LaunchedEffect(restTimer) {
+            val timer = restTimer
+            if (timer == null) {
+                restRemaining = null
+                return@LaunchedEffect
             }
+            while (true) {
+                val secs = timer.remainingSeconds(Instant.now())
+                restRemaining = secs.takeIf { it > 0 }
+                if (secs <= 0) break
+                delay(250)
+            }
+        }
+
+        if (overview) {
+            restRemaining?.let { RestTimerBar(remainingSeconds = it, onDismiss = onDismissRest) }
             OverviewList(
                 steps = steps,
                 logged = draft.logged,
@@ -540,7 +568,6 @@ private fun SessionBody(
                     logged = draft.logged[step.key].orEmpty(),
                     lastSets = lastSets,
                     now = now,
-                    restTimer = restTimer,
                     voiceEnabled = voiceEnabled,
                     announce = announce,
                     substituteOptions = substituteOptions,
@@ -554,9 +581,12 @@ private fun SessionBody(
                     onEditSet = { index, set -> onEditSet(step.key, index, set) },
                     onLogTimed = { seconds -> onLogTimed(step.key, seconds) },
                     onLogSet = { set -> onLogSet(step.key, set) },
+                    restRemainingSeconds = restRemaining,
                     onDismissRest = onDismissRest,
                     autoStart = autoStartStep == page,
                     onAutoStartConsumed = { if (autoStartStep == page) autoStartStep = null },
+                    showStart = showStart,
+                    onStarted = { started = true },
                 )
             }
             CoachActionsBar(
@@ -584,7 +614,7 @@ private fun announceStep(
 }
 
 @Composable
-private fun RestTimerBar(restTimer: RestTimer, now: Instant, onDismiss: () -> Unit) {
+private fun RestTimerBar(remainingSeconds: Long, onDismiss: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -602,7 +632,7 @@ private fun RestTimerBar(restTimer: RestTimer, now: Instant, onDismiss: () -> Un
         Text(
             stringResource(
                 R.string.workout_session_rest_remaining,
-                restCountdownLabel(restTimer.remainingSeconds(now)),
+                restCountdownLabel(remainingSeconds),
             ),
             style = Hf.type.monoMd,
             color = Hf.colors.accentDim,
@@ -630,7 +660,6 @@ private fun ExercisePage(
     logged: List<LoggedSet>,
     lastSets: Map<String, List<LoggedSet>>,
     now: Instant,
-    restTimer: RestTimer?,
     voiceEnabled: Boolean,
     announce: (String) -> Unit,
     substituteOptions: List<ExerciseSummary>,
@@ -644,9 +673,15 @@ private fun ExercisePage(
     onEditSet: (Int, LoggedSet) -> Unit,
     onLogTimed: (Int) -> Unit,
     onLogSet: (LoggedSet) -> Unit,
-    onDismissRest: () -> Unit,
+    // Non-null while a rest is running: seconds left, ticked off the shared timer.
+    restRemainingSeconds: Long? = null,
+    onDismissRest: () -> Unit = {},
     autoStart: Boolean = false,
     onAutoStartConsumed: () -> Unit = {},
+    // Session not yet started: the rep card's primary action reads "Start workout"
+    // and, on tap, announces this exercise before falling back to "Log set N".
+    showStart: Boolean = false,
+    onStarted: () -> Unit = {},
 ) {
     val prescription = step.prescription
     var showSwap by remember(step.key) { mutableStateOf(false) }
@@ -707,10 +742,9 @@ private fun ExercisePage(
                     onFlagFrame = onFlagFrame,
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (restTimer != null && restTimer.isRunning(now)) {
+                restRemainingSeconds?.let { remaining ->
                     RestOverlay(
-                        restTimer = restTimer,
-                        now = now,
+                        remainingSeconds = remaining,
                         onDismiss = onDismissRest,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -736,6 +770,11 @@ private fun ExercisePage(
                     prescription = prescription,
                     logged = logged,
                     lastSets = lastSets,
+                    showStart = showStart,
+                    onStart = {
+                        if (voiceEnabled) announceStep(step, logged, lastSets, announce)
+                        onStarted()
+                    },
                     onToggleSet = onToggleSet,
                     onEditSet = onEditSet,
                     onLogSet = onLogSet,
@@ -985,8 +1024,7 @@ private fun SwapExerciseRow(
 /** The rest countdown, large and centered, laid over the demo hero while resting. */
 @Composable
 private fun RestOverlay(
-    restTimer: RestTimer,
-    now: Instant,
+    remainingSeconds: Long,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1002,7 +1040,7 @@ private fun RestOverlay(
         ) {
             CapsLabel(stringResource(R.string.workout_session_rest_label), color = Hf.colors.accent)
             Text(
-                restCountdownLabel(restTimer.remainingSeconds(now)),
+                restCountdownLabel(remainingSeconds),
                 style = Hf.type.monoLg.copy(fontSize = 72.sp),
                 color = Hf.colors.textPrimary,
             )
@@ -1030,6 +1068,8 @@ private fun RepSetsSection(
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
     onLogSet: (LoggedSet) -> Unit,
+    showStart: Boolean = false,
+    onStart: () -> Unit = {},
 ) {
     val exerciseName = prescription.exercise?.name ?: prescription.exerciseId
     val totalRows = maxOf(prescription.sets ?: 1, logged.size)
@@ -1056,6 +1096,8 @@ private fun RepSetsSection(
                 prescription = prescription,
                 exerciseName = exerciseName,
                 onLog = { weight, reps -> onLogSet(LoggedSet(weightLbs = weight, reps = reps)) },
+                showStart = showStart,
+                onStart = onStart,
             )
             UpcomingHint(remaining = totalRows - (logged.size + 1))
         } else {
@@ -1077,6 +1119,8 @@ private fun ActiveRepCard(
     prescription: Prescription,
     exerciseName: String,
     onLog: (Double?, Int?) -> Unit,
+    showStart: Boolean = false,
+    onStart: () -> Unit = {},
 ) {
     // Staged values for this set; re-keyed per set (and when the prefill lands)
     // so each new row carries the previous load/reps forward.
@@ -1119,19 +1163,23 @@ private fun ActiveRepCard(
             )
         }
         Button(
-            onClick = { onLog(weight, reps) },
+            onClick = { if (showStart) onStart() else onLog(weight, reps) },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
         ) {
             Icon(
-                Icons.Filled.CheckCircle,
+                if (showStart) Icons.Filled.PlayArrow else Icons.Filled.CheckCircle,
                 contentDescription = null,
                 tint = Hf.colors.textInverse,
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                stringResource(R.string.workout_session_log_set, setNumber),
+                if (showStart) {
+                    stringResource(R.string.workout_session_start)
+                } else {
+                    stringResource(R.string.workout_session_log_set, setNumber)
+                },
                 style = Hf.type.bodyMd,
                 color = Hf.colors.textInverse,
             )

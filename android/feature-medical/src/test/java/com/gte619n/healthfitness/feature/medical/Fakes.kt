@@ -112,6 +112,10 @@ internal fun fakeMedicationRepository(
     // offline-fix: default to a cold cache (null) so the ViewModel falls through to
     // the network path; cache-seed behaviour is stubbed explicitly where tested.
     coEvery { repo.cachedTodaysDoses() } returns null
+    // Phase 1: today's doses are now a reactive source of truth; the ViewModel
+    // observes this stream and revalidates via refreshTodaysDoses().
+    every { repo.observeTodaysDoses() } returns MutableStateFlow(doses)
+    coEvery { repo.refreshTodaysDoses() } returns Unit
     return repo
 }
 

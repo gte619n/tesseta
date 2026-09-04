@@ -53,6 +53,10 @@ fun IngredientsSheet(
     onSave: (title: String, portion: Double, quantities: List<Double>) -> Unit,
     // Lazy "typical serving" explanation for the whole meal, fetched on open.
     fetchServingHint: suspend (String) -> String? = { null },
+    // "Adjust with AI": preview a free-text correction, then apply it on confirm.
+    previewAdjustment: suspend (String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
+    onApplyAdjustment: (com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
+    applyingAdjustment: Boolean = false,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val ingredients = entry.ingredients.orEmpty()
@@ -162,7 +166,15 @@ fun IngredientsSheet(
                 Spacer(Modifier.height(10.dp))
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(14.dp))
+            AdjustWithAiSection(
+                isComposite = true,
+                previewAdjustment = previewAdjustment,
+                onApply = onApplyAdjustment,
+                applying = applyingAdjustment,
+            )
+
+            Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Cancel", Modifier.weight(1f), onDismiss)
                 PrimaryButton(

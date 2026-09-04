@@ -16,6 +16,8 @@ import {
   describeMealAsync,
   logDescribedMeal,
   relogEntry,
+  adjustPreview,
+  adjustApply,
 } from "@/lib/nutrition-api";
 import type {
   Meal,
@@ -25,6 +27,7 @@ import type {
   UpdateIngredientBody,
   LogDescribedMealBody,
   RelogBody,
+  AdjustApplyBody,
 } from "@/lib/types/nutrition";
 import { MEALS, mealForHour, isImageMissing } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
@@ -182,6 +185,25 @@ export default async function NutritionPage(props: {
     return servingHint(entryDate, entryId);
   }
 
+  async function adjustPreviewAction(
+    entryDate: string,
+    entryId: string,
+    instruction: string,
+  ) {
+    "use server";
+    return adjustPreview(entryDate, entryId, instruction);
+  }
+
+  async function adjustApplyAction(
+    entryDate: string,
+    entryId: string,
+    body: AdjustApplyBody,
+  ) {
+    "use server";
+    await adjustApply(entryDate, entryId, body);
+    revalidatePath("/me/nutrition");
+  }
+
   async function searchFoodsAction(q: string) {
     "use server";
     return searchFoods(q);
@@ -336,6 +358,8 @@ export default async function NutritionPage(props: {
           describeMealAsync={describeMealAsyncAction}
           logMeal={logMealAction}
           relogEntry={relogAction}
+          adjustPreview={adjustPreviewAction}
+          adjustApply={adjustApplyAction}
           recents={recents}
         />
       </div>

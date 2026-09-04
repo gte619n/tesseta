@@ -21,6 +21,8 @@ import type {
   LogDescribedMealBody,
   MealSearchResult,
   RelogBody,
+  AdjustApplyBody,
+  AdjustPreviewResponse,
 } from "@/lib/types/nutrition";
 import { MEAL_LABELS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
@@ -75,6 +77,12 @@ type Props = {
   ) => Promise<void>;
   logMeal: (date: string, body: LogDescribedMealBody) => Promise<void>;
   relogEntry: (date: string, body: RelogBody) => Promise<void>;
+  adjustPreview: (
+    date: string,
+    entryId: string,
+    instruction: string,
+  ) => Promise<AdjustPreviewResponse>;
+  adjustApply: (date: string, entryId: string, body: AdjustApplyBody) => Promise<void>;
   recents: Entry[];
 };
 
@@ -123,6 +131,8 @@ export function NutritionMeals({
   describeMealAsync,
   logMeal,
   relogEntry,
+  adjustPreview,
+  adjustApply,
   recents,
 }: Props) {
   const toast = useToast();
@@ -211,6 +221,8 @@ export function NutritionMeals({
             describeMealAsync={describeMealAsync}
             logMeal={logMeal}
             relogEntry={relogEntry}
+            adjustPreview={adjustPreview}
+            adjustApply={adjustApply}
             recents={recents}
             activeId={activeId}
           />

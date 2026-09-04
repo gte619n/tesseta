@@ -4,10 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gte619n.healthfitness.data.db.entity.NutritionOpEntity
 import com.gte619n.healthfitness.data.db.entity.NutritionOpType
-import com.gte619n.healthfitness.data.nutrition.CapturePreviewStore
 import com.gte619n.healthfitness.data.nutrition.NutritionOpStore
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.data.sync.SyncSignals
+import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
@@ -25,7 +26,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -68,6 +68,8 @@ data class NutritionTodayUiState(
     val editingComposite: Entry? = null,
     /** true while an ingredient portion is being saved. */
     val savingIngredient: Boolean = false,
+    /** true while an accepted AI adjustment is being applied to an entry. */
+    val savingAdjust: Boolean = false,
     /** true while a user-initiated pull-to-refresh is in flight. */
     val isRefreshing: Boolean = false,
     /**
@@ -83,7 +85,6 @@ data class NutritionTodayUiState(
 class NutritionTodayViewModel @Inject constructor(
     private val repository: NutritionRepository,
     pendingOps: NutritionOpStore,
-    capturePreviews: CapturePreviewStore,
     syncSignals: SyncSignals,
 ) : ViewModel() {
 
@@ -94,6 +95,16 @@ class NutritionTodayViewModel @Inject constructor(
     // logged foods swap their placeholder for the studio image without the user
     // having to leave and return. Cancelled/replaced on each load.
     private var imagePollJob: Job? = null
+
+    // State-mgmt: the reactive source of truth for the shown day. Observes the
+    // entries + target mirror (and the capture-preview store) so a local write, a
+    // SyncEngine pull, or a just-captured photo reflects immediately — closing the
+    // gap that used to make nutrition rely purely on imperative REST refetches.
+    // The load/refresh/settle-poll paths remain as the network revalidation that
+    // fills the mirror; this observer renders whatever lands there. Re-subscribed
+    // when the shown date changes.
+    private var dayJob: Job? = null
+    private var observedDate: LocalDate? = null
 
     // First load (and every return to the foreground) is driven by the screen's
     // LifecycleResumeEffect, so there's no init load — that keeps the page from
@@ -127,17 +138,25 @@ class NutritionTodayViewModel @Inject constructor(
                 if (completed) refresh()
             }
         }
-        // A just-captured photo becomes available for its entry the moment the
-        // upload worker associates it (CapturePreviewStore), and is dropped again
-        // when the generated image lands. Re-assemble from the mirror (NO network)
-        // on each change so the row swaps in the real photo — and later the studio
-        // image — immediately, rather than waiting on the next settle-poll tick.
-        viewModelScope.launch {
-            capturePreviews.previews.drop(1).collect {
-                val cached = runCatching {
-                    repository.cachedDay(_state.value.date.format(ISO_DATE))
-                }.getOrNull()
-                if (cached != null) _state.update { it.copy(day = cached) }
+        // (The just-captured-photo overlay and mirror reactivity are now handled by
+        // the reactive [startDayObserve] stream, which includes the capture-preview
+        // store in its assembly.)
+    }
+
+    /**
+     * (Re)subscribe the reactive day stream for [date]. Emits the mirror-assembled
+     * day immediately and on every subsequent mirror / capture-preview change, so
+     * the screen reflects local writes and background syncs without an imperative
+     * refetch. Guarded on the shown date so a late emission for a day the user
+     * navigated away from is ignored.
+     */
+    private fun startDayObserve(date: LocalDate) {
+        dayJob?.cancel()
+        dayJob = viewModelScope.launch {
+            repository.observeDay(date.format(ISO_DATE)).collect { day ->
+                if (_state.value.date == date) {
+                    _state.update { it.copy(day = day, loading = false) }
+                }
             }
         }
     }
@@ -225,6 +244,44 @@ class NutritionTodayViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Adjust with AI — preview: run a free-text correction against the entry and
+     * return the revised meal as a proposal. Suspends for the model round-trip and
+     * throws on failure so the sheet can surface the error; nothing is persisted.
+     */
+    suspend fun previewAdjustment(entryId: String, instruction: String): AdjustPreviewResponse {
+        return repository.adjustPreview(_state.value.date.format(ISO_DATE), entryId, instruction)
+    }
+
+    /**
+     * Adjust with AI — apply the accepted proposal onto the entry, then reload and
+     * close the sheet. Runs on the ViewModel scope (not the sheet's) so closing the
+     * sheet can't cancel the in-flight apply. A composite meal's image regenerates
+     * server-side, so the settle-poll swaps it in.
+     */
+    fun applyAdjustment(entryId: String, request: AdjustApplyRequest) {
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingAdjust = true) }
+        viewModelScope.launch {
+            try {
+                repository.adjustApply(date, entryId, request)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(
+                        day = day,
+                        savingAdjust = false,
+                        editingEntry = null,
+                        editingComposite = null,
+                        error = null,
+                    )
+                }
+                pollWhileImagesGenerate(_state.value.date)
+            } catch (e: Exception) {
+                _state.update { it.copy(savingAdjust = false, error = e.message ?: "Couldn't adjust the meal") }
+            }
+        }
+    }
+
     private fun load(date: LocalDate) {
         // offline-fix — cache-first, revalidate in the background. If we're already
         // showing this date, stay quiet (stale-while-revalidate). Otherwise seed
@@ -232,6 +289,12 @@ class NutritionTodayViewModel @Inject constructor(
         // spinner; the full-screen loader now shows only when there's genuinely
         // nothing cached yet (i.e. before the first sync).
         val sameDateShown = _state.value.day != null && _state.value.date == date
+        // Point the reactive day stream at the shown date (only re-subscribe when
+        // it actually changes). It renders the mirror instantly and on every write.
+        if (observedDate != date) {
+            observedDate = date
+            startDayObserve(date)
+        }
         viewModelScope.launch {
             if (!sameDateShown) {
                 val cached = runCatching { repository.cachedDay(date.format(ISO_DATE)) }.getOrNull()

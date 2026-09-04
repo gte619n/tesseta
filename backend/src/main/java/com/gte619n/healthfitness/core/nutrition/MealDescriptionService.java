@@ -409,6 +409,25 @@ public class MealDescriptionService {
         return space > 0 ? trimmed.substring(0, space) : trimmed;
     }
 
+    /**
+     * Save a corrected meal to the shared catalog so it's findable and
+     * re-loggable next time (backs the "adjust with AI" flow's optional
+     * "also save this meal" action). A new {@link SavedMeal} is created — nothing
+     * shared or verified is mutated — and its studio photo is enqueued. Returns
+     * the saved meal.
+     */
+    public SavedMeal saveMeal(
+        String userId, String mealName, List<CompositeIngredient> ingredients) {
+        requireUser(userId);
+        if (mealName == null || mealName.isBlank()) {
+            throw new IllegalArgumentException("mealName is required");
+        }
+        if (ingredients == null || ingredients.isEmpty()) {
+            throw new IllegalArgumentException("a saved meal needs at least one ingredient");
+        }
+        return createSavedMeal(userId, mealName, List.copyOf(ingredients));
+    }
+
     private SavedMeal createSavedMeal(
         String userId, String mealName, List<CompositeIngredient> ingredients) {
         Macros total = Macros.zero();

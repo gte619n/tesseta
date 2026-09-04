@@ -11,6 +11,8 @@ import {
 } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
+import { AdjustWithAi } from "@/components/nutrition/AdjustWithAi";
+import type { AdjustApplyBody, AdjustPreviewResponse } from "@/lib/types/nutrition";
 
 type Props = {
   isOpen: boolean;
@@ -24,6 +26,17 @@ type Props = {
   ) => Promise<void>;
   // Lazy "typical serving" explanation, fetched when the modal opens.
   servingHint: (date: string, entryId: string) => Promise<string | null>;
+  // "Adjust with AI": preview a free-text correction, then apply it on confirm.
+  adjustPreview: (
+    date: string,
+    entryId: string,
+    instruction: string,
+  ) => Promise<AdjustPreviewResponse>;
+  adjustApply: (
+    date: string,
+    entryId: string,
+    body: AdjustApplyBody,
+  ) => Promise<void>;
 };
 
 // Calories are NOT an editable field: they derive from the macros (4/4/9,
@@ -83,6 +96,8 @@ export function EditEntryModal({
   date,
   updateEntry,
   servingHint,
+  adjustPreview,
+  adjustApply,
 }: Props) {
   const toast = useToast();
   const per100g = useMemo(() => derivedPer100g(entry), [entry]);
@@ -399,6 +414,16 @@ export function EditEntryModal({
                 Calories: {Math.round(derivedKcal ?? 0)} kcal — computed from macros
               </div>
             )}
+          </div>
+
+          {/* Adjust with AI */}
+          <div className="border-t-[0.5px] border-border-subtle pt-4">
+            <AdjustWithAi
+              isComposite={false}
+              adjustPreview={(instruction) => adjustPreview(date, entry.entryId, instruction)}
+              adjustApply={(body) => adjustApply(date, entry.entryId, body)}
+              onApplied={onClose}
+            />
           </div>
         </div>
 

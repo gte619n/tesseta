@@ -23,7 +23,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -145,6 +147,31 @@ class NutritionRepositoryLogMealTest {
         )
 
         assertEquals("PENDING", loggedEntry().imageStatus)
+    }
+
+    // --- state-mgmt: reactive SSOT read ---
+
+    @Test
+    fun `observeDay reflects the mirror the network fill populates (incl joined image)`() = runBlocking {
+        // The joined server projection (renamed imageUrl/imageStatus) is written
+        // into the mirror by the fill; observeDay assembles the SAME day from the
+        // mirror, so any writer to it is visible to every observing screen.
+        coEvery { api.getDay(date) } returns dayWith(entry("http://img/salmon.png", "READY"))
+        repository.refreshDay(date)
+
+        val day = repository.observeDay(date).first()
+
+        val logged = day.meals.single().entries.single()
+        assertEquals("e1", logged.entryId)
+        assertEquals("READY", logged.imageStatus)
+        assertEquals("http://img/salmon.png", logged.imageUrl)
+        assertEquals(492.0, day.totals.caloriesKcal!!, 0.001)
+    }
+
+    @Test
+    fun `observeDay is empty for a day with nothing mirrored`() = runBlocking {
+        val day = repository.observeDay(date).first()
+        assertTrue(day.meals.isEmpty())
     }
 }
 

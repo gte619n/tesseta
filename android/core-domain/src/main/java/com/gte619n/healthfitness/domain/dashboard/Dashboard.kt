@@ -54,19 +54,6 @@ data class BloodMarkerSummary(
     val history: List<HistoryPoint>,
 )
 
-enum class DoseWindow { MORNING, AFTERNOON, EVENING, BEDTIME }
-
-data class TodaysDoseSummary(
-    val medicationId: String,
-    val drugName: String,
-    val imageUrl: String?,
-    val window: DoseWindow,
-    val dose: Double,
-    val unit: String?,
-    val taken: Boolean,
-    val takenAt: Instant?,
-)
-
 data class DailyMetricPoint(
     val date: LocalDate,
     val steps: Int?,

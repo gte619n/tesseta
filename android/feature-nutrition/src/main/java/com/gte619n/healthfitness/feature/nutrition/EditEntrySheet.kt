@@ -52,6 +52,10 @@ fun EditEntrySheet(
     // Lazy "typical serving" explanation, fetched once when the sheet opens.
     // Returns null when unavailable, in which case no hint line is shown.
     fetchServingHint: suspend (String) -> String? = { null },
+    // "Adjust with AI": preview a free-text correction, then apply it on confirm.
+    previewAdjustment: suspend (String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
+    onApplyAdjustment: (com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
+    applyingAdjustment: Boolean = false,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Generated + cached server-side on first view; absent for un-synced rows.
@@ -239,6 +243,14 @@ fun EditEntrySheet(
                 EditNumberField("Sugar (g)", sugar, Modifier.weight(1f)) { sugar = it }
             }
             EditNumberField("Fiber (g)", fiber, Modifier.fillMaxWidth()) { fiber = it }
+            Spacer(Modifier.height(20.dp))
+
+            AdjustWithAiSection(
+                isComposite = false,
+                previewAdjustment = previewAdjustment,
+                onApply = onApplyAdjustment,
+                applying = applyingAdjustment,
+            )
             Spacer(Modifier.height(16.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

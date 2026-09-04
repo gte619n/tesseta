@@ -28,9 +28,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import com.gte619n.healthfitness.domain.medications.TimeWindow
+import com.gte619n.healthfitness.domain.medications.TodaysDose
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -60,6 +64,7 @@ class MedicationRepositoryTest {
     private lateinit var dao: FakeMedicationDao
     private lateinit var adherenceDao: FakeMedicationAdherenceDao
     private lateinit var outboxDao: FakeOutboxDao
+    private lateinit var dosesCache: TodaysDosesCache
 
     // Mirror-backed meds carry only `drugId`; the repo resolves `drug` through this.
     private val fakeDrugs = mutableMapOf<String, Drug>()
@@ -100,7 +105,7 @@ class MedicationRepositoryTest {
         // offline-fix: today's-doses cache is a DataStore wrapper; a relaxed mock
         // keeps write() a no-op and read() a cold miss (null) so the network path
         // under MockWebServer is exercised unchanged.
-        val dosesCache = io.mockk.mockk<TodaysDosesCache>(relaxed = true)
+        dosesCache = io.mockk.mockk<TodaysDosesCache>(relaxed = true)
         repository = MedicationRepository(api, drugRepo, dao, adherenceDao, support, dosesCache, MedsTestMoshi.instance, Dispatchers.Unconfined)
     }
 
@@ -310,6 +315,39 @@ class MedicationRepositoryTest {
         assertEquals(1, doses.size)
         assertTrue("offline log overlays the live checklist as taken", doses.single().taken)
     }
+
+    @Test
+    fun `observeTodaysDoses reflects an adherence-mirror log so the home card and reminder share one source`() =
+        runBlocking {
+            // The cross-screen consistency invariant behind the original bug: a dose
+            // logged by AdherenceRepository (what the reminder's "Take all" writes)
+            // is seen by the SAME reactive read the home card observes. The reactive
+            // read combines the cached projection with the adherence mirror.
+            val today = java.time.LocalDate.now()
+            every { dosesCache.observe(today.toString()) } returns flowOf(
+                listOf(
+                    TodaysDose(
+                        medicationId = "m1", drugName = "X", window = TimeWindow.MORNING,
+                        dose = 250.0, unit = "mg", taken = false, takenAt = null,
+                    ),
+                ),
+            )
+            val payload = MedsTestMoshi.instance.adapter(AdherenceMirrorPayload::class.java).toJson(
+                AdherenceMirrorPayload(
+                    medicationId = "m1", date = today, window = "MORNING", taken = true,
+                    takenAt = java.time.Instant.parse("2026-05-30T08:00:00Z"), dose = 250.0,
+                ),
+            )
+            dao.mirror.upsert(
+                MirrorTables.MEDICATION_ADHERENCE,
+                MirrorRowData("m1/$today/MORNING", payload, 1L, "ACTIVE", true, "PENDING"),
+            )
+
+            val doses = repository.observeTodaysDoses().first()
+
+            assertEquals(1, doses.size)
+            assertTrue("the reactive read overlays the adherence mirror as taken", doses.single().taken)
+        }
 
     @Test
     fun `delete tombstones the row and enqueues a DELETE mutation`() = runBlocking {

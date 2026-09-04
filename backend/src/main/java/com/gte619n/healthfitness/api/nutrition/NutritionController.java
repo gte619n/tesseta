@@ -14,6 +14,7 @@ import com.gte619n.healthfitness.core.nutrition.FoodSource;
 import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetService;
 import com.gte619n.healthfitness.core.nutrition.Macros;
+import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService;
 import com.gte619n.healthfitness.core.nutrition.MealCaptureService;
 import com.gte619n.healthfitness.core.nutrition.MealDescriptionService;
 import com.gte619n.healthfitness.core.nutrition.MealType;
@@ -22,6 +23,7 @@ import com.gte619n.healthfitness.core.nutrition.NutritionService;
 import com.gte619n.healthfitness.core.nutrition.ServingHintService;
 import com.gte619n.healthfitness.core.nutrition.ServingSize;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
+import com.gte619n.healthfitness.integrations.nutrition.NutritionExtractionException;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -59,6 +61,7 @@ public class NutritionController {
     private final SyncChangeNotifier syncNotifier;
     private final MealCaptureService mealCapture;
     private final MealDescriptionService mealDescription;
+    private final MealAdjustmentService mealAdjustment;
     private final ServingHintService servingHints;
 
     public NutritionController(
@@ -71,6 +74,7 @@ public class NutritionController {
         SyncChangeNotifier syncNotifier,
         MealCaptureService mealCapture,
         MealDescriptionService mealDescription,
+        MealAdjustmentService mealAdjustment,
         ServingHintService servingHints
     ) {
         this.currentUser = currentUser;
@@ -82,6 +86,7 @@ public class NutritionController {
         this.syncNotifier = syncNotifier;
         this.mealCapture = mealCapture;
         this.mealDescription = mealDescription;
+        this.mealAdjustment = mealAdjustment;
         this.servingHints = servingHints;
     }
 
@@ -345,6 +350,68 @@ public class NutritionController {
         }
         syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
         return ResponseEntity.accepted().body(toResponse(reopened));
+    }
+
+    /**
+     * Preview an AI correction of a logged meal from a free-text instruction
+     * (e.g. "that's pearl couscous, not lentils"). Runs the model against the
+     * current entry — and the original photo when there is one — and returns the
+     * revised meal as a <strong>proposal only</strong>: nothing is persisted, so
+     * the client can show the before/after diff and let the user accept or
+     * discard. The model itself decides whether the instruction is a targeted fix
+     * or a full re-identification. Extraction failures map to 422.
+     */
+    @PostMapping("/{date}/entries/{entryId}/adjust/preview")
+    public AdjustPreviewResponse adjustPreview(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId,
+        @RequestBody AdjustPreviewRequest body
+    ) {
+        if (body == null || body.instruction() == null || body.instruction().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "instruction is required");
+        }
+        String userId = currentUser.get().userId();
+        try {
+            MealAdjustmentService.AdjustmentProposal proposal =
+                mealAdjustment.preview(userId, date, entryId, body.instruction());
+            return AdjustPreviewResponse.from(proposal);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException | NutritionExtractionException e) {
+            throw new ResponseStatusException(
+                HttpStatus.UNPROCESSABLE_ENTITY, "could not adjust the meal");
+        }
+    }
+
+    /**
+     * Apply a previewed correction the user accepted. Persists the revised meal
+     * onto the entry (regenerating the finished-meal image when it's a composite
+     * meal) and, when {@code saveAsMeal} is set, saves the corrected meal to the
+     * shared catalog so it's right next time. Returns the updated entry.
+     */
+    @PostMapping("/{date}/entries/{entryId}/adjust/apply")
+    public EntryResponse adjustApply(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId,
+        @RequestBody AdjustApplyRequest body
+    ) {
+        if (body == null || body.items() == null || body.items().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "at least one item is required");
+        }
+        String userId = currentUser.get().userId();
+        MealAdjustmentService.AcceptedAdjustment accepted =
+            new MealAdjustmentService.AcceptedAdjustment(
+                body.mealName(),
+                body.packagedProduct(),
+                body.items().stream().map(AdjustItemDto::toAccepted).toList());
+        FoodEntry entry;
+        try {
+            entry = mealAdjustment.apply(userId, date, entryId, accepted, body.saveAsMeal());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return toResponse(entry);
     }
 
     /**
@@ -931,5 +998,63 @@ public class NutritionController {
         Double servingGrams,
         String servingLabel,
         Double quantity
+    ) {}
+
+    /** Request for {@code POST /{date}/entries/{entryId}/adjust/preview}. */
+    public record AdjustPreviewRequest(String instruction) {}
+
+    /**
+     * Response for the adjust preview: the revised meal plus the before/after
+     * day-total macros so the client can render the diff.
+     */
+    public record AdjustPreviewResponse(
+        String mealName,
+        boolean packagedProduct,
+        List<AdjustItemDto> items,
+        MacrosDto newTotals,
+        MacrosDto oldTotals
+    ) {
+        static AdjustPreviewResponse from(MealAdjustmentService.AdjustmentProposal p) {
+            return new AdjustPreviewResponse(
+                p.mealName(),
+                p.packagedProduct(),
+                p.items().stream().map(AdjustItemDto::from).toList(),
+                MacrosDto.from(p.newTotals()),
+                MacrosDto.from(p.oldTotals()));
+        }
+    }
+
+    /** One proposed/accepted component of an AI adjustment. */
+    public record AdjustItemDto(
+        String name,
+        String servingLabel,
+        Double servingGrams,
+        MacrosDto macrosPer100g,
+        MacrosDto macros
+    ) {
+        static AdjustItemDto from(MealAdjustmentService.ProposalItem i) {
+            return new AdjustItemDto(
+                i.name(), i.servingLabel(), i.servingGrams(),
+                MacrosDto.from(i.macrosPer100g()), MacrosDto.from(i.macros()));
+        }
+
+        MealAdjustmentService.AcceptedItem toAccepted() {
+            return new MealAdjustmentService.AcceptedItem(
+                name, servingLabel, servingGrams,
+                macrosPer100g != null ? macrosPer100g.toMacros() : null,
+                macros != null ? macros.toMacros() : null);
+        }
+    }
+
+    /**
+     * Request for {@code POST /{date}/entries/{entryId}/adjust/apply}: the accepted
+     * proposal echoed back, plus whether to also save the corrected meal to the
+     * shared catalog for reuse.
+     */
+    public record AdjustApplyRequest(
+        String mealName,
+        boolean packagedProduct,
+        List<AdjustItemDto> items,
+        boolean saveAsMeal
     ) {}
 }

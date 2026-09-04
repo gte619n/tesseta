@@ -4,6 +4,9 @@ import com.gte619n.healthfitness.data.db.dao.NutritionEntryDao
 import com.gte619n.healthfitness.data.db.dao.NutritionTargetDao
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
+import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
 import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
 import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
@@ -20,7 +23,11 @@ import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapLatest
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -107,6 +114,23 @@ class NutritionRepository @Inject constructor(
             ingredients = ingredients,
         )
     }
+
+    /**
+     * State-mgmt: the reactive source of truth for a day. Re-assembles [date] from
+     * the mirror (the SAME [assembleDay] the imperative read uses — dual row
+     * shapes, capture-preview overlay and per-row syncState all preserved)
+     * whenever its inputs change: the entries mirror (local optimistic writes AND
+     * SyncEngine pulls), the target mirror, or the transient capture-preview
+     * store. So a change from any source — this device, another device's sync, or
+     * a just-captured photo — reflects on every observing screen without an
+     * imperative refetch. [refreshDay]/[day] remain the network revalidation that
+     * fills the mirror (the joined projection: catalog images, self-heal), which
+     * then flows straight back through here.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeDay(date: String): Flow<NutritionDay> =
+        combine(entryDao.observeActive(), targetDao.observeActive(), previews.previews) { _, _, _ -> }
+            .mapLatest { assembleDay(date) }
 
     suspend fun day(date: String): NutritionDay {
         if (support.killSwitchOn()) return api.getDay(date)
@@ -231,6 +255,30 @@ class NutritionRepository @Inject constructor(
      */
     suspend fun reanalyzeEntry(date: String, entryId: String): Entry {
         val entry = api.reanalyzeEntry(date, entryId)
+        fillDay(date)
+        return entry
+    }
+
+    /**
+     * Adjust with AI — preview a free-text correction of a logged meal. Online
+     * read: runs the model server-side against the entry (+ its stored photo when
+     * there is one) and returns the revised meal as a proposal. Nothing is
+     * persisted, so the client can show the diff before the user confirms.
+     */
+    suspend fun adjustPreview(
+        date: String,
+        entryId: String,
+        instruction: String,
+    ): AdjustPreviewResponse = api.adjustPreview(date, entryId, AdjustPreviewRequest(instruction))
+
+    /**
+     * Adjust with AI — apply the accepted proposal onto the entry, then refresh
+     * this date's mirror so the row re-renders with the corrected name/macros and
+     * the settle-poll swaps in the regenerated finished-meal image. Online-only,
+     * like composite-meal generation.
+     */
+    suspend fun adjustApply(date: String, entryId: String, body: AdjustApplyRequest): Entry {
+        val entry = api.adjustApply(date, entryId, body)
         fillDay(date)
         return entry
     }

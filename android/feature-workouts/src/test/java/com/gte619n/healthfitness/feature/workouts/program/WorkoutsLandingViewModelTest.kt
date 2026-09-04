@@ -78,6 +78,9 @@ class WorkoutsLandingViewModelTest {
             flowOf(programs.firstOrNull { it.programId == id })
         }
         every { repo.observeCalendar(any(), any(), any()) } returns flowOf(calendar)
+        // The streak now reads completed sessions across all programs; in these
+        // single-program fixtures that's the same calendar.
+        every { repo.observeAllCompleted(any(), any()) } returns flowOf(calendar)
         every { settingsRepo.weeklyStreakTarget } returns flowOf(weeklyTarget)
         return WorkoutsLandingViewModel(repo, sessionRepo, settingsRepo).also { it.today = today }
     }
