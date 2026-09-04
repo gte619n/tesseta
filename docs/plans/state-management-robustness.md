@@ -156,11 +156,20 @@ present.
   `DashboardViewModel.todaysDoses` / `DashboardTodaysDosesRepository` (overlay-less
   REST) is removed in Phase 2, alongside the other dashboard cache cleanup and its
   ViewModel test / sign-out wiring.
-- **Phase 2 — dashboard cards → observe reactive repos** where a mirror exists
-  (nutrition already does); migrate blood/body-composition/daily-metrics off
-  DataStore snapshots or make `LocalWriteBus` invalidation domain-complete; and
-  delete the dead `DashboardTodaysDosesRepository` path (now superseded by the
-  Phase 1 reactive source).
+- **Phase 2 — dashboard invalidation + dead-source removal. ✅ (this branch)**
+  Chosen the lighter, low-risk path (the plan's "make `LocalWriteBus` invalidation
+  domain-complete") over a full DataStore→Room rewrite of the most-viewed screen:
+  the dashboard already force-refreshed all cards on any local write; it now also
+  refreshes on `SyncSignals` pushes, so a change on another device (or any
+  server-side change) invalidates the imperative cards instead of sitting stale
+  until the next resume/TTL. Deleted the never-rendered, overlay-less
+  `DashboardTodaysDosesRepository` / `DashboardDosesCache` / `TodaysDoseDto` /
+  `TodaysDoseSummary` / `DoseWindow` / the dashboard `todaysDoses` card state and
+  its sign-out wiring — the disjoint source the plan flagged. Deeper per-card
+  reactive-mirror observation (blood/body-composition/daily-metrics reading the
+  Room mirror directly, eliminating their DataStore snapshots) remains an optional
+  future refinement; the local + push invalidation now covers the actual
+  staleness bug class.
 - **Phase 3 — standardize ViewModel state** on `stateIn(WhileSubscribed)` derived
   from repository Flows; drop redundant `ON_RESUME` refreshes where a reactive
   source makes them unnecessary.

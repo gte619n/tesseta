@@ -10,15 +10,14 @@ import com.gte619n.healthfitness.data.dashboard.DashboardBodyCompositionReposito
 import com.gte619n.healthfitness.data.dashboard.DashboardDailyMetricsRepository
 import com.gte619n.healthfitness.data.dashboard.DashboardNutritionRepository
 import com.gte619n.healthfitness.data.dashboard.DashboardRecentActivityRepository
-import com.gte619n.healthfitness.data.dashboard.DashboardTodaysDosesRepository
 import com.gte619n.healthfitness.domain.dashboard.RecentActivityEntry
-import com.gte619n.healthfitness.domain.dashboard.TodaysDoseSummary
 import com.gte619n.healthfitness.domain.dashboard.WeightSummary
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepository
 import com.gte619n.healthfitness.domain.prefs.WeightUnit
 import com.gte619n.healthfitness.data.profile.ProfileRepository
 import com.gte619n.healthfitness.data.sync.LocalWriteBus
+import com.gte619n.healthfitness.data.sync.SyncSignals
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
@@ -53,7 +52,6 @@ data class DashboardUiState(
     val bodyComposition: CardState<WeightSummary?>,
     val dailyMetrics: CardState<List<DailyMetricPoint>>,
     val blood: CardState<List<BloodMarkerSummary>>,
-    val todaysDoses: CardState<List<TodaysDoseSummary>>,
     val nutrition: CardState<NutritionDay>,
     val recentActivity: CardState<List<RecentActivityEntry>>,
     val user: DashboardUser? = null,
@@ -68,7 +66,6 @@ data class DashboardUiState(
             CardState.Loading,
             CardState.Loading,
             CardState.Loading,
-            CardState.Loading,
         )
     }
 }
@@ -78,11 +75,11 @@ class DashboardViewModel @Inject constructor(
     private val bodyComp: DashboardBodyCompositionRepository,
     private val dailyMetrics: DashboardDailyMetricsRepository,
     private val blood: DashboardBloodMarkerRepository,
-    private val doses: DashboardTodaysDosesRepository,
     private val nutrition: DashboardNutritionRepository,
     private val recent: DashboardRecentActivityRepository,
     private val profile: ProfileRepository,
     localWriteBus: LocalWriteBus,
+    syncSignals: SyncSignals,
     unitPrefs: UnitPreferencesRepository,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(DashboardUiState.initial)
@@ -107,6 +104,12 @@ class DashboardViewModel @Inject constructor(
         // reactively from the optimistic write; this closes the gap for the rest.
         // Debounced so a burst of writes (e.g. a multi-set log) coalesces.
         observeLocalWrites(localWriteBus)
+        // State-mgmt Phase 2: local writes cover THIS device; a change on another
+        // device (or any server-side change) arrives as an FCM sync push. Refresh
+        // the imperative cards on those too, so the dashboard doesn't sit stale
+        // until the next resume/TTL — completing the invalidation the mirror-backed
+        // detail screens already get for free.
+        observeSyncPushes(syncSignals)
     }
 
     @OptIn(FlowPreview::class)
@@ -115,6 +118,12 @@ class DashboardViewModel @Inject constructor(
             localWriteBus.writes
                 .debounce(250)
                 .collect { refresh(force = true) }
+        }
+    }
+
+    private fun observeSyncPushes(syncSignals: SyncSignals) {
+        viewModelScope.launch {
+            syncSignals.pushes.collect { refresh(force = true) }
         }
     }
 
@@ -137,7 +146,6 @@ class DashboardViewModel @Inject constructor(
                 loadBodyComposition(),
                 loadDailyMetrics(),
                 loadBlood(),
-                loadDoses(),
                 loadNutrition(),
                 loadRecentActivity(),
             ).awaitAll()
@@ -156,7 +164,6 @@ class DashboardViewModel @Inject constructor(
     fun retryBodyComposition() { loadBodyComposition() }
     fun retryDailyMetrics() { loadDailyMetrics() }
     fun retryBlood() { loadBlood() }
-    fun retryDoses() { loadDoses() }
     fun retryNutrition() { loadNutrition() }
     fun retryRecentActivity() { loadRecentActivity() }
 
@@ -219,24 +226,6 @@ class DashboardViewModel @Inject constructor(
             .onFailure { t ->
                 if (_ui.value.blood !is CardState.Loaded) {
                     _ui.update { it.copy(blood = CardState.Error("Couldn't load blood", t)) }
-                }
-            }
-            .isSuccess
-    }
-
-    private fun loadDoses() = viewModelScope.async {
-        if (_ui.value.todaysDoses !is CardState.Loaded) {
-            runCatching { doses.cachedToday() }.getOrNull()?.let { c ->
-                if (_ui.value.todaysDoses !is CardState.Loaded) {
-                    _ui.update { it.copy(todaysDoses = CardState.Loaded(c)) }
-                }
-            }
-        }
-        runCatching { doses.loadToday() }
-            .onSuccess { d -> _ui.update { it.copy(todaysDoses = CardState.Loaded(d)) } }
-            .onFailure { t ->
-                if (_ui.value.todaysDoses !is CardState.Loaded) {
-                    _ui.update { it.copy(todaysDoses = CardState.Error("Couldn't load doses", t)) }
                 }
             }
             .isSuccess
