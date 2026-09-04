@@ -188,10 +188,26 @@ present.
   `flatMapLatest` ViewModels (workouts landing, goals list) into terminal
   `stateIn` was likewise skipped: it's non-mechanical (multi-source merges with
   loading/error handling) and pure churn on working screens for no user benefit.
-- **Phase 4 — durability & delivery.** Parked-mutation auto-cleanup when a later
-  op succeeds for the same entity; nutrition toward mirror-as-SSOT; reminder
-  delivery-health (tighter periodic replan, optional banner) for the force-stop
-  case; a small cross-screen consistency test harness.
+- **Phase 4 — durability & delivery. ◑ (partial — this branch)**
+  - **Reminder delivery-health. ✅** Tightened the periodic `ReminderPlanWorker`
+    from 12 h → **1 h** and switched its registration to `UPDATE` so existing
+    installs adopt it. Exact alarms (Phase 0's `USE_EXACT_ALARM`) don't survive a
+    force-stop / OEM battery-kill, and the boot receiver only fires on a real
+    reboot — so a dropped morning alarm previously wouldn't re-arm until the app
+    was opened. The hourly `replan()` (cheap, offline-safe) now self-heals that
+    within the hour.
+  - **Deferred (need careful design, not a quick sweep):**
+    - *Workouts parked-completion auto-cleanup.* The optimistic completion marks
+      the scheduled mirror row `COMPLETED` **before** its upload parks on a 4xx, so
+      a naive "hide the banner when the row is COMPLETED" check would suppress
+      legitimate recovery banners and **lose the user's logged sets**. A correct
+      fix must key off the row being SYNCED/server-reconciled (not the optimistic
+      write) — high-stakes, so left for a dedicated change with tests.
+    - *Goals step-done optimism.* Step done/doneAt is a deliberately
+      server-evaluated mutation; making it optimistic risks diverging from the
+      server's evaluation. Needs its own design pass.
+    - *Nutrition mirror-as-SSOT* and a *cross-screen consistency test harness*
+      remain as follow-ups.
 
 ## 8. Risks / caveats
 
