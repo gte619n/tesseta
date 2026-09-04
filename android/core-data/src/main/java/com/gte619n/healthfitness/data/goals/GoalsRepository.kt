@@ -325,6 +325,14 @@ class GoalsRepository @Inject constructor(
      * intent the server re-evaluates, so it goes straight to `PATCH .../steps/{sid}`
      * (NOT the structural-edit outbox) and returns the refreshed deep goal so the UI
      * sees the cascade (phase completion, next-phase activation, goal completion).
+     *
+     * State-mgmt: the checkbox used to lag a full network round-trip (every open
+     * view — list, detail, roadmap — waited for [refreshedDeep]). We now flip the
+     * step's `done` in the mirror OPTIMISTICALLY first so all reactive views update
+     * at once; the PATCH remains the authoritative write and [refreshedDeep]
+     * reconciles the full cascade. A local-only mirror refresh (NOT the outbox,
+     * like [appendToGoalPhaseOrder]); on failure the previous row is restored so
+     * the views snap back and the caller still sees the error.
      */
     suspend fun setStepDone(
         goalId: String,
@@ -332,7 +340,29 @@ class GoalsRepository @Inject constructor(
         stepId: String,
         done: Boolean,
     ): GoalDeep {
-        api.patchStep(goalId, phaseId, stepId, StepPatchRequest(done = done))
+        val id = stepCompositeId(goalId, phaseId, stepId)
+        val previousJson = stepDao.getById(id)?.payloadJson
+        previousJson?.let { json ->
+            decode(json, stepAdapter)?.let { step ->
+                val optimistic = step.copy(
+                    done = done,
+                    doneAt = if (done) java.time.Instant.now().toString() else null,
+                    manualOverride = true,
+                )
+                support.refreshInto(
+                    MirrorTables.GOAL_STEPS,
+                    listOf(refreshRow(id, stepAdapter.toJson(optimistic))),
+                )
+            }
+        }
+        try {
+            api.patchStep(goalId, phaseId, stepId, StepPatchRequest(done = done))
+        } catch (e: Throwable) {
+            previousJson?.let {
+                support.refreshInto(MirrorTables.GOAL_STEPS, listOf(refreshRow(id, it)))
+            }
+            throw e
+        }
         return refreshedDeep(goalId)
     }
 

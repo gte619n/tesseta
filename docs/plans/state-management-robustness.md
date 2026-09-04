@@ -206,11 +206,16 @@ present.
     The parked outbox row itself is left in place (harmless — it never retries and
     is now filtered from the surfaced list); it's cleared on the next
     restore/discard or DB wipe.
-    - *Goals step-done optimism.* Step done/doneAt is a deliberately
-      server-evaluated mutation; making it optimistic risks diverging from the
-      server's evaluation. Needs its own design pass.
+    - **Goals step-done optimism. ✅** `setStepDone` now flips the step's `done`
+      in the mirror optimistically (a local-only `refreshInto`, not the outbox —
+      same pattern as `appendToGoalPhaseOrder`) so every open view updates at
+      once, then the `PATCH` intent + `refreshedDeep()` reconcile the full
+      server cascade (phase/goal completion). On a rejection the previous row is
+      restored so the views snap back and the caller still surfaces the error.
+      Two tests added (optimistic flip; revert on failure).
     - *Nutrition mirror-as-SSOT* and a *cross-screen consistency test harness*
-      remain as follow-ups.
+      remain as follow-ups (nutrition's REST-hybrid read is a larger migration;
+      the test harness is net-new tooling).
 
 ## 8. Risks / caveats
 
