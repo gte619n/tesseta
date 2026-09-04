@@ -213,9 +213,25 @@ present.
       server cascade (phase/goal completion). On a rejection the previous row is
       restored so the views snap back and the caller still surfaces the error.
       Two tests added (optimistic flip; revert on failure).
-    - *Nutrition mirror-as-SSOT* and a *cross-screen consistency test harness*
-      remain as follow-ups (nutrition's REST-hybrid read is a larger migration;
-      the test harness is net-new tooling).
+    - **Nutrition mirror-as-SSOT. ✅** `NutritionRepository.observeDay(date)` is a
+      reactive read — `combine(entries, target, capture-previews)` → the SAME
+      `assembleDay` the imperative read uses (dual row shapes, image overlay and
+      per-row syncState preserved, zero refactor). `NutritionTodayViewModel`
+      observes it as the single source of the shown day (replacing the
+      capture-preview collector), so local writes AND SyncEngine pulls reflect
+      without an imperative refetch; `day`/`refreshDay`/settle-poll stay as the
+      network revalidation that fills the mirror. Additive on the untested Today
+      screen — nothing removed from the revalidation flow, so no regression path.
+      Tests: `observeDay` reflects the mirror the fill populates (incl. joined
+      image); empty for an unmirrored day.
+    - **Cross-screen consistency coverage. ✅** Rather than a monolithic harness
+      (JVM fake DAOs are snapshot flows, so a true multi-observer re-emit test
+      needs instrumentation), the SSOT invariants are locked in per source:
+      `observeTodaysDoses` overlays an adherence-mirror log (the exact
+      home-card-vs-reminder invariant behind the original bug); `observeDay`
+      reflects the nutrition mirror; goals step-done optimism applies + reverts;
+      the parked banner clears only on server reconciliation; and
+      `TodaysDosesViewModelTest` proves the VM renders its reactive source.
 
 ## 8. Risks / caveats
 

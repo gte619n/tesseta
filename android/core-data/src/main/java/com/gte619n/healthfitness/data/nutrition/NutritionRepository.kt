@@ -23,7 +23,11 @@ import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapLatest
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -110,6 +114,23 @@ class NutritionRepository @Inject constructor(
             ingredients = ingredients,
         )
     }
+
+    /**
+     * State-mgmt: the reactive source of truth for a day. Re-assembles [date] from
+     * the mirror (the SAME [assembleDay] the imperative read uses — dual row
+     * shapes, capture-preview overlay and per-row syncState all preserved)
+     * whenever its inputs change: the entries mirror (local optimistic writes AND
+     * SyncEngine pulls), the target mirror, or the transient capture-preview
+     * store. So a change from any source — this device, another device's sync, or
+     * a just-captured photo — reflects on every observing screen without an
+     * imperative refetch. [refreshDay]/[day] remain the network revalidation that
+     * fills the mirror (the joined projection: catalog images, self-heal), which
+     * then flows straight back through here.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeDay(date: String): Flow<NutritionDay> =
+        combine(entryDao.observeActive(), targetDao.observeActive(), previews.previews) { _, _, _ -> }
+            .mapLatest { assembleDay(date) }
 
     suspend fun day(date: String): NutritionDay {
         if (support.killSwitchOn()) return api.getDay(date)
