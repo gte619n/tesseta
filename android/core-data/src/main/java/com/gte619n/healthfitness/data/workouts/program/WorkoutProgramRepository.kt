@@ -235,6 +235,26 @@ class WorkoutProgramRepository @Inject internal constructor(
             .collect { send(it) }
     }
 
+    /**
+     * COMPLETED scheduled workouts across EVERY program in the local mirror,
+     * within [from]..[to]. Unlike [observeCalendar] this is deliberately NOT
+     * scoped to one program: the weekly streak must carry across a program change
+     * (starting a new program must not reset a still-live streak), so it counts
+     * completed sessions from all of the user's programs. Mirror-backed — the same
+     * source the per-program calendar reads — so it stays consistent with the
+     * grid; a program the user has never opened on this device simply contributes
+     * nothing until its sessions sync in.
+     */
+    fun observeAllCompleted(from: LocalDate, to: LocalDate): Flow<List<ScheduledWorkout>> =
+        scheduledDao.observeActive()
+            .map { rows ->
+                rows.mapNotNull { decodeScheduled(it.payloadJson) }
+                    .map { it.toDomain() }
+                    .filter { it.status == ScheduledStatus.COMPLETED }
+                    .filter { !it.date.isBefore(from) && !it.date.isAfter(to) }
+                    .sortedBy { it.date }
+            }
+
     suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {
             runCatching {

@@ -208,11 +208,20 @@ class WorkoutsLandingViewModel @Inject constructor(
                                 // history for the streak (back to the program start).
                                 val calFrom = minOf(resolved.startDate ?: monthStart, monthStart)
                                 val calTo = maxOf(today, monthEnd)
+                                // The streak counts completed sessions across every
+                                // program, so it must not reset when a new program
+                                // starts. A wide look-back comfortably covers any
+                                // realistic weekly run.
+                                val streakFrom = today.minusYears(2)
                                 combine(
                                     repository.observeProgram(resolved.programId),
                                     repository.observeCalendar(resolved.programId, calFrom, calTo)
                                         .catch { emit(emptyList()) },
-                                ) { deep, cal -> LandingLoad(deep ?: resolved, true, cal, month) }
+                                    repository.observeAllCompleted(streakFrom, today)
+                                        .catch { emit(emptyList()) },
+                                ) { deep, cal, allCompleted ->
+                                    LandingLoad(deep ?: resolved, true, cal, month, allCompleted)
+                                }
                             }
                         }
                         .map { Result.success(it) }
@@ -256,6 +265,12 @@ class WorkoutsLandingViewModel @Inject constructor(
         val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val weekEnd = weekStart.plusDays(6)
         val cal = data.calendar
+        // The streak + weekly-progress count from completed sessions across ALL
+        // programs (so a new program keeps a live streak); the calendar grid,
+        // this-week list and history stay scoped to the featured program. Fall
+        // back to the per-program calendar if the cross-program read came back
+        // empty (e.g. kill-switch degradation).
+        val streakSource = data.allCompleted.ifEmpty { cal }
         _state.update {
             it.copy(
                 loading = false,
@@ -265,8 +280,8 @@ class WorkoutsLandingViewModel @Inject constructor(
                 thisWeek = cal.filter { s -> s.date in weekStart..weekEnd }.sortedBy { s -> s.date },
                 monthDays = cal.filter { s -> YearMonth.from(s.date) == data.month },
                 pastSessions = cal.filter { s -> s.date <= today }.sortedByDescending { s -> s.date },
-                weekStreak = computeWeeklyStreak(cal, today, weeklyTarget),
-                completedThisWeek = completedThisWeek(cal, today),
+                weekStreak = computeWeeklyStreak(streakSource, today, weeklyTarget),
+                completedThisWeek = completedThisWeek(streakSource, today),
                 weeklyStreakTarget = weeklyTarget,
                 error = null,
             )
@@ -280,4 +295,7 @@ private data class LandingLoad(
     val hasAnyProgram: Boolean,
     val calendar: List<ScheduledWorkout>,
     val month: YearMonth,
+    // Completed sessions across ALL programs (not just the active one), so the
+    // weekly streak carries over when the user starts a new program.
+    val allCompleted: List<ScheduledWorkout> = emptyList(),
 )
