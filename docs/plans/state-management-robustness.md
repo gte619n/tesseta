@@ -170,9 +170,24 @@ present.
   Room mirror directly, eliminating their DataStore snapshots) remains an optional
   future refinement; the local + push invalidation now covers the actual
   staleness bug class.
-- **Phase 3 — standardize ViewModel state** on `stateIn(WhileSubscribed)` derived
-  from repository Flows; drop redundant `ON_RESUME` refreshes where a reactive
-  source makes them unnecessary.
+- **Phase 3 — standardize ViewModel state. ✅ (audit: already conformant)**
+  A full sweep of every ViewModel and screen found the target architecture is
+  already in place:
+  - **Lifecycle-safe collection everywhere** — no bare `collectAsState()` in any
+    feature or app screen; all use `collectAsStateWithLifecycle`.
+  - **Immutable state exposure everywhere** — all 44 ViewModels expose
+    `StateFlow` (via `asStateFlow()`/`stateIn`); no public `MutableStateFlow`.
+  - **Reactive Room-SSOT repos** back every mirror-backed domain (medications,
+    goals, workouts, blood, profile, and — from Phase 1 — today's doses).
+  Deliberate decision: the remaining `ON_RESUME`/pull refreshes were **kept**, not
+  stripped. They revalidate genuinely server-derived data (nutrition REST day,
+  the dashboard's aggregate cards, the today's-doses server projection) or guard
+  cross-device freshness where a foreground sync-pull isn't guaranteed. Removing
+  them would be change-for-its-own-sake with a staleness risk — the opposite of
+  the plan's goal. Mechanically rewriting the already-reactive `combine`/
+  `flatMapLatest` ViewModels (workouts landing, goals list) into terminal
+  `stateIn` was likewise skipped: it's non-mechanical (multi-source merges with
+  loading/error handling) and pure churn on working screens for no user benefit.
 - **Phase 4 — durability & delivery.** Parked-mutation auto-cleanup when a later
   op succeeds for the same entity; nutrition toward mirror-as-SSOT; reminder
   delivery-health (tighter periodic replan, optional banner) for the force-stop
