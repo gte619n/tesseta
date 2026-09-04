@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.feature.medical
 
 import app.cash.turbine.test
+import com.gte619n.healthfitness.data.sync.LocalWriteBus
 import com.gte619n.healthfitness.feature.medical.today.TodaysDosesUiState
 import com.gte619n.healthfitness.feature.medical.today.TodaysDosesViewModel
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
@@ -24,7 +25,7 @@ class TodaysDosesViewModelTest {
     fun `toggle optimistically flips and logs`() = runTest {
         val meds = fakeMedicationRepository(doses = listOf(sampleDose(taken = false)))
         val adherence = fakeAdherenceRepository()
-        val vm = TodaysDosesViewModel(meds, adherence, SnackbarController())
+        val vm = TodaysDosesViewModel(meds, adherence, LocalWriteBus(), SnackbarController())
         advanceUntilIdle()
 
         val before = (vm.state.value as TodaysDosesUiState.Ready).doses.first()
@@ -42,7 +43,7 @@ class TodaysDosesViewModelTest {
         val meds = fakeMedicationRepository(doses = listOf(sampleDose(taken = false)))
         val adherence = fakeAdherenceRepository(failOnLog = true)
         val snackbar = SnackbarController()
-        val vm = TodaysDosesViewModel(meds, adherence, snackbar)
+        val vm = TodaysDosesViewModel(meds, adherence, LocalWriteBus(), snackbar)
         advanceUntilIdle()
 
         // Collect snackbar messages while triggering the failing toggle.

@@ -3,9 +3,17 @@
 
     <!-- IMPL-16 Part A: medication dose reminders are scheduled on-device.
          POST_NOTIFICATIONS is requested at runtime from the reminder settings
-         screen; SCHEDULE_EXACT_ALARM is the user-grantable special access for
-         exact dose times (a windowed alarm is the fallback when revoked). -->
+         screen. Medication reminders are a core alarm-clock-style use case, so we
+         declare USE_EXACT_ALARM (API 33+, granted at install, no user prompt) —
+         canScheduleExactAlarms() is then always true so the scheduler uses
+         setExactAndAllowWhileIdle and fires precisely even in Doze, instead of the
+         windowed fallback that Doze could batch for hours (the "morning reminder
+         only appeared when I opened the app" bug). SCHEDULE_EXACT_ALARM covers
+         API 31–32; the windowed fallback remains only for the unusual case where
+         exact access is unavailable. NOTE: USE_EXACT_ALARM is a Play Console
+         policy declaration (permitted for alarm/reminder apps). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

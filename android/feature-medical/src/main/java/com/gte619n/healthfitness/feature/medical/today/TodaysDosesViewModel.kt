@@ -2,14 +2,18 @@ package com.gte619n.healthfitness.feature.medical.today
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.medications.AdherenceRepository
 import com.gte619n.healthfitness.data.medications.MedicationRepository
+import com.gte619n.healthfitness.data.sync.LocalWriteBus
 import com.gte619n.healthfitness.domain.medications.TodaysDose
 import com.gte619n.healthfitness.ui.snackbar.SnackbarController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -25,6 +29,7 @@ sealed interface TodaysDosesUiState {
 class TodaysDosesViewModel @Inject constructor(
     private val medications: MedicationRepository,
     private val adherence: AdherenceRepository,
+    private val localWriteBus: LocalWriteBus,
     private val snackbar: SnackbarController,
 ) : ViewModel() {
 
@@ -33,6 +38,25 @@ class TodaysDosesViewModel @Inject constructor(
 
     init {
         refresh()
+        observeAdherenceWrites()
+    }
+
+    /**
+     * Re-read whenever a dose is logged/undone (or a medication changes) ANYWHERE
+     * — the reminder notification's "Take all" / "✓" actions run in a background
+     * receiver and write the adherence mirror while this screen is already
+     * resumed, so an ON_RESUME-only refresh never saw them and the card went
+     * stale. The mirror (overlaid by [MedicationRepository.todaysDoses]) is the
+     * source of truth; this just makes the card observe writes to it, matching the
+     * dashboard's LocalWriteBus invalidation.
+     */
+    private fun observeAdherenceWrites() {
+        viewModelScope.launch {
+            localWriteBus.writes
+                .filter { it == MirrorTables.MEDICATION_ADHERENCE || it == MirrorTables.MEDICATIONS }
+                .debounce(250)
+                .collect { refresh() }
+        }
     }
 
     /**
