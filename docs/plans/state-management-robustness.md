@@ -196,13 +196,16 @@ present.
     reboot — so a dropped morning alarm previously wouldn't re-arm until the app
     was opened. The hourly `replan()` (cheap, offline-safe) now self-heals that
     within the hour.
-  - **Deferred (need careful design, not a quick sweep):**
-    - *Workouts parked-completion auto-cleanup.* The optimistic completion marks
-      the scheduled mirror row `COMPLETED` **before** its upload parks on a 4xx, so
-      a naive "hide the banner when the row is COMPLETED" check would suppress
-      legitimate recovery banners and **lose the user's logged sets**. A correct
-      fix must key off the row being SYNCED/server-reconciled (not the optimistic
-      write) — high-stakes, so left for a dedicated change with tests.
+  - **Workouts parked-completion auto-cleanup. ✅** Done safely:
+    `observeParkedCompletions` now drops a parked completion once the scheduled
+    mirror row is **server-reconciled** (`!dirty`) AND terminal (COMPLETED/
+    SKIPPED) — the same `!dirty` "this is the server's truth" signal
+    `revertOptimisticOutcome` trusts. A genuinely-parked row is still our dirty
+    optimistic write, so its recovery banner (and logged-set recovery) is
+    preserved. Two tests added (clears when reconciled; kept while still dirty).
+    The parked outbox row itself is left in place (harmless — it never retries and
+    is now filtered from the surfaced list); it's cleared on the next
+    restore/discard or DB wipe.
     - *Goals step-done optimism.* Step done/doneAt is a deliberately
       server-evaluated mutation; making it optimistic risks diverging from the
       server's evaluation. Needs its own design pass.

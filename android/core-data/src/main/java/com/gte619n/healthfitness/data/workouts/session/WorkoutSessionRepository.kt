@@ -460,7 +460,22 @@ class WorkoutSessionRepository(
                 // owns its UI — its finish supersedes the parked payload in the
                 // outbox chain, so no recovery affordance is shown beside it.
                 if (programId to scheduledId in draftKeys) return@mapNotNull null
-                val snapshot = mirrorById[row.entityId]?.let { decodeScheduled(it.payloadJson) }
+                val mirrorRow = mirrorById[row.entityId]
+                val snapshot = mirrorRow?.let { decodeScheduled(it.payloadJson) }
+                // Durability: once the SERVER has reconciled this session to a
+                // terminal outcome (a pull cleared the row's dirty flag — the same
+                // "this is the server's truth, not our optimistic write" signal
+                // revertOptimisticOutcome trusts), a still-parked completion for it
+                // is superseded (it was finished on another device, or a later
+                // upload of the same session landed). Drop the stale recovery
+                // banner. A still-dirty row is our own un-uploaded optimistic
+                // completion, so its recovery affordance is preserved — this
+                // deliberately does NOT hide genuinely-parked rows.
+                if (mirrorRow != null && !mirrorRow.dirty &&
+                    snapshot?.status.isTerminalScheduledStatus()
+                ) {
+                    return@mapNotNull null
+                }
                 val keys = snapshot.prescriptionKeys()
                 ParkedCompletion(
                     programId = programId,
@@ -569,6 +584,15 @@ class WorkoutSessionRepository(
             .minOrNull()
             ?.toEpochMilli()
     }
+
+    /**
+     * A server-terminal scheduled outcome. Combined with a non-dirty mirror row it
+     * means the server has a final answer for this session, so a parked completion
+     * for it is superseded and its recovery banner should clear.
+     */
+    private fun String?.isTerminalScheduledStatus(): Boolean =
+        runCatching { this?.let { ScheduledStatus.valueOf(it) } }.getOrNull()
+            .let { it == ScheduledStatus.COMPLETED || it == ScheduledStatus.SKIPPED }
 
     private fun ScheduledWorkoutDto?.prescriptionKeys(): Set<PrescriptionKey> =
         this?.session?.blocks
