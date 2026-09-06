@@ -109,6 +109,28 @@ steps:
         echo "----- release notes -----"
         cat /workspace/release-notes.txt
 
+  # Restore the Gradle home (dependency cache + local build cache + wrapper
+  # dist) persisted by the previous release build. Cloud Build workers are
+  # ephemeral, so without this every release re-downloads ~2 GB of
+  # dependencies and recompiles every module from scratch. Best-effort: a
+  # cache miss just means a cold build, never a failed one. The releases
+  # bucket is reused because this build's service account already writes
+  # there (artifacts + last-release-sha marker).
+  - id: restore-gradle-cache
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        mkdir -p /workspace/.gradle-home
+        if gsutil -q cp gs://health-fitness-160-android-releases/gradle-cache/gradle-home.tgz /tmp/gradle-home.tgz; then
+          tar -xzf /tmp/gradle-home.tgz -C /workspace/.gradle-home
+          echo "gradle cache restored: $(du -sh /workspace/.gradle-home | cut -f1)"
+        else
+          echo "no gradle cache found — cold build"
+        fi
+
   # TODO(infra): replace cimg/android with a custom builder image baked
   # once and pushed to this project's Artifact Registry, with USER root so
   # the chown workaround can be removed.
@@ -129,7 +151,29 @@ steps:
         # resolveVersionCode/resolveVersionName in app/build.gradle.kts).
         export ANDROID_VERSION_CODE="$(cat /workspace/version-code)"
         export ANDROID_VERSION_NAME="$(cat /workspace/version-name)"
+        # Point Gradle at the restored cache home (see restore-gradle-cache).
+        export GRADLE_USER_HOME=/workspace/.gradle-home
         ./gradlew :app:assembleRelease --no-daemon
+
+  # Persist the warmed Gradle home for the next release build. Runs before
+  # distribution so a flaky App Distribution upload doesn't throw away a good
+  # cache. Daemon/journal dirs are transient (and the daemon logs can be
+  # large), so they're trimmed first.
+  - id: save-gradle-cache
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        rm -rf /workspace/.gradle-home/daemon \
+               /workspace/.gradle-home/.tmp \
+               /workspace/.gradle-home/kotlin-profile || true
+        tar -czf /tmp/gradle-home.tgz -C /workspace/.gradle-home .
+        gsutil -q cp /tmp/gradle-home.tgz \
+          gs://health-fitness-160-android-releases/gradle-cache/gradle-home.tgz || \
+          echo "cache upload failed (non-fatal)"
+        du -sh /tmp/gradle-home.tgz
 
   - id: distribute-firebase
     name: gcr.io/google.com/cloudsdktool/cloud-sdk

@@ -1,3 +1,7 @@
+// Plain `java.util.Properties` won't resolve below: in the Kotlin DSL script
+// body, `java` is the JavaPluginExtension accessor, shadowing the package.
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -42,7 +46,8 @@ android {
         // without one, so resolution that comes up empty FAILS the build rather
         // than shipping a broken APK. See resolveWebOauthClientId() below for the
         // lookup order (property -> env var -> GCP Secret Manager).
-        val webOauthClientId = resolveWebOauthClientId(providers)
+        val webOauthClientId =
+            resolveWebOauthClientId(providers, rootProject.layout.projectDirectory.file("local.properties"))
         buildConfigField("String", "WEB_OAUTH_CLIENT_ID", "\"$webOauthClientId\"")
 
         // IMPL-12: backend base URL for the Retrofit client. Defaults to the
@@ -205,14 +210,24 @@ dependencies {
  * REFUSES to produce an APK without one. Resolution order:
  *   1. -PwebOauthClientId=<id>            explicit Gradle property override
  *   2. WEB_OAUTH_CLIENT_ID env var        used by Cloud Build (android/cloudbuild.yaml)
- *   3. gcloud Secret Manager              oauth-web-client-id in the GCP project
+ *   3. webOauthClientId in local.properties  cached from a previous fetch (gitignored)
+ *   4. gcloud Secret Manager              oauth-web-client-id in the GCP project
  *                                         (override project with -PgcpProjectId=...)
  *
  * If none yields a value that looks like a real client ID the build fails with
- * actionable instructions. With Gradle's configuration cache enabled the gcloud
- * lookup only runs when the cache is (re)computed, not on every build.
+ * actionable instructions.
+ *
+ * The local.properties cache (step 3) exists for build speed, not convenience:
+ * an external process captured via providers.exec is a configuration-cache
+ * INPUT, so Gradle re-runs gcloud on every build just to validate the cache
+ * fingerprint — a network round-trip per build, and a Secret Manager hiccup
+ * invalidates the whole configuration cache. A successful gcloud fetch is
+ * therefore persisted to local.properties so later builds never exec at all.
  */
-fun resolveWebOauthClientId(providers: ProviderFactory): String {
+fun resolveWebOauthClientId(
+    providers: ProviderFactory,
+    localProperties: org.gradle.api.file.RegularFile,
+): String {
     val gcpProject =
         providers.gradleProperty("gcpProjectId").orNull?.takeIf { it.isNotBlank() }
             ?: "health-fitness-160"
@@ -231,7 +246,17 @@ fun resolveWebOauthClientId(providers: ProviderFactory): String {
         if (looksLikeClientId(it)) return it
     }
 
-    // 3. Fetch straight from Secret Manager via gcloud (local dev convenience).
+    // 3. Cached value in local.properties (written by step 4 on a previous
+    //    build). providers.fileContents keeps it a tracked config-cache input,
+    //    so edits to the file still invalidate correctly.
+    providers.fileContents(localProperties).asText.orNull?.let { text ->
+        val props = Properties().apply { load(text.reader()) }
+        props.getProperty("webOauthClientId")?.trim()?.let {
+            if (looksLikeClientId(it)) return it
+        }
+    }
+
+    // 4. Fetch straight from Secret Manager via gcloud (local dev convenience).
     val fromSecretManager: String? =
         try {
             val output =
@@ -251,7 +276,18 @@ fun resolveWebOauthClientId(providers: ProviderFactory): String {
             // gcloud missing / not on PATH — treated as "unresolved" below.
             null
         }
-    if (looksLikeClientId(fromSecretManager)) return fromSecretManager!!
+    if (looksLikeClientId(fromSecretManager)) {
+        val clientId = fromSecretManager!!.trim()
+        // Persist so the next build resolves from local.properties (step 3)
+        // instead of re-running gcloud. Best-effort: a read-only checkout just
+        // keeps paying the exec cost.
+        runCatching {
+            val file = localProperties.asFile
+            val needsNewline = file.exists() && file.length() > 0 && !file.readText().endsWith("\n")
+            file.appendText((if (needsNewline) "\n" else "") + "webOauthClientId=$clientId\n")
+        }
+        return clientId
+    }
 
     throw GradleException(
         """
@@ -263,6 +299,8 @@ fun resolveWebOauthClientId(providers: ProviderFactory): String {
         |      ./gradlew :app:assembleDebug -PwebOauthClientId=<id>.apps.googleusercontent.com
         |  • Export it in the environment:
         |      export WEB_OAUTH_CLIENT_ID=<id>.apps.googleusercontent.com
+        |  • Cache it in android/local.properties (gitignored):
+        |      webOauthClientId=<id>.apps.googleusercontent.com
         |  • Let Gradle fetch it from Secret Manager (default) — authenticate gcloud first:
         |      gcloud auth login
         |      gcloud config set project $gcpProject
