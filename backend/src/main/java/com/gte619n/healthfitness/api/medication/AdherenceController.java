@@ -92,13 +92,15 @@ public class AdherenceController {
         TimeWindow window = body.window();
         double dose = body.dose() != null ? body.dose() : med.dose();
 
-        // Adherence is an upsert keyed by (medication, date) — not a generated
-        // id — so the offline contract here is: an Idempotency-Key replay is a
-        // no-op that returns the current state of the day's log, and the write
-        // fans out (origin suppressed) carrying an authoritative lastUpdate (#11,
-        // D7/D18). The replay scope is per (medication, date).
+        // Adherence is an upsert keyed by (medication, date, window) — not a
+        // generated id — so the offline contract here is: an Idempotency-Key
+        // replay is a no-op that returns the current state of the day's log, and
+        // the write fans out (origin suppressed) carrying an authoritative
+        // lastUpdate (#11, D7/D18). The scope MUST include the window: scoped to
+        // just (medication, date), a twice-a-day medication's second dose shared
+        // the first dose's replay entry and was silently dropped as a duplicate.
         WriteResult<AdherenceLogResponse> response = syncWrite.idempotentCreate(
-            "medicationAdherence:log:" + medicationId + ":" + date,
+            "medicationAdherence:log:" + medicationId + ":" + date + ":" + window,
             userId,
             () -> {
                 Instant writtenAt = Instant.now();
@@ -115,7 +117,7 @@ public class AdherenceController {
                 metricChangedPublisher.publish(userId, MetricKey.MEDS_ADHERENCE_30D);
                 syncNotifier.changed(userId, syncWrite.originDeviceId(), "medicationAdherence");
                 return new SyncWriteContext.Created<>(
-                    medicationId + ":" + date,
+                    medicationId + ":" + date + ":" + window,
                     WriteResult.of(AdherenceLogResponse.from(log), writtenAt));
             },
             id -> adherence.findByDate(userId, medicationId, date)

@@ -248,15 +248,18 @@ object OutboxEndpointRegistry {
     /**
      * The `Idempotency-Key` to send for a replayed mutation (#24/#33). Most tables
      * use the random per-mutation `mutationId` (a fresh client UUID per write).
-     * **Adherence** instead derives a deterministic `(med,date)` key so a re-queued
-     * log of the same dose-day is a server-side no-op returning the current state —
-     * matching the backend's `medicationAdherence:log:{med}:{date}` idempotency
-     * scope (the day's log is keyed by med+date, not by an opaque write id).
+     * **Adherence** instead derives a deterministic `(med,date,window)` key so a
+     * re-queued log of the same dose is a server-side no-op returning the current
+     * state — matching the backend's `medicationAdherence:log:{med}:{date}:{window}`
+     * idempotency scope. The window MUST be part of the key: with the old
+     * `(med,date)` key a twice-a-day medication's second dose of the day shared the
+     * first dose's key, so the server treated it as a duplicate replay and silently
+     * never recorded it.
      */
     fun idempotencyKey(table: String, entityId: String, mutationId: String): String =
         if (table == MirrorTables.MEDICATION_ADHERENCE) {
-            val (med, date, _) = splitTriple(entityId)
-            "adherence:$med:$date"
+            val (med, date, window) = splitTriple(entityId)
+            "adherence:$med:$date:$window"
         } else {
             mutationId
         }
