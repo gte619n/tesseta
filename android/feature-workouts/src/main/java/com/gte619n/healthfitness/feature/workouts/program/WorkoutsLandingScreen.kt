@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.LocalFireDepartment
@@ -65,6 +66,7 @@ fun WorkoutsLandingRoute(
     onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
     onRefine: (programId: String?) -> Unit,
     onOpenProgramsTab: () -> Unit,
+    onOpenProgression: () -> Unit = {},
     viewModel: WorkoutsLandingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -93,6 +95,7 @@ fun WorkoutsLandingRoute(
         onPrevMonth = viewModel::prevMonth,
         onNextMonth = viewModel::nextMonth,
         onOpenProgramsTab = onOpenProgramsTab,
+        onOpenProgression = onOpenProgression,
         onRetry = viewModel::refresh,
     )
 }
@@ -103,6 +106,7 @@ fun WorkoutsLandingScreen(
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
     onRefine: () -> Unit,
+    onOpenProgression: () -> Unit = {},
     onOpenPastSessions: () -> Unit = {},
     onDismissPastSessions: () -> Unit = {},
     onDeletePastSession: (String) -> Unit = {},
@@ -131,6 +135,7 @@ fun WorkoutsLandingScreen(
             onOpenSession = onOpenSession,
             onOpenWorkout = onOpenWorkout,
             onRefine = onRefine,
+            onOpenProgression = onOpenProgression,
             onOpenPastSessions = onOpenPastSessions,
             onActivate = onActivate,
             onRestoreParked = onRestoreParked,
@@ -182,6 +187,7 @@ private fun LandingBody(
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onOpenWorkout: (phaseId: String, dayId: String) -> Unit,
     onRefine: () -> Unit,
+    onOpenProgression: () -> Unit,
     onOpenPastSessions: () -> Unit,
     onActivate: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit,
@@ -213,6 +219,11 @@ private fun LandingBody(
                         Spacer(Modifier.height(6.dp))
                         ProgramStatusPill(program.status)
                     }
+                    IconAction(
+                        icon = Icons.AutoMirrored.Outlined.TrendingUp,
+                        description = "Progression",
+                        onClick = onOpenProgression,
+                    )
                     IconAction(
                         icon = Icons.Outlined.CalendarMonth,
                         description = "Past workouts",

@@ -56,7 +56,8 @@ class WorkoutSessionCompletionServiceTest {
         aggregates = new InMemoryWeeklyWorkoutAggregateRepository();
         events = new ArrayList<>();
         service = new WorkoutSessionCompletionService(
-            scheduled, programs, workouts, aggregates, capturingPublisher(events));
+            scheduled, programs, workouts, aggregates, capturingPublisher(events),
+            event -> { /* progression session-completed event: ignored in this unit test */ });
     }
 
     @Test

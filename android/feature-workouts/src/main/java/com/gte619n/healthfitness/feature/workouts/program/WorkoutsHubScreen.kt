@@ -62,6 +62,7 @@ fun WorkoutsHubRoute(
     onOpenWorkout: (programId: String, phaseId: String, dayId: String) -> Unit,
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onDesignProgram: (programId: String?) -> Unit,
+    onOpenProgression: () -> Unit = {},
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(WorkoutsTab.THIS_WEEK) }
 
@@ -76,6 +77,7 @@ fun WorkoutsHubRoute(
                 onOpenWorkout = onOpenWorkout,
                 onRefine = onDesignProgram,
                 onOpenProgramsTab = { selectedTab = WorkoutsTab.PROGRAMS },
+                onOpenProgression = onOpenProgression,
             )
         },
         programsContent = {

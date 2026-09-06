@@ -24,22 +24,43 @@ public class WhoAmIController {
     @GetMapping
     public WhoAmIResponse whoAmI() {
         CurrentUser cu = currentUser.get();
-        Integer heightCm = users.findById(cu.userId())
-            .map(User::heightCm)
-            .orElse(null);
-        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), heightCm);
+        return response(cu, users.findById(cu.userId()).orElse(null));
     }
 
-    // Partial profile update. Only `heightCm` is supported today; the
-    // PATCH shape keeps the door open for additional editable profile
-    // fields (date of birth, sex, units preference) without another
-    // endpoint.
+    // Partial profile update: heightCm plus the M3 Mifflin demographics
+    // (biologicalSex, dateOfBirth). An omitted (null) field is left unchanged.
     @PatchMapping
     public WhoAmIResponse update(@RequestBody UpdateProfileRequest body) {
         CurrentUser cu = currentUser.get();
-        users.updateHeightCm(cu.userId(), body.heightCm());
-        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), body.heightCm());
+        User existing = users.findById(cu.userId()).orElse(null);
+
+        Integer heightCm = body.heightCm() != null ? body.heightCm()
+            : (existing == null ? null : existing.heightCm());
+        com.gte619n.healthfitness.core.user.BiologicalSex sex = body.biologicalSex() != null
+            ? com.gte619n.healthfitness.core.user.BiologicalSex.valueOf(body.biologicalSex())
+            : (existing == null ? null : existing.biologicalSex());
+        java.time.LocalDate dob = body.dateOfBirth() != null
+            ? java.time.LocalDate.parse(body.dateOfBirth())
+            : (existing == null ? null : existing.dateOfBirth());
+
+        if (body.heightCm() != null) {
+            users.updateHeightCm(cu.userId(), body.heightCm());
+        }
+        if (body.biologicalSex() != null || body.dateOfBirth() != null) {
+            users.updateDemographics(cu.userId(), sex, dob);
+        }
+        // Echo the intended post-update state (mirrors the pre-M3 behaviour of
+        // returning the request value even when the profile doc doesn't exist yet).
+        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(),
+            heightCm, sex == null ? null : sex.name(), dob == null ? null : dob.toString());
     }
 
-    public record UpdateProfileRequest(Integer heightCm) {}
+    private static WhoAmIResponse response(CurrentUser cu, User user) {
+        Integer heightCm = user == null ? null : user.heightCm();
+        String sex = user == null || user.biologicalSex() == null ? null : user.biologicalSex().name();
+        String dob = user == null || user.dateOfBirth() == null ? null : user.dateOfBirth().toString();
+        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), heightCm, sex, dob);
+    }
+
+    public record UpdateProfileRequest(Integer heightCm, String biologicalSex, String dateOfBirth) {}
 }

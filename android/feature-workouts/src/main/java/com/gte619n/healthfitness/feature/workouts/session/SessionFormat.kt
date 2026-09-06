@@ -149,6 +149,41 @@ fun weightOutcome(prescription: Prescription, weightLbs: Double?): TargetOutcome
     return if (weightLbs >= target) TargetOutcome.HIT else TargetOutcome.MISS
 }
 
+// ---- RIR (reps-in-reserve) capture — the RPE successor, inference-first. ----
+//
+// The progression engine wants effort as reps-in-reserve, but asking every set
+// is friction. So the logger prompts only the LAST working set of an exercise,
+// one-tap, pre-filled with an inferred value the user just confirms (or nudges).
+// The stored source flips to `REPORTED` the moment the user taps a chip.
+
+/** The RIR chips offered on the last-set prompt. `5` is shown as "5+". */
+val RIR_CHOICES: List<Int> = listOf(0, 1, 2, 3, 4, 5)
+
+/** [LoggedSet.rirSource] value written when the user taps a RIR chip themselves. */
+const val RIR_SOURCE_REPORTED = "REPORTED"
+
+/** [LoggedSet.rirSource] value for a value we inferred from the rep outcome. */
+const val RIR_SOURCE_INFERRED_TARGET = "INFERRED_TARGET"
+
+/**
+ * The RIR we pre-select on the last set's chip row, inference-first: if the set
+ * already carries a reported [LoggedSet.rir] (re-opened/edited), keep it; else
+ * infer from how the reps landed against the target — hitting the top of the
+ * range suggests a couple left in the tank (2), falling short suggests failure
+ * (0), mid-range a modest reserve (1). Clamped into [RIR_CHOICES].
+ */
+fun inferredRir(prescription: Prescription, set: LoggedSet): Int {
+    set.rir?.let { return it.toInt().coerceIn(RIR_CHOICES.first(), RIR_CHOICES.last()) }
+    val reps = set.reps
+    val target = prescription.repsMax ?: prescription.repsMin
+    return when {
+        reps == null || target == null -> 2
+        reps < target -> 0
+        reps == target -> 1
+        else -> 2
+    }
+}
+
 /**
  * The spoken "rest 90 seconds" cue announced when a rest countdown starts (PR2
  * voice announcements), phrased in minutes/seconds so a long rest doesn't read

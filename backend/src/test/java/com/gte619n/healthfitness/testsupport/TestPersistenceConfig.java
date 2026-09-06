@@ -103,6 +103,38 @@ public class TestPersistenceConfig {
         return new InMemoryBodyCompositionRepository();
     }
 
+    // IMPL-PROG-01: in-memory progression repositories so the full context wires
+    // the engine beans when firestore-enabled=false.
+    @Bean
+    com.gte619n.healthfitness.core.progression.ProgressionStateRepository progressionStateRepository() {
+        return new com.gte619n.healthfitness.testsupport.progression.InMemoryProgressionRepositories.State();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.progression.SetObservationRepository setObservationRepository() {
+        return new com.gte619n.healthfitness.testsupport.progression.InMemoryProgressionRepositories.Observations();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.progression.PredictionLogRepository predictionLogRepository() {
+        return new com.gte619n.healthfitness.testsupport.progression.InMemoryProgressionRepositories.Predictions();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.progression.ExerciseLoadingProfileRepository exerciseLoadingProfileRepository() {
+        return new com.gte619n.healthfitness.testsupport.progression.InMemoryProgressionRepositories.Profiles();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.progression.BlockParametersRepository blockParametersRepository() {
+        return new com.gte619n.healthfitness.testsupport.progression.InMemoryProgressionRepositories.Block();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.progression.WeekParametersRepository weekParametersRepository() {
+        return new com.gte619n.healthfitness.testsupport.progression.InMemoryProgressionRepositories.Week();
+    }
+
     @Bean
     DailyMetricRepository dailyMetricRepository() {
         return new InMemoryDailyMetricRepository();

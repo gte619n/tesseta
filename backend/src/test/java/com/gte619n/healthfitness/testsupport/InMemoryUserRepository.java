@@ -102,7 +102,29 @@ public class InMemoryUserRepository implements UserRepository {
             existing.googleHealth(),
             heightCm,
             existing.createdAt(),
-            Instant.now()
+            Instant.now(),
+            existing.biologicalSex(),
+            existing.dateOfBirth()
+        ));
+    }
+
+    @Override
+    public void updateDemographics(
+        String userId,
+        com.gte619n.healthfitness.core.user.BiologicalSex biologicalSex,
+        java.time.LocalDate dateOfBirth) {
+        User existing = store.get(userId);
+        if (existing == null) return;
+        store.put(userId, new User(
+            existing.userId(),
+            existing.email(),
+            existing.displayName(),
+            existing.googleHealth(),
+            existing.heightCm(),
+            existing.createdAt(),
+            Instant.now(),
+            biologicalSex,
+            dateOfBirth
         ));
     }
 

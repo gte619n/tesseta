@@ -163,6 +163,22 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
 
     @Override
     @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void updateDemographics(
+        String userId,
+        com.gte619n.healthfitness.core.user.BiologicalSex biologicalSex,
+        java.time.LocalDate dateOfBirth) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        body.put("biologicalSex", biologicalSex == null
+            ? com.google.cloud.firestore.FieldValue.delete() : biologicalSex.name());
+        body.put("dateOfBirth", dateOfBirth == null
+            ? com.google.cloud.firestore.FieldValue.delete() : dateOfBirth.toString());
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void clearGoogleHealthConnection(String userId) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();
@@ -187,6 +203,8 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     private static User toUser(String userId, DocumentSnapshot snapshot) {
         Long heightLong = snapshot.getLong("heightCm");
         Integer heightCm = heightLong == null ? null : heightLong.intValue();
+        String sexStr = snapshot.getString("biologicalSex");
+        String dobStr = snapshot.getString("dateOfBirth");
         return new User(
             userId,
             snapshot.getString("email"),
@@ -194,7 +212,9 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
             toGoogleHealth(snapshot),
             heightCm,
             toInstant(snapshot.get("createdAt")),
-            toInstant(snapshot.get("updatedAt"))
+            toInstant(snapshot.get("updatedAt")),
+            sexStr == null ? null : com.gte619n.healthfitness.core.user.BiologicalSex.valueOf(sexStr),
+            dobStr == null ? null : java.time.LocalDate.parse(dobStr)
         );
     }
 

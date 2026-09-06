@@ -202,6 +202,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                     rm.put("notes", rx.notes());
                     rm.put("targetWeightLbs", rx.targetWeightLbs());
                     rm.put("loadBasis", rx.loadBasis());
+                    rm.put("rationale", rationaleToWire(rx.rationale()));  // IMPL-PROG-01 D24
                     if (rx.deloadModifier() != null) {
                         Map<String, Object> dm = new HashMap<>();
                         dm.put("setsMultiplier", rx.deloadModifier().setsMultiplier());
@@ -218,6 +219,8 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                             sm.put("restSeconds", s.restSeconds());
                             sm.put("completedAt", s.completedAt() == null ? null : s.completedAt().toString());
                             sm.put("durationSeconds", s.durationSeconds());
+                            sm.put("rir", s.rir());  // IMPL-PROG-01 D1
+                            sm.put("rirSource", s.rirSource() == null ? null : s.rirSource().name());
                             ls.add(sm);
                         }
                         rm.put("loggedSets", ls);
@@ -369,7 +372,8 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                 deload,
                 loggedSetsFromWire(rm.get("loggedSets")),
                 rm.get("targetWeightLbs") instanceof Number tw ? tw.doubleValue() : null,
-                str(rm.get("loadBasis"))
+                str(rm.get("loadBasis")),
+                rationaleFromWire(rm.get("rationale"))
             ));
         }
         return out;
@@ -400,6 +404,38 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
             str(nm.get("note")));
     }
 
+    private static Map<String, Object> rationaleToWire(
+        com.gte619n.healthfitness.core.progression.PrescriptionRationale r) {
+        if (r == null) return null;
+        Map<String, Object> m = new HashMap<>();
+        m.put("path", r.path() == null ? null : r.path().name());
+        m.put("direction", r.direction() == null ? null : r.direction().name());
+        m.put("deltaLbs", r.deltaLbs());
+        m.put("deltaReps", r.deltaReps());
+        m.put("deltaSets", r.deltaSets());
+        m.put("confidence", r.confidence() == null ? null : r.confidence().name());
+        m.put("inputs", r.inputs());
+        return m;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static com.gte619n.healthfitness.core.progression.PrescriptionRationale rationaleFromWire(Object raw) {
+        if (!(raw instanceof Map<?, ?> m)) return null;
+        Map<String, Object> rm = (Map<String, Object>) m;
+        String path = str(rm.get("path"));
+        String dir = str(rm.get("direction"));
+        String conf = str(rm.get("confidence"));
+        Object inputs = rm.get("inputs");
+        return new com.gte619n.healthfitness.core.progression.PrescriptionRationale(
+            path == null ? null : com.gte619n.healthfitness.core.progression.ProgressionPath.valueOf(path),
+            dir == null ? null : com.gte619n.healthfitness.core.progression.Direction.valueOf(dir),
+            rm.get("deltaLbs") instanceof Number a ? a.doubleValue() : null,
+            intOrNull(rm.get("deltaReps")),
+            intOrNull(rm.get("deltaSets")),
+            conf == null ? null : com.gte619n.healthfitness.core.progression.Confidence.valueOf(conf),
+            inputs instanceof List<?> l ? l.stream().map(String::valueOf).toList() : null);
+    }
+
     private static List<LoggedSet> loggedSetsFromWire(Object raw) {
         if (!(raw instanceof List<?> list)) return null;
         List<LoggedSet> out = new ArrayList<>();
@@ -407,13 +443,18 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
             if (!(o instanceof Map<?, ?> m)) continue;
             Object w = m.get("weightLbs");
             Object rpe = m.get("rpe");
+            Object rir = m.get("rir");
+            String rirSourceStr = str(m.get("rirSource"));
             out.add(new LoggedSet(
                 w instanceof Number n ? n.doubleValue() : null,
                 intOrNull(m.get("reps")),
                 rpe instanceof Number n2 ? n2.doubleValue() : null,
                 intOrNull(m.get("restSeconds")),
                 parseInstant(str(m.get("completedAt"))),
-                intOrNull(m.get("durationSeconds"))));
+                intOrNull(m.get("durationSeconds")),
+                rir instanceof Number n3 ? n3.doubleValue() : null,
+                rirSourceStr == null ? null
+                    : com.gte619n.healthfitness.core.progression.RirSource.valueOf(rirSourceStr)));
         }
         return out;
     }

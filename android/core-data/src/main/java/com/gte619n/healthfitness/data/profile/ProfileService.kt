@@ -22,9 +22,16 @@ data class ProfileDto(
     val displayName: String?,
     val photoUrl: String?,
     val heightCm: Int?,
+    // "MALE" | "FEMALE" | null. Nullable so pre-field payloads still decode.
+    val biologicalSex: String? = null,
+    // ISO "YYYY-MM-DD" | null. Nullable so pre-field payloads still decode.
+    val dateOfBirth: String? = null,
 )
 
-// Partial update body. A null heightCm clears the stored height.
+// Partial update body. Omitted fields are left unchanged by the backend; a null
+// heightCm clears the stored height.
 data class PatchProfileBody(
     val heightCm: Int?,
+    val biologicalSex: String? = null,
+    val dateOfBirth: String? = null,
 )

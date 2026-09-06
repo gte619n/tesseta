@@ -66,14 +66,28 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun saveHeightCm(heightCm: Int) {
+        save("height") { repo.updateHeightCm(heightCm) }
+    }
+
+    /** biologicalSex = "MALE" | "FEMALE" | null (feeds the calorie estimate). */
+    fun saveBiologicalSex(biologicalSex: String?) {
+        save("biological sex") { repo.updateBiologicalSex(biologicalSex) }
+    }
+
+    /** dateOfBirth = ISO "YYYY-MM-DD" | null (feeds the calorie estimate). */
+    fun saveDateOfBirth(dateOfBirth: String?) {
+        save("date of birth") { repo.updateDateOfBirth(dateOfBirth) }
+    }
+
+    private fun save(label: String, block: suspend () -> Result<Profile>) {
         val current = _state.value
         if (current !is UiState.Loaded) return
         _state.value = current.copy(saving = true)
         viewModelScope.launch {
-            repo.updateHeightCm(heightCm).fold(
+            block().fold(
                 onSuccess = { _state.value = UiState.Loaded(it) },
                 onFailure = {
-                    _state.value = UiState.Error(it.message ?: "Failed to save height")
+                    _state.value = UiState.Error(it.message ?: "Failed to save $label")
                 },
             )
         }

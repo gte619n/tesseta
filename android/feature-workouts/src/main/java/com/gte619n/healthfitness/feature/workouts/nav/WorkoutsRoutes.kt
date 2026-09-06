@@ -16,6 +16,7 @@ import com.gte619n.healthfitness.feature.workouts.program.WorkoutDetailRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutHistoryRoute
 import com.gte619n.healthfitness.feature.workouts.program.WorkoutsHubRoute
 import com.gte619n.healthfitness.feature.workouts.program.chat.WorkoutDesignerRoute
+import com.gte619n.healthfitness.feature.workouts.progression.ProgressionConsoleRoute
 import com.gte619n.healthfitness.feature.workouts.session.WorkoutSessionRoute
 
 /**
@@ -52,6 +53,9 @@ object WorkoutsRoutes {
 
     // Read-only workout history (every COMPLETED session).
     const val HISTORY = "workouts/history"
+
+    // Progression console: backend-computed week review + block parameters.
+    const val PROGRESSION_CONSOLE = "workouts/progression"
 
     // Programs (IMPL-AND-15, read-only).
     const val PROGRAMS = "workouts/programs"
@@ -112,11 +116,16 @@ fun NavGraphBuilder.workoutsGraph(
                     if (activeId != null) WorkoutsRoutes.chatEdit(activeId) else WorkoutsRoutes.CHAT,
                 )
             },
+            onOpenProgression = { navController.navigate(WorkoutsRoutes.PROGRESSION_CONSOLE) },
         )
     }
 
     composable(WorkoutsRoutes.HISTORY) {
         WorkoutHistoryRoute(onBack = { navController.popBackStack() })
+    }
+
+    composable(WorkoutsRoutes.PROGRESSION_CONSOLE) {
+        ProgressionConsoleRoute(onBack = { navController.popBackStack() })
     }
 
     composable(
