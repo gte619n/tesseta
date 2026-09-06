@@ -46,6 +46,60 @@ export default async function WorkoutsPage() {
           </p>
         </header>
 
+        {/* Progression Engine — prominent full-width feature entry. Tracks
+            strength per exercise and drives weights/reps across every program. */}
+        <Link
+          href="/me/workouts/progression"
+          className="group block rounded-[16px] border border-accent/40 bg-accent-bg px-6 py-5 shadow-[0_2px_16px_rgba(92,122,46,0.10)] ring-1 ring-accent/10 transition-colors hover:border-accent/70"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mt-0.5 shrink-0 text-accent-dim"
+              >
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                <polyline points="17 6 23 6 23 12" />
+              </svg>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[17px] font-medium text-primary">
+                    Progression Engine
+                  </h2>
+                  <span className="caps-mono rounded-full bg-accent/15 px-2 py-0.5 text-[9px] tracking-[0.06em] text-accent-dim">
+                    Auto
+                  </span>
+                </div>
+                <p className="mt-1 max-w-[560px] text-[13px] leading-relaxed text-secondary">
+                  Tracks your true strength per exercise and adjusts weights,
+                  reps, and sets after every workout — the trends and settings
+                  driving your numbers across every program.
+                </p>
+              </div>
+            </div>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0 text-accent/70 transition-colors group-hover:text-accent-dim"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+        </Link>
+
         <section className="grid grid-cols-2 gap-4">
           {/* Gyms Card */}
           <Link

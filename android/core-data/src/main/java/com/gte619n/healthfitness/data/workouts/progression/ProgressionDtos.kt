@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.data.workouts.progression
 
 import com.gte619n.healthfitness.domain.workouts.progression.BlockParameters
+import com.gte619n.healthfitness.domain.workouts.progression.EnergyBalance
+import com.gte619n.healthfitness.domain.workouts.progression.ExerciseStrength
 import com.gte619n.healthfitness.domain.workouts.progression.PatternReview
 
 // Plain data classes; the Moshi KotlinJsonAdapterFactory (see NetworkModule)
@@ -52,5 +54,39 @@ data class BlockParametersDto(
         },
         rirCaps = rirCaps,
         weeklyCeiling = weeklyCeiling,
+    )
+}
+
+data class ExerciseStrengthDto(
+    val exerciseId: String,
+    val name: String,
+    val movementPattern: String?,
+    val e1rmLbs: Double,
+    val confidence: String,
+    val observationCount: Int,
+) {
+    fun toDomain() = ExerciseStrength(
+        exerciseId = exerciseId,
+        name = name,
+        movementPattern = movementPattern,
+        e1rmLbs = e1rmLbs,
+        confidence = confidence,
+        observationCount = observationCount,
+    )
+}
+
+data class EnergyBalanceDto(
+    val maintenanceKcal: Double,
+    val meanIntakeKcal: Double,
+    val balanceKcal: Double,
+    val mode: String,
+    val hasIntakeData: Boolean,
+) {
+    fun toDomain() = EnergyBalance(
+        maintenanceKcal = maintenanceKcal,
+        meanIntakeKcal = meanIntakeKcal,
+        balanceKcal = balanceKcal,
+        mode = mode,
+        hasIntakeData = hasIntakeData,
     )
 }

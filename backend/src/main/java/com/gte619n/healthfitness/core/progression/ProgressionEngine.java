@@ -80,6 +80,11 @@ public class ProgressionEngine {
         return blockParams.find(userId).orElseGet(() -> blockLoop.recompute(userId));
     }
 
+    /** Measured energy-balance snapshot (read-only) for the plan-coherence view. */
+    public BlockLoop.EnergyBalance energyBalance(String userId) {
+        return blockLoop.energyBalance(userId);
+    }
+
     /** Manual mode override (D12): pins params so the block loop won't overwrite. */
     public BlockParameters overrideBlockParameters(String userId, BlockParameters params) {
         BlockParameters pinned = new BlockParameters(

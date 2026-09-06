@@ -61,6 +61,26 @@ public class BlockLoop {
         return BlockMode.RECOVERY;
     }
 
+    /**
+     * Read-only energy-balance snapshot (no persistence) for the plan-coherence
+     * view: the measured maintenance TDEE, the 14-day mean intake, the resulting
+     * balance, and the mode that balance implies. {@code hasIntakeData} is false
+     * until enough intake has been logged — the balance is not meaningful yet and
+     * mode falls back to RECOMP (same neutral default as {@link #recompute}).
+     */
+    public EnergyBalance energyBalance(String userId) {
+        double meanIntake = maintenance.meanIntake14d(userId);
+        double maintenanceKcal = maintenance.estimate(userId);
+        boolean hasData = meanIntake > 0;
+        double balance = hasData ? meanIntake - maintenanceKcal : 0;
+        return new EnergyBalance(maintenanceKcal, meanIntake, balance, modeFor(balance), hasData);
+    }
+
+    /** Snapshot returned by {@link #energyBalance(String)}. */
+    public record EnergyBalance(
+        double maintenanceKcal, double meanIntakeKcal, double balanceKcal,
+        BlockMode mode, boolean hasIntakeData) {}
+
     private BlockParameters parametersFor(String userId, BlockMode mode) {
         double drift = switch (mode) {
             case GAINING -> DRIFT_GAINING;

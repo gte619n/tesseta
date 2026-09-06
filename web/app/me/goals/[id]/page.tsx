@@ -11,8 +11,13 @@ import {
   getGoalNutritionGuidance,
   applyGoalNutrition,
 } from "@/lib/goals-api";
+import { updateProgram } from "@/lib/workout-program-api";
+import { setTarget } from "@/lib/nutrition-api";
+import { getPlanChainForGoal } from "@/lib/plan-api";
+import type { PlanActionKind } from "@/lib/types/plan";
 import { DOMAIN_LABEL } from "@/lib/types/goals";
 import { RoadmapTimeline } from "@/components/goals/RoadmapTimeline";
+import { PlanCoherence } from "@/components/plan/PlanCoherence";
 import { GoalDetailActions } from "@/components/goals/GoalDetailActions";
 import { entityMetadata } from "@/lib/page-metadata";
 import { formatDateUpper } from "@/lib/format-date";
@@ -83,6 +88,48 @@ export default async function GoalDetailPage(props: {
     revalidatePath("/me/nutrition");
   }
 
+  // Plan-coherence view (only meaningful while the goal is active): the chain
+  // of program → target → intake → engine, scoped to this goal.
+  const planChain =
+    goal.status === "ACTIVE"
+      ? await getPlanChainForGoal({
+          id: goal.goalId,
+          title: goal.title,
+          domain: goal.domain,
+        })
+      : null;
+
+  // Reconcile a single divergence from the plan view. Closes over the goal +
+  // freshly-fetched chain for the ids/values it needs.
+  async function reconcilePlan(kind: PlanActionKind) {
+    "use server";
+    switch (kind) {
+      case "applyProgramNutrition":
+        await applyGoalNutrition(id);
+        break;
+      case "linkProgramToGoal":
+        if (planChain?.program) {
+          await updateProgram(planChain.program.id, { goalId: id });
+        }
+        break;
+      case "setTargetFromMaintenance":
+        if (planChain?.energy?.hasIntakeData) {
+          const kcal = Math.round(planChain.energy.maintenanceKcal);
+          await setTarget({
+            caloriesKcal: kcal,
+            proteinGrams: Math.round((kcal * 0.3) / 4),
+            carbsGrams: Math.round((kcal * 0.4) / 4),
+            fatGrams: Math.round((kcal * 0.3) / 9),
+            fiberGrams: null,
+            sugarGrams: null,
+          });
+        }
+        break;
+    }
+    revalidatePath(detailPath);
+    revalidatePath("/me/nutrition");
+  }
+
   const behind = isBehindSchedule(goal.targetDate, goal.status);
   const chatHref = `/me/goals/chat?goalId=${goal.goalId}` as Route;
 
@@ -147,6 +194,10 @@ export default async function GoalDetailPage(props: {
             </Link>
           </div>
         </header>
+
+        {planChain ? (
+          <PlanCoherence chain={planChain} onReconcile={reconcilePlan} />
+        ) : null}
 
         <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-6">
           {goal.phases.length === 0 ? (

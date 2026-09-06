@@ -1,12 +1,17 @@
 package com.gte619n.healthfitness.api.progression;
 
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
+import com.gte619n.healthfitness.core.exercise.Exercise;
+import com.gte619n.healthfitness.core.exercise.ExerciseRepository;
+import com.gte619n.healthfitness.core.progression.BlockLoop;
 import com.gte619n.healthfitness.core.progression.BlockMode;
 import com.gte619n.healthfitness.core.progression.BlockParameters;
 import com.gte619n.healthfitness.core.progression.ProgressionEngine;
 import com.gte619n.healthfitness.core.progression.ProgressionState;
+import com.gte619n.healthfitness.core.progression.ProgressionStateRepository;
 import com.gte619n.healthfitness.core.progression.SuccessCriterion;
 import com.gte619n.healthfitness.core.progression.WeekLoop;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,10 +36,16 @@ public class ProgressionController {
 
     private final CurrentUserProvider currentUser;
     private final ProgressionEngine engine;
+    private final ProgressionStateRepository states;
+    private final ExerciseRepository exercises;
 
-    public ProgressionController(CurrentUserProvider currentUser, ProgressionEngine engine) {
+    public ProgressionController(
+        CurrentUserProvider currentUser, ProgressionEngine engine,
+        ProgressionStateRepository states, ExerciseRepository exercises) {
         this.currentUser = currentUser;
         this.engine = engine;
+        this.states = states;
+        this.exercises = exercises;
     }
 
     /** e1rm / sigma / confidence / trend for one exercise. */
@@ -63,6 +74,39 @@ public class ProgressionController {
     @GetMapping("/block-parameters")
     public BlockParametersDto blockParameters() {
         return BlockParametersDto.of(engine.blockParameters(currentUser.get().userId()));
+    }
+
+    /** Measured energy state (maintenance TDEE, mean intake, balance) — powers the plan view. */
+    @GetMapping("/energy-balance")
+    public EnergyBalanceDto energyBalance() {
+        return EnergyBalanceDto.of(engine.energyBalance(currentUser.get().userId()));
+    }
+
+    /**
+     * Per-exercise estimated 1RM (the "weights") — every tracked lift with a
+     * belief, named and sorted heaviest-first. e1rm is the only authoritative
+     * number in the engine; this is the read view of it.
+     */
+    @GetMapping("/strength")
+    public List<ExerciseStrengthDto> strength() {
+        String userId = currentUser.get().userId();
+        List<ProgressionState> all = states.findAll(userId);
+        Map<String, Exercise> byId = exercises
+            .findByIds(all.stream().map(ProgressionState::exerciseId).toList())
+            .stream()
+            .collect(Collectors.toMap(Exercise::exerciseId, e -> e));
+        return all.stream()
+            .filter(s -> s.e1rmLbs() > 0) // skip cold states with no belief yet
+            .sorted(Comparator.comparingDouble(ProgressionState::e1rmLbs).reversed())
+            .map(s -> {
+                Exercise ex = byId.get(s.exerciseId());
+                return new ExerciseStrengthDto(
+                    s.exerciseId(),
+                    ex != null ? ex.name() : s.exerciseId(),
+                    ex != null ? ex.movementPattern().name() : null,
+                    s.e1rmLbs(), s.confidence().name(), s.observationCount());
+            })
+            .toList();
     }
 
     /** Manual mode override (D12) — pins params so the block loop won't overwrite. */
@@ -121,4 +165,17 @@ public class ProgressionController {
     }
 
     public record BlockOverrideDto(String mode, String successCriterion, Double expectedDriftPerDay) {}
+
+    public record EnergyBalanceDto(
+        double maintenanceKcal, double meanIntakeKcal, double balanceKcal,
+        String mode, boolean hasIntakeData) {
+        static EnergyBalanceDto of(BlockLoop.EnergyBalance e) {
+            return new EnergyBalanceDto(e.maintenanceKcal(), e.meanIntakeKcal(),
+                e.balanceKcal(), e.mode().name(), e.hasIntakeData());
+        }
+    }
+
+    public record ExerciseStrengthDto(
+        String exerciseId, String name, String movementPattern,
+        double e1rmLbs, String confidence, int observationCount) {}
 }

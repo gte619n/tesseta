@@ -94,10 +94,33 @@ fun ActivateButton(label: String, onClick: () -> Unit) {
  * the training-day summary. All status comes from the backend.
  */
 @Composable
-fun ProgramCard(program: WorkoutProgram, onClick: () -> Unit) {
+fun ProgramCard(
+    program: WorkoutProgram,
+    onClick: () -> Unit,
+    // Emphasized treatment for the active program: accent border + tint so the
+    // one you're training on now stands out from the history below it.
+    featured: Boolean = false,
+) {
+    val modifier = Modifier.fillMaxWidth().clickable { onClick() }
+    if (featured) {
+        Box(
+            modifier = modifier
+                .background(Hf.colors.accentBg, RoundedCornerShape(10.dp))
+                .border(1.dp, Hf.colors.accent.copy(alpha = 0.55f), RoundedCornerShape(10.dp)),
+        ) {
+            ProgramCardBody(program)
+        }
+    } else {
+        HfCard(modifier = modifier) {
+            ProgramCardBody(program)
+        }
+    }
+}
+
+@Composable
+private fun ProgramCardBody(program: WorkoutProgram) {
     val (completed, total) = program.phaseProgress
-    HfCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 14.dp)) {
+    Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -138,7 +161,6 @@ fun ProgramCard(program: WorkoutProgram, onClick: () -> Unit) {
                 )
             }
         }
-    }
 }
 
 /**

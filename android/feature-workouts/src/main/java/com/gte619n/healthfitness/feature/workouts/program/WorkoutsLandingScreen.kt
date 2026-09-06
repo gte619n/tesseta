@@ -221,7 +221,7 @@ private fun LandingBody(
                     }
                     IconAction(
                         icon = Icons.AutoMirrored.Outlined.TrendingUp,
-                        description = "Progression",
+                        description = "Progression Engine",
                         onClick = onOpenProgression,
                     )
                     IconAction(

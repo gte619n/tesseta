@@ -1,6 +1,10 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { listPrograms } from "@/lib/workout-program-api";
+import type {
+  WorkoutProgramResponse,
+  ProgramStatus,
+} from "@/lib/types/workout-program";
 import { ProgramCard } from "@/components/workouts/ProgramCard";
 import { pageMetadata } from "@/lib/page-metadata";
 
@@ -8,8 +12,20 @@ export const metadata = pageMetadata("Programs");
 
 export const dynamic = "force-dynamic";
 
+// Display order + labels for the status sections. Active first (the program the
+// user is training on now), then in-progress drafts, then the history.
+const SECTIONS: { status: ProgramStatus; label: string }[] = [
+  { status: "ACTIVE", label: "Active" },
+  { status: "DRAFT", label: "Drafts" },
+  { status: "COMPLETED", label: "Completed" },
+  { status: "ARCHIVED", label: "Archived" },
+];
+
 export default async function ProgramsPage() {
   const programs = await listPrograms().catch(() => []);
+  // Group by status, preserving the backend's within-status ordering.
+  const byStatus = (status: ProgramStatus): WorkoutProgramResponse[] =>
+    programs.filter((p) => p.status === status);
 
   return (
     <main className="min-h-screen bg-canvas p-8">
@@ -54,16 +70,33 @@ export default async function ProgramsPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
-            {programs.map((p) => (
-              <Link
-                key={p.programId}
-                href={`/me/workouts/programs/${p.programId}` as Route}
-                className="block transition-opacity hover:opacity-95"
-              >
-                <ProgramCard program={p} />
-              </Link>
-            ))}
+          <div className="space-y-8">
+            {SECTIONS.map(({ status, label }) => {
+              const group = byStatus(status);
+              if (group.length === 0) return null;
+              return (
+                <section key={status} className="space-y-3">
+                  <h2 className="caps-mono flex items-center gap-2 text-[11px] tracking-[0.06em] text-tertiary">
+                    {label}
+                    <span className="text-quaternary">{group.length}</span>
+                  </h2>
+                  <div className="space-y-3">
+                    {group.map((p) => (
+                      <Link
+                        key={p.programId}
+                        href={`/me/workouts/programs/${p.programId}` as Route}
+                        className="block transition-opacity hover:opacity-95"
+                      >
+                        <ProgramCard
+                          program={p}
+                          featured={status === "ACTIVE"}
+                        />
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
       </div>

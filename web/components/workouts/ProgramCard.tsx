@@ -9,7 +9,15 @@ const STATUS_PILL: Record<ProgramStatus, { label: string; cls: string }> = {
   ARCHIVED: { label: "Archived", cls: "bg-canvas-muted text-tertiary" },
 };
 
-export function ProgramCard({ program }: { program: WorkoutProgramResponse }) {
+export function ProgramCard({
+  program,
+  featured = false,
+}: {
+  program: WorkoutProgramResponse;
+  // Emphasized treatment for the active program(s): accent border + ring so the
+  // one the user is currently training on stands out from the history below it.
+  featured?: boolean;
+}) {
   const pill = STATUS_PILL[program.status];
   const trainingDays = program.trainingDays
     .map((d) => WEEK_DAY_LABEL[d])
@@ -24,7 +32,13 @@ export function ProgramCard({ program }: { program: WorkoutProgramResponse }) {
       : null;
 
   return (
-    <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
+    <div
+      className={
+        featured
+          ? "rounded-[14px] border border-accent/70 bg-surface px-6 py-5 shadow-[0_2px_16px_rgba(92,122,46,0.10)] ring-1 ring-accent/15"
+          : "rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5"
+      }
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

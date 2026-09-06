@@ -37,3 +37,32 @@ data class BlockParameters(
     /** Pattern enum name → weekly working-set ceiling. */
     val weeklyCeiling: Map<String, Int>,
 )
+
+/**
+ * Per-exercise estimated 1RM — the engine's authoritative "weight" belief for a
+ * lift, named and confidence-graded. Sorted heaviest-first by the backend.
+ */
+data class ExerciseStrength(
+    val exerciseId: String,
+    val name: String,
+    /** Movement-pattern enum name, e.g. "SQUAT"; null if the exercise is gone. */
+    val movementPattern: String?,
+    val e1rmLbs: Double,
+    /** "LOW" | "MEDIUM" | "HIGH" — from the belief's relative uncertainty. */
+    val confidence: String,
+    val observationCount: Int,
+)
+
+/**
+ * The engine's measured energy state. [mode] is what the measured balance
+ * implies; the pinned/effective block mode may differ. [hasIntakeData] is false
+ * until enough intake accrues — the balance is not meaningful yet.
+ */
+data class EnergyBalance(
+    val maintenanceKcal: Double,
+    val meanIntakeKcal: Double,
+    val balanceKcal: Double,
+    /** "GAINING" | "RECOMP" | "MAINTENANCE" | "RECOVERY". */
+    val mode: String,
+    val hasIntakeData: Boolean,
+)

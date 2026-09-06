@@ -21,6 +21,12 @@ interface ProgressionApi {
 
     @PUT("api/me/progression/block-parameters")
     suspend fun updateBlockParameters(@Body body: UpdateBlockParametersRequest): BlockParametersDto
+
+    @GET("api/me/progression/strength")
+    suspend fun strength(): List<ExerciseStrengthDto>
+
+    @GET("api/me/progression/energy-balance")
+    suspend fun energyBalance(): EnergyBalanceDto
 }
 
 /**

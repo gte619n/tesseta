@@ -128,6 +128,7 @@ fun ProgramsListScreen(
                             ProgramCard(
                                 program = program,
                                 onClick = { onOpenProgram(program.programId) },
+                                featured = status == ProgramStatus.ACTIVE,
                             )
                         }
                     }
