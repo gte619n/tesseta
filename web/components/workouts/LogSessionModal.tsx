@@ -84,7 +84,7 @@ type SlotOverride = {
 type SetRow = {
   weight: string;
   reps: string;
-  rpe: string;
+  rir: string;
   rest: string;
   completedAt: string | null;
 };
@@ -98,19 +98,21 @@ function initialRows(p: Prescription): SetRow[] {
     return logged.map((s) => ({
       weight: s.weightLbs != null ? `${s.weightLbs}` : "",
       reps: s.reps != null ? `${s.reps}` : "",
-      rpe: s.rpe != null ? `${s.rpe}` : "",
+      // Prefer the set's RIR; fall back to deriving it from legacy RPE
+      // (RIR ≈ 10 − RPE) so old data still shows a sensible reps-in-reserve.
+      rir: s.rir != null ? `${s.rir}` : s.rpe != null ? `${10 - s.rpe}` : "",
       rest: s.restSeconds != null ? `${s.restSeconds}` : "",
       completedAt: s.completedAt ?? null,
     }));
   }
   // First log: one row per prescribed set, prefilled from the targets so a
-  // session that went to plan saves with minimal edits. Weight has no target.
+  // session that went to plan saves with minimal edits. Weight has no target,
+  // and RIR is left blank (the target RIR shows as a placeholder — see below).
   const targetReps = p.repsMax ?? p.repsMin;
-  const targetRpe = p.intensity?.kind === "RPE" ? p.intensity.value : null;
   return Array.from({ length: p.sets ?? 1 }, () => ({
     weight: "",
     reps: targetReps != null ? `${targetReps}` : "",
-    rpe: targetRpe != null ? `${targetRpe}` : "",
+    rir: "",
     rest: p.restSeconds != null ? `${p.restSeconds}` : "",
     completedAt: null,
   }));
@@ -185,7 +187,7 @@ function LogSessionForm({
       // Duplicate the previous set's numbers — straight sets are the norm.
       const next: SetRow = last
         ? { ...last, completedAt: null }
-        : { weight: "", reps: "", rpe: "", rest: "", completedAt: null };
+        : { weight: "", reps: "", rir: "", rest: "", completedAt: null };
       return { ...prev, [key]: [...list, next] };
     });
   }
@@ -260,12 +262,13 @@ function LogSessionForm({
         const list = rows[rowKey(block.blockId, p.orderIndex)] ?? [];
         const sets: LoggedSetInput[] = list
           .filter(
-            (r) => r.weight.trim() || r.reps.trim() || r.rpe.trim() || r.rest.trim(),
+            (r) => r.weight.trim() || r.reps.trim() || r.rir.trim() || r.rest.trim(),
           )
           .map((r) => ({
             weightLbs: num(r.weight),
             reps: int(r.reps),
-            rpe: num(r.rpe),
+            rir: num(r.rir),
+            rirSource: r.rir.trim() ? "REPORTED" : undefined,
             restSeconds: int(r.rest),
             completedAt: r.completedAt,
           }));
@@ -378,6 +381,13 @@ function LogSessionForm({
                 const autoFocusHere = firstInput && list.length > 0;
                 if (autoFocusHere) firstInput = false;
                 const ov = overrides[key];
+                // Target reps-in-reserve shown as the input placeholder. When
+                // the prescription's intensity is expressed as RPE, RIR ≈ 10 −
+                // RPE; otherwise there's no target to hint.
+                const targetRir =
+                  p.intensity?.kind === "RPE" && p.intensity.value != null
+                    ? `${10 - p.intensity.value}`
+                    : undefined;
                 return (
                   <div
                     key={key}
@@ -397,7 +407,7 @@ function LogSessionForm({
                         <span />
                         <span>Lb</span>
                         <span>Reps</span>
-                        <span>RPE</span>
+                        <span>RIR</span>
                         <span>Rest s</span>
                         <span />
                       </div>
@@ -427,9 +437,10 @@ function LogSessionForm({
                             step="1"
                           />
                           <SetInput
-                            value={row.rpe}
-                            onChange={(v) => updateRow(key, i, { rpe: v })}
+                            value={row.rir}
+                            onChange={(v) => updateRow(key, i, { rir: v })}
                             step="0.5"
+                            placeholder={targetRir}
                           />
                           <SetInput
                             value={row.rest}
@@ -537,11 +548,13 @@ function SetInput({
   onChange,
   step,
   autoFocus,
+  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   step: string;
   autoFocus?: boolean;
+  placeholder?: string;
 }) {
   return (
     <input
@@ -551,6 +564,7 @@ function SetInput({
       inputMode="decimal"
       value={value}
       autoFocus={autoFocus}
+      placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       className="w-full rounded-md border border-border-default bg-surface px-2 py-1 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
     />

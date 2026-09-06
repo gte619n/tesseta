@@ -12,6 +12,10 @@
     <string name="workout_session_weight_header">lb</string>
     <string name="workout_session_reps_header">Reps</string>
     <string name="workout_session_rpe_header">RPE</string>
+    <string name="workout_session_rir_header">Reps in reserve</string>
+    <string name="workout_session_rir_hint">How many more could you have done?</string>
+    <string name="workout_session_rir_max">5+</string>
+    <string name="workout_session_rationale_why">Why</string>
     <string name="workout_session_time_header">Time</string>
     <string name="workout_session_set_pending">Tap the circle to log</string>
     <string name="workout_session_add_set">Add set</string>

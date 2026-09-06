@@ -11,7 +11,10 @@ import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
+import com.gte619n.healthfitness.domain.workouts.program.PrescriptionRationale
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhase
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionConfidence
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
 import com.gte619n.healthfitness.domain.workouts.program.ProgramPhaseStatus
 import com.gte619n.healthfitness.domain.workouts.program.ProgramSource
 import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
@@ -133,9 +136,28 @@ data class LoggedSetDto(
     val weightLbs: Double? = null,
     val reps: Int? = null,
     val rpe: Double? = null,
+    // Progression-engine RIR (reps-in-reserve), additive to the legacy [rpe].
+    // JSON field names `rir` / `rirSource`; both nullable so old payloads decode.
+    val rir: Double? = null,
+    val rirSource: String? = null,
     val restSeconds: Int? = null,
     val completedAt: Instant? = null,
     val durationSeconds: Int? = null,
+)
+
+/**
+ * Progression-engine rationale for a prescription (additive, nullable). All
+ * fields nullable so a legacy payload (no rationale) and a partial engine
+ * decision both decode; the mapper fills sane enum fallbacks.
+ */
+data class PrescriptionRationaleDto(
+    val path: String? = null,
+    val direction: String? = null,
+    val deltaLbs: Double? = null,
+    val deltaReps: Int? = null,
+    val deltaSets: Int? = null,
+    val confidence: String? = null,
+    val inputs: List<String>? = null,
 )
 
 data class PrescriptionDto(
@@ -157,6 +179,8 @@ data class PrescriptionDto(
     // IMPL-18: concrete prescribed load + its "why" basis (additive, nullable).
     val targetWeightLbs: Double? = null,
     val loadBasis: String? = null,
+    // Progression-engine rationale (additive, nullable).
+    val rationale: PrescriptionRationaleDto? = null,
 )
 
 data class BlockDto(
@@ -352,6 +376,8 @@ fun LoggedSetDto.toDomain(): LoggedSet = LoggedSet(
     weightLbs = weightLbs,
     reps = reps,
     rpe = rpe,
+    rir = rir,
+    rirSource = rirSource,
     restSeconds = restSeconds,
     completedAt = completedAt,
     durationSeconds = durationSeconds,
@@ -361,9 +387,21 @@ fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
     weightLbs = weightLbs,
     reps = reps,
     rpe = rpe,
+    rir = rir,
+    rirSource = rirSource,
     restSeconds = restSeconds,
     completedAt = completedAt,
     durationSeconds = durationSeconds,
+)
+
+fun PrescriptionRationaleDto.toDomain(): PrescriptionRationale = PrescriptionRationale(
+    path = path,
+    direction = parseEnum(direction, ProgressionDirection.HOLD),
+    deltaLbs = deltaLbs,
+    deltaReps = deltaReps,
+    deltaSets = deltaSets,
+    confidence = parseEnum(confidence, ProgressionConfidence.LOW),
+    inputs = inputs.orEmpty(),
 )
 
 fun PrescriptionDto.toDomain(): Prescription = Prescription(
@@ -382,6 +420,7 @@ fun PrescriptionDto.toDomain(): Prescription = Prescription(
     loggedSets = loggedSets.orEmpty().map { it.toDomain() },
     targetWeightLbs = targetWeightLbs,
     loadBasis = loadBasis,
+    rationale = rationale?.toDomain(),
 )
 
 fun BlockDto.toDomain(): Block = Block(

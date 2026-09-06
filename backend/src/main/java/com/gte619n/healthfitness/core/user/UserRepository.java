@@ -41,6 +41,12 @@ public interface UserRepository {
     void updateHeightCm(String userId, Integer heightCm);
 
     /**
+     * Set the Mifflin-St Jeor demographics (IMPL-PROG-01 M3). A null argument
+     * clears that field. Field-scoped merge — leaves everything else intact.
+     */
+    void updateDemographics(String userId, BiologicalSex biologicalSex, java.time.LocalDate dateOfBirth);
+
+    /**
      * Return the IDs of every top-level document in {@code users/}.
      *
      * Used by the daily SUSTAINED re-evaluation Cloud Run Job (IMPL-12

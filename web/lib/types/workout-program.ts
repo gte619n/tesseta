@@ -51,6 +51,10 @@ export type PrescriptionExercise = {
 export type LoggedSet = {
   weightLbs: number | null;
   reps: number | null;
+  // Reps-in-reserve — the user-facing effort field (0–5+). `rpe` is retained
+  // for back-compat with legacy imported/logged data only.
+  rir?: number | null;
+  rirSource?: string | null;
   rpe: number | null;
   restSeconds: number | null;
   completedAt: string | null;
@@ -207,7 +211,11 @@ export type ScheduledWorkoutResponse = {
 export type LoggedSetInput = {
   weightLbs: number | null;
   reps: number | null;
-  rpe: number | null;
+  // Reps-in-reserve is the user-facing effort field now; `rpe` kept optional
+  // for back-compat. `rirSource` is "REPORTED" when the user entered a RIR.
+  rir?: number | null;
+  rirSource?: string | null;
+  rpe?: number | null;
   restSeconds: number | null;
   completedAt: string | null;
 };

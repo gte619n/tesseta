@@ -6,6 +6,7 @@ import android.media.ToneGenerator
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Timer
@@ -94,6 +96,9 @@ import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
+import com.gte619n.healthfitness.domain.workouts.program.PrescriptionRationale
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionConfidence
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.R
@@ -105,6 +110,8 @@ import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.components.HfTone
+import com.gte619n.healthfitness.ui.components.Pill
 import com.gte619n.healthfitness.ui.components.SectionTitle
 import com.gte619n.healthfitness.ui.image.HfAsyncImage
 import com.gte619n.healthfitness.ui.input.EditableNumber
@@ -711,6 +718,12 @@ private fun ExercisePage(
                 Spacer(Modifier.height(4.dp))
                 Text(target, style = Hf.type.monoMd.copy(fontSize = 16.sp), color = Hf.colors.textSecondary)
             }
+            // Progression-engine rationale: direction glyph + delta, a confidence
+            // pill, and a tappable "why" revealing the engine's inputs.
+            prescription.rationale?.let { rationale ->
+                Spacer(Modifier.height(6.dp))
+                RationaleStrip(rationale)
+            }
             // #4: swap this movement for a muscle-matched one the current gym can
             // do, and/or adjust its sets/reps — for just this workout or the whole
             // program. Loads ranked options lazily when the picker opens.
@@ -795,6 +808,103 @@ private fun ExercisePage(
             onDismiss = { showSwap = false },
         )
     }
+}
+
+/**
+ * The progression-engine "why" for this prescription: a ▲/▼ direction glyph +
+ * delta (green ▲ for UP, ▼ for DOWN, nothing for HOLD — this is *direction*
+ * coloring, independent of the green=HIT/red=MISS live-set feedback), a 3-level
+ * confidence pill, and a tappable "why" line that reveals the engine's inputs
+ * (same reveal/card idiom as the loadBasis "why" and AdjustWithAi).
+ */
+@Composable
+private fun RationaleStrip(rationale: PrescriptionRationale) {
+    var showWhy by remember { mutableStateOf(false) }
+    val glyph = when (rationale.direction) {
+        ProgressionDirection.UP -> "▲"
+        ProgressionDirection.DOWN -> "▼"
+        ProgressionDirection.HOLD -> null
+    }
+    val directionColor = when (rationale.direction) {
+        ProgressionDirection.UP -> Hf.colors.accent
+        ProgressionDirection.DOWN -> Hf.colors.alert
+        ProgressionDirection.HOLD -> Hf.colors.textTertiary
+    }
+    val delta = rationaleDeltaLabel(rationale)
+    val confidenceTone = when (rationale.confidence) {
+        ProgressionConfidence.HIGH -> HfTone.Good
+        ProgressionConfidence.MEDIUM -> HfTone.Warn
+        ProgressionConfidence.LOW -> HfTone.Neutral
+    }
+    val hasWhy = rationale.inputs.isNotEmpty()
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (glyph != null && delta != null) {
+                Text(
+                    "$glyph $delta",
+                    style = Hf.type.bodySm,
+                    color = directionColor,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Pill(text = rationale.confidence.name, tone = confidenceTone)
+            if (hasWhy) {
+                Spacer(Modifier.width(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { showWhy = !showWhy }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = if (showWhy) Hf.colors.accent else Hf.colors.textTertiary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        stringResource(R.string.workout_session_rationale_why),
+                        style = Hf.type.bodySm,
+                        color = if (showWhy) Hf.colors.accent else Hf.colors.textTertiary,
+                    )
+                }
+            }
+        }
+        AnimatedVisibility(visible = showWhy && hasWhy) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Hf.colors.accentBg, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    rationale.inputs.joinToString(" · "),
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.accentDim,
+                )
+            }
+        }
+    }
+}
+
+/** "▲/▼" delta label from the rationale's lb/reps/sets deltas; null when none carry. */
+private fun rationaleDeltaLabel(rationale: PrescriptionRationale): String? {
+    val parts = buildList {
+        rationale.deltaLbs?.takeIf { it != 0.0 }?.let {
+            val n = if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString()
+            add("${if (it > 0) "+" else ""}$n lb")
+        }
+        rationale.deltaReps?.takeIf { it != 0 }?.let {
+            add("${if (it > 0) "+" else ""}$it rep${if (kotlin.math.abs(it) == 1) "" else "s"}")
+        }
+        rationale.deltaSets?.takeIf { it != 0 }?.let {
+            add("${if (it > 0) "+" else ""}$it set${if (kotlin.math.abs(it) == 1) "" else "s"}")
+        }
+    }
+    return parts.joinToString(", ").ifBlank { null }
 }
 
 /**
@@ -1102,7 +1212,90 @@ private fun RepSetsSection(
             UpcomingHint(remaining = totalRows - (logged.size + 1))
         } else {
             AllSetsDoneRow(total = totalRows)
+            // Inference-first RIR: only the last working set prompts, one-tap,
+            // pre-filled with the inferred value. Tapping stores it as REPORTED.
+            val lastIndex = logged.lastIndex
+            val lastSet = logged.lastOrNull()
+            if (lastSet != null) {
+                RirChipRow(
+                    prescription = prescription,
+                    set = lastSet,
+                    onSelect = { rir ->
+                        onEditSet(
+                            lastIndex,
+                            lastSet.copy(rir = rir.toDouble(), rirSource = RIR_SOURCE_REPORTED),
+                        )
+                    },
+                )
+            }
         }
+    }
+}
+
+/**
+ * The last-set effort prompt: a one-tap row of RIR (reps-in-reserve) chips,
+ * pre-selecting the inferred value so confirming is a single tap. The selected
+ * chip fills with the accent; tapping any chip writes [LoggedSet.rir] as
+ * REPORTED. Shown only once the exercise's final working set is logged.
+ */
+@Composable
+private fun RirChipRow(
+    prescription: Prescription,
+    set: LoggedSet,
+    onSelect: (Int) -> Unit,
+) {
+    // The value shown as selected: the user's reported RIR if set, else the
+    // inferred default (so the row is never blank).
+    val selected = set.rir?.toInt() ?: inferredRir(prescription, set)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        CapsLabel(
+            stringResource(R.string.workout_session_rir_header),
+            color = Hf.colors.textTertiary,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            RIR_CHOICES.forEach { value ->
+                val isSelected = value == selected && set.rir != null
+                val label = if (value == RIR_CHOICES.last()) {
+                    stringResource(R.string.workout_session_rir_max)
+                } else {
+                    value.toString()
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) Hf.colors.accent else Hf.colors.canvasMuted)
+                        .border(
+                            1.dp,
+                            // The inferred (not-yet-tapped) default reads as a
+                            // suggestion: accent outline, not a filled selection.
+                            if (isSelected || (set.rir == null && value == selected)) {
+                                Hf.colors.accent
+                            } else {
+                                Hf.colors.borderStrong
+                            },
+                            RoundedCornerShape(10.dp),
+                        )
+                        .clickable { onSelect(value) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        label,
+                        style = Hf.type.monoMd,
+                        color = if (isSelected) Hf.colors.textInverse else Hf.colors.textPrimary,
+                    )
+                }
+            }
+        }
+        Text(
+            stringResource(R.string.workout_session_rir_hint),
+            style = Hf.type.bodySm,
+            color = Hf.colors.textTertiary,
+        )
     }
 }
 

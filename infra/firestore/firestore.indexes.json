@@ -1,137 +1,244 @@
 {
-  "_comment": "Source of truth for composite indexes + field overrides on the `production` Firestore database. Deploy with `infra/scripts/deploy-firestore-indexes.sh` (see infra/README.md § Firestore composite indexes) — run it whenever this file changes and on any fresh-DB bootstrap, because Firestore export/import copies documents only, not indexes. IMPL-04 adds the metric+sampleTime index for body composition range queries. IMPL-12 adds the goals composite index and steps collection-group field overrides. The single-field index on users.googleHealth.healthUserId is created automatically by Firestore — no entry needed here.",
+  "_comment": "Source of truth for composite indexes + field overrides on the `production` Firestore database. Deploy with `infra/scripts/deploy-firestore-indexes.sh` (see infra/README.md \u00a7 Firestore composite indexes) \u2014 run it whenever this file changes and on any fresh-DB bootstrap, because Firestore export/import copies documents only, not indexes. IMPL-04 adds the metric+sampleTime index for body composition range queries. IMPL-12 adds the goals composite index and steps collection-group field overrides. The single-field index on users.googleHealth.healthUserId is created automatically by Firestore \u2014 no entry needed here.",
   "indexes": [
     {
       "collectionGroup": "bodyComposition",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "metric", "order": "ASCENDING" },
-        { "fieldPath": "sampleTime", "order": "DESCENDING" }
+        {
+          "fieldPath": "metric",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sampleTime",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
-      "_comment": "IMPL-20 #6: BloodReadingRepository.findLatestByMarker — whereEqualTo(marker) + orderBy(sampleDate DESC).limit(1). The bodyComposition entry above already covers BodyCompositionRepository.findLatest (metric ASC, sampleTime DESC). DailyMetricRepository.findLatestDailyMetric only needs the auto-created single-field `date` index, so no composite entry is required for it.",
+      "_comment": "IMPL-20 #6: BloodReadingRepository.findLatestByMarker \u2014 whereEqualTo(marker) + orderBy(sampleDate DESC).limit(1). The bodyComposition entry above already covers BodyCompositionRepository.findLatest (metric ASC, sampleTime DESC). DailyMetricRepository.findLatestDailyMetric only needs the auto-created single-field `date` index, so no composite entry is required for it.",
       "collectionGroup": "bloodReadings",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "marker", "order": "ASCENDING" },
-        { "fieldPath": "sampleDate", "order": "DESCENDING" }
+        {
+          "fieldPath": "marker",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sampleDate",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "equipment",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "equipment",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "equipment",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "subcategory", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "subcategory",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "equipment",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ownerId", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "equipment",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "locations",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isActive", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goals",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "medications",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "startDate", "order": "DESCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "startDate",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
-      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.deletePlannedFrom — whereEqualTo(status) + whereGreaterThanOrEqualTo(date). findByProgram (date range + orderBy date) needs only the auto-created single-field date index.",
+      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.deletePlannedFrom \u2014 whereEqualTo(status) + whereGreaterThanOrEqualTo(date). findByProgram (date range + orderBy date) needs only the auto-created single-field date index.",
       "collectionGroup": "scheduled",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
-      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.latestDateByStatus — whereEqualTo(status) + orderBy(date DESC).limit(1). Also serves findByStatus — whereEqualTo(status COMPLETED) + orderBy(date DESC) — backing the paged Workout History read (workout-paging).",
+      "_comment": "IMPL-15: FirestoreScheduledWorkoutRepository.latestDateByStatus \u2014 whereEqualTo(status) + orderBy(date DESC).limit(1). Also serves findByStatus \u2014 whereEqualTo(status COMPLETED) + orderBy(date DESC) \u2014 backing the paged Workout History read (workout-paging).",
       "collectionGroup": "scheduled",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "DESCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "progressionObservations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "exerciseId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "completedAt",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
   "fieldOverrides": [
     {
-      "_comment": "IMPL-AND-20 #10: the unified delta-read now reads each subcollection by per-user enumeration — it lists the user's own parent docs (medications, goals, goalChatThreads, nutritionDays, goals/phases, workoutPrograms) and runs a COLLECTION-scoped `<leaf>.orderBy(updatedAt ASC) [+ updatedAt >= cursor range]` query on each child collection directly (including workoutPrograms/{id}/scheduled). That is served by the automatic COLLECTION-scope single-field `updatedAt` index, so the previous COLLECTION_GROUP `updatedAt` overrides on adherence/history/phases/steps/messages/entries/scheduled are no longer required and were removed (no collectionGroup(updatedAt) query remains anywhere). Top-level per-user collections (bloodReadings, medications, goals, locations, workoutPrograms, etc.) likewise need NO composite/override: their delta query is the same pure single-field updatedAt order+range the automatic COLLECTION-scope index already serves (tombstones are emitted, so no extra equality filter on syncStatus is combined in the delta path). The remaining overrides below back unrelated collectionGroup queries (steps metric/kind, medications.drugId) and array-contains (locations.equipmentIds).",
+      "_comment": "IMPL-AND-20 #10: the unified delta-read now reads each subcollection by per-user enumeration \u2014 it lists the user's own parent docs (medications, goals, goalChatThreads, nutritionDays, goals/phases, workoutPrograms) and runs a COLLECTION-scoped `<leaf>.orderBy(updatedAt ASC) [+ updatedAt >= cursor range]` query on each child collection directly (including workoutPrograms/{id}/scheduled). That is served by the automatic COLLECTION-scope single-field `updatedAt` index, so the previous COLLECTION_GROUP `updatedAt` overrides on adherence/history/phases/steps/messages/entries/scheduled are no longer required and were removed (no collectionGroup(updatedAt) query remains anywhere). Top-level per-user collections (bloodReadings, medications, goals, locations, workoutPrograms, etc.) likewise need NO composite/override: their delta query is the same pure single-field updatedAt order+range the automatic COLLECTION-scope index already serves (tombstones are emitted, so no extra equality filter on syncStatus is combined in the delta path). The remaining overrides below back unrelated collectionGroup queries (steps metric/kind, medications.drugId) and array-contains (locations.equipmentIds).",
       "collectionGroup": "locations",
       "fieldPath": "equipmentIds",
       "indexes": [
-        { "queryScope": "COLLECTION_GROUP", "arrayConfig": "CONTAINS" }
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "arrayConfig": "CONTAINS"
+        }
       ]
     },
     {
       "collectionGroup": "steps",
       "fieldPath": "metric.metricKey",
       "indexes": [
-        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "steps",
       "fieldPath": "kind",
       "indexes": [
-        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "medications",
       "fieldPath": "drugId",
       "indexes": [
-        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
+        }
       ]
     }
   ]

@@ -61,11 +61,25 @@ class ProfileRepository @Inject constructor(
         dto.toDomain()
     }
 
-    suspend fun updateHeightCm(heightCm: Int?): Result<Profile> = runCatching {
-        // Carry every field the screen renders (not just the changed height) into
-        // the optimistic row so an offline edit shows the full profile instantly.
+    suspend fun updateHeightCm(heightCm: Int?): Result<Profile> =
+        update { it.copy(heightCm = heightCm) }
+
+    suspend fun updateBiologicalSex(biologicalSex: String?): Result<Profile> =
+        update { it.copy(biologicalSex = biologicalSex) }
+
+    suspend fun updateDateOfBirth(dateOfBirth: String?): Result<Profile> =
+        update { it.copy(dateOfBirth = dateOfBirth) }
+
+    /**
+     * Optimistic partial edit of the singleton profile. Carries every field the
+     * screen renders (not just the changed one) into the mirror row so an offline
+     * edit shows the full profile instantly, and so the outbox replay PATCHes the
+     * full [ProfileDto] — Spring binds only the fields [PatchProfileBody] declares
+     * (heightCm, biologicalSex, dateOfBirth) and ignores the rest.
+     */
+    private suspend fun update(mutate: (ProfileDto) -> ProfileDto): Result<Profile> = runCatching {
         val current = mirroredDto() ?: service.get()
-        val updated = current.copy(heightCm = heightCm)
+        val updated = mutate(current)
         support.updateLocal(
             table = MirrorTables.USER_PROFILE,
             id = updated.userId,
@@ -86,5 +100,7 @@ private fun ProfileDto.toDomain() = Profile(
     email = email,
     displayName = displayName,
     heightCm = heightCm,
+    biologicalSex = biologicalSex,
+    dateOfBirth = dateOfBirth,
     photoUrl = photoUrl,
 )

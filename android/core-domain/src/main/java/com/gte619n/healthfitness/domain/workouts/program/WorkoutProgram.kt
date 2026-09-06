@@ -79,11 +79,41 @@ data class ExerciseSummary(
 data class LoggedSet(
     val weightLbs: Double? = null,
     val reps: Int? = null,
+    /** Legacy effort scale, kept for back-compat with older payloads / imported history. */
     val rpe: Double? = null,
+    /**
+     * Reps-in-reserve for this set (the RPE successor). Nullable so old payloads
+     * and weight-only imported rows stay valid.
+     */
+    val rir: Double? = null,
+    /** How [rir] was obtained: `REPORTED | INFERRED_TARGET | INFERRED_FAILURE | ABSENT`. Null on legacy rows. */
+    val rirSource: String? = null,
     val restSeconds: Int? = null,
     val completedAt: Instant? = null,
     /** Held time for a timed exercise (stretch/mobility/cardio); the time-based counterpart to [reps]. */
     val durationSeconds: Int? = null,
+)
+
+/** Direction the progression engine moved the prescription vs. last time. */
+enum class ProgressionDirection { UP, DOWN, HOLD }
+
+/** Confidence the progression engine attaches to its [PrescriptionRationale]. */
+enum class ProgressionConfidence { HIGH, MEDIUM, LOW }
+
+/**
+ * The progression-engine "why" for a prescription: which [path] fired, the
+ * [direction] it moved the load/reps/sets, the concrete deltas, a [confidence]
+ * level, and the human-readable [inputs] that fed the decision. Entirely
+ * nullable/optional on the wire — absent for un-progressed prescriptions.
+ */
+data class PrescriptionRationale(
+    val path: String?,
+    val direction: ProgressionDirection,
+    val deltaLbs: Double? = null,
+    val deltaReps: Int? = null,
+    val deltaSets: Int? = null,
+    val confidence: ProgressionConfidence,
+    val inputs: List<String> = emptyList(),
 )
 
 data class Prescription(
@@ -109,6 +139,8 @@ data class Prescription(
     val targetWeightLbs: Double? = null,
     /** IMPL-18: short "why" for the prescribed load (e1RM / last done / ramp), shown on tap (R6). */
     val loadBasis: String? = null,
+    /** Progression-engine rationale for this prescription; null → no engine decision to show. */
+    val rationale: PrescriptionRationale? = null,
 ) {
     /**
      * A timed exercise (stretch / mobility / cardio hold) — logged by held time

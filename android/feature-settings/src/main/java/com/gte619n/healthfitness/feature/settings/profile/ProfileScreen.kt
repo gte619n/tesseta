@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.feature.settings.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,13 +14,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Height
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +50,10 @@ import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @Composable
 fun ProfileScreen(
@@ -78,6 +90,8 @@ fun ProfileScreen(
                         heightUnit = heightUnit,
                         onSaveFtIn = viewModel::saveHeight,
                         onSaveCm = viewModel::saveHeightCm,
+                        onSaveBiologicalSex = viewModel::saveBiologicalSex,
+                        onSaveDateOfBirth = viewModel::saveDateOfBirth,
                     )
                 }
             }
@@ -92,6 +106,8 @@ private fun ProfileLoaded(
     heightUnit: HeightUnit,
     onSaveFtIn: (feet: Int, inches: Int) -> Unit,
     onSaveCm: (cm: Int) -> Unit,
+    onSaveBiologicalSex: (String) -> Unit,
+    onSaveDateOfBirth: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -100,24 +116,116 @@ private fun ProfileLoaded(
         ReadOnlyRow("Name", profile.displayName ?: "—", Icons.Outlined.Person)
         ReadOnlyRow("Email", profile.email ?: "—", Icons.Outlined.Email)
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Height,
-                contentDescription = null,
-                tint = Hf.colors.textTertiary,
-                modifier = Modifier.size(18.dp),
-            )
-            Text("Height")
-        }
+        FieldLabel("Height", Icons.Outlined.Height)
         when (heightUnit) {
             HeightUnit.FEET_INCHES -> FeetInchesEditor(profile.heightCm, saving, onSaveFtIn)
             HeightUnit.CENTIMETERS -> CentimetersEditor(profile.heightCm, saving, onSaveCm)
         }
+
+        FieldLabel("Biological sex", Icons.Outlined.Person)
+        BiologicalSexEditor(profile.biologicalSex, saving, onSaveBiologicalSex)
+
+        FieldLabel("Date of birth", Icons.Outlined.Cake)
+        DateOfBirthEditor(profile.dateOfBirth, saving, onSaveDateOfBirth)
     }
 }
+
+@Composable
+private fun FieldLabel(text: String, icon: ImageVector) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Hf.colors.textTertiary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(text)
+    }
+}
+
+/** Two-option chooser (Male/Female) sending "MALE"/"FEMALE" on tap. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BiologicalSexEditor(
+    biologicalSex: String?,
+    saving: Boolean,
+    onSave: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FilterChip(
+            selected = biologicalSex == "MALE",
+            enabled = !saving,
+            onClick = { onSave("MALE") },
+            label = { Text("Male") },
+        )
+        FilterChip(
+            selected = biologicalSex == "FEMALE",
+            enabled = !saving,
+            onClick = { onSave("FEMALE") },
+            label = { Text("Female") },
+        )
+    }
+}
+
+/** Date field opening a Material3 date picker; stores/sends ISO "YYYY-MM-DD". */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateOfBirthEditor(
+    dateOfBirth: String?,
+    saving: Boolean,
+    onSave: (String) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+
+    OutlinedTextField(
+        value = dateOfBirth ?: "",
+        onValueChange = {},
+        readOnly = true,
+        enabled = !saving,
+        label = { Text("YYYY-MM-DD") },
+        placeholder = { Text("Pick a date") },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !saving) { showPicker = true },
+    )
+
+    if (showPicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = isoToEpochMillis(dateOfBirth),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { onSave(epochMillisToIso(it)) }
+                    showPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Cancel") }
+            },
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
+private val isoDateFormat: SimpleDateFormat
+    get() = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+
+private fun isoToEpochMillis(iso: String?): Long? =
+    iso?.let { runCatching { isoDateFormat.parse(it)?.time }.getOrNull() }
+
+private fun epochMillisToIso(millis: Long): String = isoDateFormat.format(Date(millis))
 
 @Composable
 private fun FeetInchesEditor(

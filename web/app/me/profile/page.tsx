@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { signIn } from "@/auth";
 import { apiFetch, apiJson } from "@/lib/api";
 import { HeightForm } from "@/components/profile/HeightForm";
+import { BodyDetailsForm } from "@/components/profile/BodyDetailsForm";
 import { UnitsSection } from "@/components/profile/UnitsSection";
 import type { WhoAmI } from "@/lib/types/profile";
 
@@ -73,6 +74,23 @@ export default async function ProfilePage() {
     revalidatePath("/me/profile");
   }
 
+  async function saveBodyDetails(
+    biologicalSex: string | null,
+    dateOfBirth: string | null,
+  ) {
+    "use server";
+    const res = await apiFetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ biologicalSex, dateOfBirth }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Save failed: ${res.status}`);
+    }
+    revalidatePath("/me/profile");
+  }
+
   return (
     <main className="min-h-screen bg-canvas p-8">
       <div className="mx-auto max-w-[720px] space-y-6">
@@ -106,10 +124,18 @@ export default async function ProfilePage() {
             Body
           </h2>
           <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
-            Your height is used to compute BMI from each weigh-in.
+            Your height is used to compute BMI from each weigh-in. Biological sex
+            and date of birth power your daily calorie estimate.
           </p>
           <div className="mt-4">
             <HeightForm heightCm={me.heightCm} saveAction={saveHeight} />
+          </div>
+          <div className="mt-4">
+            <BodyDetailsForm
+              biologicalSex={me.biologicalSex}
+              dateOfBirth={me.dateOfBirth}
+              saveAction={saveBodyDetails}
+            />
           </div>
         </section>
 

@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.core.workoutprogram;
 
 import com.gte619n.healthfitness.core.goals.eval.MetricKey;
 import com.gte619n.healthfitness.core.goals.events.MetricChangedPublisher;
+import com.gte619n.healthfitness.core.progression.SessionCompletedEvent;
 import com.gte619n.healthfitness.core.workout.Workout;
 import com.gte619n.healthfitness.core.workout.WorkoutRepository;
 import com.gte619n.healthfitness.core.workoutaggregate.WeeklyWorkoutAggregate;
@@ -15,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /**
@@ -85,19 +87,22 @@ public class WorkoutSessionCompletionService {
     private final WorkoutRepository workouts;
     private final WeeklyWorkoutAggregateRepository aggregates;
     private final MetricChangedPublisher metricChangedPublisher;
+    private final ApplicationEventPublisher events;
 
     public WorkoutSessionCompletionService(
         ScheduledWorkoutRepository scheduled,
         WorkoutProgramRepository programs,
         WorkoutRepository workouts,
         WeeklyWorkoutAggregateRepository aggregates,
-        MetricChangedPublisher metricChangedPublisher
+        MetricChangedPublisher metricChangedPublisher,
+        ApplicationEventPublisher events
     ) {
         this.scheduled = scheduled;
         this.programs = programs;
         this.workouts = workouts;
         this.aggregates = aggregates;
         this.metricChangedPublisher = metricChangedPublisher;
+        this.events = events;
     }
 
     /**
@@ -179,6 +184,12 @@ public class WorkoutSessionCompletionService {
         }
         recomputeWeek(userId, updated.date());
         metricChangedPublisher.publishAll(userId, WORKOUT_KEYS);
+        // Progression session loop (IMPL-PROG-01 D22): synchronous, after the
+        // fan-out, COMPLETED only. Advisory — the listener swallows failures so
+        // progression can never break completion.
+        if (completed) {
+            events.publishEvent(new SessionCompletedEvent(userId, updated));
+        }
         return updated;
     }
 
