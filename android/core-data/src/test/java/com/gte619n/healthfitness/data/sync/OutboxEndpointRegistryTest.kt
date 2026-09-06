@@ -133,11 +133,18 @@ class OutboxEndpointRegistryTest {
     }
 
     @Test
-    fun `adherence idempotency key is derived from med and date`() {
-        val key = OutboxEndpointRegistry.idempotencyKey(
+    fun `adherence idempotency key is derived from med, date AND window`() {
+        // The window must be in the key: with a (med,date)-only key, a twice-a-day
+        // medication's second dose of the day shared the first dose's key, so the
+        // backend no-op'd it as a duplicate replay and never recorded it.
+        val morning = OutboxEndpointRegistry.idempotencyKey(
             MirrorTables.MEDICATION_ADHERENCE, "m1/2026-06-02/MORNING", "random-uuid",
         )
-        assertEquals("adherence:m1:2026-06-02", key)
+        val evening = OutboxEndpointRegistry.idempotencyKey(
+            MirrorTables.MEDICATION_ADHERENCE, "m1/2026-06-02/EVENING", "random-uuid",
+        )
+        assertEquals("adherence:m1:2026-06-02:MORNING", morning)
+        assertEquals("adherence:m1:2026-06-02:EVENING", evening)
     }
 
     @Test
