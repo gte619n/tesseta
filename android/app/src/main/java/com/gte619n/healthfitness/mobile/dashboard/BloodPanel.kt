@@ -20,6 +20,7 @@ import com.gte619n.healthfitness.domain.blood.LatestMarker
 import com.gte619n.healthfitness.domain.blood.MarkerCatalog
 import com.gte619n.healthfitness.domain.blood.ReferenceRange
 import com.gte619n.healthfitness.ui.components.MarkerReferenceBar
+import com.gte619n.healthfitness.ui.format.formatNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import java.time.format.DateTimeFormatter
@@ -98,7 +99,7 @@ private fun MarkerRow(
             )
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = formatValue(value),
+                    text = formatNumber(value),
                     style = Hf.type.monoMd.copy(fontSize = 12.sp),
                     color = valueColor(marker),
                 )
@@ -125,9 +126,9 @@ private fun MarkerRow(
             if (showLabels) {
                 Spacer(Modifier.height(3.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(formatValue(ref.displayMin), style = Hf.type.monoSm.copy(fontSize = 9.sp), color = Hf.colors.textQuaternary)
-                    Text(formatValue(ref.goodThreshold), style = Hf.type.monoSm.copy(fontSize = 9.sp), color = Hf.colors.good)
-                    Text(formatValue(ref.displayMax), style = Hf.type.monoSm.copy(fontSize = 9.sp), color = Hf.colors.textQuaternary)
+                    Text(formatNumber(ref.displayMin), style = Hf.type.monoSm.copy(fontSize = 9.sp), color = Hf.colors.textQuaternary)
+                    Text(formatNumber(ref.goodThreshold), style = Hf.type.monoSm.copy(fontSize = 9.sp), color = Hf.colors.good)
+                    Text(formatNumber(ref.displayMax), style = Hf.type.monoSm.copy(fontSize = 9.sp), color = Hf.colors.textQuaternary)
                 }
             }
         }
@@ -163,6 +164,3 @@ private fun valueColor(marker: LatestMarker): Color {
     }
     return if (good) Hf.colors.good else Hf.colors.alert
 }
-
-private fun formatValue(v: Double): String =
-    if (v == v.toLong().toDouble()) v.toLong().toString() else String.format("%.1f", v)

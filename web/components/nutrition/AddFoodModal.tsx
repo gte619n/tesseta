@@ -19,6 +19,7 @@ import {
 } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
+import { formatWholeNumber } from "@/lib/format-number";
 
 type FoodResult = {
   foodId: string;
@@ -371,12 +372,12 @@ function SearchPane({
                         {m.name}
                       </div>
                       <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
-                        Meal{m.totalGrams != null ? ` · ${Math.round(m.totalGrams)}g` : ""}
+                        Meal{m.totalGrams != null ? ` · ${formatWholeNumber(m.totalGrams)}g` : ""}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-right">
                       <span className="font-mono text-[12px] tabular-nums text-secondary">
-                        {Math.round(m.macros.caloriesKcal ?? 0)}
+                        {formatWholeNumber(m.macros.caloriesKcal ?? 0)}
                         <span className="ml-0.5 text-[10px] text-tertiary">kcal</span>
                       </span>
                       <i className="ti ti-plus text-[14px] text-accent-dim" aria-hidden />
@@ -408,13 +409,13 @@ function SearchPane({
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="font-mono text-[12px] tabular-nums text-secondary">
-                      {Math.round(food.macrosPer100g.caloriesKcal ?? 0)}
+                      {formatWholeNumber(food.macrosPer100g.caloriesKcal ?? 0)}
                       <span className="ml-0.5 text-[10px] text-tertiary">kcal/100g</span>
                     </div>
                     <div className="caps-mono mt-0.5 text-[9px] text-tertiary">
-                      P {Math.round(food.macrosPer100g.proteinGrams ?? 0)}g · C{" "}
-                      {Math.round(food.macrosPer100g.carbsGrams ?? 0)}g · F{" "}
-                      {Math.round(food.macrosPer100g.fatGrams ?? 0)}g
+                      P {formatWholeNumber(food.macrosPer100g.proteinGrams ?? 0)}g · C{" "}
+                      {formatWholeNumber(food.macrosPer100g.carbsGrams ?? 0)}g · F{" "}
+                      {formatWholeNumber(food.macrosPer100g.fatGrams ?? 0)}g
                     </div>
                   </div>
                 </button>
@@ -498,7 +499,7 @@ function RecentList({
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <span className="font-mono text-[12px] tabular-nums text-secondary">
-                {Math.round(entry.macros.caloriesKcal ?? 0)}
+                {formatWholeNumber(entry.macros.caloriesKcal ?? 0)}
                 <span className="ml-0.5 text-[10px] text-tertiary">kcal</span>
               </span>
               <i className="ti ti-plus text-[14px] text-accent-dim" aria-hidden />
@@ -655,7 +656,7 @@ function FoodDetailPane({
             ].map(({ label, value, unit }) => (
               <div key={label} className="text-center">
                 <div className="font-mono text-[16px] font-medium tabular-nums text-primary">
-                  {value !== null ? Math.round(value) : "—"}
+                  {value !== null ? formatWholeNumber(value) : "—"}
                 </div>
                 <div className="caps-mono text-[8px] tracking-[0.06em] text-tertiary">
                   {label}
@@ -834,7 +835,7 @@ function QuickAddPane({
 
       {hasMacros && (
         <div className="rounded-[10px] bg-canvas-sunken px-4 py-2.5 font-mono text-[12px] tabular-nums text-secondary">
-          = {Math.round(derived ?? 0)} kcal{" "}
+          = {formatWholeNumber(derived ?? 0)} kcal{" "}
           <span className="caps-mono text-[9px] tracking-[0.04em] text-tertiary">
             computed from macros
           </span>

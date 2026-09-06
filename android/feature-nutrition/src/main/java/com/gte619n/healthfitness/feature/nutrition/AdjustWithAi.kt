@@ -25,10 +25,10 @@ import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustItem
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /**
  * "Adjust with AI" section for an entry's edit sheet — the free-text correction
@@ -110,8 +110,8 @@ fun AdjustWithAiSection(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                val oldKcal = current.oldTotals.caloriesKcal?.roundToInt()
-                val newKcal = current.newTotals.caloriesKcal?.roundToInt()
+                val oldKcal = current.oldTotals.caloriesKcal?.let { formatWholeNumber(it) }
+                val newKcal = current.newTotals.caloriesKcal?.let { formatWholeNumber(it) }
                 Text(
                     "Calories: ${oldKcal ?: "?"} → ${newKcal ?: "?"} kcal",
                     style = Hf.type.monoSm,
@@ -168,8 +168,8 @@ fun AdjustWithAiSection(
 
 /** "  120 g · 210 kcal" style tail for a proposed item, omitting unknown parts. */
 private fun AdjustItem.portionSummary(): String {
-    val grams = servingGrams?.roundToInt()
-    val kcal = macros?.caloriesKcal?.roundToInt()
+    val grams = servingGrams?.let { formatWholeNumber(it) }
+    val kcal = macros?.caloriesKcal?.let { formatWholeNumber(it) }
     val parts = buildList {
         if (grams != null) add("$grams g")
         if (kcal != null) add("$kcal kcal")

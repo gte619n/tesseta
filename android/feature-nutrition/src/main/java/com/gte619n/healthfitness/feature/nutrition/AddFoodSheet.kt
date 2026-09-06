@@ -42,10 +42,10 @@ import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.derivedCaloriesKcal
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import java.time.LocalTime
-import kotlin.math.roundToInt
 
 /**
  * Add-food bottom sheet — one unified surface (no tabs):
@@ -396,7 +396,7 @@ private fun MealRow(meal: MealSearchResult, onClick: () -> Unit, onArchive: () -
                 Text(
                     buildString {
                         append(formatKcal(meal.macros.caloriesKcal))
-                        meal.totalGrams?.let { append(" · ${it.roundToInt()} g") }
+                        meal.totalGrams?.let { append(" · ${formatWholeNumber(it)} g") }
                     },
                     style = Hf.type.monoSm,
                     color = Hf.colors.textSecondary,
@@ -517,7 +517,7 @@ private fun QuickAddForm(onCancel: () -> Unit, onSave: (String, Macros) -> Unit)
         if (hasMacros) {
             Spacer(Modifier.height(10.dp))
             Text(
-                "= ${derived?.roundToInt() ?: 0} kcal (computed from macros)",
+                "= ${derived?.let { formatWholeNumber(it) } ?: "0"} kcal (computed from macros)",
                 style = Hf.type.monoSm,
                 color = Hf.colors.textSecondary,
             )

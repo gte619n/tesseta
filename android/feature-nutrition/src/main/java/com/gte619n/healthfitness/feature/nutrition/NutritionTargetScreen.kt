@@ -33,6 +33,7 @@ import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -117,8 +118,8 @@ private fun TargetForm(state: NutritionTargetUiState, onSave: (Macros) -> Unit) 
         val entered = kcal.toDoubleOrNull()
         if (derived != null && entered != null && kotlin.math.abs(entered - derived) > 1.0) {
             Text(
-                "Your calorie target (${entered.toLong()} kcal) doesn't match your " +
-                    "macros (${derived.toLong()} kcal). It'll be saved as ${derived.toLong()} " +
+                "Your calorie target (${formatWholeNumber(entered)} kcal) doesn't match your " +
+                    "macros (${formatWholeNumber(derived)} kcal). It'll be saved as ${formatWholeNumber(derived)} " +
                     "to stay consistent — adjust the macros for a different total.",
                 style = Hf.type.bodySm,
                 color = Hf.colors.warn,

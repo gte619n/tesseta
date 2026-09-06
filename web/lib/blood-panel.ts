@@ -1,4 +1,5 @@
 import { apiJson } from "@/lib/api";
+import { formatNumber } from "@/lib/format-number";
 import type {
   BloodPanelData,
   BloodPanelMarker,
@@ -202,16 +203,16 @@ export async function loadBloodPanel(): Promise<BloodPanelData | null> {
 
     markers.push({
       name: DASHBOARD_BLOOD_LABELS[m] ?? m,
-      value: r.value.toFixed(2),
+      value: formatNumber(r.value, 2),
       unit: r.unit,
       tone,
       goodFillPct: goodWidthPct,
       goodLeftPct,
       tickPct,
       labels: {
-        min: String(displayMin),
-        threshold: String(goodThreshold),
-        max: String(displayMax),
+        min: formatNumber(displayMin),
+        threshold: formatNumber(goodThreshold),
+        max: formatNumber(displayMax),
       },
       sparkline: historyByMarker.get(m),
       refLow: displayMin,

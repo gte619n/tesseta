@@ -6,6 +6,7 @@ export const metadata: Metadata = {
 };
 import { revalidatePath } from "next/cache";
 import { apiFetch, apiJson } from "@/lib/api";
+import { formatNumber } from "@/lib/format-number";
 import { AddReadingButton } from "@/components/bloodtest/AddReadingButton";
 import { BloodTestUploadButton } from "@/components/bloodtest/BloodTestUploadButton";
 import { ExpandableReport } from "@/components/bloodtest/ExpandableReport";
@@ -320,7 +321,9 @@ export default async function BloodPage() {
                                   : "text-primary"
                             }`}
                           >
-                            {marker.value?.toFixed(1) ?? "—"}
+                            {marker.value != null
+                              ? formatNumber(marker.value, 1)
+                              : "—"}
                             <span className="ml-1 text-[12px] font-normal text-tertiary">
                               {marker.unit}
                             </span>
@@ -448,7 +451,8 @@ function RangeBar({
         />
       </div>
       <span className="font-mono text-[10px] text-tertiary">
-        {low ?? "—"}–{high ?? "—"}
+        {low != null ? formatNumber(low) : "—"}–
+        {high != null ? formatNumber(high) : "—"}
       </span>
     </div>
   );

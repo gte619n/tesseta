@@ -32,9 +32,9 @@ import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.derivedCaloriesKcal
 import com.gte619n.healthfitness.domain.nutrition.forPortion
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
-import kotlin.math.roundToInt
 
 /**
  * Edit-entry bottom sheet. Lets the user change the meal, serving, quantity and
@@ -116,7 +116,7 @@ fun EditEntrySheet(
         ) {
             // ── Hero: larger image + live amount/calorie readout ──────────
             val effectiveGrams = (servingGrams.toDoubleOrNull() ?: 0.0) * quantity
-            val liveKcal = kcal.toDoubleOrNull()?.roundToInt()
+            val liveKcal = kcal.toDoubleOrNull()?.let { formatWholeNumber(it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 76.dp)
                 Spacer(Modifier.width(14.dp))
@@ -129,7 +129,7 @@ fun EditEntrySheet(
                     Spacer(Modifier.height(4.dp))
                     Text(
                         buildString {
-                            append("${effectiveGrams.roundToInt()} g")
+                            append("${formatWholeNumber(effectiveGrams)} g")
                             if (liveKcal != null) append(" · $liveKcal kcal")
                         },
                         style = Hf.type.monoSm,
@@ -215,7 +215,7 @@ fun EditEntrySheet(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "= ${effectiveGrams.roundToInt()} g total" +
+                "= ${formatWholeNumber(effectiveGrams)} g total" +
                     (liveKcal?.let { " · $it kcal" } ?: ""),
                 style = Hf.type.bodySm,
                 color = Hf.colors.textTertiary,
@@ -227,7 +227,7 @@ fun EditEntrySheet(
             if (hasMacros) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Calories: ${derivedKcal?.roundToInt() ?: 0} kcal — computed from macros",
+                    "Calories: ${derivedKcal?.let { formatWholeNumber(it) } ?: "0"} kcal — computed from macros",
                     style = Hf.type.monoSm,
                     color = Hf.colors.textSecondary,
                 )

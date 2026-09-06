@@ -60,7 +60,11 @@ export function formatWeight(
   opts: FormatWeightOpts = {},
 ): string {
   const { withUnit = true, decimals = 1 } = opts;
-  const num = weightValue(lb, unit).toFixed(decimals);
+  // Thousands-grouped, keeping a fixed number of decimals (e.g. "1,209.0 lb").
+  const num = weightValue(lb, unit).toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
   return withUnit ? `${num} ${weightUnitLabel(unit)}` : num;
 }
 

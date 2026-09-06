@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatNumber } from "@/lib/format-number";
 import { BloodReportActions } from "./BloodReportActions";
 
 type ExtractedMarker = {
@@ -78,7 +79,7 @@ export function ExpandableReport({
                             : "text-primary"
                       }
                     >
-                      {m.value?.toFixed(2) ?? "—"}
+                      {m.value != null ? formatNumber(m.value, 2) : "—"}
                     </span>
                     {m.flag && (
                       <span className="ml-1 text-[9px] font-medium text-alert">
@@ -88,7 +89,8 @@ export function ExpandableReport({
                   </td>
                   <td className="py-1.5 pr-4 text-tertiary">{m.unit ?? ""}</td>
                   <td className="py-1.5 text-tertiary">
-                    {m.refRangeLow ?? "—"} – {m.refRangeHigh ?? "—"}
+                    {m.refRangeLow != null ? formatNumber(m.refRangeLow) : "—"}{" "}
+                    – {m.refRangeHigh != null ? formatNumber(m.refRangeHigh) : "—"}
                   </td>
                 </tr>
               ))}

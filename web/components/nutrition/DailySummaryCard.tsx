@@ -1,4 +1,5 @@
 import type { Macros } from "@/lib/types/nutrition";
+import { formatWholeNumber } from "@/lib/format-number";
 
 type Props = {
   totals: Macros;
@@ -48,11 +49,11 @@ export function DailySummaryCard({ totals, target }: Props) {
           </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="font-mono text-[40px] font-medium leading-none tracking-[-0.02em] text-primary tabular-nums">
-              {calConsumed}
+              {formatWholeNumber(calConsumed)}
             </span>
             {calTarget !== null && (
               <span className="font-mono text-[15px] text-tertiary tabular-nums">
-                / {Math.round(calTarget)}
+                / {formatWholeNumber(calTarget)}
                 <span className="ml-0.5 text-[11px]">kcal</span>
               </span>
             )}
@@ -61,7 +62,7 @@ export function DailySummaryCard({ totals, target }: Props) {
         {calRemaining !== null && (
           <div className="text-right">
             <div className="font-mono text-[20px] font-medium leading-none tabular-nums text-primary">
-              {Math.abs(calRemaining)}
+              {formatWholeNumber(Math.abs(calRemaining))}
             </div>
             <div className="caps-mono mt-1 text-[9px] tracking-[0.06em] text-tertiary">
               {calRemaining >= 0 ? "kcal left" : "kcal over"}
@@ -145,10 +146,10 @@ function MacroStat({
             compact ? "text-[13px]" : "text-[18px]"
           } font-medium leading-none tabular-nums text-primary`}
         >
-          {consumed}
+          {formatWholeNumber(consumed)}
           {tgt !== null && (
             <span className="ml-0.5 text-[10px] font-normal text-tertiary">
-              /{Math.round(tgt)}
+              /{formatWholeNumber(tgt)}
             </span>
           )}
           <span className="ml-0.5 text-[10px] font-normal text-tertiary">
@@ -170,7 +171,7 @@ function MacroStat({
             ? "No target"
             : remaining === 0
               ? "Met target"
-              : `${remaining}${meta.unit} left`}
+              : `${formatWholeNumber(remaining)}${meta.unit} left`}
         </div>
       )}
     </div>
