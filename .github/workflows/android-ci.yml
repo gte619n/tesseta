@@ -53,17 +53,25 @@ jobs:
 
       # testDebugUnitTest (no :app: prefix) runs EVERY module's unit tests —
       # this is what gates the SyncEngine/ConflictResolver/outbox/DbKeystore/
-      # chat suites. The app build requires a real WEB OAuth client ID (it
-      # fails rather than embedding an empty audience); the web client ID is a
-      # public identifier, supplied via the repo variable so CI builds a
-      # signable APK without gcloud/Secret Manager access.
-      - name: Assemble debug + unit tests
+      # chat suites — and its task graph already covers all debug compilation,
+      # KSP/Hilt, resource and manifest processing. Full :app:/:wear:
+      # assembleDebug is deliberately NOT run: nothing consumes the debug APKs
+      # in CI, and the packaging tail (dex/merge/sign/zip) can't fail once
+      # compilation passes — except duplicate runtime classes, so that one
+      # check is kept. It uniquely gates debugImplementation-only deps (e.g.
+      # compose-ui-tooling) that the release build never packages.
+      #
+      # The app build requires a real WEB OAuth client ID (it fails rather
+      # than embedding an empty audience); the web client ID is a public
+      # identifier, supplied via the repo variable so CI configures without
+      # gcloud/Secret Manager access.
+      - name: Unit tests + duplicate-class check
         env:
           WEB_OAUTH_CLIENT_ID: ${{ vars.WEB_OAUTH_CLIENT_ID }}
         run: >-
           ./gradlew
-          :app:assembleDebug :wear:assembleDebug
           testDebugUnitTest
+          :app:checkDebugDuplicateClasses :wear:checkDebugDuplicateClasses
 
       - name: Upload unit test reports
         if: always()
