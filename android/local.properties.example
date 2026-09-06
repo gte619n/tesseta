@@ -1,1 +1,6 @@
 sdk.dir=/Users/you/Library/Android/sdk
+
+# Optional: cached WEB OAuth client ID. Auto-written by the first successful
+# gcloud Secret Manager fetch (see resolveWebOauthClientId in
+# app/build.gradle.kts); with it present, builds never shell out to gcloud.
+#webOauthClientId=<id>.apps.googleusercontent.com
