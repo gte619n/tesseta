@@ -210,13 +210,28 @@ class NutritionRepository @Inject constructor(
     suspend fun patchEntry(date: String, entryId: String, body: EntryPatchRequest): Entry {
         val current = entriesForDate(date).firstOrNull { it.entryId == entryId }
             ?: return api.patchEntry(date, entryId, body)
+        // A composite meal's macro snapshot isn't a client value — it's the sum of
+        // its ingredient snapshots re-scaled by the whole-meal portion
+        // (entry.quantity), the same rule the backend enforces (compositeTotal).
+        // Changing only the "portion of meal" sends no macros, so recompute them
+        // from the new portion here; this patch is a pure local mirror write
+        // (offline-first, never a REST round-trip), so nothing else re-scales them
+        // and the old full-portion snapshot would otherwise stick. Single-food
+        // edits supply their own macros and keep the existing behaviour.
+        val newQuantity = body.quantity ?: current.quantity
+        val newMacros = body.macros
+            ?: if (current.isComposite && body.quantity != null) {
+                compositeTotal(current.ingredients.orEmpty(), newQuantity)
+            } else {
+                current.macros
+            }
         val merged = current.copy(
             meal = body.meal ?: current.meal,
             foodName = body.foodName ?: current.foodName,
             servingLabel = body.servingLabel ?: current.servingLabel,
             servingGrams = body.servingGrams ?: current.servingGrams,
-            quantity = body.quantity ?: current.quantity,
-            macros = body.macros ?: current.macros,
+            quantity = newQuantity,
+            macros = newMacros,
         )
         support.updateLocal(
             table = MirrorTables.NUTRITION_ENTRIES,
@@ -649,6 +664,24 @@ class NutritionRepository @Inject constructor(
 
     private infix fun Double?.plusN(other: Double?): Double? =
         if (this == null && other == null) null else (this ?: 0.0) + (other ?: 0.0)
+
+    /**
+     * A composite meal's total macros: the sum of its ingredient snapshots scaled
+     * by the whole-meal [portion]. Mirrors the backend's
+     * `NutritionService.compositeTotal` so an offline portion edit computes the
+     * same total the server would (portion 1.0 = whole meal, 0.5 = half).
+     */
+    private fun compositeTotal(ingredients: List<EntryIngredient>, portion: Double): Macros =
+        sumMacros(ingredients.map { it.macros }).scaleBy(portion)
+
+    private fun Macros.scaleBy(factor: Double): Macros = Macros(
+        caloriesKcal = caloriesKcal?.let { it * factor },
+        proteinGrams = proteinGrams?.let { it * factor },
+        carbsGrams = carbsGrams?.let { it * factor },
+        fatGrams = fatGrams?.let { it * factor },
+        fiberGrams = fiberGrams?.let { it * factor },
+        sugarGrams = sugarGrams?.let { it * factor },
+    )
 
     private fun composite(date: String, entryId: String) = "$date/$entryId"
 

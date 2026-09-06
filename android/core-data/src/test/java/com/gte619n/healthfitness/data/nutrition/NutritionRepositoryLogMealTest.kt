@@ -173,6 +173,57 @@ class NutritionRepositoryLogMealTest {
         val day = repository.observeDay(date).first()
         assertTrue(day.meals.isEmpty())
     }
+
+    // --- portion of meal: a composite meal's macros re-scale by its portion ---
+
+    private fun compositeIngredient(kcal: Double, protein: Double) =
+        com.gte619n.healthfitness.domain.nutrition.EntryIngredient(
+            name = "ingredient",
+            servingGrams = 100.0,
+            quantity = 1.0,
+            macros = Macros(caloriesKcal = kcal, proteinGrams = protein),
+        )
+
+    private fun compositeEntry(portion: Double, macros: Macros) = Entry(
+        entryId = "e1",
+        meal = "dinner",
+        foodName = "Salmon plate",
+        quantity = portion,
+        macros = macros,
+        source = "MANUAL",
+        imageUrl = "http://img/salmon.png",
+        imageStatus = "READY",
+        ingredients = listOf(
+            compositeIngredient(300.0, 30.0),
+            compositeIngredient(200.0, 10.0),
+        ),
+    )
+
+    @Test
+    fun `patch of a composite portion re-scales the frozen macros from the ingredient sum`() =
+        runBlocking {
+            // Seed a whole-meal (portion 1.0) composite: macros = ingredient sum.
+            val whole = compositeEntry(1.0, Macros(caloriesKcal = 500.0, proteinGrams = 40.0))
+            coEvery { api.getDay(date) } returns NutritionDay(
+                date = date,
+                totals = whole.macros,
+                meals = listOf(MealGroup("dinner", whole.macros, listOf(whole))),
+            )
+            repository.refreshDay(date)
+
+            // Halve the portion (no macros supplied — the real "portion of meal" edit).
+            val patched = repository.patchEntry(
+                date, "e1",
+                com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest(quantity = 0.5),
+            )
+
+            assertEquals(0.5, patched.quantity, 0.0001)
+            assertEquals(250.0, patched.macros.caloriesKcal!!, 0.0001)
+            assertEquals(20.0, patched.macros.proteinGrams!!, 0.0001)
+            // And the mirror the day read serves reflects the halved total.
+            val logged = loggedEntry()
+            assertEquals(250.0, logged.macros.caloriesKcal!!, 0.0001)
+        }
 }
 
 private class FakeNutritionEntryDao(private val mirror: FakeMirrorOps) : NutritionEntryDao {
