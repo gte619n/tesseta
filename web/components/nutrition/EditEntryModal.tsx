@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
 import { AdjustWithAi } from "@/components/nutrition/AdjustWithAi";
 import type { AdjustApplyBody, AdjustPreviewResponse } from "@/lib/types/nutrition";
+import { formatWholeNumber } from "@/lib/format-number";
 
 type Props = {
   isOpen: boolean;
@@ -228,8 +229,8 @@ export function EditEntryModal({
 
   // Live amount readout that tracks serving grams × quantity and calories.
   const effectiveGrams = Math.round((numOr(servingGrams) ?? 0) * quantity);
-  const amountLabel = `${effectiveGrams} g${
-    effectiveKcal !== null ? ` · ${Math.round(effectiveKcal)} kcal` : ""
+  const amountLabel = `${formatWholeNumber(effectiveGrams)} g${
+    effectiveKcal !== null ? ` · ${formatWholeNumber(effectiveKcal)} kcal` : ""
   }`;
 
   return (
@@ -411,7 +412,7 @@ export function EditEntryModal({
             </div>
             {hasMacros && (
               <div className="mt-2 font-mono text-[11px] tabular-nums text-tertiary">
-                Calories: {Math.round(derivedKcal ?? 0)} kcal — computed from macros
+                Calories: {formatWholeNumber(derivedKcal ?? 0)} kcal — computed from macros
               </div>
             )}
           </div>

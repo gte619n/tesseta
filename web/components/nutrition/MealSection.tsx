@@ -22,6 +22,7 @@ import { AddFoodModal } from "@/components/nutrition/AddFoodModal";
 import { EditEntryModal } from "@/components/nutrition/EditEntryModal";
 import { IngredientsModal } from "@/components/nutrition/IngredientsModal";
 import { FoodImage } from "@/components/nutrition/FoodImage";
+import { formatWholeNumber } from "@/lib/format-number";
 
 type Props = {
   group: MealGroup;
@@ -177,7 +178,7 @@ export function MealSection({
           </h3>
           {hasEntries && (
             <span className="caps-mono rounded-[4px] bg-canvas-sunken px-1.5 py-px text-[9px] tracking-[0.06em] text-tertiary">
-              {Math.round(sub.caloriesKcal ?? 0)} kcal
+              {formatWholeNumber(sub.caloriesKcal ?? 0)} kcal
             </span>
           )}
         </div>
@@ -348,7 +349,7 @@ function EntryRow({
           <MacroChip label="F" value={entry.macros.fatGrams} unit="g" />
         </div>
         <span className="font-mono text-[13px] font-medium tabular-nums text-primary">
-          {Math.round(entry.macros.caloriesKcal ?? 0)}
+          {formatWholeNumber(entry.macros.caloriesKcal ?? 0)}
           <span className="ml-0.5 text-[10px] font-normal text-tertiary">
             kcal
           </span>
@@ -404,7 +405,7 @@ function MacroChip({
     <span className="caps-mono text-[9px] tracking-[0.04em] text-tertiary">
       {label}{" "}
       <span className="font-mono text-[10px] font-medium text-secondary tabular-nums">
-        {Math.round(value ?? 0)}
+        {formatWholeNumber(value ?? 0)}
       </span>
       {unit}
     </span>

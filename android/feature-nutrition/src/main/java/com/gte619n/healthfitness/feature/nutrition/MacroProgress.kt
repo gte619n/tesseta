@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import kotlin.math.roundToInt
@@ -67,7 +68,7 @@ fun MacroProgressCard(
                     Spacer(Modifier.height(3.dp))
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            "${calConsumed.roundToInt()}",
+                            formatWholeNumber(calConsumed),
                             style = Hf.type.headingLg.copy(
                                 fontSize = 34.sp,
                                 fontWeight = FontWeight.Medium,
@@ -77,7 +78,7 @@ fun MacroProgressCard(
                         if (calTarget != null) {
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                "/ ${calTarget.roundToInt()} kcal",
+                                "/ ${formatWholeNumber(calTarget)} kcal",
                                 style = Hf.type.monoSm,
                                 color = Hf.colors.textTertiary,
                                 modifier = Modifier.padding(bottom = 4.dp),
@@ -89,7 +90,7 @@ fun MacroProgressCard(
                     val diff = (calTarget - calConsumed).roundToInt()
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            "${kotlin.math.abs(diff)}",
+                            formatWholeNumber(kotlin.math.abs(diff).toDouble()),
                             style = Hf.type.headingMd,
                             color = Hf.colors.textPrimary,
                         )
@@ -164,8 +165,8 @@ private fun MacroMini(
         Spacer(Modifier.height(3.dp))
         Text(
             buildString {
-                append((consumed ?: 0.0).roundToInt())
-                if (tgt != null) append("/${tgt.roundToInt()}")
+                append(formatWholeNumber(consumed ?: 0.0))
+                if (tgt != null) append("/${formatWholeNumber(tgt)}")
                 if (nutrient.grams) append(" g")
             },
             style = Hf.type.monoSm,

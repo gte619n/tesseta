@@ -28,6 +28,7 @@ import { MEAL_LABELS } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
 import { MealSection } from "@/components/nutrition/MealSection";
+import { formatWholeNumber } from "@/lib/format-number";
 
 type Props = {
   meals: MealGroup[];
@@ -243,7 +244,7 @@ export function NutritionMeals({
                   {activeEntry.foodName}
                 </span>
                 <span className="font-mono text-[12px] tabular-nums text-tertiary">
-                  {Math.round(activeEntry.macros.caloriesKcal ?? 0)} kcal
+                  {formatWholeNumber(activeEntry.macros.caloriesKcal ?? 0)} kcal
                 </span>
               </div>
             ) : null}

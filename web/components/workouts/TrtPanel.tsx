@@ -8,6 +8,7 @@ import type {
   TrtMarkerTrend,
   DangerFlag,
 } from "@/lib/types/trt";
+import { formatNumber } from "@/lib/format-number";
 
 // TRT / monitoring-panel surface for the program-designer chat (IMPL-18 /
 // ADR-0015). Fetches the user's relevant labs (value vs. reference range,
@@ -54,14 +55,14 @@ const TREND_ARROW: Record<TrtMarkerTrend, string> = {
 
 function formatValue(m: TrtMarker): string {
   if (m.value == null) return "—";
-  const v = Number.isInteger(m.value) ? `${m.value}` : m.value.toFixed(1);
+  const v = formatNumber(m.value, 1);
   return m.unit ? `${v} ${m.unit}` : v;
 }
 
 function formatRange(m: TrtMarker): string | null {
   if (m.refLow == null && m.refHigh == null) return null;
-  const lo = m.refLow == null ? "" : `${m.refLow}`;
-  const hi = m.refHigh == null ? "" : `${m.refHigh}`;
+  const lo = m.refLow == null ? "" : formatNumber(m.refLow);
+  const hi = m.refHigh == null ? "" : formatNumber(m.refHigh);
   return `${lo}–${hi}`;
 }
 

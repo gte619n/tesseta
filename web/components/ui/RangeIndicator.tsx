@@ -2,6 +2,7 @@
 
 import type { Comparator } from "@/lib/types/goals";
 import { COMPARATOR_SYMBOL } from "@/lib/types/goals";
+import { formatNumber } from "@/lib/format-number";
 
 // A mini horizontal bar showing a current value relative to a single
 // target threshold with a comparator (e.g. "LDL 112 → target < 100").
@@ -137,5 +138,5 @@ function comparatorLabel(cmp: Comparator, target: number, unit?: string): string
 }
 
 function formatNum(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return formatNumber(n, 1);
 }

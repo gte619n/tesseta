@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
 import { AdjustWithAi } from "@/components/nutrition/AdjustWithAi";
 import type { AdjustApplyBody, AdjustPreviewResponse } from "@/lib/types/nutrition";
+import { formatWholeNumber } from "@/lib/format-number";
 
 type Props = {
   isOpen: boolean;
@@ -161,7 +162,7 @@ export function IngredientsModal({
                 {title.trim() || entry.foodName}
               </h2>
               <div className="mt-1 font-mono text-[12px] tabular-nums text-secondary">
-                {liveKcal} kcal · {ingredients.length} ingredients
+                {formatWholeNumber(liveKcal)} kcal · {ingredients.length} ingredients
               </div>
               {hint && (
                 <div className="mt-1 text-[12px] leading-snug text-secondary">
@@ -295,7 +296,7 @@ function IngredientRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-medium text-primary">{ingredient.name}</div>
         <div className="mt-0.5 font-mono text-[11px] tabular-nums text-tertiary">
-          {Math.round(baseGrams * q)} g · {kcal} kcal
+          {formatWholeNumber(baseGrams * q)} g · {formatWholeNumber(kcal)} kcal
         </div>
       </div>
       <label className="shrink-0">

@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.gte619n.healthfitness.domain.blood.ExtractedMarker
+import com.gte619n.healthfitness.ui.format.formatNumber
 import com.gte619n.healthfitness.ui.components.HfTone
 import com.gte619n.healthfitness.ui.components.Pill
 import com.gte619n.healthfitness.ui.theme.Hf
@@ -37,7 +38,7 @@ fun ExtractedMarkerRow(
 
         Text(
             text = buildString {
-                append(marker.value?.let { formatValue(it) } ?: "—")
+                append(marker.value?.let { formatNumber(it) } ?: "—")
                 marker.unit?.takeIf { it.isNotBlank() }?.let { append(" $it") }
             },
             style = Hf.type.monoMd,
@@ -56,12 +57,9 @@ private fun buildRefText(marker: ExtractedMarker): String? {
     val lo = marker.refRangeLow
     val hi = marker.refRangeHigh
     return when {
-        lo != null && hi != null -> "Ref ${formatValue(lo)}–${formatValue(hi)}"
-        hi != null -> "Ref < ${formatValue(hi)}"
-        lo != null -> "Ref > ${formatValue(lo)}"
+        lo != null && hi != null -> "Ref ${formatNumber(lo)}–${formatNumber(hi)}"
+        hi != null -> "Ref < ${formatNumber(hi)}"
+        lo != null -> "Ref > ${formatNumber(lo)}"
         else -> null
     }
 }
-
-private fun formatValue(v: Double): String =
-    if (v == v.toLong().toDouble()) v.toLong().toString() else String.format("%.1f", v)

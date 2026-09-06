@@ -1,10 +1,10 @@
 package com.gte619n.healthfitness.feature.nutrition
 
 import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.roundToInt
 
 // Small presentation helpers for the nutrition feature. Pure functions so they
 // are unit-testable without Compose (see MacroFormatTest).
@@ -13,10 +13,10 @@ internal val ISO_DATE: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
 /** Round a macro value for display; null → "—". Grams get no unit here. */
 fun formatGrams(value: Double?): String =
-    if (value == null) "—" else "${value.roundToInt()} g"
+    if (value == null) "—" else "${formatWholeNumber(value)} g"
 
 fun formatKcal(value: Double?): String =
-    if (value == null) "—" else "${value.roundToInt()} kcal"
+    if (value == null) "—" else "${formatWholeNumber(value)} kcal"
 
 /** Friendly day label, e.g. "Today", "Yesterday", or "Mon, May 30". */
 fun dayLabel(date: LocalDate, today: LocalDate = LocalDate.now()): String =

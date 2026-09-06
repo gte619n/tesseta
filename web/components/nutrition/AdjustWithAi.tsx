@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AdjustApplyBody, AdjustItem, AdjustPreviewResponse } from "@/lib/types/nutrition";
 import { useToast } from "@/components/ui/Toast";
+import { formatWholeNumber } from "@/lib/format-number";
 
 type Props = {
   isComposite: boolean;
@@ -15,8 +16,8 @@ type Props = {
 
 function itemSummary(item: AdjustItem): string {
   const parts: string[] = [];
-  if (item.servingGrams != null) parts.push(`${Math.round(item.servingGrams)} g`);
-  if (item.macros?.caloriesKcal != null) parts.push(`${Math.round(item.macros.caloriesKcal)} kcal`);
+  if (item.servingGrams != null) parts.push(`${formatWholeNumber(item.servingGrams)} g`);
+  if (item.macros?.caloriesKcal != null) parts.push(`${formatWholeNumber(item.macros.caloriesKcal)} kcal`);
   return parts.length ? `  ${parts.join(" · ")}` : "";
 }
 
@@ -113,8 +114,8 @@ export function AdjustWithAi({ isComposite, adjustPreview, adjustApply, onApplie
             ))}
           </ul>
           <div className="mt-2 font-mono text-[11px] tabular-nums text-secondary">
-            Calories: {oldKcal != null ? Math.round(oldKcal) : "?"} →{" "}
-            {newKcal != null ? Math.round(newKcal) : "?"} kcal
+            Calories: {oldKcal != null ? formatWholeNumber(oldKcal) : "?"} →{" "}
+            {newKcal != null ? formatWholeNumber(newKcal) : "?"} kcal
           </div>
           {isComposite && (
             <label className="mt-2 flex cursor-pointer items-center gap-2 text-[12px] text-secondary">

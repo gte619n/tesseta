@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getTarget, setTarget } from "@/lib/nutrition-api";
 import type { Macros } from "@/lib/types/nutrition";
 import { TargetForm } from "@/components/nutrition/TargetForm";
+import { formatWholeNumber } from "@/lib/format-number";
 
 export const metadata: Metadata = { title: "Nutrition Targets" };
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export default async function NutritionTargetPage() {
               ].map(({ label, value, unit }) => (
                 <div key={label} className="text-center">
                   <div className="font-mono text-[18px] font-medium tabular-nums text-primary">
-                    {value != null ? Math.round(value) : "—"}
+                    {value != null ? formatWholeNumber(value) : "—"}
                   </div>
                   <div className="caps-mono mt-0.5 text-[9px] tracking-[0.06em] text-tertiary">
                     {label}

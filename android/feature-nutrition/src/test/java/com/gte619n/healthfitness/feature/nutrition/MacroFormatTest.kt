@@ -59,6 +59,12 @@ class MacroFormatTest {
     }
 
     @Test
+    fun `large calorie and gram values are grouped with commas`() {
+        assertEquals("2,450 kcal", formatKcal(2450.0))
+        assertEquals("1,200 g", formatGrams(1200.0))
+    }
+
+    @Test
     fun `progressFraction clamps and handles missing target`() {
         assertEquals(0.5f, progressFraction(100.0, 200.0)!!, 1e-6f)
         assertEquals(1f, progressFraction(300.0, 200.0)!!, 1e-6f) // clamped

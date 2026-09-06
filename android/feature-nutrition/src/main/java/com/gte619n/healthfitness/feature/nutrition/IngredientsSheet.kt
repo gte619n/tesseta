@@ -31,9 +31,9 @@ import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryIngredient
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
-import kotlin.math.roundToInt
 
 /**
  * Bottom sheet for a composite (photo-logged) meal: the finished-meal image, an
@@ -106,7 +106,7 @@ fun IngredientsSheet(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "${liveKcal.roundToInt()} kcal · ${ingredients.size} ingredients",
+                        "${formatWholeNumber(liveKcal)} kcal · ${ingredients.size} ingredients",
                         style = Hf.type.monoSm,
                         color = Hf.colors.textSecondary,
                     )
@@ -203,7 +203,7 @@ private fun IngredientCard(
     val qty = quantity.toDoubleOrNull() ?: 1.0
     // Portion size is fixed; the quantity multiplier scales it.
     val preview = ingredient.macrosPer100g?.forPortion(baseGrams, qty) ?: ingredient.macros
-    val kcal = (preview.caloriesKcal ?: 0.0).roundToInt()
+    val kcal = formatWholeNumber(preview.caloriesKcal ?: 0.0)
 
     HfCard(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -216,7 +216,7 @@ private fun IngredientCard(
                 Text(ingredient.name, style = Hf.type.headingSm, color = Hf.colors.textPrimary)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "${(baseGrams * qty).roundToInt()} g · $kcal kcal",
+                    "${formatWholeNumber(baseGrams * qty)} g · $kcal kcal",
                     style = Hf.type.capsSm,
                     color = Hf.colors.textTertiary,
                 )

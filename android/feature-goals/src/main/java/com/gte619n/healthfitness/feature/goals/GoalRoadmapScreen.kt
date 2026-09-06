@@ -58,6 +58,7 @@ import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.HfTone
 import com.gte619n.healthfitness.ui.components.Pill
 import com.gte619n.healthfitness.ui.components.ProgressTrack
+import com.gte619n.healthfitness.ui.format.formatWholeNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -196,7 +197,7 @@ private fun guidanceSummary(g: NutritionGuidance): String {
 
 private fun macrosSummary(m: Macros): String {
     val parts = mutableListOf<String>()
-    m.caloriesKcal?.let { parts += "${it.toLong()} kcal" }
+    m.caloriesKcal?.let { parts += "${formatWholeNumber(it)} kcal" }
     val macros = listOfNotNull(
         m.proteinGrams?.let { "${it.toLong()}P" },
         m.carbsGrams?.let { "${it.toLong()}C" },

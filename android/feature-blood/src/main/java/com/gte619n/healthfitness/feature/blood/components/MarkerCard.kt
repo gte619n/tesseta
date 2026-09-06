@@ -20,6 +20,7 @@ import com.gte619n.healthfitness.domain.blood.MarkerCatalog
 import com.gte619n.healthfitness.domain.blood.ReferenceRange
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.format.formatNumber
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 import java.time.format.DateTimeFormatter
@@ -44,7 +45,7 @@ fun MarkerCard(
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 val valueColor = valueColor(latest)
                 Text(
-                    text = latest.value?.let { formatValue(it) } ?: "—",
+                    text = latest.value?.let { formatNumber(it) } ?: "—",
                     style = Hf.type.displaySm,
                     color = valueColor,
                     fontWeight = FontWeight.SemiBold,
@@ -73,9 +74,6 @@ fun MarkerCard(
         }
     }
 }
-
-private fun formatValue(v: Double): String =
-    if (v == v.toLong().toDouble()) v.toLong().toString() else String.format("%.1f", v)
 
 @Composable
 private fun valueColor(latest: LatestMarker): androidx.compose.ui.graphics.Color {

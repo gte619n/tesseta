@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getHistory, getTarget } from "@/lib/nutrition-api";
 import type { DailyRollup, Macros } from "@/lib/types/nutrition";
+import { formatWholeNumber } from "@/lib/format-number";
 
 export const metadata: Metadata = { title: "Nutrition History" };
 export const dynamic = "force-dynamic";
@@ -119,23 +120,23 @@ export default async function NutritionHistoryPage(props: {
             />
             <SummaryCard
               label="Avg calories"
-              value={`${Math.round(
+              value={formatWholeNumber(
                 sorted.reduce((s, r) => s + r.caloriesKcal, 0) / Math.max(1, totalDays),
-              )}`}
+              )}
               unit="kcal"
             />
             <SummaryCard
               label="Avg protein"
-              value={`${Math.round(
+              value={formatWholeNumber(
                 sorted.reduce((s, r) => s + r.proteinGrams, 0) / Math.max(1, totalDays),
-              )}`}
+              )}
               unit="g"
             />
             <SummaryCard
               label="Avg carbs"
-              value={`${Math.round(
+              value={formatWholeNumber(
                 sorted.reduce((s, r) => s + r.carbsGrams, 0) / Math.max(1, totalDays),
-              )}`}
+              )}
               unit="g"
             />
           </div>
@@ -290,12 +291,12 @@ function NutrientCell({
                 : "text-primary"
         }`}
       >
-        {Math.round(value)}
+        {formatWholeNumber(value)}
         <span className="ml-0.5 text-[10px] text-tertiary">{unit}</span>
       </div>
       {target !== null && (
         <div className="caps-mono mt-0.5 text-[9px] text-tertiary">
-          / {Math.round(target)}
+          / {formatWholeNumber(target)}
         </div>
       )}
     </td>

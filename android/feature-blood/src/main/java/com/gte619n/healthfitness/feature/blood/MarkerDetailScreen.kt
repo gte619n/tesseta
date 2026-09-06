@@ -29,6 +29,7 @@ import com.gte619n.healthfitness.feature.blood.components.MarkerReferenceBar
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.format.formatNumber
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
 import com.gte619n.healthfitness.ui.theme.Hf
@@ -108,7 +109,7 @@ fun MarkerDetailScreen(
                             }
                             Text(
                                 text = buildString {
-                                    append(formatValue(row.value))
+                                    append(formatNumber(row.value))
                                     if (row.unit.isNotBlank()) append(" ${row.unit}")
                                 },
                                 style = Hf.type.monoMd,
@@ -122,6 +123,3 @@ fun MarkerDetailScreen(
         }
     }
 }
-
-private fun formatValue(v: Double): String =
-    if (v == v.toLong().toDouble()) v.toLong().toString() else String.format("%.1f", v)
