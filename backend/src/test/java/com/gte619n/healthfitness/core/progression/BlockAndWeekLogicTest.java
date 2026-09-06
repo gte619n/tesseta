@@ -1,7 +1,10 @@
 package com.gte619n.healthfitness.core.progression;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,6 +20,37 @@ class BlockAndWeekLogicTest {
         assertEquals(BlockMode.RECOMP, BlockLoop.modeFor(0));          // maintenance
         assertEquals(BlockMode.MAINTENANCE, BlockLoop.modeFor(-400));  // deficit 300–500
         assertEquals(BlockMode.RECOVERY, BlockLoop.modeFor(-700));     // deficit >500 (Murphy & Koehler gate)
+    }
+
+    @Test
+    void energyBalanceSnapshotComputesBalanceAndImpliedMode() {
+        var estimator = mock(MaintenanceCalorieEstimator.class);
+        // Eating 2740, burning 2680 → +60 surplus → RECOMP (within ±300 band).
+        when(estimator.meanIntake14d("u1")).thenReturn(2740.0);
+        when(estimator.estimate("u1")).thenReturn(2680.0);
+        var loop = new BlockLoop(estimator, null, null); // energyBalance touches only the estimator
+
+        BlockLoop.EnergyBalance eb = loop.energyBalance("u1");
+
+        assertEquals(2680.0, eb.maintenanceKcal());
+        assertEquals(2740.0, eb.meanIntakeKcal());
+        assertEquals(60.0, eb.balanceKcal());
+        assertEquals(BlockMode.RECOMP, eb.mode());
+        assertTrue(eb.hasIntakeData());
+    }
+
+    @Test
+    void energyBalanceWithNoLoggedIntakeIsNeutralAndFlagged() {
+        var estimator = mock(MaintenanceCalorieEstimator.class);
+        when(estimator.meanIntake14d("u1")).thenReturn(0.0); // nothing logged yet
+        when(estimator.estimate("u1")).thenReturn(2500.0);   // cold-start estimate
+        var loop = new BlockLoop(estimator, null, null);
+
+        BlockLoop.EnergyBalance eb = loop.energyBalance("u1");
+
+        assertEquals(0.0, eb.balanceKcal());          // not meaningful without intake
+        assertEquals(BlockMode.RECOMP, eb.mode());    // neutral default
+        assertFalse(eb.hasIntakeData());
     }
 
     @Test

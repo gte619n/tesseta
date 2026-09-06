@@ -1,6 +1,8 @@
 package com.gte619n.healthfitness.data.workouts.progression
 
 import com.gte619n.healthfitness.domain.workouts.progression.BlockParameters
+import com.gte619n.healthfitness.domain.workouts.progression.EnergyBalance
+import com.gte619n.healthfitness.domain.workouts.progression.ExerciseStrength
 import com.gte619n.healthfitness.domain.workouts.progression.PatternReview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,6 +25,14 @@ class ProgressionRepository @Inject constructor(
 
     suspend fun blockParameters(): Result<BlockParameters> = withContext(Dispatchers.IO) {
         runCatching { api.blockParameters().toDomain() }
+    }
+
+    suspend fun strength(): Result<List<ExerciseStrength>> = withContext(Dispatchers.IO) {
+        runCatching { api.strength().map { it.toDomain() } }
+    }
+
+    suspend fun energyBalance(): Result<EnergyBalance> = withContext(Dispatchers.IO) {
+        runCatching { api.energyBalance().toDomain() }
     }
 
     /**

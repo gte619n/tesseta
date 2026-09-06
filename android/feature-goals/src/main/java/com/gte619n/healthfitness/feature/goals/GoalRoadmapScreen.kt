@@ -46,10 +46,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.domain.goals.GoalDeep
+import com.gte619n.healthfitness.domain.goals.GoalStatus
 import com.gte619n.healthfitness.domain.goals.Phase
 import com.gte619n.healthfitness.domain.goals.PhaseStatus
 import com.gte619n.healthfitness.domain.goals.Step
 import com.gte619n.healthfitness.domain.goals.StepKind
+import com.gte619n.healthfitness.feature.goals.plan.PlanCoherenceSection
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.workouts.program.NutritionGuidance
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
@@ -223,6 +225,13 @@ private fun RoadmapBody(
         item {
             GoalHeader(goal = goal, summary = progress.summary, fraction = progress.stepFraction)
             Spacer(Modifier.height(16.dp))
+        }
+        // Plan coherence — only meaningful while the goal is active.
+        if (goal.status == GoalStatus.ACTIVE) {
+            item {
+                PlanCoherenceSection()
+                Spacer(Modifier.height(16.dp))
+            }
         }
         itemsIndexed(phases, key = { _, p -> p.phaseId }) { index, phase ->
             PhaseRow(
