@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.data.medications
 
 import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
+import com.gte619n.healthfitness.data.db.entity.MedicationAdherenceEntity
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.di.IoDispatcher
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
@@ -47,6 +48,7 @@ class AdherenceRepository @Inject internal constructor(
 ) {
 
     private val payloadAdapter = moshi.adapter(AdherenceMirrorPayload::class.java)
+    private val dayPayloadAdapter = moshi.adapter(ServerDayPayload::class.java)
 
     suspend fun logDose(
         medicationId: String,
@@ -118,56 +120,115 @@ class AdherenceRepository @Inject internal constructor(
 
     /**
      * IMPL-21: `(medicationId, window)` pairs that already have ANY adherence record
-     * (taken OR missed, non-tombstoned) for [date], read from the local mirror. Used by
-     * the midnight/boot missed-rollover so a dose that was taken — or already marked
-     * missed — is never (re-)marked missed. Local-only by design (spec D15).
+     * (taken OR missed) for [date] — this device's flat per-window rows plus the
+     * pulled server day-rows (see [dayRowWindows]). Used by the midnight/boot
+     * missed-rollover so a dose that was taken — or already marked missed, on any
+     * device — is never (re-)marked missed.
      */
     suspend fun recordedWindowsFor(date: LocalDate): Set<Pair<String, TimeWindow>> =
         withContext(io) {
-            adherenceDao.observeAll().first()
-                .filter { it.status != "ARCHIVED" }
-                .mapNotNull { row ->
-                    val payload = decodePayload(row.payloadJson)?.takeIf { it.date == date }
-                        ?: return@mapNotNull null
-                    val window = runCatching { TimeWindow.valueOf(payload.window) }.getOrNull()
-                        ?: return@mapNotNull null
-                    payload.medicationId to window
-                }
-                .toSet()
+            val rows = adherenceDao.observeAll().first()
+            flatWindows(rows, date) { true } + dayRowWindows(rows, date) { true }
         }
 
     /**
-     * IMPL-21: `(medicationId, window)` pairs recorded as TAKEN (taken=true, not a
-     * miss, non-tombstoned) for [date], read from the local mirror. This is the
-     * authoritative record of what the user actually checked off on THIS device —
-     * including a dose just logged from the rolling reminder's "✓"/"Take all" action
-     * that the server `today` projection hasn't caught up to yet. The reminder engine
-     * unions this with the projection so an outstanding dose the user just tapped
-     * always clears from the notification, independent of the projection round-trip.
+     * IMPL-21: `(medicationId, window)` pairs recorded as TAKEN for [date]. Two
+     * sources, both read from the mirror (no network):
+     *  - the flat `med/date/window` rows THIS device wrote — the authoritative
+     *    record of what the user checked off here, including a dose just logged
+     *    from the rolling reminder's "✓"/"Take all" action;
+     *  - the day-shaped `med/date` rows the sync pull lands for takes made on
+     *    OTHER devices (each carrying the server day's `doses` array).
+     * The reminder engine unions this with the cached `today` projection so a
+     * tapped dose always clears from the notification without a network round-trip.
      */
     suspend fun takenWindowsFor(date: LocalDate): Set<Pair<String, TimeWindow>> =
         withContext(io) {
-            adherenceDao.observeAll().first()
-                .filter { it.status != "ARCHIVED" }
-                .mapNotNull { row ->
-                    val payload = decodePayload(row.payloadJson)
-                        ?.takeIf { it.date == date && it.taken && !it.missed }
-                        ?: return@mapNotNull null
-                    val window = runCatching { TimeWindow.valueOf(payload.window) }.getOrNull()
-                        ?: return@mapNotNull null
-                    payload.medicationId to window
-                }
-                .toSet()
+            val rows = adherenceDao.observeAll().first()
+            flatWindows(rows, date) { it.taken && !it.missed } +
+                dayRowWindows(rows, date) { !it.missed }
         }
+
+    /** Non-tombstoned flat per-window rows for [date] matching [include]. */
+    private fun flatWindows(
+        rows: List<MedicationAdherenceEntity>,
+        date: LocalDate,
+        include: (AdherenceMirrorPayload) -> Boolean,
+    ): Set<Pair<String, TimeWindow>> =
+        rows.filter { it.status != "ARCHIVED" }
+            .mapNotNull { row ->
+                val payload = decodePayload(row.payloadJson)
+                    ?.takeIf { it.date == date && include(it) }
+                    ?: return@mapNotNull null
+                val window = runCatching { TimeWindow.valueOf(payload.window) }.getOrNull()
+                    ?: return@mapNotNull null
+                payload.medicationId to window
+            }
+            .toSet()
+
+    /**
+     * Windows carried by the server day-rows (`"{med}/{date}"` composite id, the
+     * backend's `{date, doses:[{window, missed}]}` document) for [date]. A flat
+     * row for the same `(med, date, window)` — even a tombstoned one (a local
+     * undo) — wins over the pulled day-row, which may lag this device's writes.
+     */
+    private fun dayRowWindows(
+        rows: List<MedicationAdherenceEntity>,
+        date: LocalDate,
+        include: (ServerDayPayload.DoseEntry) -> Boolean,
+    ): Set<Pair<String, TimeWindow>> {
+        val locallyRecorded = rows.mapNotNull { row ->
+            // Any flat row for the date, regardless of status/taken.
+            val payload = decodePayload(row.payloadJson)?.takeIf { it.date == date }
+                ?: return@mapNotNull null
+            val window = runCatching { TimeWindow.valueOf(payload.window) }.getOrNull()
+                ?: return@mapNotNull null
+            payload.medicationId to window
+        }.toSet()
+        return rows
+            .filter { it.status != "ARCHIVED" && it.id.count { c -> c == '/' } == 1 }
+            .mapNotNull { row ->
+                val payload = decodeDayPayload(row.payloadJson)?.takeIf { it.date == date }
+                payload?.let { row.id.substringBefore('/') to it }
+            }
+            .flatMap { (medicationId, payload) ->
+                payload.doses.filter(include).mapNotNull { dose ->
+                    runCatching { TimeWindow.valueOf(dose.window) }.getOrNull()
+                        ?.let { medicationId to it }
+                }
+            }
+            .filter { it !in locallyRecorded }
+            .toSet()
+    }
 
     private fun decodePayload(json: String): AdherenceMirrorPayload? =
         runCatching { payloadAdapter.fromJson(json) }.getOrNull()
+
+    private fun decodeDayPayload(json: String): ServerDayPayload? =
+        runCatching { dayPayloadAdapter.fromJson(json) }.getOrNull()
 
     companion object {
         /** Composite mirror id `"<med>/<date>/<window>"` (date as ISO yyyy-MM-dd). */
         fun adherenceId(medicationId: String, date: LocalDate, window: TimeWindow): String =
             "$medicationId/$date/${window.name}"
     }
+}
+
+/**
+ * The day-shaped payload of a PULLED server adherence row (Firestore doc
+ * `users/{u}/medications/{med}/adherence/{date}`, mirrored under the composite
+ * id `"{med}/{date}"`). Only the fields the window-set readers need; Moshi
+ * skips the rest (`takenAt`, `notes`, timestamps). The medication id comes from
+ * the row id, not the payload.
+ */
+internal data class ServerDayPayload(
+    val date: LocalDate,
+    val doses: List<DoseEntry> = emptyList(),
+) {
+    internal data class DoseEntry(
+        val window: String,
+        val missed: Boolean = false,
+    )
 }
 
 /**

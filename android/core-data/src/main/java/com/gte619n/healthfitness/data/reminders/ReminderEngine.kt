@@ -26,12 +26,23 @@ import javax.inject.Singleton
  *  - [replan] / [onAlarmFired] — recompute + re-post + re-arm the DUE alarm.
  *  - [onDosesTaken] — log the take, then recompute (the notification decrements
  *    silently, or clears when the last dose is checked off).
+ *  - [onDismissed] — the user swiped the notification away: remember today's
+ *    shown keys so replans stop resurrecting it until a NEW dose crosses into
+ *    due (which re-posts and re-alerts the full outstanding list) or midnight.
  *  - [onMidnight] — record the just-ended day's untaken scheduled doses as MISSED
  *    (spec D5/D11), clear the notification, then recompute for the new day.
  *  - [reconcileMissed] — boot/launch catch-up for a skipped midnight (spec D15).
  *
- * Framework I/O is behind [ReminderNotifier] / [ReminderScheduler] and time behind
- * [Clock], so the orchestration here is covered by fast JVM tests (decision D-5).
+ * [refresh] is deliberately NETWORK-FREE: it runs inside broadcast receivers'
+ * ~10s `goAsync` window, and the live `today` fetch it used to make routinely
+ * blew that budget on a slow link — the process died before the notification was
+ * re-posted, leaving a stale "N medications to take" in the shade after the
+ * doses were already logged (the dead "Take all" button). Everything it needs is
+ * local: cached settings, the Room mirrors, and the cached `today` projection.
+ *
+ * Framework I/O is behind [ReminderNotifier] / [ReminderScheduler], durable
+ * notification state behind [ReminderStateStore], and time behind [Clock], so
+ * the orchestration here is covered by fast JVM tests (decision D-5).
  */
 @Singleton
 class ReminderEngine @Inject constructor(
@@ -40,16 +51,9 @@ class ReminderEngine @Inject constructor(
     private val settings: ReminderSettingsRepository,
     private val notifier: ReminderNotifier,
     private val scheduler: ReminderScheduler,
+    private val state: ReminderStateStore,
     private val clock: Clock,
 ) {
-    /**
-     * The `(med:window)` keys posted on the last notification, for the alert-vs-silent
-     * diff (spec D4): a post re-alerts iff it introduces a key that wasn't shown before
-     * (a new batch crossed into due, or the first post of the session); a pure decrement
-     * is silent. In-memory on the singleton — process death simply makes the next post
-     * alert once, which matches "reappears with re-alert" (spec D6 / decision D-7).
-     */
-    @Volatile private var lastPostedKeys: Set<String> = emptySet()
 
     /** Recompute the single reminder and re-arm the alarms. */
     suspend fun replan() = refresh()
@@ -67,6 +71,18 @@ class ReminderEngine @Inject constructor(
     }
 
     /**
+     * The user swiped the notification away. Remember every key it was showing;
+     * [postOrCancel] then suppresses re-posts until some NEW key joins the
+     * outstanding set (or the day rolls over). Never called for our own
+     * [ReminderNotifier.cancel] — Android only fires the delete intent on
+     * user-driven dismissal.
+     */
+    suspend fun onDismissed() {
+        val today = LocalDateTime.now(clock).toLocalDate()
+        state.addDismissedKeys(today, state.postedKeys(today))
+    }
+
+    /**
      * Local midnight rolled over: mark the just-ended day's untaken scheduled doses
      * MISSED (synced for stats, spec D11), clear the notification, then recompute for
      * the new day (which re-arms the next midnight alarm).
@@ -75,7 +91,7 @@ class ReminderEngine @Inject constructor(
         val endedDay = LocalDateTime.now(clock).toLocalDate().minusDays(1)
         markMissedFor(endedDay)
         notifier.cancel()
-        lastPostedKeys = emptySet()
+        state.clear()
         refresh()
     }
 
@@ -97,27 +113,38 @@ class ReminderEngine @Inject constructor(
         val config = settings.getCached()
         if (!config.enabled) {
             notifier.cancel()
-            lastPostedKeys = emptySet()
+            state.setPostedKeys(now.toLocalDate(), emptySet())
             scheduler.cancelDue()
             return
         }
         val meds = runCatching { medications.list(MedicationStatus.ACTIVE) }.getOrElse { return }
         val takenToday = takenTodaySet()
         val outstanding = OutstandingDoses.outstanding(meds, config, takenToday, now)
-        postOrCancel(outstanding)
+        postOrCancel(outstanding, now.toLocalDate())
         armAlarms(meds, config, now)
     }
 
-    private fun postOrCancel(outstanding: List<DueDose>) {
+    private suspend fun postOrCancel(outstanding: List<DueDose>, today: LocalDate) {
         if (outstanding.isEmpty()) {
             notifier.cancel()
-            lastPostedKeys = emptySet()
+            state.setPostedKeys(today, emptySet())
             return
         }
         val keys = outstanding.map { it.key }.toSet()
-        val alert = keys.any { it !in lastPostedKeys }
-        notifier.post(outstanding, alert)
-        lastPostedKeys = keys
+        val posted = state.postedKeys(today)
+        val dismissed = state.dismissedKeys(today)
+        // The alert-vs-silent diff (spec D4), durable across process death: a post
+        // re-alerts iff it introduces a key never shown (nor swiped away) today —
+        // a new batch crossed into due. A pure decrement/re-post stays silent.
+        val newKeys = keys - posted - dismissed
+        if (newKeys.isEmpty() && keys.all { it in dismissed }) {
+            // Everything still outstanding was swiped away — honor the dismissal
+            // instead of resurrecting the notification on every replan trigger.
+            // A new batch (or the midnight reset) ends the suppression.
+            return
+        }
+        notifier.post(outstanding, alert = newKeys.isNotEmpty())
+        state.setPostedKeys(today, keys)
     }
 
     private fun armAlarms(meds: List<com.gte619n.healthfitness.domain.medications.Medication>, config: ReminderSettings, now: LocalDateTime) {
@@ -142,16 +169,14 @@ class ReminderEngine @Inject constructor(
 
     /**
      * The `(med:window)` doses to treat as taken for today, as the UNION of two
-     * sources — because they are computed from divergent snapshots and either alone
-     * can miss a take:
-     *  - the server `today` projection ([MedicationRepository.todaysDoses]) picks up
-     *    doses taken on another device / the web that never touched this mirror; but
-     *    its overlay only marks doses the projection already lists, so a just-logged
-     *    dose whose `(med,window)` isn't in that projection (a stale/slow/offline
-     *    projection, or a local-vs-server schedule gap) is silently dropped.
-     *  - the local adherence mirror ([AdherenceRepository.takenWindowsFor]) is the
-     *    authoritative record of what THIS device just checked off, so the dose the
-     *    notification's "✓"/"Take all" action logged always counts here.
+     * LOCAL sources — no network (see the class doc for why that's load-bearing):
+     *  - the CACHED server `today` projection ([MedicationRepository.cachedTodaysDoses],
+     *    revalidated whenever the app fetches the checklist) covers takes made on
+     *    another device / the web before the last revalidation;
+     *  - the adherence mirror ([AdherenceRepository.takenWindowsFor]) covers what
+     *    THIS device checked off — including the dose the notification's
+     *    "✓"/"Take all" action just logged — plus the day-rows the sync pull lands
+     *    for remote takes, which keeps the union current between revalidations.
      *
      * Unioning guarantees a tapped dose clears the reminder while still reflecting
      * remote takes — the bug where "Take all" marked the doses but left the reminder
@@ -159,7 +184,8 @@ class ReminderEngine @Inject constructor(
      */
     private suspend fun takenTodaySet(): Set<Pair<String, TimeWindow>> {
         val today = LocalDateTime.now(clock).toLocalDate()
-        val fromProjection = runCatching { medications.todaysDoses() }.getOrElse { emptyList() }
+        val fromProjection = runCatching { medications.cachedTodaysDoses() }.getOrNull()
+            .orEmpty()
             .filter { it.taken }
             .map { it.medicationId to it.window }
         val fromMirror = runCatching { adherence.takenWindowsFor(today) }.getOrElse { emptySet() }
@@ -173,6 +199,7 @@ class ReminderEngine @Inject constructor(
         const val ACTION_REMINDER_FIRE = "com.gte619n.healthfitness.REMINDER_FIRE"
         const val ACTION_MIDNIGHT = "com.gte619n.healthfitness.REMINDER_MIDNIGHT"
         const val ACTION_DOSE_TAKEN = "com.gte619n.healthfitness.REMINDER_DOSE_TAKEN"
+        const val ACTION_DISMISSED = "com.gte619n.healthfitness.REMINDER_DISMISSED"
         const val EXTRA_TAKE_MEDS = "takeMeds"
         const val EXTRA_TAKE_WINDOWS = "takeWindows"
 

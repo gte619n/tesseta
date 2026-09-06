@@ -29,5 +29,9 @@ object RemindersDataModule {
 
     @Provides
     @Singleton
+    fun provideReminderStateStore(impl: DataStoreReminderStateStore): ReminderStateStore = impl
+
+    @Provides
+    @Singleton
     fun provideReminderClock(): Clock = Clock.systemDefaultZone()
 }

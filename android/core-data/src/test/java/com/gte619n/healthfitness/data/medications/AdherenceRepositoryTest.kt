@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.data.medications
 
+import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
+import com.gte619n.healthfitness.data.db.entity.MedicationAdherenceEntity
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.db.entity.OutboxOp
 import com.gte619n.healthfitness.data.sync.DrainTrigger
@@ -94,4 +96,74 @@ class AdherenceRepositoryTest {
         val ops = outboxDao.listByEntity(id).map { it.op }
         assertTrue("an undo enqueues a DELETE", ops.contains(OutboxOp.DELETE.name))
     }
+
+    // ---- window-set readers: flat local rows + pulled server day-rows ----------
+
+    @Test
+    fun `takenWindowsFor unions flat local rows with pulled server day-rows`() = runBlocking {
+        val date = LocalDate.of(2026, 9, 5)
+        val repo = repositoryWith(
+            flatRow("m1", date, TimeWindow.MORNING, taken = true),
+            dayRow("m2", date, """{"window":"MORNING"},{"window":"EVENING","missed":true}"""),
+            dayRow("m3", date.minusDays(1), """{"window":"MORNING"}"""),  // other day: ignored
+        )
+
+        assertEquals(
+            setOf("m1" to TimeWindow.MORNING, "m2" to TimeWindow.MORNING),
+            repo.takenWindowsFor(date),
+        )
+        // recorded additionally counts the remote MISSED marker.
+        assertEquals(
+            setOf("m1" to TimeWindow.MORNING, "m2" to TimeWindow.MORNING, "m2" to TimeWindow.EVENING),
+            repo.recordedWindowsFor(date),
+        )
+    }
+
+    @Test
+    fun `local undo tombstone beats a stale server day-row`() = runBlocking {
+        val date = LocalDate.of(2026, 9, 5)
+        val repo = repositoryWith(
+            // Undone on this device (tombstoned flat row) …
+            flatRow("m1", date, TimeWindow.MORNING, taken = true, status = "ARCHIVED"),
+            // … while the pulled server day-row still says taken: local wins.
+            dayRow("m1", date, """{"window":"MORNING"}"""),
+        )
+
+        assertEquals(emptySet<Pair<String, TimeWindow>>(), repo.takenWindowsFor(date))
+    }
+
+    private fun repositoryWith(vararg rows: MedicationAdherenceEntity): AdherenceRepository {
+        val dao = io.mockk.mockk<MedicationAdherenceDao>(relaxed = true)
+        io.mockk.every { dao.observeAll() } returns kotlinx.coroutines.flow.flowOf(rows.toList())
+        return AdherenceRepository(
+            MirrorRepositorySupport(
+                mirror = mirror,
+                outbox = io.mockk.mockk(relaxed = true),
+                killSwitch = KillSwitchGate { false },
+                drainTrigger = DrainTrigger { },
+            ),
+            dao,
+            MedsTestMoshi.instance,
+            Dispatchers.Unconfined,
+        )
+    }
+
+    private fun flatRow(
+        med: String,
+        date: LocalDate,
+        window: TimeWindow,
+        taken: Boolean,
+        status: String = "ACTIVE",
+    ) = MedicationAdherenceEntity(
+        id = AdherenceRepository.adherenceId(med, date, window),
+        payloadJson = """{"medicationId":"$med","date":"$date","window":"${window.name}","taken":$taken}""",
+        lastUpdate = 1L, status = status, dirty = false, syncState = "SYNCED",
+    )
+
+    /** A row as the sync pull lands it: composite `med/date` id, server day payload. */
+    private fun dayRow(med: String, date: LocalDate, dosesJson: String) = MedicationAdherenceEntity(
+        id = "$med/$date",
+        payloadJson = """{"date":"$date","doses":[$dosesJson],"notes":null}""",
+        lastUpdate = 1L, status = "ACTIVE", dirty = false, syncState = "SYNCED",
+    )
 }
