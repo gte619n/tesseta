@@ -41,6 +41,7 @@ class ReminderEngineTest {
     private val clock = MutableClock(monday.atTime(6, 0), zone)
     private val notifier = FakeNotifier()
     private val scheduler = FakeScheduler()
+    private val state = FakeStateStore()
     private val medications = mockk<MedicationRepository>()
     private val adherence = mockk<AdherenceRepository>(relaxed = true)
     private val settings = mockk<ReminderSettingsRepository>()
@@ -57,12 +58,14 @@ class ReminderEngineTest {
     private val twoAfternoon = (1..2).map { med("a$it", "Afternoon$it", TimeWindow.AFTERNOON, "13:00") }
     private val allMeds = fiveMorning + twoAfternoon
 
-    private val engine = ReminderEngine(medications, adherence, settings, notifier, scheduler, clock)
+    private val engine = ReminderEngine(medications, adherence, settings, notifier, scheduler, state, clock)
 
     private fun stubRepos(meds: List<Medication> = allMeds) {
         coEvery { settings.getCached() } returns ReminderSettings()
         coEvery { medications.list(MedicationStatus.ACTIVE) } returns meds
-        coEvery { medications.todaysDoses() } answers {
+        // The engine reads the CACHED projection (network-free refresh); the fake
+        // reflects `taken` the way the DataStore-cached checklist would.
+        coEvery { medications.cachedTodaysDoses() } answers {
             taken.map { (id, w) -> TodaysDose(id, id, w, 1.0, "mg", true, null) }
         }
         coEvery { adherence.recordedWindowsFor(any()) } answers { recorded.toSet() }
@@ -179,15 +182,72 @@ class ReminderEngineTest {
         assertEquals(monday.plusDays(2).atStartOfDay().toEpoch(), scheduler.lastMidnight)
     }
 
-    // ---- F7: swipe → next due re-alerts ---------------------------------------
+    // ---- F7: swipe suppresses re-posts; the next batch re-alerts ---------------
 
     @Test
-    fun f7_afterSwipe_nextBatchReAlerts() = runTest {
+    fun f7_afterSwipe_samBatchStaysHidden_nextBatchReAlerts() = runTest {
         stubRepos()
         clock.set(monday.atTime(7, 0)); engine.onAlarmFired()   // posts 5 (alert)
-        // User swipes the notification away — external dismissal, engine state unchanged.
+        engine.onDismissed()                                    // user swipes it away
+        notifier.activeCount = 0                                // the swipe removed it
+        notifier.lastAlert = false
+
+        // Replans for the SAME outstanding batch (hourly worker, sync pushes)
+        // must not resurrect the dismissed notification.
+        engine.replan()
+        assertEquals(0, notifier.activeCount)
+
         clock.set(monday.atTime(13, 0)); engine.onAlarmFired()  // afternoon crosses into due
+        assertEquals(1, notifier.activeCount)
         assertTrue("reappears with a re-alert", notifier.lastAlert)
+        assertEquals(7, notifier.lastDoses.size)                // full outstanding list is back
+    }
+
+    // ---- durable posted-keys: process death must not re-alert ------------------
+
+    @Test
+    fun processRestart_samePostedKeys_rePostsSilently() = runTest {
+        stubRepos()
+        clock.set(monday.atTime(7, 0)); engine.onAlarmFired()   // posts 5 (alert)
+        assertTrue(notifier.lastAlert)
+
+        // "Process death": a fresh engine sharing only the persisted state store.
+        val revived = ReminderEngine(medications, adherence, settings, notifier, scheduler, state, clock)
+        revived.replan()
+
+        assertEquals(1, notifier.activeCount)
+        assertFalse("no re-alert for keys already posted today", notifier.lastAlert)
+    }
+
+    // ---- dismissal survives process death --------------------------------------
+
+    @Test
+    fun processRestart_dismissalStillSuppresses() = runTest {
+        stubRepos()
+        clock.set(monday.atTime(7, 0)); engine.onAlarmFired()
+        engine.onDismissed()
+        notifier.activeCount = 0                                // the swipe removed it
+
+        val revived = ReminderEngine(medications, adherence, settings, notifier, scheduler, state, clock)
+        revived.replan()
+
+        assertEquals("dismissed batch stays hidden across restarts", 0, notifier.activeCount)
+    }
+
+    // ---- dismissal ends at midnight --------------------------------------------
+
+    @Test
+    fun dismissal_clearsAtMidnight() = runTest {
+        stubRepos()
+        clock.set(monday.atTime(7, 0)); engine.onAlarmFired()
+        engine.onDismissed()
+        notifier.activeCount = 0                                // the swipe removed it
+
+        clock.set(monday.plusDays(1).atTime(7, 30))
+        engine.onMidnight()                                     // rollover clears the state
+
+        assertEquals(1, notifier.activeCount)
+        assertTrue("new day re-alerts", notifier.lastAlert)
     }
 
     // ---- F8: boot reconciliation ----------------------------------------------
@@ -217,7 +277,7 @@ class ReminderEngineTest {
     fun disabledSettings_cancelEverything() = runTest {
         coEvery { settings.getCached() } returns ReminderSettings(enabled = false)
         coEvery { medications.list(any()) } returns allMeds
-        coEvery { medications.todaysDoses() } returns emptyList()
+        coEvery { medications.cachedTodaysDoses() } returns emptyList()
         clock.set(monday.atTime(8, 0)); engine.replan()
         assertTrue(notifier.cancelled)
         assertTrue(scheduler.dueCancelled)
@@ -256,6 +316,33 @@ class ReminderEngineTest {
             activeCount = 1; maxActive = maxOf(maxActive, activeCount)
         }
         override fun cancel() { activeCount = 0; cancelled = true }
+    }
+
+    private class FakeStateStore : ReminderStateStore {
+        private var postedDate: LocalDate? = null
+        private var posted: Set<String> = emptySet()
+        private var dismissedDate: LocalDate? = null
+        private var dismissed: Set<String> = emptySet()
+
+        override suspend fun postedKeys(date: LocalDate): Set<String> =
+            if (date == postedDate) posted else emptySet()
+
+        override suspend fun setPostedKeys(date: LocalDate, keys: Set<String>) {
+            postedDate = date; posted = keys
+        }
+
+        override suspend fun dismissedKeys(date: LocalDate): Set<String> =
+            if (date == dismissedDate) dismissed else emptySet()
+
+        override suspend fun addDismissedKeys(date: LocalDate, keys: Set<String>) {
+            dismissed = if (date == dismissedDate) dismissed + keys else keys
+            dismissedDate = date
+        }
+
+        override suspend fun clear() {
+            postedDate = null; posted = emptySet()
+            dismissedDate = null; dismissed = emptySet()
+        }
     }
 
     private class FakeScheduler : ReminderScheduler {

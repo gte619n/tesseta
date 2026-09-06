@@ -48,23 +48,29 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
     }
 }
 
-/** Handles the notification's "Took it" / "Take all" actions. */
+/** Handles the notification's "Took it" / "Take all" actions and its swipe-dismissal. */
 @AndroidEntryPoint
 class ReminderActionReceiver : BroadcastReceiver() {
 
     @Inject lateinit var engine: ReminderEngine
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != ReminderEngine.ACTION_DOSE_TAKEN) return
-        val meds = intent.getStringArrayExtra(ReminderEngine.EXTRA_TAKE_MEDS).orEmpty()
-        val windows = intent.getStringArrayExtra(ReminderEngine.EXTRA_TAKE_WINDOWS).orEmpty()
-        val taken = meds.zip(windows.toList()).mapNotNull { (med, window) ->
-            runCatching { TimeWindow.valueOf(window) }.getOrNull()?.let { med to it }
+        val action = intent.action
+        if (action != ReminderEngine.ACTION_DOSE_TAKEN && action != ReminderEngine.ACTION_DISMISSED) return
+        val taken = if (action == ReminderEngine.ACTION_DOSE_TAKEN) {
+            val meds = intent.getStringArrayExtra(ReminderEngine.EXTRA_TAKE_MEDS).orEmpty()
+            val windows = intent.getStringArrayExtra(ReminderEngine.EXTRA_TAKE_WINDOWS).orEmpty()
+            meds.zip(windows.toList()).mapNotNull { (med, window) ->
+                runCatching { TimeWindow.valueOf(window) }.getOrNull()?.let { med to it }
+            }
+        } else {
+            emptyList()
         }
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             try {
-                engine.onDosesTaken(taken)
+                if (action == ReminderEngine.ACTION_DISMISSED) engine.onDismissed()
+                else engine.onDosesTaken(taken)
             } finally {
                 pending.finish()
             }

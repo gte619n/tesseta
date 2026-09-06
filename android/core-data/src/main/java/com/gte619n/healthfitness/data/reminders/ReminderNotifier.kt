@@ -78,6 +78,9 @@ class AndroidReminderNotifier @Inject constructor(
             // decrement re-uses the shade entry without buzzing (spec D4).
             .setOnlyAlertOnce(!alert)
             .setContentIntent(launchAppIntent())
+            // A user swipe (never our own cancel()) tells the engine to stop
+            // resurrecting this batch on every replan until something new is due.
+            .setDeleteIntent(dismissIntent())
 
         if (doses.size <= MAX_PER_MED_ACTIONS) {
             doses.forEachIndexed { index, dose ->
@@ -87,7 +90,11 @@ class AndroidReminderNotifier @Inject constructor(
                 )
             }
         } else {
-            builder.addAction(0, "✓ Take all", actionIntent(doses, RC_ACTION_BASE))
+            // Distinct request code: sharing RC_ACTION_BASE with the first per-med
+            // "✓" action made them the same PendingIntent record (extras don't
+            // participate in Intent.filterEquals), so whichever was posted last
+            // silently rewrote what a tap on the other would take.
+            builder.addAction(0, "✓ Take all", actionIntent(doses, RC_ACTION_ALL))
         }
         notificationManager.notify(MED_REMINDER_NOTIFICATION_ID, builder.build())
     }
@@ -103,6 +110,15 @@ class AndroidReminderNotifier @Inject constructor(
             .putExtra(ReminderEngine.EXTRA_TAKE_WINDOWS, take.map { it.window.name }.toTypedArray())
         return PendingIntent.getBroadcast(
             context, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun dismissIntent(): PendingIntent {
+        val intent = Intent(context, ReminderActionReceiver::class.java)
+            .setAction(ReminderEngine.ACTION_DISMISSED)
+        return PendingIntent.getBroadcast(
+            context, RC_DISMISS, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
@@ -139,6 +155,8 @@ class AndroidReminderNotifier @Inject constructor(
         const val CHANNEL_ID = "medication_reminders"
         const val MAX_PER_MED_ACTIONS = 3
         const val RC_LAUNCH = 41002
+        const val RC_DISMISS = 41004
         const val RC_ACTION_BASE = 41100
+        const val RC_ACTION_ALL = 41190
     }
 }

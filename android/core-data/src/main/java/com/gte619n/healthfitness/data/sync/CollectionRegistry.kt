@@ -36,8 +36,16 @@ object CollectionRegistry {
     private val aliases: Map<String, String> = buildMap {
         // Medication subcollections — backend may emit either the plain
         // subcollection name or a dotted path; map both to the flat mirror table.
+        // The backend's FirestoreSyncChangeReader actually emits the SLASH form
+        // ("medications/adherence"); without that alias every pulled adherence
+        // change was skipped as an unknown collection, so a dose taken on another
+        // device never reached this mirror (the reminder engine then only learned
+        // of it via the live `today` projection fetch). Server rows land under the
+        // composite id "{med}/{date}" with the day-shaped payload; the flat
+        // per-window rows this device writes are untouched (different ids).
         put("adherence", MirrorTables.MEDICATION_ADHERENCE)
         put("medications.adherence", MirrorTables.MEDICATION_ADHERENCE)
+        put("medications/adherence", MirrorTables.MEDICATION_ADHERENCE)
         put("history", MirrorTables.MEDICATION_HISTORY)
         put("medications.history", MirrorTables.MEDICATION_HISTORY)
 

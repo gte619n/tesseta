@@ -12,8 +12,10 @@ import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.SetOptions;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -55,12 +57,18 @@ public class ReminderSettingsRepositoryImpl implements ReminderSettingsRepositor
         body.put("windowTimes", windowTimesBody(settings.windowTimes()));
         body.put("perMedication", perMedicationBody(settings.perMedication()));
         body.put("updatedAt", serverTimestamp());
+        // The merge mask may only name fields present in the body: naming
+        // "createdAt" while omitting it from the body makes Firestore reject the
+        // whole write ("Field masks contains invalid path"), which 400'd every
+        // save after the first. So createdAt joins both, and only on create.
+        List<String> fields = new ArrayList<>(
+            List.of("enabled", "windowTimes", "perMedication", "updatedAt"));
         if (!existing.exists()) {
             body.put("createdAt", serverTimestamp());
+            fields.add("createdAt");
         }
         // set() (not merge) for the maps so removed overrides actually go away.
-        await(docRef.set(body, SetOptions.mergeFields(
-            "enabled", "windowTimes", "perMedication", "updatedAt", "createdAt")));
+        await(docRef.set(body, SetOptions.mergeFields(fields)));
     }
 
     private DocumentReference document(String userId) {
