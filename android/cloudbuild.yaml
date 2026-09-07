@@ -12,6 +12,13 @@ steps:
         gcloud secrets versions access latest \
           --secret=oauth-web-client-id --project=$PROJECT_ID \
           --out-file=/workspace/web-oauth-client-id
+        # Withings partner client id (optional): compiled into BuildConfig to
+        # build the OAuth authorize URL. Best-effort — if the secret isn't
+        # provisioned yet, fall back to empty so the build still succeeds (the
+        # settings section shows "not configured" rather than crashing).
+        gcloud secrets versions access latest \
+          --secret=withings-client-id --project=$PROJECT_ID \
+          --out-file=/workspace/withings-client-id || : > /workspace/withings-client-id
 
   # Derive a real version + release notes for this build so Firebase App
   # Distribution stops showing a perpetual "(1) / 0.1.0" with a bare SHA. The
@@ -147,6 +154,9 @@ steps:
         # can write into android/build/.
         sudo chown -R "$(id -u):$(id -g)" /workspace
         export WEB_OAUTH_CLIENT_ID="$(cat /workspace/web-oauth-client-id)"
+        # Optional Withings client id (empty file when the secret is unset →
+        # BuildConfig.WITHINGS_CLIENT_ID="" → settings shows "not configured").
+        export WITHINGS_CLIENT_ID="$(cat /workspace/withings-client-id 2>/dev/null || true)"
         # Inject the version derived in the compute-version step (see
         # resolveVersionCode/resolveVersionName in app/build.gradle.kts).
         export ANDROID_VERSION_CODE="$(cat /workspace/version-code)"

@@ -4,6 +4,7 @@ import android.content.Context
 import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthService
 import com.gte619n.healthfitness.data.profile.ProfileService
+import com.gte619n.healthfitness.data.withings.WithingsService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -30,6 +31,11 @@ object SettingsDataModule {
     @Provides
     @Singleton
     fun provideGoogleHealthService(retrofit: Retrofit): GoogleHealthService =
+        retrofit.create()
+
+    @Provides
+    @Singleton
+    fun provideWithingsService(retrofit: Retrofit): WithingsService =
         retrofit.create()
 
     @Provides
