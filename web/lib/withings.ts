@@ -20,6 +20,24 @@ export const WITHINGS_CALLBACK_PATH = "/api/withings/callback";
 // httpOnly cookie carrying the CSRF `state` between start and callback.
 export const WITHINGS_STATE_COOKIE = "withings_oauth_state";
 
+// Resolve the app's public origin for building the redirect_uri. Behind Cloud
+// Run's proxy, Next's request.nextUrl.origin reflects the container's internal
+// bind host (https://0.0.0.0:8080), which must never be sent to Withings as the
+// redirect_uri. Prefer the canonical AUTH_URL (set in prod cloudbuild and by
+// dev.sh), then the forwarded host/proto headers, then the request origin as a
+// last resort (plain `next dev` on localhost, where it's already correct).
+export function resolveWebOrigin(request: {
+  headers: Headers;
+  nextUrl: { origin: string };
+}): string {
+  const envUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
+  if (envUrl && envUrl.trim()) return envUrl.trim().replace(/\/+$/, "");
+  const host =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  return host ? `${proto}://${host}` : request.nextUrl.origin;
+}
+
 export function buildWithingsAuthorizeUrl(params: {
   clientId: string;
   redirectUri: string;

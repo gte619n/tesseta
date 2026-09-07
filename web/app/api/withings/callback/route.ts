@@ -1,7 +1,11 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { send } from "@/lib/api";
-import { WITHINGS_CALLBACK_PATH, WITHINGS_STATE_COOKIE } from "@/lib/withings";
+import {
+  resolveWebOrigin,
+  WITHINGS_CALLBACK_PATH,
+  WITHINGS_STATE_COOKIE,
+} from "@/lib/withings";
 
 // Withings redirects the browser back here with ?code&state after the user
 // authorizes. We validate the CSRF state, then hand the code (plus the exact
@@ -18,7 +22,11 @@ export async function GET(request: NextRequest) {
   const expectedState = jar.get(WITHINGS_STATE_COOKIE)?.value;
   jar.delete(WITHINGS_STATE_COOKIE);
 
-  const profile = new URL("/me/profile", url.origin);
+  // Public origin (not the container's internal bind host) — used both to build
+  // the redirect_uri (must byte-match the one /start sent to Withings) and to
+  // bounce the browser back to the profile page.
+  const origin = resolveWebOrigin(request);
+  const profile = new URL("/me/profile", origin);
 
   if (oauthError || !code) {
     profile.searchParams.set("withings", "error");
@@ -30,7 +38,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(profile);
   }
 
-  const redirectUri = `${url.origin}${WITHINGS_CALLBACK_PATH}`;
+  const redirectUri = `${origin}${WITHINGS_CALLBACK_PATH}`;
   try {
     await send("/api/me/withings/connect", "POST", { code, redirectUri });
     profile.searchParams.set("withings", "connected");

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildWithingsAuthorizeUrl,
+  resolveWebOrigin,
   WITHINGS_CALLBACK_PATH,
   WITHINGS_STATE_COOKIE,
 } from "@/lib/withings";
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
   if (!clientId) {
     return new NextResponse("Withings integration is not configured", { status: 500 });
   }
-  const origin = request.nextUrl.origin;
+  const origin = resolveWebOrigin(request);
   const redirectUri = `${origin}${WITHINGS_CALLBACK_PATH}`;
   const state = crypto.randomUUID();
 
