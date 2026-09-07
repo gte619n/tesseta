@@ -1,6 +1,11 @@
 package com.gte619n.healthfitness.feature.workouts.session
 
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
+import com.gte619n.healthfitness.domain.workouts.program.Prescription
+import com.gte619n.healthfitness.domain.workouts.program.PrescriptionRationale
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionConfidence
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.feature.workouts.program.ProgramFixtures
 import org.junit.Assert.assertEquals
@@ -13,6 +18,47 @@ class SessionFormatTest {
 
     private val squat = ProgramFixtures.activeDraft.sessionSteps()[0].prescription
     private val plank = ProgramFixtures.activeDraft.sessionSteps()[1].prescription
+
+    // ---- IMPL-PROG-02 fixtures & helpers ----
+
+    private fun rationale(
+        direction: ProgressionDirection,
+        deltaLbs: Double? = null,
+    ) = PrescriptionRationale(
+        path = "KALMAN",
+        direction = direction,
+        deltaLbs = deltaLbs,
+        deltaReps = null,
+        deltaSets = null,
+        confidence = ProgressionConfidence.HIGH,
+        inputs = listOf("last: 100×8"),
+    )
+
+    private fun rx(
+        exerciseId: String = "ex-x",
+        name: String? = "Cable Push-down",
+        repsMin: Int? = 8,
+        repsMax: Int? = 12,
+        targetWeightLbs: Double? = null,
+        rationale: PrescriptionRationale? = null,
+        isBodyweight: Boolean = false,
+    ) = Prescription(
+        exerciseId = exerciseId,
+        orderIndex = 0,
+        sets = 3,
+        repsMin = repsMin,
+        repsMax = repsMax,
+        durationSeconds = null,
+        intensity = null,
+        restSeconds = null,
+        tempo = null,
+        notes = null,
+        deloadModifier = null,
+        exercise = name?.let { ExerciseSummary(exerciseId, it, emptyList(), emptyList(), emptyList()) },
+        targetWeightLbs = targetWeightLbs,
+        rationale = rationale,
+        isBodyweight = isBodyweight,
+    )
 
     @Test
     fun `prefill carries the last logged set within the session first`() {
@@ -215,6 +261,100 @@ class SessionFormatTest {
         assertEquals("Rest 1 minute 30 seconds.", restAnnouncement(90))
         assertEquals("Rest 2 minutes.", restAnnouncement(120))
         assertEquals("Rest 1 minute.", restAnnouncement(60))
+    }
+
+    // ---- IMPL-PROG-02 F2/F3/D1: prediction is authoritative over last-session actual ----
+
+    @Test
+    fun `prefill prefers the engine prediction over last-session actual`() {
+        val prescribed = rx(targetWeightLbs = 155.0, rationale = rationale(ProgressionDirection.UP))
+        val prefill = prefillFor(
+            prescribed,
+            logged = emptyList(),
+            lastSets = mapOf("ex-x" to listOf(LoggedSet(weightLbs = 145.0, reps = 12))),
+        )
+        // The prediction (155) wins over what was lifted last time (145) — no race.
+        assertEquals(155.0, prefill.weightLbs)
+    }
+
+    @Test
+    fun `prefill still carries last session when there is no prediction`() {
+        // A static prescription (no target, no rationale) keeps carry-forward.
+        val prefill = prefillFor(
+            rx(name = "Row", targetWeightLbs = null, rationale = null),
+            logged = emptyList(),
+            lastSets = mapOf("ex-x" to listOf(LoggedSet(weightLbs = 95.0, reps = 10))),
+        )
+        assertEquals(95.0, prefill.weightLbs)
+    }
+
+    // ---- IMPL-PROG-02 F5/D5: reps reset to the band bottom on a weight increase ----
+
+    @Test
+    fun `target reps reset to band bottom on a weight increase`() {
+        val up = rx(repsMin = 6, repsMax = 10, rationale = rationale(ProgressionDirection.UP))
+        assertEquals(6, targetReps(up))
+    }
+
+    @Test
+    fun `target reps hold at band top when not increasing`() {
+        val hold = rx(repsMin = 6, repsMax = 10, rationale = rationale(ProgressionDirection.HOLD))
+        assertEquals(10, targetReps(hold))
+    }
+
+    @Test
+    fun `target reps are null without an engine decision`() {
+        assertNull(targetReps(rx(rationale = null)))
+    }
+
+    // ---- IMPL-PROG-02 F6: "body weight" only for real bodyweight movements ----
+
+    @Test
+    fun `bodyweight movement announces body weight`() {
+        val dip = rx(name = "Dip", repsMax = 8, isBodyweight = true, targetWeightLbs = null)
+        assertEquals("Dip. body weight, 8 reps.", coachAnnouncement(dip))
+    }
+
+    @Test
+    fun `first-time weighted lift announces its seed load, never body weight`() {
+        // The cable push-down regression: seeded to 45 lb, must speak a number.
+        val pushdown = rx(name = "Cable Push-down", repsMax = 12, targetWeightLbs = 45.0)
+        val spoken = coachAnnouncement(pushdown)
+        assertEquals("Cable Push-down. 45 pounds, 12 reps.", spoken)
+        assertFalse(spoken!!.contains("body weight"))
+    }
+
+    @Test
+    fun `non-bodyweight lift with no known load omits the weight, not body weight`() {
+        val unknown = rx(name = "Cable Push-down", repsMax = 12, targetWeightLbs = null)
+        val spoken = coachAnnouncement(unknown, weightLbs = 0.0)
+        assertFalse(spoken!!.contains("body weight"))
+        assertEquals("Cable Push-down. 12 reps.", spoken)
+    }
+
+    // ---- IMPL-PROG-02 F1/D2/D9: adjustment chip vs last time ----
+
+    @Test
+    fun `weight adjustment reports the delta versus last time`() {
+        val prescribed = rx(targetWeightLbs = 155.0, rationale = rationale(ProgressionDirection.UP))
+        val adj = weightAdjustment(prescribed, mapOf("ex-x" to listOf(LoggedSet(weightLbs = 145.0, reps = 12))))
+        assertEquals(true, adj?.up)
+        assertEquals("+10 lb", adj?.label)
+    }
+
+    @Test
+    fun `no weight adjustment chip without an engine decision`() {
+        val prescribed = rx(targetWeightLbs = 155.0, rationale = null)
+        assertNull(weightAdjustment(prescribed, mapOf("ex-x" to listOf(LoggedSet(weightLbs = 145.0, reps = 12)))))
+    }
+
+    @Test
+    fun `reps adjustment reports the delta when the engine reset the band`() {
+        val up = rx(repsMin = 6, repsMax = 10, rationale = rationale(ProgressionDirection.UP))
+        val adj = repsAdjustment(up, mapOf("ex-x" to listOf(LoggedSet(weightLbs = 145.0, reps = 10))))
+        // Target dropped from 10 (last) to 6 (band bottom) → −4 reps.
+        assertEquals(false, adj?.up)
+        assertEquals("−4 reps", adj?.label)
     }
 
     @Test

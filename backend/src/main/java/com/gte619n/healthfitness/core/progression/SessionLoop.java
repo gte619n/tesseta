@@ -134,8 +134,8 @@ public class SessionLoop {
         logPredictions(userId, exerciseId, sessionId, priorForPrediction, rx, workingLoad, lastSet, block, pattern, mechanic, profile);
 
         // ---- next-session prescription ----
-        PrescribedLoad next = derivePrescription(
-            userId, exerciseId, updated, sets, workingLoad, rx, block, pattern, mechanic, profile, now);
+        PrescribedLoad next = tightenBandOnIncrease(derivePrescription(
+            userId, exerciseId, updated, sets, workingLoad, rx, block, pattern, mechanic, profile, now));
         writeback.applyNextPrescription(userId, exerciseId, next, completed.date());
     }
 
@@ -270,6 +270,22 @@ public class SessionLoop {
             if (priorSession.equals(o.sessionId()) && o.reps() != null && o.reps() < band.min()) return true;
         }
         return false;
+    }
+
+    /**
+     * IMPL-PROG-02 D5 / IMPL-D11: on a load increase, collapse the emitted rep band
+     * toward its bottom (e.g. 6..10 → 6..7) so the STORED prescription matches the
+     * "reps reset to the bottom" the athlete is shown — the heavier load stays
+     * achievable and the recorded target is honest. Non-increases keep the full band.
+     */
+    static PrescribedLoad tightenBandOnIncrease(PrescribedLoad load) {
+        if (load == null || load.rationale() == null || load.rationale().direction() != Direction.UP) {
+            return load;
+        }
+        int tightenedMax = Math.min(load.repsMax(), load.repsMin() + 1);
+        if (tightenedMax >= load.repsMax()) return load;
+        return new PrescribedLoad(
+            load.sets(), load.repsMin(), tightenedMax, load.targetWeightLbs(), load.rationale());
     }
 
     private static PrescribedLoad relabelPath(PrescribedLoad load, ProgressionPath path) {

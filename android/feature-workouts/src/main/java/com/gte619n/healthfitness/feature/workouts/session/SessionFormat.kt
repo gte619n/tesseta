@@ -3,6 +3,8 @@ package com.gte619n.healthfitness.feature.workouts.session
 import com.gte619n.healthfitness.domain.workouts.program.Block
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
+import kotlin.math.abs
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 
@@ -70,11 +72,33 @@ fun WorkoutSessionDraft.resumeStepIndex(): Int {
 }
 
 /**
+ * The engine's intended reps for the upcoming set (IMPL-PROG-02 F5/D5), or null
+ * when there's no engine decision to honour (a static program → keep the existing
+ * "carry last session" behaviour). When the engine raised the load
+ * ([ProgressionDirection.UP]) the target resets to the BOTTOM of the rep band so
+ * the heavier weight stays achievable; otherwise it's the top of the band (work
+ * reps up before the next jump).
+ */
+fun targetReps(prescription: Prescription): Int? {
+    prescription.rationale ?: return null
+    return if (prescription.rationale?.direction == ProgressionDirection.UP) {
+        prescription.repsMin ?: prescription.repsMax
+    } else {
+        prescription.repsMax ?: prescription.repsMin
+    }
+}
+
+/**
  * The prefill for the next, not-yet-logged set of a prescription — the value
- * the logger shows on the pending row and the coach announces. Precedence:
- * what was carried within this session (the last logged set), then the final
- * set of the previous session ([lastSets], IMPL-COACH PR2), then the designed
- * target.
+ * the logger shows on the pending row and the coach announces. Precedence
+ * (IMPL-PROG-02 D1): what was carried within this session (the last logged set),
+ * then the ENGINE PREDICTION ([Prescription.targetWeightLbs] / [targetReps]) as
+ * the authoritative next target, then — only if there's no prediction — the final
+ * set of the previous session ([lastSets]).
+ *
+ * <p>Making the prediction win over last-session actual is the root-cause fix for
+ * the "announcement/notification switched a second later" race: the shown number
+ * no longer depends on the async [lastSets] fetch landing.
  * Shared by the UI (display) and the ViewModel (the actual logged set) so both
  * agree on "what to lift next". A timed exercise carries a held duration
  * instead of weight/reps.
@@ -104,10 +128,48 @@ fun prefillFor(
         )
     } else {
         SetPrefill(
-            weightLbs = previous?.weightLbs ?: lastTime?.weightLbs ?: prescription.targetWeightLbs,
-            reps = previous?.reps ?: lastTime?.reps ?: prescription.repsMax ?: prescription.repsMin,
+            weightLbs = previous?.weightLbs ?: prescription.targetWeightLbs ?: lastTime?.weightLbs,
+            reps = previous?.reps ?: targetReps(prescription) ?: lastTime?.reps
+                ?: prescription.repsMax ?: prescription.repsMin,
         )
     }
+}
+
+/**
+ * How the shown target compares to what the athlete actually did last time
+ * (IMPL-PROG-02 F1/D2/D9). Rendered as a neutral accent ▲/▼ chip on the number —
+ * deliberately distinct from the green/red HIT/MISS outcome coloring. Null when
+ * there's no last-time value or the target is unchanged.
+ */
+data class TargetAdjustment(val up: Boolean, val label: String)
+
+/** Weight target vs. last-session actual weight for this exercise. */
+fun weightAdjustment(
+    prescription: Prescription,
+    lastSets: Map<String, List<LoggedSet>>,
+): TargetAdjustment? {
+    // Only flag a change the ENGINE made — a static program target isn't an "adjustment".
+    prescription.rationale ?: return null
+    if (prescription.isBodyweight) return null
+    val target = prescription.targetWeightLbs ?: return null
+    val last = lastSets[prescription.exerciseId]?.lastOrNull()?.weightLbs ?: return null
+    val delta = target - last
+    if (abs(delta) < 0.5) return null
+    val mag = abs(delta)
+    val num = if (mag == mag.toLong().toDouble()) mag.toLong().toString() else mag.toString()
+    return TargetAdjustment(up = delta > 0, label = "${if (delta > 0) "+" else "−"}$num lb")
+}
+
+/** Rep target vs. last-session actual reps for this exercise. */
+fun repsAdjustment(
+    prescription: Prescription,
+    lastSets: Map<String, List<LoggedSet>>,
+): TargetAdjustment? {
+    val target = targetReps(prescription) ?: return null
+    val last = lastSets[prescription.exerciseId]?.lastOrNull()?.reps ?: return null
+    val delta = target - last
+    if (delta == 0) return null
+    return TargetAdjustment(up = delta > 0, label = "${if (delta > 0) "+" else "−"}${abs(delta)} reps")
 }
 
 /**
@@ -211,7 +273,7 @@ fun restAnnouncement(totalSeconds: Int): String {
 fun coachAnnouncement(
     prescription: Prescription,
     weightLbs: Double? = prescription.targetWeightLbs,
-    reps: Int? = prescription.repsMax ?: prescription.repsMin,
+    reps: Int? = targetReps(prescription) ?: prescription.repsMax ?: prescription.repsMin,
 ): String? {
     val name = prescription.exercise?.name?.takeIf { it.isNotBlank() } ?: return null
     if (prescription.isTimed) {
@@ -219,9 +281,18 @@ fun coachAnnouncement(
         return "$name. $seconds second hold."
     }
     val pieces = mutableListOf<String>()
+    // IMPL-PROG-02 F6: say "body weight" ONLY for a real bodyweight movement.
+    // A weighted lift with no known load (lbs 0/null) omits the weight rather than
+    // announcing the impossible "body weight".
     weightLbs?.let { lbs ->
         val rounded = if (lbs == lbs.toLong().toDouble()) lbs.toLong().toString() else lbs.toString()
-        pieces += if (lbs == 0.0) "body weight" else "$rounded pounds"
+        when {
+            prescription.isBodyweight -> pieces += "body weight"
+            lbs > 0.0 -> pieces += "$rounded pounds"
+        }
+    }
+    if (weightLbs == null && prescription.isBodyweight) {
+        pieces += "body weight"
     }
     reps?.let { r ->
         pieces += if (r == 1) "1 rep" else "$r reps"

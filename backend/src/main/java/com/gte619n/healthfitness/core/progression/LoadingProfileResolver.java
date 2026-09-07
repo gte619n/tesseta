@@ -6,7 +6,6 @@ import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseRepository;
 import com.gte619n.healthfitness.core.exercise.MovementPattern;
 import java.util.Optional;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
@@ -77,18 +76,13 @@ public class LoadingProfileResolver {
         return 5.0;
     }
 
-    /** Bodyweight-loaded movements carry an offset = bodyweight (§4.4). */
+    /**
+     * Bodyweight-loaded movements carry an offset = bodyweight (§4.4). Delegates
+     * to {@link BodyweightClassifier} so the resolver's offset decision and the
+     * API's {@code isBodyweight} flag (IMPL-PROG-02 F6) never diverge.
+     */
     private static boolean isBodyweightLoaded(Exercise ex, String nameLower) {
-        if (contains(nameLower, "pull-up", "pull up", "pullup", "chin-up", "chin up",
-            "chinup", "dip", "push-up", "push up", "pushup", "muscle-up", "inverted row")) {
-            return true;
-        }
-        // Bodyweight iff no equipment groups and a loaded movement pattern.
-        boolean noEquipment = ex.requiredEquipment() == null || ex.requiredEquipment().isEmpty();
-        return noEquipment && ex.movementPattern() != null
-            && Set.of(MovementPattern.PULL_VERTICAL, MovementPattern.PUSH_VERTICAL,
-                MovementPattern.PUSH_HORIZONTAL, MovementPattern.PULL_HORIZONTAL)
-                .contains(ex.movementPattern());
+        return BodyweightClassifier.isBodyweight(ex);
     }
 
     /** Timed/mobility/stretch/cardio movements do not progress on load (D21). */

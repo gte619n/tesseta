@@ -77,6 +77,12 @@ public record WorkoutProgramDeepResponse(
         List<LoggedSet> loggedSets,
         ExerciseSummary exercise,
         Double targetWeightLbs,  // IMPL-18: concrete prescribed load; null → use intensity
-        String loadBasis         // IMPL-18: short "why" for the load (e1RM / last done / ramp), shown on tap
+        String loadBasis,        // IMPL-18: short "why" for the load (e1RM / last done / ramp), shown on tap
+        // IMPL-PROG-02: structured engine rationale (direction/delta/confidence/inputs)
+        // so the client can highlight adjustments and reveal the full "why".
+        com.gte619n.healthfitness.core.progression.PrescriptionRationale rationale,
+        // IMPL-PROG-02 F6: true only for real bodyweight movements (dips/pull-ups),
+        // so a weighted lift with no known load is never announced as "body weight".
+        boolean isBodyweight
     ) {}
 }

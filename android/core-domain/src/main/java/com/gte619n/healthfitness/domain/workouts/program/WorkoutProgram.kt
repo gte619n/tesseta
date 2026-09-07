@@ -141,6 +141,12 @@ data class Prescription(
     val loadBasis: String? = null,
     /** Progression-engine rationale for this prescription; null → no engine decision to show. */
     val rationale: PrescriptionRationale? = null,
+    /**
+     * IMPL-PROG-02 F6: true only for real bodyweight movements (dips/pull-ups/push-ups).
+     * The coach announces/labels "body weight" ONLY when this is true — a weighted lift
+     * with no known load (e.g. cable push-downs) must never resolve to "body weight".
+     */
+    val isBodyweight: Boolean = false,
 ) {
     /**
      * A timed exercise (stretch / mobility / cardio hold) — logged by held time
