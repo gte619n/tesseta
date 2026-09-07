@@ -25,6 +25,23 @@ class CollectionRegistryTest {
     }
 
     @Test
+    fun `backend slash-form subcollection strings resolve to flat mirror tables`() {
+        // The FirestoreSyncChangeReader emits the full Firestore path for
+        // subcollections (its SUBCOLLECTIONS `emitted` values). tableFor does an
+        // exact-match lookup on that raw string, so each one must be aliased —
+        // otherwise the pulled change is skipped and never reaches the mirror
+        // (the web→phone nutrition sync bug: entries logged on another device
+        // never landed because only the dotted/bare forms were registered).
+        assertEquals(MirrorTables.NUTRITION_ENTRIES, CollectionRegistry.tableFor("nutritionDays/entries"))
+        assertEquals(MirrorTables.MEDICATION_ADHERENCE, CollectionRegistry.tableFor("medications/adherence"))
+        assertEquals(MirrorTables.MEDICATION_HISTORY, CollectionRegistry.tableFor("medications/history"))
+        assertEquals(MirrorTables.GOAL_PHASES, CollectionRegistry.tableFor("goals/phases"))
+        assertEquals(MirrorTables.GOAL_STEPS, CollectionRegistry.tableFor("goals/phases/steps"))
+        assertEquals(MirrorTables.GOAL_CHAT_MESSAGES, CollectionRegistry.tableFor("goalChatThreads/messages"))
+        assertEquals(MirrorTables.WORKOUT_SCHEDULED, CollectionRegistry.tableFor("workoutPrograms/scheduled"))
+    }
+
+    @Test
     fun `unknown collection returns null and is skipped`() {
         assertNull(CollectionRegistry.tableFor("somethingTheClientDoesNotMirrorYet"))
     }
