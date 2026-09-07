@@ -13,10 +13,11 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
-// Base marketing version — the single source of truth for the "0.x.y" prefix.
-// CI appends the build number to this (see resolveVersionName); bump it for a
-// real release. infra/scripts compose release notes against this same string.
-val baseVersionName = "0.1.0"
+// Base marketing version — the single source of truth for the "1.x" prefix.
+// CI appends the build number to this (see resolveVersionName), yielding
+// "1.<buildNumber>"; bump the major here for a real release. infra/scripts
+// compose release notes against this same string.
+val baseVersionName = "1"
 
 android {
     namespace = "com.gte619n.healthfitness.mobile"
@@ -30,7 +31,7 @@ android {
         // Versioning. The base marketing version lives here as the single source
         // of truth; CI (android/cloudbuild.yaml) injects a monotonic build number
         // so every Firebase App Distribution release shows a distinct version
-        // instead of a perpetual "(1) / 0.1.0". Resolution order for each value:
+        // (e.g. "1.42") instead of a perpetual "1". Resolution order for each value:
         //   1. -PandroidVersionCode / -PandroidVersionName Gradle property
         //   2. ANDROID_VERSION_CODE / ANDROID_VERSION_NAME env var (Cloud Build)
         //   3. local default (versionCode 1, base versionName) — unchanged local UX
@@ -349,8 +350,8 @@ fun resolveVersionCode(providers: ProviderFactory): Int {
  * version tracks the build. Resolution order:
  *   1. -PandroidVersionName=<str>   explicit Gradle property override
  *   2. ANDROID_VERSION_NAME env var used by Cloud Build
- *   3. derived: "<base> (<versionCode>)" when CI supplied a real build number,
- *      otherwise just "<base>" for local builds.
+ *   3. derived: "<base>.<versionCode>" when CI supplied a real build number
+ *      (e.g. "1.42"), otherwise just "<base>" for local builds.
  */
 fun resolveVersionName(providers: ProviderFactory, base: String, versionCode: Int): String {
     providers.gradleProperty("androidVersionName").orNull?.trim()?.takeIf { it.isNotEmpty() }?.let {
@@ -359,5 +360,5 @@ fun resolveVersionName(providers: ProviderFactory, base: String, versionCode: In
     providers.environmentVariable("ANDROID_VERSION_NAME").orNull?.trim()?.takeIf { it.isNotEmpty() }?.let {
         return it
     }
-    return if (versionCode > 1) "$base ($versionCode)" else base
+    return if (versionCode > 1) "$base.$versionCode" else base
 }
