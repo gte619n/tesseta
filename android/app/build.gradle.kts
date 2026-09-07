@@ -61,6 +61,17 @@ android {
                 ?: "https://health-fitness-backend-mbysudfbja-uc.a.run.app"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
 
+        // withings-api: public Withings partner-app client id used to build the
+        // browser authorize URL. Unlike the Google client id this does NOT fail
+        // the build when unset — Withings is optional; the settings section
+        // reports "not configured" when empty. Resolution: -PwithingsClientId ->
+        // WITHINGS_CLIENT_ID env var -> "".
+        val withingsClientId =
+            (project.findProperty("withingsClientId") as String?)
+                ?: System.getenv("WITHINGS_CLIENT_ID")
+                ?: ""
+        buildConfigField("String", "WITHINGS_CLIENT_ID", "\"$withingsClientId\"")
+
         // ABI filtering: default to arm64-v8a ONLY. 32-bit ARM (armeabi-v7a)
         // doubles the native-lib payload (SQLCipher etc.) yet targets essentially
         // no real device at minSdk 29 / Android 10. The x86/x86_64 libs are only

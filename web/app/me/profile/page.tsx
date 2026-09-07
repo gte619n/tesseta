@@ -32,11 +32,19 @@ const GOOGLE_HEALTH_SCOPE = [
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
-  const [me, status] = await Promise.all([
-    apiJson<WhoAmI>("/api/me"),
-    apiJson<Status>("/api/me/google-health/status"),
-  ]);
+export default async function ProfilePage({
+  searchParams,
+}: {
+  // The Withings callback redirects here with ?withings=connected|error.
+  searchParams: Promise<{ withings?: string }>;
+}) {
+  const [{ withings: withingsResult }, me, status, withingsStatus] =
+    await Promise.all([
+      searchParams,
+      apiJson<WhoAmI>("/api/me"),
+      apiJson<Status>("/api/me/google-health/status"),
+      apiJson<Status>("/api/me/withings/status"),
+    ]);
 
   async function connect() {
     "use server";
@@ -56,6 +64,13 @@ export default async function ProfilePage() {
     const res = await apiFetch("/api/me/google-health/connect", {
       method: "DELETE",
     });
+    if (!res.ok) throw new Error(`Disconnect failed: ${res.status}`);
+    revalidatePath("/me/profile");
+  }
+
+  async function disconnectWithings() {
+    "use server";
+    const res = await apiFetch("/api/me/withings/connect", { method: "DELETE" });
     if (!res.ok) throw new Error(`Disconnect failed: ${res.status}`);
     revalidatePath("/me/profile");
   }
@@ -206,6 +221,72 @@ export default async function ProfilePage() {
                   className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
                 >
                   Disconnect Google Health
+                </button>
+              </form>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
+              Withings
+            </h2>
+            {withingsStatus.connected &&
+              (withingsStatus.needsReconnect ? (
+                <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-alert">
+                  Reconnect needed
+                </span>
+              ) : (
+                withingsStatus.connectedAt && (
+                  <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-tertiary">
+                    Connected
+                  </span>
+                )
+              ))}
+          </div>
+          <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
+            Sync sleep from your Sleep Analyzer pad, plus weight and body fat
+            from your Withings scale.
+          </p>
+          {withingsResult === "connected" && (
+            <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
+              Withings connected — your history is importing now.
+            </p>
+          )}
+          {withingsResult === "error" && (
+            <p className="mt-2 text-[13px] leading-[1.5] text-alert">
+              Couldn’t complete the Withings connection. Please try again.
+            </p>
+          )}
+          {withingsStatus.connected && withingsStatus.needsReconnect && (
+            <p className="mt-2 text-[13px] leading-[1.5] text-alert">
+              Your connection expired and data has stopped syncing. Reconnect to
+              resume.
+            </p>
+          )}
+          <div className="mt-4">
+            {!withingsStatus.connected ? (
+              <a
+                href="/api/withings/start"
+                className="inline-flex cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse"
+              >
+                Connect Withings
+              </a>
+            ) : withingsStatus.needsReconnect ? (
+              <a
+                href="/api/withings/start"
+                className="inline-flex cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-inverse"
+              >
+                Reconnect Withings
+              </a>
+            ) : (
+              <form action={disconnectWithings}>
+                <button
+                  type="submit"
+                  className="cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
+                >
+                  Disconnect Withings
                 </button>
               </form>
             )}

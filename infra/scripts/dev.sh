@@ -72,6 +72,12 @@ AUTH_SECRET="$(secret authjs-secret)"
 GOOGLE_HEALTH_WEBHOOK_SECRET="$(secret google-health-webhook-secret)"
 GEMINI_API_KEY="$(secret gemini_api_key)"
 SESSION_SIGNING_KEY="$(secret session-signing-key)"
+# Withings (optional locally). Tolerant of the secrets not existing yet
+# (bootstrap-withings-secrets.sh provisions them) so dev.sh never breaks — an
+# absent value just leaves Withings "not configured".
+WITHINGS_CLIENT_ID="$(secret withings-client-id 2>/dev/null || true)"
+WITHINGS_CLIENT_SECRET="$(secret withings-client-secret 2>/dev/null || true)"
+WITHINGS_WEBHOOK_SECRET="$(secret withings-webhook-secret 2>/dev/null || true)"
 
 # --- Backend env ---
 # Serve on :8090, all interfaces (Spring Boot's default bind) so the Tailscale
@@ -93,6 +99,14 @@ export GCP_PROJECT_ID="$PROJECT_ID"
 export OAUTH_WEB_CLIENT_ID
 export OAUTH_WEB_CLIENT_SECRET
 export GOOGLE_HEALTH_WEBHOOK_SECRET
+# Withings: the backend redeems OAuth codes + rotates refresh tokens with the
+# client id/secret. WITHINGS_CALLBACK_URL is intentionally left unset locally —
+# Withings can't reach a private tailnet, so no webhook subscription is attempted
+# (the refresh sweep keeps data fresh); the webhook secret is still exported so a
+# manual callback test authenticates.
+export WITHINGS_CLIENT_ID
+export WITHINGS_CLIENT_SECRET
+export WITHINGS_WEBHOOK_SECRET
 # DEXA: PDFs go to GCS; Gemini API extracts the structured data.
 export GEMINI_API_KEY
 # ADR-0010: HS256 key for minting native-client session access tokens. Without
@@ -112,6 +126,7 @@ AUTH_GOOGLE_SECRET=${AUTH_GOOGLE_SECRET}
 AUTH_URL=${WEB_ORIGIN}
 AUTH_TRUST_HOST=true
 BACKEND_URL=http://localhost:${BACKEND_PORT}
+WITHINGS_CLIENT_ID=${WITHINGS_CLIENT_ID}
 EOF
 echo "    wrote $WEB_ENV"
 
@@ -159,6 +174,9 @@ echo "  Try:     open ${WEB_ORIGIN}/me"
 echo
 echo "  Google OAuth redirect URI to authorize (Console -> Credentials -> Web client):"
 echo "    ${WEB_ORIGIN}/api/auth/callback/google"
+echo
+echo "  Withings redirect URI to register (Withings partner app -> Callback URI):"
+echo "    ${WEB_ORIGIN}/api/withings/callback"
 echo
 echo "  Ctrl-C to stop both servers and remove the serve config."
 

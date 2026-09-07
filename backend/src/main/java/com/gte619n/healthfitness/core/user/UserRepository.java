@@ -37,6 +37,32 @@ public interface UserRepository {
      * {@link #recordGoogleHealthConnection} clears these again.
      */
     void markGoogleHealthBroken(String userId, String reason);
+
+    /**
+     * Resolve a user by their Withings numeric user id (stored as a string).
+     * Used by the Withings webhook handler to map an inbound {@code userid}
+     * notification back to the owning app user.
+     */
+    Optional<User> findByWithingsUserId(String withingsUserId);
+
+    /**
+     * Persist (or replace) the user's Withings connection. Because Withings
+     * rotates the refresh token on every exchange, this is called both at
+     * connect time and after each successful refresh to store the new token.
+     * A (re)connect also clears any prior broken flag.
+     */
+    void recordWithingsConnection(String userId, WithingsConnection connection);
+
+    void clearWithingsConnection(String userId);
+
+    /**
+     * Stamp the user's Withings connection as broken (a refresh failed
+     * permanently), setting brokenAt/brokenReason without touching the
+     * encrypted token fields. Reconnecting via
+     * {@link #recordWithingsConnection} clears these again.
+     */
+    void markWithingsBroken(String userId, String reason);
+
     // Pass null to clear; an Integer cm value to set.
     void updateHeightCm(String userId, Integer heightCm);
 

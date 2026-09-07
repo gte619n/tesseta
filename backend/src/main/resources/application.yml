@@ -172,6 +172,26 @@ app:
     kms-key-name: ${GOOGLE_HEALTH_KMS_KEY:projects/health-fitness-160/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens}
     web-oauth-client-id: ${OAUTH_WEB_CLIENT_ID:}
     web-oauth-client-secret: ${OAUTH_WEB_CLIENT_SECRET:}
+  withings:
+    api-base-url: https://wbsapi.withings.net
+    oauth-token-url: https://wbsapi.withings.net/v2/oauth2
+    client-id: ${WITHINGS_CLIENT_ID:}
+    client-secret: ${WITHINGS_CLIENT_SECRET:}
+    # Secret-free base URL Withings pushes notify callbacks to, e.g.
+    # https://api.tesseta.com/api/webhooks/withings. The connect flow appends the
+    # webhook-secret below as a `?secret=` query param when subscribing (Withings
+    # notifications carry no signature, so that param is the only auth). Keeping
+    # the secret out of this value lets it live in plain deploy env. Empty locally
+    # (can't receive callbacks) — the refresh sweep keeps data fresh in that case.
+    callback-url: ${WITHINGS_CALLBACK_URL:}
+    webhook-secret: ${WITHINGS_WEBHOOK_SECRET:}
+    # Connect-time backfill spans the full history; the refresh sweep re-pulls
+    # only the trailing window as a safety net for missed callbacks. Refresh
+    # tokens rotate, so the encrypted token is re-persisted on every exchange
+    # (shares the Google Health KMS key).
+    backfill-days: ${WITHINGS_BACKFILL_DAYS:1460}
+    backfill-chunk-days: ${WITHINGS_BACKFILL_CHUNK_DAYS:365}
+    refresh-window-days: ${WITHINGS_REFRESH_WINDOW_DAYS:14}
   dexa:
     bucket: ${DEXA_BUCKET:health-fitness-160-dexa-scans}
     # Direct Gemini API (not Vertex). API key in Secret Manager → env at

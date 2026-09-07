@@ -7,6 +7,7 @@ import static com.gte619n.healthfitness.persistence.FirestoreMapper.toInstant;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
 import com.gte619n.healthfitness.core.user.GoogleHealthConnection;
 import com.gte619n.healthfitness.core.user.User;
+import com.gte619n.healthfitness.core.user.WithingsConnection;
 import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.firestore.Blob;
 import com.google.cloud.firestore.DocumentReference;
@@ -96,6 +97,17 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
     }
 
     @Override
+    public Optional<User> findByWithingsUserId(String withingsUserId) {
+        List<QueryDocumentSnapshot> docs = await(firestore.collection(COLLECTION)
+            .whereEqualTo("withings.withingsUserId", withingsUserId)
+            .limit(1)
+            .get()).getDocuments();
+        if (docs.isEmpty()) return Optional.empty();
+        QueryDocumentSnapshot snapshot = docs.get(0);
+        return Optional.of(toUser(snapshot.getId(), snapshot));
+    }
+
+    @Override
     @CacheEvict(cacheNames = "userById", key = "#user.userId()")
     public void save(User user) {
         var docRef = firestore.collection(COLLECTION).document(user.userId());
@@ -145,6 +157,56 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         gh.put("brokenReason", reason);
         Map<String, Object> body = new HashMap<>();
         body.put("googleHealth", gh);
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void recordWithingsConnection(String userId, WithingsConnection connection) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        Map<String, Object> w = new HashMap<>();
+        w.put("withingsUserId", connection.withingsUserId());
+        w.put("refreshTokenCiphertext", Blob.fromBytes(connection.refreshTokenCiphertext()));
+        w.put("dekCiphertext", Blob.fromBytes(connection.dekCiphertext()));
+        // connectedAt is stamped once, at first connect. Token rotations
+        // re-call this method with connectedAt already set (non-null) — we omit
+        // the field entirely so the merge preserves the original connect time
+        // (and we never have to serialize a raw Instant). A fresh connect passes
+        // connectedAt=null, so we stamp the server time.
+        if (connection.connectedAt() == null) {
+            w.put("connectedAt", serverTimestamp());
+        }
+        // A (re)connect or a successful refresh heals a previously-broken
+        // connection. Because we merge, any stale brokenAt/brokenReason would
+        // survive unless explicitly deleted.
+        w.put("brokenAt", com.google.cloud.firestore.FieldValue.delete());
+        w.put("brokenReason", com.google.cloud.firestore.FieldValue.delete());
+        body.put("withings", w);
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void markWithingsBroken(String userId, String reason) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> w = new HashMap<>();
+        w.put("brokenAt", serverTimestamp());
+        w.put("brokenReason", reason);
+        Map<String, Object> body = new HashMap<>();
+        body.put("withings", w);
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void clearWithingsConnection(String userId) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        body.put("withings", com.google.cloud.firestore.FieldValue.delete());
         body.put("updatedAt", serverTimestamp());
         await(docRef.set(body, SetOptions.merge()));
     }
@@ -214,7 +276,25 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt")),
             sexStr == null ? null : com.gte619n.healthfitness.core.user.BiologicalSex.valueOf(sexStr),
-            dobStr == null ? null : java.time.LocalDate.parse(dobStr)
+            dobStr == null ? null : java.time.LocalDate.parse(dobStr),
+            toWithings(snapshot)
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static WithingsConnection toWithings(DocumentSnapshot snapshot) {
+        Object raw = snapshot.get("withings");
+        if (!(raw instanceof Map<?, ?> map)) return null;
+        Map<String, Object> w = (Map<String, Object>) map;
+        Object refreshCt = w.get("refreshTokenCiphertext");
+        Object dekCt = w.get("dekCiphertext");
+        return new WithingsConnection(
+            (String) w.get("withingsUserId"),
+            refreshCt instanceof Blob b ? b.toBytes() : null,
+            dekCt instanceof Blob b ? b.toBytes() : null,
+            toInstant(w.get("connectedAt")),
+            toInstant(w.get("brokenAt")),
+            (String) w.get("brokenReason")
         );
     }
 

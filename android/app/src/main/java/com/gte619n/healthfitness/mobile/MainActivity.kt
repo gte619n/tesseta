@@ -32,6 +32,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import com.gte619n.healthfitness.data.auth.AuthState
+import com.gte619n.healthfitness.data.withings.WithingsOAuthCoordinator
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionBootstrap
 import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
 import com.gte619n.healthfitness.mobile.auth.SignInScreen
@@ -83,6 +84,17 @@ class MainActivity : ComponentActivity() {
     // process death). Lazy for the same SQLCipher-off-main-thread reason.
     @Inject lateinit var sessionLauncher: dagger.Lazy<WorkoutSessionForegroundLauncher>
 
+    // withings-api: app-scoped relay for the Withings OAuth browser redirect
+    // (healthfitness://withings-callback). singleTop delivers warm redirects via
+    // onNewIntent; a cold-start redirect is picked up from the launch intent.
+    @Inject lateinit var withingsOAuth: WithingsOAuthCoordinator
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        withingsOAuth.handleRedirect(intent.data)
+    }
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         // offline-fix: hold the system splash (app icon on the brand canvas) until
@@ -101,6 +113,8 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         observeFoldState()
+        // Cold-start case: the redirect that launched us is the current intent.
+        withingsOAuth.handleRedirect(intent?.data)
 
         setContent {
             HealthFitnessTheme {

@@ -90,6 +90,16 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="healthfitness" android:host="workout-session" />
             </intent-filter>
+            <!-- withings-api: the Withings OAuth browser redirect returns to
+                 healthfitness://withings-callback?code=…&state=…. Relayed to the
+                 settings ViewModel via WithingsOAuthCoordinator from
+                 MainActivity.onNewIntent, not Navigation. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="healthfitness" android:host="withings-callback" />
+            </intent-filter>
         </activity>
 
         <!-- IMPL-02: handles /auth/refresh-request messages from the paired

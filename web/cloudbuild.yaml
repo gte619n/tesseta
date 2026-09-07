@@ -58,8 +58,10 @@ steps:
       # AUTH_GOOGLE_* feed Auth.js; AUTH_SECRET encrypts the session
       # cookie. Without these the next-auth handlers throw on every
       # request to /api/auth/* and the body-comp connect flow can't
-      # complete its OAuth round-trip.
-      - --set-secrets=AUTH_GOOGLE_ID=oauth-web-client-id:latest,AUTH_GOOGLE_SECRET=oauth-web-client-secret:latest,AUTH_SECRET=authjs-secret:latest
+      # complete its OAuth round-trip. WITHINGS_CLIENT_ID builds the
+      # Withings authorize URL in app/api/withings/start (the client secret
+      # stays on the backend).
+      - --set-secrets=AUTH_GOOGLE_ID=oauth-web-client-id:latest,AUTH_GOOGLE_SECRET=oauth-web-client-secret:latest,AUTH_SECRET=authjs-secret:latest,WITHINGS_CLIENT_ID=withings-client-id:latest
 
   # Smoke-test the candidate and only then shift 100% traffic to it. The web root
   # redirects to sign-in, so the smoke check accepts any 2xx/3xx.

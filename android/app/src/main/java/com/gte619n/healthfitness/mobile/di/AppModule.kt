@@ -38,6 +38,14 @@ object AppModule {
     @javax.inject.Named("webOauthClientId")
     fun provideWebOauthClientId(): String = BuildConfig.WEB_OAUTH_CLIENT_ID
 
+    // withings-api: the Withings partner-app client id (public — used only to
+    // build the browser authorize URL; the client secret lives on the backend).
+    // May be empty when unconfigured, in which case the settings section shows a
+    // "not configured in this build" error rather than failing the build.
+    @Provides
+    @javax.inject.Named("withingsClientId")
+    fun provideWithingsClientId(): String = BuildConfig.WITHINGS_CLIENT_ID
+
     // Singleton Coil ImageLoader with a memory + on-disk cache so drug/gym/
     // equipment imagery is only decoded and downloaded once. HealthFitnessApp
     // implements ImageLoaderFactory and returns this, so Coil's AsyncImage uses

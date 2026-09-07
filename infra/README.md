@@ -96,6 +96,46 @@ The Google Health API scopes are **Restricted**, which means:
 Current state: `evan.ruff@oxos.com` is on the test users list. No
 production review submitted yet.
 
+## Withings integration
+
+Second health-data provider (Sleep Analyzer pad + scale), mirroring the Google
+Health pattern. Backend/web/android are wired; the following must be provisioned
+**once per project, before the first deploy that references them** (a missing
+`--set-secrets` target reds the deploy):
+
+1. Register a Withings partner app at <https://developer.withings.com> to get a
+   client id + secret. Register these redirect URIs on it:
+   - `https://app.tesseta.com/api/withings/callback` (web)
+   - `healthfitness://withings-callback` (android deep link)
+2. Provision the secrets + IAM (grants runtime **and** Cloud Build SAs
+   `secretmanager.secretAccessor`):
+   ```
+   WITHINGS_CLIENT_ID=<id> WITHINGS_CLIENT_SECRET=<secret> \
+     bash infra/scripts/bootstrap-withings-secrets.sh
+   ```
+   Creates `withings-client-id`, `withings-client-secret` (both also consumed by
+   the web + android builds) and an auto-generated `withings-webhook-secret`.
+   Withings refresh tokens reuse the existing `google-health-refresh-tokens` KMS
+   key — no new key.
+3. Deploy the safety-net refresh job + its 6-hourly schedule:
+   ```
+   bash infra/scripts/deploy-withings-refresh-job.sh
+   bash infra/scripts/bootstrap-withings-refresh-scheduler.sh
+   ```
+   The `withings-refresh` job re-uses the backend image under Spring profile
+   `job-withings-refresh`; `backend/cloudbuild.yaml` keeps its image in sync on
+   every deploy.
+
+Deploy wiring already committed: `WITHINGS_CALLBACK_URL` (secret-free base;
+backend appends `?secret=` from `withings-webhook-secret` at subscribe time) and
+`WITHINGS_CLIENT_ID/SECRET` + `WITHINGS_WEBHOOK_SECRET` in
+`backend/cloudbuild.yaml`; `WITHINGS_CLIENT_ID` in `web/cloudbuild.yaml` and
+`android/cloudbuild.yaml`.
+
+The webhook (`/api/webhooks/withings`) has no signature — auth is the `?secret=`
+query param on the registered callback URL. Notify categories subscribed:
+`appli=44` (sleep) and `appli=1` (weight).
+
 ## IMPL-AND-20: Firestore TTL on idempotencyKeys
 
 The offline-sync idempotency store (`FirestoreIdempotencyStore`) writes records
