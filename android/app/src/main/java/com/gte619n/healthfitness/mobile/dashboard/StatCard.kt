@@ -19,6 +19,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 @Composable
 fun StatCard(
@@ -76,7 +81,32 @@ fun StatCard(
                         .height(16.dp),
                 )
             }
+            if (stat.observedAt != null) {
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    text = observedLabel(stat.observedAt),
+                    style = Hf.type.monoSm.copy(fontSize = 9.sp),
+                    color = Hf.colors.textQuaternary,
+                )
+            }
         }
+    }
+}
+
+private val OBSERVED_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+
+// Subtle, day-granular "recorded" label for a metric card: today / yesterday /
+// Nd ago within a week, else "Sep 6". Mirrors the web dashboard's formatObserved.
+internal fun observedLabel(instant: Instant, now: Instant = Instant.now()): String {
+    val zone = ZoneId.systemDefault()
+    val then = instant.atZone(zone).toLocalDate()
+    val today = now.atZone(zone).toLocalDate()
+    val days = ChronoUnit.DAYS.between(then, today)
+    return when {
+        days <= 0L -> "today"
+        days == 1L -> "yesterday"
+        days < 7L -> "${days}d ago"
+        else -> OBSERVED_DATE.format(then)
     }
 }
 

@@ -1,4 +1,5 @@
 import type { Vital } from "@/lib/dashboard-vitals";
+import { ObservedLabel } from "./ObservedLabel";
 import { Sparkline } from "./Sparkline";
 
 export function StatCard({ stat }: { stat: Vital }) {
@@ -29,6 +30,7 @@ export function StatCard({ stat }: { stat: Vital }) {
         ) : null}
         <Sparkline points={stat.sparkline} />
       </div>
+      <ObservedLabel observedAt={stat.observedAt} />
     </div>
   );
 }

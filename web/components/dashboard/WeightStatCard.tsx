@@ -1,6 +1,7 @@
 "use client";
 
 import { useUnits } from "@/components/ui/UnitsProvider";
+import { ObservedLabel } from "@/components/dashboard/ObservedLabel";
 import { Sparkline } from "@/components/dashboard/Sparkline";
 import { weightUnitLabel, weightValue } from "@/lib/units";
 
@@ -19,6 +20,8 @@ export type WeightStat = {
     window: string;
     tone: "good" | "alert";
   };
+  // ISO timestamp of the latest weigh-in, for the subtle "recorded" label.
+  observedAt?: string;
 };
 
 export function WeightStatCard({ stat }: { stat: WeightStat }) {
@@ -57,6 +60,7 @@ export function WeightStatCard({ stat }: { stat: WeightStat }) {
         )}
         <Sparkline points={stat.sparkline} />
       </div>
+      <ObservedLabel observedAt={stat.observedAt} />
     </div>
   );
 }

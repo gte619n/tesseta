@@ -99,6 +99,12 @@ data class Vital(
     val pill: Pair<String, Tone>? = null,
     /** Nine y-values 0..20, x evenly spaced. Matches the mockup polyline. */
     val sparkline: List<Float>,
+    /**
+     * When the latest reading feeding this tile was recorded, for the subtle
+     * "recorded" label. Daily metrics carry a calendar date (stamped at local
+     * midnight); weigh-ins carry the sample instant. Null on "no data" tiles.
+     */
+    val observedAt: java.time.Instant? = null,
 )
 
 // IMPL-AND-01: feature flags gating the dashboard regions still backed by
