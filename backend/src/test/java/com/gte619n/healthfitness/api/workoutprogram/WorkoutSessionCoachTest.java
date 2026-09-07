@@ -96,7 +96,7 @@ class WorkoutSessionCoachTest {
             name.toLowerCase().replace(' ', '-'), name, List.of(), List.of(), List.of());
         return new PrescriptionResponse(
             summary.exerciseId(), 0, sets, null, null, null, null, null, null, null, null,
-            logged, summary, null, null);
+            logged, summary, null, null, null, false);
     }
 
     private static BlockResponse block(List<PrescriptionResponse> prescriptions) {

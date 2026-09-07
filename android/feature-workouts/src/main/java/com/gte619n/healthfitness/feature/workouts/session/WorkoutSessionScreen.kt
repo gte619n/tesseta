@@ -1199,58 +1199,57 @@ private fun RepSetsSection(
             )
         }
         if (hasPending) {
+            // The final working set captures RIR inline (F4/D4) — logging this set
+            // completes the exercise, so it's where effort must be recorded.
+            val isFinalWorkingSet = logged.size + 1 >= totalRows
             ActiveRepCard(
                 setNumber = logged.size + 1,
                 totalSets = totalRows,
                 prefill = prefillFor(prescription, logged, lastSets),
                 prescription = prescription,
                 exerciseName = exerciseName,
-                onLog = { weight, reps -> onLogSet(LoggedSet(weightLbs = weight, reps = reps)) },
+                // IMPL-PROG-02 F1/D9: accent ▲/▼ chip when the target differs from
+                // what was done last time (distinct from HIT/MISS colouring).
+                weightAdjustment = weightAdjustment(prescription, lastSets),
+                repsAdjustment = repsAdjustment(prescription, lastSets),
+                requireRir = isFinalWorkingSet,
+                onLog = { weight, reps, rir ->
+                    onLogSet(
+                        LoggedSet(
+                            weightLbs = weight,
+                            reps = reps,
+                            rir = rir,
+                            rirSource = if (rir != null) RIR_SOURCE_REPORTED else null,
+                        ),
+                    )
+                },
                 showStart = showStart,
                 onStart = onStart,
             )
             UpcomingHint(remaining = totalRows - (logged.size + 1))
         } else {
             AllSetsDoneRow(total = totalRows)
-            // Inference-first RIR: only the last working set prompts, one-tap,
-            // pre-filled with the inferred value. Tapping stores it as REPORTED.
-            val lastIndex = logged.lastIndex
-            val lastSet = logged.lastOrNull()
-            if (lastSet != null) {
-                RirChipRow(
-                    prescription = prescription,
-                    set = lastSet,
-                    onSelect = { rir ->
-                        onEditSet(
-                            lastIndex,
-                            lastSet.copy(rir = rir.toDouble(), rirSource = RIR_SOURCE_REPORTED),
-                        )
-                    },
-                )
-            }
         }
     }
 }
 
 /**
- * The last-set effort prompt: a one-tap row of RIR (reps-in-reserve) chips,
- * pre-selecting the inferred value so confirming is a single tap. The selected
- * chip fills with the accent; tapping any chip writes [LoggedSet.rir] as
- * REPORTED. Shown only once the exercise's final working set is logged.
+ * The final working set's effort capture (IMPL-PROG-02 F4/D4): a row of RIR
+ * (reps-in-reserve) chips shown INLINE on the active set card, before it can be
+ * logged. A BLIND pick (IMPL-D12) — nothing is pre-selected or suggested, so the
+ * inference can't anchor the athlete; [selected] stays null until an explicit tap,
+ * and logging is gated on that pick. The tapped chip fills with the accent and is
+ * stored as REPORTED.
  */
 @Composable
-private fun RirChipRow(
-    prescription: Prescription,
-    set: LoggedSet,
+private fun RirSelector(
+    selected: Int?,
     onSelect: (Int) -> Unit,
 ) {
-    // The value shown as selected: the user's reported RIR if set, else the
-    // inferred default (so the row is never blank).
-    val selected = set.rir?.toInt() ?: inferredRir(prescription, set)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 6.dp),
+            .padding(top = 2.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         CapsLabel(
@@ -1259,7 +1258,7 @@ private fun RirChipRow(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             RIR_CHOICES.forEach { value ->
-                val isSelected = value == selected && set.rir != null
+                val isSelected = value == selected
                 val label = if (value == RIR_CHOICES.last()) {
                     stringResource(R.string.workout_session_rir_max)
                 } else {
@@ -1271,13 +1270,7 @@ private fun RirChipRow(
                         .background(if (isSelected) Hf.colors.accent else Hf.colors.canvasMuted)
                         .border(
                             1.dp,
-                            // The inferred (not-yet-tapped) default reads as a
-                            // suggestion: accent outline, not a filled selection.
-                            if (isSelected || (set.rir == null && value == selected)) {
-                                Hf.colors.accent
-                            } else {
-                                Hf.colors.borderStrong
-                            },
+                            if (isSelected) Hf.colors.accent else Hf.colors.borderStrong,
                             RoundedCornerShape(10.dp),
                         )
                         .clickable { onSelect(value) }
@@ -1304,14 +1297,18 @@ private fun RirChipRow(
  * weight/reps fields and a full-width primary "Log set" that records the set and
  * lets the card advance to the next one.
  */
+// internal (not private) so the Robolectric Compose UI test can drive the RIR gate.
 @Composable
-private fun ActiveRepCard(
+internal fun ActiveRepCard(
     setNumber: Int,
     totalSets: Int,
     prefill: SetPrefill,
     prescription: Prescription,
     exerciseName: String,
-    onLog: (Double?, Int?) -> Unit,
+    onLog: (Double?, Int?, Double?) -> Unit,
+    weightAdjustment: TargetAdjustment? = null,
+    repsAdjustment: TargetAdjustment? = null,
+    requireRir: Boolean = false,
     showStart: Boolean = false,
     onStart: () -> Unit = {},
 ) {
@@ -1321,8 +1318,12 @@ private fun ActiveRepCard(
         mutableStateOf(prefill.weightLbs)
     }
     var reps by remember(exerciseName, setNumber, prefill.reps) { mutableStateOf(prefill.reps) }
+    // The mandatory RIR pick for the final set (F4/D4): null until the athlete taps.
+    var rir by remember(exerciseName, setNumber) { mutableStateOf<Int?>(null) }
     var showWeight by remember { mutableStateOf(false) }
     var showReps by remember { mutableStateOf(false) }
+    // Log is blocked on the final set until effort is explicitly reported.
+    val logEnabled = showStart || !requireRir || rir != null
 
     Column(
         modifier = Modifier
@@ -1344,6 +1345,7 @@ private fun ActiveRepCard(
                 // Live target-vs-achieved: dips red the moment the staged load
                 // drops under the prescription, green once it meets it (#8).
                 valueColor = outcomeColor(weightOutcome(prescription, weight)),
+                adjustment = weightAdjustment,
                 modifier = Modifier.weight(1f),
                 onClick = { showWeight = true },
             )
@@ -1351,12 +1353,20 @@ private fun ActiveRepCard(
                 label = stringResource(R.string.workout_session_reps_header),
                 value = reps?.toString() ?: "—",
                 valueColor = outcomeColor(repsOutcome(prescription, reps)),
+                adjustment = repsAdjustment,
                 modifier = Modifier.weight(1f),
                 onClick = { showReps = true },
             )
         }
+        if (requireRir && !showStart) {
+            RirSelector(
+                selected = rir,
+                onSelect = { rir = it },
+            )
+        }
         Button(
-            onClick = { if (showStart) onStart() else onLog(weight, reps) },
+            onClick = { if (showStart) onStart() else onLog(weight, reps, rir?.toDouble()) },
+            enabled = logEnabled,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
         ) {
@@ -1368,10 +1378,10 @@ private fun ActiveRepCard(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                if (showStart) {
-                    stringResource(R.string.workout_session_start)
-                } else {
-                    stringResource(R.string.workout_session_log_set, setNumber)
+                when {
+                    showStart -> stringResource(R.string.workout_session_start)
+                    requireRir && rir == null -> stringResource(R.string.workout_session_rir_required)
+                    else -> stringResource(R.string.workout_session_log_set, setNumber)
                 },
                 style = Hf.type.bodyMd,
                 color = Hf.colors.textInverse,
@@ -1406,10 +1416,28 @@ private fun SetFieldBox(
     value: String,
     modifier: Modifier = Modifier,
     valueColor: Color = Hf.colors.textPrimary,
+    // IMPL-PROG-02 F1/D9: when the engine changed this number vs. last time, an
+    // accent ▲/▼ chip sits by the label — a *neutral accent*, deliberately NOT the
+    // green/red used for HIT/MISS on the achieved value.
+    adjustment: TargetAdjustment? = null,
     onClick: () -> Unit,
 ) {
     Column(modifier = modifier) {
-        CapsLabel(label, color = Hf.colors.textTertiary)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CapsLabel(label, color = Hf.colors.textTertiary)
+            if (adjustment != null) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "${if (adjustment.up) "▲" else "▼"} ${adjustment.label}",
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.accent,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Hf.colors.accentBg)
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(4.dp))
         Row(
             modifier = Modifier

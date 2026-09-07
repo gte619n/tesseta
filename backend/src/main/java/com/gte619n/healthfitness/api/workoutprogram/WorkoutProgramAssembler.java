@@ -9,6 +9,8 @@ import com.gte619n.healthfitness.core.exercise.ExerciseService;
 import com.gte619n.healthfitness.core.goals.GoalRepository;
 import com.gte619n.healthfitness.core.location.Location;
 import com.gte619n.healthfitness.core.location.LocationRepository;
+import com.gte619n.healthfitness.core.progression.BodyweightClassifier;
+import com.gte619n.healthfitness.core.progression.SeedWeightResolver;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramPhase;
@@ -68,7 +70,8 @@ public class WorkoutProgramAssembler {
 
         Set<String> exerciseIds = collectExerciseIds(p.phases());
         exerciseIds.addAll(collectExerciseIdsFromDays(sessionDays(ordered)));
-        Map<String, ExerciseSummary> summaries = summariesFor(exerciseIds);
+        Map<String, Exercise> exercisesById = exercisesFor(exerciseIds);
+        Map<String, ExerciseSummary> summaries = summariesFrom(exercisesById);
         Set<String> locationIds = collectLocationIds(p.phases());
         for (ScheduledWorkout sw : ordered) {
             if (sw.locationId() != null) locationIds.add(sw.locationId());
@@ -82,11 +85,11 @@ public class WorkoutProgramAssembler {
             List<DayResponse> days = new ArrayList<>();
             if (!ph.days().isEmpty()) {
                 for (WorkoutDay d : ph.days()) {
-                    days.add(dayResponse(d, summaries, gymNames));
+                    days.add(dayResponse(d, summaries, exercisesById, gymNames));
                 }
             } else {
                 for (ScheduledWorkout sw : sessionsByPhase.getOrDefault(ph.phaseId(), List.of())) {
-                    days.add(dayResponse(sw.session(), summaries, gymNames));
+                    days.add(dayResponse(sw.session(), summaries, exercisesById, gymNames));
                 }
             }
             phases.add(new PhaseResponse(
@@ -123,14 +126,16 @@ public class WorkoutProgramAssembler {
         String userId, List<ScheduledWorkout> items, Map<String, WorkoutProgram> programsById) {
         List<WorkoutDay> sessions = items.stream().map(ScheduledWorkout::session)
             .filter(d -> d != null).toList();
-        Map<String, ExerciseSummary> summaries = summariesFor(collectExerciseIdsFromDays(sessions));
+        Map<String, Exercise> exercisesById = exercisesFor(collectExerciseIdsFromDays(sessions));
+        Map<String, ExerciseSummary> summaries = summariesFrom(exercisesById);
         Set<String> locIds = new HashSet<>();
         items.forEach(i -> { if (i.locationId() != null) locIds.add(i.locationId()); });
         Map<String, String> gymNames = gymNamesFor(userId, locIds);
 
         List<ScheduledWorkoutResponse> out = new ArrayList<>();
         for (ScheduledWorkout sw : items) {
-            DayResponse session = sw.session() == null ? null : dayResponse(sw.session(), summaries, gymNames);
+            DayResponse session = sw.session() == null ? null
+                : dayResponse(sw.session(), summaries, exercisesById, gymNames);
             WorkoutProgram program = programsById.get(sw.programId());
             String programTitle = program == null ? null : program.title();
             String phaseTitle = program == null ? null : phaseTitle(program, sw.phaseId());
@@ -152,16 +157,33 @@ public class WorkoutProgramAssembler {
         return null;
     }
 
-    private DayResponse dayResponse(WorkoutDay d, Map<String, ExerciseSummary> summaries, Map<String, String> gymNames) {
+    private DayResponse dayResponse(
+        WorkoutDay d, Map<String, ExerciseSummary> summaries,
+        Map<String, Exercise> exercisesById, Map<String, String> gymNames) {
         List<BlockResponse> blocks = new ArrayList<>();
         for (Block b : d.blocks()) {
             List<PrescriptionResponse> rxs = new ArrayList<>();
             for (Prescription rx : b.prescriptions()) {
+                Exercise ex = exercisesById.get(rx.exerciseId());
+                boolean bodyweight = BodyweightClassifier.isBodyweight(ex);
+                Double target = rx.targetWeightLbs();
+                String basis = rx.loadBasis();
+                // IMPL-PROG-02 F6/D7: a first-time weighted lift with no prediction
+                // yet gets a conservative catalog/pattern seed so it announces a real
+                // number rather than the impossible "body weight". Never override an
+                // existing prediction, a bodyweight movement, or a timed hold.
+                if (target == null && !bodyweight && rx.durationSeconds() == null && ex != null) {
+                    double seed = SeedWeightResolver.seedWeightLbs(ex);
+                    if (seed > 0) {
+                        target = seed;
+                        if (basis == null) basis = "starting estimate";
+                    }
+                }
                 rxs.add(new PrescriptionResponse(
                     rx.exerciseId(), rx.orderIndex(), rx.sets(), rx.repsMin(), rx.repsMax(),
                     rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(), rx.notes(),
                     rx.deloadModifier(), rx.loggedSets(), summaries.get(rx.exerciseId()),
-                    rx.targetWeightLbs(), rx.loadBasis()));
+                    target, basis, rx.rationale(), bodyweight));
             }
             blocks.add(new BlockResponse(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
         }
@@ -169,12 +191,21 @@ public class WorkoutProgramAssembler {
             gymNames.get(d.locationId()), d.orderIndex(), blocks);
     }
 
-    private Map<String, ExerciseSummary> summariesFor(Set<String> ids) {
-        Map<String, ExerciseSummary> map = new HashMap<>();
+    /** One batch fetch of the full catalog exercises referenced by these ids. */
+    private Map<String, Exercise> exercisesFor(Set<String> ids) {
+        Map<String, Exercise> map = new HashMap<>();
         if (ids.isEmpty()) {
             return map;
         }
         for (Exercise e : exercises.findByIds(new ArrayList<>(ids))) {
+            map.put(e.exerciseId(), e);
+        }
+        return map;
+    }
+
+    private static Map<String, ExerciseSummary> summariesFrom(Map<String, Exercise> exercisesById) {
+        Map<String, ExerciseSummary> map = new HashMap<>();
+        for (Exercise e : exercisesById.values()) {
             map.put(e.exerciseId(), ExerciseSummary.from(e));
         }
         return map;

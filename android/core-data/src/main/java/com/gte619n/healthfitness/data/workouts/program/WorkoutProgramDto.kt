@@ -181,6 +181,9 @@ data class PrescriptionDto(
     val loadBasis: String? = null,
     // Progression-engine rationale (additive, nullable).
     val rationale: PrescriptionRationaleDto? = null,
+    // IMPL-PROG-02 F6: true only for real bodyweight movements; defaults false for
+    // legacy payloads that omit it (so nothing is mis-announced as "body weight").
+    val isBodyweight: Boolean = false,
 )
 
 data class BlockDto(
@@ -421,6 +424,7 @@ fun PrescriptionDto.toDomain(): Prescription = Prescription(
     targetWeightLbs = targetWeightLbs,
     loadBasis = loadBasis,
     rationale = rationale?.toDomain(),
+    isBodyweight = isBodyweight,
 )
 
 fun BlockDto.toDomain(): Block = Block(

@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.mobile.workouts
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import java.time.Instant
@@ -108,9 +109,24 @@ object WorkoutSessionNotificationContent {
             val seconds = previous?.durationSeconds ?: prescription.durationSeconds ?: return null
             return "${seconds}s hold"
         }
+        // IMPL-PROG-02 D1: the engine prediction (targetWeightLbs) is authoritative;
+        // no dependency on the async lastSets fetch, so the notification never flips
+        // a beat after it's posted.
         val weight = previous?.weightLbs ?: prescription.targetWeightLbs
-        val reps = previous?.reps ?: prescription.repsMax ?: prescription.repsMin
-        val weightPart = weight?.let { if (it == 0.0) "body weight" else "${formatWeight(it)} lb" }
+        // IMPL-PROG-02 F5/D5: reps reset to the band bottom on a weight increase.
+        val bandTarget = if (prescription.rationale?.direction == ProgressionDirection.UP) {
+            prescription.repsMin ?: prescription.repsMax
+        } else {
+            prescription.repsMax ?: prescription.repsMin
+        }
+        val reps = previous?.reps ?: bandTarget
+        // IMPL-PROG-02 F6: "body weight" ONLY for a real bodyweight movement; a
+        // weighted lift with no known load omits the weight rather than lying.
+        val weightPart = when {
+            prescription.isBodyweight -> "body weight"
+            weight != null && weight > 0.0 -> "${formatWeight(weight)} lb"
+            else -> null
+        }
         return when {
             weightPart != null && reps != null -> "$weightPart × $reps"
             weightPart != null -> weightPart

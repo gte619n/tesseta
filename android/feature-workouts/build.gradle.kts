@@ -6,6 +6,12 @@ plugins {
 
 android {
     namespace = "com.gte619n.healthfitness.feature.workouts"
+    testOptions {
+        unitTests {
+            // Robolectric-backed Compose UI tests (the RIR-gate test) need real resources.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -35,4 +41,10 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     // Designer-chat VM test parses a proposal JSON with the reflective Moshi.
     testImplementation(libs.moshi.kotlin)
+
+    // IMPL-PROG-02: Compose UI test (RIR gate) on the JVM via Robolectric — gates in CI.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
