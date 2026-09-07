@@ -86,6 +86,7 @@ export async function loadBodyComposition(): Promise<BodyCompositionView | null>
     icon: "scale",
     valueLb: latestWeight,
     sparkline: weightSparkline(series),
+    observedAt: weightsAll[weightsAll.length - 1]!.sampleTime,
     delta:
       sevenDayDelta !== null
         ? {

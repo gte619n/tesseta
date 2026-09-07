@@ -201,6 +201,7 @@ fun weightVital(s: WeightSummary?, weightUnit: WeightUnit): Vital =
             )
         },
         sparkline = normalizedSparkline(s?.series),
+        observedAt = s?.lastUpdatedAt,
     )
 
 /**

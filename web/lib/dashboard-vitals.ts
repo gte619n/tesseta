@@ -21,6 +21,9 @@ export type Vital = {
   pill?: { label: string; tone: "good" | "warn" | "alert" };
   // 9-point sparkline path, normalized to a 48×20 viewBox.
   sparkline: string;
+  // Calendar date (YYYY-MM-DD) of the latest observation feeding this tile, for
+  // the subtle "recorded" label. Absent on "no data" tiles.
+  observedAt?: string;
 };
 
 const FLAT_SPARKLINE = "0,10 6,10 12,10 18,10 24,10 30,10 36,10 42,10 48,10";
@@ -121,6 +124,7 @@ export function buildVital(rows: DailyMetric[], spec: MetricSpec): Vital {
     ...(spec.unit ? { unit: spec.unit } : {}),
     ...(delta ? { delta } : {}),
     sparkline: metricSparkline(series),
+    observedAt: latest.date,
   };
 }
 

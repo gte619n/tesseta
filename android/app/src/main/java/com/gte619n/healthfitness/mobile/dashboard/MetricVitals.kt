@@ -21,6 +21,10 @@ private const val SPARK_FLAT = 11f
 /** A single metric series resolved from the raw daily-metric points. */
 private data class MetricSeries(val dates: List<java.time.LocalDate>, val values: List<Double>)
 
+/** Latest reading's calendar date stamped at local midnight, for the card label. */
+private fun MetricSeries.observedAt(): java.time.Instant =
+    dates.last().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+
 private fun seriesOf(points: List<DailyMetricPoint>, select: (DailyMetricPoint) -> Int?): MetricSeries {
     val rows = points.sortedBy { it.date }.mapNotNull { p -> select(p)?.let { p.date to it.toDouble() } }
     return MetricSeries(rows.map { it.first }, rows.map { it.second })
@@ -75,6 +79,7 @@ fun restingHrVital(points: List<DailyMetricPoint>): Vital {
         unit = "bpm",
         delta = delta(sevenDayDelta(s), lowerBetter = true) { it.roundToInt().toString() },
         sparkline = metricSparkline(s.values),
+        observedAt = s.observedAt(),
     )
 }
 
@@ -88,6 +93,7 @@ fun hrvVital(points: List<DailyMetricPoint>): Vital {
         unit = "ms",
         delta = delta(sevenDayDelta(s), lowerBetter = false) { it.roundToInt().toString() },
         sparkline = metricSparkline(s.values),
+        observedAt = s.observedAt(),
     )
 }
 
@@ -112,6 +118,7 @@ fun sleepVital(points: List<DailyMetricPoint>): Vital {
         unit = "h",
         delta = delta(sevenDayDelta(hoursSeries), lowerBetter = false) { "%.1f".format(it) },
         sparkline = metricSparkline(hours),
+        observedAt = s.observedAt(),
     )
 }
 
@@ -134,6 +141,7 @@ fun stepsVital(points: List<DailyMetricPoint>): Vital {
         unit = null,
         delta = delta(sevenDayDelta(s), lowerBetter = false) { "%,d".format(it.roundToInt()) },
         sparkline = metricSparkline(s.values),
+        observedAt = s.observedAt(),
     )
 }
 
