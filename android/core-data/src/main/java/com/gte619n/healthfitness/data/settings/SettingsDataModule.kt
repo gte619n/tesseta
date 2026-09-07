@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.data.settings
 
 import android.content.Context
 import com.gte619n.healthfitness.data.auth.GoogleHealthScopeRepository
+import com.gte619n.healthfitness.data.biometrics.BiometricsService
 import com.gte619n.healthfitness.data.googlehealth.GoogleHealthService
 import com.gte619n.healthfitness.data.profile.ProfileService
 import com.gte619n.healthfitness.data.withings.WithingsService
@@ -36,6 +37,11 @@ object SettingsDataModule {
     @Provides
     @Singleton
     fun provideWithingsService(retrofit: Retrofit): WithingsService =
+        retrofit.create()
+
+    @Provides
+    @Singleton
+    fun provideBiometricsService(retrofit: Retrofit): BiometricsService =
         retrofit.create()
 
     @Provides

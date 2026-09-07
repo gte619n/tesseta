@@ -26,6 +26,8 @@ data class ProfileDto(
     val biologicalSex: String? = null,
     // ISO "YYYY-MM-DD" | null. Nullable so pre-field payloads still decode.
     val dateOfBirth: String? = null,
+    // Metric keys hidden from the dashboard (empty/absent = all shown).
+    val hiddenBiometrics: List<String>? = null,
 )
 
 // Partial update body. Omitted fields are left unchanged by the backend; a null

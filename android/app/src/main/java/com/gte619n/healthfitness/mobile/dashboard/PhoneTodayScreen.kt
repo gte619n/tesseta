@@ -157,16 +157,18 @@ private fun PhoneHeader(user: DashboardUser?, lastUpdated: java.time.Instant?) {
 
 @Composable
 private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetryWeight: () -> Unit) {
-    // Tile order: Weight (live), Sleep, Steps.
+    // Tile order: Weight (live), Sleep, Steps — minus any hidden in settings.
+    val hidden = ui.hiddenBiometrics
     val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
     // Each vital does a sort + mapNotNull + sparkline pass; memoise on `metrics`
     // so they only recompute when the underlying series actually changes.
     val sleep = remember(metrics) { sleepVital(metrics) }
     val steps = remember(metrics) { stepsVital(metrics) }
-    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            // First card is the live Weight vital backed by body-composition.
-            Box(modifier = Modifier.weight(1f)) {
+    // Collect the visible tiles, then flow them into rows of two so hiding one
+    // doesn't leave a gap.
+    val tiles = buildList<@Composable () -> Unit> {
+        if ("WEIGHT" !in hidden) {
+            add {
                 CardSwitch(
                     state = ui.bodyComposition,
                     placeholderHeightDp = 96,
@@ -175,12 +177,20 @@ private fun PhoneVitalsGrid(ui: DashboardUiState, weightUnit: WeightUnit, onRetr
                     StatCard(stat = weightVital(summary, weightUnit), modifier = Modifier.fillMaxWidth())
                 }
             }
-            StatCard(stat = sleep, modifier = Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            StatCard(stat = steps, modifier = Modifier.weight(1f))
-            // Spacer keeps the last row's tile width consistent with the grid.
-            Spacer(modifier = Modifier.weight(1f))
+        if ("SLEEP" !in hidden) add { StatCard(stat = sleep, modifier = Modifier.fillMaxWidth()) }
+        if ("STEPS" !in hidden) add { StatCard(stat = steps, modifier = Modifier.fillMaxWidth()) }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        tiles.chunked(2).forEach { rowTiles ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                rowTiles.forEach { tile -> Box(modifier = Modifier.weight(1f)) { tile() } }
+                // Keep tile widths consistent when a row has a single tile.
+                if (rowTiles.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }

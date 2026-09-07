@@ -11,4 +11,6 @@ data class Profile(
     val dateOfBirth: String? = null,
     /** Google `picture` URL, served fresh from the backend; null when absent. */
     val photoUrl: String? = null,
+    /** Metric keys the user has hidden from the dashboard (empty = all shown). */
+    val hiddenBiometrics: List<String> = emptyList(),
 )

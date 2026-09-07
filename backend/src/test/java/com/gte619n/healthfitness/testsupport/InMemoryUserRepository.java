@@ -105,7 +105,8 @@ public class InMemoryUserRepository implements UserRepository {
         store.put(userId, new User(
             existing.userId(), existing.email(), existing.displayName(), existing.googleHealth(),
             heightCm, existing.createdAt(), Instant.now(),
-            existing.biologicalSex(), existing.dateOfBirth(), existing.withings()));
+            existing.biologicalSex(), existing.dateOfBirth(), existing.withings(),
+            existing.hiddenBiometrics()));
     }
 
     @Override
@@ -118,7 +119,18 @@ public class InMemoryUserRepository implements UserRepository {
         store.put(userId, new User(
             existing.userId(), existing.email(), existing.displayName(), existing.googleHealth(),
             existing.heightCm(), existing.createdAt(), Instant.now(),
-            biologicalSex, dateOfBirth, existing.withings()));
+            biologicalSex, dateOfBirth, existing.withings(), existing.hiddenBiometrics()));
+    }
+
+    @Override
+    public void updateHiddenBiometrics(String userId, List<String> hiddenBiometrics) {
+        User existing = store.get(userId);
+        if (existing == null) return;
+        store.put(userId, new User(
+            existing.userId(), existing.email(), existing.displayName(), existing.googleHealth(),
+            existing.heightCm(), existing.createdAt(), Instant.now(),
+            existing.biologicalSex(), existing.dateOfBirth(), existing.withings(),
+            hiddenBiometrics));
     }
 
     @Override
@@ -137,12 +149,14 @@ public class InMemoryUserRepository implements UserRepository {
     // Rebuild preserving every field except the Google Health connection.
     private static User withGoogleHealth(User u, GoogleHealthConnection gh) {
         return new User(u.userId(), u.email(), u.displayName(), gh, u.heightCm(),
-            u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(), u.withings());
+            u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(), u.withings(),
+            u.hiddenBiometrics());
     }
 
     // Rebuild preserving every field except the Withings connection.
     private static User withWithings(User u, WithingsConnection w) {
         return new User(u.userId(), u.email(), u.displayName(), u.googleHealth(), u.heightCm(),
-            u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(), w);
+            u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(), w,
+            u.hiddenBiometrics());
     }
 }

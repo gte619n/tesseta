@@ -270,14 +270,15 @@ private fun FoldableVitalsRow(
     weightUnit: WeightUnit,
     onRetryWeight: () -> Unit,
 ) {
-    // Tile order: Weight (live), Sleep, Steps.
+    // Tile order: Weight (live), Sleep, Steps — minus any hidden in settings.
+    val hidden = ui.hiddenBiometrics
     val metrics = (ui.dailyMetrics as? CardState.Loaded)?.data.orEmpty()
     // Each vital does a sort + mapNotNull + sparkline pass; memoise on `metrics`
     // so they only recompute when the underlying series actually changes.
     val tiles = remember(metrics) {
         listOf(
-            sleepVital(metrics) to "Sleep",
-            stepsVital(metrics) to "Steps",
+            Triple("SLEEP", sleepVital(metrics), "Sleep"),
+            Triple("STEPS", stepsVital(metrics), "Steps"),
         )
     }
     Row(
@@ -285,27 +286,31 @@ private fun FoldableVitalsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // First tile is the live Weight vital backed by body-composition.
-        Box(modifier = Modifier.weight(1f)) {
-            CardSwitch(
-                state = ui.bodyComposition,
-                placeholderHeightDp = 96,
-                onRetry = onRetryWeight,
-            ) { summary ->
-                StatCard(
-                    stat = weightVital(summary, weightUnit),
-                    overrideLabel = "Weight",
-                    valueSizeSp = 19,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        if ("WEIGHT" !in hidden) {
+            Box(modifier = Modifier.weight(1f)) {
+                CardSwitch(
+                    state = ui.bodyComposition,
+                    placeholderHeightDp = 96,
+                    onRetry = onRetryWeight,
+                ) { summary ->
+                    StatCard(
+                        stat = weightVital(summary, weightUnit),
+                        overrideLabel = "Weight",
+                        valueSizeSp = 19,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
-        tiles.forEach { (stat, shortLabel) ->
-            StatCard(
-                stat = stat,
-                overrideLabel = shortLabel,
-                valueSizeSp = 19,
-                modifier = Modifier.weight(1f),
-            )
+        tiles.forEach { (key, stat, shortLabel) ->
+            if (key !in hidden) {
+                StatCard(
+                    stat = stat,
+                    overrideLabel = shortLabel,
+                    valueSizeSp = 19,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

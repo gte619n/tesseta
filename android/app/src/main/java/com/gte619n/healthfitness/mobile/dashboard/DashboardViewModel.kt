@@ -55,6 +55,9 @@ data class DashboardUiState(
     val nutrition: CardState<NutritionDay>,
     val recentActivity: CardState<List<RecentActivityEntry>>,
     val user: DashboardUser? = null,
+    // Metric keys hidden from the dashboard (biometrics settings). Cards for
+    // these keys are dropped from the vitals grid. Sourced from the profile.
+    val hiddenBiometrics: Set<String> = emptySet(),
     // Wall-clock time the dashboard cards were last successfully (re)loaded.
     // Null until the first load lands; drives the header's "Updated …" subtitle.
     val lastUpdated: Instant? = null,
@@ -282,7 +285,12 @@ class DashboardViewModel @Inject constructor(
         profile.get().onSuccess { p ->
             val name = p.displayName?.trim().orEmpty()
             val initials = if (name.isNotEmpty()) initialsFor(name) else DashboardFallbacks.USER_INITIALS
-            _ui.update { it.copy(user = DashboardUser(initials = initials, photoUrl = p.photoUrl)) }
+            _ui.update {
+                it.copy(
+                    user = DashboardUser(initials = initials, photoUrl = p.photoUrl),
+                    hiddenBiometrics = p.hiddenBiometrics.toSet(),
+                )
+            }
         }
     }
 

@@ -21,6 +21,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.gte619n.healthfitness.feature.settings.about.AboutSection
 import com.gte619n.healthfitness.feature.settings.coach.CoachAudioSection
 import com.gte619n.healthfitness.feature.settings.googlehealth.GoogleHealthSection
+import com.gte619n.healthfitness.feature.settings.biometrics.BiometricsSection
 import com.gte619n.healthfitness.feature.settings.units.UnitsSection
 import com.gte619n.healthfitness.feature.settings.withings.WithingsSection
 import com.gte619n.healthfitness.feature.settings.workout.WorkoutPreferencesSection
@@ -69,6 +70,9 @@ fun SettingsScreen(
 
         // Units (IMPL — user-configurable display units).
         UnitsSection()
+
+        // Dashboard biometrics visibility + latest reading / cadence.
+        BiometricsSection()
 
         // Workout-coach audio cues (PR2).
         CoachAudioSection()

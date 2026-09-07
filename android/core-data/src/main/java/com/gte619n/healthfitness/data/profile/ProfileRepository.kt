@@ -89,6 +89,23 @@ class ProfileRepository @Inject constructor(
         updated.toDomain()
     }
 
+    /**
+     * Optimistically reflect a new hidden-biometrics set in the profile mirror so
+     * the dashboard drops/restores cards promptly. The authoritative write is the
+     * biometrics-visibility endpoint (see BiometricsRepository); this only keeps
+     * the mirror the dashboard reads from in sync.
+     */
+    suspend fun patchHiddenBiometricsLocally(hidden: List<String>): Result<Unit> = runCatching {
+        val current = mirroredDto() ?: service.get()
+        val updated = current.copy(hiddenBiometrics = hidden)
+        support.updateLocal(
+            table = MirrorTables.USER_PROFILE,
+            id = updated.userId,
+            payloadJson = dtoAdapter.toJson(updated),
+            lastUpdate = System.currentTimeMillis(),
+        )
+    }
+
     /** The current mirrored profile DTO, or null when the mirror is empty/undecodable. */
     private suspend fun mirroredDto(): ProfileDto? =
         dao.observeActive().first().firstOrNull()
@@ -103,4 +120,5 @@ private fun ProfileDto.toDomain() = Profile(
     biologicalSex = biologicalSex,
     dateOfBirth = dateOfBirth,
     photoUrl = photoUrl,
+    hiddenBiometrics = hiddenBiometrics ?: emptyList(),
 )
