@@ -213,6 +213,17 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
 
     @Override
     @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void updateHiddenBiometrics(String userId, List<String> hiddenBiometrics) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        // Stored as a plain string array; empty means all metrics shown.
+        body.put("hiddenBiometrics", hiddenBiometrics == null ? List.of() : hiddenBiometrics);
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
     public void updateHeightCm(String userId, Integer heightCm) {
         var docRef = firestore.collection(COLLECTION).document(userId);
         Map<String, Object> body = new HashMap<>();
@@ -277,8 +288,15 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
             toInstant(snapshot.get("updatedAt")),
             sexStr == null ? null : com.gte619n.healthfitness.core.user.BiologicalSex.valueOf(sexStr),
             dobStr == null ? null : java.time.LocalDate.parse(dobStr),
-            toWithings(snapshot)
+            toWithings(snapshot),
+            toHiddenBiometrics(snapshot)
         );
+    }
+
+    private static List<String> toHiddenBiometrics(DocumentSnapshot snapshot) {
+        Object raw = snapshot.get("hiddenBiometrics");
+        if (!(raw instanceof List<?> list)) return List.of();
+        return list.stream().map(String::valueOf).toList();
     }
 
     @SuppressWarnings("unchecked")

@@ -51,15 +51,18 @@ public class WhoAmIController {
         }
         // Echo the intended post-update state (mirrors the pre-M3 behaviour of
         // returning the request value even when the profile doc doesn't exist yet).
+        // A profile PATCH never touches biometric visibility — carry it through.
         return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(),
-            heightCm, sex == null ? null : sex.name(), dob == null ? null : dob.toString());
+            heightCm, sex == null ? null : sex.name(), dob == null ? null : dob.toString(),
+            existing == null ? java.util.List.of() : existing.hiddenBiometrics());
     }
 
     private static WhoAmIResponse response(CurrentUser cu, User user) {
         Integer heightCm = user == null ? null : user.heightCm();
         String sex = user == null || user.biologicalSex() == null ? null : user.biologicalSex().name();
         String dob = user == null || user.dateOfBirth() == null ? null : user.dateOfBirth().toString();
-        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), heightCm, sex, dob);
+        return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), heightCm, sex, dob,
+            user == null ? java.util.List.of() : user.hiddenBiometrics());
     }
 
     public record UpdateProfileRequest(Integer heightCm, String biologicalSex, String dateOfBirth) {}

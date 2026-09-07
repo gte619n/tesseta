@@ -18,6 +18,7 @@ import { loadRecentFeed } from "@/lib/recent-feed";
 import { loadBloodPanel } from "@/lib/blood-panel";
 import { loadBodyComposition } from "@/lib/body-composition-dashboard";
 import { loadDailyMetrics, emptyVital } from "@/lib/dashboard-vitals";
+import { loadHiddenBiometrics } from "@/lib/biometrics-api";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 
 export const metadata = absoluteTitle("tesseta");
@@ -87,7 +88,11 @@ async function SidebarSection({ user }: { user: SidebarUser }) {
 const loadBodyCompositionCached = cache(loadBodyComposition);
 
 async function WeightStatSection() {
-  const view = await loadBodyCompositionCached();
+  const [view, hidden] = await Promise.all([
+    loadBodyCompositionCached(),
+    loadHiddenBiometrics(),
+  ]);
+  if (hidden.has("WEIGHT")) return null;
   if (view?.weightStat) {
     return <WeightStatCard stat={view.weightStat} />;
   }
@@ -95,19 +100,28 @@ async function WeightStatSection() {
 }
 
 async function DailyVitalsSection() {
-  const dailyVitals = await loadDailyMetrics();
+  const [dailyVitals, hidden] = await Promise.all([
+    loadDailyMetrics(),
+    loadHiddenBiometrics(),
+  ]);
   return (
     <>
-      <StatCard stat={dailyVitals.restingHr} />
-      <StatCard stat={dailyVitals.hrv} />
-      <StatCard stat={dailyVitals.sleep} />
-      <StatCard stat={dailyVitals.steps} />
+      {!hidden.has("RESTING_HR") && <StatCard stat={dailyVitals.restingHr} />}
+      {!hidden.has("HRV") && <StatCard stat={dailyVitals.hrv} />}
+      {!hidden.has("SLEEP") && <StatCard stat={dailyVitals.sleep} />}
+      {!hidden.has("STEPS") && <StatCard stat={dailyVitals.steps} />}
     </>
   );
 }
 
+// The Body Composition detail card (weight / body-fat / lean mass) is gated by
+// the Body fat toggle — its only dedicated dashboard element.
 async function BodyCompositionSection() {
-  const view = await loadBodyCompositionCached();
+  const [view, hidden] = await Promise.all([
+    loadBodyCompositionCached(),
+    loadHiddenBiometrics(),
+  ]);
+  if (hidden.has("BODY_FAT")) return null;
   return <BodyCompositionCard view={view} />;
 }
 

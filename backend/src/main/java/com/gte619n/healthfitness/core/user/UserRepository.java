@@ -67,6 +67,13 @@ public interface UserRepository {
     void updateHeightCm(String userId, Integer heightCm);
 
     /**
+     * Replace the set of biometric metric keys the user has hidden from the
+     * dashboard (empty = all shown). Field-scoped merge; leaves everything else
+     * intact. Synced per-account so visibility follows the user across devices.
+     */
+    void updateHiddenBiometrics(String userId, List<String> hiddenBiometrics);
+
+    /**
      * Set the Mifflin-St Jeor demographics (IMPL-PROG-01 M3). A null argument
      * clears that field. Field-scoped merge — leaves everything else intact.
      */

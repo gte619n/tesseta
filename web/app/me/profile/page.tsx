@@ -10,6 +10,8 @@ import { apiFetch, apiJson } from "@/lib/api";
 import { HeightForm } from "@/components/profile/HeightForm";
 import { BodyDetailsForm } from "@/components/profile/BodyDetailsForm";
 import { UnitsSection } from "@/components/profile/UnitsSection";
+import { BiometricsSection } from "@/components/profile/BiometricsSection";
+import { fetchBiometrics } from "@/lib/biometrics-api";
 import type { WhoAmI } from "@/lib/types/profile";
 
 type Status = {
@@ -38,13 +40,27 @@ export default async function ProfilePage({
   // The Withings callback redirects here with ?withings=connected|error.
   searchParams: Promise<{ withings?: string }>;
 }) {
-  const [{ withings: withingsResult }, me, status, withingsStatus] =
+  const [{ withings: withingsResult }, me, status, withingsStatus, biometrics] =
     await Promise.all([
       searchParams,
       apiJson<WhoAmI>("/api/me"),
       apiJson<Status>("/api/me/google-health/status"),
       apiJson<Status>("/api/me/withings/status"),
+      fetchBiometrics().catch(() => []),
     ]);
+
+  async function saveBiometricsVisibility(hidden: string[]) {
+    "use server";
+    const res = await apiFetch("/api/me/biometrics/visibility", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hidden }),
+    });
+    if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+    // Refresh the dashboard (hidden cards) and this page's summaries.
+    revalidatePath("/");
+    revalidatePath("/me/profile");
+  }
 
   async function connect() {
     "use server";
@@ -164,6 +180,22 @@ export default async function ProfilePage({
           </p>
           <div className="mt-4">
             <UnitsSection />
+          </div>
+        </section>
+
+        <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
+          <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
+            Biometrics
+          </h2>
+          <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
+            Choose which metrics show on your dashboard. Each row shows the latest
+            reading, when it was recorded, and how often it arrives on average.
+          </p>
+          <div className="mt-3">
+            <BiometricsSection
+              summaries={biometrics}
+              saveAction={saveBiometricsVisibility}
+            />
           </div>
         </section>
 
