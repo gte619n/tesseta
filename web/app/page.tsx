@@ -6,7 +6,9 @@ import { absoluteTitle } from "@/lib/page-metadata";
 import { auth } from "@/auth";
 import { BloodPanel } from "@/components/dashboard/BloodPanel";
 import { BodyCompositionCard } from "@/components/dashboard/BodyCompositionCard";
+import { NutritionCard } from "@/components/dashboard/NutritionCard";
 import { RecentFeed } from "@/components/dashboard/RecentFeed";
+import { WorkoutCard } from "@/components/dashboard/WorkoutCard";
 import { Sidebar, type SidebarUser } from "@/components/dashboard/Sidebar";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { TodaysDosesCard } from "@/components/dashboard/TodaysDosesCard";
@@ -19,6 +21,8 @@ import { loadBloodPanel } from "@/lib/blood-panel";
 import { loadBodyComposition } from "@/lib/body-composition-dashboard";
 import { loadDailyMetrics, emptyVital } from "@/lib/dashboard-vitals";
 import { loadHiddenBiometrics } from "@/lib/biometrics-api";
+import { loadTodayNutrition } from "@/lib/nutrition-dashboard";
+import { loadWorkoutSummary } from "@/lib/workout-dashboard";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 
 export const metadata = absoluteTitle("tesseta");
@@ -55,6 +59,15 @@ export default async function DashboardPage() {
           <Suspense fallback={<BodyCompositionSkeleton />}>
             <BodyCompositionSection />
           </Suspense>
+
+          <section className="mb-3 grid grid-cols-2 gap-2.5">
+            <Suspense fallback={<CardSkeleton />}>
+              <NutritionSection />
+            </Suspense>
+            <Suspense fallback={<CardSkeleton />}>
+              <WorkoutSection />
+            </Suspense>
+          </section>
 
           <section className="mb-3 grid grid-cols-2 gap-2.5">
             <Suspense fallback={<BloodPanelSkeleton />}>
@@ -123,6 +136,16 @@ async function BodyCompositionSection() {
   ]);
   if (hidden.has("BODY_FAT")) return null;
   return <BodyCompositionCard view={view} />;
+}
+
+async function NutritionSection() {
+  const summary = await loadTodayNutrition();
+  return <NutritionCard summary={summary} />;
+}
+
+async function WorkoutSection() {
+  const summary = await loadWorkoutSummary();
+  return <WorkoutCard summary={summary} />;
 }
 
 async function BloodPanelSection() {
@@ -194,6 +217,13 @@ function BodyCompositionSkeleton() {
 function BloodPanelSkeleton() {
   return (
     <div className="h-[220px] animate-pulse rounded-[10px] border-[0.5px] border-border-default bg-surface" />
+  );
+}
+
+// Nutrition + Workout cards share a footprint in their 2-col row.
+function CardSkeleton() {
+  return (
+    <div className="h-[180px] animate-pulse rounded-[10px] border-[0.5px] border-border-default bg-surface" />
   );
 }
 

@@ -48,21 +48,33 @@ object CollectionRegistry {
         put("medications/adherence", MirrorTables.MEDICATION_ADHERENCE)
         put("history", MirrorTables.MEDICATION_HISTORY)
         put("medications.history", MirrorTables.MEDICATION_HISTORY)
+        put("medications/history", MirrorTables.MEDICATION_HISTORY)
 
-        // Goal subcollections.
+        // Goal subcollections. The backend emits the full slash path
+        // ("goals/phases", "goals/phases/steps"); without those exact aliases the
+        // pulled change resolves to null and is skipped (same class of bug the
+        // adherence slash form above fixed).
         put("phases", MirrorTables.GOAL_PHASES)
         put("goals.phases", MirrorTables.GOAL_PHASES)
+        put("goals/phases", MirrorTables.GOAL_PHASES)
         put("steps", MirrorTables.GOAL_STEPS)
         put("goals.steps", MirrorTables.GOAL_STEPS)
+        put("goals/phases/steps", MirrorTables.GOAL_STEPS)
 
         // Goal-chat thread + message subcollection.
         put("messages", MirrorTables.GOAL_CHAT_MESSAGES)
         put("goalChatThreads.messages", MirrorTables.GOAL_CHAT_MESSAGES)
+        put("goalChatThreads/messages", MirrorTables.GOAL_CHAT_MESSAGES)
 
         // Nutrition: backend `nutritionDays/{day}/entries` → flat entries table;
-        // `users/{uid}` profile doc → userProfile table.
+        // `users/{uid}` profile doc → userProfile table. The reader emits the
+        // SLASH form ("nutritionDays/entries"); without this exact alias every
+        // pulled entry was skipped as an unknown collection, so a snack logged on
+        // another device (e.g. the web app) never reached this mirror — the local
+        // day view only ever showed this device's own optimistic writes.
         put("entries", MirrorTables.NUTRITION_ENTRIES)
         put("nutritionDays.entries", MirrorTables.NUTRITION_ENTRIES)
+        put("nutritionDays/entries", MirrorTables.NUTRITION_ENTRIES)
         put("nutritionDays", MirrorTables.NUTRITION_DAILY_LOGS)
         put("users", MirrorTables.USER_PROFILE)
         put("user", MirrorTables.USER_PROFILE)
