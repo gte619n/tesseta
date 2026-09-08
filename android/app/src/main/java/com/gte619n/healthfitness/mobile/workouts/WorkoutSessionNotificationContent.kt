@@ -3,9 +3,9 @@ package com.gte619n.healthfitness.mobile.workouts
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
-import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
+import com.gte619n.healthfitness.feature.workouts.session.prefillFor
 import java.time.Instant
 
 /**
@@ -51,8 +51,13 @@ object WorkoutSessionNotificationContent {
         draft: WorkoutSessionDraft,
         rest: RestTimer?,
         now: Instant,
+        // IMPL-PROG-02 D1 / #4: the prior-session actuals the logger prefills from.
+        // Passed in so the notification's "N lb × R" is computed by the SAME
+        // [prefillFor] the coaching UI and the voice cue use — they can never
+        // disagree. Empty when unknown (offline / not yet fetched).
+        lastSets: Map<String, List<LoggedSet>> = emptyMap(),
     ): Content {
-        val current = currentSet(draft)
+        val current = currentSet(draft, lastSets)
         return when {
             rest != null && rest.isRunning(now) -> Content(
                 title = draft.scheduled.dayLabel,
@@ -79,7 +84,10 @@ object WorkoutSessionNotificationContent {
      * null` counts as one). Null once every prescription is fully logged — or
      * when the draft has no session snapshot at all.
      */
-    fun currentSet(draft: WorkoutSessionDraft): CurrentSet? {
+    fun currentSet(
+        draft: WorkoutSessionDraft,
+        lastSets: Map<String, List<LoggedSet>> = emptyMap(),
+    ): CurrentSet? {
         val day = draft.scheduled.session ?: return null
         for (block in day.blocks.sortedBy { it.orderIndex }) {
             for (prescription in block.prescriptions.sortedBy { it.orderIndex }) {
@@ -91,7 +99,7 @@ object WorkoutSessionNotificationContent {
                         name = prescription.exercise?.name ?: prescription.exerciseId,
                         setNumber = logged.size + 1,
                         totalSets = total,
-                        loadLabel = loadLabel(prescription, logged),
+                        loadLabel = loadLabel(prescription, logged, lastSets),
                     )
                 }
             }
@@ -102,26 +110,25 @@ object WorkoutSessionNotificationContent {
     /** Convenience for callers that only need the current exercise's name. */
     fun currentExerciseName(draft: WorkoutSessionDraft): String? = currentSet(draft)?.name
 
-    /** The carried (or prescribed) load for the upcoming set — the same numbers the logger prefills. */
-    private fun loadLabel(prescription: Prescription, logged: List<LoggedSet>): String? {
-        val previous = logged.lastOrNull()
+    /**
+     * The carried (or prescribed) load for the upcoming set — resolved by the same
+     * [prefillFor] the logger's pending row and the voice cue use, so the
+     * notification's numbers always match the coaching UI (#4). "body weight" is
+     * shown only for a real bodyweight movement; a weighted lift with no known
+     * load omits the weight rather than lying.
+     */
+    private fun loadLabel(
+        prescription: Prescription,
+        logged: List<LoggedSet>,
+        lastSets: Map<String, List<LoggedSet>>,
+    ): String? {
+        val prefill = prefillFor(prescription, logged, lastSets)
         if (prescription.isTimed) {
-            val seconds = previous?.durationSeconds ?: prescription.durationSeconds ?: return null
+            val seconds = prefill.durationSeconds ?: return null
             return "${seconds}s hold"
         }
-        // IMPL-PROG-02 D1: the engine prediction (targetWeightLbs) is authoritative;
-        // no dependency on the async lastSets fetch, so the notification never flips
-        // a beat after it's posted.
-        val weight = previous?.weightLbs ?: prescription.targetWeightLbs
-        // IMPL-PROG-02 F5/D5: reps reset to the band bottom on a weight increase.
-        val bandTarget = if (prescription.rationale?.direction == ProgressionDirection.UP) {
-            prescription.repsMin ?: prescription.repsMax
-        } else {
-            prescription.repsMax ?: prescription.repsMin
-        }
-        val reps = previous?.reps ?: bandTarget
-        // IMPL-PROG-02 F6: "body weight" ONLY for a real bodyweight movement; a
-        // weighted lift with no known load omits the weight rather than lying.
+        val weight = prefill.weightLbs
+        val reps = prefill.reps
         val weightPart = when {
             prescription.isBodyweight -> "body weight"
             weight != null && weight > 0.0 -> "${formatWeight(weight)} lb"

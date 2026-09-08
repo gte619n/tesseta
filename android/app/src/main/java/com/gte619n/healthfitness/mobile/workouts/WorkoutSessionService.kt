@@ -23,6 +23,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
 import com.gte619n.healthfitness.data.prefs.CoachAudioPreferences
+import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
@@ -90,6 +91,14 @@ class WorkoutSessionService : Service() {
     /** Lazily created on the first beep; routes to STREAM_MUSIC (i.e. headphones). */
     private var toneGenerator: ToneGenerator? = null
 
+    /**
+     * #4 — the session's prior-performance actuals, fetched once and cached by
+     * scheduledId so the notification's load reads through the SAME [prefillFor]
+     * the coaching UI uses (they can't disagree). One session is ever in flight,
+     * so a single-entry cache is enough.
+     */
+    private val lastSetsCache = mutableMapOf<String, Map<String, List<LoggedSet>>>()
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -136,7 +145,13 @@ class WorkoutSessionService : Service() {
             if (draft == null) {
                 stopSession()
             } else {
-                postNotification(buildNotification(draft, rest))
+                val lastSets = lastSetsCache.getOrPut(draft.scheduledId) {
+                    // Best-effort: local fold is instant + offline-safe; a network
+                    // miss just yields empty and the prefill falls back gracefully.
+                    runCatching { repo.lastSets(draft.programId, draft.scheduledId) }
+                        .getOrDefault(emptyMap())
+                }
+                postNotification(buildNotification(draft, rest, lastSets))
             }
         }
     }
@@ -234,11 +249,13 @@ class WorkoutSessionService : Service() {
     private fun buildNotification(
         draft: WorkoutSessionDraft,
         rest: WorkoutSessionTimers.RestTimer?,
+        lastSets: Map<String, List<LoggedSet>>,
     ): Notification {
         val content = WorkoutSessionNotificationContent.from(
             draft = draft,
             rest = rest,
             now = Instant.now(),
+            lastSets = lastSets,
         )
         return baseBuilder()
             // Tapping the ongoing notification jumps back into THIS session's

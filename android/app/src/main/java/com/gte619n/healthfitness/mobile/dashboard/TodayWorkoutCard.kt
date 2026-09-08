@@ -98,10 +98,20 @@ fun TodayWorkoutCard(
     val (programId, scheduledId, title, subtitle) = model
 
     Spacer(Modifier.height(11.dp))
+    // An in-progress workout is a live, time-sensitive state — give it a bold
+    // accent-filled treatment so it clearly stands out from the plain "Start"
+    // card and reads as "you're mid-workout, tap to jump back in".
     Row(
         modifier = modifier
-            .background(Hf.colors.surface, RoundedCornerShape(10.dp))
-            .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
+            .then(
+                if (inProgress) {
+                    Modifier.background(Hf.colors.accent, RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                        .background(Hf.colors.surface, RoundedCornerShape(10.dp))
+                        .border(0.5.dp, Hf.colors.borderDefault, RoundedCornerShape(10.dp))
+                },
+            )
             .clip(RoundedCornerShape(10.dp))
             .clickable { onNavigate(WorkoutsRoutes.session(programId, scheduledId)) }
             .padding(14.dp),
@@ -111,7 +121,10 @@ fun TodayWorkoutCard(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(Hf.colors.accentBg, RoundedCornerShape(10.dp)),
+                .background(
+                    if (inProgress) Hf.colors.textInverse else Hf.colors.accentBg,
+                    RoundedCornerShape(10.dp),
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -125,18 +138,22 @@ fun TodayWorkoutCard(
             Text(
                 text = title,
                 style = Hf.type.headingMd.copy(fontSize = 15.sp),
-                color = Hf.colors.textPrimary,
+                color = if (inProgress) Hf.colors.textInverse else Hf.colors.textPrimary,
             )
             Text(
                 text = subtitle,
                 style = Hf.type.monoSm.copy(fontSize = 11.sp),
-                color = Hf.colors.textTertiary,
+                color = if (inProgress) {
+                    Hf.colors.textInverse.copy(alpha = 0.85f)
+                } else {
+                    Hf.colors.textTertiary
+                },
             )
         }
         Text(
             text = "›",
             style = Hf.type.headingLg,
-            color = Hf.colors.accent,
+            color = if (inProgress) Hf.colors.textInverse else Hf.colors.accent,
         )
     }
 }

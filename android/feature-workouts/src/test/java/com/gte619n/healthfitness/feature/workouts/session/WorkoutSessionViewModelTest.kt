@@ -36,6 +36,8 @@ class WorkoutSessionViewModelTest {
     private val repo: WorkoutSessionRepository = mockk()
     private val timers = WorkoutSessionTimers()
     private val profileRepo: com.gte619n.healthfitness.data.profile.ProfileRepository = mockk(relaxed = true)
+    private val progressionRepo: com.gte619n.healthfitness.data.workouts.progression.ProgressionRepository =
+        mockk(relaxed = true)
     private val handle = SavedStateHandle(
         mapOf(
             WorkoutsRoutes.ARG_PROGRAM_ID to "p1",
@@ -54,7 +56,8 @@ class WorkoutSessionViewModelTest {
         coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
         every { repo.observeDraft("p1", "s2") } returns draftFlow
         coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
-        return WorkoutSessionViewModel(repo, timers, profileRepo, handle)
+        coEvery { repo.peekDraft("p1", "s2") } returns null
+        return WorkoutSessionViewModel(repo, timers, profileRepo, progressionRepo, handle)
     }
 
     @Test
@@ -73,7 +76,8 @@ class WorkoutSessionViewModelTest {
     fun `start failure surfaces error`() = runTest {
         coEvery { repo.start("p1", "s2") } returns Result.failure(RuntimeException("not mirrored"))
         coEvery { repo.lastSets("p1", "s2") } returns emptyMap()
-        val vm = WorkoutSessionViewModel(repo, timers, profileRepo, handle)
+        coEvery { repo.peekDraft("p1", "s2") } returns null
+        val vm = WorkoutSessionViewModel(repo, timers, profileRepo, progressionRepo, handle)
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -126,7 +130,8 @@ class WorkoutSessionViewModelTest {
 
         coEvery { repo.start("p1", "s2") } returns Result.success(ProgramFixtures.activeDraft)
         every { repo.observeDraft("p1", "s2") } returns draftFlow
-        val vm = WorkoutSessionViewModel(repo, timers, profileRepo, handle)
+        coEvery { repo.peekDraft("p1", "s2") } returns null
+        val vm = WorkoutSessionViewModel(repo, timers, profileRepo, progressionRepo, handle)
         advanceUntilIdle()
 
         vm.toggleSet(squatKey, 0)
@@ -388,12 +393,14 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
-    fun `applyAdjustment swaps via the repository and clears any rest`() = runTest {
+    fun `applyAdjustment swaps via the repository and keeps the rest timer running`() = runTest {
         val replacement = ProgramFixtures.activeDraft.sessionSteps()[0].prescription.exercise!!
             .copy(exerciseId = "ex-goblet", name = "Goblet Squat")
         coEvery {
             repo.customizePrescription("p1", "s2", squatKey, replacement, null, null, null, false)
         } returns Result.success(ProgramFixtures.activeDraft)
+        // #3: no stored belief for the new movement → no predicted target stamped.
+        coEvery { progressionRepo.strength() } returns Result.success(emptyList())
         val vm = vm()
         advanceUntilIdle()
         timers.startRest(90)
@@ -407,8 +414,8 @@ class WorkoutSessionViewModelTest {
         coVerify(exactly = 1) {
             repo.customizePrescription("p1", "s2", squatKey, replacement, null, null, null, false)
         }
-        // A swap starts the slot fresh, so the old movement's rest is dropped.
-        assertNull(timers.rest.value)
+        // #2: the swap no longer cancels the timer — the rest countdown keeps running.
+        assertNotNull(timers.rest.value)
     }
 
     @Test
