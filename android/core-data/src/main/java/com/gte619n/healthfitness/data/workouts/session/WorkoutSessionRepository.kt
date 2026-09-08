@@ -78,6 +78,14 @@ class WorkoutSessionRepository(
     fun observeDrafts(): Flow<List<WorkoutSessionDraft>> =
         draftDao.observeAll().map { rows -> rows.mapNotNull { it.toDomain() } }
 
+    /**
+     * #5 — the current draft if one already exists (a resume / return-to-app),
+     * else null. A cheap one-shot read used to decide whether the logger opens
+     * onto an in-flight session (skip the "Start workout" gate) or a fresh one.
+     */
+    suspend fun peekDraft(programId: String, scheduledId: String): WorkoutSessionDraft? =
+        withContext(io) { draftDao.getByKey(programId, scheduledId)?.toDomain() }
+
     suspend fun start(
         programId: String,
         scheduledId: String,
@@ -273,6 +281,32 @@ class WorkoutSessionRepository(
                     ),
                 )
             }
+            updated.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
+        }
+    }
+
+    /**
+     * #3 — stamp an engine-predicted starting load onto the draft's prescription
+     * at [key] (local-only; the actuals still ride the completion upload). Used
+     * right after a swap so the coach proposes a real weight for the new movement
+     * grounded in its 1RM belief. No-op if the draft/prescription is gone.
+     */
+    suspend fun applyPredictedTarget(
+        programId: String,
+        scheduledId: String,
+        key: PrescriptionKey,
+        targetWeightLbs: Double,
+    ): Result<WorkoutSessionDraft> = withContext(io) {
+        runCatching {
+            val entity = draftDao.getByKey(programId, scheduledId)
+                ?: error("No active draft for $programId/$scheduledId")
+            val dto = decodeScheduled(entity.sessionJson)
+                ?: error("Draft snapshot for $programId/$scheduledId is undecodable")
+            val updated = entity.copy(
+                sessionJson = scheduledAdapter.toJson(dto.withPredictedTarget(key, targetWeightLbs)),
+                lastActivityAt = clock(),
+            )
+            draftDao.upsert(updated)
             updated.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
         }
     }
@@ -628,6 +662,8 @@ class WorkoutSessionRepository(
                                         loggedSets = emptyList(),
                                         targetWeightLbs = null,
                                         loadBasis = null,
+                                        // The old movement's engine reasoning no longer applies.
+                                        rationale = null,
                                     )
                                 }
                             },
@@ -672,6 +708,41 @@ class WorkoutSessionRepository(
                                         loggedSets = if (swapped) emptyList() else rx.loggedSets,
                                         targetWeightLbs = if (swapped) null else rx.targetWeightLbs,
                                         loadBasis = if (swapped) null else rx.loadBasis,
+                                        // A swap invalidates the old movement's engine reasoning.
+                                        rationale = if (swapped) null else rx.rationale,
+                                    )
+                                }
+                            },
+                        )
+                    }
+                },
+            )
+        },
+    )
+
+    /**
+     * #3 — set the engine-predicted [targetWeightLbs] on the prescription at [key]
+     * (and tag its basis), leaving everything else untouched. Applied after a swap
+     * so the coach proposes a real starting load for the new movement.
+     */
+    private fun ScheduledWorkoutDto.withPredictedTarget(
+        key: PrescriptionKey,
+        targetWeightLbs: Double,
+    ): ScheduledWorkoutDto = copy(
+        session = session?.let { day ->
+            day.copy(
+                blocks = day.blocks.map { block ->
+                    if (block.blockId != key.blockId) {
+                        block
+                    } else {
+                        block.copy(
+                            prescriptions = block.prescriptions.map { rx ->
+                                if (rx.orderIndex != key.orderIndex) {
+                                    rx
+                                } else {
+                                    rx.copy(
+                                        targetWeightLbs = targetWeightLbs,
+                                        loadBasis = SWAP_PREDICTION_LOAD_BASIS,
                                     )
                                 }
                             },
@@ -925,6 +996,9 @@ class WorkoutSessionRepository(
         const val STALE_AFTER_MILLIS: Long = 24L * 60 * 60 * 1000
 
         private const val EMPTY_LOGGED_JSON = "[]"
+
+        /** #3 — loadBasis tag for a swap's engine-1RM-grounded starting load. */
+        private const val SWAP_PREDICTION_LOAD_BASIS = "swap estimate"
 
         /** IMPL-COACH: poll the recap endpoint a few times while the outbox replays. */
         private const val RECAP_FETCH_ATTEMPTS = 3

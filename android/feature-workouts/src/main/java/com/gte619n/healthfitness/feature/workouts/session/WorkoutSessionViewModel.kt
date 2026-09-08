@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.data.profile.ProfileRepository
+import com.gte619n.healthfitness.data.workouts.progression.ProgressionRepository
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.nav.WorkoutsRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -81,6 +82,13 @@ data class WorkoutSessionUiState(
      * "flag as bad" affordance so ordinary users never see it.
      */
     val isOwner: Boolean = false,
+    /**
+     * #5 — whether the workout is underway. Seeded true when the logger opens onto
+     * an already-existing draft (a resume / return-to-app), so the "Start workout"
+     * gate never re-appears after leaving the app; flipped by [markStarted] when
+     * the lifter taps Start on a brand-new session.
+     */
+    val started: Boolean = false,
 )
 
 /**
@@ -96,6 +104,7 @@ class WorkoutSessionViewModel @Inject constructor(
     private val repository: WorkoutSessionRepository,
     private val timers: WorkoutSessionTimers,
     private val profileRepository: ProfileRepository,
+    private val progressionRepository: ProgressionRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -144,6 +153,12 @@ class WorkoutSessionViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            // #5: if a draft already exists we're resuming (return-to-app / process
+            // death), so the session is already "started" — never re-show the Start
+            // gate. A brand-new session has no draft yet; Start stays until tapped.
+            if (repository.peekDraft(programId, scheduledId) != null) {
+                _state.update { it.copy(started = true) }
+            }
             val started = repository.start(programId, scheduledId)
             started.onFailure { e ->
                 _state.update {
@@ -295,18 +310,47 @@ class WorkoutSessionViewModel @Inject constructor(
      */
     fun applyAdjustment(key: PrescriptionKey, adjustment: PrescriptionAdjustment) {
         _state.value.draft ?: return
-        // A swap starts the slot fresh — drop any rest tied to the old movement.
-        if (adjustment.exercise != null) timers.clearRest()
+        // #2: a swap no longer clears the rest countdown — the workout/rest timer
+        // keeps running while the swap is applied (the elapsed clock is anchored to
+        // the draft's startedAt and is untouched either way).
         viewModelScope.launch {
             repository.customizePrescription(
                 programId, scheduledId, key,
                 adjustment.exercise, adjustment.sets, adjustment.repsMin, adjustment.repsMax,
                 adjustment.applyToProgram,
-            ).onFailure { e ->
+            ).onSuccess {
+                // #3: a swap dropped the old movement's history-grounded load — re-ground
+                // it on the engine's belief for the NEW movement so the card, announcement
+                // and notification propose a real starting weight instead of blank.
+                adjustment.exercise?.let { predictSwapLoad(key, it) }
+            }.onFailure { e ->
                 _state.update { it.copy(error = e.message ?: "Couldn't update the exercise") }
             }
         }
     }
+
+    /**
+     * #3 — best-effort: read the progression engine's stored 1RM belief for the
+     * just-swapped-in [exercise] and stamp a computed starting load onto the
+     * draft's prescription (matching the engine's own load math). Silent no-op
+     * when there's no belief yet (new exercise) or offline — the prefill then
+     * falls back to last-performed / blank.
+     */
+    private suspend fun predictSwapLoad(
+        key: PrescriptionKey,
+        exercise: ExerciseSummary,
+    ) {
+        val prescription = _state.value.draft?.prescription(key) ?: return
+        val e1rm = progressionRepository.strength().getOrNull()
+            ?.firstOrNull { it.exerciseId == exercise.exerciseId }
+            ?.e1rmLbs
+            ?: return
+        val load = predictedSwapLoad(e1rm, prescription.repsMin, prescription.repsMax) ?: return
+        repository.applyPredictedTarget(programId, scheduledId, key, load)
+    }
+
+    /** #5 — the lifter tapped "Start workout"; latch the session as underway. */
+    fun markStarted() = _state.update { it.copy(started = true) }
 
     /** #9 — owner flags a demo frame as bad; no-op for non-owners (defense in depth). */
     fun flagFrame(exerciseId: String, frameKey: String) {

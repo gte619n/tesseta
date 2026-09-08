@@ -207,6 +207,8 @@ fun WorkoutSessionRoute(
         onConfirmDiscard = viewModel::confirmDiscard,
         onDismissPrompt = viewModel::dismissPrompt,
         onDismissCompleted = viewModel::dismissCompleted,
+        started = state.started,
+        onMarkStarted = viewModel::markStarted,
     )
 }
 
@@ -237,6 +239,10 @@ fun WorkoutSessionScreen(
     onConfirmDiscard: () -> Unit,
     onDismissPrompt: () -> Unit,
     onDismissCompleted: () -> Unit = {},
+    // #5: whether the workout has been started. Persisted (derived from the draft
+    // existing) so leaving and re-entering the app never re-shows "Start workout".
+    started: Boolean = false,
+    onMarkStarted: () -> Unit = {},
 ) {
     // One-second ticker driving the elapsed header, the rest countdown, and the
     // hold-timer count-up.
@@ -313,6 +319,8 @@ fun WorkoutSessionScreen(
                 onRequestFinish = onRequestFinish,
                 onRequestSkip = onRequestSkip,
                 onRequestDiscard = onRequestDiscard,
+                started = started,
+                onMarkStarted = onMarkStarted,
             )
         }
     }
@@ -387,6 +395,8 @@ private fun SessionBody(
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
     onRequestDiscard: () -> Unit,
+    started: Boolean,
+    onMarkStarted: () -> Unit,
 ) {
     val steps = remember(draft) { draft.sessionSteps() }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -426,7 +436,8 @@ private fun SessionBody(
         // cue is otherwise silent on the first settle) and then the card reverts to
         // the normal per-set "Log set N". Once the lifter has started — or anything
         // is already logged (a resumed session) — there's nothing to start.
-        var started by rememberSaveable(draft.scheduledId) { mutableStateOf(false) }
+        // #5: [started] is persisted (derived from the draft already existing on
+        // (re)entry), so leaving and returning to the app never re-shows "Start".
         val showStart = !started && draft.logged.values.all { it.isEmpty() }
 
         // ---- coach voice cues (PR2, refined) --------------------------------
@@ -593,7 +604,7 @@ private fun SessionBody(
                     autoStart = autoStartStep == page,
                     onAutoStartConsumed = { if (autoStartStep == page) autoStartStep = null },
                     showStart = showStart,
-                    onStarted = { started = true },
+                    onStarted = onMarkStarted,
                 )
             }
             CoachActionsBar(
@@ -1213,13 +1224,13 @@ private fun RepSetsSection(
                 weightAdjustment = weightAdjustment(prescription, lastSets),
                 repsAdjustment = repsAdjustment(prescription, lastSets),
                 requireRir = isFinalWorkingSet,
-                onLog = { weight, reps, rir ->
+                onLog = { weight, reps, rir, rirSource ->
                     onLogSet(
                         LoggedSet(
                             weightLbs = weight,
                             reps = reps,
                             rir = rir,
-                            rirSource = if (rir != null) RIR_SOURCE_REPORTED else null,
+                            rirSource = rirSource,
                         ),
                     )
                 },
@@ -1305,7 +1316,7 @@ internal fun ActiveRepCard(
     prefill: SetPrefill,
     prescription: Prescription,
     exerciseName: String,
-    onLog: (Double?, Int?, Double?) -> Unit,
+    onLog: (Double?, Int?, Double?, String?) -> Unit,
     weightAdjustment: TargetAdjustment? = null,
     repsAdjustment: TargetAdjustment? = null,
     requireRir: Boolean = false,
@@ -1322,8 +1333,15 @@ internal fun ActiveRepCard(
     var rir by remember(exerciseName, setNumber) { mutableStateOf<Int?>(null) }
     var showWeight by remember { mutableStateOf(false) }
     var showReps by remember { mutableStateOf(false) }
+    // #1: falling short of the rep target means the set went to failure — there's
+    // no reserve to report. When the staged reps are under target the RIR prompt
+    // is hidden, logging is unblocked, and the set records RIR 0 automatically.
+    val belowTarget = requireRir && reps != null &&
+        repsOutcome(prescription, reps) == TargetOutcome.MISS
+    // The blind-pick RIR gate only applies when the target was actually reached.
+    val gateRir = requireRir && !belowTarget
     // Log is blocked on the final set until effort is explicitly reported.
-    val logEnabled = showStart || !requireRir || rir != null
+    val logEnabled = showStart || !gateRir || rir != null
 
     Column(
         modifier = Modifier
@@ -1358,14 +1376,21 @@ internal fun ActiveRepCard(
                 onClick = { showReps = true },
             )
         }
-        if (requireRir && !showStart) {
+        if (gateRir && !showStart) {
             RirSelector(
                 selected = rir,
                 onSelect = { rir = it },
             )
         }
         Button(
-            onClick = { if (showStart) onStart() else onLog(weight, reps, rir?.toDouble()) },
+            onClick = {
+                when {
+                    showStart -> onStart()
+                    // Under target → failure: log with an inferred RIR of 0.
+                    belowTarget -> onLog(weight, reps, 0.0, RIR_SOURCE_INFERRED_TARGET)
+                    else -> onLog(weight, reps, rir?.toDouble(), rir?.let { RIR_SOURCE_REPORTED })
+                }
+            },
             enabled = logEnabled,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
@@ -1380,7 +1405,7 @@ internal fun ActiveRepCard(
             Text(
                 when {
                     showStart -> stringResource(R.string.workout_session_start)
-                    requireRir && rir == null -> stringResource(R.string.workout_session_rir_required)
+                    gateRir && rir == null -> stringResource(R.string.workout_session_rir_required)
                     else -> stringResource(R.string.workout_session_log_set, setNumber)
                 },
                 style = Hf.type.bodyMd,

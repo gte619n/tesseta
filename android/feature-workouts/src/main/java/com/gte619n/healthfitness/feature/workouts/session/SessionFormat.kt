@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
 import kotlin.math.abs
+import kotlin.math.floor
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 
@@ -244,6 +245,52 @@ fun inferredRir(prescription: Prescription, set: LoggedSet): Int {
         reps == target -> 1
         else -> 2
     }
+}
+
+// ---- swap load prediction (#3) ---------------------------------------------
+//
+// When an exercise is swapped mid-workout its history-grounded target is dropped
+// (it was for the old movement). Rather than leave the card blank, we re-ground
+// the load on the progression engine's OWN belief for the new movement — the
+// stored per-exercise e1RM (GET api/me/progression/strength). This mirrors the
+// backend's PrescriptionCalculator/ProgressionMath: Epley-inverse of the e1RM at
+// the rep-band target and a default reserve, floored to a plate increment.
+
+/** Default reps-in-reserve the swap estimate assumes (a couple in the tank). */
+const val SWAP_PREDICTION_RIR: Int = 2
+
+/** Smallest load step the swap estimate floors to (matches the engine default). */
+const val SWAP_PREDICTION_INCREMENT_LBS: Double = 5.0
+
+/**
+ * A starting working load for a freshly swapped-in exercise, grounded in the
+ * engine's stored [e1rmLbs] belief. Targets the MIDPOINT of the rep band at
+ * [targetRir] (the engine's decision P1) and floors to [incrementLbs]. Returns
+ * null when there's no usable belief (e1RM ≤ 0 / no rep band), so the caller can
+ * fall back to last-performed / blank. Pure — mirrors backend `ProgressionMath`.
+ */
+fun predictedSwapLoad(
+    e1rmLbs: Double,
+    repsMin: Int?,
+    repsMax: Int?,
+    targetRir: Int = SWAP_PREDICTION_RIR,
+    incrementLbs: Double = SWAP_PREDICTION_INCREMENT_LBS,
+): Double? {
+    if (e1rmLbs <= 0.0 || incrementLbs <= 0.0) return null
+    val lo = repsMin ?: repsMax
+    val hi = repsMax ?: repsMin
+    val targetReps = when {
+        lo != null && hi != null -> (lo + hi) / 2
+        lo != null -> lo
+        else -> return null
+    }
+    // Inverse Epley: fraction of e1RM a (reps + rir) set represents (§6.4).
+    val pct = 1.0 / (1.0 + (targetReps + targetRir) / 30.0)
+    val raw = e1rmLbs * pct
+    if (raw <= 0.0) return null
+    val stepped = floor(raw / incrementLbs) * incrementLbs
+    // Never propose a zero/negative load — floor to a single increment.
+    return stepped.coerceAtLeast(incrementLbs)
 }
 
 /**
