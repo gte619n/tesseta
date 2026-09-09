@@ -349,8 +349,15 @@ class WorkoutSessionViewModel @Inject constructor(
         repository.applyPredictedTarget(programId, scheduledId, key, load)
     }
 
-    /** #5 — the lifter tapped "Start workout"; latch the session as underway. */
-    fun markStarted() = _state.update { it.copy(started = true) }
+    /**
+     * #5 — the lifter tapped "Start workout"; latch the session as underway and
+     * re-anchor the draft's clock to now, so the elapsed timer counts from the tap
+     * rather than from when the coach screen was opened (which created the draft).
+     */
+    fun markStarted() {
+        _state.update { it.copy(started = true) }
+        viewModelScope.launch { repository.markStarted(programId, scheduledId) }
+    }
 
     /** #9 — owner flags a demo frame as bad; no-op for non-owners (defense in depth). */
     fun flagFrame(exerciseId: String, frameKey: String) {
