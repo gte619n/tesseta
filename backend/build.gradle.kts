@@ -12,8 +12,10 @@ version = "0.0.2-SNAPSHOT"
 // Spring Boot 3.5.x line (the image scan gate blocks HIGH/CRITICAL with a fix
 // available). Spring Boot's dependency management reads these `ext` properties.
 //   jackson 2.21.4 — CVE-2026-54512 (databind RCE); Boot 3.5.x ships 2.19.
-//   netty 4.1.136.Final — CVE-2026-42583 / -33870 / -44249 (codec) + CVE-2026-59901
+//   netty 4.1.137.Final — CVE-2026-42583 / -33870 / -44249 (codec) + CVE-2026-59901
 //     / -55831 / -55833 / -56745 (codec-http DoS); Boot 3.5.x ships 4.1.12x.
+//     Bumped 4.1.136 -> 4.1.137 for CVE-2026-75595 (CRITICAL, netty-handler),
+//     fixed upstream in 4.1.137.Final.
 //   tomcat 10.1.59 — CVE-2026-65182 / -65905 / -68525 (CRITICAL: security
 //     constraint bypass, auth bypass, unauthorized access); fixed upstream in
 //     10.1.58 but that tag was never published to Maven Central, so we take the
@@ -26,7 +28,7 @@ version = "0.0.2-SNAPSHOT"
 //   httpcore5 5.4.3 — CVE-2026-54399 (httpcore5) + CVE-2026-54428 (httpcore5-h2),
 //     both HIGH; Boot 3.5.x pins 5.3.6. The property versions both core5 artifacts.
 extra["jackson-bom.version"] = "2.21.4"
-extra["netty.version"] = "4.1.136.Final"
+extra["netty.version"] = "4.1.137.Final"
 extra["tomcat.version"] = "10.1.59"
 extra["spring-framework.version"] = "6.2.19"
 extra["micrometer.version"] = "1.15.12"
