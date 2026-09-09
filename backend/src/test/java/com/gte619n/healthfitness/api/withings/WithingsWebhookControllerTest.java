@@ -13,7 +13,10 @@ import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.core.user.UserRepository;
 import com.gte619n.healthfitness.core.user.WithingsConnection;
 import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -30,7 +33,9 @@ class WithingsWebhookControllerTest {
     void setUp() {
         users = Mockito.mock(UserRepository.class);
         sync = Mockito.mock(WithingsSyncService.class);
-        controller = new WithingsWebhookController(SECRET, users, sync);
+        // Direct executor: run the dispatched work inline so routing is
+        // observable in the assertions.
+        controller = new WithingsWebhookController(SECRET, users, sync, Runnable::run);
         when(users.findByWithingsUserId("wid-1")).thenReturn(Optional.of(new User(
             "u-1", "u@x", "U", null, null, Instant.EPOCH, Instant.EPOCH, null, null,
             new WithingsConnection("wid-1", new byte[]{1}, new byte[]{2}, Instant.EPOCH, null, null))));
@@ -80,5 +85,27 @@ class WithingsWebhookControllerTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         verify(sync, never()).importSleep(anyString(), any(), any());
+    }
+
+    @Test
+    void notificationIsAckedBeforeSyncRuns() {
+        // Deferred executor: capture the dispatched work without running it, so
+        // we can prove the 200 is returned before any (slow) sync happens —
+        // this is what keeps us inside Withings' 2s callback timeout.
+        Deque<Runnable> queued = new ArrayDeque<>();
+        Executor deferred = queued::add;
+        var deferredController =
+            new WithingsWebhookController(SECRET, users, sync, deferred);
+
+        var response = deferredController.receive(SECRET, "wid-1", 44, 1000L, 2000L);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        verifyNoInteractions(sync);
+        assertThat(queued).hasSize(1);
+
+        // Draining the queue performs the deferred re-fetch.
+        queued.poll().run();
+        verify(sync).importSleep("u-1",
+            Instant.ofEpochSecond(1000), Instant.ofEpochSecond(2000));
     }
 }

@@ -6,8 +6,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,8 +30,14 @@ import org.springframework.web.bind.annotation.RestController;
 //      callback is reachable and expects HTTP 200. A request with a valid
 //      secret but no actionable userid/appli is treated as a probe → 200.
 //   2. Real notifications — routed by appli (44 = sleep, 1 = weight) to the
-//      sync service, which re-fetches the interval and writes it. Withings
-//      retries non-2xx responses, so transient handling errors return 5xx.
+//      sync service, which re-fetches the interval and writes it.
+//
+// Withings times out the callback after 2 seconds, but a real notification's
+// handling (token refresh + a Withings API re-fetch + Firestore writes) can
+// take longer than that. So we ack 200 immediately after authenticating and do
+// the sync off the request path on a virtual thread. That means we never return
+// a retryable 5xx — a dropped sync is backstopped by the periodic refresh sweep
+// (see WithingsBackfillService), which is the right trade to avoid the timeout.
 //
 // The endpoint is public-by-design (no JWT auth filter); the secret query
 // param is the gate.
@@ -48,15 +57,29 @@ public class WithingsWebhookController {
     private final String configuredSecret;
     private final UserRepository users;
     private final WithingsSyncService sync;
+    private final Executor worker;
 
+    @Autowired
     public WithingsWebhookController(
         @Value("${app.withings.webhook-secret:}") String configuredSecret,
         UserRepository users,
         WithingsSyncService sync
     ) {
+        this(configuredSecret, users, sync, Executors.newVirtualThreadPerTaskExecutor());
+    }
+
+    // Visible for testing: inject a direct (same-thread) executor so the async
+    // dispatch can be asserted deterministically.
+    WithingsWebhookController(
+        String configuredSecret,
+        UserRepository users,
+        WithingsSyncService sync,
+        Executor worker
+    ) {
         this.configuredSecret = configuredSecret;
         this.users = users;
         this.sync = sync;
+        this.worker = worker;
     }
 
     @PostMapping
@@ -78,28 +101,36 @@ public class WithingsWebhookController {
             return ResponseEntity.ok().build();
         }
 
-        Optional<User> match = users.findByWithingsUserId(withingsUserId);
-        if (match.isEmpty()) {
-            log.warn("Withings webhook for unknown withingsUserId={}", withingsUserId);
-            return ResponseEntity.ok().build();
-        }
-        String userId = match.get().userId();
+        // Ack now (Withings' 2s timeout) and re-fetch the window off the request
+        // path — the sync can outlast the timeout, and the refresh sweep covers
+        // anything dropped here.
+        worker.execute(() -> process(withingsUserId, appli, startdate, enddate));
+        return ResponseEntity.ok().build();
+    }
 
-        Instant now = Instant.now();
-        Instant from = startdate != null ? Instant.ofEpochSecond(startdate) : now.minus(DEFAULT_WINDOW);
-        Instant to = enddate != null ? Instant.ofEpochSecond(enddate) : now;
-
+    // Resolve the user, re-fetch the notified window, and persist. Runs off the
+    // request thread, so failures are logged rather than surfaced as a 5xx.
+    private void process(String withingsUserId, int appli, Long startdate, Long enddate) {
         try {
+            Optional<User> match = users.findByWithingsUserId(withingsUserId);
+            if (match.isEmpty()) {
+                log.warn("Withings webhook for unknown withingsUserId={}", withingsUserId);
+                return;
+            }
+            String userId = match.get().userId();
+
+            Instant now = Instant.now();
+            Instant from = startdate != null ? Instant.ofEpochSecond(startdate) : now.minus(DEFAULT_WINDOW);
+            Instant to = enddate != null ? Instant.ofEpochSecond(enddate) : now;
+
             switch (appli) {
                 case APPLI_SLEEP -> sync.importSleep(userId, from, to);
                 case APPLI_WEIGHT -> sync.importBody(userId, from, to);
                 default -> log.info("Withings webhook unhandled appli={} user={}", appli, userId);
             }
-            return ResponseEntity.ok().build();
         } catch (RuntimeException e) {
-            log.error("Withings webhook handling failed user={} appli={}: {}",
-                userId, appli, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Withings webhook async handling failed withingsUserId={} appli={}: {}",
+                withingsUserId, appli, e.getMessage(), e);
         }
     }
 
