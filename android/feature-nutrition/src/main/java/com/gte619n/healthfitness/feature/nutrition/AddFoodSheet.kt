@@ -222,15 +222,15 @@ private fun SearchPane(
 
     val screenH = LocalConfiguration.current.screenHeightDp.dp
     val noResults = state.results.isEmpty() && state.mealResults.isEmpty()
-    // Reserve a stable height once there ARE results, so the sheet — and the
-    // search field above it — stays put instead of jumping up and down as the
-    // result count changes on every keystroke. While there's nothing to show
-    // (loading skeleton or "No matches"), let the area collapse so the describe
-    // button rides up near the search field for an easy tap.
+    // Reserve a STABLE height for the results region the whole time a query is
+    // present — skeleton, "No matches", error and results all occupy the same box
+    // — so the sheet and the search field above it stay put instead of bouncing up
+    // and down as the result count (and the loading state) change on every
+    // keystroke. The describe button below rides at the bottom of this fixed area.
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (noResults) Modifier else Modifier.height(screenH * 0.45f)),
+            .height(screenH * 0.45f),
         contentAlignment = Alignment.TopStart,
     ) {
         when {

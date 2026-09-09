@@ -70,6 +70,7 @@ class NutritionRepositoryLogMealTest {
             api = api,
             entryDao = FakeNutritionEntryDao(mirror),
             targetDao = FakeNutritionTargetDao(mirror),
+            cacheDao = mockk(relaxed = true),
             support = support,
             ops = mockk(relaxed = true),
             previews = CapturePreviewStore(),

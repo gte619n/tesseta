@@ -30,6 +30,32 @@ class FoodRepository @Inject constructor(
         api.search(query).also { cache(it) }
 
     /**
+     * food-search-local-first: name search over the catalog foods already cached on
+     * this device — served with zero network so the add-food list populates the
+     * instant the user types. Covers the foods the user actually fetches/logs (the
+     * cache warms with every [search]/[food]/[create] result and [warmFromIds]);
+     * the network [search] augments it with the long tail. Returns [] for a blank
+     * query. [query] is lowercased + LIKE-sanitized here.
+     */
+    suspend fun localSearch(query: String, limit: Int = DEFAULT_SEARCH_LIMIT): List<Food> {
+        val q = query.trim().lowercase().replace("%", "").replace("_", "")
+        if (q.isBlank()) return emptyList()
+        return cacheDao.search(CACHE_TYPE, q, limit).mapNotNull { decode(it.json) }
+    }
+
+    /**
+     * food-search-local-first (seed): best-effort warm of the local catalog cache
+     * for [foodIds] the user has logged but may not have fetched as full foods yet
+     * (so name search finds them). Only fetches ids not already cached, and swallows
+     * per-id failures — this is a background convenience, never load-bearing.
+     */
+    suspend fun warmFromIds(foodIds: Collection<String>) {
+        foodIds.distinct()
+            .filter { cacheDao.getById(CACHE_TYPE, it) == null }
+            .forEach { id -> runCatching { food(id) } }
+    }
+
+    /**
      * Cache-first detail read: revalidate over the network and refresh the cache;
      * on failure fall back to the last-fetched cached copy so re-entry works offline.
      */
@@ -69,35 +95,31 @@ class FoodRepository @Inject constructor(
     // ---- catalog cache (offline-fix) ----
 
     private suspend fun cache(food: Food) {
-        cacheDao.upsert(
-            CatalogCacheEntity(
-                type = CACHE_TYPE,
-                id = food.foodId,
-                json = foodAdapter.toJson(food),
-                updatedAt = System.currentTimeMillis(),
-            ),
-        )
+        cacheDao.upsert(food.toCacheEntity(System.currentTimeMillis()))
     }
 
     private suspend fun cache(foods: List<Food>) {
         if (foods.isEmpty()) return
         val now = System.currentTimeMillis()
-        cacheDao.upsertAll(
-            foods.map {
-                CatalogCacheEntity(
-                    type = CACHE_TYPE,
-                    id = it.foodId,
-                    json = foodAdapter.toJson(it),
-                    updatedAt = now,
-                )
-            },
-        )
+        cacheDao.upsertAll(foods.map { it.toCacheEntity(now) })
     }
+
+    // food-search-local-first: carry the denormalized lowercase name/brand so the
+    // cached row is name-searchable via CatalogCacheDao.search.
+    private fun Food.toCacheEntity(now: Long) = CatalogCacheEntity(
+        type = CACHE_TYPE,
+        id = foodId,
+        json = foodAdapter.toJson(this),
+        updatedAt = now,
+        nameLower = name.lowercase(),
+        brandLower = brand?.lowercase(),
+    )
 
     private fun decode(json: String): Food? =
         runCatching { foodAdapter.fromJson(json) }.getOrNull()
 
     private companion object {
         const val CACHE_TYPE = "food"
+        const val DEFAULT_SEARCH_LIMIT = 25
     }
 }

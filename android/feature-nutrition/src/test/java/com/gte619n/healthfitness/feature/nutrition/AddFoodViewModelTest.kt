@@ -11,11 +11,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -53,7 +55,37 @@ class AddFoodViewModelTest {
         searchMeals: suspend () -> List<com.gte619n.healthfitness.domain.nutrition.MealSearchResult> = { emptyList() },
     ): NutritionRepository = mockk {
         coEvery { recentMeals(any()) } returns emptyList()
+        coEvery { cachedRecentMeals(any()) } returns emptyList()
+        coEvery { cachedSearchMeals(any(), any()) } returns emptyList()
         coEvery { this@mockk.searchMeals(any()) } coAnswers { searchMeals() }
+    }
+
+    /**
+     * local-first: the cached (local) catalog hits must render on the SAME frame
+     * the user types — before the 220ms debounce and the network call — then the
+     * authoritative network result replaces them. Guards the whole point of the
+     * redesign: search never blocks on the network for foods already on device.
+     */
+    @Test
+    fun localResultsShowImmediatelyThenNetworkReplacesThem() = runTest {
+        val local = sampleFood("local")
+        val net = sampleFood("net")
+        val foods = mockk<FoodRepository> {
+            coEvery { localSearch(any(), any()) } returns listOf(local)
+            coEvery { search(any()) } returns listOf(net)
+        }
+        val vm = viewModel(foods, nutritionRepo())
+
+        vm.onQueryChange("chicken")
+        runCurrent() // run the instant local pass, but NOT the 220ms debounce
+
+        assertEquals(listOf(local), vm.state.value.results)
+        assertTrue(vm.state.value.searching)
+
+        advanceUntilIdle() // clear the debounce + let the network pass settle
+
+        assertEquals(listOf(net), vm.state.value.results)
+        assertFalse(vm.state.value.searching)
     }
 
     /**
