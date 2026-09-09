@@ -372,6 +372,26 @@ class WorkoutSessionViewModel @Inject constructor(
     /** "Skip rest" — stop the shared countdown early. */
     fun dismissRest() = timers.clearRest()
 
+    // ---- timed-hold get-ready pre-roll (shares the rest countdown + notification) ----
+
+    /**
+     * Start the get-ready pre-roll before a timed hold, routed through the same
+     * shared countdown as rest so it renders in the overlay and the foreground
+     * notification (and so it survives backgrounding, unlike the old Compose-local
+     * pre-roll). The hold timer owns the transition into the hold; this only drives
+     * the countdown.
+     */
+    fun startGetReady(seconds: Int) = timers.startGetReady(seconds, now())
+
+    /** Freeze the get-ready pre-roll (its Pause control). */
+    fun pauseTimer() = timers.pause(now())
+
+    /** Resume a frozen get-ready pre-roll (its Resume control). */
+    fun resumeTimer() = timers.resume(now())
+
+    /** Restart the get-ready pre-roll from the top (its Reset control). */
+    fun resetTimer() = timers.reset(now())
+
     fun requestFinish() = _state.update { it.copy(prompt = SessionPrompt.FINISH_SUMMARY) }
 
     fun requestSkip() = _state.update { it.copy(prompt = SessionPrompt.SKIP) }

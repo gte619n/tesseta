@@ -27,6 +27,7 @@
     <string name="workout_session_hold_stop">Stop · %1$s</string>
     <string name="workout_session_hold_target">Target %1$s</string>
     <string name="workout_session_get_ready_start_now">Start now</string>
+    <string name="workout_session_get_ready_label">Get ready</string>
     <string name="workout_session_get_ready_countdown">Get ready · starting in %1$s</string>
     <string name="workout_session_get_ready_paused">Paused · %1$s to go</string>
     <string name="workout_session_hold_pause">Pause</string>
