@@ -66,12 +66,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -91,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.Kind
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
@@ -199,6 +202,10 @@ fun WorkoutSessionRoute(
         onLogTimed = viewModel::logTimedSet,
         onLogSet = viewModel::logSet,
         onDismissRest = viewModel::dismissRest,
+        onStartGetReady = viewModel::startGetReady,
+        onPauseTimer = viewModel::pauseTimer,
+        onResumeTimer = viewModel::resumeTimer,
+        onResetTimer = viewModel::resetTimer,
         onRequestFinish = viewModel::requestFinish,
         onRequestSkip = viewModel::requestSkip,
         onRequestDiscard = viewModel::requestDiscard,
@@ -231,6 +238,11 @@ fun WorkoutSessionScreen(
     onLogTimed: (PrescriptionKey, Int) -> Unit,
     onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
+    // Timed-hold get-ready pre-roll controls (routed through the shared countdown).
+    onStartGetReady: (Int) -> Unit = {},
+    onPauseTimer: () -> Unit = {},
+    onResumeTimer: () -> Unit = {},
+    onResetTimer: () -> Unit = {},
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
     onRequestDiscard: () -> Unit,
@@ -318,6 +330,10 @@ fun WorkoutSessionScreen(
                 onLogTimed = onLogTimed,
                 onLogSet = onLogSet,
                 onDismissRest = onDismissRest,
+                onStartGetReady = onStartGetReady,
+                onPauseTimer = onPauseTimer,
+                onResumeTimer = onResumeTimer,
+                onResetTimer = onResetTimer,
                 onRequestFinish = onRequestFinish,
                 onRequestSkip = onRequestSkip,
                 onRequestDiscard = onRequestDiscard,
@@ -394,6 +410,10 @@ private fun SessionBody(
     onLogTimed: (PrescriptionKey, Int) -> Unit,
     onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
+    onStartGetReady: (Int) -> Unit,
+    onPauseTimer: () -> Unit,
+    onResumeTimer: () -> Unit,
+    onResetTimer: () -> Unit,
     onRequestFinish: () -> Unit,
     onRequestSkip: () -> Unit,
     onRequestDiscard: () -> Unit,
@@ -469,6 +489,9 @@ private fun SessionBody(
         // restarting this effect with null and cancelling the pending cue.
         LaunchedEffect(restTimer, voiceEnabled) {
             val timer = restTimer ?: return@LaunchedEffect
+            // Only the between-sets rest announces "Rest N seconds"; the get-ready
+            // pre-roll speaks its own "get ready for X" from the hold timer.
+            if (timer.kind != Kind.REST) return@LaunchedEffect
             if (!voiceEnabled || overview) return@LaunchedEffect
             val remaining = timer.remainingSeconds(Instant.now())
             // Announce the rest only if it just started — a resume mid-rest
@@ -489,6 +512,9 @@ private fun SessionBody(
         val whistle = rememberWhistle()
         LaunchedEffect(restTimer) {
             val timer = restTimer ?: return@LaunchedEffect
+            // Only a rep set's rest expiry is a "start your set" cue; the get-ready
+            // pre-roll's own "go" whistle is blown by the hold timer on hold start.
+            if (timer.kind != Kind.REST) return@LaunchedEffect
             val remaining = timer.remainingSeconds(Instant.now())
             if (remaining <= 0) return@LaunchedEffect
             delay(remaining * 1_000)
@@ -551,9 +577,16 @@ private fun SessionBody(
                 delay(250)
             }
         }
+        // The kind of the shared countdown drives the overlay/bar labelling; the
+        // get-ready pre-roll (when active) is also handed to the timed-hold card so
+        // its Start now / Pause / Reset drive the same shared timer.
+        val restKind = restTimer?.kind
+        val getReady = restTimer?.takeIf { it.kind == Kind.GET_READY }
 
         if (overview) {
-            restRemaining?.let { RestTimerBar(remainingSeconds = it, onDismiss = onDismissRest) }
+            restRemaining?.let {
+                RestTimerBar(remainingSeconds = it, kind = restKind, onDismiss = onDismissRest)
+            }
             OverviewList(
                 steps = steps,
                 logged = draft.logged,
@@ -602,7 +635,13 @@ private fun SessionBody(
                     onLogTimed = { seconds -> onLogTimed(step.key, seconds) },
                     onLogSet = { set -> onLogSet(step.key, set) },
                     restRemainingSeconds = restRemaining,
+                    restKind = restKind,
                     onDismissRest = onDismissRest,
+                    getReady = getReady,
+                    onStartGetReady = onStartGetReady,
+                    onPauseTimer = onPauseTimer,
+                    onResumeTimer = onResumeTimer,
+                    onResetTimer = onResetTimer,
                     autoStart = autoStartStep == page,
                     onAutoStartConsumed = { if (autoStartStep == page) autoStartStep = null },
                     showStart = showStart,
@@ -634,7 +673,8 @@ private fun announceStep(
 }
 
 @Composable
-private fun RestTimerBar(remainingSeconds: Long, onDismiss: () -> Unit) {
+private fun RestTimerBar(remainingSeconds: Long, kind: Kind?, onDismiss: () -> Unit) {
+    val getReady = kind == Kind.GET_READY
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -650,20 +690,25 @@ private fun RestTimerBar(remainingSeconds: Long, onDismiss: () -> Unit) {
             modifier = Modifier.size(16.dp),
         )
         Text(
-            stringResource(
-                R.string.workout_session_rest_remaining,
-                restCountdownLabel(remainingSeconds),
-            ),
+            if (getReady) {
+                stringResource(R.string.workout_session_get_ready_countdown, restCountdownLabel(remainingSeconds))
+            } else {
+                stringResource(R.string.workout_session_rest_remaining, restCountdownLabel(remainingSeconds))
+            },
             style = Hf.type.monoMd,
             color = Hf.colors.accentDim,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onDismiss) {
-            Text(
-                stringResource(R.string.workout_session_rest_skip),
-                style = Hf.type.bodySm,
-                color = Hf.colors.accent,
-            )
+        // The get-ready pre-roll's controls (Start now / Pause / Reset) live in the
+        // hold card, so the bar shows no Skip; rest keeps its Skip affordance.
+        if (!getReady) {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    stringResource(R.string.workout_session_rest_skip),
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.accent,
+                )
+            }
         }
     }
 }
@@ -693,9 +738,17 @@ private fun ExercisePage(
     onEditSet: (Int, LoggedSet) -> Unit,
     onLogTimed: (Int) -> Unit,
     onLogSet: (LoggedSet) -> Unit,
-    // Non-null while a rest is running: seconds left, ticked off the shared timer.
+    // Non-null while a countdown is running: seconds left, ticked off the shared timer.
     restRemainingSeconds: Long? = null,
+    // The kind of the shared countdown (rest vs get-ready pre-roll), for overlay labelling.
+    restKind: Kind? = null,
     onDismissRest: () -> Unit = {},
+    // The get-ready pre-roll timer + its controls, driving the timed-hold card.
+    getReady: RestTimer? = null,
+    onStartGetReady: (Int) -> Unit = {},
+    onPauseTimer: () -> Unit = {},
+    onResumeTimer: () -> Unit = {},
+    onResetTimer: () -> Unit = {},
     autoStart: Boolean = false,
     onAutoStartConsumed: () -> Unit = {},
     // Session not yet started: the rep card's primary action reads "Start workout"
@@ -771,6 +824,7 @@ private fun ExercisePage(
                 restRemainingSeconds?.let { remaining ->
                     RestOverlay(
                         remainingSeconds = remaining,
+                        kind = restKind,
                         onDismiss = onDismissRest,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -785,6 +839,12 @@ private fun ExercisePage(
                     now = now,
                     voiceEnabled = voiceEnabled,
                     announce = announce,
+                    getReady = getReady,
+                    onStartGetReady = onStartGetReady,
+                    onPauseTimer = onPauseTimer,
+                    onResumeTimer = onResumeTimer,
+                    onResetTimer = onResetTimer,
+                    onClearGetReady = onDismissRest,
                     autoStart = autoStart,
                     onAutoStartConsumed = onAutoStartConsumed,
                     onToggleSet = onToggleSet,
@@ -1144,13 +1204,20 @@ private fun SwapExerciseRow(
     }
 }
 
-/** The rest countdown, large and centered, laid over the demo hero while resting. */
+/**
+ * The shared countdown, large and centered, laid over the demo hero. Used for
+ * both the between-sets rest ([Kind.REST], with a Skip button) and the timed-hold
+ * get-ready pre-roll ([Kind.GET_READY], whose Start now / Pause / Reset controls
+ * live in the hold card below — so the overlay is display-only, no Skip).
+ */
 @Composable
 private fun RestOverlay(
     remainingSeconds: Long,
+    kind: Kind?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val getReady = kind == Kind.GET_READY
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -1161,21 +1228,29 @@ private fun RestOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            CapsLabel(stringResource(R.string.workout_session_rest_label), color = Hf.colors.accent)
+            CapsLabel(
+                stringResource(
+                    if (getReady) R.string.workout_session_get_ready_label
+                    else R.string.workout_session_rest_label,
+                ),
+                color = Hf.colors.accent,
+            )
             Text(
                 restCountdownLabel(remainingSeconds),
                 style = Hf.type.monoLg.copy(fontSize = 72.sp),
                 color = Hf.colors.textPrimary,
             )
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
-            ) {
-                Text(
-                    stringResource(R.string.workout_session_rest_skip),
-                    style = Hf.type.bodyMd,
-                    color = Hf.colors.textInverse,
-                )
+            if (!getReady) {
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Hf.colors.accent),
+                ) {
+                    Text(
+                        stringResource(R.string.workout_session_rest_skip),
+                        style = Hf.type.bodyMd,
+                        color = Hf.colors.textInverse,
+                    )
+                }
             }
         }
     }
@@ -1641,6 +1716,12 @@ private fun TimedSetsSection(
     now: Instant,
     voiceEnabled: Boolean,
     announce: (String) -> Unit,
+    getReady: RestTimer?,
+    onStartGetReady: (Int) -> Unit,
+    onPauseTimer: () -> Unit,
+    onResumeTimer: () -> Unit,
+    onResetTimer: () -> Unit,
+    onClearGetReady: () -> Unit,
     autoStart: Boolean,
     onAutoStartConsumed: () -> Unit,
     onToggleSet: (Int) -> Unit,
@@ -1687,6 +1768,12 @@ private fun TimedSetsSection(
                         now = now,
                         voiceEnabled = voiceEnabled,
                         announce = announce,
+                        getReady = getReady,
+                        onStartGetReady = onStartGetReady,
+                        onPauseTimer = onPauseTimer,
+                        onResumeTimer = onResumeTimer,
+                        onResetTimer = onResetTimer,
+                        onClearGetReady = onClearGetReady,
                         autoStart = autoStartSet == pendingIndex,
                         onAutoStartConsumed = {
                             autoStartSet = -1
@@ -1770,11 +1857,13 @@ private fun CompletedTimedRow(
  * [rememberWhistle] blast plays the instant the clock starts (pre-roll → hold,
  * or a manual start), the "go" cue.
  *
- * Both the pre-roll and the running hold can be paused and reset ("sometimes
- * you're just not ready"): pause freezes the clock, reset returns the pre-roll to
- * the full rest or the hold to idle. State is kept as an accumulated-seconds base
- * plus a wall-clock anchor in `rememberSaveable`, so a config change /
- * backgrounding doesn't lose a paused or in-progress timer.
+ * The pre-roll is routed through the shared [WorkoutSessionTimers] countdown
+ * ([getReady]) — the same one the between-sets rest uses — so it renders in the
+ * big [RestOverlay] over the demo and, crucially, keeps ticking in the foreground
+ * notification when the app is backgrounded (the old Compose-local pre-roll just
+ * vanished). Its Start now / Pause / Reset controls drive that shared timer via
+ * the callbacks. The running hold stays Compose-local (accumulated-seconds base +
+ * wall-clock anchor in `rememberSaveable`); its own Pause/Reset are unchanged.
  */
 @Composable
 private fun HoldTimer(
@@ -1782,6 +1871,14 @@ private fun HoldTimer(
     now: Instant,
     voiceEnabled: Boolean,
     announce: (String) -> Unit,
+    // The shared get-ready pre-roll timer (non-null while it's running/paused for
+    // this pending set), plus the callbacks its controls drive.
+    getReady: RestTimer?,
+    onStartGetReady: (Int) -> Unit,
+    onPauseTimer: () -> Unit,
+    onResumeTimer: () -> Unit,
+    onResetTimer: () -> Unit,
+    onClearGetReady: () -> Unit,
     autoStart: Boolean,
     onAutoStartConsumed: () -> Unit,
     onLog: (Int) -> Unit,
@@ -1791,24 +1888,24 @@ private fun HoldTimer(
     val target = targetSeconds ?: 0
     // The pre-roll counts down the prescribed rest between sets; fall back to a
     // short fixed lead-in when the prescription sets none.
-    val prerollTotal = (prescription.restSeconds?.takeIf { it > 0 } ?: GET_READY_SECONDS.toInt()).toLong()
+    val prerollTotal = (prescription.restSeconds?.takeIf { it > 0 } ?: GET_READY_SECONDS.toInt())
 
-    // Pre-roll and hold both use an accumulated-seconds base + a running anchor
-    // (epoch millis, null when paused) so pause/reset survive recomposition.
-    var prerollBase by rememberSaveable { mutableStateOf(0L) }
-    var prerollAnchor by rememberSaveable { mutableStateOf<Long?>(null) }
-    var prerollArmed by rememberSaveable { mutableStateOf(false) }
+    // Pre-roll state is derived from the shared timer; the hold keeps a local
+    // accumulated-seconds base + a wall-clock anchor (null when paused).
+    val prerollActive = getReady != null
+    val prerollRunning = getReady?.isRunning(now) == true
+    val prerollPaused = getReady?.isPaused == true
+    val prerollRemaining = getReady?.remainingSeconds(now) ?: 0L
+
     var holdBase by rememberSaveable { mutableStateOf(0L) }
     var holdAnchor by rememberSaveable { mutableStateOf<Long?>(null) }
     var holdArmed by rememberSaveable { mutableStateOf(false) }
+    // True once this timer has finished/handed off its hold, so its dispose-time
+    // cleanup won't clear the *next* set's freshly-started get-ready.
+    var handedOff by rememberSaveable { mutableStateOf(false) }
 
     fun secondsSince(anchorMillis: Long): Long =
         Duration.between(Instant.ofEpochMilli(anchorMillis), now).seconds.coerceAtLeast(0L)
-
-    val prerollElapsed = prerollBase + (prerollAnchor?.let { secondsSince(it) } ?: 0L)
-    val prerollRemaining = (prerollTotal - prerollElapsed).coerceAtLeast(0L)
-    val prerollRunning = prerollArmed && prerollAnchor != null
-    val prerollPaused = prerollArmed && prerollAnchor == null
 
     val elapsed = holdBase + (holdAnchor?.let { secondsSince(it) } ?: 0L)
     val holdRunning = holdArmed && holdAnchor != null
@@ -1823,15 +1920,9 @@ private fun HoldTimer(
 
     fun nowMillis() = Instant.now().toEpochMilli()
 
-    fun startPreroll() {
-        prerollArmed = true
-        prerollBase = 0L
-        prerollAnchor = nowMillis()
-    }
-
     fun startHold() {
-        prerollArmed = false
-        prerollAnchor = null
+        // Skipping / finishing the pre-roll clears the shared get-ready timer.
+        onClearGetReady()
         firedHalf = false; firedTen = false; firedDone = false
         holdArmed = true
         holdBase = 0L
@@ -1840,12 +1931,12 @@ private fun HoldTimer(
         whistle()
     }
 
-    // Enter the rest pre-roll when handed off from a completed hold, then consume
-    // the signal so a later recomposition / return to this page can't re-arm it.
-    // Announces the upcoming hold once, up front.
+    // Enter the shared get-ready pre-roll when handed off from a completed hold,
+    // then consume the signal so a later recomposition / return to this page can't
+    // re-arm it. Announces the upcoming hold once, up front.
     LaunchedEffect(autoStart) {
-        if (autoStart && !holdArmed && !prerollArmed) {
-            startPreroll()
+        if (autoStart && !holdArmed && getReady == null) {
+            onStartGetReady(prerollTotal)
             if (voiceEnabled) getReadyAnnouncement(prescription)?.let(announce)
             onAutoStartConsumed()
         }
@@ -1854,6 +1945,19 @@ private fun HoldTimer(
     // The pre-roll running out auto-starts the hold (a paused pre-roll waits).
     LaunchedEffect(prerollRemaining, prerollRunning) {
         if (prerollRunning && prerollRemaining <= 0L) startHold()
+    }
+
+    // If the user leaves this exercise while its get-ready is still counting (it
+    // never started the hold), clear the shared timer so it can't linger in the
+    // overlay/notification on the next page. `handedOff` keeps a completed hold's
+    // dispose from clobbering the next set's just-started pre-roll.
+    val armedNow by rememberUpdatedState(holdArmed)
+    val handedOffNow by rememberUpdatedState(handedOff)
+    val prerollActiveNow by rememberUpdatedState(prerollActive)
+    DisposableEffect(Unit) {
+        onDispose {
+            if (prerollActiveNow && !armedNow && !handedOffNow) onClearGetReady()
+        }
     }
 
     // Fire the halfway / ten-seconds-left cues as the count-up crosses each mark,
@@ -1879,6 +1983,7 @@ private fun HoldTimer(
             // Mark the set complete automatically and hand the block on.
             onLog(target)
             onAutoComplete()
+            handedOff = true
             holdArmed = false
             holdAnchor = null
         }
@@ -1889,11 +1994,12 @@ private fun HoldTimer(
         onClick = {
             when {
                 // During the pre-roll (running or paused), skip straight to the hold.
-                prerollArmed -> startHold()
+                prerollActive -> startHold()
                 // Tap while holding (or paused mid-hold) logs early with whatever
                 // time is on the clock; no hand-off to the next set's pre-roll.
                 holdArmed -> {
                     onLog(elapsed.toInt())
+                    handedOff = true
                     holdArmed = false
                     holdAnchor = null
                     firedHalf = false; firedTen = false; firedDone = false
@@ -1915,7 +2021,7 @@ private fun HoldTimer(
         Spacer(Modifier.width(6.dp))
         Text(
             when {
-                prerollArmed -> stringResource(R.string.workout_session_get_ready_start_now)
+                prerollActive -> stringResource(R.string.workout_session_get_ready_start_now)
                 holdArmed -> stringResource(R.string.workout_session_hold_stop, restCountdownLabel(elapsed))
                 else -> stringResource(R.string.workout_session_hold_start)
             },
@@ -1924,7 +2030,7 @@ private fun HoldTimer(
         )
     }
     // Pause/Resume + Reset controls, shown whenever a pre-roll or hold is armed.
-    if (prerollArmed || holdArmed) {
+    if (prerollActive || holdArmed) {
         Spacer(Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1939,8 +2045,9 @@ private fun HoldTimer(
                 modifier = Modifier.weight(1f),
                 onClick = {
                     when {
-                        prerollRunning -> { prerollBase = prerollElapsed; prerollAnchor = null }
-                        prerollPaused -> prerollAnchor = nowMillis()
+                        // Pre-roll pause/resume drive the shared countdown.
+                        prerollRunning -> onPauseTimer()
+                        prerollPaused -> onResumeTimer()
                         holdRunning -> { holdBase = elapsed; holdAnchor = null }
                         holdPaused -> holdAnchor = nowMillis()
                     }
@@ -1951,10 +2058,9 @@ private fun HoldTimer(
                 icon = Icons.Filled.Refresh,
                 modifier = Modifier.weight(1f),
                 onClick = {
-                    if (prerollArmed) {
-                        // Restart the rest countdown from the top; keep running/paused.
-                        prerollBase = 0L
-                        if (prerollAnchor != null) prerollAnchor = nowMillis()
+                    if (prerollActive) {
+                        // Restart the shared countdown from the top; keeps running/paused.
+                        onResetTimer()
                     } else {
                         // Reset the hold all the way back to idle ("not ready yet").
                         holdArmed = false
@@ -1968,11 +2074,9 @@ private fun HoldTimer(
     }
     Spacer(Modifier.height(4.dp))
     Text(
+        // The big overlay carries the running countdown; the card's line just
+        // clarifies a paused/idle state.
         when {
-            prerollRunning -> stringResource(
-                R.string.workout_session_get_ready_countdown,
-                restCountdownLabel(prerollRemaining),
-            )
             prerollPaused -> stringResource(
                 R.string.workout_session_get_ready_paused,
                 restCountdownLabel(prerollRemaining),
@@ -1981,14 +2085,14 @@ private fun HoldTimer(
                 R.string.workout_session_hold_paused,
                 restCountdownLabel(elapsed),
             )
-            !holdArmed && targetSeconds != null -> stringResource(
+            !holdArmed && !prerollActive && targetSeconds != null -> stringResource(
                 R.string.workout_session_hold_target,
                 restCountdownLabel(targetSeconds.toLong()),
             )
             else -> ""
         },
         style = Hf.type.bodySm,
-        color = if (prerollArmed) Hf.colors.accent else Hf.colors.textTertiary,
+        color = if (prerollActive) Hf.colors.accent else Hf.colors.textTertiary,
     )
 }
 

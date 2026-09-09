@@ -1,11 +1,13 @@
 package com.gte619n.healthfitness.mobile.workouts
 
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.Kind
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
 import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.session.prefillFor
+import com.gte619n.healthfitness.feature.workouts.session.restCountdownLabel
 import java.time.Instant
 
 /**
@@ -59,12 +61,33 @@ object WorkoutSessionNotificationContent {
     ): Content {
         val current = currentSet(draft, lastSets)
         return when {
-            rest != null && rest.isRunning(now) -> Content(
-                title = draft.scheduled.dayLabel,
-                text = if (current != null) "Resting — next: ${current.describe()}" else "Resting",
-                elapsedSinceMillis = null,
-                countdownToMillis = rest.endsAt.toEpochMilli(),
-            )
+            rest != null && rest.isRunning(now) -> {
+                // The get-ready pre-roll before a timed hold and the between-sets
+                // rest share the countdown; only the verb differs.
+                val verb = if (rest.kind == Kind.GET_READY) "Get ready" else "Resting"
+                Content(
+                    title = draft.scheduled.dayLabel,
+                    text = if (current != null) "$verb — next: ${current.describe()}" else verb,
+                    elapsedSinceMillis = null,
+                    countdownToMillis = rest.endsAt?.toEpochMilli(),
+                )
+            }
+            // A paused get-ready pre-roll: the chronometer can't count a frozen
+            // clock, so bake the time-left into the text (buildNotification's
+            // no-chronometer branch renders it).
+            rest != null && rest.isPaused -> {
+                val remaining = restCountdownLabel(rest.remainingSeconds(now))
+                Content(
+                    title = draft.scheduled.dayLabel,
+                    text = if (current != null) {
+                        "Paused · $remaining — next: ${current.describe()}"
+                    } else {
+                        "Paused · $remaining"
+                    },
+                    elapsedSinceMillis = null,
+                    countdownToMillis = null,
+                )
+            }
             else -> Content(
                 title = draft.scheduled.dayLabel,
                 text = if (current != null) {

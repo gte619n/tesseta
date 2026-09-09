@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.mobile.workouts
 
+import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.Block
 import com.gte619n.healthfitness.domain.workouts.program.BlockType
@@ -160,7 +161,7 @@ class WorkoutSessionNotificationContentTest {
         val content = WorkoutSessionNotificationContent.from(draft(), rest = rest, now = now)
 
         assertEquals("Resting — next: Air Bike · Set 1 of 1", content.text)
-        assertEquals(rest.endsAt.toEpochMilli(), content.countdownToMillis)
+        assertEquals(now.plusSeconds(45).toEpochMilli(), content.countdownToMillis)
         assertNull(content.elapsedSinceMillis)
     }
 
@@ -173,6 +174,37 @@ class WorkoutSessionNotificationContentTest {
         assertEquals("Now: Air Bike · Set 1 of 1", content.text)
         assertEquals(startedAt.toEpochMilli(), content.elapsedSinceMillis)
         assertNull(content.countdownToMillis)
+    }
+
+    @Test
+    fun `running get-ready pre-roll reads Get ready and still counts down`() {
+        val getReady = RestTimer(
+            totalSeconds = 45,
+            endsAt = now.plusSeconds(30),
+            kind = WorkoutSessionTimers.Kind.GET_READY,
+        )
+
+        val content = WorkoutSessionNotificationContent.from(draft(), rest = getReady, now = now)
+
+        assertEquals("Get ready — next: Air Bike · Set 1 of 1", content.text)
+        assertEquals(now.plusSeconds(30).toEpochMilli(), content.countdownToMillis)
+        assertNull(content.elapsedSinceMillis)
+    }
+
+    @Test
+    fun `paused get-ready pre-roll freezes with no chronometer, time baked into text`() {
+        val paused = RestTimer(
+            totalSeconds = 45,
+            endsAt = null,
+            pausedRemainingSeconds = 30,
+            kind = WorkoutSessionTimers.Kind.GET_READY,
+        )
+
+        val content = WorkoutSessionNotificationContent.from(draft(), rest = paused, now = now)
+
+        assertEquals("Paused · 0:30 — next: Air Bike · Set 1 of 1", content.text)
+        assertNull(content.countdownToMillis)
+        assertNull(content.elapsedSinceMillis)
     }
 
     // ---- fixtures ----------------------------------------------------------

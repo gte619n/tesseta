@@ -156,20 +156,26 @@ class WorkoutSessionService : Service() {
         }
     }
 
-    /** The rest timer, re-emitted as null once its countdown runs out. */
+    /**
+     * The countdown, re-emitted as null once it runs out. A paused get-ready
+     * pre-roll (null `endsAt`) schedules no expiry — it just stays until resumed.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun restWithExpiry(): Flow<WorkoutSessionTimers.RestTimer?> =
         timers.rest.flatMapLatest { rest ->
             flow {
                 emit(rest)
-                if (rest != null) {
-                    val remaining = Duration.between(Instant.now(), rest.endsAt).toMillis()
+                val endsAt = rest?.endsAt
+                if (rest != null && endsAt != null) {
+                    val remaining = Duration.between(Instant.now(), endsAt).toMillis()
                     if (remaining > 0) {
                         // The delay is cancelled (no alert) when the user skips
-                        // rest or logs the next set — flatMapLatest tears down this
-                        // inner flow — so the buzz only fires on a true expiry.
+                        // rest, pauses, or logs the next set — flatMapLatest tears
+                        // down this inner flow — so the buzz only fires on a true
+                        // expiry. Only the between-sets rest gets the audible end
+                        // cue; the get-ready "go" is the hold timer's own whistle.
                         delay(remaining)
-                        onRestExpired()
+                        if (rest.kind == WorkoutSessionTimers.Kind.REST) onRestExpired()
                     }
                     emit(null)
                 }
