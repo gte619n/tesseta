@@ -267,7 +267,9 @@ fun WorkoutSessionScreen(
         HfScreenHeader(
             title = draft?.scheduled?.dayLabel?.ifBlank { null }
                 ?: stringResource(R.string.workout_session_title),
-            subtitle = draft?.let {
+            // Don't run the elapsed clock until the lifter taps Start — the draft
+            // (and its startedAt) exists from the moment the screen opens.
+            subtitle = draft?.takeIf { started }?.let {
                 val elapsedSeconds =
                     Duration.between(it.startedAt, now).toMillis().coerceAtLeast(0L) / 1000L
                 stringResource(R.string.workout_session_elapsed, elapsedLabel(elapsedSeconds))

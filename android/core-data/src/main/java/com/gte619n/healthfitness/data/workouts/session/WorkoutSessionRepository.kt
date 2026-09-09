@@ -128,6 +128,26 @@ class WorkoutSessionRepository(
         }
     }
 
+    /**
+     * #5 — the lifter tapped "Start workout". The draft (and its [startedAt]) is
+     * created when the coach screen opens, which can be well before the tap; re-
+     * anchor the clock to now so the elapsed timer — and the duration recorded on
+     * [finish] — counts from the start tap, not from when the screen was opened.
+     */
+    suspend fun markStarted(
+        programId: String,
+        scheduledId: String,
+    ): Result<WorkoutSessionDraft> = withContext(io) {
+        runCatching {
+            val entity = draftDao.getByKey(programId, scheduledId)
+                ?: error("No active draft for $programId/$scheduledId")
+            val now = clock()
+            val updated = entity.copy(startedAt = now, lastActivityAt = now)
+            draftDao.upsert(updated)
+            updated.toDomain() ?: error("Draft for $programId/$scheduledId failed to decode")
+        }
+    }
+
     suspend fun updateSets(
         programId: String,
         scheduledId: String,
