@@ -10,12 +10,19 @@ import androidx.room.Entity
  * a previously-seen detail INSTANTLY on re-entry and survive offline, per ADR-0018.
  *
  * One table serves all the catalog repos; [type] namespaces the rows (e.g.
- * "equipment", "food", "drug") so a single migration + DAO covers every catalog.
- * [json] is the Moshi-serialized wire/domain object (opaque to the DB layer);
- * [updatedAt] is the device epoch-millis of the last fetch (freshness only — it is
- * never a sync cursor). Bounded by construction: the repos only upsert the exact
- * items they fetch, so the table grows with what the user has browsed, not with the
- * full backend catalog.
+ * "equipment", "food", "drug", "meal") so a single migration + DAO covers every
+ * catalog. [json] is the Moshi-serialized wire/domain object (opaque to the DB
+ * layer); [updatedAt] is the device epoch-millis of the last fetch (freshness only
+ * — it is never a sync cursor). Bounded by construction: the repos only upsert the
+ * exact items they fetch, so the table grows with what the user has browsed, not
+ * with the full backend catalog.
+ *
+ * food-search-local-first: [nameLower]/[brandLower] are denormalized lowercase
+ * copies of the entity's name/brand so the cache is searchable BY NAME (not just by
+ * id) — the add-food search serves these instantly before the network responds.
+ * Nullable because rows cached before the v7 migration (and catalog types that have
+ * no brand) leave them unset; a row with a null [nameLower] is simply invisible to
+ * name search until it's re-fetched and re-cached with the columns populated.
  */
 @Entity(tableName = "catalog_cache", primaryKeys = ["type", "id"])
 data class CatalogCacheEntity(
@@ -23,4 +30,6 @@ data class CatalogCacheEntity(
     val id: String,
     val json: String,
     val updatedAt: Long,
+    val nameLower: String? = null,
+    val brandLower: String? = null,
 )

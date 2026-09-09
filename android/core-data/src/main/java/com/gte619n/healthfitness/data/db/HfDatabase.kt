@@ -127,7 +127,11 @@ import net.sqlcipher.database.SupportFactory
     // nutrition AI-create flows (describe / saved-meal / meal-items / label).
     // Additive MIGRATION_5_6; device-local (holds an in-flight op that a wipe
     // would drop), not a mirror and not synced.
-    version = 6,
+    // v7: adds nameLower/brandLower to catalog_cache (food-search-local-first) so
+    // the add-food search can serve cached foods/meals by name instantly, ahead of
+    // the network. Additive MIGRATION_6_7 (two nullable columns); existing cache
+    // rows stay valid and become name-searchable as they're re-fetched.
+    version = 7,
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {
@@ -231,6 +235,20 @@ abstract class HfDatabase : RoomDatabase() {
         }
 
         /**
+         * v6 → v7: add nameLower/brandLower to catalog_cache (food-search-local-
+         * first). Two nullable TEXT columns so the add-column is additive and
+         * needs no backfill — rows re-cache with the columns populated on next
+         * fetch. Must match the exported schema 7.json exactly so Room's
+         * identity-hash validation passes.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `catalog_cache` ADD COLUMN `nameLower` TEXT")
+                db.execSQL("ALTER TABLE `catalog_cache` ADD COLUMN `brandLower` TEXT")
+            }
+        }
+
+        /**
          * Builds the encrypted database. Loads the SQLCipher native libs, fetches
          * the Keystore-wrapped passphrase, and hands it to [SupportFactory]
          * (which copies then zeroes the byte array).
@@ -251,7 +269,7 @@ abstract class HfDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 // Known upgrades run additive migrations (the drafts table holds
                 // device-only data that a wipe would destroy)…
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 // …while schemaVersion bumps (D13) trigger an explicit wipe+resync
                 // at the sync layer, not a Room migration; fall back destructively
                 // so a mismatched on-disk schema can never wedge the app.

@@ -1,8 +1,11 @@
 package com.gte619n.healthfitness.data.nutrition
 
+import com.gte619n.healthfitness.data.db.dao.CatalogCacheDao
 import com.gte619n.healthfitness.data.db.dao.NutritionEntryDao
 import com.gte619n.healthfitness.data.db.dao.NutritionTargetDao
+import com.gte619n.healthfitness.data.db.entity.CatalogCacheEntity
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
+import com.gte619n.healthfitness.data.db.entity.NutritionEntryEntity
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewRequest
@@ -28,6 +31,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapLatest
+import java.time.LocalDate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,6 +63,7 @@ class NutritionRepository @Inject constructor(
     private val api: NutritionApi,
     private val entryDao: NutritionEntryDao,
     private val targetDao: NutritionTargetDao,
+    private val cacheDao: CatalogCacheDao,
     private val support: MirrorRepositorySupport,
     private val ops: NutritionOpEnqueuer,
     private val previews: CapturePreviewStore,
@@ -67,6 +72,7 @@ class NutritionRepository @Inject constructor(
     private val rowAdapter = moshi.adapter(NutritionEntryRow::class.java)
     private val macrosAdapter = moshi.adapter(Macros::class.java)
     private val syncDocAdapter = moshi.adapter(NutritionEntrySyncDoc::class.java)
+    private val mealAdapter = moshi.adapter(MealSearchResult::class.java)
 
     /** Mirror payload for one logged entry: the entry plus the date it belongs to. */
     data class NutritionEntryRow(val date: String, val entry: Entry)
@@ -317,10 +323,42 @@ class NutritionRepository @Inject constructor(
     /**
      * Name-prefix search over the shared saved-meal catalog (user's own first) —
      * the add-flow's "Saved meals" group. Live read; tapping a result logs it by
-     * id via [logDescribedMeal].
+     * id via [logDescribedMeal]. food-search-local-first: every hit is cached
+     * (type [MEAL_CACHE_TYPE]) so [cachedSearchMeals] can serve it instantly next
+     * time, the same warm-on-fetch rail the food catalog uses.
      */
     suspend fun searchMeals(query: String): List<MealSearchResult> =
-        if (query.isBlank()) emptyList() else api.searchMeals(query)
+        if (query.isBlank()) emptyList() else api.searchMeals(query).also { cacheMeals(it) }
+
+    /**
+     * food-search-local-first: name search over the saved meals already cached on
+     * this device — zero network, so the "Saved meals" group populates the instant
+     * the user types. [searchMeals] augments it from the network right after and
+     * warms the cache. [query] is lowercased + LIKE-sanitized here.
+     */
+    suspend fun cachedSearchMeals(query: String, limit: Int = MEAL_SEARCH_LIMIT): List<MealSearchResult> {
+        val q = query.trim().lowercase().replace("%", "").replace("_", "")
+        if (q.isBlank()) return emptyList()
+        return cacheDao.search(MEAL_CACHE_TYPE, q, limit)
+            .mapNotNull { runCatching { mealAdapter.fromJson(it.json) }.getOrNull() }
+    }
+
+    private suspend fun cacheMeals(meals: List<MealSearchResult>) {
+        if (meals.isEmpty()) return
+        val now = System.currentTimeMillis()
+        cacheDao.upsertAll(
+            meals.map {
+                CatalogCacheEntity(
+                    type = MEAL_CACHE_TYPE,
+                    id = it.mealId,
+                    json = mealAdapter.toJson(it),
+                    updatedAt = now,
+                    nameLower = it.name.lowercase(),
+                    brandLower = null,
+                )
+            },
+        )
+    }
 
     /**
      * Archive a saved meal so it stops surfacing in [searchMeals]. Per-user and
@@ -459,6 +497,47 @@ class NutritionRepository @Inject constructor(
      */
     suspend fun recentMeals(days: Int = 14, limit: Int = 20, meal: String? = null): List<Entry> =
         api.recentMeals(days, limit, meal)
+
+    /**
+     * food-search-local-first: the same recent distinct foods/meals as
+     * [recentMeals], but derived PURELY from the local `nutritionEntries` mirror —
+     * no network. The entries are already synced to Room, so the add-flow's default
+     * list (and a blank-query reopen) renders instantly and offline; [recentMeals]
+     * revalidates it right after. Distinct by catalog [Entry.foodId] (falling back
+     * to the lowercased name), newest first, biased toward meals usually eaten at
+     * the [meal] time of day — mirroring the server ordering.
+     */
+    suspend fun cachedRecentMeals(days: Int = 14, limit: Int = 20, meal: String? = null): List<Entry> {
+        val cutoff = LocalDate.now().minusDays(days.toLong()).toString()
+        // observeActive() is already newest-first (lastUpdate DESC), so the first
+        // row seen for a given food is the most recent — keep that one.
+        val recent = entryDao.observeActive().first()
+            .mapNotNull { rowToRecentEntry(it) }
+            .filter { e -> e.foodName.isNotBlank() && (e.date?.let { it >= cutoff } ?: true) }
+        val seen = HashSet<String>()
+        val distinct = recent.filter { seen.add(it.foodId ?: it.foodName.lowercase()) }
+        val ordered =
+            if (meal == null) distinct
+            // Stable sort keeps recency within each group; matching-meal entries first.
+            else distinct.sortedByDescending { it.meal.equals(meal, ignoreCase = true) }
+        return ordered.take(limit)
+    }
+
+    /**
+     * Map a mirror row to a recent-list [Entry], preserving the row's DATE (which
+     * identifies the source entry for a one-tap re-log). Handles both stored row
+     * shapes, the same way [entriesForDate] does.
+     */
+    private fun rowToRecentEntry(row: NutritionEntryEntity): Entry? {
+        runCatching { rowAdapter.fromJson(row.payloadJson) }.getOrNull()?.let { parsed ->
+            return parsed.entry.copy(date = parsed.date, syncState = row.syncState)
+        }
+        runCatching { syncDocAdapter.fromJson(row.payloadJson) }.getOrNull()?.let { doc ->
+            return doc.toEntry(row.id.substringAfter('/', row.id))
+                .copy(date = doc.date, syncState = row.syncState)
+        }
+        return null
+    }
 
     /**
      * One-tap re-log of a recent entry onto [date] under [meal]. Offline-first,
@@ -687,5 +766,10 @@ class NutritionRepository @Inject constructor(
 
     private companion object {
         const val TARGET_ID = "target"
+
+        // food-search-local-first: saved meals share the catalog_cache table,
+        // namespaced by this type; kept distinct from FoodRepository's "food" rows.
+        const val MEAL_CACHE_TYPE = "meal"
+        const val MEAL_SEARCH_LIMIT = 25
     }
 }

@@ -12,7 +12,6 @@ import java.time.LocalTime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,18 +51,27 @@ class AddFoodViewModel @Inject constructor(
 
     private fun loadRecents() {
         viewModelScope.launch {
-            try {
-                // Bias the list toward meals usually eaten at this time of day
-                // (breakfasts at breakfast time, etc.) — same window the sheet
-                // uses to pre-select the meal chip.
-                val currentMeal = Meal.forHour(LocalTime.now().hour)
-                val recents = nutrition.recentMeals(meal = currentMeal.wire)
-                _state.update { it.copy(recents = recents, recentsLoading = false) }
-            } catch (e: Exception) {
-                // Recents are a convenience; a failed load just leaves the list
-                // empty — search/describe/quick-add still work.
-                _state.update { it.copy(recentsLoading = false) }
+            // Bias the list toward meals usually eaten at this time of day
+            // (breakfasts at breakfast time, etc.) — same window the sheet
+            // uses to pre-select the meal chip.
+            val currentMeal = Meal.forHour(LocalTime.now().hour)
+            // local-first: render recents straight from the synced Room mirror so
+            // the sheet opens instantly and works offline…
+            val cached = runCatching { nutrition.cachedRecentMeals(meal = currentMeal.wire) }
+                .getOrDefault(emptyList())
+            if (cached.isNotEmpty()) {
+                _state.update { it.copy(recents = cached, recentsLoading = false) }
+                // …and seed the local food cache with the foods behind these
+                // recents so name search finds them instantly/offline too
+                // (best-effort, background; warmFromIds skips already-cached ids).
+                launch { runCatching { foods.warmFromIds(cached.mapNotNull { e -> e.foodId }) } }
             }
+            // …then revalidate from the network (authoritative ordering/freshness).
+            runCatching { nutrition.recentMeals(meal = currentMeal.wire) }
+                .onSuccess { fresh -> _state.update { it.copy(recents = fresh, recentsLoading = false) } }
+                // Recents are a convenience; a failed refresh just leaves the
+                // cached (or empty) list — search/describe/quick-add still work.
+                .onFailure { _state.update { it.copy(recentsLoading = false) } }
         }
     }
 
@@ -77,32 +85,41 @@ class AddFoodViewModel @Inject constructor(
             return
         }
         searchJob = viewModelScope.launch {
-            delay(220) // debounce keystrokes
-            _state.update { it.copy(searching = true, error = null) }
-            // Saved meals and catalog foods are searched in parallel; a failure in
-            // the meal search just leaves that group empty (catalog still works).
+            // LOCAL PASS — no debounce: serve cached foods/meals the INSTANT the
+            // user types, so the list never blocks on the network (or a cold
+            // backend). This is the local-first win; the network pass below just
+            // revalidates.
+            val localFoods = runCatching { foods.localSearch(query) }.getOrDefault(emptyList())
+            val localMeals = runCatching { nutrition.cachedSearchMeals(query) }.getOrDefault(emptyList())
+            _state.update { st ->
+                st.copy(
+                    // Show local hits now; if we have none for THIS query yet, keep
+                    // the prior results visible (with the spinner) to avoid flashing
+                    // empty between keystrokes.
+                    results = localFoods.ifEmpty { st.results },
+                    mealResults = localMeals.ifEmpty { st.mealResults },
+                    searching = true,
+                    error = null,
+                )
+            }
+            // NETWORK PASS — debounced revalidation. A SUCCESSFUL network read is
+            // authoritative and replaces the local guess; a FAILURE leaves the
+            // local results on screen instead of surfacing an error.
+            delay(220) // debounce keystrokes before the network call
             try {
-                // supervisorScope so a failing child surfaces ONLY through await()
-                // (caught below), instead of propagating up the Job hierarchy to
-                // the uncaught-exception handler and force-closing the app. Under a
-                // plain coroutineScope, a throw from the foods async would crash
-                // even though await() is wrapped in try/catch — the exception has
-                // already cancelled the parent by the time await() rethrows it.
+                // supervisorScope so a failing child surfaces ONLY through its own
+                // failure path (the foods call below, caught here), instead of
+                // propagating up the Job hierarchy to the uncaught-exception handler
+                // and force-closing the app.
                 supervisorScope {
-                    val mealsDeferred = async {
-                        runCatching { nutrition.searchMeals(query) }.getOrDefault(emptyList())
+                    val mealsJob = launch {
+                        runCatching { nutrition.searchMeals(query) }
+                            .onSuccess { meals -> _state.update { it.copy(mealResults = meals) } }
                     }
-                    val foodsDeferred = async { foods.search(query) }
-                    val meals = mealsDeferred.await()
-                    val results = foodsDeferred.await()
-                    _state.update {
-                        it.copy(
-                            searching = false,
-                            results = results,
-                            mealResults = meals,
-                            error = null,
-                        )
-                    }
+                    val net = foods.search(query)
+                    _state.update { it.copy(results = net, error = null) }
+                    mealsJob.join()
+                    _state.update { it.copy(searching = false) }
                 }
             } catch (e: CancellationException) {
                 // A newer keystroke cancelled this search; it isn't an error —
@@ -110,8 +127,17 @@ class AddFoodViewModel @Inject constructor(
                 // structured concurrency rather than surface the cancellation.)
                 throw e
             } catch (e: Exception) {
+                // Network failed — local results may already be on screen. Only
+                // surface an error when there's genuinely nothing to show.
                 _state.update {
-                    it.copy(searching = false, error = e.message ?: "Search failed")
+                    it.copy(
+                        searching = false,
+                        error = if (it.results.isEmpty() && it.mealResults.isEmpty()) {
+                            e.message ?: "Search failed"
+                        } else {
+                            null
+                        },
+                    )
                 }
             }
         }
