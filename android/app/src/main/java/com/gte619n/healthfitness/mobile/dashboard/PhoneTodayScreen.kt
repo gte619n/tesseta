@@ -79,6 +79,9 @@ fun PhoneTodayScreen(
             ) {
                 PhoneHeader(user = ui.user, lastUpdated = ui.lastUpdated)
                 Spacer(Modifier.height(16.dp))
+                // IMPL-DRINK-01 (D7): pinned above the vitals; renders nothing
+                // unless Drink Mode is on (gated inside DrinkCard).
+                com.gte619n.healthfitness.feature.nutrition.DrinkCard(modifier = Modifier.fillMaxWidth())
                 PhoneVitalsGrid(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
                 // Coaching is the primary surface: one tap to start/resume today's
                 // workout (renders nothing on a rest day).

@@ -83,6 +83,8 @@ final class OpenFoodFactsMapper {
             FoodImageStatus.NONE,
             null,
             null,
+            null,
+            null,
             null
         ));
     }

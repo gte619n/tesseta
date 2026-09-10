@@ -48,4 +48,11 @@ interface CatalogCacheDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<CatalogCacheEntity>)
+
+    /**
+     * Evict one cached row. IMPL-DRINK-01 uses this to drop a drink the server no
+     * longer returns (archived / deleted on web) when a warm replaces the cache.
+     */
+    @Query("DELETE FROM catalog_cache WHERE type = :type AND id = :id")
+    suspend fun deleteById(type: String, id: String)
 }

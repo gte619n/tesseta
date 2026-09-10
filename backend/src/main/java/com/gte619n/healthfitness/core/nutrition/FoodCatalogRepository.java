@@ -20,6 +20,15 @@ public interface FoodCatalogRepository {
     /** Barcode equality lookup. Used by barcode resolution in M2. */
     Optional<CatalogFood> findByBarcode(String code);
 
+    /**
+     * Foods created by {@code userId} in the given {@code category} (e.g.
+     * {@code "drink"}). Backs the IMPL-DRINK-01 "my drinks" listing; archived
+     * foods are included and filtered by the caller. Default empty for stubs.
+     */
+    default List<CatalogFood> findByCreatedByAndCategory(String userId, String category) {
+        return List.of();
+    }
+
     void save(CatalogFood food);
 
     /**

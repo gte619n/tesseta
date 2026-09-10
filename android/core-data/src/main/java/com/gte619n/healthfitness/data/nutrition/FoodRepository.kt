@@ -27,7 +27,13 @@ class FoodRepository @Inject constructor(
     private val foodAdapter = moshi.adapter(Food::class.java)
 
     suspend fun search(query: String): List<Food> =
-        api.search(query).also { cache(it) }
+        // IMPL-DRINK-01 (IL-13): drinks belong only on the Drink card, never the
+        // normal add-food search. The backend now excludes `category="drink"` from
+        // its search, but we filter client-side too — dropping drinks before both
+        // the cache write and the returned list — so a stale backend (or a drink
+        // that leaked into the food path) can never surface here or seed the
+        // "food" cache that [localSearch] reads.
+        api.search(query).filterNot { it.isDrink }.also { cache(it) }
 
     /**
      * food-search-local-first: name search over the catalog foods already cached on
@@ -40,7 +46,11 @@ class FoodRepository @Inject constructor(
     suspend fun localSearch(query: String, limit: Int = DEFAULT_SEARCH_LIMIT): List<Food> {
         val q = query.trim().lowercase().replace("%", "").replace("_", "")
         if (q.isBlank()) return emptyList()
-        return cacheDao.search(CACHE_TYPE, q, limit).mapNotNull { decode(it.json) }
+        // IMPL-DRINK-01 (IL-13): keep drinks off the normal add-food search. The
+        // "food" cache is now written drink-free (see [search]/[cache]), but a row
+        // cached before this fix — or via a detail/barcode fetch — could still be a
+        // drink, so filter here too.
+        return cacheDao.search(CACHE_TYPE, q, limit).mapNotNull { decode(it.json) }.filterNot { it.isDrink }
     }
 
     /**
@@ -94,15 +104,22 @@ class FoodRepository @Inject constructor(
 
     // ---- catalog cache (offline-fix) ----
 
+    // IMPL-DRINK-01 (IL-13): a drink must never enter the "food" cache that
+    // [localSearch] reads — the Drink card owns its own `type="drink"` cache. So the
+    // cache writers drop drinks even when a detail/barcode fetch returns one.
     private suspend fun cache(food: Food) {
+        if (food.isDrink) return
         cacheDao.upsert(food.toCacheEntity(System.currentTimeMillis()))
     }
 
     private suspend fun cache(foods: List<Food>) {
-        if (foods.isEmpty()) return
+        val toCache = foods.filterNot { it.isDrink }
+        if (toCache.isEmpty()) return
         val now = System.currentTimeMillis()
-        cacheDao.upsertAll(foods.map { it.toCacheEntity(now) })
+        cacheDao.upsertAll(toCache.map { it.toCacheEntity(now) })
     }
+
+    private val Food.isDrink: Boolean get() = category.equals(DRINK_CATEGORY, ignoreCase = true)
 
     // food-search-local-first: carry the denormalized lowercase name/brand so the
     // cached row is name-searchable via CatalogCacheDao.search.
@@ -121,5 +138,9 @@ class FoodRepository @Inject constructor(
     private companion object {
         const val CACHE_TYPE = "food"
         const val DEFAULT_SEARCH_LIMIT = 25
+
+        // IMPL-DRINK-01 (IL-13): the `Food.category` of a drink; excluded from the
+        // normal food search + food cache (drinks live only on the Drink card).
+        const val DRINK_CATEGORY = "drink"
     }
 }

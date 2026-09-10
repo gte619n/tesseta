@@ -181,6 +181,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideDrinkApi(retrofit: Retrofit): com.gte619n.healthfitness.data.nutrition.DrinkApi =
+        retrofit.create(com.gte619n.healthfitness.data.nutrition.DrinkApi::class.java)
+
+    @Provides
+    @Singleton
     fun provideNutritionCaptureApi(retrofit: Retrofit): NutritionCaptureApi =
         retrofit.create(NutritionCaptureApi::class.java)
 

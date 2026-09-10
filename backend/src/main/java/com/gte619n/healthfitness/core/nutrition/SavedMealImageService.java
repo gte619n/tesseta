@@ -147,7 +147,7 @@ public class SavedMealImageService {
         return new CatalogFood(
             meal.mealId(), name, name.toLowerCase(), null, null, null, null, List.of(), 0,
             FoodSource.GEMINI_DESCRIPTION, null, FoodStatus.UNVERIFIED, 0, null, null,
-            FoodImageStatus.PENDING, null, null, null);
+            FoodImageStatus.PENDING, null, null, null, null, null);
     }
 
     private void markStatus(String mealId, FoodImageStatus status, String url) {

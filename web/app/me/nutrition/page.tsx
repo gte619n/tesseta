@@ -64,7 +64,10 @@ function formatDisplay(date: string): string {
   return d.toLocaleDateString("en-US", opts);
 }
 
-// Build a full day structure with all four meals present (even empty ones)
+// Build a full day structure with the four fixed meals always present (even
+// empty ones). DRINKS is different (D8): its section only appears when the day
+// actually has drink entries, so it's appended after the fixed meals rather
+// than pre-seeded — non-drinkers never see an empty Drinks section.
 function buildDay(day: NutritionDay): NutritionDay {
   const existing = new Map(day.meals.map((m) => [m.meal, m]));
   const meals = MEALS.map((meal) =>
@@ -81,6 +84,8 @@ function buildDay(day: NutritionDay): NutritionDay {
       entries: [],
     },
   );
+  const drinks = existing.get("DRINKS");
+  if (drinks && drinks.entries.length > 0) meals.push(drinks);
   return { ...day, meals };
 }
 

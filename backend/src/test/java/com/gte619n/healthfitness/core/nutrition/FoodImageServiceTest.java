@@ -301,7 +301,7 @@ class FoodImageServiceTest {
             new Macros(165.0, 31.0, 0.0, 3.6, 0.0, 0.0),
             List.of(new ServingSize("100 g", 100.0)), 0,
             FoodSource.GEMINI_PHOTO, null, FoodStatus.UNVERIFIED, 0, null,
-            "https://img/existing.png", FoodImageStatus.READY, "creator", Instant.now(), Instant.now());
+            "https://img/existing.png", FoodImageStatus.READY, "creator", Instant.now(), Instant.now(), null, null);
     }
 
     private static CatalogFood food(String id, FoodImageStatus imageStatus) {
@@ -314,7 +314,7 @@ class FoodImageServiceTest {
             new Macros(165.0, 31.0, 0.0, 3.6, 0.0, 0.0),
             List.of(new ServingSize("100 g", 100.0)), 0,
             FoodSource.GEMINI_PHOTO, null, FoodStatus.UNVERIFIED, 0, null,
-            null, imageStatus, "creator", Instant.now(), updatedAt);
+            null, imageStatus, "creator", Instant.now(), updatedAt, null, null);
     }
 
     private static <T> ObjectProvider<T> empty() {

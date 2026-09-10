@@ -47,6 +47,6 @@ class FoodImageCacheKeyTest {
         return new CatalogFood(
             "id", name, name == null ? null : name.toLowerCase(), brand, null, category,
             null, List.of(), 0, FoodSource.USER, null, FoodStatus.UNVERIFIED, 0, null,
-            null, FoodImageStatus.NONE, "creator", null, null);
+            null, FoodImageStatus.NONE, "creator", null, null, null, null);
     }
 }

@@ -133,6 +133,8 @@ public class UsdaFoodParser {
             FoodImageStatus.NONE,
             null,
             null,
+            null,
+            null,
             null
         ));
     }

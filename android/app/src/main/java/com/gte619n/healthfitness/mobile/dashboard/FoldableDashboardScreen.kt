@@ -78,6 +78,9 @@ fun FoldableDashboardScreen(
             ) {
                 FoldableTopBar(lastUpdated = ui.lastUpdated)
                 Spacer(Modifier.height(18.dp))
+                // IMPL-DRINK-01 (D7): pinned above the vitals row; gated on Drink
+                // Mode inside DrinkCard (renders nothing when off).
+                com.gte619n.healthfitness.feature.nutrition.DrinkCard(modifier = Modifier.fillMaxWidth())
                 FoldableVitalsRow(ui = ui, weightUnit = weightUnit, onRetryWeight = vm::retryBodyComposition)
                 Spacer(Modifier.height(11.dp))
                 CardSwitch(

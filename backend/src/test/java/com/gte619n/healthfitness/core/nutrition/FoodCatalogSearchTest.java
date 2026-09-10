@@ -19,7 +19,22 @@ class FoodCatalogSearchTest {
         return new CatalogFood(
             id, name, name.toLowerCase(), null, null, null, null, List.of(), 0,
             FoodSource.USER, null, FoodStatus.UNVERIFIED, 0, null, null,
-            FoodImageStatus.NONE, null, null, null);
+            FoodImageStatus.NONE, null, null, null, null, null);
+    }
+
+    private static CatalogFood drink(String id, String name) {
+        return new CatalogFood(
+            id, name, name.toLowerCase(), null, null, "drink", null, List.of(), 0,
+            FoodSource.GEMINI_DESCRIPTION, null, FoodStatus.UNVERIFIED, 0, null, null,
+            FoodImageStatus.NONE, null, null, null,
+            new AlcoholInfo(13.0, 148.0, 15.0, 1.1), null);
+    }
+
+    private static CatalogFood archived(String id, String name) {
+        return new CatalogFood(
+            id, name, name.toLowerCase(), null, null, null, null, List.of(), 0,
+            FoodSource.USER, null, FoodStatus.UNVERIFIED, 0, null, null,
+            FoodImageStatus.NONE, null, null, null, null, java.time.Instant.now());
     }
 
     /** A repo whose two search paths return fixed, controllable lists. */
@@ -81,5 +96,29 @@ class FoodCatalogSearchTest {
         List<String> names = svc.search("chicken breast").stream().map(CatalogFood::name).toList();
 
         assertEquals("Chicken Breast", names.get(0), "exact match floats to the top");
+    }
+
+    @Test
+    void excludesDrinksFromNormalSearch() {
+        // IMPL-DRINK-01 (IL-13): a saved drink named "Wine ..." must NOT appear in
+        // the normal food search even when the repo returns it as a token/prefix hit.
+        FoodCatalogService svc = serviceWith(
+            List.of(food("f", "Wine-braised beef"), drink("d", "Red Wine")),
+            List.of(drink("d2", "White Wine")));
+
+        List<String> ids = svc.search("wine").stream().map(CatalogFood::foodId).toList();
+
+        assertEquals(List.of("f"), ids, "only the non-drink food is returned");
+    }
+
+    @Test
+    void excludesArchivedFromNormalSearch() {
+        FoodCatalogService svc = serviceWith(
+            List.of(food("f", "Chicken Breast"), archived("a", "Chicken Nuggets")),
+            List.of());
+
+        List<String> ids = svc.search("chicken").stream().map(CatalogFood::foodId).toList();
+
+        assertEquals(List.of("f"), ids, "archived food is hidden from search");
     }
 }

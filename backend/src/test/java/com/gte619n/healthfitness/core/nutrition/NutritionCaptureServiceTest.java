@@ -142,7 +142,7 @@ class NutritionCaptureServiceTest {
             new Macros(165.0, 31.0, 0.0, 3.6, 0.0, 0.0),
             List.of(new ServingSize("100 g", 100.0)), 0,
             FoodSource.USER, null, FoodStatus.UNVERIFIED, 0, null,
-            null, FoodImageStatus.NONE, "creator", Instant.now(), Instant.now());
+            null, FoodImageStatus.NONE, "creator", Instant.now(), Instant.now(), null, null);
     }
 
     private static <T> ObjectProvider<T> empty() {
