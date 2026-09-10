@@ -34,6 +34,7 @@ import com.gte619n.healthfitness.ui.theme.Hf
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToDrinks: () -> Unit,
     onSignedOut: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -64,6 +65,23 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Edit profile")
+                }
+            }
+        }
+
+        // Drinks catalog management (IMPL-DRINK-01) — add/edit/regenerate/archive
+        // the user's personal drinks, previously web-only.
+        HfCard(transparent = true) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(text = "Drinks")
+                OutlinedButton(
+                    onClick = onNavigateToDrinks,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Manage drinks")
                 }
             }
         }

@@ -2,7 +2,10 @@ package com.gte619n.healthfitness.data.nutrition
 
 import com.gte619n.healthfitness.data.db.dao.CatalogCacheDao
 import com.gte619n.healthfitness.data.db.entity.CatalogCacheEntity
+import com.gte619n.healthfitness.domain.nutrition.DrinkProposal
+import com.gte619n.healthfitness.domain.nutrition.DrinkUpsertRequest
 import com.gte619n.healthfitness.domain.nutrition.Food
+import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.squareup.moshi.Moshi
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -66,6 +69,88 @@ class DrinkRepository @Inject constructor(
     /** One cached drink by id (for freezing its snapshot when logging). */
     suspend fun cachedDrink(foodId: String): Food? =
         cacheDao.getById(DRINK_CACHE_TYPE, foodId)?.let { decode(it.json) }
+
+    // ---- management (Settings › Drinks) --------------------------------------
+    // The phone-side add / edit / regenerate / archive surface, mirroring the web
+    // `me/drinks` page. Every mutation re-warms the local cache on success so the
+    // Drink card immediately reflects the change (new drink appears, edit updates,
+    // archived drink drops off).
+
+    /**
+     * Live list of my drinks straight from the server (NOT the cache) so the
+     * management screen always shows the latest — e.g. a PENDING image resolving to
+     * READY. Also re-warms the cache as a side effect. Throws on network failure so
+     * the caller can surface a retry.
+     */
+    suspend fun listMyDrinks(): List<Food> = api.myDrinks().also { replaceCache(it) }
+
+    /**
+     * Analyze a free-text drink name into a proposal. Returns:
+     *  - [AnalyzeResult.Success] with the proposal, or
+     *  - [AnalyzeResult.Unavailable] when the backend replies 422 (AI off) so the UI
+     *    can drop the user straight into manual entry, or
+     *  - [AnalyzeResult.Error] on any other failure.
+     */
+    suspend fun analyze(name: String): AnalyzeResult {
+        val response = runCatching { api.analyze(AnalyzeDrinkRequest(name)) }
+            .getOrElse { return AnalyzeResult.Error(it) }
+        val body = response.body()
+        return when {
+            response.isSuccessful && body != null -> AnalyzeResult.Success(body)
+            response.code() == 422 -> AnalyzeResult.Unavailable
+            else -> AnalyzeResult.Error(IllegalStateException("Analyze failed (${response.code()})"))
+        }
+    }
+
+    /**
+     * Create a drink then re-warm the cache. [abvPercent] + [servingVolumeMl] are
+     * required; [macros] is the per-serving MIXER contribution (backend adds the
+     * alcohol calories). Returns the created [Food].
+     */
+    suspend fun createDrink(
+        name: String,
+        abvPercent: Double,
+        servingVolumeMl: Double,
+        servingLabel: String? = null,
+        macros: Macros? = null,
+    ): Food =
+        api.create(
+            DrinkUpsertRequest(name, abvPercent, servingVolumeMl, servingLabel, macros),
+        ).also { warm() }
+
+    /** Edit a drink (re-derives alcohol) then re-warm the cache. */
+    suspend fun updateDrink(
+        id: String,
+        name: String,
+        abvPercent: Double,
+        servingVolumeMl: Double,
+        servingLabel: String? = null,
+        macros: Macros? = null,
+    ): Food =
+        api.update(
+            id,
+            DrinkUpsertRequest(name, abvPercent, servingVolumeMl, servingLabel, macros),
+        ).also { warm() }
+
+    /** Re-run image generation for a drink then re-warm the cache. */
+    suspend fun regenerateImage(id: String): Food =
+        api.regenerateImage(id).also { warm() }
+
+    /** Archive (soft-delete) a drink then re-warm so it drops off the card. */
+    suspend fun archiveDrink(id: String) {
+        val response = api.delete(id)
+        if (!response.isSuccessful) {
+            throw IllegalStateException("Archive failed (${response.code()})")
+        }
+        warm()
+    }
+
+    /** Outcome of [analyze] — separates the 422 "AI unavailable" fallback path. */
+    sealed interface AnalyzeResult {
+        data class Success(val proposal: DrinkProposal) : AnalyzeResult
+        data object Unavailable : AnalyzeResult
+        data class Error(val cause: Throwable) : AnalyzeResult
+    }
 
     // ---- cache plumbing ----
 

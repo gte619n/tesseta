@@ -55,6 +55,7 @@ import kotlin.math.abs
 @Composable
 fun PhoneTodayScreen(
     onNavigate: (route: String) -> Unit = {},
+    onHome: () -> Unit = {},
 ) {
     val vm: DashboardViewModel = hiltViewModel()
     val ui by vm.uiState.collectAsStateWithLifecycle()
@@ -110,6 +111,7 @@ fun PhoneTodayScreen(
                 onLogTap = openFoodCapture,
                 onLogLongPress = { showLogMenu = true },
                 onNavigate = onNavigate,
+                onHome = onHome,
             )
         }
         if (showLogMenu) {
@@ -302,6 +304,7 @@ private fun BottomNav(
     onLogTap: () -> Unit,
     onLogLongPress: () -> Unit,
     onNavigate: (route: String) -> Unit = {},
+    onHome: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -326,6 +329,7 @@ private fun BottomNav(
                     // the food camera capture; long-press opens the quick-log
                     // menu (Workout/Weight/Food).
                     val onClick: () -> Unit = when (dest.label) {
+                        "Today" -> onHome
                         "More" -> ({ onNavigate(com.gte619n.healthfitness.mobile.nav.Routes.MORE) })
                         "Log" -> onLogTap
                         else -> ({})

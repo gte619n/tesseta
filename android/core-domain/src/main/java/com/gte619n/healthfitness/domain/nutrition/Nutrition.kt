@@ -41,6 +41,37 @@ data class AlcoholInfo(
 )
 
 /**
+ * IMPL-DRINK-01 — the AI proposal returned by `POST /api/me/drinks/analyze` for a
+ * free-text drink name. Mirrors the backend `DrinkProposalResponse`. `servingMacros`
+ * is the proposed per-serving macros (caloriesKcal incl. alcohol; the rest are the
+ * mixer contribution) and `alcohol` the derived alcohol facts, both shown read-only
+ * in the review form so the user can sanity-check before saving. The backend returns
+ * HTTP 422 when AI is unavailable — the UI then falls back to fully-manual entry.
+ */
+data class DrinkProposal(
+    val name: String,
+    val abvPercent: Double? = null,
+    val servingVolumeMl: Double? = null,
+    val servingMacros: Macros? = null,
+    val alcohol: AlcoholInfo? = null,
+)
+
+/**
+ * IMPL-DRINK-01 — body for `POST /api/me/drinks` (create) and `PUT /api/me/drinks/{id}`
+ * (edit). ABV% + serving volume are required; `macros` is the per-serving MIXER
+ * contribution (carbs/sugar/etc, EXCLUDING alcohol calories — the backend adds those).
+ * `id` lets a create mint a client id; null ⇒ server-generated.
+ */
+data class DrinkUpsertRequest(
+    val name: String,
+    val abvPercent: Double,
+    val servingVolumeMl: Double,
+    val servingLabel: String? = null,
+    val macros: Macros? = null,
+    val id: String? = null,
+)
+
+/**
  * A saved-meal hit in the add-food search (GET api/me/nutrition/meals/search).
  * Logged by [mealId] via the describe-meal path, which reuses the meal's
  * ingredient breakdown + plated photo. [macros]/[totalGrams] are one serving.
@@ -75,6 +106,14 @@ data class Food(
      * the alcohol facts (std drinks / grams) for the Drink card's live tally.
      */
     val alcohol: AlcoholInfo? = null,
+    /**
+     * IMPL-DRINK-01 — per-serving macros for a `category="drink"` catalog food, as
+     * returned by `GET /api/me/drinks`: `caloriesKcal` includes the alcohol calories,
+     * while protein/carbs/fat/fiber/sugar are the per-serving MIXER contribution.
+     * Used by the drink-management screen to show per-serving calories and to prefill
+     * the edit form's mixer macros (rather than re-deriving from `macrosPer100g`).
+     */
+    val servingMacros: Macros? = null,
 )
 
 /** One logged food on a given day + meal. Macros are a frozen snapshot. */
