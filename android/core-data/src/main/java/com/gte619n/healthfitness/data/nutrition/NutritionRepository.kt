@@ -496,7 +496,13 @@ class NutritionRepository @Inject constructor(
      * eaten at that time of day.
      */
     suspend fun recentMeals(days: Int = 14, limit: Int = 20, meal: String? = null): List<Entry> =
-        api.recentMeals(days, limit, meal)
+        // IMPL-DRINK-01 (IL-13): drinks are a card+session-only bucket, so a past
+        // DRINKS entry must never appear in the normal recent-meals / re-log list
+        // (re-logging one off-card would create it sessionless). The backend now
+        // suppresses DRINKS from recentMeals; filter client-side too so a stale
+        // backend can't leak one. cachedRecentDrinks() (the card's recents) is
+        // separate and unaffected.
+        api.recentMeals(days, limit, meal).filterNot { it.meal.equals(DRINKS_WIRE, ignoreCase = true) }
 
     /**
      * food-search-local-first: the same recent distinct foods/meals as
@@ -513,7 +519,14 @@ class NutritionRepository @Inject constructor(
         // row seen for a given food is the most recent — keep that one.
         val recent = entryDao.observeActive().first()
             .mapNotNull { rowToRecentEntry(it) }
-            .filter { e -> e.foodName.isNotBlank() && (e.date?.let { it >= cutoff } ?: true) }
+            // IMPL-DRINK-01 (IL-13): suppress past DRINKS entries from the normal
+            // recents / re-log flow — drinks are card+session only (see the
+            // network [recentMeals] filter). cachedRecentDrinks() serves the card.
+            .filter { e ->
+                e.foodName.isNotBlank() &&
+                    !e.meal.equals(DRINKS_WIRE, ignoreCase = true) &&
+                    (e.date?.let { it >= cutoff } ?: true)
+            }
         val seen = HashSet<String>()
         val distinct = recent.filter { seen.add(it.foodId ?: it.foodName.lowercase()) }
         val ordered =
@@ -522,6 +535,42 @@ class NutritionRepository @Inject constructor(
             else distinct.sortedByDescending { it.meal.equals(meal, ignoreCase = true) }
         return ordered.take(limit)
     }
+
+    /**
+     * IMPL-DRINK-01 (D12) — the Drink card's "recents" row: most-recent DRINKS
+     * entries from the synced `nutritionEntries` mirror, distinct by catalog
+     * [Entry.foodId], newest first. Purely local (no network), like
+     * [cachedRecentMeals]; survives restart + reinstall-resync. Only entries with a
+     * catalog [Entry.foodId] are kept, since the card re-joins each recent back to
+     * the warmed drink cache by id to render its image + std-drink count.
+     */
+    suspend fun cachedRecentDrinks(days: Int = 30, limit: Int = 12): List<String> {
+        val cutoff = LocalDate.now().minusDays(days.toLong()).toString()
+        val recent = entryDao.observeActive().first()
+            .mapNotNull { rowToRecentEntry(it) }
+            .filter { e ->
+                e.meal.equals(DRINKS_WIRE, ignoreCase = true) &&
+                    e.foodId != null &&
+                    (e.date?.let { it >= cutoff } ?: true)
+            }
+        val seen = HashSet<String>()
+        return recent.mapNotNull { it.foodId }.filter { seen.add(it) }.take(limit)
+    }
+
+    /**
+     * IMPL-DRINK-01 (IL-13) — the reactive set of every active (non-tombstoned)
+     * entryId in the `nutritionEntries` mirror, across all dates. The entryId is the
+     * trailing segment of the composite row id (`"<date>/<entryId>"`), so this reads
+     * it off the row id and needs no payload decode. The Drink card's active session
+     * observes this to reconcile its local tally: when a session-logged drink is
+     * deleted from the day view (its row leaves the active set), the session drops it
+     * so the live count matches. Emits on every mirror change (local delete, sync
+     * pull), and is offline-safe (pure Room read).
+     */
+    fun observeActiveEntryIds(): Flow<Set<String>> =
+        entryDao.observeActive().mapLatest { rows ->
+            rows.map { it.id.substringAfter('/', it.id) }.toSet()
+        }
 
     /**
      * Map a mirror row to a recent-list [Entry], preserving the row's DATE (which
@@ -659,13 +708,29 @@ class NutritionRepository @Inject constructor(
 
     private suspend fun assembleDay(date: String): NutritionDay {
         val entries = entriesForDate(date).map { it.withCapturePreview() }
-        val groups = Meal.entries.mapNotNull { meal ->
+        // IMPL-DRINK-01 (D8): DRINKS is not a `Meal` enum value (it's logged only
+        // from the Drink card, never the meal pickers), so build its group
+        // explicitly — and only when the day actually has drink entries, so a
+        // non-drinker's day view never shows an empty Drinks section. Without this
+        // the DRINKS entries would be dropped from both the meals list AND the day
+        // totals (which sum over `entries` below, so alcohol kcal still count).
+        val mealGroups = Meal.entries.mapNotNull { meal ->
             val mealEntries = entries.filter { it.meal.equals(meal.wire, ignoreCase = true) }
             if (mealEntries.isEmpty()) null
             else MealGroup(
                 meal = meal.wire,
                 subtotal = sumMacros(mealEntries.map { it.macros }),
                 entries = mealEntries,
+            )
+        }
+        val drinkEntries = entries.filter { it.meal.equals(DRINKS_WIRE, ignoreCase = true) }
+        val groups = if (drinkEntries.isEmpty()) {
+            mealGroups
+        } else {
+            mealGroups + MealGroup(
+                meal = DRINKS_WIRE,
+                subtotal = sumMacros(drinkEntries.map { it.macros }),
+                entries = drinkEntries,
             )
         }
         return NutritionDay(
@@ -766,6 +831,11 @@ class NutritionRepository @Inject constructor(
 
     private companion object {
         const val TARGET_ID = "target"
+
+        // IMPL-DRINK-01 (D8): the meal bucket drinks log into. Not a `Meal` enum
+        // value on purpose (kept out of the meal pickers); handled explicitly in
+        // day assembly so a Drinks section only appears when drink entries exist.
+        const val DRINKS_WIRE = "DRINKS"
 
         // food-search-local-first: saved meals share the catalog_cache table,
         // namespaced by this type; kept distinct from FoodRepository's "food" rows.

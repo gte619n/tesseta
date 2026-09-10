@@ -285,28 +285,31 @@ export function EditEntryModal({
             />
           </div>
 
-          {/* Meal */}
-          <div>
-            <label className="mb-1.5 block text-[11px] font-medium text-secondary">
-              Meal
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {MEALS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMeal(m)}
-                  className={`caps-mono rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
-                    meal === m
-                      ? "border-accent bg-accent-bg text-accent-dim"
-                      : "border-border-default bg-canvas text-secondary hover:border-border-strong"
-                  }`}
-                >
-                  {MEAL_LABELS[m]}
-                </button>
-              ))}
+          {/* Meal — hidden for drink entries: Drinks is a drink-only bucket, so a
+              drink can't be moved into a regular meal (IMPL-DRINK-01 IL-13). */}
+          {entry.meal !== "DRINKS" && (
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium text-secondary">
+                Meal
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {MEALS.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMeal(m)}
+                    className={`caps-mono rounded-md border-[0.5px] px-3 py-1.5 text-[10px] tracking-[0.06em] transition-colors ${
+                      meal === m
+                        ? "border-accent bg-accent-bg text-accent-dim"
+                        : "border-border-default bg-canvas text-secondary hover:border-border-strong"
+                    }`}
+                  >
+                    {MEAL_LABELS[m]}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Serving label + grams */}
           <div className="grid grid-cols-2 gap-3">

@@ -59,6 +59,9 @@ public class FoodCatalogService {
         }
         String ql = q.toLowerCase().trim();
         return byId.values().stream()
+            // IMPL-DRINK-01 (IL-13): alcoholic drinks live only on the Drink card,
+            // never in the normal food/add-food search. Archived foods are hidden too.
+            .filter(f -> !f.isDrink() && !f.isArchived())
             .sorted(Comparator
                 .comparingInt((CatalogFood f) -> rank(f, ql)).reversed()
                 .thenComparing(f -> f.nameLower() == null ? "" : f.nameLower()))
@@ -151,7 +154,9 @@ public class FoodCatalogService {
             food.imageStatus(),
             food.createdBy(),
             food.createdAt(),
-            food.updatedAt()
+            food.updatedAt(),
+            food.alcohol(),
+            food.archivedAt()
         );
     }
 
@@ -253,6 +258,8 @@ public class FoodCatalogService {
             FoodImageStatus.NONE,
             createdByUserId,
             null,
+            null,
+            null,
             null
         );
         repository.save(food);
@@ -261,6 +268,170 @@ public class FoodCatalogService {
             images.enqueueGeneration(food.foodId(), referencePhotoRef);
         }
         return food;
+    }
+
+    // ----- Drinks (IMPL-DRINK-01) --------------------------------------
+
+    /**
+     * Create an alcoholic-drink catalog food (category {@code "drink"}) and enqueue
+     * its beverage-style studio image. Unlike {@link #create}, calories are NOT
+     * re-derived from macros — they are computed explicitly to include alcohol
+     * (7 kcal/g), which {@link Macros#withDerivedCalories()} would otherwise drop
+     * (IL-3). The drink is stored as per-100(ml≈g) macros with a single serving
+     * equal to {@code servingVolumeMl}, so the log-time quantity multiplier reuses
+     * the standard entry scaling (IL-4).
+     *
+     * @param macroContribution the mixer/sugar macros for ONE serving (protein/
+     *     carbs/fat/fiber/sugar), excluding alcohol calories; may be null/zero for
+     *     a neat spirit
+     */
+    public CatalogFood createDrink(
+        String createdByUserId,
+        String name,
+        Double abvPercent,
+        Double servingVolumeMl,
+        Macros macroContribution,
+        String servingLabel,
+        String foodId
+    ) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (abvPercent == null || abvPercent <= 0 || servingVolumeMl == null || servingVolumeMl <= 0) {
+            throw new IllegalArgumentException("a drink requires positive ABV% and serving volume");
+        }
+        AlcoholInfo alcohol = DrinkMath.describe(abvPercent, servingVolumeMl);
+        double grams = alcohol.alcoholGrams() != null ? alcohol.alcoholGrams() : 0.0;
+        double servingCalories = DrinkMath.servingCalories(macroContribution, grams);
+        Macros serving = new Macros(
+            servingCalories,
+            macroContribution != null ? macroContribution.proteinGrams() : null,
+            macroContribution != null ? macroContribution.carbsGrams() : null,
+            macroContribution != null ? macroContribution.fatGrams() : null,
+            macroContribution != null ? macroContribution.fiberGrams() : null,
+            macroContribution != null ? macroContribution.sugarGrams() : null);
+        // Normalize to per-100 units so entry scaling (grams×qty/100) reproduces the
+        // serving at quantity 1 and multiplies it at the long-press multiplier.
+        Macros per100 = serving.scale(100.0 / servingVolumeMl);
+        String label = (servingLabel != null && !servingLabel.isBlank())
+            ? servingLabel
+            : defaultDrinkLabel(servingVolumeMl);
+        CatalogFood food = new CatalogFood(
+            (foodId != null && !foodId.isBlank()) ? foodId : UUID.randomUUID().toString(),
+            name,
+            name.toLowerCase(),
+            null,
+            null,
+            "drink",
+            per100,
+            List.of(new ServingSize(label, servingVolumeMl)),
+            0,
+            FoodSource.GEMINI_DESCRIPTION,
+            null,
+            FoodStatus.UNVERIFIED,
+            0,
+            null,
+            null,
+            FoodImageStatus.NONE,
+            createdByUserId,
+            null,
+            null,
+            alcohol,
+            null
+        );
+        repository.save(food);
+        FoodImageService images = foodImages.getIfAvailable();
+        if (images != null) {
+            images.enqueueGeneration(food.foodId(), null);
+        }
+        return food;
+    }
+
+    private static String defaultDrinkLabel(double ml) {
+        long rounded = Math.round(ml);
+        return "1 serving (" + rounded + " ml)";
+    }
+
+    /**
+     * Edit a drink's fields and re-derive its alcohol/calorie maths. Only the
+     * drink-relevant fields are updatable; image and confirmation state are
+     * preserved. Throws {@link NoSuchElementException} for an unknown id.
+     */
+    public CatalogFood updateDrink(
+        String foodId,
+        String name,
+        Double abvPercent,
+        Double servingVolumeMl,
+        Macros macroContribution,
+        String servingLabel
+    ) {
+        CatalogFood existing = get(foodId);
+        if (abvPercent == null || abvPercent <= 0 || servingVolumeMl == null || servingVolumeMl <= 0) {
+            throw new IllegalArgumentException("a drink requires positive ABV% and serving volume");
+        }
+        String newName = (name != null && !name.isBlank()) ? name : existing.name();
+        AlcoholInfo alcohol = DrinkMath.describe(abvPercent, servingVolumeMl);
+        double grams = alcohol.alcoholGrams() != null ? alcohol.alcoholGrams() : 0.0;
+        double servingCalories = DrinkMath.servingCalories(macroContribution, grams);
+        Macros serving = new Macros(
+            servingCalories,
+            macroContribution != null ? macroContribution.proteinGrams() : null,
+            macroContribution != null ? macroContribution.carbsGrams() : null,
+            macroContribution != null ? macroContribution.fatGrams() : null,
+            macroContribution != null ? macroContribution.fiberGrams() : null,
+            macroContribution != null ? macroContribution.sugarGrams() : null);
+        Macros per100 = serving.scale(100.0 / servingVolumeMl);
+        String label = (servingLabel != null && !servingLabel.isBlank())
+            ? servingLabel
+            : defaultDrinkLabel(servingVolumeMl);
+        CatalogFood updated = new CatalogFood(
+            existing.foodId(),
+            newName,
+            newName.toLowerCase(),
+            existing.brand(),
+            existing.barcode(),
+            "drink",
+            per100,
+            List.of(new ServingSize(label, servingVolumeMl)),
+            0,
+            existing.source(),
+            existing.sourceRef(),
+            existing.status(),
+            existing.confirmationCount(),
+            existing.verifiedAt(),
+            existing.imageUrl(),
+            existing.imageStatus(),
+            existing.createdBy(),
+            existing.createdAt(),
+            null,
+            alcohol,
+            existing.archivedAt()
+        );
+        repository.save(updated);
+        return updated;
+    }
+
+    /** My non-archived drinks (category {@code "drink"}, created by me), newest first. */
+    public List<CatalogFood> listMyDrinks(String userId) {
+        return repository.findByCreatedByAndCategory(userId, "drink").stream()
+            .filter(f -> !f.isArchived())
+            .sorted(Comparator.comparing(
+                CatalogFood::createdAt,
+                Comparator.nullsLast(Comparator.reverseOrder())))
+            .toList();
+    }
+
+    /** Soft-delete (archive) a drink: hide it from listings; keep the document. */
+    public CatalogFood archiveDrink(String foodId) {
+        CatalogFood food = get(foodId);
+        CatalogFood updated = new CatalogFood(
+            food.foodId(), food.name(), food.nameLower(), food.brand(), food.barcode(),
+            food.category(), food.macrosPer100g(), food.servingSizes(), food.defaultServingIndex(),
+            food.source(), food.sourceRef(), food.status(), food.confirmationCount(),
+            food.verifiedAt(), food.imageUrl(), food.imageStatus(), food.createdBy(),
+            food.createdAt(), null, food.alcohol(), Instant.now());
+        repository.save(updated);
+        return updated;
     }
 
     /**
@@ -335,7 +506,9 @@ public class FoodCatalogService {
             food.imageStatus(),
             food.createdBy(),
             food.createdAt(),
-            null
+            null,
+            food.alcohol(),
+            food.archivedAt()
         );
         repository.save(updated);
         return updated;

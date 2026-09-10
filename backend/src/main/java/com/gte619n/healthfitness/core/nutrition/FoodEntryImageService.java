@@ -230,7 +230,7 @@ public class FoodEntryImageService {
         return new CatalogFood(
             entryId, name, name.toLowerCase(), null, null, null, null, List.of(), 0,
             FoodSource.GEMINI_PHOTO, null, FoodStatus.UNVERIFIED, 0, null, null,
-            FoodImageStatus.PENDING, null, null, null);
+            FoodImageStatus.PENDING, null, null, null, null, null);
     }
 
     private MealPhotoReader.Photo loadReference(String ref) {

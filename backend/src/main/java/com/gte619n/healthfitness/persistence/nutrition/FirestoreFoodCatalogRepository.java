@@ -107,6 +107,15 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
     }
 
     @Override
+    public List<CatalogFood> findByCreatedByAndCategory(String userId, String category) {
+        List<QueryDocumentSnapshot> docs = await(collection()
+            .whereEqualTo("createdBy", userId)
+            .whereEqualTo("category", category)
+            .get()).getDocuments();
+        return docs.stream().map(FirestoreFoodCatalogRepository::toFood).toList();
+    }
+
+    @Override
     public List<CatalogFood> findByImageStatus(FoodImageStatus status, int limit) {
         List<QueryDocumentSnapshot> docs = await(collection()
             .whereEqualTo("imageStatus", status.name())
@@ -178,6 +187,8 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
         body.put("imageUrl", f.imageUrl());
         body.put("imageStatus", f.imageStatus() != null ? f.imageStatus().name() : null);
         body.put("createdBy", f.createdBy());
+        body.put("alcohol", alcoholToMap(f.alcohol()));
+        body.put("archivedAt", f.archivedAt());
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -210,7 +221,29 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
             imageStatus != null ? FoodImageStatus.valueOf(imageStatus) : null,
             snapshot.getString("createdBy"),
             toInstant(snapshot.get("createdAt")),
-            toInstant(snapshot.get("updatedAt"))
+            toInstant(snapshot.get("updatedAt")),
+            alcoholFromMap(snapshot.get("alcohol")),
+            toInstant(snapshot.get("archivedAt"))
+        );
+    }
+
+    private static Map<String, Object> alcoholToMap(com.gte619n.healthfitness.core.nutrition.AlcoholInfo a) {
+        if (a == null) return null;
+        Map<String, Object> map = new HashMap<>();
+        map.put("abvPercent", a.abvPercent());
+        map.put("servingVolumeMl", a.servingVolumeMl());
+        map.put("alcoholGrams", a.alcoholGrams());
+        map.put("standardDrinks", a.standardDrinks());
+        return map;
+    }
+
+    private static com.gte619n.healthfitness.core.nutrition.AlcoholInfo alcoholFromMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) return null;
+        return new com.gte619n.healthfitness.core.nutrition.AlcoholInfo(
+            asDouble(map.get("abvPercent")),
+            asDouble(map.get("servingVolumeMl")),
+            asDouble(map.get("alcoholGrams")),
+            asDouble(map.get("standardDrinks"))
         );
     }
 

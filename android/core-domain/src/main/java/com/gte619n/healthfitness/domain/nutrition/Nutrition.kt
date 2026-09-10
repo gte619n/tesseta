@@ -27,6 +27,20 @@ data class ServingSize(
 )
 
 /**
+ * IMPL-DRINK-01 — alcohol facts on a `category="drink"` catalog food. Mirrors the
+ * backend `FoodResponse.AlcoholDto` wire shape. Non-null only for drinks; all
+ * fields are the drink's DEFAULT serving (one glass = [servingVolumeMl]). The card
+ * scales [standardDrinks] linearly by the logged quantity (the long-press ×0.5/×1/
+ * ×1.5/×2 multiplier), the same way [Macros.forPortion] scales the macros.
+ */
+data class AlcoholInfo(
+    val abvPercent: Double? = null,
+    val servingVolumeMl: Double? = null,
+    val alcoholGrams: Double? = null,
+    val standardDrinks: Double? = null,
+)
+
+/**
  * A saved-meal hit in the add-food search (GET api/me/nutrition/meals/search).
  * Logged by [mealId] via the describe-meal path, which reuses the meal's
  * ingredient breakdown + plated photo. [macros]/[totalGrams] are one serving.
@@ -56,6 +70,11 @@ data class Food(
     val confirmationCount: Int = 0,
     val imageUrl: String? = null,
     val imageStatus: String,
+    /**
+     * IMPL-DRINK-01 — non-null only for a `category="drink"` catalog food; carries
+     * the alcohol facts (std drinks / grams) for the Drink card's live tally.
+     */
+    val alcohol: AlcoholInfo? = null,
 )
 
 /** One logged food on a given day + meal. Macros are a frozen snapshot. */

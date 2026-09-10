@@ -703,6 +703,11 @@ public class NutritionController {
                 || e.analysisStatus() == com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus.FAILED) {
                 continue;
             }
+            // IMPL-DRINK-01 (IL-13): drinks are logged only from the Drink card
+            // during a session — never sessionless via recent-meals / re-log.
+            if (e.meal() == MealType.DRINKS) {
+                continue;
+            }
             if (e.foodName() == null || e.foodName().isBlank()) {
                 continue;
             }

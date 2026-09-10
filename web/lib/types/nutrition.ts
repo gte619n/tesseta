@@ -10,7 +10,7 @@ export type Macros = {
   sugarGrams: number | null;
 };
 
-export type Meal = "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK";
+export type Meal = "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "DRINKS";
 
 export type EntrySource = "MANUAL" | "CATALOG" | "BARCODE" | "LABEL" | "PHOTO";
 
@@ -141,6 +141,57 @@ export type Food = {
   imageStatus: ImageStatus;
 };
 
+// ── Drinks (IMPL-DRINK-01) ───────────────────────────────────────────
+// A drink is a CatalogFood with category="drink" and a non-null `alcohol`
+// block. The backend derives the alcohol math (grams/std drinks) and folds
+// alcohol calories into the food's calories. See DrinkController.
+
+// Deterministic alcohol readouts (backend-computed from ABV% + serving volume;
+// §4.1 of the spec). Present on any drink food + on an analyze proposal.
+export type AlcoholInfo = {
+  abvPercent: number | null;
+  servingVolumeMl: number | null;
+  alcoholGrams: number | null;
+  standardDrinks: number | null;
+};
+
+// A drink in my catalog — the FoodResponse shape narrowed to drinks. `alcohol`
+// is non-null and `category === "drink"`.
+export type Drink = Food & {
+  sourceRef?: string | null;
+  createdBy?: string | null;
+  alcohol: AlcoholInfo | null;
+  // Per-serving macros the backend echoes for drinks (rounded 1 dp), so the edit
+  // form shows exactly what was entered without re-deriving from `macrosPer100g`
+  // (which drifts on float round-trips). `caloriesKcal` is the full serving total
+  // INCLUDING alcohol; the mixer components (protein/carbs/fat/fiber/sugar) are the
+  // per-serving mixer contribution. Null for non-drinks. (IMPL-DRINK-01 IL-13.)
+  servingMacros: Macros | null;
+};
+
+// Result of POST /api/me/drinks/analyze — a non-persisted AI proposal. `macros`
+// is the per-serving mixer contribution (carbs/sugar/…), EXCLUDING alcohol
+// calories; the derived `alcohol` readouts come alongside. On analyzer failure
+// the backend returns 422 (surfaced as a manual-entry fallback in the UI).
+export type DrinkProposal = {
+  name: string;
+  abvPercent: number | null;
+  servingVolumeMl: number | null;
+  servingMacros: Macros;
+  alcohol: AlcoholInfo | null;
+};
+
+// Body for POST/PUT /api/me/drinks. `macros` is the per-serving mixer
+// contribution EXCLUDING alcohol calories; the backend computes total calories.
+export type SaveDrinkBody = {
+  id?: string;
+  name: string;
+  abvPercent: number;
+  servingVolumeMl: number;
+  servingLabel?: string | null;
+  macros?: Macros | null;
+};
+
 // A saved-meal hit in the add-food search (GET /api/me/nutrition/meals/search).
 // Logged by `mealId` via the describe-meal path, which reuses the meal's
 // ingredient breakdown + plated photo. `macros`/`totalGrams` are one serving.
@@ -267,6 +318,7 @@ export const MEAL_LABELS: Record<Meal, string> = {
   LUNCH: "Lunch",
   DINNER: "Dinner",
   SNACK: "Snack",
+  DRINKS: "Drinks",
 };
 
 export const MEAL_ICONS: Record<Meal, string> = {
@@ -274,9 +326,66 @@ export const MEAL_ICONS: Record<Meal, string> = {
   LUNCH: "salad",
   DINNER: "soup",
   SNACK: "apple",
+  DRINKS: "glass-cocktail",
 };
 
+// The always-present meal sections in the day view. DRINKS is intentionally
+// excluded — its section only appears when the day has drink entries (D8), so
+// it's appended separately from the server response rather than pre-seeded here.
 export const MEALS: Meal[] = ["BREAKFAST", "LUNCH", "DINNER", "SNACK"];
+
+// ── Drink alcohol math (IMPL-DRINK-01 §4.1) ──────────────────────────
+// The backend is the single source of truth for these; this mirror lets the
+// web review/edit form show the derived readouts live as the user types. Keep
+// the constants in sync with DrinkMath on the backend.
+const ETHANOL_DENSITY_G_PER_ML = 0.789;
+const STANDARD_DRINK_GRAMS = 14.0;
+const ALCOHOL_KCAL_PER_GRAM = 7.0;
+
+/** Pure ethanol mass (g) for a serving; null when inputs are missing/invalid. */
+export function alcoholGrams(
+  abvPercent: number | null,
+  servingVolumeMl: number | null,
+): number | null {
+  if (!abvPercent || !servingVolumeMl) return null;
+  return servingVolumeMl * (abvPercent / 100) * ETHANOL_DENSITY_G_PER_ML;
+}
+
+/** US standard drinks (14 g each) for a serving. */
+export function standardDrinks(
+  abvPercent: number | null,
+  servingVolumeMl: number | null,
+): number | null {
+  const g = alcoholGrams(abvPercent, servingVolumeMl);
+  return g === null ? null : g / STANDARD_DRINK_GRAMS;
+}
+
+/**
+ * Total serving calories for a drink: macro-derived (Atwater 4/4/9 on the mixer
+ * contribution) plus alcohol calories (7 kcal/g). Mirrors the backend's drink
+ * calorie model (decision IL-3), which bypasses plain macro re-derivation so
+ * alcohol calories aren't erased.
+ */
+export function drinkCaloriesKcal(
+  proteinGrams: number | null,
+  carbsGrams: number | null,
+  fatGrams: number | null,
+  abvPercent: number | null,
+  servingVolumeMl: number | null,
+): number | null {
+  const g = alcoholGrams(abvPercent, servingVolumeMl);
+  if (
+    proteinGrams === null &&
+    carbsGrams === null &&
+    fatGrams === null &&
+    g === null
+  ) {
+    return null;
+  }
+  const macroKcal =
+    (proteinGrams ?? 0) * 4 + (carbsGrams ?? 0) * 4 + (fatGrams ?? 0) * 9;
+  return macroKcal + (g ?? 0) * ALCOHOL_KCAL_PER_GRAM;
+}
 
 export const QUANTITY_STEPS = [0.5, 1, 1.5, 2] as const;
 export type QuantityStep = (typeof QUANTITY_STEPS)[number];

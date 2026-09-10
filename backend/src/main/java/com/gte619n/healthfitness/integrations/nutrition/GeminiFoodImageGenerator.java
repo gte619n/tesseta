@@ -144,6 +144,41 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
         %s
         """;
 
+    /**
+     * Style for an alcoholic DRINK (IMPL-DRINK-01): a single served beverage in
+     * the correct glassware for its type, staged on a moody bar top. Same studio
+     * lighting discipline as the plated-food style, re-aimed at a cocktail/pour.
+     */
+    private static final String BEVERAGE_STYLE = """
+        PHOTOGRAPHY SPECIFICATIONS:
+        - A single served alcoholic drink in the CORRECT glassware for its type
+          (rocks/old-fashioned glass for a spirit or negroni, coupe or martini
+          glass for an up cocktail, highball for a tall mixed drink, pint/tulip for
+          beer, stemmed wine glass for wine), with appropriate garnish where natural
+        - Staged on a clean, dark moody bar top with tasteful, subtle reflection
+        - Soft diffused directional lighting from the upper left
+        - Gentle shadows and highlights that reveal the drink's color and clarity
+        - Shallow depth of field (f/2.8 aperture equivalent)
+        - 100mm macro lens perspective
+        - Centered composition with generous negative space
+        - Premium editorial cocktail-photography aesthetic
+
+        CRITICAL REQUIREMENTS:
+        - Photorealistic rendering of the drink in its glass
+        - Correct glass and garnish for the named drink
+        - No text, labels, packaging, or branding visible
+        - No human hands or body parts
+        - No background clutter or props beyond the single glass and its garnish
+        """;
+
+    private static final String BEVERAGE_PROMPT_TEMPLATE = """
+        Generate a professional still-life photograph of a single alcoholic drink.
+
+        DRINK: %s
+
+        %s
+        """;
+
     /** Reference-image prompt: the user's real meal photo informs the dish. */
     private static final String REFERENCE_PROMPT_TEMPLATE = """
         The attached image is a real photo of a meal a user logged.
@@ -203,6 +238,14 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
             String prompt = String.format(RAW_INGREDIENT_PROMPT_TEMPLATE, name, RAW_INGREDIENT_STYLE);
             return execute(prompt, food.name());
         }
+        // Alcoholic drinks render as a served beverage in correct glassware
+        // (IMPL-DRINK-01), from the name only — no reference photo path.
+        if (isDrink(food)) {
+            String name = (food.name() == null || food.name().isBlank())
+                ? "a cocktail" : food.name();
+            String prompt = String.format(BEVERAGE_PROMPT_TEMPLATE, name, BEVERAGE_STYLE);
+            return execute(prompt, food.name());
+        }
         // Packaged products render as the exact branded product itself (using
         // the capture photo as the visual reference when available), never as a
         // genericized stand-in or a breakdown of ingredients.
@@ -234,6 +277,11 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
     /** Single packaged products are tagged with the "product" category. */
     private static boolean isPackagedProduct(CatalogFood food) {
         return food.category() != null && food.category().equalsIgnoreCase("product");
+    }
+
+    /** Alcoholic drinks are tagged with the "drink" category (IMPL-DRINK-01). */
+    private static boolean isDrink(CatalogFood food) {
+        return food.category() != null && food.category().equalsIgnoreCase("drink");
     }
 
     /** Product subject "<brand> — <name>" when the brand isn't already in the name. */

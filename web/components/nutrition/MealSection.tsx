@@ -149,9 +149,14 @@ export function MealSection({
   const sub = group.subtotal;
   const hasEntries = group.entries.length > 0;
 
+  // DRINKS is a drink-only bucket in both directions (IMPL-DRINK-01 IL-13): a
+  // regular food must never be filed under Drinks, so this section is not a drop
+  // target, and its own entries don't offer "move to another meal" below.
+  const isDrinks = group.meal === "DRINKS";
+
   // Each meal section is a drop target keyed by its meal. Highlight only when an
   // entry from *another* meal is hovering over it (dropping in place is a no-op).
-  const { setNodeRef, isOver } = useDroppable({ id: group.meal });
+  const { setNodeRef, isOver } = useDroppable({ id: group.meal, disabled: isDrinks });
   const isForeignDragOver =
     isOver &&
     activeId !== null &&
@@ -199,6 +204,9 @@ export function MealSection({
             <EntryRow
               key={entry.entryId}
               entry={entry}
+              // Drink entries live in a drink-only bucket, so they don't offer
+              // "move to another meal" (the drag grip is hidden).
+              movable={!isDrinks}
               onEdit={() => openEntry(entry)}
               onDelete={() => handleDelete(entry)}
               onRetryImage={() => handleRetryImage(entry)}
@@ -270,11 +278,15 @@ export function MealSection({
 
 function EntryRow({
   entry,
+  movable,
   onEdit,
   onDelete,
   onRetryImage,
 }: {
   entry: Entry;
+  // When false (drink entries), the move-to-meal drag grip is hidden — a drink
+  // stays in the drink-only Drinks bucket (IMPL-DRINK-01 IL-13).
+  movable: boolean;
   onEdit: () => void;
   onDelete: () => Promise<void>;
   onRetryImage: () => Promise<void>;
@@ -283,6 +295,7 @@ function EntryRow({
   // listeners so the row's edit / delete clicks keep working.
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: entry.entryId,
+    disabled: !movable,
   });
   const [retrying, startRetry] = useTransition();
   return (
@@ -292,16 +305,24 @@ function EntryRow({
         isDragging ? "opacity-40" : ""
       }`}
     >
-      {/* Drag handle: hold and drag to move this food to another meal */}
-      <button
-        type="button"
-        {...listeners}
-        {...attributes}
-        className="-ml-1 shrink-0 cursor-grab touch-none rounded p-1 text-tertiary opacity-60 hover:text-secondary active:cursor-grabbing group-hover:opacity-100"
-        aria-label={`Move ${entry.foodName} to another meal`}
-      >
-        <i className="ti ti-grip-vertical text-[14px]" aria-hidden />
-      </button>
+      {/* Drag handle: hold and drag to move this food to another meal. Hidden
+          for drink entries, which can't leave the Drinks bucket. */}
+      {movable ? (
+        <button
+          type="button"
+          {...listeners}
+          {...attributes}
+          className="-ml-1 shrink-0 cursor-grab touch-none rounded p-1 text-tertiary opacity-60 hover:text-secondary active:cursor-grabbing group-hover:opacity-100"
+          aria-label={`Move ${entry.foodName} to another meal`}
+        >
+          <i className="ti ti-grip-vertical text-[14px]" aria-hidden />
+        </button>
+      ) : (
+        // Keep the row's left alignment consistent with movable rows.
+        <span className="-ml-1 shrink-0 p-1" aria-hidden>
+          <i className="ti ti-glass-cocktail text-[14px] text-tertiary opacity-60" />
+        </span>
+      )}
       {/* Click the food (image + name) to edit serving / macros */}
       <button
         type="button"

@@ -51,8 +51,12 @@ fun NutritionTodayRoute(
     onOpenCapture: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
     viewModel: NutritionTodayViewModel = hiltViewModel(),
+    // IMPL-DRINK-01 (D7): the ⋮ menu's Drink Mode toggle reads/writes the same
+    // device-local store the home Drink card uses.
+    drinkViewModel: DrinkSessionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val drinkState by drinkViewModel.state.collectAsStateWithLifecycle()
     // Refresh whenever the page returns to the foreground — e.g. after a barcode
     // scan logs an entry and pops back here — so the new food shows up.
     LifecycleResumeEffect(viewModel) {
@@ -85,6 +89,8 @@ fun NutritionTodayRoute(
         onOpenTarget = onOpenTarget,
         onOpenCapture = onOpenCapture,
         onBack = onBack,
+        drinkModeEnabled = drinkState.drinkModeEnabled,
+        onToggleDrinkMode = drinkViewModel::setDrinkMode,
     )
 }
 
@@ -115,6 +121,8 @@ fun NutritionTodayScreen(
     onOpenTarget: () -> Unit,
     onOpenCapture: (LocalDate) -> Unit,
     onBack: (() -> Unit)? = null,
+    drinkModeEnabled: Boolean = false,
+    onToggleDrinkMode: (Boolean) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -130,6 +138,8 @@ fun NutritionTodayScreen(
             onOpenCapture = { onOpenCapture(state.date) },
             onOpenAddSheet = onOpenAddSheet,
             onBack = onBack,
+            drinkModeEnabled = drinkModeEnabled,
+            onToggleDrinkMode = onToggleDrinkMode,
         )
         when {
             state.loading -> CenteredMessage { CircularProgressIndicator(color = Hf.colors.accent) }
@@ -269,6 +279,22 @@ private fun DayContent(
                         },
                         onDragCancel = { drag = null },
                     )
+                }
+            }
+            // IMPL-DRINK-01 (D8): render the Drinks section only when the day has
+            // drink entries. The DRINKS group is not a `Meal` enum value, so it's
+            // handled here, after the four meal sections.
+            mealsByName["DRINKS"]?.let { drinksGroup ->
+                if (drinksGroup.entries.isNotEmpty()) {
+                    item("DRINKS") {
+                        DrinksSection(
+                            group = drinksGroup,
+                            pendingEntryIds = pendingEntryIds,
+                            onDeleteEntry = onDeleteEntry,
+                            onRetryImage = onRetryImage,
+                            onOpenEditSheet = onOpenEditSheet,
+                        )
+                    }
                 }
             }
             item("tail") { Spacer(Modifier.height(8.dp)) }

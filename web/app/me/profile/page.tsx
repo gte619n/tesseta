@@ -327,6 +327,24 @@ export default async function ProfilePage({
 
         <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
           <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
+            Drinks
+          </h2>
+          <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
+            Build a personal catalog of alcoholic drinks with AI-estimated ABV,
+            calories, and a generated picture — ready to log on your phone.
+          </p>
+          <div className="mt-4">
+            <Link
+              href="/me/drinks"
+              className="inline-flex cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
+            >
+              Manage drinks
+            </Link>
+          </div>
+        </section>
+
+        <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
+          <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
             Connected apps
           </h2>
           <p className="mt-2 text-[13px] leading-[1.5] text-secondary">

@@ -23,7 +23,10 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,6 +61,9 @@ internal fun TodayTopBar(
     onOpenCapture: () -> Unit,
     onOpenAddSheet: () -> Unit,
     onBack: (() -> Unit)? = null,
+    // IMPL-DRINK-01 (D7): the ⋮ menu hosts the device-local Drink Mode toggle.
+    drinkModeEnabled: Boolean = false,
+    onToggleDrinkMode: (Boolean) -> Unit = {},
 ) {
     // Canonical header row (shared component): back arrow + title/subtitle.
     HfScreenHeader(
@@ -84,6 +90,37 @@ internal fun TodayTopBar(
             IconChip(Icons.Outlined.Flag, "Target", onOpenTarget)
             IconChip(Icons.Outlined.CameraAlt, "Capture", onOpenCapture)
             IconChip(Icons.Outlined.Add, "Add food", onOpenAddSheet)
+            NutritionOverflowMenu(
+                drinkModeEnabled = drinkModeEnabled,
+                onToggleDrinkMode = onToggleDrinkMode,
+            )
+        }
+    }
+}
+
+/** The ⋮ overflow menu — hosts the Drink Mode toggle (D7). */
+@Composable
+private fun NutritionOverflowMenu(
+    drinkModeEnabled: Boolean,
+    onToggleDrinkMode: (Boolean) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconChip(Icons.Outlined.MoreVert, "More", onClick = { expanded = true })
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (drinkModeEnabled) "Drink Mode: On" else "Drink Mode: Off",
+                        style = Hf.type.bodyMd,
+                        color = if (drinkModeEnabled) Hf.colors.accent else Hf.colors.textPrimary,
+                    )
+                },
+                onClick = {
+                    onToggleDrinkMode(!drinkModeEnabled)
+                    expanded = false
+                },
+            )
         }
     }
 }
@@ -187,6 +224,11 @@ internal fun EntryRow(
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
+    // IMPL-DRINK-01 (IL-13): whether this row can be long-press-dragged to another
+    // meal. Drinks are a drink-only bucket, so their rows pass `movable = false` —
+    // the move gesture is not attached at all (both directions blocked), while
+    // quantity-edit (tap) + delete stay. Meal rows keep the default (movable).
+    movable: Boolean = true,
 ) {
     // A photo whose analysis failed still has its captured image server-side, so
     // tapping the row retries the analysis instead of opening the (empty) editor.
@@ -206,9 +248,11 @@ internal fun EntryRow(
             .onGloballyPositioned { rowOriginInWindow = it.positionInWindow() }
             .graphicsLayer { alpha = if (dragging) 0.3f else 1f }
             // Long-press to pick the entry up, then drag onto another meal.
-            // Drags are consumed so the list doesn't scroll mid-move.
-            .pointerInput(entry.entryId, pending) {
-                if (pending) return@pointerInput
+            // Drags are consumed so the list doesn't scroll mid-move. Not attached
+            // for a non-movable (drink) row, so a drink can't be dragged out of its
+            // bucket (IL-13).
+            .pointerInput(entry.entryId, pending, movable) {
+                if (pending || !movable) return@pointerInput
                 detectDragGesturesAfterLongPress(
                     onDragStart = { offset -> onDragStart(entry, rowOriginInWindow + offset) },
                     onDrag = { change, _ ->
@@ -274,6 +318,57 @@ internal fun EntryRow(
                 CircularProgressIndicator(color = Hf.colors.accent, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
             } else {
                 Icon(Icons.Outlined.Delete, contentDescription = "Delete entry", tint = Hf.colors.textTertiary, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+/**
+ * IMPL-DRINK-01 (D8) — the day-view "Drinks" section. Rendered ONLY when the day
+ * has drink entries (the caller passes a non-null [group]), so a non-drinker's day
+ * view never shows an empty Drinks card. Reuses [EntryRow] for parity with meals,
+ * but without drag-to-move (drinks live in their own bucket, logged from the card).
+ */
+@Composable
+internal fun DrinksSection(
+    group: MealGroup,
+    pendingEntryIds: Set<String>,
+    onDeleteEntry: (String) -> Unit,
+    onRetryImage: (String) -> Unit,
+    onOpenEditSheet: (Entry) -> Unit,
+) {
+    HfCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Drinks", style = Hf.type.headingSm, color = Hf.colors.textPrimary)
+                Text(
+                    formatKcal(group.subtotal.caloriesKcal ?: 0.0),
+                    style = Hf.type.monoSm,
+                    color = Hf.colors.textSecondary,
+                )
+            }
+            group.entries.forEach { entry ->
+                Spacer(Modifier.height(10.dp))
+                EntryRow(
+                    entry = entry,
+                    pending = entry.entryId in pendingEntryIds,
+                    dragging = false,
+                    onClick = { onOpenEditSheet(entry) },
+                    onDelete = { onDeleteEntry(entry.entryId) },
+                    onRetryImage = { onRetryImage(entry.entryId) },
+                    onReanalyze = { },
+                    onDragStart = { _, _ -> },
+                    onDrag = { },
+                    onDragEnd = { },
+                    onDragCancel = { },
+                    // IMPL-DRINK-01 (IL-13): drinks live in their own bucket — no
+                    // move-to-meal (the gesture isn't attached), just edit + delete.
+                    movable = false,
+                )
             }
         }
     }

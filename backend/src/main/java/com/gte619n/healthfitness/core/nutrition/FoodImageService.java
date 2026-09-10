@@ -291,7 +291,9 @@ public class FoodImageService {
                 status,
                 food.createdBy(),
                 food.createdAt(),
-                Instant.now()
+                Instant.now(),
+                food.alcohol(),
+                food.archivedAt()
             );
             repository.save(updated);
         });

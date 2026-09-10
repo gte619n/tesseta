@@ -243,6 +243,7 @@ public class RecentActivityService {
             case LUNCH -> "Lunch";
             case DINNER -> "Dinner";
             case SNACK -> "Snack";
+            case DRINKS -> "Drinks";
         };
     }
 
