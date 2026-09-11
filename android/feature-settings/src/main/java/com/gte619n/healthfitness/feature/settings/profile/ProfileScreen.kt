@@ -11,8 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material.icons.outlined.Email
@@ -22,7 +26,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -37,9 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,9 +49,13 @@ import com.gte619n.healthfitness.domain.prefs.HeightUnit
 import com.gte619n.healthfitness.domain.profile.HeightMetric
 import com.gte619n.healthfitness.domain.profile.Profile
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
-import com.gte619n.healthfitness.ui.theme.Hf
+import com.gte619n.healthfitness.ui.components.SegmentedChoice
+import com.gte619n.healthfitness.ui.components.SettingsCard
+import com.gte619n.healthfitness.ui.components.SettingsContentMaxWidth
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
+import com.gte619n.healthfitness.ui.theme.Hf
+import com.gte619n.healthfitness.ui.theme.type
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -73,26 +79,35 @@ fun ProfileScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            when (val s = state) {
-                is ProfileViewModel.UiState.Loading -> LoadingState()
-                is ProfileViewModel.UiState.Error -> ErrorState(
-                    message = s.message,
-                    onRetry = viewModel::refresh,
-                )
-                is ProfileViewModel.UiState.Loaded -> {
-                    val heightUnit by viewModel.heightUnit.collectAsStateWithLifecycle()
-                    ProfileLoaded(
-                        profile = s.profile,
-                        saving = s.saving,
-                        heightUnit = heightUnit,
-                        onSaveFtIn = viewModel::saveHeight,
-                        onSaveCm = viewModel::saveHeightCm,
-                        onSaveBiologicalSex = viewModel::saveBiologicalSex,
-                        onSaveDateOfBirth = viewModel::saveDateOfBirth,
+            Column(
+                modifier = Modifier
+                    .widthIn(max = SettingsContentMaxWidth)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                when (val s = state) {
+                    is ProfileViewModel.UiState.Loading -> LoadingState()
+                    is ProfileViewModel.UiState.Error -> ErrorState(
+                        message = s.message,
+                        onRetry = viewModel::refresh,
                     )
+                    is ProfileViewModel.UiState.Loaded -> {
+                        val heightUnit by viewModel.heightUnit.collectAsStateWithLifecycle()
+                        ProfileLoaded(
+                            profile = s.profile,
+                            saving = s.saving,
+                            heightUnit = heightUnit,
+                            onSaveFtIn = viewModel::saveHeight,
+                            onSaveCm = viewModel::saveHeightCm,
+                            onSaveBiologicalSex = viewModel::saveBiologicalSex,
+                            onSaveDateOfBirth = viewModel::saveDateOfBirth,
+                        )
+                    }
                 }
             }
         }
@@ -109,13 +124,12 @@ private fun ProfileLoaded(
     onSaveBiologicalSex: (String) -> Unit,
     onSaveDateOfBirth: (String) -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    SettingsCard(title = "Account") {
         ReadOnlyRow("Name", profile.displayName ?: "—", Icons.Outlined.Person)
         ReadOnlyRow("Email", profile.email ?: "—", Icons.Outlined.Email)
+    }
 
+    SettingsCard(title = "Body") {
         FieldLabel("Height", Icons.Outlined.Height)
         when (heightUnit) {
             HeightUnit.FEET_INCHES -> FeetInchesEditor(profile.heightCm, saving, onSaveFtIn)
@@ -123,7 +137,12 @@ private fun ProfileLoaded(
         }
 
         FieldLabel("Biological sex", Icons.Outlined.Person)
-        BiologicalSexEditor(profile.biologicalSex, saving, onSaveBiologicalSex)
+        SegmentedChoice(
+            options = listOf("MALE" to "Male", "FEMALE" to "Female"),
+            selected = profile.biologicalSex,
+            onSelect = onSaveBiologicalSex,
+            enabled = !saving,
+        )
 
         FieldLabel("Date of birth", Icons.Outlined.Cake)
         DateOfBirthEditor(profile.dateOfBirth, saving, onSaveDateOfBirth)
@@ -142,34 +161,7 @@ private fun FieldLabel(text: String, icon: ImageVector) {
             tint = Hf.colors.textTertiary,
             modifier = Modifier.size(18.dp),
         )
-        Text(text)
-    }
-}
-
-/** Two-option chooser (Male/Female) sending "MALE"/"FEMALE" on tap. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BiologicalSexEditor(
-    biologicalSex: String?,
-    saving: Boolean,
-    onSave: (String) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        FilterChip(
-            selected = biologicalSex == "MALE",
-            enabled = !saving,
-            onClick = { onSave("MALE") },
-            label = { Text("Male") },
-        )
-        FilterChip(
-            selected = biologicalSex == "FEMALE",
-            enabled = !saving,
-            onClick = { onSave("FEMALE") },
-            label = { Text("Female") },
-        )
+        Text(text, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
     }
 }
 
@@ -291,12 +283,10 @@ private fun CentimetersEditor(
 
 @Composable
 private fun SaveButton(saving: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        enabled = !saving,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(if (saving) "Saving…" else "Save")
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Button(onClick = onClick, enabled = !saving) {
+            Text(if (saving) "Saving…" else "Save")
+        }
     }
 }
 
@@ -319,8 +309,8 @@ private fun ReadOnlyRow(label: String, value: String, icon: ImageVector? = null)
                     modifier = Modifier.size(18.dp),
                 )
             }
-            Text(label)
+            Text(label, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
         }
-        Text(value)
+        Text(value, style = Hf.type.bodyMd, color = Hf.colors.textSecondary)
     }
 }

@@ -1,9 +1,11 @@
 package com.gte619n.healthfitness.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.sp
 import com.gte619n.healthfitness.ui.theme.HfColors
 import com.gte619n.healthfitness.ui.theme.HfTypography
 import com.gte619n.healthfitness.ui.theme.LocalHfColors
@@ -32,6 +34,26 @@ fun HealthFitnessTheme(content: @Composable () -> Unit) {
                 onBackground = colors.textPrimary,
                 surface = colors.surface,
                 onSurface = colors.textPrimary,
+            ),
+            // Map the Hf type stack onto Material's roles so M3 widgets (button
+            // labels, text fields, dialogs, menus) and any unstyled Text render
+            // the app fonts instead of falling back to Roboto defaults.
+            typography = Typography(
+                displayLarge = typography.displayXl,
+                displayMedium = typography.displayLg,
+                displaySmall = typography.displayMd,
+                headlineLarge = typography.headingLg.copy(fontSize = 28.sp, lineHeight = 36.sp),
+                headlineMedium = typography.headingLg.copy(fontSize = 24.sp, lineHeight = 32.sp),
+                headlineSmall = typography.headingLg,
+                titleLarge = typography.headingLg,
+                titleMedium = typography.headingMd,
+                titleSmall = typography.headingSm,
+                bodyLarge = typography.bodyLg,
+                bodyMedium = typography.bodyMd,
+                bodySmall = typography.bodySm,
+                labelLarge = typography.headingMd,
+                labelMedium = typography.headingSm,
+                labelSmall = typography.headingSm.copy(fontSize = 11.sp, lineHeight = 16.sp),
             ),
             content = content,
         )

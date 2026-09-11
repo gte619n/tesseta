@@ -1,20 +1,28 @@
 package com.gte619n.healthfitness.feature.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -26,8 +34,12 @@ import com.gte619n.healthfitness.feature.settings.units.UnitsSection
 import com.gte619n.healthfitness.feature.settings.withings.WithingsSection
 import com.gte619n.healthfitness.feature.settings.workout.WorkoutPreferencesSection
 import com.gte619n.healthfitness.feature.settings.workout.WorkoutStreakSection
+import com.gte619n.healthfitness.ui.components.ConfirmDialog
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
+import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.components.SettingsContentMaxWidth
+import com.gte619n.healthfitness.ui.components.SettingsNavRow
 import com.gte619n.healthfitness.ui.theme.Hf
 
 @Composable
@@ -38,88 +50,118 @@ fun SettingsScreen(
     onSignedOut: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
+    var confirmSignOut by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.systemBars)
-            .background(Hf.colors.canvas)
-            .verticalScroll(rememberScrollState()),
+            .background(Hf.colors.canvas),
     ) {
         HfScreenHeader(title = "Settings", subtitle = "App preferences and account", onBack = onNavigateBack)
 
+        // Header stays pinned; content scrolls beneath it. The column is capped
+        // at SettingsContentMaxWidth and centered so tablet / unfolded widths
+        // don't stretch cards edge-to-edge.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-        // Profile entry card.
-        HfCard(transparent = true) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .widthIn(max = SettingsContentMaxWidth)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                Text(text = "Profile")
-                OutlinedButton(
-                    onClick = onNavigateToProfile,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Edit profile")
+                SettingsGroup("Account") {
+                    NavCard {
+                        SettingsNavRow(
+                            label = "Profile",
+                            subtitle = "Height, biological sex, date of birth",
+                            onClick = onNavigateToProfile,
+                        )
+                    }
+                }
+
+                SettingsGroup("Preferences") {
+                    UnitsSection()
+                    BiometricsSection()
+                    CoachAudioSection()
+                    WorkoutStreakSection()
+                    WorkoutPreferencesSection()
+                    NavCard {
+                        SettingsNavRow(
+                            label = "Drinks",
+                            subtitle = "Manage your drink catalog",
+                            onClick = onNavigateToDrinks,
+                        )
+                    }
+                }
+
+                SettingsGroup("Connections") {
+                    GoogleHealthSection()
+                    WithingsSection()
+                }
+
+                SettingsGroup("About") {
+                    AboutSection(
+                        versionName = viewModel.versionName,
+                        versionCode = viewModel.versionCode,
+                    )
+                    OutlinedButton(
+                        onClick = { confirmSignOut = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Hf.colors.alert),
+                        border = BorderStroke(1.dp, Hf.colors.alert),
+                    ) {
+                        Text("Sign out")
+                    }
                 }
             }
         }
+    }
 
-        // Drinks catalog management (IMPL-DRINK-01) — add/edit/regenerate/archive
-        // the user's personal drinks, previously web-only.
-        HfCard(transparent = true) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(text = "Drinks")
-                OutlinedButton(
-                    onClick = onNavigateToDrinks,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Manage drinks")
-                }
-            }
-        }
-
-        // Units (IMPL — user-configurable display units).
-        UnitsSection()
-
-        // Dashboard biometrics visibility + latest reading / cadence.
-        BiometricsSection()
-
-        // Workout-coach audio cues (PR2).
-        CoachAudioSection()
-
-        // Workout streak (weekly target).
-        WorkoutStreakSection()
-
-        // Workout preferences (free-text standing notes for the program designer).
-        WorkoutPreferencesSection()
-
-        // Google Health connection.
-        GoogleHealthSection()
-
-        // Withings connection (sleep pad + scale).
-        WithingsSection()
-
-        // About.
-        AboutSection(
-            versionName = viewModel.versionName,
-            versionCode = viewModel.versionCode,
+    if (confirmSignOut) {
+        ConfirmDialog(
+            title = "Sign out?",
+            message = "You can sign back in with your Google account at any time.",
+            confirmLabel = "Sign out",
+            destructive = true,
+            onConfirm = {
+                confirmSignOut = false
+                viewModel.signOut(onSignedOut)
+            },
+            onDismiss = { confirmSignOut = false },
         )
+    }
+}
 
-        // Sign out footer.
-        Button(
-            onClick = { viewModel.signOut(onSignedOut) },
-            modifier = Modifier.fillMaxWidth(),
+/** A section-titled group of settings cards. */
+@Composable
+private fun SettingsGroup(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionTitle(title)
+        content()
+    }
+}
+
+/** A card holding only navigation rows (tighter padding than [com.gte619n.healthfitness.ui.components.SettingsCard]). */
+@Composable
+private fun NavCard(content: @Composable ColumnScope.() -> Unit) {
+    HfCard(transparent = true) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 4.dp),
         ) {
-            Text("Sign out")
-        }
+            content()
         }
     }
 }

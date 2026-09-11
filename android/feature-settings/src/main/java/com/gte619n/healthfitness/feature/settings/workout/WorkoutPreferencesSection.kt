@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.SettingsCard
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -41,21 +40,15 @@ fun WorkoutPreferencesSection(
     var text by remember(stored) { mutableStateOf(stored) }
     val dirty = text.trim() != stored.trim()
 
-    HfCard(transparent = true) {
+    SettingsCard(
+        title = "Workout preferences",
+        description = "Standing notes the program builder follows every time — exercises to "
+            + "avoid, injuries to work around, or how you like to train.",
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Workout preferences", style = Hf.type.headingSm, color = Hf.colors.textPrimary)
-            Text(
-                "Standing notes the program builder follows every time — exercises to "
-                    + "avoid, injuries to work around, or how you like to train.",
-                style = Hf.type.bodySm,
-                color = Hf.colors.textTertiary,
-            )
-
             OutlinedTextField(
                 value = text,
                 onValueChange = {
