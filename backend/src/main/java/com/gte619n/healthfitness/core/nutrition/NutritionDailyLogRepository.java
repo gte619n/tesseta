@@ -31,14 +31,19 @@ public interface NutritionDailyLogRepository {
         return log;
     }
 
-    /** Build the persisted rollup from a macro total (with derived calories),
-     *  matching {@code NutritionService.logDay}. Shared by the default + Firestore impl. */
+    /**
+     * Build the persisted rollup from the summed entry macros. Uses the SUMMED
+     * calories (each entry already froze its own calories) rather than re-deriving
+     * from macros: re-deriving would drop the alcohol calories of drink entries
+     * (IMPL-DRINK-01), which sit outside the 4/4/9 macro split — and would also
+     * zero out any calorie-only quick-add that carries no macros. Shared by the
+     * default + Firestore impl.
+     */
     static NutritionDailyLog rollupFrom(String userId, LocalDate date, Macros total) {
-        Macros derived = total.withDerivedCalories();
         return new NutritionDailyLog(
             userId, date,
-            derived.proteinGrams(), derived.carbsGrams(), derived.fatGrams(),
-            derived.fiberGrams(), derived.sugarGrams(), derived.caloriesKcal(),
+            total.proteinGrams(), total.carbsGrams(), total.fatGrams(),
+            total.fiberGrams(), total.sugarGrams(), total.caloriesKcal(),
             null, null);
     }
 }

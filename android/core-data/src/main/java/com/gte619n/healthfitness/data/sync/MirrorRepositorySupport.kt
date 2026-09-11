@@ -187,11 +187,43 @@ class MirrorRepositorySupport @Inject constructor(
     /** Optimistic DELETE: tombstone the mirror row, enqueue, drain. */
     suspend fun deleteLocal(table: String, id: String, lastUpdate: Long) =
         withContext(NonCancellable) {
-            mirror.markArchived(table, id, lastUpdate)
+            markArchivedDirty(table, id, lastUpdate)
             outbox.enqueue(OutboxOp.DELETE, table, id, null)
             localWriteBus.signal(table)
             drainTrigger.requestDrain()
         }
+
+    /**
+     * Tombstone [id] AND flag it locally-dirty, so a concurrent network refresh
+     * ([refreshInto]) or reconcile ([pruneLocal]) — both of which skip dirty rows —
+     * cannot RESURRECT it before the outbox DELETE reaches the server.
+     *
+     * The bare DAO `markArchived` only flips `status=ARCHIVED` and bumps
+     * `lastUpdate`; it leaves `dirty` untouched. A row that was SYNCED (dirty=false)
+     * therefore tombstones with dirty=false, so a `refreshInto` that runs before the
+     * outbox drains (e.g. the nutrition day re-fetch while other entries are still
+     * settling) sees `existing.dirty == false`, upserts the still-present server row
+     * back as ACTIVE, and the just-deleted entry pops back — the "delete doesn't
+     * stick" bug. Preserving the payload keeps the LWW/outbox replay unchanged; only
+     * the dirty flag differs from [markArchived]. Falls back to the plain archive when
+     * the row is somehow absent (nothing to preserve).
+     */
+    private suspend fun markArchivedDirty(table: String, id: String, lastUpdate: Long) {
+        val existing = mirror.getRow(table, id)
+        if (existing == null) {
+            mirror.markArchived(table, id, lastUpdate)
+            return
+        }
+        mirror.upsert(
+            table,
+            existing.copy(
+                lastUpdate = lastUpdate,
+                status = SyncRowStatus.ARCHIVED.name,
+                dirty = true,
+                syncState = SyncRowState.PENDING.name,
+            ),
+        )
+    }
 
     /**
      * Emit a local-write signal for [table] without an accompanying optimistic

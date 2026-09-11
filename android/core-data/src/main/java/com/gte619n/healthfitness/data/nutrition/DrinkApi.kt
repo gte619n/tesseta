@@ -52,7 +52,17 @@ interface DrinkApi {
     /** `DELETE /api/me/drinks/{id}` — archive / soft-delete a drink (204). */
     @DELETE("api/me/drinks/{id}")
     suspend fun delete(@Path("id") id: String): Response<Unit>
+
+    /**
+     * `PUT /api/me/drinks/order` — persist the user's drink display order (204).
+     * The next `GET /api/me/drinks` returns the drinks in this order.
+     */
+    @PUT("api/me/drinks/order")
+    suspend fun reorder(@Body body: ReorderDrinksRequest): Response<Unit>
 }
 
 /** Body for `POST /api/me/drinks/analyze`. */
 data class AnalyzeDrinkRequest(val name: String)
+
+/** Body for `PUT /api/me/drinks/order` — my drink ids in the desired order. */
+data class ReorderDrinksRequest(val orderedIds: List<String>)

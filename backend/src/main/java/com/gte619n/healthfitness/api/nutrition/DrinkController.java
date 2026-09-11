@@ -65,7 +65,23 @@ public class DrinkController {
     @GetMapping
     public List<FoodResponse> list() {
         String userId = currentUser.get().userId();
-        return catalog.listMyDrinks(userId).stream().map(FoodResponse::from).toList();
+        return drinks.listOrderedDrinks(userId).stream().map(FoodResponse::from).toList();
+    }
+
+    /**
+     * Save the drink display order (IMPL-DRINK-01 reorder). Body is the full list
+     * of drink ids in the desired order; the Drink card and this list then render
+     * in that order. Ids not owned by the user are ignored on read.
+     */
+    @PutMapping("/order")
+    public ResponseEntity<Void> reorder(@RequestBody ReorderDrinksRequest body) {
+        if (body == null || body.orderedIds() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "orderedIds is required");
+        }
+        String userId = currentUser.get().userId();
+        drinks.saveOrder(userId, body.orderedIds());
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "foodCatalog");
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -168,6 +184,9 @@ public class DrinkController {
     // ----- DTOs ---------------------------------------------------------
 
     public record AnalyzeDrinkRequest(String name) {}
+
+    /** Body for {@code PUT /order}: drink ids in the desired display order. */
+    public record ReorderDrinksRequest(List<String> orderedIds) {}
 
     /** Create/update request. {@code macros} is the per-serving mixer contribution. */
     public record SaveDrinkRequest(

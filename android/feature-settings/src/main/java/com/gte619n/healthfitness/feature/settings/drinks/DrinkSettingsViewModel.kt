@@ -249,6 +249,42 @@ class DrinkSettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Move [drink] one place toward the top of the list (a no-op if already first),
+     * persisting the new order. Optimistically reorders the on-screen list so it
+     * moves instantly, then PUTs the full ordered id list; a failure refreshes back
+     * to the server truth.
+     */
+    fun moveUp(drink: Food) {
+        val drinks = _state.value.drinks
+        val index = drinks.indexOfFirst { it.foodId == drink.foodId }
+        if (index <= 0) return
+        reorderTo(drinks.swapped(index, index - 1))
+    }
+
+    /**
+     * Move [drink] one place toward the bottom of the list (a no-op if already last),
+     * persisting the new order. Optimistic, like [moveUp].
+     */
+    fun moveDown(drink: Food) {
+        val drinks = _state.value.drinks
+        val index = drinks.indexOfFirst { it.foodId == drink.foodId }
+        if (index < 0 || index >= drinks.lastIndex) return
+        reorderTo(drinks.swapped(index, index + 1))
+    }
+
+    /** Optimistically apply [reordered], persist it, and revert (refresh) on failure. */
+    private fun reorderTo(reordered: List<Food>) {
+        _state.update { it.copy(drinks = reordered) }
+        val orderedIds = reordered.map { it.foodId }
+        viewModelScope.launch {
+            runCatching { repo.reorder(orderedIds) }.onFailure { e ->
+                _state.update { it.copy(message = e.message ?: "Couldn't save order") }
+                refresh()
+            }
+        }
+    }
+
     fun archive(drink: Food) {
         viewModelScope.launch {
             runCatching { repo.archiveDrink(drink.foodId) }.fold(
@@ -274,3 +310,13 @@ class DrinkSettingsViewModel @Inject constructor(
 /** Format a Double without a trailing ".0" so form fields read cleanly. */
 internal fun trimNumber(value: Double): String =
     if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
+
+/**
+ * Return a copy of this list with the elements at [a] and [b] swapped. Pure +
+ * bounds-safe (returns the list unchanged if either index is out of range) so the
+ * move-up/move-down reorder is unit-testable without the ViewModel/Hilt.
+ */
+internal fun <T> List<T>.swapped(a: Int, b: Int): List<T> {
+    if (a == b || a !in indices || b !in indices) return this
+    return toMutableList().also { it[a] = this[b]; it[b] = this[a] }
+}

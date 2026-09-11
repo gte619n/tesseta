@@ -129,6 +129,51 @@ class DrinkSettingsViewModelTest {
     }
 
     @Test
+    fun `moveUp reorders the list optimistically and persists the new order`() = runTest {
+        val existing = listOf(drink("a", "Lager"), drink("b", "Stout"), drink("c", "IPA"))
+        coEvery { repo.listMyDrinks() } returns existing
+        coEvery { repo.reorder(any()) } returns Unit
+        val model = vm()
+
+        model.moveUp(existing[2]) // move "c" (index 2) up one → a, c, b
+
+        assertEquals(listOf("a", "c", "b"), model.state.value.drinks.map { it.foodId })
+        coVerify { repo.reorder(listOf("a", "c", "b")) }
+    }
+
+    @Test
+    fun `moveDown reorders the list optimistically and persists the new order`() = runTest {
+        val existing = listOf(drink("a", "Lager"), drink("b", "Stout"), drink("c", "IPA"))
+        coEvery { repo.listMyDrinks() } returns existing
+        coEvery { repo.reorder(any()) } returns Unit
+        val model = vm()
+
+        model.moveDown(existing[0]) // move "a" (index 0) down one → b, a, c
+
+        assertEquals(listOf("b", "a", "c"), model.state.value.drinks.map { it.foodId })
+        coVerify { repo.reorder(listOf("b", "a", "c")) }
+    }
+
+    @Test
+    fun `moveUp on the first drink is a no-op`() = runTest {
+        val existing = listOf(drink("a", "Lager"), drink("b", "Stout"))
+        coEvery { repo.listMyDrinks() } returns existing
+        val model = vm()
+
+        model.moveUp(existing[0])
+
+        assertEquals(listOf("a", "b"), model.state.value.drinks.map { it.foodId })
+        coVerify(exactly = 0) { repo.reorder(any()) }
+    }
+
+    @Test
+    fun `swapped swaps two indices and is bounds-safe`() {
+        assertEquals(listOf("b", "a", "c"), listOf("a", "b", "c").swapped(0, 1))
+        // Out-of-range index leaves the list unchanged.
+        assertEquals(listOf("a", "b"), listOf("a", "b").swapped(0, 5))
+    }
+
+    @Test
     fun `archive removes the drink from the list`() = runTest {
         val existing = listOf(drink("a", "Lager"), drink("b", "Stout"))
         coEvery { repo.listMyDrinks() } returns existing
