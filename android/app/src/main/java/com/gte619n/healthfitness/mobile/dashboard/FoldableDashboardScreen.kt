@@ -51,6 +51,7 @@ import java.time.Instant
 fun FoldableDashboardScreen(
     onOpenGoals: () -> Unit = {},
     onNavigate: (route: String) -> Unit = {},
+    onHome: () -> Unit = {},
 ) {
     val vm: DashboardViewModel = hiltViewModel()
     val bloodVm: DashboardBloodViewModel = hiltViewModel()
@@ -67,7 +68,8 @@ fun FoldableDashboardScreen(
             .background(Hf.colors.canvas),
     ) {
         Row(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-            FoldableSidebar(user = ui.user, onOpenGoals = onOpenGoals, onNavigate = onNavigate)
+            FoldableSidebar(
+                user = ui.user, onOpenGoals = onOpenGoals, onNavigate = onNavigate, onHome = onHome)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -134,6 +136,7 @@ private fun FoldableSidebar(
     user: DashboardUser? = null,
     onOpenGoals: () -> Unit = {},
     onNavigate: (route: String) -> Unit = {},
+    onHome: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -146,11 +149,18 @@ private fun FoldableSidebar(
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         // Logo — Tesseta mark, ink squircle per LOGO-SPEC.md (foldable
-        // section). 38 dp matches the spec's foldable rail size.
-        TessetaMark(variant = TessetaMarkVariant.DARK, size = 38.dp)
+        // section). 38 dp matches the spec's foldable rail size. Tapping it
+        // returns to the dashboard home (it was previously inert).
+        TessetaMark(
+            variant = TessetaMarkVariant.DARK,
+            size = 38.dp,
+            modifier = Modifier.clickable(onClickLabel = "Home") { onHome() },
+        )
         Spacer(Modifier.height(9.dp))
         DashboardFallbacks.foldableNav.forEach { dest ->
             val onClick: () -> Unit = when (dest.label) {
+                // "Dashboard" is the home item under the logo; was a dead no-op.
+                "Dashboard" -> onHome
                 "Goals" -> onOpenGoals
                 "Body" -> ({ onNavigate(com.gte619n.healthfitness.feature.bodycomposition.nav.BodyCompositionRoutes.BODY) })
                 "Blood" -> ({ onNavigate(com.gte619n.healthfitness.feature.blood.nav.BloodRoutes.OVERVIEW) })

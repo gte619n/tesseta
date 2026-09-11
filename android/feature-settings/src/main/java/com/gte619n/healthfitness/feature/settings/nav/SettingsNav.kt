@@ -4,12 +4,14 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.gte619n.healthfitness.feature.settings.SettingsScreen
+import com.gte619n.healthfitness.feature.settings.drinks.DrinkSettingsScreen
 import com.gte619n.healthfitness.feature.settings.profile.ProfileScreen
 
 // String-based Navigation-Compose routes for the settings surface.
 object SettingsRoutes {
     const val SETTINGS = "settings"
     const val PROFILE = "settings/profile"
+    const val DRINKS = "settings/drinks"
 }
 
 // Registers the settings destinations. The app wires `onSignedOut` to its
@@ -22,11 +24,17 @@ fun NavGraphBuilder.settingsGraph(
         SettingsScreen(
             onNavigateBack = { navController.popBackStack() },
             onNavigateToProfile = { navController.navigate(SettingsRoutes.PROFILE) },
+            onNavigateToDrinks = { navController.navigate(SettingsRoutes.DRINKS) },
             onSignedOut = onSignedOut,
         )
     }
     composable(SettingsRoutes.PROFILE) {
         ProfileScreen(
+            onNavigateBack = { navController.popBackStack() },
+        )
+    }
+    composable(SettingsRoutes.DRINKS) {
+        DrinkSettingsScreen(
             onNavigateBack = { navController.popBackStack() },
         )
     }

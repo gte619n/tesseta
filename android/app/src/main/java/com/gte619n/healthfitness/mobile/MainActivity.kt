@@ -311,11 +311,13 @@ fun DashboardRoot(
     widthClass: WindowWidthSizeClass,
     onOpenGoals: () -> Unit = {},
     onNavigate: (route: String) -> Unit = {},
+    onHome: () -> Unit = {},
 ) {
     // Compact (< 600 dp) → phone Today screen.
     // Medium / Expanded (≥ 600 dp) → foldable/tablet dashboard with icon-only sidebar.
     when (widthClass) {
-        WindowWidthSizeClass.Compact -> PhoneTodayScreen(onNavigate = onNavigate)
-        else -> FoldableDashboardScreen(onOpenGoals = onOpenGoals, onNavigate = onNavigate)
+        WindowWidthSizeClass.Compact -> PhoneTodayScreen(onNavigate = onNavigate, onHome = onHome)
+        else -> FoldableDashboardScreen(
+            onOpenGoals = onOpenGoals, onNavigate = onNavigate, onHome = onHome)
     }
 }

@@ -123,6 +123,15 @@ private fun AppNavHostGraph(
                 widthClass = widthClass,
                 onOpenGoals = { navController.navigate(Routes.GOALS_LIST) },
                 onNavigate = { route -> navController.navigate(route) },
+                // Tapping the tesseta logo / "Dashboard" home control returns to the
+                // single dashboard instance instead of pushing a duplicate (which
+                // mounted an empty second dashboard — the "blank screen").
+                onHome = {
+                    navController.navigate(Routes.DASHBOARD) {
+                        popUpTo(Routes.DASHBOARD) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                },
             )
         }
         composable(Routes.GOALS_LIST) {
