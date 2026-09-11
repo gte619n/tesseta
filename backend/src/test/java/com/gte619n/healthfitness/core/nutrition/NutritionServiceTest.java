@@ -68,6 +68,31 @@ class NutritionServiceTest {
     }
 
     @Test
+    void addEntry_preservesDrinkAlcoholCalories_inEntryAndDailyRollup() {
+        // IMPL-DRINK-01: a drink's calories are mostly alcohol (7 kcal/g), which sit
+        // OUTSIDE the 4/4/9 macro split. Neither the entry freeze nor the daily
+        // rollup may re-derive them, or a gin & soda (no mixer macros) would read 0.
+        InMemNutrition rollups = new InMemNutrition();
+        NutritionService svc = new NutritionService(rollups, new InMemEntries(), capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 23);
+
+        // Gin & soda: 132 kcal, all from alcohol; zero mixer macros.
+        FoodEntry gin = svc.addEntry(
+            USER, date, MealType.DRINKS, "drink-1", "Gin and Soda", "200 ml", 200.0, 1.0,
+            new Macros(132.0, 0.0, 0.0, 0.0, 0.0, 0.0), EntrySource.CATALOG);
+        assertEquals(132.0, gin.macros().caloriesKcal(), 1e-9, "entry keeps alcohol calories");
+
+        // Add a second drink with a little mixer sugar; its calories must survive too.
+        svc.addEntry(
+            USER, date, MealType.DRINKS, "drink-2", "Rum & Coke", "250 ml", 250.0, 1.0,
+            new Macros(210.0, 0.0, 22.0, 0.0, 0.0, 22.0), EntrySource.CATALOG);
+
+        // Daily rollup = SUM of the frozen calories (132 + 210), not re-derived
+        // (which would give 4*22 = 88).
+        assertEquals(342.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+    }
+
+    @Test
     void logDay_upsertsSameDate_ratherThanDuplicating() {
         InMemNutrition repo = new InMemNutrition();
         NutritionService svc = new NutritionService(repo, new InMemEntries(), capturingPublisher(new ArrayList<>()));

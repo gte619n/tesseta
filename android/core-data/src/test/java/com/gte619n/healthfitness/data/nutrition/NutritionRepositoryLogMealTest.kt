@@ -175,6 +175,48 @@ class NutritionRepositoryLogMealTest {
         assertTrue(day.meals.isEmpty())
     }
 
+    // --- delete-doesn't-stick: a tombstoned entry must not be resurrected by the
+    // network re-pull that day() runs while other entries are still settling ---
+
+    @Test
+    fun `deleting an entry sticks even when day() re-pulls while settling`() = runBlocking {
+        // A drink entry: catalog-backed (foodId set) with no image, so it's
+        // image-missing → the day is "settling" → day() calls fillDay(), which
+        // re-pulls from the server. The server still returns the entry (the outbox
+        // DELETE hasn't drained yet), so a non-dirty tombstone would be resurrected.
+        val drink = Entry(
+            entryId = "d1",
+            meal = "DRINKS",
+            foodId = "food-beer",
+            foodName = "Lager",
+            quantity = 1.0,
+            macros = Macros(caloriesKcal = 150.0),
+            source = "CATALOG",
+            imageStatus = "NONE",
+        )
+        coEvery { api.getDay(date) } returns NutritionDay(
+            date = date,
+            totals = drink.macros,
+            meals = listOf(MealGroup("DRINKS", drink.macros, listOf(drink))),
+        )
+        repository.refreshDay(date)
+        assertEquals(1, repository.observeDay(date).first().meals.sumOf { it.entries.size })
+
+        // Optimistic delete: tombstones the mirror row + enqueues an outbox DELETE.
+        repository.deleteEntry(date, "d1")
+
+        // The reactive stream drops it immediately.
+        assertTrue(repository.observeDay(date).first().meals.all { it.entries.isEmpty() })
+
+        // day() re-pulls (settling) and the server STILL has the entry — the
+        // dirty tombstone must survive the refreshInto/pruneLocal and NOT reappear.
+        val day = repository.day(date)
+        assertTrue(
+            "a deleted entry must not be resurrected by the settling re-pull",
+            day.meals.all { it.entries.isEmpty() },
+        )
+    }
+
     // --- portion of meal: a composite meal's macros re-scale by its portion ---
 
     private fun compositeIngredient(kcal: Double, protein: Double) =

@@ -1,7 +1,6 @@
 package com.gte619n.healthfitness.feature.settings.drinks
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,11 +17,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.LocalBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -104,11 +107,15 @@ fun DrinkSettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         SectionTitle("My drinks")
-                        state.drinks.forEach { drink ->
+                        state.drinks.forEachIndexed { index, drink ->
                             DrinkRow(
                                 drink = drink,
+                                canMoveUp = index > 0,
+                                canMoveDown = index < state.drinks.lastIndex,
                                 onEdit = { viewModel.openEdit(drink) },
                                 onRegenerate = { viewModel.regenerateImage(drink) },
+                                onMoveUp = { viewModel.moveUp(drink) },
+                                onMoveDown = { viewModel.moveDown(drink) },
                                 onArchive = { viewModel.archive(drink) },
                             )
                         }
@@ -136,11 +143,16 @@ fun DrinkSettingsScreen(
 @Composable
 private fun DrinkRow(
     drink: Food,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
     onEdit: () -> Unit,
     onRegenerate: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onArchive: () -> Unit,
 ) {
     var showArchive by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -164,10 +176,42 @@ private fun DrinkRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            RowAction("Edit", onEdit)
-            RowAction("Image", onRegenerate)
-            RowAction("Archive", { showArchive = true })
+        // Single ⋮ overflow menu (normal 48dp touch target), matching the nutrition
+        // screen's convention, replacing the tiny inline Edit/Image/Archive controls.
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    contentDescription = "Drink actions",
+                    tint = Hf.colors.textSecondary,
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Edit", style = Hf.type.bodyMd, color = Hf.colors.textPrimary) },
+                    onClick = { menuOpen = false; onEdit() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Regenerate image", style = Hf.type.bodyMd, color = Hf.colors.textPrimary) },
+                    onClick = { menuOpen = false; onRegenerate() },
+                )
+                if (canMoveUp) {
+                    DropdownMenuItem(
+                        text = { Text("Move up", style = Hf.type.bodyMd, color = Hf.colors.textPrimary) },
+                        onClick = { menuOpen = false; onMoveUp() },
+                    )
+                }
+                if (canMoveDown) {
+                    DropdownMenuItem(
+                        text = { Text("Move down", style = Hf.type.bodyMd, color = Hf.colors.textPrimary) },
+                        onClick = { menuOpen = false; onMoveDown() },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Archive", style = Hf.type.bodyMd, color = Hf.colors.alert) },
+                    onClick = { menuOpen = false; showArchive = true },
+                )
+            }
         }
     }
 
@@ -193,16 +237,6 @@ private fun DrinkRow(
             },
         )
     }
-}
-
-@Composable
-private fun RowAction(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        style = Hf.type.capsSm,
-        color = Hf.colors.accent,
-        modifier = Modifier.clickable { onClick() }.padding(horizontal = 4.dp, vertical = 2.dp),
-    )
 }
 
 /** Generated glass image, or a glassware placeholder when it isn't READY (D12). */

@@ -145,6 +145,20 @@ class DrinkRepository @Inject constructor(
         warm()
     }
 
+    /**
+     * Persist the user's drink display order ([orderedIds] = my drink ids in the
+     * desired order) then re-warm the cache. The warm re-fetches `GET /api/me/drinks`
+     * (now in the saved order) and [replaceCache]'s `now - i` updatedAt trick makes
+     * the cache — and so the Drink card + management list — reflect the new order.
+     */
+    suspend fun reorder(orderedIds: List<String>) {
+        val response = api.reorder(ReorderDrinksRequest(orderedIds))
+        if (!response.isSuccessful) {
+            throw IllegalStateException("Reorder failed (${response.code()})")
+        }
+        warm()
+    }
+
     /** Outcome of [analyze] — separates the 422 "AI unavailable" fallback path. */
     sealed interface AnalyzeResult {
         data class Success(val proposal: DrinkProposal) : AnalyzeResult

@@ -219,9 +219,15 @@ public class NutritionService {
             entryId = UUID.randomUUID().toString();
         }
         boolean composite = ingredients != null && !ingredients.isEmpty();
+        // Drinks (IMPL-DRINK-01) carry alcohol calories (7 kcal/g) that sit OUTSIDE
+        // the 4/4/9 macro split, so we must NOT re-derive their calories from macros
+        // — that would drop the alcohol calories the client already froze. Every
+        // other entry keeps calories consistent with its macros.
+        Macros frozenMacros = macros == null ? null
+            : (meal == MealType.DRINKS ? macros : macros.withDerivedCalories());
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, foodId, foodName, servingLabel,
-            servingGrams, quantity, macros != null ? macros.withDerivedCalories() : null,
+            servingGrams, quantity, frozenMacros,
             null, null, source,
             composite ? withDerivedCalories(ingredients) : null,
             composite ? mealImageUrl : null,
