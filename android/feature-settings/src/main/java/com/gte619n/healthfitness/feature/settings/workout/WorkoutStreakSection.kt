@@ -18,7 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.SettingsCard
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
@@ -33,36 +33,27 @@ fun WorkoutStreakSection(
 ) {
     val target by viewModel.weeklyTarget.collectAsStateWithLifecycle()
 
-    HfCard(transparent = true) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+    SettingsCard(title = "Workout streak") {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Workout streak", style = Hf.type.headingSm, color = Hf.colors.textPrimary)
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text("Weekly goal", style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
-                    Text(
-                        "Workouts per week to keep your streak",
-                        style = Hf.type.bodySm,
-                        color = Hf.colors.textTertiary,
-                    )
-                }
-                Stepper(
-                    value = target,
-                    onDecrement = { viewModel.setTarget(target - 1) },
-                    onIncrement = { viewModel.setTarget(target + 1) },
-                    canDecrement = target > viewModel.minTarget,
-                    canIncrement = target < viewModel.maxTarget,
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Weekly goal", style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
+                Text(
+                    "Workouts per week to keep your streak",
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textTertiary,
                 )
             }
+            Stepper(
+                value = target,
+                onDecrement = { viewModel.setTarget(target - 1) },
+                onIncrement = { viewModel.setTarget(target + 1) },
+                canDecrement = target > viewModel.minTarget,
+                canIncrement = target < viewModel.maxTarget,
+            )
         }
     }
 }

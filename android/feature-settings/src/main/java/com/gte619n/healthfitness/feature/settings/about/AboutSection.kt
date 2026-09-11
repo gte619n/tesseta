@@ -1,19 +1,19 @@
 package com.gte619n.healthfitness.feature.settings.about
 
 import android.content.Intent
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import com.gte619n.healthfitness.ui.components.HfCard
+import com.gte619n.healthfitness.ui.components.SettingsCard
+import com.gte619n.healthfitness.ui.components.SettingsNavRow
+import com.gte619n.healthfitness.ui.theme.Hf
+import com.gte619n.healthfitness.ui.theme.type
 
 @Composable
 fun AboutSection(
@@ -22,46 +22,26 @@ fun AboutSection(
 ) {
     val context = LocalContext.current
 
-    HfCard(transparent = true) {
-        Column(
+    SettingsCard(title = "About") {
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("About")
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Version")
-                Text("$versionName (#$versionCode)")
-            }
-
-            LinkRow(label = "Privacy Policy") {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, PRIVACY_URL.toUri()),
-                )
-            }
-            LinkRow(label = "Terms of Service") {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, TERMS_URL.toUri()),
-                )
-            }
+            Text("Version", style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
+            Text(
+                "$versionName (#$versionCode)",
+                style = Hf.type.monoMd,
+                color = Hf.colors.textSecondary,
+            )
         }
-    }
-}
 
-@Composable
-private fun LinkRow(label: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label)
-        Text("›")
+        SettingsNavRow(label = "Privacy Policy", onClick = {
+            context.startActivity(Intent(Intent.ACTION_VIEW, PRIVACY_URL.toUri()))
+        })
+        SettingsNavRow(label = "Terms of Service", onClick = {
+            context.startActivity(Intent(Intent.ACTION_VIEW, TERMS_URL.toUri()))
+        })
     }
 }
 

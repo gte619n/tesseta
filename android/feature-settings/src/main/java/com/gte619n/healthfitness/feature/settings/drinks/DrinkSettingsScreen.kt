@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,6 +49,7 @@ import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.ui.components.HfCard
 import com.gte619n.healthfitness.ui.components.HfScreenHeader
 import com.gte619n.healthfitness.ui.components.SectionTitle
+import com.gte619n.healthfitness.ui.components.SettingsContentMaxWidth
 import com.gte619n.healthfitness.ui.image.HfAsyncImage
 import com.gte619n.healthfitness.ui.state.ErrorState
 import com.gte619n.healthfitness.ui.state.LoadingState
@@ -78,53 +80,62 @@ fun DrinkSettingsScreen(
             title = "Drinks",
             subtitle = "Manage your drink catalog",
             onBack = onNavigateBack,
+            trailing = {
+                Button(onClick = viewModel::openAdd) { Text("Add drink") }
+            },
         )
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Button(onClick = viewModel::openAdd, modifier = Modifier.fillMaxWidth()) {
-                Text("Add a drink")
-            }
-
-            when {
-                state.loading && state.drinks.isEmpty() -> LoadingState()
-                state.error != null && state.drinks.isEmpty() ->
-                    ErrorState(message = state.error!!, onRetry = viewModel::refresh)
-                state.drinks.isEmpty() ->
-                    Text(
-                        "No drinks yet — add one to log it during a session.",
-                        style = Hf.type.bodySm,
-                        color = Hf.colors.textTertiary,
-                    )
-                else -> HfCard(transparent = true) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        SectionTitle("My drinks")
-                        state.drinks.forEachIndexed { index, drink ->
-                            DrinkRow(
-                                drink = drink,
-                                canMoveUp = index > 0,
-                                canMoveDown = index < state.drinks.lastIndex,
-                                onEdit = { viewModel.openEdit(drink) },
-                                onRegenerate = { viewModel.regenerateImage(drink) },
-                                onMoveUp = { viewModel.moveUp(drink) },
-                                onMoveDown = { viewModel.moveDown(drink) },
-                                onArchive = { viewModel.archive(drink) },
-                            )
+            Column(
+                modifier = Modifier
+                    .widthIn(max = SettingsContentMaxWidth)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                when {
+                    state.loading && state.drinks.isEmpty() -> LoadingState()
+                    state.error != null && state.drinks.isEmpty() ->
+                        ErrorState(message = state.error!!, onRetry = viewModel::refresh)
+                    state.drinks.isEmpty() ->
+                        Text(
+                            "No drinks yet — add one to log it during a session.",
+                            style = Hf.type.bodySm,
+                            color = Hf.colors.textTertiary,
+                        )
+                    else -> HfCard(transparent = true) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            SectionTitle("My drinks")
+                            state.drinks.forEachIndexed { index, drink ->
+                                DrinkRow(
+                                    drink = drink,
+                                    canMoveUp = index > 0,
+                                    canMoveDown = index < state.drinks.lastIndex,
+                                    onEdit = { viewModel.openEdit(drink) },
+                                    onRegenerate = { viewModel.regenerateImage(drink) },
+                                    onMoveUp = { viewModel.moveUp(drink) },
+                                    onMoveDown = { viewModel.moveDown(drink) },
+                                    onArchive = { viewModel.archive(drink) },
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            state.message?.let { msg ->
-                Text(msg, style = Hf.type.bodySm, color = Hf.colors.textTertiary)
+                state.message?.let { msg ->
+                    Text(msg, style = Hf.type.bodySm, color = Hf.colors.textTertiary)
+                }
             }
         }
     }
