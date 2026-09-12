@@ -56,6 +56,7 @@ class NutritionOpEnqueuer @Inject constructor(
     private val savedMealAdapter = moshi.adapter(LogSavedMealPayload::class.java)
     private val labelAdapter = moshi.adapter(ConfirmLabelPayload::class.java)
     private val itemsAdapter = moshi.adapter(ConfirmMealItemsPayload::class.java)
+    private val leftoversAdapter = moshi.adapter(RemoveLeftoversPayload::class.java)
 
     /** Enqueue a fire-and-forget text-describe. Returns the op id. */
     suspend fun enqueueDescribeAsync(date: String, mealWire: String, description: String): String =
@@ -120,6 +121,28 @@ class NutritionOpEnqueuer @Inject constructor(
             mealWire = mealWire,
             label = label,
             payloadJson = itemsAdapter.toJson(ConfirmMealItemsPayload(confirmItems)),
+        )
+    }
+
+    /**
+     * IMPL-LEFTOVER-01: enqueue a durable leftover-photo analyze for the composite
+     * entry [entryId]. The JPEG is parked in a cache file (like [enqueueCapturePhoto]);
+     * the worker POSTs it to `…/leftovers/analyze`. Survives process death.
+     */
+    suspend fun enqueueRemoveLeftovers(date: String, entryId: String, jpeg: ByteArray): String {
+        val id = UUID.randomUUID().toString()
+        val file = File(context.cacheDir, "nutrition-op-$id.jpg")
+        file.writeBytes(jpeg)
+        return enqueue(
+            id = id,
+            type = NutritionOpType.REMOVE_LEFTOVERS,
+            // The leftover meal group is irrelevant (the target entry already lives
+            // in its meal); reuse the field only to satisfy the schema.
+            date = date,
+            mealWire = "",
+            label = "Analyzing leftovers…",
+            payloadJson = leftoversAdapter.toJson(RemoveLeftoversPayload(entryId)),
+            jpegPath = file.absolutePath,
         )
     }
 
@@ -204,6 +227,7 @@ class NutritionOpWorker @AssistedInject constructor(
     private val savedMealAdapter = moshi.adapter(LogSavedMealPayload::class.java)
     private val labelAdapter = moshi.adapter(ConfirmLabelPayload::class.java)
     private val itemsAdapter = moshi.adapter(ConfirmMealItemsPayload::class.java)
+    private val leftoversAdapter = moshi.adapter(RemoveLeftoversPayload::class.java)
 
     override suspend fun doWork(): Result {
         val id = inputData.getString(KEY_ID) ?: return Result.failure()
@@ -224,9 +248,12 @@ class NutritionOpWorker @AssistedInject constructor(
                 NutritionOpType.CONFIRM_LABEL -> confirmLabel(op)
                 NutritionOpType.CONFIRM_MEAL_ITEMS -> confirmMealItems(op)
                 NutritionOpType.CAPTURE_PHOTO -> capturePhoto(op)
+                NutritionOpType.REMOVE_LEFTOVERS -> removeLeftovers(op)
             }
             // On success, DON'T delete the JPEG: a photo capture just handed it to
             // the preview store, which owns it until the generated image lands.
+            // (A leftover op deletes its own cache file inside removeLeftovers —
+            // the leftover photo is never shown or reused once uploaded, D11.)
             store.remove(op.id)
             Result.success()
         } catch (e: Exception) {
@@ -307,6 +334,17 @@ class NutritionOpWorker @AssistedInject constructor(
                 entryId = ci.clientEntryId,
             )
         }
+    }
+
+    private suspend fun removeLeftovers(op: NutritionOpEntity) {
+        val p = leftoversAdapter.fromJson(op.payloadJson!!)!!
+        val path = op.jpegPath ?: return
+        val file = File(path)
+        if (!file.exists()) return
+        nutrition.runRemoveLeftovers(op.date, p.targetEntryId, file.readBytes())
+        // The leftover photo is never shown or reused after upload (D11): drop the
+        // local cache file now (the generic success path preserves it for capture).
+        runCatching { file.delete() }
     }
 
     private suspend fun capturePhoto(op: NutritionOpEntity) {

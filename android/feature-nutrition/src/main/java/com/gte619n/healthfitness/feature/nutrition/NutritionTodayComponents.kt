@@ -125,6 +125,18 @@ private fun NutritionOverflowMenu(
     }
 }
 
+/** IMPL-LEFTOVER-01 (D17) — small "leftovers" pill by an APPLIED entry's name. */
+@Composable
+internal fun LeftoverBadge() {
+    Box(
+        modifier = Modifier
+            .background(Hf.colors.surface, RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text("leftovers", style = Hf.type.capsSm, color = Hf.colors.accent)
+    }
+}
+
 @Composable
 internal fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Box(
@@ -284,6 +296,11 @@ internal fun EntryRow(
                 Text(entry.foodName, style = Hf.type.bodyMd, color = Hf.colors.textPrimary)
                 // #40: per-row PENDING/FAILED badge for an offline nutrition write.
                 SyncBadge(syncState = entry.syncState)
+                // IMPL-LEFTOVER-01 (D17): a small "leftovers" badge by the name for
+                // an entry whose macros have been reduced to the consumed amount.
+                if (entry.hasAppliedLeftover) {
+                    LeftoverBadge()
+                }
             }
             Spacer(Modifier.height(2.dp))
             // Secondary line follows the logging stages: analyzing → creating the
@@ -299,6 +316,9 @@ internal fun EntryRow(
                     isPendingOp && entry.localImagePath != null -> "Uploading…"
                     isPendingOp -> "Logging…"
                     entry.isAnalyzing -> "Analyzing your photo…"
+                    // IMPL-LEFTOVER-01 (D8/D7): leftover pass states surface on the row.
+                    entry.isAnalyzingLeftovers -> "Analyzing leftovers… · $macrosLine"
+                    entry.hasLeftoverReview -> "Leftovers ready · tap to review · $macrosLine"
                     failedAnalysis -> "Couldn’t read photo · tap to retry"
                     entry.imageStatus == "PENDING" -> "Creating image… · $macrosLine"
                     // A picture is expected but missing — point at the retry chip.

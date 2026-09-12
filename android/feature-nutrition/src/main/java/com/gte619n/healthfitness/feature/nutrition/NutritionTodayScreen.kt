@@ -49,6 +49,8 @@ import java.time.LocalDate
 fun NutritionTodayRoute(
     onOpenTarget: () -> Unit,
     onOpenCapture: (LocalDate) -> Unit,
+    // IMPL-LEFTOVER-01 (D10): launch leftover-mode capture for a composite entry.
+    onStartLeftoverCapture: (LocalDate, String) -> Unit = { _, _ -> },
     onBack: (() -> Unit)? = null,
     viewModel: NutritionTodayViewModel = hiltViewModel(),
     // IMPL-DRINK-01 (D7): the ⋮ menu's Drink Mode toggle reads/writes the same
@@ -79,6 +81,12 @@ fun NutritionTodayRoute(
         onSaveComposite = viewModel::saveCompositeMeal,
         onPreviewAdjustment = viewModel::previewAdjustment,
         onApplyAdjustment = viewModel::applyAdjustment,
+        onStartLeftoverCapture = { entryId -> onStartLeftoverCapture(state.date, entryId) },
+        onReviewLeftovers = viewModel::reviewLeftovers,
+        onCloseLeftoverReview = viewModel::closeLeftoverReview,
+        onApplyLeftovers = viewModel::applyLeftovers,
+        onDiscardLeftovers = viewModel::discardLeftovers,
+        onRestoreFullPortion = viewModel::restoreFullPortion,
         onOpenAddSheet = viewModel::openAddSheet,
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
@@ -111,6 +119,13 @@ fun NutritionTodayScreen(
     onSaveComposite: (String, String, Double, List<Double>) -> Unit,
     onPreviewAdjustment: suspend (String, String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
     onApplyAdjustment: (String, com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
+    // IMPL-LEFTOVER-01 (D4/D7/D15): leftover capture launch + review + restore.
+    onStartLeftoverCapture: (String) -> Unit = {},
+    onReviewLeftovers: (Entry) -> Unit = {},
+    onCloseLeftoverReview: () -> Unit = {},
+    onApplyLeftovers: (String) -> Unit = {},
+    onDiscardLeftovers: (String) -> Unit = {},
+    onRestoreFullPortion: (String) -> Unit = {},
     onOpenAddSheet: () -> Unit,
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
@@ -198,6 +213,27 @@ fun NutritionTodayScreen(
             previewAdjustment = { instruction -> onPreviewAdjustment(composite.entryId, instruction) },
             onApplyAdjustment = { request -> onApplyAdjustment(composite.entryId, request) },
             applyingAdjustment = state.savingAdjust,
+            // IMPL-LEFTOVER-01 (D4/D7/D15): the leftover controls live on the
+            // composite meal's sheet (only composite photo meals are eligible, D5).
+            savingLeftover = state.savingLeftover,
+            onRemoveLeftovers = {
+                onCloseEditSheet()
+                onStartLeftoverCapture(composite.entryId)
+            },
+            onReviewLeftovers = { onReviewLeftovers(composite) },
+            onRestoreFullPortion = { onRestoreFullPortion(composite.entryId) },
+        )
+    }
+
+    // IMPL-LEFTOVER-01 (D7): the review-diff sheet (Served→Ate, Apply/Discard).
+    val reviewing = state.reviewingLeftover
+    if (reviewing != null) {
+        LeftoverReviewSheet(
+            entry = reviewing,
+            saving = state.savingLeftover,
+            onDismiss = onCloseLeftoverReview,
+            onApply = { onApplyLeftovers(reviewing.entryId) },
+            onDiscard = { onDiscardLeftovers(reviewing.entryId) },
         )
     }
 }

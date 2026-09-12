@@ -68,4 +68,12 @@ enum class NutritionOpType {
 
     /** Confirm a scanned nutrition-label draft (create food + entry). */
     CONFIRM_LABEL,
+
+    /**
+     * IMPL-LEFTOVER-01 (D8): multipart leftover-photo upload for a composite entry
+     * → `…/leftovers/analyze`. Carries the target entryId in [payloadJson] and the
+     * JPEG in a cache file ([jpegPath]), exactly like [CAPTURE_PHOTO]. Survives
+     * process death; the backend job runs the leftover comparison.
+     */
+    REMOVE_LEFTOVERS,
 }

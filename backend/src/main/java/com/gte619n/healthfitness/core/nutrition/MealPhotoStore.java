@@ -23,4 +23,16 @@ public interface MealPhotoStore {
      * @return a storage reference (a public URL) for the stored object
      */
     String store(String userId, byte[] imageBytes, String mimeType);
+
+    /**
+     * Best-effort delete of a stored photo by its reference. Used to discard the
+     * transient leftover photo once analysis is done (IMPL-LEFTOVER-01, spec D11).
+     * Implementations must not throw — a failed delete just leaves an orphan object.
+     * Default is a no-op so alternative stores need not implement it.
+     *
+     * @param ref the storage reference (public URL) returned from {@link #store}
+     */
+    default void delete(String ref) {
+        // no-op by default
+    }
 }

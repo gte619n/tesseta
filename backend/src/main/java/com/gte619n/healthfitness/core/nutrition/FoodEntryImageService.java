@@ -252,7 +252,7 @@ public class FoodEntryImageService {
                 e.servingLabel(), e.servingGrams(), e.quantity(), e.macros(), e.photoRef(),
                 e.contentHash(), e.source(), e.ingredients(),
                 url != null ? url : e.mealImageUrl(), status, e.analysisStatus(),
-                e.createdAt(), Instant.now());
+                e.createdAt(), Instant.now(), e.leftover());
             entries.save(updated);
         });
     }

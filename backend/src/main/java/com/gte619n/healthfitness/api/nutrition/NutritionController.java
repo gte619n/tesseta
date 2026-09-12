@@ -14,6 +14,7 @@ import com.gte619n.healthfitness.core.nutrition.FoodSource;
 import com.gte619n.healthfitness.core.nutrition.MacroTarget;
 import com.gte619n.healthfitness.core.nutrition.MacroTargetService;
 import com.gte619n.healthfitness.core.nutrition.Macros;
+import com.gte619n.healthfitness.core.nutrition.LeftoverService;
 import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService;
 import com.gte619n.healthfitness.core.nutrition.MealCaptureService;
 import com.gte619n.healthfitness.core.nutrition.MealDescriptionService;
@@ -63,6 +64,7 @@ public class NutritionController {
     private final MealDescriptionService mealDescription;
     private final MealAdjustmentService mealAdjustment;
     private final ServingHintService servingHints;
+    private final LeftoverService leftovers;
 
     public NutritionController(
         CurrentUserProvider currentUser,
@@ -75,7 +77,8 @@ public class NutritionController {
         MealCaptureService mealCapture,
         MealDescriptionService mealDescription,
         MealAdjustmentService mealAdjustment,
-        ServingHintService servingHints
+        ServingHintService servingHints,
+        LeftoverService leftovers
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
@@ -88,6 +91,7 @@ public class NutritionController {
         this.mealDescription = mealDescription;
         this.mealAdjustment = mealAdjustment;
         this.servingHints = servingHints;
+        this.leftovers = leftovers;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -409,6 +413,95 @@ public class NutritionController {
             entry = mealAdjustment.apply(userId, date, entryId, accepted, body.saveAsMeal());
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return toResponse(entry);
+    }
+
+    // ----- Remove Leftovers (IMPL-LEFTOVER-01) -------------------------
+
+    /**
+     * Start a "Remove Leftovers" pass: upload a photo of what's left on the plate.
+     * Flips the composite entry to a leftover {@code ANALYZING} state and returns
+     * it immediately (202); the background job compares the leftover photo to the
+     * original meal photo, estimates what was eaten and either surfaces a
+     * pending-review proposal or a "couldn't read" rejection (spec D8/D12). Only
+     * photo-logged composite meals are eligible (spec D5) — otherwise 422.
+     */
+    @PostMapping(value = "/{date}/entries/{entryId}/leftovers/analyze",
+        consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<EntryResponse> analyzeLeftovers(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId,
+        @RequestPart("photo") MultipartFile photo
+    ) {
+        String userId = currentUser.get().userId();
+        byte[] bytes = readPhotoBytes(photo);
+        FoodEntry entry;
+        try {
+            entry = leftovers.startAnalysis(userId, date, entryId, bytes, photo.getContentType());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            // Ineligible entry (spec D5) or analysis unavailable.
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
+    }
+
+    /**
+     * Apply the pending leftover proposal the user accepted (spec D7/D13): the
+     * entry's live macros become the consumed values and the as-served baseline is
+     * preserved. Returns the updated entry.
+     */
+    @PostMapping("/{date}/entries/{entryId}/leftovers/apply")
+    public EntryResponse applyLeftovers(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry;
+        try {
+            entry = leftovers.apply(userId, date, entryId);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return toResponse(entry);
+    }
+
+    /** Discard a pending leftover proposal (spec D7 "Discard"). */
+    @PostMapping("/{date}/entries/{entryId}/leftovers/discard")
+    public EntryResponse discardLeftovers(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry = leftovers.discard(userId, date, entryId)
+            .orElseGet(() -> nutrition.findEntry(userId, date, entryId)
+                .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "entry not found: " + entryId)));
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return toResponse(entry);
+    }
+
+    /** Restore the full served portion, clearing any applied leftover (spec D15). */
+    @PostMapping("/{date}/entries/{entryId}/leftovers/restore")
+    public EntryResponse restoreLeftovers(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry;
+        try {
+            entry = leftovers.restore(userId, date, entryId);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
         syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
         return toResponse(entry);

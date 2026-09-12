@@ -32,6 +32,15 @@ class NutritionCaptureRepository @Inject constructor(
         return api.analyzeLabel(photoPart(jpegBytes), barcodePart)
     }
 
+    /**
+     * Remove Leftovers (IMPL-LEFTOVER-01): upload a leftover-plate photo for the
+     * composite [entryId] on [date]. Returns the entry with its leftover status now
+     * ANALYZING; the backend job runs the comparison. Mirrors [captureMeal]'s
+     * multipart approach (same `photo` part).
+     */
+    suspend fun analyzeLeftovers(date: String, entryId: String, jpegBytes: ByteArray): Entry =
+        api.analyzeLeftovers(date, entryId, photoPart(jpegBytes))
+
     private fun photoPart(jpegBytes: ByteArray): MultipartBody.Part {
         val body = jpegBytes.toRequestBody("image/jpeg".toMediaType(), 0, jpegBytes.size)
         return MultipartBody.Part.createFormData("photo", "capture.jpg", body)

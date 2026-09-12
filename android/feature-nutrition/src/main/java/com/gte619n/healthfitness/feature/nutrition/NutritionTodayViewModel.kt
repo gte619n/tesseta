@@ -13,6 +13,8 @@ import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
 import com.gte619n.healthfitness.domain.nutrition.Food
+import com.gte619n.healthfitness.domain.nutrition.Leftover
+import com.gte619n.healthfitness.domain.nutrition.LeftoverStatus
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
@@ -70,6 +72,14 @@ data class NutritionTodayUiState(
     val savingIngredient: Boolean = false,
     /** true while an accepted AI adjustment is being applied to an entry. */
     val savingAdjust: Boolean = false,
+    /**
+     * IMPL-LEFTOVER-01 — the entry whose leftover review-diff sheet is open, or
+     * null. Set from the sheet's "Review leftovers" affordance / a PENDING_REVIEW
+     * entry; drives the Served→Ate diff with Apply/Discard (spec D7).
+     */
+    val reviewingLeftover: Entry? = null,
+    /** true while a leftover Apply/Discard/Restore is in flight. */
+    val savingLeftover: Boolean = false,
     /** true while a user-initiated pull-to-refresh is in flight. */
     val isRefreshing: Boolean = false,
     /**
@@ -278,6 +288,99 @@ class NutritionTodayViewModel @Inject constructor(
                 pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
                 _state.update { it.copy(savingAdjust = false, error = e.message ?: "Couldn't adjust the meal") }
+            }
+        }
+    }
+
+    // ---- Remove Leftovers (IMPL-LEFTOVER-01) ------------------------------
+
+    /**
+     * Open the leftover review-diff sheet for [entry] (spec D7): its stored
+     * proposal (Served→Ate totals + per-ingredient) with Apply/Discard. Closes any
+     * edit/ingredients sheet. A no-op for a synthetic in-flight row.
+     */
+    fun reviewLeftovers(entry: Entry) {
+        if (entry.entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        _state.update {
+            it.copy(reviewingLeftover = entry, editingEntry = null, editingComposite = null)
+        }
+    }
+
+    /** Close the leftover review sheet without applying/discarding. */
+    fun closeLeftoverReview() = _state.update { it.copy(reviewingLeftover = null) }
+
+    /**
+     * Apply the stored leftover proposal (D7/D13): commit consumed macros on the
+     * backend, refresh, and close the review sheet. Runs on the ViewModel scope so
+     * closing the sheet can't cancel the in-flight apply. This is also the endpoint
+     * the notification's Apply action commits (server holds the proposal).
+     */
+    fun applyLeftovers(entryId: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingLeftover = true) }
+        viewModelScope.launch {
+            try {
+                repository.applyLeftovers(date, entryId)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(day = day, savingLeftover = false, reviewingLeftover = null, error = null)
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(savingLeftover = false, error = e.message ?: "Couldn't apply leftovers")
+                }
+            }
+        }
+    }
+
+    /** Discard the pending leftover proposal (D7), then refresh + close the sheet. */
+    fun discardLeftovers(entryId: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingLeftover = true) }
+        viewModelScope.launch {
+            try {
+                repository.discardLeftovers(date, entryId)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(day = day, savingLeftover = false, reviewingLeftover = null, error = null)
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(savingLeftover = false, error = e.message ?: "Couldn't discard leftovers")
+                }
+            }
+        }
+    }
+
+    /**
+     * Restore the full served portion (D15) on an APPLIED entry: reset live =
+     * served + clear the leftover state on the backend, then refresh and close any
+     * open sheet.
+     */
+    fun restoreFullPortion(entryId: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingLeftover = true) }
+        viewModelScope.launch {
+            try {
+                repository.restoreLeftovers(date, entryId)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(
+                        day = day,
+                        savingLeftover = false,
+                        reviewingLeftover = null,
+                        editingEntry = null,
+                        editingComposite = null,
+                        error = null,
+                    )
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(savingLeftover = false, error = e.message ?: "Couldn't restore the portion")
+                }
             }
         }
     }
@@ -624,6 +727,26 @@ class NutritionTodayViewModel @Inject constructor(
 const val PENDING_CAPTURE_PREFIX = "pending-capture-"
 
 /**
+ * IMPL-LEFTOVER-01 — the target composite entry id carried in a REMOVE_LEFTOVERS
+ * op's payload (`{"targetEntryId":"…"}`, [RemoveLeftoversPayload]). Extracted with
+ * a tiny string scan (no Moshi) so the pure [withPendingOps] merge stays JVM-safe
+ * for unit tests. Returns "" when absent/malformed (never matches a real entry).
+ */
+internal fun NutritionOpEntity.targetEntryId(): String {
+    val json = payloadJson ?: return ""
+    val key = "\"targetEntryId\""
+    val at = json.indexOf(key)
+    if (at < 0) return ""
+    val colon = json.indexOf(':', at + key.length)
+    if (colon < 0) return ""
+    val open = json.indexOf('"', colon + 1)
+    if (open < 0) return ""
+    val close = json.indexOf('"', open + 1)
+    if (close < 0) return ""
+    return json.substring(open + 1, close)
+}
+
+/**
  * Merge the in-flight durable ops into the day for display: one synthetic
  * "logging…" row (ANALYZING, zero macros) per op targeting [date], appended to
  * its target meal group. Pure presentation — totals are untouched (a pending op
@@ -637,8 +760,28 @@ fun NutritionDay?.withPendingOps(
     val forDate = ops.filter { it.date == date.format(ISO_DATE) }
     if (forDate.isEmpty()) return this
     val base = this ?: NutritionDay(date = date.format(ISO_DATE), totals = Macros.EMPTY)
-    var meals = base.meals
-    forDate.forEach { op ->
+    // IMPL-LEFTOVER-01: a REMOVE_LEFTOVERS op targets an EXISTING composite entry
+    // rather than adding a new row — decorate that entry with an ANALYZING leftover
+    // state so the row shows "Analyzing leftovers…" the instant the shutter fires,
+    // before the backend's own ANALYZING (or the sync) lands. Purely presentational.
+    val leftoverOps = forDate.filter { it.type == NutritionOpType.REMOVE_LEFTOVERS.name }
+    val leftoverTargetIds = leftoverOps.map { it.targetEntryId() }.toSet()
+    var meals = if (leftoverTargetIds.isEmpty()) {
+        base.meals
+    } else {
+        base.meals.map { g ->
+            g.copy(
+                entries = g.entries.map { e ->
+                    if (e.entryId in leftoverTargetIds && !e.isAnalyzingLeftovers) {
+                        e.copy(leftover = (e.leftover ?: Leftover()).copy(status = LeftoverStatus.ANALYZING))
+                    } else {
+                        e
+                    }
+                },
+            )
+        }
+    }
+    forDate.filterNot { it.type == NutritionOpType.REMOVE_LEFTOVERS.name }.forEach { op ->
         val isCapture = op.type == NutritionOpType.CAPTURE_PHOTO.name
         val synthetic = Entry(
             entryId = PENDING_CAPTURE_PREFIX + op.id,

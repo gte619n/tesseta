@@ -139,6 +139,16 @@
             </intent-filter>
         </service>
 
+        <!-- IMPL-LEFTOVER-01 (D13): "Apply" action on the leftover-review
+             notification commits the stored proposal in the background. -->
+        <receiver
+            android:name=".push.LeftoverApplyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.gte619n.healthfitness.LEFTOVER_APPLY" />
+            </intent-filter>
+        </receiver>
+
         <!-- IMPL-AND-04 / IMPL-AND-05: share downloaded lab/DEXA PDFs with the
              system viewer via ACTION_VIEW over a content:// URI. -->
         <provider

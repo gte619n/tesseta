@@ -23,5 +23,8 @@ public enum NutritionJobType {
     MEAL_ANALYSIS,
 
     /** Resolve a described meal and finalize its placeholder entry. */
-    DESCRIPTION_ANALYSIS
+    DESCRIPTION_ANALYSIS,
+
+    /** Compare a leftover photo to the original meal and estimate what was eaten. */
+    LEFTOVER_ANALYSIS
 }

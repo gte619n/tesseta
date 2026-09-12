@@ -1,12 +1,17 @@
 package com.gte619n.healthfitness.api.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.CompositeIngredient;
 import com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus;
 import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
+import com.gte619n.healthfitness.core.nutrition.Leftover;
+import com.gte619n.healthfitness.core.nutrition.LeftoverProposal;
+import com.gte619n.healthfitness.core.nutrition.LeftoverStatus;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,7 +42,9 @@ public record EntryResponse(
     // When the entry was first logged (server timestamp). Lets clients order
     // entries on a cross-source activity timeline; null for a not-yet-persisted
     // placeholder (e.g. an in-flight photo capture).
-    Instant createdAt
+    Instant createdAt,
+    // "Remove Leftovers" state (IMPL-LEFTOVER-01); null when there is none.
+    LeftoverDto leftover
 ) {
     /** Bare mapping with no catalog image (used where the food isn't loaded). */
     public static EntryResponse from(FoodEntry e) {
@@ -75,7 +82,8 @@ public record EntryResponse(
             imageStatus != null ? imageStatus : FoodImageStatus.NONE,
             e.analysisStatus() != null ? e.analysisStatus() : EntryAnalysisStatus.NONE,
             ingredients,
-            e.createdAt()
+            e.createdAt(),
+            leftoverDtoOf(e.leftover())
         );
     }
 
@@ -91,4 +99,76 @@ public record EntryResponse(
         String imageUrl,
         FoodImageStatus imageStatus
     ) {}
+
+    /**
+     * "Remove Leftovers" state for the clients (IMPL-LEFTOVER-01). Carries the
+     * as-served baseline (so an APPLIED entry can show "Served → Ate") and, while
+     * {@code PENDING_REVIEW}, the pending proposal for the review diff (spec D7).
+     */
+    public record LeftoverDto(
+        LeftoverStatus status,
+        MacrosDto servedMacros,
+        List<LeftoverIngredientDto> servedIngredients,
+        LeftoverProposalDto proposal
+    ) {}
+
+    /** One as-served ingredient baseline (name + grams + macros). */
+    public record LeftoverIngredientDto(
+        String name,
+        Double servingGrams,
+        Double quantity,
+        MacrosDto macros
+    ) {}
+
+    /** The pending leftover proposal shown in the review diff. */
+    public record LeftoverProposalDto(
+        List<LeftoverItemDto> items,
+        MacrosDto servedTotals,
+        MacrosDto consumedTotals,
+        double overallConfidence,
+        boolean warning,
+        String warningNote
+    ) {}
+
+    /** One item within the pending leftover proposal. */
+    public record LeftoverItemDto(
+        String name,
+        Double servedGrams,
+        Double consumedGrams,
+        Double remainingGrams,
+        boolean matched,
+        MacrosDto consumedMacros
+    ) {}
+
+    private static LeftoverDto leftoverDtoOf(Leftover l) {
+        if (l == null) {
+            return null;
+        }
+        List<LeftoverIngredientDto> served = new ArrayList<>();
+        if (l.servedIngredients() != null) {
+            for (CompositeIngredient ing : l.servedIngredients()) {
+                served.add(new LeftoverIngredientDto(
+                    ing.name(), ing.servingGrams(), ing.quantity(), MacrosDto.from(ing.macros())));
+            }
+        }
+        return new LeftoverDto(
+            l.status(), MacrosDto.from(l.servedMacros()), served, proposalDtoOf(l.proposal()));
+    }
+
+    private static LeftoverProposalDto proposalDtoOf(LeftoverProposal p) {
+        if (p == null) {
+            return null;
+        }
+        List<LeftoverItemDto> items = new ArrayList<>();
+        if (p.items() != null) {
+            for (LeftoverProposal.Item it : p.items()) {
+                items.add(new LeftoverItemDto(
+                    it.name(), it.servedGrams(), it.consumedGrams(), it.remainingGrams(),
+                    it.matched(), MacrosDto.from(it.consumedMacros())));
+            }
+        }
+        return new LeftoverProposalDto(
+            items, MacrosDto.from(p.servedTotals()), MacrosDto.from(p.consumedTotals()),
+            p.overallConfidence(), p.warning(), p.warningNote());
+    }
 }

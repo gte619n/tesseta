@@ -45,7 +45,11 @@ public record FoodEntry(
     FoodImageStatus mealImageStatus,
     EntryAnalysisStatus analysisStatus,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    // "Remove Leftovers" state (IMPL-LEFTOVER-01). Null for entries with no
+    // leftover activity. When applied, this entry's live macros/ingredients are
+    // the CONSUMED values (spec D9); the as-served baseline lives here.
+    Leftover leftover
 ) {
     /** True when this entry is a photo-logged meal with sub-ingredients. */
     public boolean isComposite() {
@@ -55,5 +59,21 @@ public record FoodEntry(
     /** True while the background photo analysis is still running. */
     public boolean isAnalyzing() {
         return analysisStatus == EntryAnalysisStatus.ANALYZING;
+    }
+
+    /** True when a "Remove Leftovers" pass has started (any status). */
+    public boolean hasLeftover() {
+        return leftover != null;
+    }
+
+    /**
+     * True when this entry can accept a "Remove Leftovers" pass (spec D5): it must
+     * be a photo-logged composite meal (has ingredients) with a retained original
+     * photo to compare against, and not still analyzing its initial capture.
+     */
+    public boolean leftoverEligible() {
+        return isComposite()
+            && photoRef != null && !photoRef.isBlank()
+            && analysisStatus != EntryAnalysisStatus.ANALYZING;
     }
 }

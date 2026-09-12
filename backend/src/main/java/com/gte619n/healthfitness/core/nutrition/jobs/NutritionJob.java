@@ -51,4 +51,15 @@ public record NutritionJob(
         return new NutritionJob(
             NutritionJobType.DESCRIPTION_ANALYSIS, entryId, userId, date, null, description, null);
     }
+
+    /**
+     * Leftover analysis; {@code ref} is the stored leftover photo and {@code mime}
+     * its type. The ORIGINAL meal photo is read from the entry itself, so only the
+     * leftover ref rides the queue (IMPL-LEFTOVER-01 / IL-4).
+     */
+    public static NutritionJob leftoverAnalysis(
+        String userId, String date, String entryId, String leftoverPhotoRef, String mime) {
+        return new NutritionJob(
+            NutritionJobType.LEFTOVER_ANALYSIS, entryId, userId, date, leftoverPhotoRef, null, mime);
+    }
 }

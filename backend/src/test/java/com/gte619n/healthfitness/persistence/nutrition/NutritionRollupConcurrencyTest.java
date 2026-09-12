@@ -99,6 +99,6 @@ class NutritionRollupConcurrencyTest {
             null, "food", null, null, null,
             new Macros(0.0, 1.0, 0.0, 0.0, 0.0, 0.0), // calories 0, protein 1
             null, null, EntrySource.MANUAL, null, null, null,
-            EntryAnalysisStatus.NONE, null, null);
+            EntryAnalysisStatus.NONE, null, null, null);
     }
 }

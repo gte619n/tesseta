@@ -112,7 +112,8 @@ class FoodEntryImageServiceTest {
         return new FoodEntry(
             USER, DATE, entryId, MealType.LUNCH, null, "Chicken bowl", "1 bowl", 400.0, 1.0,
             new Macros(500.0, 40.0, 30.0, 20.0, 0.0, 0.0), null, null, EntrySource.PHOTO,
-            List.of(), null, imageStatus, EntryAnalysisStatus.READY, Instant.now(), Instant.now());
+            List.of(), null, imageStatus, EntryAnalysisStatus.READY, Instant.now(), Instant.now(),
+            null);
     }
 
     /** A composite (ingredient-bearing) meal entry with an explicit updatedAt. */
@@ -123,7 +124,7 @@ class FoodEntryImageServiceTest {
             List.of(new CompositeIngredient(
                 "Chicken", null, new Macros(165.0, 31.0, 0.0, 3.6, 0.0, 0.0), 200.0, "100 g", 1.0,
                 new Macros(330.0, 62.0, 0.0, 7.2, 0.0, 0.0))),
-            null, imageStatus, EntryAnalysisStatus.READY, Instant.now(), updatedAt);
+            null, imageStatus, EntryAnalysisStatus.READY, Instant.now(), updatedAt, null);
     }
 
     private static FoodImageGenerator gen(Optional<byte[]> result) {

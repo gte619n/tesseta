@@ -162,6 +162,49 @@ internal fun loadJpegFromUri(context: Context, uri: Uri, maxDim: Int = 1568): By
     }
 }
 
+/**
+ * IMPL-LEFTOVER-01 (D10) — shutter-only leftover-capture pane. Reuses the camera
+ * plumbing but binds NO barcode/label analyzers (this is a plain plate photo), so
+ * the flow goes straight to the shutter. The shutter routes the captured bytes to
+ * the durable leftover op via [onCapture].
+ */
+@Composable
+internal fun LeftoverCapturePane(
+    controller: CameraCaptureController,
+    onCapture: (ByteArray) -> Unit,
+) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 18.dp)
+                .background(Hf.colors.textPrimary, RoundedCornerShape(12.dp)),
+        ) {
+            // No onBarcode/onLabelDetected → a pure live preview (no ML Kit).
+            CameraPreview(controller = controller)
+            Text(
+                "Photograph what's left on the plate",
+                style = Hf.type.capsSm,
+                color = Hf.colors.textInverse,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp)) {
+            PrimaryButton(text = "ANALYZE LEFTOVERS", modifier = Modifier.fillMaxWidth()) {
+                controller.takePhoto(
+                    context = context,
+                    onResult = onCapture,
+                    onError = { /* surfaced via state.error on the next attempt */ },
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
 @Composable
 internal fun BarcodeFoodPane(food: Food, onConfirm: (Int, Double) -> Unit, onCancel: () -> Unit) {
     var servingIndex by remember(food.foodId) {

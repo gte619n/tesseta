@@ -42,6 +42,46 @@ export type Entry = {
   // ISO timestamp of when the entry was first logged (server-stamped). Null for
   // a not-yet-persisted placeholder (e.g. an in-flight photo capture).
   createdAt: string | null;
+  // "Remove Leftovers" state (IMPL-LEFTOVER-01). Present once a leftover pass has
+  // started; when APPLIED, this entry's macros are the CONSUMED values and the
+  // as-served baseline lives here. Web is read-only for this (spec D14).
+  leftover?: Leftover | null;
+};
+
+// ----- Remove Leftovers (IMPL-LEFTOVER-01, web read-only) -----------------
+
+export type LeftoverStatus = "ANALYZING" | "PENDING_REVIEW" | "REJECTED" | "APPLIED";
+
+export type LeftoverServedIngredient = {
+  name: string;
+  servingGrams: number | null;
+  quantity: number | null;
+  macros: Macros;
+};
+
+export type LeftoverProposalItem = {
+  name: string;
+  servedGrams: number | null;
+  consumedGrams: number | null;
+  remainingGrams: number | null;
+  matched: boolean;
+  consumedMacros: Macros;
+};
+
+export type LeftoverProposal = {
+  items: LeftoverProposalItem[];
+  servedTotals: Macros;
+  consumedTotals: Macros;
+  overallConfidence: number;
+  warning: boolean;
+  warningNote: string | null;
+};
+
+export type Leftover = {
+  status: LeftoverStatus;
+  servedMacros: Macros;
+  servedIngredients: LeftoverServedIngredient[];
+  proposal: LeftoverProposal | null;
 };
 
 export type EntryIngredient = {
