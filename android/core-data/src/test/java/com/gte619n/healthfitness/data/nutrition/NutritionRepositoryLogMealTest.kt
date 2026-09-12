@@ -74,6 +74,7 @@ class NutritionRepositoryLogMealTest {
             support = support,
             ops = mockk(relaxed = true),
             previews = CapturePreviewStore(),
+            capture = mockk(relaxed = true),
             moshi = SyncTestMoshi.instance,
         )
     }

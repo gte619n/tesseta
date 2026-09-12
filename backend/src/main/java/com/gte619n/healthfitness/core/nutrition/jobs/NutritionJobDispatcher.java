@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.core.nutrition.jobs;
 
 import com.gte619n.healthfitness.core.nutrition.FoodEntryImageService;
 import com.gte619n.healthfitness.core.nutrition.FoodImageService;
+import com.gte619n.healthfitness.core.nutrition.LeftoverService;
 import com.gte619n.healthfitness.core.nutrition.MealCaptureService;
 import com.gte619n.healthfitness.core.nutrition.MealDescriptionService;
 import com.gte619n.healthfitness.core.nutrition.SavedMealImageService;
@@ -30,19 +31,22 @@ public class NutritionJobDispatcher {
     private final ObjectProvider<SavedMealImageService> savedMealImages;
     private final ObjectProvider<MealCaptureService> mealCapture;
     private final ObjectProvider<MealDescriptionService> mealDescription;
+    private final ObjectProvider<LeftoverService> leftovers;
 
     public NutritionJobDispatcher(
         ObjectProvider<FoodImageService> foodImages,
         ObjectProvider<FoodEntryImageService> entryImages,
         ObjectProvider<SavedMealImageService> savedMealImages,
         ObjectProvider<MealCaptureService> mealCapture,
-        ObjectProvider<MealDescriptionService> mealDescription
+        ObjectProvider<MealDescriptionService> mealDescription,
+        ObjectProvider<LeftoverService> leftovers
     ) {
         this.foodImages = foodImages;
         this.entryImages = entryImages;
         this.savedMealImages = savedMealImages;
         this.mealCapture = mealCapture;
         this.mealDescription = mealDescription;
+        this.leftovers = leftovers;
     }
 
     /**
@@ -86,6 +90,12 @@ public class NutritionJobDispatcher {
                     s.resolveAndFinalizeOrThrow(job.userId(), date(job), job.id(), job.name());
                 }
             }
+            case LEFTOVER_ANALYSIS -> {
+                LeftoverService s = leftovers.getIfAvailable();
+                if (s != null) {
+                    s.analyzeFromRefOrThrow(job.userId(), date(job), job.id(), job.ref(), job.mime());
+                }
+            }
             default -> { /* unknown type: ignore so an old queued job can't wedge the handler */ }
         }
     }
@@ -126,6 +136,12 @@ public class NutritionJobDispatcher {
             }
             case DESCRIPTION_ANALYSIS -> {
                 MealDescriptionService s = mealDescription.getIfAvailable();
+                if (s != null) {
+                    s.markFailed(job.userId(), date(job), job.id());
+                }
+            }
+            case LEFTOVER_ANALYSIS -> {
+                LeftoverService s = leftovers.getIfAvailable();
                 if (s != null) {
                     s.markFailed(job.userId(), date(job), job.id());
                 }

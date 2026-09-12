@@ -356,11 +356,27 @@ function EntryRow({
                 quick add
               </span>
             )}
+            {entry.leftover?.status === "APPLIED" && (
+              <span
+                className="caps-mono shrink-0 rounded-[3px] bg-canvas-sunken px-1 py-px text-[8px] tracking-[0.06em] text-tertiary"
+                title="Leftovers were removed from this meal"
+              >
+                <i className="ti ti-tools-kitchen-2 mr-0.5 inline-block text-[8px]" aria-hidden />
+                leftovers
+              </span>
+            )}
           </div>
           <div className="mt-0.5 caps-mono text-[9px] tracking-[0.04em] text-tertiary">
             {entry.servingLabel}
             {entry.quantity !== 1 && ` × ${entry.quantity}`}
           </div>
+          {entry.leftover?.status === "APPLIED" &&
+            entry.leftover.servedMacros?.caloriesKcal != null && (
+              <div className="mt-0.5 caps-mono text-[9px] tracking-[0.04em] text-tertiary">
+                Served {formatWholeNumber(entry.leftover.servedMacros.caloriesKcal)} → Ate{" "}
+                {formatWholeNumber(entry.macros.caloriesKcal ?? 0)} kcal
+              </div>
+            )}
         </div>
       </button>
       <div className="flex shrink-0 items-center gap-3">

@@ -74,9 +74,16 @@ object Routes {
     // capture, which navigates to the bare NUTRITION_CAPTURE) → the capture
     // ViewModel defaults to today.
     const val NUTRITION_CAPTURE_ARG_DATE = "date"
-    const val NUTRITION_CAPTURE_PATTERN = "nutrition/capture?date={date}"
+    // IMPL-LEFTOVER-01 (D10): when present, capture runs in leftover mode scoped to
+    // this composite entry (shutter-only; bytes routed to the leftover op).
+    const val NUTRITION_CAPTURE_ARG_ENTRY = "entryId"
+    const val NUTRITION_CAPTURE_PATTERN = "nutrition/capture?date={date}&entryId={entryId}"
     fun nutritionCaptureRoute(date: LocalDate? = null): String =
         if (date == null) NUTRITION_CAPTURE else "nutrition/capture?date=$date"
+
+    /** Leftover-mode capture for [entryId] on [date] (IMPL-LEFTOVER-01, D10). */
+    fun nutritionLeftoverCaptureRoute(date: LocalDate, entryId: String): String =
+        "nutrition/capture?date=$date&entryId=$entryId"
 }
 
 @Composable
@@ -177,6 +184,9 @@ private fun AppNavHostGraph(
             NutritionTodayRoute(
                 onOpenTarget = { navController.navigate(Routes.NUTRITION_TARGET) },
                 onOpenCapture = { date -> navController.navigate(Routes.nutritionCaptureRoute(date)) },
+                onStartLeftoverCapture = { date, entryId ->
+                    navController.navigate(Routes.nutritionLeftoverCaptureRoute(date, entryId))
+                },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -187,6 +197,11 @@ private fun AppNavHostGraph(
             route = Routes.NUTRITION_CAPTURE_PATTERN,
             arguments = listOf(
                 navArgument(Routes.NUTRITION_CAPTURE_ARG_DATE) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument(Routes.NUTRITION_CAPTURE_ARG_ENTRY) {
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null

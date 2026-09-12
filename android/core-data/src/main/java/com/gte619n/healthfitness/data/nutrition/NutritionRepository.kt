@@ -19,6 +19,8 @@ import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryIngredient
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
+import com.gte619n.healthfitness.domain.nutrition.Leftover
+import com.gte619n.healthfitness.domain.nutrition.LeftoverStatus
 import com.gte619n.healthfitness.domain.nutrition.Macros
 import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.Meal
@@ -67,6 +69,7 @@ class NutritionRepository @Inject constructor(
     private val support: MirrorRepositorySupport,
     private val ops: NutritionOpEnqueuer,
     private val previews: CapturePreviewStore,
+    private val capture: NutritionCaptureRepository,
     moshi: Moshi,
 ) {
     private val rowAdapter = moshi.adapter(NutritionEntryRow::class.java)
@@ -103,6 +106,12 @@ class NutritionRepository @Inject constructor(
         val mealImageUrl: String?,
         val mealImageStatus: String?,
         val analysisStatus: String?,
+        // IMPL-LEFTOVER-01: the sync delta carries the leftover state as a nested
+        // `leftover` map with the SAME field names as the REST `leftover` object
+        // (status/servedMacros/servedIngredients/proposal), so it deserializes
+        // straight into the domain [Leftover]. Nullable → back-compat for entries
+        // with no leftover activity.
+        val leftover: Leftover?,
     ) {
         fun toEntry(entryId: String): Entry = Entry(
             entryId = entryId,
@@ -118,6 +127,7 @@ class NutritionRepository @Inject constructor(
             imageStatus = mealImageStatus ?: "NONE",
             analysisStatus = analysisStatus ?: "NONE",
             ingredients = ingredients,
+            leftover = leftover,
         )
     }
 
@@ -302,6 +312,90 @@ class NutritionRepository @Inject constructor(
         val entry = api.adjustApply(date, entryId, body)
         fillDay(date)
         return entry
+    }
+
+    // ---- Remove Leftovers (IMPL-LEFTOVER-01) ------------------------------
+
+    /**
+     * Start a "Remove Leftovers" pass: enqueue a durable REMOVE_LEFTOVERS op that
+     * uploads the leftover [jpeg] to `…/leftovers/analyze` (D8). Fire-and-forget,
+     * survives process death; the op-store synthetic state shows "Analyzing
+     * leftovers…" on the target entry until the backend job lands PENDING_REVIEW /
+     * REJECTED and the completion push + sync surface the outcome.
+     */
+    suspend fun analyzeLeftovers(date: String, entryId: String, jpeg: ByteArray) {
+        ops.enqueueRemoveLeftovers(date, entryId, jpeg)
+    }
+
+    /**
+     * Worker body for a REMOVE_LEFTOVERS op: POST the leftover photo, then refresh
+     * this date's mirror so the entry re-renders with its ANALYZING leftover state.
+     * The photo bytes come from the op's cache file (parked at enqueue).
+     */
+    suspend fun runRemoveLeftovers(date: String, entryId: String, jpeg: ByteArray) {
+        capture.analyzeLeftovers(date, entryId, jpeg)
+        fillDayAndSignal(date)
+    }
+
+    /**
+     * Apply the stored leftover proposal (D7/D13): the backend commits it (live
+     * macros → consumed, served baseline captured, status APPLIED), then refresh
+     * so the row re-renders with the reduced macros + badge and the day total drops
+     * by served−consumed. Real backend call — NOT the local-only [patchEntry].
+     */
+    suspend fun applyLeftovers(date: String, entryId: String): Entry {
+        val entry = api.applyLeftovers(date, entryId)
+        fillDayAndSignal(date)
+        return entry
+    }
+
+    /** Discard the stored leftover proposal (D7): server clears it; refresh. */
+    suspend fun discardLeftovers(date: String, entryId: String): Entry {
+        val entry = api.discardLeftovers(date, entryId)
+        fillDayAndSignal(date)
+        return entry
+    }
+
+    /**
+     * Restore the full served portion (D15): the backend resets live = served and
+     * clears the leftover baseline; refresh so the badge/consumed macros drop.
+     */
+    suspend fun restoreLeftovers(date: String, entryId: String): Entry {
+        val entry = api.restoreLeftovers(date, entryId)
+        fillDayAndSignal(date)
+        return entry
+    }
+
+    /**
+     * IMPL-LEFTOVER-01 — locate a leftover awaiting review, mirror-only (no
+     * network). The leftover completion FCM push (D13) carries no date/entryId, so
+     * the notification's Apply action resolves the target from the freshly-synced
+     * mirror instead. Returns the (date, entryId) of the most-recent PENDING_REVIEW
+     * entry, or null when none is pending. Robust: the app also gets a sync ping so
+     * the PENDING_REVIEW state is in the mirror by the time the notification posts.
+     */
+    suspend fun findLeftoverPendingReview(): Pair<String, String>? {
+        val rows = entryDao.observeActive().first()
+        for (row in rows) {
+            val entry = rowToEntry(row) ?: continue
+            if (entry.leftover?.status == LeftoverStatus.PENDING_REVIEW) {
+                val date = entry.date ?: row.id.substringBefore('/')
+                return date to entry.entryId
+            }
+        }
+        return null
+    }
+
+    /** Parse a mirror row to a domain [Entry] (both stored shapes), carrying its date. */
+    private fun rowToEntry(row: NutritionEntryEntity): Entry? {
+        runCatching { rowAdapter.fromJson(row.payloadJson) }.getOrNull()?.let {
+            return it.entry.copy(date = it.date, syncState = row.syncState)
+        }
+        runCatching { syncDocAdapter.fromJson(row.payloadJson) }.getOrNull()?.let { doc ->
+            return doc.toEntry(row.id.substringAfter('/', row.id))
+                .copy(date = doc.date, syncState = row.syncState)
+        }
+        return null
     }
 
     /**

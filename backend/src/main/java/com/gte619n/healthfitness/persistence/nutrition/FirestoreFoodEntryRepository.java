@@ -11,6 +11,9 @@ import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodEntryRepository;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
+import com.gte619n.healthfitness.core.nutrition.Leftover;
+import com.gte619n.healthfitness.core.nutrition.LeftoverProposal;
+import com.gte619n.healthfitness.core.nutrition.LeftoverStatus;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
@@ -115,6 +118,7 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
         body.put("mealImageStatus", e.mealImageStatus() != null ? e.mealImageStatus().name() : null);
         body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("analysisStatus", e.analysisStatus() != null ? e.analysisStatus().name() : null);
+        body.put("leftover", leftoverToMap(e.leftover()));
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -144,7 +148,8 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
             imageStatusFrom(snapshot.getString("mealImageStatus")),
             analysisStatusFrom(snapshot.getString("analysisStatus")),
             toInstant(snapshot.get("createdAt")),
-            toInstant(snapshot.get("updatedAt"))
+            toInstant(snapshot.get("updatedAt")),
+            leftoverFromMap(snapshot.get("leftover"))
         );
     }
 
@@ -220,6 +225,85 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
         if (value == null) return null;
         if (value instanceof Number n) return n.doubleValue();
         return null;
+    }
+
+    // ----- Remove Leftovers (IMPL-LEFTOVER-01) --------------------------
+
+    private static Map<String, Object> leftoverToMap(Leftover l) {
+        if (l == null) return null;
+        Map<String, Object> map = new HashMap<>();
+        map.put("status", l.status() != null ? l.status().name() : null);
+        map.put("servedMacros", macrosToMap(l.servedMacros()));
+        map.put("servedIngredients", ingredientsToList(l.servedIngredients()));
+        map.put("proposal", proposalToMap(l.proposal()));
+        map.put("analyzedAt", l.analyzedAt());
+        return map;
+    }
+
+    private static Leftover leftoverFromMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) return null;
+        String status = (String) map.get("status");
+        return new Leftover(
+            status != null ? LeftoverStatus.valueOf(status) : null,
+            macrosFromMap(map.get("servedMacros")),
+            ingredientsFromList(map.get("servedIngredients")),
+            proposalFromMap(map.get("proposal")),
+            toInstant(map.get("analyzedAt")));
+    }
+
+    private static Map<String, Object> proposalToMap(LeftoverProposal p) {
+        if (p == null) return null;
+        Map<String, Object> map = new HashMap<>();
+        List<Map<String, Object>> items = new ArrayList<>();
+        if (p.items() != null) {
+            for (LeftoverProposal.Item it : p.items()) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("name", it.name());
+                m.put("servedGrams", it.servedGrams());
+                m.put("consumedGrams", it.consumedGrams());
+                m.put("remainingGrams", it.remainingGrams());
+                m.put("matched", it.matched());
+                m.put("confidence", it.confidence());
+                m.put("macrosPer100g", macrosToMap(it.macrosPer100g()));
+                m.put("consumedMacros", macrosToMap(it.consumedMacros()));
+                items.add(m);
+            }
+        }
+        map.put("items", items);
+        map.put("servedTotals", macrosToMap(p.servedTotals()));
+        map.put("consumedTotals", macrosToMap(p.consumedTotals()));
+        map.put("overallConfidence", p.overallConfidence());
+        map.put("warning", p.warning());
+        map.put("warningNote", p.warningNote());
+        return map;
+    }
+
+    private static LeftoverProposal proposalFromMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) return null;
+        List<LeftoverProposal.Item> items = new ArrayList<>();
+        if (map.get("items") instanceof List<?> list) {
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> m)) continue;
+                items.add(new LeftoverProposal.Item(
+                    (String) m.get("name"),
+                    asDouble(m.get("servedGrams")),
+                    asDouble(m.get("consumedGrams")),
+                    asDouble(m.get("remainingGrams")),
+                    Boolean.TRUE.equals(m.get("matched")),
+                    asDouble(m.get("confidence")),
+                    macrosFromMap(m.get("macrosPer100g")),
+                    macrosFromMap(m.get("consumedMacros"))));
+            }
+        }
+        double confidence = asDouble(map.get("overallConfidence")) != null
+            ? asDouble(map.get("overallConfidence")) : 0.0;
+        return new LeftoverProposal(
+            items,
+            macrosFromMap(map.get("servedTotals")),
+            macrosFromMap(map.get("consumedTotals")),
+            confidence,
+            Boolean.TRUE.equals(map.get("warning")),
+            (String) map.get("warningNote"));
     }
 
 }

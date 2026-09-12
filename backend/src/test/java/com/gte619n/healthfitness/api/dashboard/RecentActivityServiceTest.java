@@ -188,6 +188,6 @@ class RecentActivityServiceTest {
         Macros macros = new Macros(kcal, null, null, null, null, null);
         return new FoodEntry(
             USER, LocalDate.now(), "e", meal, null, name, null, null, null, macros,
-            null, null, null, null, null, null, null, createdAt, createdAt);
+            null, null, null, null, null, null, null, createdAt, createdAt, null);
     }
 }

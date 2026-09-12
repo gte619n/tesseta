@@ -61,6 +61,37 @@ public class MealPhotoStorage implements MealPhotoStore {
         }
     }
 
+    @Override
+    public void delete(String ref) {
+        String objectName = objectNameFromUrl(ref);
+        if (objectName == null) {
+            return;
+        }
+        try {
+            storage.delete(BlobId.of(bucket, objectName));
+        } catch (RuntimeException e) {
+            // Best-effort (spec D11): a failed delete just leaves an orphan photo.
+            log.warn("Failed to delete meal photo {}: {}", objectName, e.getMessage());
+        }
+    }
+
+    /** Map a public URL for this bucket back to its object name, or null. */
+    private String objectNameFromUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        String prefix = "https://storage.googleapis.com/" + bucket + "/";
+        if (!url.startsWith(prefix)) {
+            return null;
+        }
+        String objectName = url.substring(prefix.length());
+        int q = objectName.indexOf('?');
+        if (q >= 0) {
+            objectName = objectName.substring(0, q);
+        }
+        return objectName.isBlank() ? null : objectName;
+    }
+
     private static String objectName(String userId, String extension) {
         String safeUser = (userId == null || userId.isBlank()) ? "unknown" : userId;
         return "nutrition/" + safeUser + "/" + UUID.randomUUID() + "." + extension;

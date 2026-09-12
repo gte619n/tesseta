@@ -31,6 +31,14 @@ data class ConfirmLabelPayload(
     val clientFoodId: String,
 )
 
+/**
+ * REMOVE_LEFTOVERS (IMPL-LEFTOVER-01): analyze a leftover-plate photo for the
+ * composite entry [targetEntryId]. The leftover JPEG lives in the op's cache file
+ * ([NutritionOpEntity.jpegPath]); this payload carries only the target entry so a
+ * replay re-POSTs against the same entry. `date` rides the op row itself.
+ */
+data class RemoveLeftoversPayload(val targetEntryId: String)
+
 /** CONFIRM_MEAL_ITEMS: create foods for unmatched items, then log one entry each. */
 data class ConfirmMealItemsPayload(val items: List<ConfirmMealItem>)
 

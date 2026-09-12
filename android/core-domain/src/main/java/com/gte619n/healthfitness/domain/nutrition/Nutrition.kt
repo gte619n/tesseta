@@ -161,6 +161,14 @@ data class Entry(
      * day-assembly time from the capture-preview store and dropped once READY.
      */
     val localImagePath: String? = null,
+    /**
+     * IMPL-LEFTOVER-01 — "Remove Leftovers" state for this entry, or null when the
+     * entry has never had a leftover pass. Additive/nullable so every existing
+     * entry (and every existing constructor call site) parses/constructs unchanged.
+     * Mirrors the backend `EntryResponse.leftover` object (and the nested `leftover`
+     * map the sync delta carries).
+     */
+    val leftover: Leftover? = null,
 ) {
     val isComposite: Boolean get() = !ingredients.isNullOrEmpty()
 
@@ -185,6 +193,28 @@ data class Entry(
     val isImageMissing: Boolean
         get() = isImageEligible && !isAnalyzing &&
             imageStatus != "READY" && imageStatus != "PENDING"
+
+    // ---- Remove Leftovers (IMPL-LEFTOVER-01) ------------------------------
+
+    /** True while the backend is analyzing a just-shot leftover photo (D8). */
+    val isAnalyzingLeftovers: Boolean get() = leftover?.status == LeftoverStatus.ANALYZING
+
+    /** True when a computed leftover proposal awaits the user's Apply/Discard (D7). */
+    val hasLeftoverReview: Boolean
+        get() = leftover?.status == LeftoverStatus.PENDING_REVIEW && leftover.proposal != null
+
+    /** True when a leftover has been applied — the row shows the "leftovers" badge (D17). */
+    val hasAppliedLeftover: Boolean get() = leftover?.status == LeftoverStatus.APPLIED
+
+    /**
+     * Spec D5 eligibility for the "Remove Leftovers" button: a composite photo
+     * meal (has an ingredient list) with a generated finished-meal image, and not
+     * mid-analysis (neither the photo analysis nor a leftover pass in flight). The
+     * button is hidden for barcode / manual / label / single-product entries.
+     */
+    val isLeftoverEligible: Boolean
+        get() = isComposite && !isAnalyzing && !isAnalyzingLeftovers &&
+            !entryId.startsWith("pending-capture-")
 }
 
 /** One ingredient of a composite meal, with its generated raw-ingredient image. */
@@ -198,6 +228,72 @@ data class EntryIngredient(
     val macrosPer100g: Macros? = null,
     val imageUrl: String? = null,
     val imageStatus: String = "NONE",
+)
+
+// ---- Remove Leftovers (IMPL-LEFTOVER-01) ----------------------------------
+
+/** Lifecycle of a leftover pass on an entry. Mirrors the backend `LeftoverStatus`. */
+enum class LeftoverStatus {
+    /** A leftover photo is uploading / being analyzed server-side (D8). */
+    ANALYZING,
+
+    /** Analysis produced a proposal awaiting the user's Apply/Discard (D7). */
+    PENDING_REVIEW,
+
+    /** The leftover photo was unreadable / foreign / low-confidence (D12). */
+    REJECTED,
+
+    /** A leftover was applied — live macros are now the consumed amount (D3/D9). */
+    APPLIED,
+}
+
+/**
+ * IMPL-LEFTOVER-01 — the leftover state carried on an [Entry], mirroring the
+ * backend `EntryResponse.leftover` object (and the nested `leftover` map the sync
+ * delta emits). [servedMacros]/[servedIngredients] are the preserved as-served
+ * baseline (present once a leftover exists); [proposal] is present only while
+ * [status] == [LeftoverStatus.PENDING_REVIEW].
+ */
+data class Leftover(
+    val status: LeftoverStatus? = null,
+    val servedMacros: Macros? = null,
+    val servedIngredients: List<LeftoverServedIngredient> = emptyList(),
+    val proposal: LeftoverProposal? = null,
+)
+
+/**
+ * One as-served ingredient baseline. The REST `LeftoverIngredientDto` carries a
+ * slim {name, servingGrams, quantity, macros}; the sync delta serializes the full
+ * `CompositeIngredient` (also {servingLabel, macrosPer100g}). Both parse into this
+ * (extra fields are nullable, unknown fields are ignored by Moshi).
+ */
+data class LeftoverServedIngredient(
+    val name: String,
+    val servingGrams: Double? = null,
+    val servingLabel: String? = null,
+    val quantity: Double? = null,
+    val macros: Macros? = null,
+    val macrosPer100g: Macros? = null,
+)
+
+/** The pending leftover proposal shown in the review diff (D7). */
+data class LeftoverProposal(
+    val items: List<LeftoverProposalItem> = emptyList(),
+    val servedTotals: Macros? = null,
+    val consumedTotals: Macros? = null,
+    val overallConfidence: Double = 0.0,
+    val warning: Boolean = false,
+    val warningNote: String? = null,
+)
+
+/** One item within the pending leftover proposal (served vs consumed per food). */
+data class LeftoverProposalItem(
+    val name: String,
+    val servedGrams: Double? = null,
+    val consumedGrams: Double? = null,
+    val remainingGrams: Double? = null,
+    val matched: Boolean = true,
+    val consumedMacros: Macros? = null,
 )
 
 /** One meal group within a day: its entries + computed subtotal. */

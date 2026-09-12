@@ -232,7 +232,7 @@ public class NutritionService {
             composite ? withDerivedCalories(ingredients) : null,
             composite ? mealImageUrl : null,
             composite && mealImageStatus != null ? mealImageStatus : FoodImageStatus.NONE,
-            EntryAnalysisStatus.NONE, null, null);
+            EntryAnalysisStatus.NONE, null, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -271,7 +271,7 @@ public class NutritionService {
             source.ingredients() != null ? withDerivedCalories(source.ingredients()) : null,
             source.mealImageUrl(),
             hasMealImage ? FoodImageStatus.READY : FoodImageStatus.NONE,
-            EntryAnalysisStatus.NONE, null, null);
+            EntryAnalysisStatus.NONE, null, null, null);
         entries.save(copy);
         recomputeDay(userId, targetDate);
         return copy;
@@ -335,7 +335,8 @@ public class NutritionService {
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, mealName,
             ingredients.size() + " ingredients", grams, 1.0, total, null, null, source,
-            List.copyOf(ingredients), null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE, null, null);
+            List.copyOf(ingredients), null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE,
+            null, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -359,7 +360,7 @@ public class NutritionService {
             existing.source(), existing.ingredients(),
             imageUrl != null ? imageUrl : existing.mealImageUrl(),
             status != null ? status : existing.mealImageStatus(),
-            existing.analysisStatus(), existing.createdAt(), null);
+            existing.analysisStatus(), existing.createdAt(), null, existing.leftover());
         entries.save(updated);
         return updated;
     }
@@ -422,7 +423,7 @@ public class NutritionService {
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, placeholderName,
             null, null, 1.0, Macros.zero(), photoRef, contentHash, source,
-            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null);
+            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null, null);
         entries.save(entry);
         return entry;
     }
@@ -476,7 +477,7 @@ public class NutritionService {
             null, mealName, ingredients.size() + " ingredients", grams, 1.0, total,
             existing.photoRef(), existing.contentHash(), existing.source(), List.copyOf(ingredients),
             existing.mealImageUrl(), existing.mealImageStatus(),
-            EntryAnalysisStatus.READY, existing.createdAt(), null);
+            EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover());
         entries.save(updated);
         recomputeDay(userId, date);
         return updated;
@@ -504,7 +505,7 @@ public class NutritionService {
             quantity != null ? quantity : 1.0,
             macros != null ? macros.withDerivedCalories() : null, existing.photoRef(),
             existing.contentHash(), existing.source(), null, null, FoodImageStatus.NONE,
-            EntryAnalysisStatus.READY, existing.createdAt(), null);
+            EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover());
         entries.save(updated);
         recomputeDay(userId, date);
         return updated;
@@ -527,7 +528,7 @@ public class NutritionService {
                 name, e.servingLabel(), e.servingGrams(),
                 e.quantity(), e.macros(), e.photoRef(), e.contentHash(), e.source(), e.ingredients(),
                 e.mealImageUrl(), e.mealImageStatus(), EntryAnalysisStatus.FAILED,
-                e.createdAt(), null);
+                e.createdAt(), null, e.leftover());
             entries.save(failed);
         });
     }
@@ -556,7 +557,7 @@ public class NutritionService {
             e.userId(), e.date(), e.entryId(), e.meal(), null, "Analyzing photo…",
             null, null, 1.0, Macros.zero(), e.photoRef(), e.contentHash(), e.source(),
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING,
-            Instant.now(), null);
+            Instant.now(), null, e.leftover());
         entries.save(reopened);
         return reopened;
     }
@@ -615,7 +616,7 @@ public class NutritionService {
             existing.foodId(), existing.foodName(), existing.servingLabel(),
             existing.servingGrams(), existing.quantity(), total, existing.photoRef(),
             existing.contentHash(), existing.source(), updated, existing.mealImageUrl(), existing.mealImageStatus(),
-            existing.analysisStatus(), existing.createdAt(), null);
+            existing.analysisStatus(), existing.createdAt(), null, existing.leftover());
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -668,7 +669,8 @@ public class NutritionService {
             existing.mealImageStatus(),
             existing.analysisStatus(),
             existing.createdAt(),
-            null
+            null,
+            existing.leftover()
         );
         entries.save(updated);
         recomputeDay(userId, date);
@@ -680,6 +682,191 @@ public class NutritionService {
         requireDate(date);
         entries.delete(userId, date, entryId);
         recomputeDay(userId, date);
+    }
+
+    // ----- Remove Leftovers (IMPL-LEFTOVER-01) --------------------------
+
+    /**
+     * Begin a "Remove Leftovers" pass: flip the entry's leftover to
+     * {@code ANALYZING}. On the FIRST pass (no existing leftover) the current
+     * macros/ingredients ARE the as-served baseline, so they are snapshotted into
+     * the {@link Leftover}; a re-run keeps the preserved baseline untouched (spec
+     * D6/IL-3). No day rollup change — live macros are unchanged until apply.
+     * Throws when the entry is ineligible (spec D5).
+     */
+    public FoodEntry beginLeftoverAnalysis(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        if (!existing.leftoverEligible()) {
+            throw new IllegalStateException("entry is not eligible for leftovers: " + entryId);
+        }
+        Leftover prior = existing.leftover();
+        Macros servedMacros = prior != null ? prior.servedMacros() : existing.macros();
+        List<CompositeIngredient> servedIngredients = prior != null
+            ? prior.servedIngredients() : existing.ingredients();
+        Instant analyzedAt = prior != null ? prior.analyzedAt() : null;
+        Leftover analyzing = new Leftover(
+            LeftoverStatus.ANALYZING, servedMacros, servedIngredients, null, analyzedAt);
+        FoodEntry updated = withLeftover(existing, existing.ingredients(), existing.macros(), analyzing);
+        entries.save(updated);
+        return updated;
+    }
+
+    /**
+     * Record a valid analysis result awaiting the user's confirm/discard
+     * ({@code PENDING_REVIEW}). Live macros are unchanged (nothing applied yet), so
+     * no rollup recompute. No-op if the entry vanished or is no longer analyzing.
+     */
+    public Optional<FoodEntry> setLeftoverProposal(
+        String userId, LocalDate date, String entryId, LeftoverProposal proposal) {
+        requireUser(userId);
+        requireDate(date);
+        Optional<FoodEntry> found = entries.findById(userId, date, entryId);
+        if (found.isEmpty() || found.get().leftover() == null
+            || found.get().leftover().status() != LeftoverStatus.ANALYZING) {
+            return Optional.empty();
+        }
+        FoodEntry existing = found.get();
+        Leftover prior = existing.leftover();
+        Leftover pending = new Leftover(
+            LeftoverStatus.PENDING_REVIEW, prior.servedMacros(), prior.servedIngredients(),
+            proposal, prior.analyzedAt());
+        FoodEntry updated = withLeftover(existing, existing.ingredients(), existing.macros(), pending);
+        entries.save(updated);
+        return Optional.of(updated);
+    }
+
+    /**
+     * Record a rejected analysis (low confidence / hard mismatch, spec D12). A
+     * first-time pass drops to {@code REJECTED} (baseline kept so a retake can
+     * recompute); a re-run of an already-applied entry reverts to its committed
+     * {@code APPLIED} state so a bad retake never loses the prior result. No rollup
+     * recompute (live macros unchanged). No-op if the entry vanished or moved on.
+     */
+    public Optional<FoodEntry> rejectLeftover(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        Optional<FoodEntry> found = entries.findById(userId, date, entryId);
+        if (found.isEmpty() || found.get().leftover() == null
+            || found.get().leftover().status() != LeftoverStatus.ANALYZING) {
+            return Optional.empty();
+        }
+        FoodEntry existing = found.get();
+        Leftover prior = existing.leftover();
+        LeftoverStatus status = prior.everApplied() ? LeftoverStatus.APPLIED : LeftoverStatus.REJECTED;
+        Leftover reverted = new Leftover(
+            status, prior.servedMacros(), prior.servedIngredients(), null, prior.analyzedAt());
+        FoodEntry updated = withLeftover(existing, existing.ingredients(), existing.macros(), reverted);
+        entries.save(updated);
+        return Optional.of(updated);
+    }
+
+    /**
+     * Discard a pending/rejected leftover proposal (spec D7 "Discard"): revert to
+     * the prior committed state — {@code APPLIED} if a consumed estimate was
+     * already committed, otherwise clear the leftover entirely. Live macros are
+     * unchanged either way, so no rollup recompute. No-op if nothing to discard.
+     */
+    public Optional<FoodEntry> discardLeftover(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        Optional<FoodEntry> found = entries.findById(userId, date, entryId);
+        if (found.isEmpty() || found.get().leftover() == null) {
+            return Optional.empty();
+        }
+        FoodEntry existing = found.get();
+        Leftover prior = existing.leftover();
+        if (prior.status() == LeftoverStatus.APPLIED) {
+            return Optional.of(existing);
+        }
+        Leftover reverted = prior.everApplied()
+            ? new Leftover(LeftoverStatus.APPLIED, prior.servedMacros(),
+                prior.servedIngredients(), null, prior.analyzedAt())
+            : null;
+        FoodEntry updated = withLeftover(existing, existing.ingredients(), existing.macros(), reverted);
+        entries.save(updated);
+        return Optional.of(updated);
+    }
+
+    /**
+     * Commit the pending proposal: the entry's live ingredients/macros become the
+     * CONSUMED values computed from the preserved served baseline (spec §4.1), the
+     * leftover flips to {@code APPLIED} (baseline preserved for re-run/restore), and
+     * the day rollup recomputes. Idempotent-friendly: requires a
+     * {@code PENDING_REVIEW} proposal.
+     */
+    public FoodEntry applyLeftover(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        Leftover prior = existing.leftover();
+        if (prior == null || prior.status() != LeftoverStatus.PENDING_REVIEW
+            || prior.proposal() == null) {
+            throw new IllegalStateException("no leftover proposal to apply: " + entryId);
+        }
+        List<CompositeIngredient> consumed = withDerivedCalories(
+            LeftoverMath.consumedIngredients(prior.servedIngredients(), prior.proposal()));
+        Macros consumedTotal = compositeTotal(consumed, 1.0);
+        Leftover applied = new Leftover(
+            LeftoverStatus.APPLIED, prior.servedMacros(), prior.servedIngredients(),
+            null, Instant.now());
+        FoodEntry updated = withLeftover(existing, consumed, consumedTotal, applied);
+        entries.save(updated);
+        recomputeDay(userId, date);
+        return updated;
+    }
+
+    /**
+     * "Restore full portion" (spec D15): reset the entry's live ingredients/macros
+     * to the preserved as-served baseline and clear the leftover. Recomputes the
+     * day rollup. Throws when there is no leftover baseline to restore.
+     */
+    public FoodEntry restoreServedPortion(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        Leftover prior = existing.leftover();
+        if (prior == null || prior.servedIngredients() == null) {
+            throw new IllegalStateException("no served baseline to restore: " + entryId);
+        }
+        List<CompositeIngredient> served = withDerivedCalories(prior.servedIngredients());
+        Macros servedTotal = compositeTotal(served, 1.0);
+        FoodEntry updated = withLeftover(existing, served, servedTotal, null);
+        entries.save(updated);
+        recomputeDay(userId, date);
+        return updated;
+    }
+
+    /**
+     * Rebuild a composite entry with a new ingredient list + total macros +
+     * leftover state, recomputing the entry's total grams and preserving
+     * everything else. Used by the leftover apply/restore paths.
+     */
+    private static FoodEntry withLeftover(
+        FoodEntry existing, List<CompositeIngredient> ingredients, Macros total, Leftover leftover) {
+        double grams = 0.0;
+        if (ingredients != null) {
+            for (CompositeIngredient ing : ingredients) {
+                if (ing.servingGrams() != null) {
+                    grams += ing.servingGrams() * (ing.quantity() != null ? ing.quantity() : 1.0);
+                }
+            }
+        }
+        return new FoodEntry(
+            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            existing.foodId(), existing.foodName(),
+            ingredients != null ? ingredients.size() + " ingredients" : existing.servingLabel(),
+            ingredients != null ? grams : existing.servingGrams(),
+            existing.quantity() != null ? existing.quantity() : 1.0,
+            total != null ? total : existing.macros(),
+            existing.photoRef(), existing.contentHash(), existing.source(),
+            ingredients != null ? List.copyOf(ingredients) : existing.ingredients(),
+            existing.mealImageUrl(), existing.mealImageStatus(), existing.analysisStatus(),
+            existing.createdAt(), null, leftover);
     }
 
     /**

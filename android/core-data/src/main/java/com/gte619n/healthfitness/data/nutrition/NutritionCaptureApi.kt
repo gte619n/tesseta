@@ -40,4 +40,16 @@ interface NutritionCaptureApi {
         @Part photo: MultipartBody.Part,
         @Part("barcode") barcode: RequestBody? = null,
     ): LabelCaptureResponse
+
+    // Remove Leftovers (IMPL-LEFTOVER-01): upload a photo of what's left on the
+    // plate. Returns 202 + the entry (leftover status now ANALYZING); the backend
+    // job compares it to the original meal photo and estimates what was eaten.
+    // Mirrors captureMeal's multipart shape exactly (`photo` part, image/jpeg).
+    @Multipart
+    @POST("api/me/nutrition/{date}/entries/{entryId}/leftovers/analyze")
+    suspend fun analyzeLeftovers(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+        @Part photo: MultipartBody.Part,
+    ): Entry
 }

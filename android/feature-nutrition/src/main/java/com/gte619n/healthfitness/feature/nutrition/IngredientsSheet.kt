@@ -57,6 +57,12 @@ fun IngredientsSheet(
     previewAdjustment: suspend (String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
     onApplyAdjustment: (com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
     applyingAdjustment: Boolean = false,
+    // IMPL-LEFTOVER-01 (D4/D7/D15): "Remove Leftovers" launch, "Review leftovers"
+    // (a PENDING_REVIEW awaiting the diff), and "Restore full portion" (APPLIED).
+    savingLeftover: Boolean = false,
+    onRemoveLeftovers: () -> Unit = {},
+    onReviewLeftovers: () -> Unit = {},
+    onRestoreFullPortion: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val ingredients = entry.ingredients.orEmpty()
@@ -165,6 +171,17 @@ fun IngredientsSheet(
                 )
                 Spacer(Modifier.height(10.dp))
             }
+
+            // IMPL-LEFTOVER-01 (D4/D7/D8/D15/D17): the leftover controls + the
+            // "Served → Ate" per-ingredient display for an APPLIED entry.
+            Spacer(Modifier.height(14.dp))
+            LeftoverSection(
+                entry = entry,
+                saving = savingLeftover,
+                onRemoveLeftovers = onRemoveLeftovers,
+                onReviewLeftovers = onReviewLeftovers,
+                onRestoreFullPortion = onRestoreFullPortion,
+            )
 
             Spacer(Modifier.height(14.dp))
             AdjustWithAiSection(

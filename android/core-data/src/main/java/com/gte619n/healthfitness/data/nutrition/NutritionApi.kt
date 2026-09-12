@@ -174,4 +174,31 @@ interface NutritionApi {
         @Query("from") from: String,
         @Query("to") to: String,
     ): List<DailyRollup>
+
+    // ----- Remove Leftovers (IMPL-LEFTOVER-01) --------------------------
+    // `analyze` is multipart, so it lives on NutritionCaptureApi alongside
+    // capture-meal. These three commit/undo the already-stored proposal — no
+    // body; the server holds everything (spec D13).
+
+    // Commit the stored leftover proposal: live macros become the consumed
+    // amount, the as-served baseline is captured, status → APPLIED. Idempotent.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/leftovers/apply")
+    suspend fun applyLeftovers(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+    ): Entry
+
+    // Discard the stored proposal; status returns to its prior committed state.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/leftovers/discard")
+    suspend fun discardLeftovers(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+    ): Entry
+
+    // Restore the full served portion (D15): live = served, leftover cleared.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/leftovers/restore")
+    suspend fun restoreLeftovers(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+    ): Entry
 }

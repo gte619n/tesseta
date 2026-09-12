@@ -61,6 +61,9 @@ fun NutritionCaptureRoute(
         onConfirmLabelDraft = viewModel::confirmLabelDraft,
         onFallbackToLabel = viewModel::fallbackToLabel,
         onReset = viewModel::reset,
+        // IMPL-LEFTOVER-01 (D10): leftover mode is shutter-only, routed to the op.
+        leftoverMode = viewModel.isLeftoverMode,
+        onAnalyzeLeftover = viewModel::analyzeLeftover,
     )
 }
 
@@ -77,6 +80,10 @@ fun NutritionCaptureScreen(
     onConfirmLabelDraft: (LabelCaptureFood, Int, Double) -> Unit,
     onFallbackToLabel: () -> Unit,
     onReset: () -> Unit,
+    // IMPL-LEFTOVER-01 (D10): render only the shutter (no barcode/label stages) and
+    // route the captured bytes to [onAnalyzeLeftover] instead of new-meal logging.
+    leftoverMode: Boolean = false,
+    onAnalyzeLeftover: (ByteArray) -> Unit = {},
 ) {
     val context = LocalContext.current
     var hasPermission by remember {
@@ -102,8 +109,12 @@ fun NutritionCaptureScreen(
             .background(Hf.colors.canvas),
     ) {
         HfScreenHeader(
-            title = "Capture",
-            subtitle = "Point at a barcode or label, or photograph your meal",
+            title = if (leftoverMode) "Remove Leftovers" else "Capture",
+            subtitle = if (leftoverMode) {
+                "Photograph what's left on the plate"
+            } else {
+                "Point at a barcode or label, or photograph your meal"
+            },
             onBack = onBack,
         )
         Spacer(Modifier.height(10.dp))
@@ -119,6 +130,21 @@ fun NutritionCaptureScreen(
 
         if (!hasPermission) {
             CameraDenied(onRequest = { launcher.launch(Manifest.permission.CAMERA) })
+            return@Column
+        }
+
+        // IMPL-LEFTOVER-01 (D10): leftover mode skips barcode/label entirely — a
+        // single shutter-only pane that shoots the plate and routes to the op.
+        if (leftoverMode) {
+            LeftoverCapturePane(controller = controller, onCapture = onAnalyzeLeftover)
+            if (state.error != null) {
+                Text(
+                    state.error,
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.alert,
+                    modifier = Modifier.padding(18.dp),
+                )
+            }
             return@Column
         }
 

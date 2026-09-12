@@ -96,6 +96,14 @@ class NutritionCaptureViewModel @Inject constructor(
         savedStateHandle.get<String>("date")?.takeIf { it.isNotBlank() }
             ?: LocalDate.now().format(ISO_DATE)
 
+    // IMPL-LEFTOVER-01 (D10): when launched in leftover mode the screen is scoped
+    // to a single target entry — skip barcode/label stages, go straight to the
+    // shutter, and route the captured bytes to the leftover op instead of new-meal
+    // logging. Both come from nav args (matches Routes.NUTRITION_CAPTURE_ARG_*).
+    val leftoverEntryId: String? =
+        savedStateHandle.get<String>("entryId")?.takeIf { it.isNotBlank() }
+    val isLeftoverMode: Boolean = leftoverEntryId != null
+
     // The meal is inferred from the time of day at log time — the capture flow
     // never asks the user which meal it is (the web client doesn't either).
     private fun currentMeal(): Meal = Meal.forHour(java.time.LocalTime.now().hour)
@@ -221,6 +229,22 @@ class NutritionCaptureViewModel @Inject constructor(
             // page shows a synthetic "Analyzing photo…" row from the op store until
             // the server's ANALYZING placeholder lands.
             ops.enqueueCapturePhoto(captureDate, currentMeal().wire, jpeg)
+            _events.send(CaptureEvent.NavigateBack)
+        }
+    }
+
+    /**
+     * IMPL-LEFTOVER-01 (D10): capture the leftover-plate photo and pop straight
+     * back — the JPEG is parked and the durable REMOVE_LEFTOVERS op uploads it to
+     * `…/leftovers/analyze` (surviving process death). The target entry shows
+     * "Analyzing leftovers…" until the backend job lands PENDING_REVIEW/REJECTED.
+     */
+    fun analyzeLeftover(jpeg: ByteArray) {
+        val entryId = leftoverEntryId ?: return
+        snackbar.show("Analyzing leftovers…")
+        _state.update { it.copy(stage = CaptureStage.Scanning, error = null) }
+        viewModelScope.launch {
+            nutrition.analyzeLeftovers(captureDate, entryId, jpeg)
             _events.send(CaptureEvent.NavigateBack)
         }
     }
