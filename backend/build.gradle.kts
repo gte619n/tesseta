@@ -85,7 +85,7 @@ dependencies {
     // ADR-0020 (decision D16): live OpenAPI 3 spec + Swagger UI for the /v1
     // third-party API. Scoped to /v1 via springdoc.paths-to-match so it never
     // documents the first-party /api surface.
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.security.test)
