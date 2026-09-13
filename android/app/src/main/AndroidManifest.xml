@@ -149,6 +149,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Adjust with AI (async): "Apply" action on the adjust-review
+             notification commits the stored proposal in the background. -->
+        <receiver
+            android:name=".push.AdjustApplyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.gte619n.healthfitness.ADJUST_APPLY" />
+            </intent-filter>
+        </receiver>
+
         <!-- IMPL-AND-04 / IMPL-AND-05: share downloaded lab/DEXA PDFs with the
              system viewer via ACTION_VIEW over a content:// URI. -->
         <provider

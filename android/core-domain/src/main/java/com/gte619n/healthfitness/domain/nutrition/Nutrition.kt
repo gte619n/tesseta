@@ -169,6 +169,13 @@ data class Entry(
      * map the sync delta carries).
      */
     val leftover: Leftover? = null,
+    /**
+     * Async "Adjust with AI" state for this entry, or null when there is no pending
+     * adjustment. Additive/nullable so every existing constructor call site is
+     * unaffected. Mirrors the backend `EntryResponse.adjustment` object (and the
+     * nested `adjustment` map the sync delta carries).
+     */
+    val adjustment: MealAdjustment? = null,
 ) {
     val isComposite: Boolean get() = !ingredients.isNullOrEmpty()
 
@@ -205,6 +212,15 @@ data class Entry(
 
     /** True when a leftover has been applied — the row shows the "leftovers" badge (D17). */
     val hasAppliedLeftover: Boolean get() = leftover?.status == LeftoverStatus.APPLIED
+
+    // ---- Adjust with AI (async) -------------------------------------------
+
+    /** True while the backend is re-analyzing the meal from a correction. */
+    val isAdjusting: Boolean get() = adjustment?.status == AdjustStatus.ADJUSTING
+
+    /** True when an adjustment proposal awaits the user's Apply/Discard. */
+    val hasAdjustReview: Boolean
+        get() = adjustment?.status == AdjustStatus.PENDING_REVIEW && adjustment.proposal != null
 
     /**
      * Spec D5 eligibility for the "Remove Leftovers" button: a composite photo
@@ -464,6 +480,40 @@ data class AdjustApplyRequest(
     val mealName: String,
     val packagedProduct: Boolean = false,
     val items: List<AdjustItem> = emptyList(),
+    val saveAsMeal: Boolean = false,
+)
+
+/** Lifecycle of an async "Adjust with AI" pass. Mirrors the backend `AdjustStatus`. */
+enum class AdjustStatus {
+    /** The correction is submitted and the backend is re-analyzing the meal. */
+    ADJUSTING,
+
+    /** Re-analysis produced a proposal awaiting the user's Apply/Discard. */
+    PENDING_REVIEW,
+
+    /** Re-analysis failed (analyzer unavailable / no identifiable food). */
+    REJECTED,
+}
+
+/**
+ * The async "Adjust with AI" state carried on an [Entry], mirroring the backend
+ * `EntryResponse.adjustment` object (and the nested `adjustment` map the sync delta
+ * emits). [proposal] is present only while [status] == [AdjustStatus.PENDING_REVIEW]
+ * and reuses [AdjustPreviewResponse] so the review sheet shares one parser.
+ */
+data class MealAdjustment(
+    val status: AdjustStatus? = null,
+    val instruction: String? = null,
+    val proposal: AdjustPreviewResponse? = null,
+)
+
+/**
+ * Body for POST …/adjust/start: the free-text correction plus whether committing
+ * should also save the corrected meal. Both are stored server-side so the eventual
+ * commit needs no body.
+ */
+data class AdjustStartRequest(
+    val instruction: String,
     val saveAsMeal: Boolean = false,
 )
 

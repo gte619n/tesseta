@@ -26,5 +26,8 @@ public enum NutritionJobType {
     DESCRIPTION_ANALYSIS,
 
     /** Compare a leftover photo to the original meal and estimate what was eaten. */
-    LEFTOVER_ANALYSIS
+    LEFTOVER_ANALYSIS,
+
+    /** Re-analyze a logged meal from a free-text correction ("Adjust with AI"). */
+    MEAL_ADJUSTMENT
 }

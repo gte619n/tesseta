@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gte619n.healthfitness.data.nutrition.NutritionDeepLinkRelay
 import com.gte619n.healthfitness.mobile.sync.SyncStatusViewModel
 import com.gte619n.healthfitness.ui.sync.SyncStatusOverlay
 import androidx.navigation.NavType
@@ -92,6 +95,15 @@ fun AppNavHost(
     syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
+    // Nutrition notification deep link (e.g. an "adjust-review" body tap): navigate
+    // to the nutrition screen and forward the target so its review sheet opens.
+    val deepLinkRelay = rememberNutritionDeepLinkRelay()
+    val adjustDeepLink by deepLinkRelay.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(adjustDeepLink) {
+        if (adjustDeepLink != null) {
+            navController.navigate(Routes.NUTRITION) { launchSingleTop = true }
+        }
+    }
     // IMPL-AND-20 (Phase 6, D11): the global sync-state indicator is an OVERLAY
     // drawn on top of the nav graph, so it never shifts the layout (no content
     // jump). In the common states (syncing / pending / offline) it's just a faint
@@ -114,15 +126,40 @@ fun AppNavHost(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AppNavHostGraph(widthClass = widthClass, navController = navController)
+        AppNavHostGraph(
+            widthClass = widthClass,
+            navController = navController,
+            adjustDeepLink = adjustDeepLink,
+            onAdjustDeepLinkConsumed = deepLinkRelay::consume,
+        )
         SyncStatusOverlay(state = syncState, onRetry = syncStatusViewModel::retry)
     }
+}
+
+/** Obtain the app-scoped nutrition deep-link relay (a Hilt @Singleton). */
+@Composable
+private fun rememberNutritionDeepLinkRelay(): NutritionDeepLinkRelay {
+    val appContext = LocalContext.current.applicationContext
+    return remember {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(
+            appContext,
+            NutritionDeepLinkEntryPoint::class.java,
+        ).nutritionDeepLinkRelay()
+    }
+}
+
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+interface NutritionDeepLinkEntryPoint {
+    fun nutritionDeepLinkRelay(): NutritionDeepLinkRelay
 }
 
 @Composable
 private fun AppNavHostGraph(
     widthClass: WindowWidthSizeClass,
     navController: androidx.navigation.NavHostController,
+    adjustDeepLink: NutritionDeepLinkRelay.AdjustReviewTarget? = null,
+    onAdjustDeepLinkConsumed: () -> Unit = {},
 ) {
     NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
         composable(Routes.DASHBOARD) {
@@ -188,6 +225,9 @@ private fun AppNavHostGraph(
                     navController.navigate(Routes.nutritionLeftoverCaptureRoute(date, entryId))
                 },
                 onBack = { navController.popBackStack() },
+                openAdjustReviewDate = adjustDeepLink?.date,
+                openAdjustReviewEntryId = adjustDeepLink?.entryId,
+                onAdjustReviewConsumed = onAdjustDeepLinkConsumed,
             )
         }
         composable(Routes.NUTRITION_TARGET) {

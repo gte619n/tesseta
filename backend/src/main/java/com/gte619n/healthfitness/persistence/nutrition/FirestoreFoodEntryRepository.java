@@ -11,10 +11,13 @@ import com.gte619n.healthfitness.core.nutrition.EntrySource;
 import com.gte619n.healthfitness.core.nutrition.FoodEntry;
 import com.gte619n.healthfitness.core.nutrition.FoodEntryRepository;
 import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
+import com.gte619n.healthfitness.core.nutrition.AdjustStatus;
 import com.gte619n.healthfitness.core.nutrition.Leftover;
 import com.gte619n.healthfitness.core.nutrition.LeftoverProposal;
 import com.gte619n.healthfitness.core.nutrition.LeftoverStatus;
 import com.gte619n.healthfitness.core.nutrition.Macros;
+import com.gte619n.healthfitness.core.nutrition.MealAdjustment;
+import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
 import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
@@ -119,6 +122,7 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
         body.put(SYNC_STATUS_KEY, SyncStatus.ACTIVE.name());
         body.put("analysisStatus", e.analysisStatus() != null ? e.analysisStatus().name() : null);
         body.put("leftover", leftoverToMap(e.leftover()));
+        body.put("adjustment", adjustmentToMap(e.adjustment()));
         body.put("updatedAt", serverTimestamp());
         if (isNew) {
             body.put("createdAt", serverTimestamp());
@@ -149,7 +153,8 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
             analysisStatusFrom(snapshot.getString("analysisStatus")),
             toInstant(snapshot.get("createdAt")),
             toInstant(snapshot.get("updatedAt")),
-            leftoverFromMap(snapshot.get("leftover"))
+            leftoverFromMap(snapshot.get("leftover")),
+            adjustmentFromMap(snapshot.get("adjustment"))
         );
     }
 
@@ -304,6 +309,76 @@ public class FirestoreFoodEntryRepository implements FoodEntryRepository {
             confidence,
             Boolean.TRUE.equals(map.get("warning")),
             (String) map.get("warningNote"));
+    }
+
+    // ----- Adjust with AI (async) ---------------------------------------
+
+    private static Map<String, Object> adjustmentToMap(MealAdjustment a) {
+        if (a == null) return null;
+        Map<String, Object> map = new HashMap<>();
+        map.put("status", a.status() != null ? a.status().name() : null);
+        map.put("instruction", a.instruction());
+        map.put("saveAsMeal", a.saveAsMeal());
+        map.put("proposal", adjustProposalToMap(a.proposal()));
+        map.put("analyzedAt", a.analyzedAt());
+        return map;
+    }
+
+    private static MealAdjustment adjustmentFromMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) return null;
+        String status = (String) map.get("status");
+        return new MealAdjustment(
+            status != null ? AdjustStatus.valueOf(status) : null,
+            (String) map.get("instruction"),
+            Boolean.TRUE.equals(map.get("saveAsMeal")),
+            adjustProposalFromMap(map.get("proposal")),
+            toInstant(map.get("analyzedAt")));
+    }
+
+    private static Map<String, Object> adjustProposalToMap(
+        MealAdjustmentService.AdjustmentProposal p) {
+        if (p == null) return null;
+        Map<String, Object> map = new HashMap<>();
+        List<Map<String, Object>> items = new ArrayList<>();
+        if (p.items() != null) {
+            for (MealAdjustmentService.ProposalItem it : p.items()) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("name", it.name());
+                m.put("servingLabel", it.servingLabel());
+                m.put("servingGrams", it.servingGrams());
+                m.put("macrosPer100g", macrosToMap(it.macrosPer100g()));
+                m.put("macros", macrosToMap(it.macros()));
+                items.add(m);
+            }
+        }
+        map.put("mealName", p.mealName());
+        map.put("packagedProduct", p.packagedProduct());
+        map.put("items", items);
+        map.put("newTotals", macrosToMap(p.newTotals()));
+        map.put("oldTotals", macrosToMap(p.oldTotals()));
+        return map;
+    }
+
+    private static MealAdjustmentService.AdjustmentProposal adjustProposalFromMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) return null;
+        List<MealAdjustmentService.ProposalItem> items = new ArrayList<>();
+        if (map.get("items") instanceof List<?> list) {
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> m)) continue;
+                items.add(new MealAdjustmentService.ProposalItem(
+                    (String) m.get("name"),
+                    (String) m.get("servingLabel"),
+                    asDouble(m.get("servingGrams")),
+                    macrosFromMap(m.get("macrosPer100g")),
+                    macrosFromMap(m.get("macros"))));
+            }
+        }
+        return new MealAdjustmentService.AdjustmentProposal(
+            (String) map.get("mealName"),
+            Boolean.TRUE.equals(map.get("packagedProduct")),
+            items,
+            macrosFromMap(map.get("newTotals")),
+            macrosFromMap(map.get("oldTotals")));
     }
 
 }

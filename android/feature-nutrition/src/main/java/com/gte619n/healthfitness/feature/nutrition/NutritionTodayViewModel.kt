@@ -7,8 +7,7 @@ import com.gte619n.healthfitness.data.db.entity.NutritionOpType
 import com.gte619n.healthfitness.data.nutrition.NutritionOpStore
 import com.gte619n.healthfitness.data.nutrition.NutritionRepository
 import com.gte619n.healthfitness.data.sync.SyncSignals
-import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
-import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
+import com.gte619n.healthfitness.domain.nutrition.AdjustStatus
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest
 import com.gte619n.healthfitness.domain.nutrition.EntryRequest
@@ -16,6 +15,7 @@ import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.Leftover
 import com.gte619n.healthfitness.domain.nutrition.LeftoverStatus
 import com.gte619n.healthfitness.domain.nutrition.Macros
+import com.gte619n.healthfitness.domain.nutrition.MealAdjustment
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
@@ -70,8 +70,20 @@ data class NutritionTodayUiState(
     val editingComposite: Entry? = null,
     /** true while an ingredient portion is being saved. */
     val savingIngredient: Boolean = false,
-    /** true while an accepted AI adjustment is being applied to an entry. */
+    /** true while an AI adjustment commit/discard is in flight. */
     val savingAdjust: Boolean = false,
+    /**
+     * The entry whose async-adjustment review sheet is open, or null. Set from the
+     * entry's "Review adjustment" affordance / the FCM deep link; drives the
+     * old→new diff with Apply/Discard.
+     */
+    val reviewingAdjust: Entry? = null,
+    /**
+     * An entry whose adjustment proposal just landed while the app is foregrounded —
+     * drives a one-time in-app banner with a "Review" button that jumps to the
+     * editor. Null when there's nothing to surface / after dismissal.
+     */
+    val adjustReviewBanner: Entry? = null,
     /**
      * IMPL-LEFTOVER-01 — the entry whose leftover review-diff sheet is open, or
      * null. Set from the sheet's "Review leftovers" affordance / a PENDING_REVIEW
@@ -114,6 +126,9 @@ class NutritionTodayViewModel @Inject constructor(
     // fills the mirror; this observer renders whatever lands there. Re-subscribed
     // when the shown date changes.
     private var dayJob: Job? = null
+
+    /** Entry ids we've already shown the foreground adjustment banner for (once each). */
+    private var bannerShownAdjustIds: Set<String> = emptySet()
     private var observedDate: LocalDate? = null
 
     // First load (and every return to the foreground) is driven by the screen's
@@ -165,10 +180,28 @@ class NutritionTodayViewModel @Inject constructor(
         dayJob = viewModelScope.launch {
             repository.observeDay(date.format(ISO_DATE)).collect { day ->
                 if (_state.value.date == date) {
-                    _state.update { it.copy(day = day, loading = false) }
+                    _state.update { it.copy(day = day, loading = false, adjustReviewBanner = bannerFor(day)) }
                 }
             }
         }
+    }
+
+    /**
+     * The entry to surface in the foreground "adjustment ready" banner: the first
+     * one whose proposal just landed (PENDING_REVIEW) and that we haven't banner-ed
+     * yet, and only while its review sheet isn't already open. Returns the current
+     * banner otherwise so a mere mirror re-emit doesn't clear it. Each entry banners
+     * at most once (dismiss/review both retire it) so it never nags.
+     */
+    private fun bannerFor(day: NutritionDay?): Entry? {
+        val open = _state.value.reviewingAdjust != null
+        val fresh = day?.meals?.flatMap { it.entries }
+            ?.firstOrNull { it.hasAdjustReview && it.entryId !in bannerShownAdjustIds }
+        if (fresh != null && !open) {
+            bannerShownAdjustIds = bannerShownAdjustIds + fresh.entryId
+            return fresh
+        }
+        return _state.value.adjustReviewBanner
     }
 
     fun previousDay() = load(_state.value.date.minusDays(1))
@@ -255,39 +288,111 @@ class NutritionTodayViewModel @Inject constructor(
     }
 
     /**
-     * Adjust with AI — preview: run a free-text correction against the entry and
-     * return the revised meal as a proposal. Suspends for the model round-trip and
-     * throws on failure so the sheet can surface the error; nothing is persisted.
+     * Adjust with AI (async) — submit a free-text correction as a durable op that
+     * survives backgrounding/process death, then close the edit sheet. The op flips
+     * the entry to ADJUSTING (the row shows "Adjusting…"); the backend re-analyzes
+     * and pushes an FCM review notification when the proposal is ready. Fire-and-
+     * forget on the ViewModel scope so closing the sheet can't cancel the enqueue.
      */
-    suspend fun previewAdjustment(entryId: String, instruction: String): AdjustPreviewResponse {
-        return repository.adjustPreview(_state.value.date.format(ISO_DATE), entryId, instruction)
+    fun submitAdjust(entryId: String, instruction: String, saveAsMeal: Boolean) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            runCatching { repository.submitAdjust(date, entryId, instruction, saveAsMeal) }
+        }
+        _state.update { it.copy(editingEntry = null, editingComposite = null) }
     }
 
     /**
-     * Adjust with AI — apply the accepted proposal onto the entry, then reload and
-     * close the sheet. Runs on the ViewModel scope (not the sheet's) so closing the
-     * sheet can't cancel the in-flight apply. A composite meal's image regenerates
-     * server-side, so the settle-poll swaps it in.
+     * Open the async-adjustment review sheet for [entry]: its stored old→new
+     * proposal with Apply/Discard. Closes any edit/ingredients sheet and clears the
+     * foreground banner. A no-op for a synthetic in-flight row.
      */
-    fun applyAdjustment(entryId: String, request: AdjustApplyRequest) {
+    fun reviewAdjust(entry: Entry) {
+        if (entry.entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        _state.update {
+            it.copy(
+                reviewingAdjust = entry,
+                adjustReviewBanner = null,
+                editingEntry = null,
+                editingComposite = null,
+            )
+        }
+    }
+
+    /** Close the adjustment review sheet without applying/discarding. */
+    fun closeAdjustReview() = _state.update { it.copy(reviewingAdjust = null) }
+
+    /** Dismiss the foreground "adjustment ready" banner without opening the review. */
+    fun dismissAdjustBanner() = _state.update { it.copy(adjustReviewBanner = null) }
+
+    /**
+     * Commit the stored adjustment proposal (the "Apply" path): the backend applies
+     * its stored proposal (bodiless), then refresh and close the review sheet. Runs
+     * on the ViewModel scope so closing the sheet can't cancel the in-flight commit.
+     * A composite meal's image regenerates server-side, so the settle-poll swaps it in.
+     */
+    fun commitAdjust(entryId: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
         val date = _state.value.date.format(ISO_DATE)
         _state.update { it.copy(savingAdjust = true) }
         viewModelScope.launch {
             try {
-                repository.adjustApply(date, entryId, request)
+                repository.commitAdjust(date, entryId)
                 val day = repository.day(date)
                 _state.update {
-                    it.copy(
-                        day = day,
-                        savingAdjust = false,
-                        editingEntry = null,
-                        editingComposite = null,
-                        error = null,
-                    )
+                    it.copy(day = day, savingAdjust = false, reviewingAdjust = null, error = null)
                 }
                 pollWhileImagesGenerate(_state.value.date)
             } catch (e: Exception) {
-                _state.update { it.copy(savingAdjust = false, error = e.message ?: "Couldn't adjust the meal") }
+                _state.update {
+                    it.copy(savingAdjust = false, error = e.message ?: "Couldn't adjust the meal")
+                }
+            }
+        }
+    }
+
+    /** Discard a pending/failed adjustment, then refresh + close the sheet. */
+    fun discardAdjust(entryId: String) {
+        if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
+        val date = _state.value.date.format(ISO_DATE)
+        _state.update { it.copy(savingAdjust = true) }
+        viewModelScope.launch {
+            try {
+                repository.discardAdjust(date, entryId)
+                val day = repository.day(date)
+                _state.update {
+                    it.copy(day = day, savingAdjust = false, reviewingAdjust = null, error = null)
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(savingAdjust = false, error = e.message ?: "Couldn't discard the adjustment")
+                }
+            }
+        }
+    }
+
+    /**
+     * Open the review sheet for a specific (date, entryId) — the target of the FCM
+     * "adjust-review" notification body tap. Switches to that day, revalidates it so
+     * the PENDING_REVIEW entry is present, then opens the review sheet for it.
+     */
+    fun openAdjustReviewFor(dateStr: String, entryId: String) {
+        val target = runCatching { LocalDate.parse(dateStr) }.getOrNull() ?: _state.value.date
+        if (_state.value.date != target) load(target)
+        viewModelScope.launch {
+            val day = runCatching { repository.day(target.format(ISO_DATE)) }.getOrNull()
+            val entry = day?.meals?.flatMap { it.entries }?.firstOrNull { it.entryId == entryId }
+            if (entry != null) {
+                _state.update {
+                    it.copy(
+                        day = day,
+                        reviewingAdjust = entry,
+                        adjustReviewBanner = null,
+                        editingEntry = null,
+                        editingComposite = null,
+                    )
+                }
             }
         }
     }
@@ -764,24 +869,42 @@ fun NutritionDay?.withPendingOps(
     // rather than adding a new row — decorate that entry with an ANALYZING leftover
     // state so the row shows "Analyzing leftovers…" the instant the shutter fires,
     // before the backend's own ANALYZING (or the sync) lands. Purely presentational.
-    val leftoverOps = forDate.filter { it.type == NutritionOpType.REMOVE_LEFTOVERS.name }
-    val leftoverTargetIds = leftoverOps.map { it.targetEntryId() }.toSet()
-    var meals = if (leftoverTargetIds.isEmpty()) {
+    val leftoverTargetIds = forDate
+        .filter { it.type == NutritionOpType.REMOVE_LEFTOVERS.name }
+        .map { it.targetEntryId() }.toSet()
+    // An ADJUST_MEAL op likewise targets an EXISTING entry (no new row) — decorate it
+    // with an ADJUSTING adjustment so the row shows "Adjusting…" the instant the user
+    // submits, before the backend's own ADJUSTING (or the sync) lands.
+    val adjustTargetIds = forDate
+        .filter { it.type == NutritionOpType.ADJUST_MEAL.name }
+        .map { it.targetEntryId() }.toSet()
+    var meals = if (leftoverTargetIds.isEmpty() && adjustTargetIds.isEmpty()) {
         base.meals
     } else {
         base.meals.map { g ->
             g.copy(
                 entries = g.entries.map { e ->
-                    if (e.entryId in leftoverTargetIds && !e.isAnalyzingLeftovers) {
-                        e.copy(leftover = (e.leftover ?: Leftover()).copy(status = LeftoverStatus.ANALYZING))
-                    } else {
-                        e
+                    var out = e
+                    if (out.entryId in leftoverTargetIds && !out.isAnalyzingLeftovers) {
+                        out = out.copy(
+                            leftover = (out.leftover ?: Leftover()).copy(status = LeftoverStatus.ANALYZING),
+                        )
                     }
+                    if (out.entryId in adjustTargetIds && !out.isAdjusting) {
+                        out = out.copy(
+                            adjustment = (out.adjustment ?: MealAdjustment()).copy(
+                                status = AdjustStatus.ADJUSTING,
+                            ),
+                        )
+                    }
+                    out
                 },
             )
         }
     }
-    forDate.filterNot { it.type == NutritionOpType.REMOVE_LEFTOVERS.name }.forEach { op ->
+    forDate.filterNot {
+        it.type == NutritionOpType.REMOVE_LEFTOVERS.name || it.type == NutritionOpType.ADJUST_MEAL.name
+    }.forEach { op ->
         val isCapture = op.type == NutritionOpType.CAPTURE_PHOTO.name
         val synthetic = Entry(
             entryId = PENDING_CAPTURE_PREFIX + op.id,

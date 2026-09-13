@@ -92,6 +92,20 @@ class HfMessagingService : FirebaseMessagingService() {
                 syncSignals.onSyncPush("nutrition")
                 postLeftoverRetakeNotification(message)
             }
+            // Adjust with AI (async): the re-analysis produced a proposal. Sync the
+            // PENDING_REVIEW state into the mirror, signal foreground screens, then
+            // post the notification (Apply action + a body tap that deep-links into
+            // the meal editor's review sheet for the exact entry).
+            ADJUST_REVIEW_MESSAGE_TYPE -> {
+                scheduler.enqueuePull()
+                syncSignals.onSyncPush("nutrition")
+                postAdjustReviewNotification(message)
+            }
+            ADJUST_FAILED_MESSAGE_TYPE -> {
+                scheduler.enqueuePull()
+                syncSignals.onSyncPush("nutrition")
+                postAdjustFailedNotification(message)
+            }
         }
     }
 
@@ -154,6 +168,90 @@ class HfMessagingService : FirebaseMessagingService() {
             .build()
         manager.notify(LEFTOVER_NOTIFICATION_ID, notification)
     }
+
+    /**
+     * Adjust with AI (async): the proposal is ready. Body tap deep-links straight
+     * into the meal editor's review sheet for the target entry (via extras the
+     * launch Activity routes on); the Apply action commits the exact entry in the
+     * background through [AdjustApplyReceiver]. The push carries the target
+     * `date`/`entryId` so both target precisely.
+     */
+    private fun postAdjustReviewNotification(message: RemoteMessage) {
+        if (!canPostNotifications()) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        manager.createNotificationChannel(adjustChannel())
+        val title = message.notification?.title ?: "Meal re-analyzed"
+        val body = message.notification?.body ?: "Tap to review the adjustment."
+        val date = message.data["date"].orEmpty()
+        val entryId = message.data["entryId"].orEmpty()
+        // Body tap → open the app and deep-link to the review sheet for this entry.
+        val contentIntent = adjustReviewContentIntent(date, entryId)
+        // Apply action → a background broadcast that commits the exact entry.
+        val applyIntent = Intent(this, AdjustApplyReceiver::class.java)
+            .setAction(AdjustApplyReceiver.ACTION_APPLY)
+            .putExtra(AdjustApplyReceiver.EXTRA_DATE, date)
+            .putExtra(AdjustApplyReceiver.EXTRA_ENTRY_ID, entryId)
+        val applyPending = PendingIntent.getBroadcast(
+            this,
+            RC_ADJUST_APPLY,
+            applyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, ADJUST_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_sync_problem)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(contentIntent)
+            .addAction(0, "Apply", applyPending)
+            .build()
+        manager.notify(ADJUST_NOTIFICATION_ID, notification)
+    }
+
+    /** Failed adjustment: tap opens the app so the user can retry from the sheet. */
+    private fun postAdjustFailedNotification(message: RemoteMessage) {
+        if (!canPostNotifications()) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        manager.createNotificationChannel(adjustChannel())
+        val title = message.notification?.title ?: "Couldn't adjust the meal"
+        val body = message.notification?.body ?: "Tap to try again."
+        val notification = NotificationCompat.Builder(this, ADJUST_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_sync_problem)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(adjustReviewContentIntent(message.data["date"].orEmpty(), message.data["entryId"].orEmpty()))
+            .build()
+        manager.notify(ADJUST_NOTIFICATION_ID, notification)
+    }
+
+    /**
+     * A body-tap intent that opens the launcher activity carrying the extras the
+     * Activity reads to deep-link into the adjustment review sheet for (date,
+     * entryId). Unlike [launchAppIntent] this attaches routing extras + SINGLE_TOP
+     * so a warm app delivers them via onNewIntent.
+     */
+    private fun adjustReviewContentIntent(date: String, entryId: String): PendingIntent? {
+        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return null
+        launch.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        launch.putExtra(EXTRA_NAV_DEST, NAV_DEST_ADJUST_REVIEW)
+        launch.putExtra(EXTRA_DATE, date)
+        launch.putExtra(EXTRA_ENTRY_ID, entryId)
+        return PendingIntent.getActivity(
+            this, RC_ADJUST_REVIEW, launch,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun adjustChannel() = NotificationChannel(
+        ADJUST_CHANNEL_ID,
+        "Meal adjustments",
+        NotificationManager.IMPORTANCE_HIGH,
+    ).apply { description = "Results of an Adjust with AI re-analysis" }
 
     private fun leftoverChannel() = NotificationChannel(
         LEFTOVER_CHANNEL_ID,
@@ -234,5 +332,20 @@ class HfMessagingService : FirebaseMessagingService() {
         private const val RC_LEFTOVER_REVIEW = 42021
         private const val RC_LEFTOVER_RETAKE = 42022
         private const val RC_LEFTOVER_APPLY = 42023
+
+        // Adjust with AI (async): must match MealAdjustmentService.NOTIF_ADJUST_* .
+        const val ADJUST_REVIEW_MESSAGE_TYPE = "adjust-review"
+        const val ADJUST_FAILED_MESSAGE_TYPE = "adjust-failed"
+        private const val ADJUST_CHANNEL_ID = "meal_adjustments"
+        private const val ADJUST_NOTIFICATION_ID = 42030
+        private const val RC_ADJUST_REVIEW = 42031
+        private const val RC_ADJUST_APPLY = 42032
+
+        // Deep-link extras the launcher Activity reads to route a notification body
+        // tap to the adjustment review sheet.
+        const val EXTRA_NAV_DEST = "com.gte619n.healthfitness.NAV_DEST"
+        const val EXTRA_DATE = "com.gte619n.healthfitness.NAV_DATE"
+        const val EXTRA_ENTRY_ID = "com.gte619n.healthfitness.NAV_ENTRY_ID"
+        const val NAV_DEST_ADJUST_REVIEW = "nutrition-adjust-review"
     }
 }

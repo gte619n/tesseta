@@ -418,6 +418,77 @@ public class NutritionController {
         return toResponse(entry);
     }
 
+    /**
+     * Start an async "Adjust with AI" pass from a free-text instruction. Flips the
+     * entry to an {@code ADJUSTING} state and returns it immediately (202); a
+     * background job re-analyzes the meal and either surfaces a pending-review
+     * proposal or a failure, notifying the device via FCM. The correction and
+     * {@code saveAsMeal} choice are captured here so the eventual commit needs no
+     * body. Analyzer unavailable → 422; unknown entry → 404.
+     */
+    @PostMapping("/{date}/entries/{entryId}/adjust/start")
+    public ResponseEntity<EntryResponse> adjustStart(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId,
+        @RequestBody AdjustStartRequest body
+    ) {
+        if (body == null || body.instruction() == null || body.instruction().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "instruction is required");
+        }
+        String userId = currentUser.get().userId();
+        FoodEntry entry;
+        try {
+            entry = mealAdjustment.startAdjustment(
+                userId, date, entryId, body.instruction(), body.saveAsMeal());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
+    }
+
+    /**
+     * Commit the pending adjustment proposal the user accepted (the "Apply" path,
+     * from the review sheet or the notification action). The server holds the
+     * proposal, so this is bodiless: it persists the stored proposal onto the entry
+     * (honoring the saved {@code saveAsMeal}, regenerating a composite's image) and
+     * clears the pending state. Returns the updated entry.
+     */
+    @PostMapping("/{date}/entries/{entryId}/adjust/commit")
+    public EntryResponse adjustCommit(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry;
+        try {
+            entry = mealAdjustment.commit(userId, date, entryId);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return toResponse(entry);
+    }
+
+    /** Discard a pending/failed adjustment, clearing the entry's pending state. */
+    @PostMapping("/{date}/entries/{entryId}/adjust/discard")
+    public EntryResponse adjustDiscard(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry = mealAdjustment.discard(userId, date, entryId)
+            .orElseGet(() -> nutrition.findEntry(userId, date, entryId)
+                .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "entry not found: " + entryId)));
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return toResponse(entry);
+    }
+
     // ----- Remove Leftovers (IMPL-LEFTOVER-01) -------------------------
 
     /**
@@ -1100,6 +1171,14 @@ public class NutritionController {
 
     /** Request for {@code POST /{date}/entries/{entryId}/adjust/preview}. */
     public record AdjustPreviewRequest(String instruction) {}
+
+    /**
+     * Request for {@code POST /{date}/entries/{entryId}/adjust/start}: the free-text
+     * correction plus whether committing should also save the corrected meal. Both
+     * are stored on the entry so the background job (and a later notification-driven
+     * commit) read them back without re-prompting.
+     */
+    public record AdjustStartRequest(String instruction, boolean saveAsMeal) {}
 
     /**
      * Response for the adjust preview: the revised meal plus the before/after

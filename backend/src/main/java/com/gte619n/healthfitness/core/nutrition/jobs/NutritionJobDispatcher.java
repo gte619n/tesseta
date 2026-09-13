@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.core.nutrition.jobs;
 import com.gte619n.healthfitness.core.nutrition.FoodEntryImageService;
 import com.gte619n.healthfitness.core.nutrition.FoodImageService;
 import com.gte619n.healthfitness.core.nutrition.LeftoverService;
+import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService;
 import com.gte619n.healthfitness.core.nutrition.MealCaptureService;
 import com.gte619n.healthfitness.core.nutrition.MealDescriptionService;
 import com.gte619n.healthfitness.core.nutrition.SavedMealImageService;
@@ -32,6 +33,7 @@ public class NutritionJobDispatcher {
     private final ObjectProvider<MealCaptureService> mealCapture;
     private final ObjectProvider<MealDescriptionService> mealDescription;
     private final ObjectProvider<LeftoverService> leftovers;
+    private final ObjectProvider<MealAdjustmentService> mealAdjustment;
 
     public NutritionJobDispatcher(
         ObjectProvider<FoodImageService> foodImages,
@@ -39,7 +41,8 @@ public class NutritionJobDispatcher {
         ObjectProvider<SavedMealImageService> savedMealImages,
         ObjectProvider<MealCaptureService> mealCapture,
         ObjectProvider<MealDescriptionService> mealDescription,
-        ObjectProvider<LeftoverService> leftovers
+        ObjectProvider<LeftoverService> leftovers,
+        ObjectProvider<MealAdjustmentService> mealAdjustment
     ) {
         this.foodImages = foodImages;
         this.entryImages = entryImages;
@@ -47,6 +50,7 @@ public class NutritionJobDispatcher {
         this.mealCapture = mealCapture;
         this.mealDescription = mealDescription;
         this.leftovers = leftovers;
+        this.mealAdjustment = mealAdjustment;
     }
 
     /**
@@ -96,6 +100,12 @@ public class NutritionJobDispatcher {
                     s.analyzeFromRefOrThrow(job.userId(), date(job), job.id(), job.ref(), job.mime());
                 }
             }
+            case MEAL_ADJUSTMENT -> {
+                MealAdjustmentService s = mealAdjustment.getIfAvailable();
+                if (s != null) {
+                    s.adjustFromStateOrThrow(job.userId(), date(job), job.id());
+                }
+            }
             default -> { /* unknown type: ignore so an old queued job can't wedge the handler */ }
         }
     }
@@ -142,6 +152,12 @@ public class NutritionJobDispatcher {
             }
             case LEFTOVER_ANALYSIS -> {
                 LeftoverService s = leftovers.getIfAvailable();
+                if (s != null) {
+                    s.markFailed(job.userId(), date(job), job.id());
+                }
+            }
+            case MEAL_ADJUSTMENT -> {
+                MealAdjustmentService s = mealAdjustment.getIfAvailable();
                 if (s != null) {
                     s.markFailed(job.userId(), date(job), job.id());
                 }

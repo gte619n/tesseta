@@ -49,7 +49,10 @@ public record FoodEntry(
     // "Remove Leftovers" state (IMPL-LEFTOVER-01). Null for entries with no
     // leftover activity. When applied, this entry's live macros/ingredients are
     // the CONSUMED values (spec D9); the as-served baseline lives here.
-    Leftover leftover
+    Leftover leftover,
+    // Async "Adjust with AI" state. Null for entries with no pending adjustment.
+    // Never mutates live macros/ingredients until a proposal is committed.
+    MealAdjustment adjustment
 ) {
     /** True when this entry is a photo-logged meal with sub-ingredients. */
     public boolean isComposite() {
@@ -64,6 +67,18 @@ public record FoodEntry(
     /** True when a "Remove Leftovers" pass has started (any status). */
     public boolean hasLeftover() {
         return leftover != null;
+    }
+
+    /** True while an async "Adjust with AI" re-analysis is running. */
+    public boolean isAdjusting() {
+        return adjustment != null && adjustment.status() == AdjustStatus.ADJUSTING;
+    }
+
+    /** True when an adjustment proposal is awaiting the user's apply/discard. */
+    public boolean hasAdjustReview() {
+        return adjustment != null
+            && adjustment.status() == AdjustStatus.PENDING_REVIEW
+            && adjustment.proposal() != null;
     }
 
     /**

@@ -57,6 +57,7 @@ class NutritionOpEnqueuer @Inject constructor(
     private val labelAdapter = moshi.adapter(ConfirmLabelPayload::class.java)
     private val itemsAdapter = moshi.adapter(ConfirmMealItemsPayload::class.java)
     private val leftoversAdapter = moshi.adapter(RemoveLeftoversPayload::class.java)
+    private val adjustAdapter = moshi.adapter(AdjustMealPayload::class.java)
 
     /** Enqueue a fire-and-forget text-describe. Returns the op id. */
     suspend fun enqueueDescribeAsync(date: String, mealWire: String, description: String): String =
@@ -146,6 +147,27 @@ class NutritionOpEnqueuer @Inject constructor(
         )
     }
 
+    /**
+     * Enqueue a durable "Adjust with AI" submit for the logged entry [entryId]. No
+     * photo — just the correction; the worker POSTs to `…/adjust/start`. Survives
+     * process death; the backend runs the re-analysis async and notifies via FCM.
+     */
+    suspend fun enqueueAdjustMeal(
+        date: String,
+        entryId: String,
+        instruction: String,
+        saveAsMeal: Boolean,
+    ): String =
+        enqueue(
+            type = NutritionOpType.ADJUST_MEAL,
+            date = date,
+            mealWire = "",
+            label = "Adjusting…",
+            payloadJson = adjustAdapter.toJson(
+                AdjustMealPayload(entryId, instruction, saveAsMeal),
+            ),
+        )
+
     /** Enqueue a meal-photo upload; the JPEG is parked in a cache file. */
     suspend fun enqueueCapturePhoto(date: String, mealWire: String, jpeg: ByteArray): String {
         val id = UUID.randomUUID().toString()
@@ -228,6 +250,7 @@ class NutritionOpWorker @AssistedInject constructor(
     private val labelAdapter = moshi.adapter(ConfirmLabelPayload::class.java)
     private val itemsAdapter = moshi.adapter(ConfirmMealItemsPayload::class.java)
     private val leftoversAdapter = moshi.adapter(RemoveLeftoversPayload::class.java)
+    private val adjustAdapter = moshi.adapter(AdjustMealPayload::class.java)
 
     override suspend fun doWork(): Result {
         val id = inputData.getString(KEY_ID) ?: return Result.failure()
@@ -249,6 +272,7 @@ class NutritionOpWorker @AssistedInject constructor(
                 NutritionOpType.CONFIRM_MEAL_ITEMS -> confirmMealItems(op)
                 NutritionOpType.CAPTURE_PHOTO -> capturePhoto(op)
                 NutritionOpType.REMOVE_LEFTOVERS -> removeLeftovers(op)
+                NutritionOpType.ADJUST_MEAL -> adjustMeal(op)
             }
             // On success, DON'T delete the JPEG: a photo capture just handed it to
             // the preview store, which owns it until the generated image lands.
@@ -345,6 +369,11 @@ class NutritionOpWorker @AssistedInject constructor(
         // The leftover photo is never shown or reused after upload (D11): drop the
         // local cache file now (the generic success path preserves it for capture).
         runCatching { file.delete() }
+    }
+
+    private suspend fun adjustMeal(op: NutritionOpEntity) {
+        val p = adjustAdapter.fromJson(op.payloadJson!!)!!
+        nutrition.runAdjust(op.date, p.targetEntryId, p.instruction, p.saveAsMeal)
     }
 
     private suspend fun capturePhoto(op: NutritionOpEntity) {
