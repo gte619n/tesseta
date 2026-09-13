@@ -1,0 +1,84 @@
+{
+  "run_date": "2026-09-13",
+  "run_number": 1,
+  "git_head": "4d147ef3",
+  "branch": "tesseta-refactoring (worktree; PR #248 squash-merged to main as b7e58b0b)",
+  "loc_by_language": {
+    "command": "for ext in java kt kts ts tsx js mjs css yaml yml tf; do find backend/src android web/{app,lib,components,test,e2e} functions infra uat/src scripts website -name \"*.$ext\" | grep -v node_modules | grep -v /build/ | xargs wc -l; done",
+    "java": 87636,
+    "kotlin": 79862,
+    "kts_gradle": 981,
+    "typescript": 7386,
+    "tsx": 34162,
+    "js_mjs": 453,
+    "css": 413,
+    "yaml_yml": 3158,
+    "terraform": 251
+  },
+  "tests": {
+    "command": "find <layer>/src/test -name '*.java|*.kt' | wc -l; grep -rc @Test",
+    "backend_test_files": 209,
+    "backend_test_methods": 860,
+    "android_unit_test_files": 97,
+    "android_unit_test_methods": 579,
+    "android_instrumented_test_files": 5,
+    "web_unit_test_files": 11,
+    "web_e2e_spec_files": 1,
+    "uat_harness_files": 22,
+    "coverage_backend": null,
+    "coverage_backend_reason": "jacoco is configured (backend/build.gradle.kts:3,149) but generating a report requires a test run that writes build artifacts; R3 read-only. Command for next run: ./gradlew -p backend jacocoTestReport",
+    "coverage_android": null,
+    "coverage_android_reason": "no kover/jacoco config found in android build files",
+    "coverage_web": null,
+    "coverage_web_reason": "vitest coverage not configured in web/vitest.config.ts"
+  },
+  "dependencies": {
+    "command": "package.json len(deps); grep -c 'resolution:' pnpm-lock.yaml; grep -c 'module = ' libs.versions.toml; grep -cE 'implementation|runtimeOnly' build.gradle.kts",
+    "web_direct": 6,
+    "web_dev": 18,
+    "web_lockfile_packages": 716,
+    "android_catalog_modules": 68,
+    "backend_declared_configurations": 15
+  },
+  "known_vulnerable_dependencies": {
+    "command": "cd web && pnpm audit --json (2026-09-13)",
+    "web_pnpm_audit": { "critical": 0, "high": 12, "moderate": 4, "low": 0, "info": 0 },
+    "backend": null,
+    "backend_reason": "Trivy image scan runs only at deploy time (backend/cloudbuild.yaml); no local SCA run available read-only. Backend build.gradle.kts carries manual CVE overrides (jackson 2.21.4, netty 4.1.137, tomcat 10.1.59) indicating active CVE pressure.",
+    "android": null,
+    "android_reason": "no dependency-audit tooling wired; not measured"
+  },
+  "build_times": {
+    "android_warm_compile_app_core_data_wear_seconds": 15,
+    "android_warm_command": "JAVA_HOME=$HOME/.sdkman/candidates/java/current ./gradlew -p android :app:compileDebugKotlin :core-data:compileDebugKotlin :wear:compileDebugKotlin (measured 2026-09-13, config cache warm, 116/198 tasks from cache)",
+    "android_full_test_run_seconds": 4,
+    "android_full_test_command": "./gradlew -p android :app:testDebugUnitTest :core-data:testDebugUnitTest (warm, mostly cached)",
+    "cold_builds": null,
+    "cold_builds_reason": "R3 read-only phase; cold builds write large artifact trees and take 5-15 min each. Commands for next run: ./gradlew clean build (backend, android); pnpm build (web)",
+    "web_bundle_size": null,
+    "web_bundle_reason": "requires pnpm build (writes web/.next); R3 read-only",
+    "container_image_sizes": null,
+    "container_image_reason": "requires Artifact Registry access; not queried this run"
+  },
+  "ci": {
+    "command": "gh run list --workflow <wf> --limit 3 --json createdAt,updatedAt (2026-09-13)",
+    "workflows": ["android-ci", "backend-ci", "web-ci", "codeql", "terraform-ci"],
+    "android_ci_wallclock_seconds": 121,
+    "backend_or_web_ci_wallclock_seconds": 120,
+    "codeql_wallclock_seconds": 330,
+    "ci_cost": null,
+    "ci_cost_reason": "GitHub-hosted runners on a personal repo; per-run cost not exposed via gh api"
+  },
+  "code_hygiene": {
+    "todo_fixme_hack_count_jvm": 5,
+    "todo_fixme_hack_count_web": 0,
+    "command": "grep -rEn 'TODO|FIXME|HACK' backend/src android --include='*.java' --include='*.kt' | wc -l",
+    "typescript_strictness": "strict: true, noUncheckedIndexedAccess: true (web/tsconfig.json)",
+    "lint_errors": null,
+    "lint_reason": "lint runs write build artifacts (gradle lint) or require install state verification (eslint); R3 read-only. Commands: ./gradlew lint; pnpm lint"
+  },
+  "performance": {
+    "p95_latencies": null,
+    "reason": "no APM/metrics endpoint accessible read-only; Cloud Run metrics not queried this run"
+  }
+}
