@@ -12,8 +12,13 @@ confuse them:
 | **GCP Cloud Build** | `infra/triggers/` + `*/cloudbuild.yaml` | **push to `main`** (path-filtered) | **Builds + deploys** to production. |
 
 The golden rule: **merging to `main` is the production deploy.** There is no
-separate "deploy" button or command for the normal path. GitHub Actions gates
-what's *allowed* to merge; Cloud Build ships whatever lands on `main`.
+separate "deploy" button or command for the normal path. GitHub Actions
+validates, but today its checks are **advisory** — `main` has no branch
+protection, so nothing technically prevents a red-CI commit from merging, and
+Cloud Build ships whatever lands on `main` regardless of CI results (this has
+happened; see the safety-net note under [How to deploy](#how-to-deploy--step-by-step)).
+Treat "CI green before merge" as a hard manual rule until branch protection is
+enabled.
 
 ---
 
@@ -38,7 +43,7 @@ what's *allowed* to merge; Cloud Build ships whatever lands on `main`.
 
 | Environment | Where | Firestore DB | Notes |
 |---|---|---|---|
-| **Local dev** | your machine (`infra/scripts/dev.sh`) | `(default)` | Backend `:8080`, web `:3000`. Secrets pulled live from Secret Manager. |
+| **Local dev** | your machine (`infra/scripts/dev.sh`) | `(default)` | Backend `:8090` (HTTPS `:8443` via Tailscale), web `:3000`. Secrets pulled live from Secret Manager. |
 | **Production** | Cloud Run in `health-fitness-160` / `us-central1` | `production` (named DB) | The only continuously-deployed environment. Backend sets `FIRESTORE_DATABASE_ID=production`. |
 | **Staging** | *scaffold only* — see below | `staging` (named DB, opt-in) | No deploy pipeline wired yet. Terraform can create the DB; deploys would be manual. |
 
@@ -163,7 +168,7 @@ each cloudbuild's `dir:` becomes a no-op — see the comment atop each file.)
 **There is no deployed staging today.** For day-to-day development, run locally:
 
 ```bash
-bash infra/scripts/dev.sh   # backend :8080 + web :3000, secrets from Secret Manager
+bash infra/scripts/dev.sh   # backend :8090 + web :3000, secrets from Secret Manager
 ```
 
 A staging environment is prepared but **opt-in and not wired to a pipeline**:

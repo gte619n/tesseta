@@ -74,8 +74,18 @@ Run `bash infra/scripts/dev.sh` to start both backend and web servers locally.
 This script:
 - Fetches all required secrets from GCP Secret Manager
 - Creates `web/.env.local` with `BACKEND_URL`, auth secrets, etc.
-- Starts backend on http://localhost:8080 and web on http://localhost:3000
+- Starts backend on http://localhost:8090 and web on http://localhost:3000
+  (the backend is also served over HTTPS on :8443 via Tailscale for device testing)
 - Ctrl-C stops both servers
+
+## Audits & archives
+- `docs/audit/<date>/` — dated audit runs. `findings.json` is the machine index
+  (stable finding IDs like `SEC-012`, `CICD-001`); `INDEX.md` is the human entry
+  point; `reaping-plan.md` classifies doc artifacts for archival.
+- `docs/archive/<yyyy-mm>/` — superseded/implemented specs, plans, and other
+  artifacts live here with an `ARCHIVED` header (date, classification, evidence,
+  successor). **Never delete** archived docs; never treat them as current.
+- Before creating a spec/plan doc, check the audit's reaping plan conventions.
 
 ## Tools
 - GCP project: `health-fitness-160`

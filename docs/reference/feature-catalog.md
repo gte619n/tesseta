@@ -17,7 +17,8 @@ Legend: ✅ shipped · ◐ partial · ⚠️ fixture/placeholder · ➖ not buil
 | Body composition / DEXA | ✅ | ✅ `/me/body-composition` | ✅ feature-body-composition | DEXA upload via multipart+SSE; editable regions |
 | Medications | ✅ + adherence + reminder settings | ✅ `/me/meds` | ✅ feature-medical | Drug lookup via SSE; dosage periods; adherence; dose reminders (IMPL-16) — Android-local alarms + grouped check-off notifications, config at `reminder-settings` |
 | Goals | ✅ metric-event engine + Cloud Run Job | ✅ `/me/goals*` | ✅ feature-goals | AI goal chat (Gemini Pro, SSE) → proposal → commit |
-| Nutrition | ✅ logs + capture + describe + recents/relog | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode (background upload on Android); fire-and-forget describe (202 placeholder) on both clients; unified add surface w/ time-inferred meal chip + one-tap recents; calories always derived from macros (4/4/9); exact branded-product recognition (IMPL-16); **not** SSE |
+| Nutrition | ✅ logs + capture + describe + recents/relog + adjust/leftovers | ✅ `/me/nutrition*` | ✅ feature-nutrition | Capture via Gemini meal/label/barcode (background upload on Android); fire-and-forget describe (202 placeholder) on both clients; unified add surface w/ time-inferred meal chip + one-tap recents; calories always derived from macros (4/4/9); exact branded-product recognition (IMPL-16); **Adjust-with-AI** — async free-text correction of a logged meal with preview→apply/discard (`…/entries/{id}/adjust/*`, #245); **Remove Leftovers** — photo-based partial-meal subtraction, live macros = consumed with the served baseline preserved (`…/entries/{id}/leftovers/*`, IMPL-LEFTOVER-01, #244; web is read-only for leftovers per spec D14); **not** SSE |
+| Drinks | ✅ `/api/me/drinks*` + drink sessions | ✅ `/me/drinks` catalog mgmt | ✅ Drink Mode + `settings/drinks` | IMPL-DRINK-01: drinks are `CatalogFood` rows with `category="drink"`; per-user display order (`drinkOrder` on the user doc); analyze/create/regenerate-image/archive on web; Android Drink Mode logs local drink sessions with an end-of-session picker; alcohol kcal fold into `Macros.caloriesKcal` |
 | Gym & equipment | ✅ + bulk import | ✅ `/me/workouts/gyms*` | ✅ feature-workouts | Bulk CSV import preview/confirm; cover-photo upload |
 | Admin (drugs, equipment) | ✅ `/api/admin/**` | ✅ `/admin/**` | ➖ no mobile admin | Email-gated; intentionally web-only |
 | Workout programs | ✅ programs + materialized sessions | ✅ `/me/workouts/programs*` | ✅ feature-workouts | Periodized program model (IMPL-15). Android Workouts hub is a tabbed shell defaulting to a "This Week" view (`ThisWeekStrip` + compliance calendar) |
@@ -59,5 +60,6 @@ is retained only for the Readiness gap.
   Retrofit-direct — see `android/CLAUDE.md`.)
 - Settings "About" links use placeholder `https://placeholder.tesseta.app/`
   URLs.
-- `isAdmin()` allow-lists are hardcoded on both web and backend (TODO: move to
-  env/DB).
+- Admin allow-lists: the backend reads `ADMIN_EMAILS` (env, **fail-closed** —
+  empty means no admins); the web has hardcoded built-in emails in
+  `web/lib/admin.ts` *extended* by `ADMIN_EMAILS` (TODO: drop the web built-ins).
