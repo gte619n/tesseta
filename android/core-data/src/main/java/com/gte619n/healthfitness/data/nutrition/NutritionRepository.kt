@@ -10,6 +10,9 @@ import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
+import com.gte619n.healthfitness.domain.nutrition.AdjustStartRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustStatus
+import com.gte619n.healthfitness.domain.nutrition.MealAdjustment
 import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
 import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
@@ -112,6 +115,10 @@ class NutritionRepository @Inject constructor(
         // straight into the domain [Leftover]. Nullable → back-compat for entries
         // with no leftover activity.
         val leftover: Leftover?,
+        // Async "Adjust with AI" state, carried as a nested `adjustment` map with the
+        // same field names as the REST `adjustment` object (status/instruction/
+        // proposal). Nullable → back-compat for entries with no adjustment.
+        val adjustment: MealAdjustment?,
     ) {
         fun toEntry(entryId: String): Entry = Entry(
             entryId = entryId,
@@ -128,6 +135,7 @@ class NutritionRepository @Inject constructor(
             analysisStatus = analysisStatus ?: "NONE",
             ingredients = ingredients,
             leftover = leftover,
+            adjustment = adjustment,
         )
     }
 
@@ -312,6 +320,63 @@ class NutritionRepository @Inject constructor(
         val entry = api.adjustApply(date, entryId, body)
         fillDay(date)
         return entry
+    }
+
+    // ---- Adjust with AI (async) -------------------------------------------
+
+    /**
+     * Submit an async "Adjust with AI" pass: enqueue a durable ADJUST_MEAL op that
+     * POSTs the correction to `…/adjust/start` (survives process death). Fire-and-
+     * forget; the op-store synthetic state shows "Adjusting…" on the target entry
+     * until the backend job lands PENDING_REVIEW / REJECTED and the completion push
+     * + sync surface the outcome.
+     */
+    suspend fun submitAdjust(date: String, entryId: String, instruction: String, saveAsMeal: Boolean) {
+        ops.enqueueAdjustMeal(date, entryId, instruction, saveAsMeal)
+    }
+
+    /**
+     * Worker body for an ADJUST_MEAL op: POST adjust/start, then refresh this date's
+     * mirror so the entry re-renders with its ADJUSTING state.
+     */
+    suspend fun runAdjust(date: String, entryId: String, instruction: String, saveAsMeal: Boolean) {
+        api.adjustStart(date, entryId, AdjustStartRequest(instruction, saveAsMeal))
+        fillDayAndSignal(date)
+    }
+
+    /**
+     * Commit the stored adjustment proposal (D-Apply): bodiless — the server holds
+     * the proposal and the saveAsMeal choice. Refreshes so the row re-renders with
+     * the corrected name/macros and the settle-poll swaps in a regenerated image.
+     */
+    suspend fun commitAdjust(date: String, entryId: String): Entry {
+        val entry = api.adjustCommit(date, entryId)
+        fillDayAndSignal(date)
+        return entry
+    }
+
+    /** Discard a pending/failed adjustment: server clears it; refresh. */
+    suspend fun discardAdjust(date: String, entryId: String): Entry {
+        val entry = api.adjustDiscard(date, entryId)
+        fillDayAndSignal(date)
+        return entry
+    }
+
+    /**
+     * Locate an adjustment awaiting review, mirror-only (no network) — the fallback
+     * the notification's Apply action uses when the push carries no date/entryId.
+     * Returns the (date, entryId) of the most-recent PENDING_REVIEW adjustment.
+     */
+    suspend fun findAdjustPendingReview(): Pair<String, String>? {
+        val rows = entryDao.observeActive().first()
+        for (row in rows) {
+            val entry = rowToEntry(row) ?: continue
+            if (entry.adjustment?.status == AdjustStatus.PENDING_REVIEW) {
+                val date = entry.date ?: row.id.substringBefore('/')
+                return date to entry.entryId
+            }
+        }
+        return null
     }
 
     // ---- Remove Leftovers (IMPL-LEFTOVER-01) ------------------------------

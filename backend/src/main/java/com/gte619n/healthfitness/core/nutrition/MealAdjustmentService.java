@@ -1,10 +1,15 @@
 package com.gte619n.healthfitness.core.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +37,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class MealAdjustmentService {
 
+    private static final Logger log = LoggerFactory.getLogger(MealAdjustmentService.class);
+
+    /** Data-message type the Android client switches on to open the adjust review screen. */
+    public static final String NOTIF_ADJUST_REVIEW = "adjust-review";
+    /** Data-message type the Android client switches on when the adjustment failed. */
+    public static final String NOTIF_ADJUST_FAILED = "adjust-failed";
+
     private final ObjectProvider<MealAdjustmentAnalyzer> analyzer;
     private final ObjectProvider<MealPhotoReader> photoReader;
     private final NutritionService nutrition;
@@ -39,6 +51,8 @@ public class MealAdjustmentService {
     private final FoodEntryImageService foodEntryImages;
     private final MealDescriptionService mealDescription;
     private final SyncChangeNotifier syncNotifier;
+    private final ObjectProvider<NutritionJobQueue> jobQueue;
+    private final AdjustReviewPublisher reviewPublisher;
 
     public MealAdjustmentService(
         ObjectProvider<MealAdjustmentAnalyzer> analyzer,
@@ -47,7 +61,9 @@ public class MealAdjustmentService {
         FoodCatalogService catalog,
         FoodEntryImageService foodEntryImages,
         MealDescriptionService mealDescription,
-        SyncChangeNotifier syncNotifier
+        SyncChangeNotifier syncNotifier,
+        ObjectProvider<NutritionJobQueue> jobQueue,
+        AdjustReviewPublisher reviewPublisher
     ) {
         this.analyzer = analyzer;
         this.photoReader = photoReader;
@@ -56,6 +72,8 @@ public class MealAdjustmentService {
         this.foodEntryImages = foodEntryImages;
         this.mealDescription = mealDescription;
         this.syncNotifier = syncNotifier;
+        this.jobQueue = jobQueue;
+        this.reviewPublisher = reviewPublisher;
     }
 
     /**
@@ -77,7 +95,18 @@ public class MealAdjustmentService {
         }
         FoodEntry entry = nutrition.findEntry(userId, date, entryId)
             .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        return computeProposal(adjuster, entry, instruction);
+    }
 
+    /**
+     * Run the analyzer against {@code entry} (+ its photo when present) and build
+     * the revised meal as a proposal. Shared by the synchronous {@link #preview}
+     * and the async {@link #runAdjustment}. Throws {@link IllegalStateException}
+     * when the analyzer returns no identifiable food; lets extraction failures
+     * propagate.
+     */
+    private AdjustmentProposal computeProposal(
+        MealAdjustmentAnalyzer adjuster, FoodEntry entry, String instruction) {
         MealAdjustmentAnalyzer.MealContext context = contextOf(entry);
 
         byte[] photoBytes = null;
@@ -118,6 +147,140 @@ public class MealAdjustmentService {
             mealName, revised.packagedProduct(), proposed,
             newTotal.withDerivedCalories(),
             entry.macros() != null ? entry.macros() : Macros.zero());
+    }
+
+    // ----- Async "Adjust with AI" (background job + FCM review) ---------
+
+    /**
+     * Begin an async adjustment: flip the entry to {@code ADJUSTING} (storing the
+     * instruction + saveAsMeal), then enqueue a durable {@code MEAL_ADJUSTMENT}
+     * job — returning immediately. Falls back to an inline off-thread run when no
+     * durable queue is wired (dev / core test). Wakes devices to render the
+     * "Adjusting…" state. Throws {@link IllegalArgumentException} on a blank
+     * instruction / unknown entry and {@link IllegalStateException} when the
+     * analyzer is unavailable (mapped to 422).
+     */
+    public FoodEntry startAdjustment(
+        String userId, LocalDate date, String entryId, String instruction, boolean saveAsMeal) {
+        if (instruction == null || instruction.isBlank()) {
+            throw new IllegalArgumentException("instruction is required");
+        }
+        if (analyzer.getIfAvailable() == null) {
+            throw new IllegalStateException("meal adjustment is not available");
+        }
+        FoodEntry adjusting = nutrition.beginAdjustment(userId, date, entryId, instruction, saveAsMeal);
+        NutritionJobQueue queue = jobQueue.getIfAvailable();
+        if (queue != null) {
+            queue.enqueue(NutritionJob.mealAdjustment(userId, date.toString(), entryId));
+        } else {
+            CompletableFuture.runAsync(() -> runAdjustment(userId, date, entryId));
+        }
+        syncNotifier.changed(userId, null, "nutritionDays/entries");
+        return adjusting;
+    }
+
+    /**
+     * Durable-queue entry point: run the adjustment for an entry still
+     * {@code ADJUSTING}. Idempotent — a redelivered job whose entry has already
+     * settled (PENDING_REVIEW/REJECTED/cleared) is a cheap no-op.
+     */
+    public void adjustFromStateOrThrow(String userId, LocalDate date, String entryId) {
+        if (analyzer.getIfAvailable() == null) {
+            return;
+        }
+        Optional<FoodEntry> found = nutrition.findEntry(userId, date, entryId);
+        if (found.isEmpty() || found.get().adjustment() == null
+            || found.get().adjustment().status() != AdjustStatus.ADJUSTING) {
+            return;
+        }
+        runAdjustment(userId, date, entryId);
+    }
+
+    /** Mark an adjustment failed from the queue (retries exhausted). */
+    public void markFailed(String userId, LocalDate date, String entryId) {
+        nutrition.rejectAdjustment(userId, date, entryId);
+        publishReview(userId, date, entryId, true, 0.0);
+        syncNotifier.changed(userId, null, "nutritionDays/entries");
+    }
+
+    /**
+     * Run the re-analysis and settle the pass. Package-private + synchronous so
+     * tests drive it without the async hop. Never throws — a failure rejects it.
+     */
+    void runAdjustment(String userId, LocalDate date, String entryId) {
+        try {
+            MealAdjustmentAnalyzer adjuster = analyzer.getIfAvailable();
+            FoodEntry entry = nutrition.findEntry(userId, date, entryId).orElse(null);
+            if (adjuster == null || entry == null || entry.adjustment() == null
+                || entry.adjustment().status() != AdjustStatus.ADJUSTING) {
+                return;
+            }
+            AdjustmentProposal proposal =
+                computeProposal(adjuster, entry, entry.adjustment().instruction());
+            nutrition.setAdjustmentProposal(userId, date, entryId, proposal);
+            double deltaKcal = kcal(proposal.newTotals()) - kcal(proposal.oldTotals());
+            publishReview(userId, date, entryId, false, deltaKcal);
+        } catch (RuntimeException e) {
+            log.warn("Meal adjustment failed for entry {}: {}", entryId, e.getMessage());
+            nutrition.rejectAdjustment(userId, date, entryId);
+            publishReview(userId, date, entryId, true, 0.0);
+        } finally {
+            syncNotifier.changed(userId, null, "nutritionDays/entries");
+        }
+    }
+
+    /**
+     * Commit the pending proposal (the "Apply" path, from the review sheet or the
+     * notification action): persist the stored proposal onto the entry via
+     * {@link #apply} (honoring the saved {@code saveAsMeal}), then clear the
+     * adjustment state. Requires a {@code PENDING_REVIEW} proposal.
+     */
+    public FoodEntry commit(String userId, LocalDate date, String entryId) {
+        FoodEntry entry = nutrition.findEntry(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        MealAdjustment adj = entry.adjustment();
+        if (adj == null || adj.status() != AdjustStatus.PENDING_REVIEW || adj.proposal() == null) {
+            throw new IllegalStateException("no adjustment proposal to commit: " + entryId);
+        }
+        AdjustmentProposal p = adj.proposal();
+        AcceptedAdjustment accepted = new AcceptedAdjustment(
+            p.mealName(), p.packagedProduct(),
+            p.items().stream().map(it -> new AcceptedItem(
+                it.name(), it.servingLabel(), it.servingGrams(),
+                it.macrosPer100g(), it.macros())).toList());
+        apply(userId, date, entryId, accepted, adj.saveAsMeal());
+        // apply() rebuilt the entry via the finalize paths (which preserve the
+        // adjustment) — clear it now so the committed entry carries no pending state.
+        FoodEntry cleared = nutrition.discardAdjustment(userId, date, entryId).orElse(null);
+        syncNotifier.changed(userId, null, "nutritionDays/entries");
+        return cleared != null ? cleared
+            : nutrition.findEntry(userId, date, entryId).orElse(entry);
+    }
+
+    /** Discard a pending/rejected adjustment (the "Discard" path). */
+    public Optional<FoodEntry> discard(String userId, LocalDate date, String entryId) {
+        Optional<FoodEntry> updated = nutrition.discardAdjustment(userId, date, entryId);
+        updated.ifPresent(e -> syncNotifier.changed(userId, null, "nutritionDays/entries"));
+        return updated;
+    }
+
+    /**
+     * Publish the review/failed event — a listener ({@code AdjustReviewNotifier})
+     * turns it into the FCM push. Never throws; the in-app pending-review state is
+     * the durable path.
+     */
+    private void publishReview(
+        String userId, LocalDate date, String entryId, boolean rejected, double deltaKcal) {
+        try {
+            reviewPublisher.reviewReady(new AdjustReviewReadyEvent(
+                userId, date.toString(), entryId, rejected, deltaKcal));
+        } catch (RuntimeException e) {
+            log.debug("Adjust review event failed for user {}: {}", userId, e.getMessage());
+        }
+    }
+
+    private static double kcal(Macros m) {
+        return m == null || m.caloriesKcal() == null ? 0.0 : m.caloriesKcal();
     }
 
     /**

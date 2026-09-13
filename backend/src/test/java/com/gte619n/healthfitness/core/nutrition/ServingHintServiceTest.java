@@ -65,7 +65,7 @@ class ServingHintServiceTest {
             USER, DATE, entryId, MealType.SNACK, "food-" + entryId, name, "1 serving", grams, 1.0,
             new Macros(92.0, 1.0, 22.0, 0.5, 0.0, 0.0), null, null, EntrySource.MANUAL,
             null, null, FoodImageStatus.READY, EntryAnalysisStatus.NONE, Instant.now(), Instant.now(),
-            null);
+            null, null);
     }
 
     private static final class CountingAnalyzer implements ServingHintAnalyzer {

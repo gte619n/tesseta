@@ -3,6 +3,7 @@ package com.gte619n.healthfitness.data.nutrition
 import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
+import com.gte619n.healthfitness.domain.nutrition.AdjustStartRequest
 import com.gte619n.healthfitness.domain.nutrition.CompositeMealRequest
 import com.gte619n.healthfitness.domain.nutrition.DailyRollup
 import com.gte619n.healthfitness.domain.nutrition.DescribeMealLogRequest
@@ -86,6 +87,31 @@ interface NutritionApi {
         @Path("date") date: String,
         @Path("entryId") entryId: String,
         @Body body: AdjustApplyRequest,
+    ): Entry
+
+    // Adjust with AI (async) — start a background re-analysis from a free-text
+    // correction. Flips the entry to ADJUSTING (202); the backend job stores a
+    // pending-review proposal and pushes an FCM notification when ready.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/adjust/start")
+    suspend fun adjustStart(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+        @Body body: AdjustStartRequest,
+    ): Entry
+
+    // Commit the stored adjustment proposal (no body — the server holds it, with
+    // the saveAsMeal choice captured at start). Returns the updated entry.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/adjust/commit")
+    suspend fun adjustCommit(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
+    ): Entry
+
+    // Discard a pending/failed adjustment, clearing the entry's pending state.
+    @POST("api/me/nutrition/{date}/entries/{entryId}/adjust/discard")
+    suspend fun adjustDiscard(
+        @Path("date") date: String,
+        @Path("entryId") entryId: String,
     ): Entry
 
     // Lazy "typical serving" explanation for an entry, shown in the edit sheet.

@@ -62,4 +62,14 @@ public record NutritionJob(
         return new NutritionJob(
             NutritionJobType.LEFTOVER_ANALYSIS, entryId, userId, date, leftoverPhotoRef, null, mime);
     }
+
+    /**
+     * Async "Adjust with AI" re-analysis. The correction instruction + saveAsMeal
+     * choice are already persisted on the entry's {@code MealAdjustment}, so only
+     * the identifiers ride the queue — the handler reads the rest back from state.
+     */
+    public static NutritionJob mealAdjustment(String userId, String date, String entryId) {
+        return new NutritionJob(
+            NutritionJobType.MEAL_ADJUSTMENT, entryId, userId, date, null, null, null);
+    }
 }

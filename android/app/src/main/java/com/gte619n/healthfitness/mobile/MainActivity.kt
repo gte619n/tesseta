@@ -32,7 +32,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import com.gte619n.healthfitness.data.auth.AuthState
+import com.gte619n.healthfitness.data.nutrition.NutritionDeepLinkRelay
 import com.gte619n.healthfitness.data.withings.WithingsOAuthCoordinator
+import com.gte619n.healthfitness.mobile.push.HfMessagingService
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionBootstrap
 import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
 import com.gte619n.healthfitness.mobile.auth.SignInScreen
@@ -89,10 +91,29 @@ class MainActivity : ComponentActivity() {
     // onNewIntent; a cold-start redirect is picked up from the launch intent.
     @Inject lateinit var withingsOAuth: WithingsOAuthCoordinator
 
+    // App-scoped relay for nutrition notification deep links (e.g. an "adjust-review"
+    // body tap → open the meal editor's review sheet for the target entry).
+    @Inject lateinit var nutritionDeepLinks: NutritionDeepLinkRelay
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         withingsOAuth.handleRedirect(intent.data)
+        handleNutritionDeepLink(intent)
+    }
+
+    /** Route a notification body tap carrying nutrition deep-link extras. */
+    private fun handleNutritionDeepLink(intent: Intent?) {
+        if (intent?.getStringExtra(HfMessagingService.EXTRA_NAV_DEST)
+            != HfMessagingService.NAV_DEST_ADJUST_REVIEW
+        ) {
+            return
+        }
+        val date = intent.getStringExtra(HfMessagingService.EXTRA_DATE)?.takeIf { it.isNotBlank() }
+        val entryId = intent.getStringExtra(HfMessagingService.EXTRA_ENTRY_ID)?.takeIf { it.isNotBlank() }
+        if (date != null && entryId != null) {
+            nutritionDeepLinks.openAdjustReview(date, entryId)
+        }
     }
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -113,8 +134,9 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         observeFoldState()
-        // Cold-start case: the redirect that launched us is the current intent.
+        // Cold-start case: the redirect / deep link that launched us is the current intent.
         withingsOAuth.handleRedirect(intent?.data)
+        handleNutritionDeepLink(intent)
 
         setContent {
             HealthFitnessTheme {

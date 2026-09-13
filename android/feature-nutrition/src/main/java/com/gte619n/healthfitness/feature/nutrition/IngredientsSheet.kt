@@ -53,10 +53,9 @@ fun IngredientsSheet(
     onSave: (title: String, portion: Double, quantities: List<Double>) -> Unit,
     // Lazy "typical serving" explanation for the whole meal, fetched on open.
     fetchServingHint: suspend (String) -> String? = { null },
-    // "Adjust with AI": preview a free-text correction, then apply it on confirm.
-    previewAdjustment: suspend (String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
-    onApplyAdjustment: (com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
-    applyingAdjustment: Boolean = false,
+    // "Adjust with AI" (async): submit a free-text correction; review when ready.
+    onSubmitAdjust: (instruction: String, saveAsMeal: Boolean) -> Unit,
+    onReviewAdjust: () -> Unit,
     // IMPL-LEFTOVER-01 (D4/D7/D15): "Remove Leftovers" launch, "Review leftovers"
     // (a PENDING_REVIEW awaiting the diff), and "Restore full portion" (APPLIED).
     savingLeftover: Boolean = false,
@@ -100,7 +99,8 @@ fun IngredientsSheet(
             }
             val liveKcal = recipeKcal * portion
 
-            // ── Hero: finished-meal image + total calories ────────────────
+            // ── Hero: finished-meal image + total calories, Leftovers pill in
+            // the upper-right corner (IMPL-LEFTOVER-01 D4/D7/D8) ─────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FoodThumbnail(imageUrl = entry.imageUrl, imageStatus = entry.imageStatus, size = 76.dp)
                 Spacer(Modifier.width(14.dp))
@@ -117,6 +117,14 @@ fun IngredientsSheet(
                         color = Hf.colors.textSecondary,
                     )
                 }
+                Spacer(Modifier.width(10.dp))
+                LeftoverHeroPill(
+                    entry = entry,
+                    saving = savingLeftover,
+                    onRemoveLeftovers = onRemoveLeftovers,
+                    onReviewLeftovers = onReviewLeftovers,
+                    modifier = Modifier.align(Alignment.Top),
+                )
             }
             // Generated everyday-terms explanation of the meal's portion so the
             // amount is easy to picture. Lazy + best-effort; shown once it lands.
@@ -124,74 +132,73 @@ fun IngredientsSheet(
                 Spacer(Modifier.height(10.dp))
                 Text(hint, style = Hf.type.bodySm, color = Hf.colors.textSecondary)
             }
-            Spacer(Modifier.height(14.dp))
 
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Meal title") },
-                singleLine = true,
-            )
-            Spacer(Modifier.height(16.dp))
-
-            // ── Portion of the whole meal — scales every ingredient at once ─
-            Text("Portion of meal", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            Spacer(Modifier.height(5.dp))
-            ChipRow(
-                options = QUANTITY_STEPS,
-                selected = portion,
-                label = { "${trimAmount(it)}×" },
-                onSelect = {
-                    portion = it
-                    portionText = trimAmount(it)
-                },
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = portionText,
-                onValueChange = { text ->
-                    portionText = text
-                    text.toDoubleOrNull()?.takeIf { it > 0 }?.let { portion = it }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Portion (×)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(Modifier.height(16.dp))
-
-            Text("Ingredients", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            Spacer(Modifier.height(8.dp))
-            ingredients.forEachIndexed { index, ingredient ->
-                IngredientCard(
-                    ingredient = ingredient,
-                    quantity = quantities.getOrElse(index) { "1" },
-                    onQuantityChange = { quantities[index] = it },
+            SheetSection("Details") {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Meal title") },
+                    singleLine = true,
                 )
-                Spacer(Modifier.height(10.dp))
             }
 
-            // IMPL-LEFTOVER-01 (D4/D7/D8/D15/D17): the leftover controls + the
-            // "Served → Ate" per-ingredient display for an APPLIED entry.
-            Spacer(Modifier.height(14.dp))
-            LeftoverSection(
-                entry = entry,
-                saving = savingLeftover,
-                onRemoveLeftovers = onRemoveLeftovers,
-                onReviewLeftovers = onReviewLeftovers,
-                onRestoreFullPortion = onRestoreFullPortion,
-            )
+            // Portion of the whole meal — scales every ingredient at once.
+            SheetSection("Portion of meal") {
+                ChipRow(
+                    options = QUANTITY_STEPS,
+                    selected = portion,
+                    label = { "${trimAmount(it)}×" },
+                    onSelect = {
+                        portion = it
+                        portionText = trimAmount(it)
+                    },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = portionText,
+                        onValueChange = { text ->
+                            portionText = text
+                            text.toDoubleOrNull()?.takeIf { it > 0 }?.let { portion = it }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Portion (×)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                    Spacer(Modifier.weight(1f))
+                }
+            }
 
-            Spacer(Modifier.height(14.dp))
+            SheetSection("Ingredients") {
+                ingredients.forEachIndexed { index, ingredient ->
+                    IngredientCard(
+                        ingredient = ingredient,
+                        quantity = quantities.getOrElse(index) { "1" },
+                        onQuantityChange = { quantities[index] = it },
+                    )
+                }
+            }
+
+            // IMPL-LEFTOVER-01 (D15/D17): the "Served → Ate" summary + restore,
+            // only once a leftover has been applied (the pill covers the rest).
+            if (entry.hasAppliedLeftover) {
+                LeftoverAppliedSection(
+                    entry = entry,
+                    saving = savingLeftover,
+                    onRestoreFullPortion = onRestoreFullPortion,
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
             AdjustWithAiSection(
+                entry = entry,
                 isComposite = true,
-                previewAdjustment = previewAdjustment,
-                onApply = onApplyAdjustment,
-                applying = applyingAdjustment,
+                onSubmitAdjust = onSubmitAdjust,
+                onReviewAdjust = onReviewAdjust,
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Cancel", Modifier.weight(1f), onDismiss)
                 PrimaryButton(

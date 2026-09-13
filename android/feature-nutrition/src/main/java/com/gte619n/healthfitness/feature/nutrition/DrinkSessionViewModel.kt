@@ -185,9 +185,11 @@ class DrinkSessionViewModel @Inject constructor(
     }
 
     /**
-     * End the session (D21) with a user-editable [closeTimeMillis] (default now,
-     * must be ≥ start). Produces the one-time summary, then clears the session
-     * (entries remain). Rejects a close time before start by clamping to start.
+     * End the session (D21) with a user-editable [closeTimeMillis] (defaults, in the
+     * UI, to one hour after the last drink; must be ≥ start). Produces the one-time
+     * summary and exits Drink Mode (the card is hidden once the night is over) —
+     * `setEnabled(false)` also clears the session per D7, so the entries remain but
+     * the tally is gone. Rejects a close time before start by clamping to start.
      */
     fun endSession(closeTimeMillis: Long) {
         val session = _state.value.session
@@ -201,7 +203,7 @@ class DrinkSessionViewModel @Inject constructor(
             durationMillis = close - session.startedAtMillis,
         )
         viewModelScope.launch {
-            store.clearSession()
+            store.setEnabled(false)
             _state.update { it.copy(summary = summary) }
         }
     }

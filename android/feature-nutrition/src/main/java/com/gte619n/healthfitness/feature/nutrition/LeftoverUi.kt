@@ -28,69 +28,48 @@ import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
 
 /**
- * IMPL-LEFTOVER-01 — the "Remove Leftovers" controls inside the composite meal's
- * ingredients sheet (spec §5). Renders exactly one affordance based on the entry's
- * leftover [Entry.leftover] state:
- *  - eligible (no leftover / rejected)     → "Remove Leftovers" button (D4/D5)
- *  - ANALYZING                             → an "Analyzing leftovers…" note (D8)
- *  - PENDING_REVIEW                        → "Review leftovers" button (D7)
- *  - APPLIED                               → "Served → Ate" per-ingredient + a
- *                                            "Restore full portion" action (D15/D17)
+ * IMPL-LEFTOVER-01 — the compact Leftovers control in the composite sheet's
+ * upper-right corner (hero row). One state-aware pill instead of the old
+ * mid-sheet section:
+ *  - eligible / rejected / applied → "Leftovers" pill → launch the capture (D4/D5;
+ *    on an APPLIED entry this is the re-shoot, D6)
+ *  - ANALYZING                    → an inert "Analyzing…" chip (D8)
+ *  - PENDING_REVIEW               → an accent "Review" pill → the diff sheet (D7)
  */
 @Composable
-internal fun LeftoverSection(
+internal fun LeftoverHeroPill(
     entry: Entry,
     saving: Boolean,
     onRemoveLeftovers: () -> Unit,
     onReviewLeftovers: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when {
+        entry.isAnalyzingLeftovers -> HeroPill("Analyzing…", modifier, enabled = false) {}
+        entry.hasLeftoverReview -> HeroPill("Review", modifier, accent = true) {
+            if (!saving) onReviewLeftovers()
+        }
+        else -> HeroPill("🍽️ Leftovers", modifier) { if (!saving) onRemoveLeftovers() }
+    }
+}
+
+/**
+ * The APPLIED-state body section (D15/D17): the "Served → Ate" summary plus the
+ * "Restore full portion" action. The launch/analyzing/review states live in the
+ * hero pill, so this renders only once a leftover has been applied.
+ */
+@Composable
+internal fun LeftoverAppliedSection(
+    entry: Entry,
+    saving: Boolean,
     onRestoreFullPortion: () -> Unit,
 ) {
-    Text("Leftovers", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-    Spacer(Modifier.height(6.dp))
-    when {
-        entry.isAnalyzingLeftovers -> {
-            Text(
-                "Analyzing leftovers… you'll get a notification when it's ready.",
-                style = Hf.type.bodySm,
-                color = Hf.colors.textSecondary,
-            )
-        }
-        entry.hasLeftoverReview -> {
-            Text(
-                "Your leftover photo is ready to review.",
-                style = Hf.type.bodySm,
-                color = Hf.colors.textSecondary,
-            )
-            Spacer(Modifier.height(8.dp))
-            PrimaryButton("Review leftovers", Modifier.fillMaxWidth()) {
-                if (!saving) onReviewLeftovers()
-            }
-        }
-        entry.hasAppliedLeftover -> {
-            AppliedLeftoverSummary(entry)
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton(
-                    if (saving) "Restoring…" else "Restore full portion",
-                    Modifier.fillMaxWidth(),
-                ) { if (!saving) onRestoreFullPortion() }
-            }
-            Spacer(Modifier.height(8.dp))
-            PrimaryButton("Re-shoot leftovers", Modifier.fillMaxWidth()) {
-                if (!saving) onRemoveLeftovers()
-            }
-        }
-        else -> {
-            Text(
-                "Didn't finish the meal? Photograph what's left and we'll subtract it.",
-                style = Hf.type.bodySm,
-                color = Hf.colors.textSecondary,
-            )
-            Spacer(Modifier.height(8.dp))
-            PrimaryButton("🍽️ Remove Leftovers", Modifier.fillMaxWidth()) {
-                if (!saving) onRemoveLeftovers()
-            }
-        }
+    SheetSection("Leftovers") {
+        AppliedLeftoverSummary(entry)
+        SecondaryButton(
+            if (saving) "Restoring…" else "Restore full portion",
+            Modifier.fillMaxWidth(),
+        ) { if (!saving) onRestoreFullPortion() }
     }
 }
 

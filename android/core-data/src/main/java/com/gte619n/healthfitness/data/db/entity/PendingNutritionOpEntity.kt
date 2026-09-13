@@ -76,4 +76,12 @@ enum class NutritionOpType {
      * process death; the backend job runs the leftover comparison.
      */
     REMOVE_LEFTOVERS,
+
+    /**
+     * Async "Adjust with AI": submit a free-text correction for a logged meal →
+     * `…/adjust/start`. Carries the target entryId + instruction + saveAsMeal in
+     * [payloadJson] (no photo). Survives process death; the backend job re-analyzes
+     * the meal and pushes an FCM review notification when the proposal is ready.
+     */
+    ADJUST_MEAL,
 }

@@ -232,7 +232,7 @@ public class NutritionService {
             composite ? withDerivedCalories(ingredients) : null,
             composite ? mealImageUrl : null,
             composite && mealImageStatus != null ? mealImageStatus : FoodImageStatus.NONE,
-            EntryAnalysisStatus.NONE, null, null, null);
+            EntryAnalysisStatus.NONE, null, null, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -271,7 +271,7 @@ public class NutritionService {
             source.ingredients() != null ? withDerivedCalories(source.ingredients()) : null,
             source.mealImageUrl(),
             hasMealImage ? FoodImageStatus.READY : FoodImageStatus.NONE,
-            EntryAnalysisStatus.NONE, null, null, null);
+            EntryAnalysisStatus.NONE, null, null, null, null);
         entries.save(copy);
         recomputeDay(userId, targetDate);
         return copy;
@@ -336,7 +336,7 @@ public class NutritionService {
             userId, date, entryId, meal, null, mealName,
             ingredients.size() + " ingredients", grams, 1.0, total, null, null, source,
             List.copyOf(ingredients), null, FoodImageStatus.NONE, EntryAnalysisStatus.NONE,
-            null, null, null);
+            null, null, null, null);
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -360,7 +360,8 @@ public class NutritionService {
             existing.source(), existing.ingredients(),
             imageUrl != null ? imageUrl : existing.mealImageUrl(),
             status != null ? status : existing.mealImageStatus(),
-            existing.analysisStatus(), existing.createdAt(), null, existing.leftover());
+            existing.analysisStatus(), existing.createdAt(), null, existing.leftover(),
+            existing.adjustment());
         entries.save(updated);
         return updated;
     }
@@ -423,7 +424,7 @@ public class NutritionService {
         FoodEntry entry = new FoodEntry(
             userId, date, entryId, meal, null, placeholderName,
             null, null, 1.0, Macros.zero(), photoRef, contentHash, source,
-            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null, null);
+            null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING, null, null, null, null);
         entries.save(entry);
         return entry;
     }
@@ -477,7 +478,8 @@ public class NutritionService {
             null, mealName, ingredients.size() + " ingredients", grams, 1.0, total,
             existing.photoRef(), existing.contentHash(), existing.source(), List.copyOf(ingredients),
             existing.mealImageUrl(), existing.mealImageStatus(),
-            EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover());
+            EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover(),
+            existing.adjustment());
         entries.save(updated);
         recomputeDay(userId, date);
         return updated;
@@ -505,7 +507,8 @@ public class NutritionService {
             quantity != null ? quantity : 1.0,
             macros != null ? macros.withDerivedCalories() : null, existing.photoRef(),
             existing.contentHash(), existing.source(), null, null, FoodImageStatus.NONE,
-            EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover());
+            EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover(),
+            existing.adjustment());
         entries.save(updated);
         recomputeDay(userId, date);
         return updated;
@@ -528,7 +531,7 @@ public class NutritionService {
                 name, e.servingLabel(), e.servingGrams(),
                 e.quantity(), e.macros(), e.photoRef(), e.contentHash(), e.source(), e.ingredients(),
                 e.mealImageUrl(), e.mealImageStatus(), EntryAnalysisStatus.FAILED,
-                e.createdAt(), null, e.leftover());
+                e.createdAt(), null, e.leftover(), e.adjustment());
             entries.save(failed);
         });
     }
@@ -557,7 +560,7 @@ public class NutritionService {
             e.userId(), e.date(), e.entryId(), e.meal(), null, "Analyzing photo…",
             null, null, 1.0, Macros.zero(), e.photoRef(), e.contentHash(), e.source(),
             null, null, FoodImageStatus.NONE, EntryAnalysisStatus.ANALYZING,
-            Instant.now(), null, e.leftover());
+            Instant.now(), null, e.leftover(), e.adjustment());
         entries.save(reopened);
         return reopened;
     }
@@ -616,7 +619,8 @@ public class NutritionService {
             existing.foodId(), existing.foodName(), existing.servingLabel(),
             existing.servingGrams(), existing.quantity(), total, existing.photoRef(),
             existing.contentHash(), existing.source(), updated, existing.mealImageUrl(), existing.mealImageStatus(),
-            existing.analysisStatus(), existing.createdAt(), null, existing.leftover());
+            existing.analysisStatus(), existing.createdAt(), null, existing.leftover(),
+            existing.adjustment());
         entries.save(entry);
         recomputeDay(userId, date);
         return entry;
@@ -670,7 +674,8 @@ public class NutritionService {
             existing.analysisStatus(),
             existing.createdAt(),
             null,
-            existing.leftover()
+            existing.leftover(),
+            existing.adjustment()
         );
         entries.save(updated);
         recomputeDay(userId, date);
@@ -866,7 +871,108 @@ public class NutritionService {
             existing.photoRef(), existing.contentHash(), existing.source(),
             ingredients != null ? List.copyOf(ingredients) : existing.ingredients(),
             existing.mealImageUrl(), existing.mealImageStatus(), existing.analysisStatus(),
-            existing.createdAt(), null, leftover);
+            existing.createdAt(), null, leftover, existing.adjustment());
+    }
+
+    // ----- Adjust with AI (async) ---------------------------------------
+
+    /**
+     * Begin an async "Adjust with AI" pass: stamp the entry with an
+     * {@link AdjustStatus#ADJUSTING} {@link MealAdjustment} carrying the user's
+     * {@code instruction} and {@code saveAsMeal} choice. Live macros/ingredients
+     * are untouched (nothing is applied until commit), so no rollup recompute.
+     * Overwrites any prior adjustment (a resubmit re-enters ADJUSTING).
+     */
+    public FoodEntry beginAdjustment(
+        String userId, LocalDate date, String entryId, String instruction, boolean saveAsMeal) {
+        requireUser(userId);
+        requireDate(date);
+        if (instruction == null || instruction.isBlank()) {
+            throw new IllegalArgumentException("instruction is required");
+        }
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        MealAdjustment adjusting = new MealAdjustment(
+            AdjustStatus.ADJUSTING, instruction, saveAsMeal, null, null);
+        FoodEntry updated = withAdjustment(existing, adjusting);
+        entries.save(updated);
+        return updated;
+    }
+
+    /**
+     * Record a valid adjustment proposal awaiting the user's apply/discard
+     * ({@link AdjustStatus#PENDING_REVIEW}), preserving the submitted
+     * instruction/saveAsMeal. Live macros are unchanged, so no rollup recompute.
+     * No-op if the entry vanished or is no longer {@code ADJUSTING} (idempotent
+     * against a redelivered job).
+     */
+    public Optional<FoodEntry> setAdjustmentProposal(
+        String userId, LocalDate date, String entryId,
+        MealAdjustmentService.AdjustmentProposal proposal) {
+        requireUser(userId);
+        requireDate(date);
+        Optional<FoodEntry> found = entries.findById(userId, date, entryId);
+        if (found.isEmpty() || found.get().adjustment() == null
+            || found.get().adjustment().status() != AdjustStatus.ADJUSTING) {
+            return Optional.empty();
+        }
+        FoodEntry existing = found.get();
+        MealAdjustment prior = existing.adjustment();
+        MealAdjustment pending = new MealAdjustment(
+            AdjustStatus.PENDING_REVIEW, prior.instruction(), prior.saveAsMeal(),
+            proposal, Instant.now());
+        FoodEntry updated = withAdjustment(existing, pending);
+        entries.save(updated);
+        return Optional.of(updated);
+    }
+
+    /**
+     * Record a failed adjustment ({@link AdjustStatus#REJECTED}) — the analyzer was
+     * unavailable or produced no identifiable food. Live macros unchanged; no
+     * rollup. No-op if the entry vanished or is no longer {@code ADJUSTING}.
+     */
+    public Optional<FoodEntry> rejectAdjustment(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        Optional<FoodEntry> found = entries.findById(userId, date, entryId);
+        if (found.isEmpty() || found.get().adjustment() == null
+            || found.get().adjustment().status() != AdjustStatus.ADJUSTING) {
+            return Optional.empty();
+        }
+        FoodEntry existing = found.get();
+        MealAdjustment prior = existing.adjustment();
+        MealAdjustment rejected = new MealAdjustment(
+            AdjustStatus.REJECTED, prior.instruction(), prior.saveAsMeal(), null, Instant.now());
+        FoodEntry updated = withAdjustment(existing, rejected);
+        entries.save(updated);
+        return Optional.of(updated);
+    }
+
+    /**
+     * Clear any adjustment state back to null (the "Discard" path, and the cleanup
+     * step after a commit rewrites the entry). Live macros unchanged; no rollup.
+     * No-op if there is no adjustment.
+     */
+    public Optional<FoodEntry> discardAdjustment(String userId, LocalDate date, String entryId) {
+        requireUser(userId);
+        requireDate(date);
+        Optional<FoodEntry> found = entries.findById(userId, date, entryId);
+        if (found.isEmpty() || found.get().adjustment() == null) {
+            return Optional.empty();
+        }
+        FoodEntry updated = withAdjustment(found.get(), null);
+        entries.save(updated);
+        return Optional.of(updated);
+    }
+
+    /** Rebuild an entry with a new (or cleared) adjustment; everything else identical. */
+    private static FoodEntry withAdjustment(FoodEntry e, MealAdjustment adjustment) {
+        return new FoodEntry(
+            e.userId(), e.date(), e.entryId(), e.meal(), e.foodId(), e.foodName(),
+            e.servingLabel(), e.servingGrams(), e.quantity(), e.macros(),
+            e.photoRef(), e.contentHash(), e.source(), e.ingredients(),
+            e.mealImageUrl(), e.mealImageStatus(), e.analysisStatus(),
+            e.createdAt(), null, e.leftover(), adjustment);
     }
 
     /**

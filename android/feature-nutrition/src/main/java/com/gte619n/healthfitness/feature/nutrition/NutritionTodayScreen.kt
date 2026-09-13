@@ -1,28 +1,35 @@
 package com.gte619n.healthfitness.feature.nutrition
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -52,6 +59,11 @@ fun NutritionTodayRoute(
     // IMPL-LEFTOVER-01 (D10): launch leftover-mode capture for a composite entry.
     onStartLeftoverCapture: (LocalDate, String) -> Unit = { _, _ -> },
     onBack: (() -> Unit)? = null,
+    // Adjust with AI deep link: when set (from a notification body tap), open the
+    // review sheet for this (date, entryId), then invoke [onAdjustReviewConsumed].
+    openAdjustReviewDate: String? = null,
+    openAdjustReviewEntryId: String? = null,
+    onAdjustReviewConsumed: () -> Unit = {},
     viewModel: NutritionTodayViewModel = hiltViewModel(),
     // IMPL-DRINK-01 (D7): the ⋮ menu's Drink Mode toggle reads/writes the same
     // device-local store the home Drink card uses.
@@ -64,6 +76,16 @@ fun NutritionTodayRoute(
     LifecycleResumeEffect(viewModel) {
         viewModel.refresh()
         onPauseOrDispose { }
+    }
+    // Notification body-tap deep link → open the adjustment review sheet for the
+    // target entry, then consume so a config change / re-nav doesn't reopen it.
+    LaunchedEffect(openAdjustReviewDate, openAdjustReviewEntryId) {
+        val date = openAdjustReviewDate
+        val entryId = openAdjustReviewEntryId
+        if (date != null && entryId != null) {
+            viewModel.openAdjustReviewFor(date, entryId)
+            onAdjustReviewConsumed()
+        }
     }
     NutritionTodayScreen(
         state = state,
@@ -79,8 +101,12 @@ fun NutritionTodayRoute(
         onUpdateEntry = viewModel::updateEntry,
         onFetchServingHint = viewModel::servingHint,
         onSaveComposite = viewModel::saveCompositeMeal,
-        onPreviewAdjustment = viewModel::previewAdjustment,
-        onApplyAdjustment = viewModel::applyAdjustment,
+        onSubmitAdjust = viewModel::submitAdjust,
+        onReviewAdjust = viewModel::reviewAdjust,
+        onCloseAdjustReview = viewModel::closeAdjustReview,
+        onCommitAdjust = viewModel::commitAdjust,
+        onDiscardAdjust = viewModel::discardAdjust,
+        onDismissAdjustBanner = viewModel::dismissAdjustBanner,
         onStartLeftoverCapture = { entryId -> onStartLeftoverCapture(state.date, entryId) },
         onReviewLeftovers = viewModel::reviewLeftovers,
         onCloseLeftoverReview = viewModel::closeLeftoverReview,
@@ -117,8 +143,13 @@ fun NutritionTodayScreen(
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
     onFetchServingHint: suspend (String) -> String?,
     onSaveComposite: (String, String, Double, List<Double>) -> Unit,
-    onPreviewAdjustment: suspend (String, String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
-    onApplyAdjustment: (String, com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
+    // "Adjust with AI" (async): submit a correction, review the proposal, commit/discard.
+    onSubmitAdjust: (entryId: String, instruction: String, saveAsMeal: Boolean) -> Unit = { _, _, _ -> },
+    onReviewAdjust: (Entry) -> Unit = {},
+    onCloseAdjustReview: () -> Unit = {},
+    onCommitAdjust: (String) -> Unit = {},
+    onDiscardAdjust: (String) -> Unit = {},
+    onDismissAdjustBanner: () -> Unit = {},
     // IMPL-LEFTOVER-01 (D4/D7/D15): leftover capture launch + review + restore.
     onStartLeftoverCapture: (String) -> Unit = {},
     onReviewLeftovers: (Entry) -> Unit = {},
@@ -156,6 +187,12 @@ fun NutritionTodayScreen(
             drinkModeEnabled = drinkModeEnabled,
             onToggleDrinkMode = onToggleDrinkMode,
         )
+        state.adjustReviewBanner?.let { banner ->
+            AdjustReadyBanner(
+                onReview = { onReviewAdjust(banner) },
+                onDismiss = onDismissAdjustBanner,
+            )
+        }
         when {
             state.loading -> CenteredMessage { CircularProgressIndicator(color = Hf.colors.accent) }
             state.error != null && state.day == null -> CenteredMessage {
@@ -194,9 +231,10 @@ fun NutritionTodayScreen(
             onDismiss = onCloseEditSheet,
             onSave = onUpdateEntry,
             fetchServingHint = onFetchServingHint,
-            previewAdjustment = { instruction -> onPreviewAdjustment(editing.entryId, instruction) },
-            onApplyAdjustment = { request -> onApplyAdjustment(editing.entryId, request) },
-            applyingAdjustment = state.savingAdjust,
+            onSubmitAdjust = { instruction, saveAsMeal ->
+                onSubmitAdjust(editing.entryId, instruction, saveAsMeal)
+            },
+            onReviewAdjust = { onReviewAdjust(editing) },
         )
     }
 
@@ -210,9 +248,10 @@ fun NutritionTodayScreen(
                 onSaveComposite(composite.entryId, title, portion, quantities)
             },
             fetchServingHint = onFetchServingHint,
-            previewAdjustment = { instruction -> onPreviewAdjustment(composite.entryId, instruction) },
-            onApplyAdjustment = { request -> onApplyAdjustment(composite.entryId, request) },
-            applyingAdjustment = state.savingAdjust,
+            onSubmitAdjust = { instruction, saveAsMeal ->
+                onSubmitAdjust(composite.entryId, instruction, saveAsMeal)
+            },
+            onReviewAdjust = { onReviewAdjust(composite) },
             // IMPL-LEFTOVER-01 (D4/D7/D15): the leftover controls live on the
             // composite meal's sheet (only composite photo meals are eligible, D5).
             savingLeftover = state.savingLeftover,
@@ -234,6 +273,55 @@ fun NutritionTodayScreen(
             onDismiss = onCloseLeftoverReview,
             onApply = { onApplyLeftovers(reviewing.entryId) },
             onDiscard = { onDiscardLeftovers(reviewing.entryId) },
+        )
+    }
+
+    // Adjust with AI (async): the old→new review-diff sheet (Apply/Discard).
+    val reviewingAdjust = state.reviewingAdjust
+    if (reviewingAdjust != null) {
+        AdjustReviewSheet(
+            entry = reviewingAdjust,
+            saving = state.savingAdjust,
+            onDismiss = onCloseAdjustReview,
+            onApply = { onCommitAdjust(reviewingAdjust.entryId) },
+            onDiscard = { onDiscardAdjust(reviewingAdjust.entryId) },
+        )
+    }
+}
+
+/**
+ * The foreground "adjustment ready" banner: a one-tap jump into the review sheet
+ * for a proposal that just landed while the app is open (mirrors what the FCM
+ * notification offers when backgrounded). Dismissible.
+ */
+@Composable
+private fun AdjustReadyBanner(onReview: () -> Unit, onDismiss: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .background(Hf.colors.surface, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            "A meal adjustment is ready to review.",
+            style = Hf.type.bodySm,
+            color = Hf.colors.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Review",
+            style = Hf.type.capsSm,
+            color = Hf.colors.accent,
+            modifier = Modifier.clickable { onReview() }.padding(horizontal = 6.dp, vertical = 4.dp),
+        )
+        Text(
+            "Dismiss",
+            style = Hf.type.capsSm,
+            color = Hf.colors.textTertiary,
+            modifier = Modifier.clickable { onDismiss() }.padding(horizontal = 6.dp, vertical = 4.dp),
         )
     }
 }
@@ -377,8 +465,6 @@ private fun NutritionTodayPreview() {
             onOpenEditSheet = {}, onCloseEditSheet = {}, onUpdateEntry = { _, _ -> },
             onFetchServingHint = { null },
             onSaveComposite = { _, _, _, _ -> },
-            onPreviewAdjustment = { _, _ -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse("") },
-            onApplyAdjustment = { _, _ -> },
             onOpenAddSheet = {}, onCloseAddSheet = {},
             onAddCatalog = { _, _, _, _ -> }, onAddQuick = { _, _, _ -> },
             onDescribeAsync = { _, _ -> }, onRelogRecent = { _, _ -> },

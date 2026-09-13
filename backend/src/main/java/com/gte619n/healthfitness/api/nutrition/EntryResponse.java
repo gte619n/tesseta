@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.api.nutrition;
 
+import com.gte619n.healthfitness.core.nutrition.AdjustStatus;
 import com.gte619n.healthfitness.core.nutrition.CompositeIngredient;
 import com.gte619n.healthfitness.core.nutrition.EntryAnalysisStatus;
 import com.gte619n.healthfitness.core.nutrition.EntrySource;
@@ -8,6 +9,8 @@ import com.gte619n.healthfitness.core.nutrition.FoodImageStatus;
 import com.gte619n.healthfitness.core.nutrition.Leftover;
 import com.gte619n.healthfitness.core.nutrition.LeftoverProposal;
 import com.gte619n.healthfitness.core.nutrition.LeftoverStatus;
+import com.gte619n.healthfitness.core.nutrition.MealAdjustment;
+import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService;
 import com.gte619n.healthfitness.core.nutrition.MealType;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,7 +47,9 @@ public record EntryResponse(
     // placeholder (e.g. an in-flight photo capture).
     Instant createdAt,
     // "Remove Leftovers" state (IMPL-LEFTOVER-01); null when there is none.
-    LeftoverDto leftover
+    LeftoverDto leftover,
+    // Async "Adjust with AI" state; null when there is none.
+    AdjustmentDto adjustment
 ) {
     /** Bare mapping with no catalog image (used where the food isn't loaded). */
     public static EntryResponse from(FoodEntry e) {
@@ -83,7 +88,8 @@ public record EntryResponse(
             e.analysisStatus() != null ? e.analysisStatus() : EntryAnalysisStatus.NONE,
             ingredients,
             e.createdAt(),
-            leftoverDtoOf(e.leftover())
+            leftoverDtoOf(e.leftover()),
+            adjustmentDtoOf(e.adjustment())
         );
     }
 
@@ -170,5 +176,60 @@ public record EntryResponse(
         return new LeftoverProposalDto(
             items, MacrosDto.from(p.servedTotals()), MacrosDto.from(p.consumedTotals()),
             p.overallConfidence(), p.warning(), p.warningNote());
+    }
+
+    /**
+     * Async "Adjust with AI" state for the clients. While {@code PENDING_REVIEW} it
+     * carries the {@code proposal} the review diff renders; the {@code proposal}
+     * shape mirrors the sync {@code AdjustPreviewResponse} so the client reuses one
+     * parser.
+     */
+    public record AdjustmentDto(
+        AdjustStatus status,
+        String instruction,
+        AdjustProposalDto proposal
+    ) {}
+
+    /** The pending adjustment proposal (mirrors AdjustPreviewResponse). */
+    public record AdjustProposalDto(
+        String mealName,
+        boolean packagedProduct,
+        List<AdjustItemDto> items,
+        MacrosDto newTotals,
+        MacrosDto oldTotals
+    ) {}
+
+    /** One item within the pending adjustment proposal. */
+    public record AdjustItemDto(
+        String name,
+        String servingLabel,
+        Double servingGrams,
+        MacrosDto macrosPer100g,
+        MacrosDto macros
+    ) {}
+
+    private static AdjustmentDto adjustmentDtoOf(MealAdjustment a) {
+        if (a == null) {
+            return null;
+        }
+        return new AdjustmentDto(a.status(), a.instruction(), adjustProposalDtoOf(a.proposal()));
+    }
+
+    private static AdjustProposalDto adjustProposalDtoOf(
+        MealAdjustmentService.AdjustmentProposal p) {
+        if (p == null) {
+            return null;
+        }
+        List<AdjustItemDto> items = new ArrayList<>();
+        if (p.items() != null) {
+            for (MealAdjustmentService.ProposalItem it : p.items()) {
+                items.add(new AdjustItemDto(
+                    it.name(), it.servingLabel(), it.servingGrams(),
+                    MacrosDto.from(it.macrosPer100g()), MacrosDto.from(it.macros())));
+            }
+        }
+        return new AdjustProposalDto(
+            p.mealName(), p.packagedProduct(), items,
+            MacrosDto.from(p.newTotals()), MacrosDto.from(p.oldTotals()));
     }
 }

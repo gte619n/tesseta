@@ -21,6 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocalBar
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
@@ -28,6 +31,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +47,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -56,6 +63,7 @@ import com.gte619n.healthfitness.ui.theme.type
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -78,6 +86,14 @@ fun DrinkCard(
     // Warm the offline drink cache + budget/recents on every foreground (§4.3).
     // Runs even while Drink Mode is off so it's ready the instant it's enabled.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+
+    // The one-time End summary is hoisted above the Drink Mode gate: ending a session
+    // also exits Drink Mode (endSession), which early-returns the card — so the summary
+    // must live here to stay visible until the user dismisses it.
+    state.summary?.let { summary ->
+        DrinkSummaryDialog(summary = summary, onDismiss = viewModel::dismissSummary)
+    }
+
     if (!state.drinkModeEnabled) return
 
     // Self-hosted snackbar so the card drops into either dashboard as a one-liner
@@ -107,7 +123,6 @@ fun DrinkCard(
                 }
             },
             onEnd = viewModel::endSession,
-            onDismissSummary = viewModel::dismissSummary,
         )
         SnackbarHost(hostState = snackbarHost)
         // Separates the pinned card from the vitals below (only present when the
@@ -124,7 +139,6 @@ private fun DrinkCardContent(
     onQueryChange: (String) -> Unit,
     onLog: (Food, Double) -> Unit,
     onEnd: (Long) -> Unit,
-    onDismissSummary: () -> Unit,
 ) {
     HfCard(modifier = modifier) {
         Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
@@ -153,10 +167,6 @@ private fun DrinkCardContent(
                 )
             }
         }
-    }
-
-    state.summary?.let { summary ->
-        DrinkSummaryDialog(summary = summary, onDismiss = onDismissSummary)
     }
 }
 
@@ -227,6 +237,7 @@ private fun ActiveSession(
     if (showEndDialog) {
         EndSessionDialog(
             startedAtMillis = state.session.startedAtMillis,
+            lastDrinkAtMillis = state.session.loggedDrinks.lastOrNull()?.atMillis,
             onConfirm = { close ->
                 showEndDialog = false
                 onEnd(close)
@@ -392,19 +403,26 @@ private fun QuantityPickerDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EndSessionDialog(
     startedAtMillis: Long,
+    lastDrinkAtMillis: Long?,
     onConfirm: (Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // D21: an editable close time (default now, must be ≥ start). Kept simple: the
-    // user nudges the close time back in 15-min steps from now; it can never go
-    // below start. Only the summary duration is affected.
-    val now = System.currentTimeMillis()
-    var minutesBack by remember { mutableStateOf(0) }
-    val maxBack = (((now - startedAtMillis) / 60000L).toInt()).coerceAtLeast(0)
-    val close = (now - minutesBack * 60000L).coerceAtLeast(startedAtMillis)
+    // D21: a fully editable close date + time. It defaults to one hour after the last
+    // drink was logged (or now, if nothing's been logged), never before the start.
+    // The user can dial in any exact moment via the date and time pickers; the
+    // ViewModel still clamps the result to ≥ start.
+    val zone = remember { ZoneId.systemDefault() }
+    val defaultClose = remember(startedAtMillis, lastDrinkAtMillis) {
+        val base = lastDrinkAtMillis?.plus(3_600_000L) ?: System.currentTimeMillis()
+        base.coerceAtLeast(startedAtMillis)
+    }
+    var closeMillis by remember { mutableStateOf(defaultClose) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -412,19 +430,65 @@ private fun EndSessionDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Close time", style = Hf.type.bodySm, color = Hf.colors.textTertiary)
-                Text(clockLabel(close), style = Hf.type.headingSm, color = Hf.colors.textPrimary)
+                Text(dateTimeLabel(closeMillis), style = Hf.type.headingSm, color = Hf.colors.textPrimary)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SecondaryPill(
-                        label = "−15 min",
-                        onClick = { minutesBack = (minutesBack + 15).coerceAtMost(maxBack) },
-                    )
-                    SecondaryPill(label = "Now", onClick = { minutesBack = 0 })
+                    SecondaryPill(label = "Date", onClick = { showDatePicker = true })
+                    SecondaryPill(label = "Time", onClick = { showTimePicker = true })
                 }
             }
         },
-        confirmButton = { PrimaryPill(label = "End", onClick = { onConfirm(close) }) },
+        confirmButton = { PrimaryPill(label = "End", onClick = { onConfirm(closeMillis) }) },
         dismissButton = { SecondaryPill(label = "Cancel", onClick = onDismiss) },
     )
+
+    if (showDatePicker) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = localDateToUtcMillis(closeMillis, zone),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                PrimaryPill(label = "Set", onClick = {
+                    dateState.selectedDateMillis?.let { picked ->
+                        closeMillis = combineDate(picked, closeMillis, zone)
+                    }
+                    showDatePicker = false
+                })
+            },
+            dismissButton = {
+                SecondaryPill(label = "Cancel", onClick = { showDatePicker = false })
+            },
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+
+    if (showTimePicker) {
+        val current = remember { Instant.ofEpochMilli(closeMillis).atZone(zone) }
+        val timeState = rememberTimePickerState(
+            initialHour = current.hour,
+            initialMinute = current.minute,
+            is24Hour = false,
+        )
+        Dialog(onDismissRequest = { showTimePicker = false }) {
+            Column(
+                modifier = Modifier
+                    .background(Hf.colors.canvas, RoundedCornerShape(16.dp))
+                    .padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                TimePicker(state = timeState)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryPill(label = "Cancel", onClick = { showTimePicker = false })
+                    PrimaryPill(label = "Set", onClick = {
+                        closeMillis = combineTime(closeMillis, timeState.hour, timeState.minute, zone)
+                        showTimePicker = false
+                    })
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -498,13 +562,34 @@ internal fun secondaryLine(tally: DrinkTally, target: Double?, kcalLoggedToday: 
 }
 
 private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE h:mm a", Locale.US)
-private val TIME_ONLY: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+private val DATE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", Locale.US)
 
 private fun startedLabel(millis: Long): String =
     Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(CLOCK)
 
-private fun clockLabel(millis: Long): String =
-    Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(TIME_ONLY)
+private fun dateTimeLabel(millis: Long): String =
+    Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(DATE_TIME)
+
+/**
+ * The DatePicker works in UTC-midnight millis. Map a local instant to the UTC-midnight
+ * millis of its local calendar date (to seed the picker) and back (to recombine a
+ * picked date with the existing time-of-day), so the picked day is never off-by-one
+ * across timezones.
+ */
+private fun localDateToUtcMillis(millis: Long, zone: ZoneId): Long =
+    Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
+        .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun combineDate(pickedUtcMillis: Long, existing: Long, zone: ZoneId): Long {
+    val date = Instant.ofEpochMilli(pickedUtcMillis).atZone(ZoneOffset.UTC).toLocalDate()
+    val time = Instant.ofEpochMilli(existing).atZone(zone).toLocalTime()
+    return date.atTime(time).atZone(zone).toInstant().toEpochMilli()
+}
+
+private fun combineTime(existing: Long, hour: Int, minute: Int, zone: ZoneId): Long {
+    val date = Instant.ofEpochMilli(existing).atZone(zone).toLocalDate()
+    return date.atTime(hour, minute).atZone(zone).toInstant().toEpochMilli()
+}
 
 internal fun formatDuration(millis: Long): String {
     val totalMinutes = (millis / 60000L).coerceAtLeast(0)

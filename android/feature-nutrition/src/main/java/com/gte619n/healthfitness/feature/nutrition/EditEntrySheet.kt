@@ -52,10 +52,9 @@ fun EditEntrySheet(
     // Lazy "typical serving" explanation, fetched once when the sheet opens.
     // Returns null when unavailable, in which case no hint line is shown.
     fetchServingHint: suspend (String) -> String? = { null },
-    // "Adjust with AI": preview a free-text correction, then apply it on confirm.
-    previewAdjustment: suspend (String) -> com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse,
-    onApplyAdjustment: (com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest) -> Unit,
-    applyingAdjustment: Boolean = false,
+    // "Adjust with AI" (async): submit a free-text correction; review when ready.
+    onSubmitAdjust: (instruction: String, saveAsMeal: Boolean) -> Unit,
+    onReviewAdjust: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Generated + cached server-side on first view; absent for un-synced rows.
@@ -148,115 +147,97 @@ fun EditEntrySheet(
                     color = Hf.colors.textSecondary,
                 )
             }
-            Spacer(Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Title") },
-                singleLine = true,
-            )
-            Spacer(Modifier.height(14.dp))
-
-            Text("Meal", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            Spacer(Modifier.height(5.dp))
-            MealPicker(selected = meal, onSelect = { meal = it })
-            Spacer(Modifier.height(16.dp))
-
-            // ── Amount: serving label + grams, quantity chips + custom entry ─
-            Text("Amount", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            Spacer(Modifier.height(5.dp))
-            OutlinedTextField(
-                value = servingLabel,
-                onValueChange = { servingLabel = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Serving (e.g. 1 container, 1 slice, 100 g)") },
-                singleLine = true,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SheetSection("Details") {
                 OutlinedTextField(
-                    value = servingGrams,
-                    onValueChange = {
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Title") },
+                    singleLine = true,
+                )
+                MealPicker(selected = meal, onSelect = { meal = it })
+            }
+
+            SheetSection("Amount") {
+                OutlinedTextField(
+                    value = servingLabel,
+                    onValueChange = { servingLabel = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Serving (e.g. 1 container, 1 slice, 100 g)") },
+                    singleLine = true,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    EditNumberField("Grams / serving", servingGrams, Modifier.weight(1f)) {
                         servingGrams = it
                         rescale(it, quantity)
-                    },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Grams / serving") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-                OutlinedTextField(
-                    value = quantityText,
-                    onValueChange = { text ->
+                    }
+                    EditNumberField("Quantity (×)", quantityText, Modifier.weight(1f)) { text ->
                         quantityText = text
                         text.toDoubleOrNull()?.takeIf { it > 0 }?.let { q ->
                             quantity = q
                             rescale(servingGrams, q)
                         }
+                    }
+                }
+                ChipRow(
+                    options = QUANTITY_STEPS,
+                    selected = quantity,
+                    label = { "${trimDouble(it)}×" },
+                    onSelect = {
+                        quantity = it
+                        quantityText = trimDouble(it)
+                        rescale(servingGrams, it)
                     },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Quantity (×)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
-            }
-            Spacer(Modifier.height(8.dp))
-            ChipRow(
-                options = QUANTITY_STEPS,
-                selected = quantity,
-                label = { "${trimDouble(it)}×" },
-                onSelect = {
-                    quantity = it
-                    quantityText = trimDouble(it)
-                    rescale(servingGrams, it)
-                },
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "= ${formatWholeNumber(effectiveGrams)} g total" +
-                    (liveKcal?.let { " · $it kcal" } ?: ""),
-                style = Hf.type.bodySm,
-                color = Hf.colors.textTertiary,
-            )
-            Spacer(Modifier.height(16.dp))
-
-            // ── Macros: calories derived from them (4/4/9), then two-up rows ──
-            Text("Macros", style = Hf.type.capsSm, color = Hf.colors.textTertiary)
-            if (hasMacros) {
-                Spacer(Modifier.height(8.dp))
                 Text(
-                    "Calories: ${derivedKcal?.let { formatWholeNumber(it) } ?: "0"} kcal — computed from macros",
+                    "= ${formatWholeNumber(effectiveGrams)} g total" +
+                        (liveKcal?.let { " · $it kcal" } ?: ""),
                     style = Hf.type.monoSm,
-                    color = Hf.colors.textSecondary,
+                    color = Hf.colors.textTertiary,
                 )
-            } else {
-                EditNumberField("Calories (kcal)", manualKcal, Modifier.fillMaxWidth()) { manualKcal = it }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                EditNumberField("Protein (g)", protein, Modifier.weight(1f)) { protein = it }
-                EditNumberField("Carbs (g)", carbs, Modifier.weight(1f)) { carbs = it }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                EditNumberField("Fat (g)", fat, Modifier.weight(1f)) { fat = it }
-                EditNumberField("Sugar (g)", sugar, Modifier.weight(1f)) { sugar = it }
-            }
-            EditNumberField("Fiber (g)", fiber, Modifier.fillMaxWidth()) { fiber = it }
-            Spacer(Modifier.height(20.dp))
 
+            // Calories follow the macros (4/4/9); only a macro-less entry edits them.
+            SheetSection("Macros") {
+                if (hasMacros) {
+                    Text(
+                        "Calories ${derivedKcal?.let { formatWholeNumber(it) } ?: "0"} kcal · computed from macros",
+                        style = Hf.type.monoSm,
+                        color = Hf.colors.textSecondary,
+                    )
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        EditNumberField("Calories (kcal)", manualKcal, Modifier.weight(1f)) { manualKcal = it }
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    EditNumberField("Protein (g)", protein, Modifier.weight(1f)) { protein = it }
+                    EditNumberField("Carbs (g)", carbs, Modifier.weight(1f)) { carbs = it }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    EditNumberField("Fat (g)", fat, Modifier.weight(1f)) { fat = it }
+                    EditNumberField("Sugar (g)", sugar, Modifier.weight(1f)) { sugar = it }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    EditNumberField("Fiber (g)", fiber, Modifier.weight(1f)) { fiber = it }
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
             AdjustWithAiSection(
+                entry = entry,
                 isComposite = false,
-                previewAdjustment = previewAdjustment,
-                onApply = onApplyAdjustment,
-                applying = applyingAdjustment,
+                onSubmitAdjust = onSubmitAdjust,
+                onReviewAdjust = onReviewAdjust,
             )
-            Spacer(Modifier.height(16.dp))
 
+            Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Cancel", Modifier.weight(1f), onDismiss)
                 PrimaryButton(
-                    if (saving) "Saving…" else "Save changes",
+                    if (saving) "Saving…" else "Save",
                     Modifier.weight(1f),
                 ) {
                     if (saving) return@PrimaryButton
@@ -292,10 +273,11 @@ private fun EditNumberField(
     modifier: Modifier = Modifier,
     onChange: (String) -> Unit,
 ) {
+    // No baked-in padding — the section's spacedBy rhythm owns the spacing.
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        modifier = modifier.padding(top = 8.dp),
+        modifier = modifier,
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

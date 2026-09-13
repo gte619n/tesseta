@@ -39,6 +39,18 @@ data class ConfirmLabelPayload(
  */
 data class RemoveLeftoversPayload(val targetEntryId: String)
 
+/**
+ * ADJUST_MEAL: submit a free-text correction for the logged entry [targetEntryId].
+ * The backend runs the AI re-analysis async and stores a pending-review proposal;
+ * [instruction] and [saveAsMeal] are carried so a replay re-POSTs identically and
+ * the eventual commit honors the save choice. `date` rides the op row itself.
+ */
+data class AdjustMealPayload(
+    val targetEntryId: String,
+    val instruction: String,
+    val saveAsMeal: Boolean,
+)
+
 /** CONFIRM_MEAL_ITEMS: create foods for unmatched items, then log one entry each. */
 data class ConfirmMealItemsPayload(val items: List<ConfirmMealItem>)
 

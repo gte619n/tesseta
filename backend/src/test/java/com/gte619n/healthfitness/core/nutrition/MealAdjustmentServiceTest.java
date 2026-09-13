@@ -12,6 +12,9 @@ import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService.AcceptedIt
 import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService.AdjustmentProposal;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealAnalysis;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealItem;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobQueue;
+import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobType;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -95,6 +98,100 @@ class MealAdjustmentServiceTest {
             () -> f.svc.preview(USER, DATE, "nope", "fix it"));
     }
 
+    // ---- async "Adjust with AI" ----
+
+    @Test
+    void startAdjustment_enqueuesJob_andLeavesEntryAdjusting() {
+        CapturingQueue queue = new CapturingQueue();
+        Fixture f = new Fixture(adjuster(couscousCorrection()), queue);
+        FoodEntry entry = f.lentilsAndRice();
+
+        f.svc.startAdjustment(USER, DATE, entry.entryId(), "swap lentils for couscous", true);
+
+        assertEquals(1, queue.jobs.size());
+        assertEquals(NutritionJobType.MEAL_ADJUSTMENT, queue.jobs.get(0).type());
+        assertEquals(entry.entryId(), queue.jobs.get(0).id());
+        MealAdjustment adj = f.nutrition.findEntry(USER, DATE, entry.entryId()).orElseThrow().adjustment();
+        assertNotNull(adj);
+        assertEquals(AdjustStatus.ADJUSTING, adj.status());
+        assertTrue(adj.saveAsMeal());
+        assertEquals("swap lentils for couscous", adj.instruction());
+    }
+
+    @Test
+    void runAdjustment_storesProposal_asPendingReview() {
+        Fixture f = new Fixture(adjuster(couscousCorrection()));
+        FoodEntry entry = f.lentilsAndRice();
+        f.nutrition.beginAdjustment(USER, DATE, entry.entryId(), "swap lentils for couscous", false);
+
+        f.svc.runAdjustment(USER, DATE, entry.entryId());
+
+        MealAdjustment adj = f.nutrition.findEntry(USER, DATE, entry.entryId()).orElseThrow().adjustment();
+        assertNotNull(adj);
+        assertEquals(AdjustStatus.PENDING_REVIEW, adj.status());
+        assertNotNull(adj.proposal());
+        assertEquals("Pearl couscous and rice", adj.proposal().mealName());
+        // Live macros are untouched until commit.
+        assertEquals(entry.macros().caloriesKcal(),
+            f.nutrition.findEntry(USER, DATE, entry.entryId()).orElseThrow().macros().caloriesKcal(), 1e-6);
+    }
+
+    @Test
+    void runAdjustment_whenAdjusterFails_rejects() {
+        Fixture f = new Fixture((current, instruction, photoBytes, mimeType) -> {
+            throw new IllegalStateException("model down");
+        });
+        FoodEntry entry = f.lentilsAndRice();
+        f.nutrition.beginAdjustment(USER, DATE, entry.entryId(), "fix", false);
+
+        f.svc.runAdjustment(USER, DATE, entry.entryId());
+
+        MealAdjustment adj = f.nutrition.findEntry(USER, DATE, entry.entryId()).orElseThrow().adjustment();
+        assertEquals(AdjustStatus.REJECTED, adj.status());
+    }
+
+    @Test
+    void adjustFromState_isNoOp_whenEntryNotAdjusting() {
+        Fixture f = new Fixture(adjuster(couscousCorrection()));
+        FoodEntry entry = f.lentilsAndRice();
+        // No beginAdjustment → no adjustment state → the queued job is a cheap no-op.
+        f.svc.adjustFromStateOrThrow(USER, DATE, entry.entryId());
+        assertTrue(f.nutrition.findEntry(USER, DATE, entry.entryId()).orElseThrow().adjustment() == null);
+    }
+
+    @Test
+    void commit_appliesStoredProposal_andClearsAdjustment() {
+        Fixture f = new Fixture(adjuster(couscousCorrection()));
+        FoodEntry entry = f.lentilsAndRice();
+        f.nutrition.beginAdjustment(USER, DATE, entry.entryId(), "swap lentils for couscous", false);
+        f.svc.runAdjustment(USER, DATE, entry.entryId());
+
+        FoodEntry done = f.svc.commit(USER, DATE, entry.entryId());
+
+        assertEquals("Pearl couscous and rice", done.foodName());
+        assertEquals("Pearl couscous", done.ingredients().get(0).name());
+        assertTrue(done.adjustment() == null, "commit clears the pending adjustment");
+    }
+
+    @Test
+    void commit_withoutProposal_throwsIllegalState() {
+        Fixture f = new Fixture(adjuster(couscousCorrection()));
+        FoodEntry entry = f.lentilsAndRice();
+        assertThrows(IllegalStateException.class, () -> f.svc.commit(USER, DATE, entry.entryId()));
+    }
+
+    @Test
+    void discard_clearsPendingAdjustment() {
+        Fixture f = new Fixture(adjuster(couscousCorrection()));
+        FoodEntry entry = f.lentilsAndRice();
+        f.nutrition.beginAdjustment(USER, DATE, entry.entryId(), "fix", false);
+        f.svc.runAdjustment(USER, DATE, entry.entryId());
+
+        f.svc.discard(USER, DATE, entry.entryId());
+
+        assertTrue(f.nutrition.findEntry(USER, DATE, entry.entryId()).orElseThrow().adjustment() == null);
+    }
+
     // ---- helpers ----
 
     private static MealAnalysis couscousCorrection() {
@@ -130,12 +227,18 @@ class MealAdjustmentServiceTest {
         final MealAdjustmentService svc;
 
         Fixture(MealAdjustmentAnalyzer adjuster) {
+            this(adjuster, null);
+        }
+
+        Fixture(MealAdjustmentAnalyzer adjuster, NutritionJobQueue queue) {
             this.svc = new MealAdjustmentService(
                 adjuster != null ? provider(adjuster) : empty(),
                 empty(), // no photo reader — text-only path
                 nutrition, catalog, images,
                 null, // MealDescriptionService: unused unless saveAsMeal=true
-                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(e -> { }));
+                new com.gte619n.healthfitness.core.push.SyncChangeNotifier(e -> { }),
+                queue != null ? provider(queue) : empty(),
+                new com.gte619n.healthfitness.core.nutrition.AdjustReviewPublisher(e -> { }));
         }
 
         /** A composite "Lentils and rice" entry with catalog-backed ingredients. */
@@ -168,6 +271,12 @@ class MealAdjustmentServiceTest {
             @Override public T getIfAvailable() { return value; }
             @Override public T getIfUnique() { return value; }
         };
+    }
+
+    /** Captures enqueued jobs without running them (a durable queue never runs inline). */
+    private static final class CapturingQueue implements NutritionJobQueue {
+        final List<NutritionJob> jobs = new java.util.ArrayList<>();
+        @Override public void enqueue(NutritionJob job) { jobs.add(job); }
     }
 
     private static final class InMemNutrition implements NutritionDailyLogRepository {

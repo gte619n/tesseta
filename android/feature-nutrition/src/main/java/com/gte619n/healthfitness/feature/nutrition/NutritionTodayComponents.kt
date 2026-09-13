@@ -319,6 +319,9 @@ internal fun EntryRow(
                     // IMPL-LEFTOVER-01 (D8/D7): leftover pass states surface on the row.
                     entry.isAnalyzingLeftovers -> "Analyzing leftovers… · $macrosLine"
                     entry.hasLeftoverReview -> "Leftovers ready · tap to review · $macrosLine"
+                    // Adjust with AI (async): the pass states surface on the row too.
+                    entry.isAdjusting -> "Adjusting… · $macrosLine"
+                    entry.hasAdjustReview -> "Adjustment ready · tap to review · $macrosLine"
                     failedAnalysis -> "Couldn’t read photo · tap to retry"
                     entry.imageStatus == "PENDING" -> "Creating image… · $macrosLine"
                     // A picture is expected but missing — point at the retry chip.
