@@ -1,20 +1,39 @@
 name: backend-ci
 
+# CICD-001: always runs on pull_request to main (no top-level `paths:` gate) so
+# it reports a conclusion on every PR and a branch ruleset can require it. The
+# `changes` guard detects whether backend/ (or the published /v1 spec, or this
+# workflow) was touched; heavy jobs `needs:` it and short-circuit to success
+# when unchanged. The `backend-ci` aggregate job is the single stable check name
+# the ruleset requires.
 on:
   push:
     branches: [main]
-    paths:
-      - 'backend/**'
-      - 'website/public/api/**'
-      - '.github/workflows/backend-ci.yml'
   pull_request:
-    paths:
-      - 'backend/**'
-      - 'website/public/api/**'
-      - '.github/workflows/backend-ci.yml'
+    branches: [main]
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Detect backend changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'website/public/api/**'
+              - '.github/workflows/backend-ci.yml'
+
   build:
+    name: build
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -62,7 +81,9 @@ jobs:
   # artifact against the base branch's and blocks removals / tightened params /
   # incompatible type changes. Skipped on the first introduction (no base spec).
   openapi-breaking-change:
-    if: github.event_name == 'pull_request'
+    name: openapi-breaking-change
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -89,3 +110,23 @@ jobs:
           base: 'origin/${{ github.base_ref }}:website/public/api/tesseta-platform-v1.yaml'
           revision: 'HEAD:website/public/api/tesseta-platform-v1.yaml'
           fail-on: ERR
+
+  # Aggregate gate: one stable check name for the ruleset. Succeeds when the
+  # component was unchanged (heavy jobs skipped) OR all heavy jobs passed; fails
+  # if any heavy job failed. `if: always()` runs it even when upstream jobs skip.
+  backend-ci:
+    name: backend-ci
+    needs: [changes, build, openapi-breaking-change]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on heavy job results
+        run: |
+          echo "build=${{ needs.build.result }} openapi=${{ needs.openapi-breaking-change.result }}"
+          for r in "${{ needs.build.result }}" "${{ needs.openapi-breaking-change.result }}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "A required backend job did not pass"; exit 1 ;;
+            esac
+          done
+          echo "backend-ci gate passed"

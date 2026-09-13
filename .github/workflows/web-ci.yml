@@ -1,18 +1,37 @@
 name: web-ci
 
+# CICD-001: always runs on pull_request to main (no top-level `paths:` gate) so
+# it reports a conclusion on every PR and a branch ruleset can require it. The
+# `changes` guard detects whether web/ (or this workflow) was touched; the heavy
+# build job `needs:` it and short-circuits to success when unchanged. The
+# `web-ci` aggregate job is the single stable check name the ruleset requires.
 on:
   push:
     branches: [main]
-    paths:
-      - 'web/**'
-      - '.github/workflows/web-ci.yml'
   pull_request:
-    paths:
-      - 'web/**'
-      - '.github/workflows/web-ci.yml'
+    branches: [main]
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Detect web changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'web/**'
+              - '.github/workflows/web-ci.yml'
+
   build:
+    name: build
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -76,3 +95,19 @@ jobs:
           name: playwright-report
           path: web/playwright-report/
           if-no-files-found: ignore
+
+  # Aggregate gate: one stable check name for the ruleset. Succeeds when web was
+  # unchanged (build skipped) OR build passed; fails if build failed.
+  web-ci:
+    name: web-ci
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on build result
+        run: |
+          echo "build=${{ needs.build.result }}"
+          case "${{ needs.build.result }}" in
+            success|skipped) echo "web-ci gate passed" ;;
+            *) echo "The web build did not pass"; exit 1 ;;
+          esac
