@@ -25,6 +25,11 @@ import javax.inject.Singleton
 class AuthCoordinator @Inject constructor(
     private val repo: GoogleAuthRepository,
     private val cache: IdTokenCache,
+    // Multi-user guard collaborators: LastAccountStore remembers which account's
+    // data is on disk; SignOutSideEffects.wipeLocalData() destroys it when a
+    // different account signs in (see wipeIfAccountSwitched).
+    private val lastAccount: LastAccountStore,
+    private val signOutSideEffects: SignOutSideEffects,
 ) {
     private val _state = MutableStateFlow<AuthState>(AuthState.Loading)
     val state: StateFlow<AuthState> = _state
@@ -129,10 +134,39 @@ class AuthCoordinator @Inject constructor(
     suspend fun interactiveSignIn(activityContext: android.content.Context) {
         _state.value = AuthState.Loading
         val result = repo.interactiveSignIn(activityContext)
-        // Mark BEFORE publishing SignedIn so the signed-in entry's LaunchedEffect,
-        // which fires on that state change, observes the flag when it consumes it.
-        if (result is AuthState.SignedIn) interactiveSignInPending = true
+        if (result is AuthState.SignedIn) {
+            // Multi-user guard — must complete BEFORE publishing SignedIn, so
+            // the wipe (if any) is done before anything reads the Room mirror.
+            wipeIfAccountSwitched(result.userId)
+            // Mark BEFORE publishing SignedIn so the signed-in entry's LaunchedEffect,
+            // which fires on that state change, observes the flag when it consumes it.
+            interactiveSignInPending = true
+        }
         _state.value = result
+    }
+
+    /**
+     * Multi-user guard: if the account that just signed in is not the account
+     * whose data is on this device, destroy the previous account's local state
+     * (Room mirror, HTTP/image caches, per-user prefs) before the new session
+     * renders anything. Sign-out already wipes via `onSignOut`, but this path is
+     * reachable WITHOUT a sign-out: a server-side session death (refresh token
+     * rejected → `IdTokenCache.clear()`, no wipe) drops the user to the sign-in
+     * screen with the old account's PHI still on disk, and any Google account
+     * can sign in from there. Interactive sign-in is the only path that can
+     * change identity (silentRefresh reuses the stored refresh token), so the
+     * check lives here — on the one sign-in entry point.
+     */
+    private suspend fun wipeIfAccountSwitched(userId: String) {
+        // "(session)" is GoogleAuthRepository's placeholder when token claims
+        // couldn't be decoded — no real identity to compare, so skip the guard
+        // rather than record a bogus id or wipe on a false mismatch.
+        if (userId.isBlank() || userId == "(session)") return
+        val previous = lastAccount.read()
+        if (previous != null && previous != userId) {
+            runCatching { signOutSideEffects.wipeLocalData() }
+        }
+        lastAccount.write(userId)
     }
 
     /**

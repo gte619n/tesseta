@@ -5,7 +5,10 @@ import com.gte619n.healthfitness.data.auth.AuthState
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,11 +19,19 @@ import org.junit.Test
  * IMPL-STAB (Workstream C) — the offline-first launch contract: a returning user
  * is shown the app immediately from their cached session and is never bounced to
  * the sign-in screen by a stale access token or a transient refresh failure.
+ *
+ * Plus the multi-user account-switch guard: an interactive sign-in by a
+ * different account than the one whose data is on this device wipes that data
+ * before the new session renders anything.
  */
 class AuthCoordinatorTest {
 
     private val repo = mockk<GoogleAuthRepository>(relaxed = true)
     private val cache = mockk<IdTokenCache>()
+    private val lastAccount = mockk<LastAccountStore>(relaxed = true)
+    private val signOutSideEffects = mockk<SignOutSideEffects>(relaxed = true)
+
+    private fun coordinator() = AuthCoordinator(repo, cache, lastAccount, signOutSideEffects)
 
     private fun snapshot(
         idToken: String?,
@@ -41,7 +52,7 @@ class AuthCoordinatorTest {
     @Test
     fun `never signed in goes to SignedOut`() = runTest {
         coEvery { cache.read() } returns snapshot(idToken = null, accessExpiresInSeconds = 0, hasSignedIn = false)
-        val coordinator = AuthCoordinator(repo, cache)
+        val coordinator = coordinator()
 
         coordinator.bootstrap()
 
@@ -51,7 +62,7 @@ class AuthCoordinatorTest {
     @Test
     fun `fresh cached token shows the app with no network`() = runTest {
         coEvery { cache.read() } returns snapshot(idToken = "tok", accessExpiresInSeconds = 3600, hasSignedIn = true)
-        val coordinator = AuthCoordinator(repo, cache)
+        val coordinator = coordinator()
 
         coordinator.bootstrap()
 
@@ -68,7 +79,7 @@ class AuthCoordinatorTest {
         coEvery { cache.read() } returns
             snapshot(idToken = "stale", accessExpiresInSeconds = -10, hasSignedIn = true)
         coEvery { repo.silentRefresh() } returns AuthState.Failed("offline")
-        val coordinator = AuthCoordinator(repo, cache)
+        val coordinator = coordinator()
 
         coordinator.bootstrap()
 
@@ -81,7 +92,7 @@ class AuthCoordinatorTest {
     fun `interactive sign-in that succeeds sets a one-shot re-auth resync flag`() = runTest {
         coEvery { repo.interactiveSignIn(any()) } returns
             AuthState.SignedIn(userId = "u", email = null, displayName = null, idToken = "tok")
-        val coordinator = AuthCoordinator(repo, cache)
+        val coordinator = coordinator()
 
         coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
 
@@ -94,7 +105,7 @@ class AuthCoordinatorTest {
     @Test
     fun `interactive sign-in that fails does not set the re-auth flag`() = runTest {
         coEvery { repo.interactiveSignIn(any()) } returns AuthState.Failed("cancelled")
-        val coordinator = AuthCoordinator(repo, cache)
+        val coordinator = coordinator()
 
         coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
 
@@ -104,12 +115,80 @@ class AuthCoordinatorTest {
     @Test
     fun `a silent cached-session launch does not set the re-auth flag`() = runTest {
         coEvery { cache.read() } returns snapshot(idToken = "tok", accessExpiresInSeconds = 3600, hasSignedIn = true)
-        val coordinator = AuthCoordinator(repo, cache)
+        val coordinator = coordinator()
 
         coordinator.bootstrap()
 
         // Only an explicit interactive sign-in forces the resync — a returning user
         // launching on their cached session must not pay for an extra pull.
         assertFalse(coordinator.consumeInteractiveSignIn())
+    }
+
+    // --- Multi-user account-switch guard -----------------------------------
+
+    @Test
+    fun `sign-in by a different account wipes the previous account's local data`() = runTest {
+        every { lastAccount.read() } returns "user-a"
+        coEvery { repo.interactiveSignIn(any()) } returns
+            AuthState.SignedIn(userId = "user-b", email = null, displayName = null, idToken = "tok")
+        val coordinator = coordinator()
+
+        coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
+
+        coVerify(exactly = 1) { signOutSideEffects.wipeLocalData() }
+        verify { lastAccount.write("user-b") }
+        assertTrue(coordinator.state.value is AuthState.SignedIn)
+    }
+
+    @Test
+    fun `sign-in by the same account does not wipe`() = runTest {
+        every { lastAccount.read() } returns "user-a"
+        coEvery { repo.interactiveSignIn(any()) } returns
+            AuthState.SignedIn(userId = "user-a", email = null, displayName = null, idToken = "tok")
+        val coordinator = coordinator()
+
+        coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
+
+        coVerify(exactly = 0) { signOutSideEffects.wipeLocalData() }
+        verify { lastAccount.write("user-a") }
+    }
+
+    @Test
+    fun `first-ever sign-in records the account without wiping`() = runTest {
+        every { lastAccount.read() } returns null
+        coEvery { repo.interactiveSignIn(any()) } returns
+            AuthState.SignedIn(userId = "user-a", email = null, displayName = null, idToken = "tok")
+        val coordinator = coordinator()
+
+        coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
+
+        coVerify(exactly = 0) { signOutSideEffects.wipeLocalData() }
+        verify { lastAccount.write("user-a") }
+    }
+
+    @Test
+    fun `undecodable identity skips the guard entirely`() = runTest {
+        // "(session)" is GoogleAuthRepository's placeholder when token claims
+        // couldn't be decoded — neither wipe nor record a bogus id on it.
+        every { lastAccount.read() } returns "user-a"
+        coEvery { repo.interactiveSignIn(any()) } returns
+            AuthState.SignedIn(userId = "(session)", email = null, displayName = null, idToken = "tok")
+        val coordinator = coordinator()
+
+        coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
+
+        coVerify(exactly = 0) { signOutSideEffects.wipeLocalData() }
+        verify(exactly = 0) { lastAccount.write(any()) }
+    }
+
+    @Test
+    fun `failed sign-in never touches the guard`() = runTest {
+        coEvery { repo.interactiveSignIn(any()) } returns AuthState.Failed("cancelled")
+        val coordinator = coordinator()
+
+        coordinator.interactiveSignIn(mockk<Context>(relaxed = true))
+
+        coVerify(exactly = 0) { signOutSideEffects.wipeLocalData() }
+        verify(exactly = 0) { lastAccount.write(any()) }
     }
 }

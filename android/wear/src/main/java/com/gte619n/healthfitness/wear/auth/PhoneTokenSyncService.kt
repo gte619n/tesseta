@@ -21,8 +21,10 @@ class PhoneTokenSyncService : WearableListenerService() {
     override fun onMessageReceived(event: MessageEvent) {
         if (event.path != PATH_ID_TOKEN) return
         val token = String(event.data, Charsets.UTF_8)
-        if (token.isBlank()) return
         val cache = WearIdTokenCache(applicationContext)
-        scope.launch { cache.write(token) }
+        // A blank payload is the phone's sign-out signal (SignOutSideEffects):
+        // drop the cached token so the watch can't keep calling the API as the
+        // signed-out account.
+        scope.launch { if (token.isBlank()) cache.clear() else cache.write(token) }
     }
 }
