@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.push.FcmSendResult;
 import com.gte619n.healthfitness.core.push.FcmSender;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -21,12 +22,29 @@ public class RecordingFcmSender implements FcmSender {
     /** One captured send: the addressed tokens and the changed collections. */
     public record Sent(List<String> tokens, List<String> collections) {}
 
+    /** One captured user-visible notification send. */
+    public record SentNotification(
+        List<String> tokens, String title, String body, Map<String, String> data) {}
+
     private final List<Sent> sends = new CopyOnWriteArrayList<>();
+    private final List<SentNotification> notificationSends = new CopyOnWriteArrayList<>();
     private volatile List<String> unregisteredToReport = List.of();
 
     @Override
     public FcmSendResult sendSyncData(List<String> tokens, List<String> collections) {
         sends.add(new Sent(new ArrayList<>(tokens), new ArrayList<>(collections)));
+        return resultFor(tokens);
+    }
+
+    @Override
+    public FcmSendResult sendNotification(
+        List<String> tokens, String title, String body, Map<String, String> data) {
+        notificationSends.add(
+            new SentNotification(new ArrayList<>(tokens), title, body, Map.copyOf(data)));
+        return resultFor(tokens);
+    }
+
+    private FcmSendResult resultFor(List<String> tokens) {
         List<String> unregistered = new ArrayList<>();
         for (String t : unregisteredToReport) {
             if (tokens.contains(t)) {
@@ -46,6 +64,17 @@ public class RecordingFcmSender implements FcmSender {
         return sends.isEmpty() ? null : sends.get(sends.size() - 1);
     }
 
+    /** All user-visible notification sends in order. */
+    public List<SentNotification> notificationSends() {
+        return List.copyOf(notificationSends);
+    }
+
+    /** The most recent notification send, or null if none. */
+    public SentNotification lastNotification() {
+        return notificationSends.isEmpty()
+            ? null : notificationSends.get(notificationSends.size() - 1);
+    }
+
     /** Arrange for these tokens to be reported UNREGISTERED on the next sends. */
     public void reportUnregistered(String... tokens) {
         this.unregisteredToReport = List.of(tokens);
@@ -53,6 +82,7 @@ public class RecordingFcmSender implements FcmSender {
 
     public void clear() {
         sends.clear();
+        notificationSends.clear();
         unregisteredToReport = List.of();
     }
 }

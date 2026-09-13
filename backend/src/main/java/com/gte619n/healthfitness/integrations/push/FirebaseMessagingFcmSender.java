@@ -12,6 +12,7 @@ import com.google.firebase.messaging.SendResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -70,6 +71,10 @@ public class FirebaseMessagingFcmSender implements FcmSender {
                 BatchResponse response = messaging.sendEachForMulticast(message);
                 sent += response.getSuccessCount();
                 collectUnregistered(batch, response, unregistered);
+                if (response.getFailureCount() > 0 && log.isDebugEnabled()) {
+                    log.debug("FCM sync: {}/{} sends failed ({})",
+                        response.getFailureCount(), batch.size(), failureSummary(response));
+                }
             } catch (FirebaseMessagingException e) {
                 // Whole-batch failure (e.g. auth/transport) — log and move on; the
                 // client's periodic floor recovers the missed pull.
@@ -105,11 +110,33 @@ public class FirebaseMessagingFcmSender implements FcmSender {
                 BatchResponse response = messaging.sendEachForMulticast(message);
                 sent += response.getSuccessCount();
                 collectUnregistered(batch, response, unregistered);
+                // A dropped notification has no periodic-floor recovery, so
+                // per-token failures are surfaced (the sync path logs at debug).
+                if (response.getFailureCount() > 0) {
+                    log.warn("FCM notification: {}/{} sends failed ({})",
+                        response.getFailureCount(), batch.size(), failureSummary(response));
+                }
             } catch (FirebaseMessagingException e) {
                 log.warn("FCM notification send failed for {} token(s): {}", batch.size(), e.toString());
             }
         }
         return new FcmSendResult(sent, unregistered);
+    }
+
+    /** Distinct error-code → count summary of a batch's failed sends, e.g. {@code UNREGISTERED×2}. */
+    private static String failureSummary(BatchResponse response) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (SendResponse r : response.getResponses()) {
+            if (r.isSuccessful()) {
+                continue;
+            }
+            FirebaseMessagingException ex = r.getException();
+            MessagingErrorCode code = ex == null ? null : ex.getMessagingErrorCode();
+            counts.merge(code == null ? "UNKNOWN" : code.name(), 1, Integer::sum);
+        }
+        StringBuilder out = new StringBuilder();
+        counts.forEach((code, n) -> out.append(out.isEmpty() ? "" : ", ").append(code).append('×').append(n));
+        return out.toString();
     }
 
     private static void collectUnregistered(

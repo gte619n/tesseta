@@ -2,20 +2,16 @@ package com.gte619n.healthfitness.api.nutrition;
 
 import com.gte619n.healthfitness.core.nutrition.AdjustReviewReadyEvent;
 import com.gte619n.healthfitness.core.nutrition.MealAdjustmentService;
-import com.gte619n.healthfitness.core.push.FcmSender;
-import com.gte619n.healthfitness.core.push.FcmToken;
-import com.gte619n.healthfitness.core.push.FcmTokenRepository;
-import java.lang.System.Logger;
-import java.lang.System.Logger.Level;
-import java.util.List;
+import com.gte619n.healthfitness.core.push.UserNotificationPusher;
 import java.util.Map;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
  * Turns an {@link AdjustReviewReadyEvent} into a user-visible FCM push. Mirrors
- * {@link LeftoverReviewNotifier}: loads the user's device tokens and sends a
- * notification (title/body) rather than a silent sync ping.
+ * {@link LeftoverReviewNotifier}: maps the event to a title/body + routing data
+ * and delegates delivery (token lookup, stale-token pruning, dead-end logging)
+ * to {@link UserNotificationPusher}.
  *
  * <p>The {@code data} carries the routing {@code type} plus the target
  * {@code date}/{@code entryId} so the Android client's Apply action commits the
@@ -26,42 +22,26 @@ import org.springframework.stereotype.Component;
 @Component
 public class AdjustReviewNotifier {
 
-    private static final Logger log = System.getLogger(AdjustReviewNotifier.class.getName());
+    private final UserNotificationPusher push;
 
-    private final FcmTokenRepository tokens;
-    private final FcmSender sender;
-
-    public AdjustReviewNotifier(FcmTokenRepository tokens, FcmSender sender) {
-        this.tokens = tokens;
-        this.sender = sender;
+    public AdjustReviewNotifier(UserNotificationPusher push) {
+        this.push = push;
     }
 
     @EventListener
     public void onReviewReady(AdjustReviewReadyEvent event) {
-        try {
-            List<FcmToken> all = tokens.findByUser(event.userId());
-            if (all.isEmpty()) {
-                return;
-            }
-            List<String> tokenValues = all.stream().map(FcmToken::token).toList();
-            String type = event.rejected()
-                ? MealAdjustmentService.NOTIF_ADJUST_FAILED
-                : MealAdjustmentService.NOTIF_ADJUST_REVIEW;
-            String title = event.rejected() ? "Couldn't adjust the meal" : "Meal re-analyzed";
-            String body = event.rejected()
-                ? "Tap to try again"
-                : String.format("%+d kcal · tap to review", Math.round(event.deltaKcal()));
-            Map<String, String> data = Map.of(
-                "type", type,
-                "date", nullToEmpty(event.date()),
-                "entryId", nullToEmpty(event.entryId()));
-            sender.sendNotification(tokenValues, title, body, data);
-        } catch (RuntimeException e) {
-            // An adjustment result must never fail because a push could not be sent;
-            // the in-app pending-review state is the durable path.
-            log.log(Level.WARNING,
-                "Adjust review push failed for user=" + event.userId() + ": " + e);
-        }
+        String type = event.rejected()
+            ? MealAdjustmentService.NOTIF_ADJUST_FAILED
+            : MealAdjustmentService.NOTIF_ADJUST_REVIEW;
+        String title = event.rejected() ? "Couldn't adjust the meal" : "Meal re-analyzed";
+        String body = event.rejected()
+            ? "Tap to try again"
+            : String.format("%+d kcal · tap to review", Math.round(event.deltaKcal()));
+        Map<String, String> data = Map.of(
+            "type", type,
+            "date", nullToEmpty(event.date()),
+            "entryId", nullToEmpty(event.entryId()));
+        push.send(type, event.userId(), title, body, data);
     }
 
     private static String nullToEmpty(String s) {
