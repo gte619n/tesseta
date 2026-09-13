@@ -153,19 +153,24 @@ Declared as infra-as-code in
 If Terraform is not yet being applied for this project, apply the **equivalent
 one-time gcloud command** (idempotent; safe to re-run):
 
+> **DATA-002 (audit 2026-09-13):** prod traffic runs on the **`production`**
+> named database. The Terraform policy and the gcloud commands below target
+> `production`, not `(default)`. Previously they targeted `(default)`, so the
+> live `production` DB had NO active TTL — corrected in `firestore_ttl.tf`.
+
 ```bash
 # Enable the TTL policy on idempotencyKeys.expiresAt (collection-group scope).
 gcloud firestore fields ttls update expiresAt \
   --collection-group=idempotencyKeys \
   --enable-ttl \
   --project=health-fitness-160 \
-  --database='(default)'
+  --database=production
 
 # Verify it is now SERVING:
 gcloud firestore fields ttls list \
   --collection-group=idempotencyKeys \
   --project=health-fitness-160 \
-  --database='(default)'
+  --database=production
 ```
 
 The policy takes effect asynchronously (state goes `CREATING` → `ACTIVE`);

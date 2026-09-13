@@ -10,7 +10,12 @@ run by a human/operator against the remote state.
 | `variables.tf` | project/region + per-pipeline secret lists + `enable_staging` |
 | `ci_iam.tf` | **Dedicated least-privilege CI service account** with **per-secret** access (replaces project-wide `secretAccessor`) |
 | `staging.tf` | Staging Firestore database (opt-in via `enable_staging`) |
-| `firestore_ttl.tf` | Idempotency-key TTL policy (pre-existing) |
+| `firestore_ttl.tf` | Idempotency-key TTL policy — **now targets `production`** (DATA-002 fix) |
+| `firestore_backup.tf` | **DATA-001** — `production` backups (daily 7d + weekly 14w), PITR, delete-protection; GCS versioning + noncurrent lifecycle |
+| `monitoring.tf` | **OBS-001** — email channel, 5xx alert, `/actuator/health` uptime check + alert, Cloud Build failure + Cloud Run Job error log-metric alerts, gated billing budget |
+
+> Apply steps for `firestore_backup.tf` / `monitoring.tf` and the DATA-002
+> re-target: see [`APPLY.md`](APPLY.md) (audit remediation — not yet applied).
 
 > Tooling: `terraform` **or** `tofu` (OpenTofu) — commands below use `tofu`; they
 > are drop-in with `terraform`.
