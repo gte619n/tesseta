@@ -36,6 +36,23 @@ steps:
 
   # Canary deploy: bring the new revision up with a stable `candidate` tag but
   # ZERO traffic, so the live revision keeps serving until it's proven healthy.
+  # ── PERF-002 / COST-001 RECOMMENDATION (not applied — operator cost decision) ──
+  # The audit measured backend p95 startup 15.7s and ~$81/mo of mostly-idle
+  # compute driven by `--no-cpu-throttling` + the sync keepalive. The Dockerfile
+  # now adds Spring Boot CDS (targets startup <5s), which makes scale-to-zero far
+  # cheaper to tolerate. Per IMPL-PERF-01 Workstream B's decision matrix and the
+  # COST-001 async inventory (all durable background work is on the Cloud Tasks
+  # rail; the remaining fire-and-forget sites — nutrition image runAsync, the
+  # Withings/Google-Health webhook + backfill virtual threads, DrugCatalog cache
+  # warmers — are best-effort and merely run slower, not incorrectly, under
+  # CPU throttling), Agent 1 recommends **Option 2**:
+  #     - --min-instances=1          # keep one warm instance → ~1.3s p50, no cold start
+  #     (remove) --no-cpu-throttling # drop always-on CPU billing; CDS + warm instance cover latency
+  # Net effect vs today: warm always AND ≈ −$40 to −$55/mo (throttled idle
+  # instance bills per-request CPU + idle memory only). Rollback if a throttled
+  # background job regresses: re-add `--no-cpu-throttling` (single flag, instant).
+  # NOT changing the live flags below — apply deliberately after confirming the
+  # CDS startup win in `container/startup_latencies`.
   - id: deploy-candidate
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud

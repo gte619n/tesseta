@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.core.nutrition.FoodCatalogRepository;
 import com.gte619n.healthfitness.core.sync.SyncChange;
 import com.gte619n.healthfitness.core.sync.SyncChangeReader;
 import com.gte619n.healthfitness.core.sync.SyncCursor;
+import com.gte619n.healthfitness.core.sync.SyncEnumerationBounds;
 import com.gte619n.healthfitness.core.sync.SyncRecentWindow;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
 import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
@@ -16,6 +17,7 @@ import com.google.cloud.firestore.Blob;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
@@ -89,6 +91,21 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
 
     private static final String USERS = "users";
     private static final String UPDATED_AT = "updatedAt";
+
+    /**
+     * Parent collection whose doc ids are ISO dates ({@code yyyy-MM-dd}), so its
+     * enumeration can be pruned to a cursor-derived date floor (PERF-001). This
+     * is the unbounded-with-account-age frontier: one doc per calendar day
+     * forever.
+     */
+    private static final String DATE_KEYED_PARENT = "nutritionDays";
+
+    /**
+     * Parent collection whose own {@code updatedAt} is bumped whenever a nested
+     * child (a message) is written, so its enumeration can be pruned to parents
+     * changed at/after the cursor (PERF-001, plan Workstream A #3).
+     */
+    private static final String UPDATED_AT_KEYED_PARENT = "goalChatThreads";
 
     /** Top-level per-user collections emitted under their own name. */
     private static final List<String> TOP_LEVEL = List.of(
@@ -184,12 +201,22 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         // Subcollections via strict per-user enumeration (IMPL-AND-20 #10):
         // walk down from users/{userId} one parent collection at a time and
         // query each child subcollection directly. This never issues a
-        // collectionGroup query, so it never reads another user's documents
-        // before filtering — at the cost of an N+1 read pattern (bounded by the
-        // user's own parent-doc counts).
+        // collectionGroup query (ADR-0021), so it never reads another user's
+        // documents before filtering — at the cost of an N+1 read pattern.
+        //
+        // PERF-001: the parent enumeration is cursor-bounded so a delta sync no
+        // longer touches one ref per day the account has ever logged. See
+        // enumerateParents(...): date-keyed (nutritionDays) and updatedAt-keyed
+        // (goalChatThreads) frontiers are pruned to what could have changed since
+        // the cursor, with a periodic full-scan safety valve (isFullScanSync) so
+        // far-backdated edits still converge. The per-leaf updatedAt scan +
+        // in-app cursor tiebreak below remain the source of truth for emission,
+        // so pruning can only defer a far-backdated change, never drop/dup one.
         DocumentReference userRef = firestore.collection(USERS).document(userId);
+        boolean fullScan = SyncEnumerationBounds.isFullScanSync(since);
         for (Subcollection sub : SUBCOLLECTIONS) {
-            for (CollectionReference ref : leafCollections(userRef, sub.parentChain(), sub.leaf())) {
+            for (CollectionReference ref :
+                leafCollections(userRef, sub.parentChain(), sub.leaf(), since, fullScan)) {
                 // Pass userId so the cursor tiebreak probes the composite id
                 // (e.g. "{med}/{adherenceId}"), matching the emitted change id.
                 for (QueryDocumentSnapshot doc : scan(ref, since, sub.emitted(), limit, userId)) {
@@ -306,18 +333,15 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
      * user document, so no other user's data is ever queried.
      */
     private List<CollectionReference> leafCollections(
-        DocumentReference base, List<String> parentChain, String leaf) {
+        DocumentReference base, List<String> parentChain, String leaf,
+        SyncCursor since, boolean fullScan) {
         // Frontier of parent docs reachable so far; starts at the user doc.
         List<DocumentReference> frontier = new ArrayList<>();
         frontier.add(base);
         for (String parentCollection : parentChain) {
             List<DocumentReference> next = new ArrayList<>();
             for (DocumentReference parent : frontier) {
-                // listDocuments() returns an Iterable of child doc refs directly
-                // (it is itself the blocking enumeration), scoped to this parent.
-                for (DocumentReference child : parent.collection(parentCollection).listDocuments()) {
-                    next.add(child);
-                }
+                next.addAll(enumerateParents(parent, parentCollection, since, fullScan));
             }
             frontier = next;
         }
@@ -326,6 +350,69 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
             leaves.add(parent.collection(leaf));
         }
         return leaves;
+    }
+
+    /**
+     * Enumerate the child docs of {@code parent}'s {@code parentCollection},
+     * pruned by the cursor where the collection's shape allows it (PERF-001).
+     *
+     * <ul>
+     *   <li><b>Date-keyed</b> ({@code nutritionDays}): doc ids are ISO dates and
+     *       an entry's {@code updatedAt} only moves forward, so a delta sync only
+     *       needs day-docs on/after a cursor-derived floor (minus a backdate
+     *       slack). We query {@code documentId() >= floor} instead of listing
+     *       every day the account has ever had.</li>
+     *   <li><b>updatedAt-keyed</b> ({@code goalChatThreads}): the parent's
+     *       {@code updatedAt} is bumped on every child (message) write, so a
+     *       delta sync only needs parents with {@code updatedAt >= cursor}.</li>
+     *   <li>Otherwise (goals, phases, workoutPrograms): full
+     *       {@code listDocuments()} — these frontiers are bounded by entity
+     *       count, not account age.</li>
+     * </ul>
+     *
+     * <p>{@code fullScan} forces the unpruned path (initial sync, or the periodic
+     * safety-valve sync) so backdated edits older than the slack still converge.
+     * Pruning is a read-reduction heuristic layered on top of the per-leaf
+     * {@code updatedAt} scan + in-app cursor tiebreak, which remain the source of
+     * truth for what is emitted — so a too-tight prune can never emit a wrong or
+     * duplicate change, only defer a far-backdated one to a later full-scan sync.
+     */
+    private List<DocumentReference> enumerateParents(
+        DocumentReference parent, String parentCollection, SyncCursor since, boolean fullScan) {
+        CollectionReference coll = parent.collection(parentCollection);
+        List<DocumentReference> out = new ArrayList<>();
+
+        if (!fullScan && since != null && DATE_KEYED_PARENT.equals(parentCollection)) {
+            String floor = SyncEnumerationBounds.dateFloorForCursor(since);
+            if (floor != null) {
+                // Bounded doc-id range query — reads only day-docs on/after the
+                // floor, not one ref per day the account has ever logged.
+                Query q = coll.whereGreaterThanOrEqualTo(FieldPath.documentId(), floor);
+                for (QueryDocumentSnapshot d : await(q.get()).getDocuments()) {
+                    out.add(d.getReference());
+                }
+                return out;
+            }
+        }
+
+        if (!fullScan && since != null && UPDATED_AT_KEYED_PARENT.equals(parentCollection)) {
+            // Parents touched at/after the cursor timestamp. Belt: the per-leaf
+            // scan still applies the exact cursor tiebreak, so the >= bound here
+            // only needs to be inclusive, never precise.
+            Query q = coll.whereGreaterThanOrEqualTo(
+                UPDATED_AT, Timestamp.ofTimeMicroseconds(since.lastUpdateMillis() * 1000L));
+            for (QueryDocumentSnapshot d : await(q.get()).getDocuments()) {
+                out.add(d.getReference());
+            }
+            return out;
+        }
+
+        // Unbounded enumeration: listDocuments() is the blocking child-ref scan
+        // scoped to this parent (used for full scans and non-prunable parents).
+        for (DocumentReference child : coll.listDocuments()) {
+            out.add(child);
+        }
+        return out;
     }
 
     /**
@@ -367,6 +454,16 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
      * (deletes always propagate so offline clients can drop the row), or the
      * heavy doc's sample/effective date is on/after the window date. A heavy doc
      * whose date can't be read is conservatively emitted.
+     *
+     * <p>PERF-001 note: the plan also proposed pushing this window floor into the
+     * Firestore query. That is deliberately NOT done here — a
+     * {@code whereGreaterThanOrEqualTo(dateField, floor)} would have to be the
+     * first {@code orderBy}, colliding with the {@code updatedAt} ordering the
+     * pagination cursor depends on, and would require new composite indexes
+     * (per heavy collection, some string-date + some Timestamp-typed — see
+     * {@link #effectiveDate}) in the infra-owned {@code firestore.indexes.json}.
+     * The big amplification win (parent enumeration) is handled by
+     * {@code enumerateParents}; this stays the in-app belt.
      */
     private static boolean windowAllows(String collection, DocumentSnapshot doc, SyncRecentWindow window) {
         if (window == null || !window.isHeavy(collection)) {

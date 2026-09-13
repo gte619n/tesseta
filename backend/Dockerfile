@@ -9,6 +9,33 @@ RUN ./gradlew --no-daemon dependencies >/dev/null 2>&1 || true
 COPY src src
 RUN ./gradlew --no-daemon bootJar -x test
 
+# CDS stage — build a Class Data Sharing archive (PERF-002).
+# Spring Boot 3.5's supported CDS flow (docs.spring.io/spring-boot/reference/
+# packaging/class-data-sharing.html + .../packaging/container-images/dockerfiles.html):
+#   1. Explode the executable jar with the `tools` jarmode so the classes load
+#      off the filesystem (CDS archives can only be created against an exploded
+#      layout, not a nested-jar boot archive).
+#   2. Do a "training run" that starts the Spring context and exits right after
+#      refresh (`-Dspring.context.exit=onRefresh`), dumping the loaded classes
+#      to app.jsa via `-XX:ArchiveClassesAtExit`. AOT is left OFF (out of scope;
+#      plain CDS only) so no BeanFactory pre-processing is needed.
+# The training run loads the full context, so it must not require live external
+# credentials — every AI/GCS bean is env-gated (enabled=... defaults still
+# construct fakes without a key), and Firestore is not contacted before refresh.
+FROM eclipse-temurin:21-jdk AS cds
+WORKDIR /training
+COPY --from=builder /workspace/build/libs/app.jar app.jar
+RUN java -Djarmode=tools -jar app.jar extract --destination extracted
+# Training run against the exploded launcher: start, reach context-refresh, exit,
+# and persist the shared archive. `|| true` guards the non-zero exit some JVMs
+# report on the deliberate onRefresh shutdown; the build fails downstream only if
+# app.jsa was never written (the COPY below would error).
+RUN cd extracted \
+    && java -XX:ArchiveClassesAtExit=/training/app.jsa \
+            -Dspring.context.exit=onRefresh \
+            -jar app.jar || true \
+    && test -f /training/app.jsa
+
 # Runtime stage
 FROM eclipse-temurin:21-jre
 WORKDIR /app
@@ -17,7 +44,12 @@ WORKDIR /app
 # fail the image vulnerability scan (no Go net paths are reachable in a Java
 # app). Deterministically removing it clears those findings; a no-op if absent.
 RUN rm -f /usr/bin/pebble
-COPY --from=builder /workspace/build/libs/app.jar /app/app.jar
+# Copy the exploded application layout (extracted/app.jar + extracted/lib/) and
+# the CDS archive produced above. `extract` (no --layers) yields a restructured
+# app.jar that loads its dependencies from the sibling lib/ dir off the
+# filesystem — the layout CDS was trained against.
+COPY --from=cds /training/extracted/ /app/
+COPY --from=cds /training/app.jsa /app/app.jsa
 EXPOSE 8080
 # MaxRAMPercentage=65 lets the heap actually use the 2Gi container. The default
 # (25%) would cap the heap at ~512MB even on 2Gi — and meal/image work allocates
@@ -25,4 +57,12 @@ EXPOSE 8080
 # stays as starved as the old 512Mi box. Bounding the heap also turns a memory
 # spike into a catchable per-task OutOfMemoryError (→ markAnalysisFailed) instead
 # of a cgroup OOM-kill that orphans every in-flight analysis.
-ENTRYPOINT ["sh", "-c", "exec java -XX:MaxRAMPercentage=65.0 -jar /app/app.jar"]
+#
+# CDS (PERF-002): -XX:SharedArchiveFile loads classes from the pre-dumped
+# app.jsa to cut the measured 15.7s p95 cold start. -XX:+AutoCreateSharedArchive
+# makes the flag self-healing — if app.jsa is missing or JVM-incompatible the
+# JVM regenerates/ignores it instead of failing to boot (so a CDS problem can
+# never take the service down; worst case is a slower start). We run the exploded
+# app.jar (same layout the archive was trained on) rather than the original
+# nested-jar boot archive so the class paths in the archive match at runtime.
+ENTRYPOINT ["sh", "-c", "exec java -XX:MaxRAMPercentage=65.0 -XX:SharedArchiveFile=/app/app.jsa -XX:+AutoCreateSharedArchive -jar /app/app.jar"]

@@ -224,7 +224,7 @@ app:
     # the nutrition bucket above under a food-images/ prefix (no new bucket).
     images:
       enabled: ${NUTRITION_IMAGES_ENABLED:true}
-      model: ${NUTRITION_IMAGE_MODEL:gemini-3.1-flash-image-preview}
+      model: ${NUTRITION_IMAGE_MODEL:gemini-3.1-flash-image}
     # Tier 3: background work (image generation + photo/description analysis) runs
     # on a durable job queue instead of a detached CompletableFuture.runAsync, so a
     # Cloud Run throttle / scale-in / redeploy mid-flight no longer loses it.
@@ -286,7 +286,7 @@ app:
     # Gemini 3.1 Flash for equipment image generation (nano quality tier)
     vertex-ai-location: ${VERTEX_AI_LOCATION:us-central1}
     gemini-api-key: ${GEMINI_API_KEY:}
-    gemini-model: ${GEMINI_IMAGE_MODEL:gemini-3.1-flash-image-preview}
+    gemini-model: ${GEMINI_IMAGE_MODEL:gemini-3.1-flash-image}
     gemini-quality: ${GEMINI_IMAGE_QUALITY:nano}
     parser-api-key: ${GEMINI_API_KEY:}
     parser-model: ${EQUIPMENT_PARSER_MODEL:gemini-3.8-flash}
@@ -306,7 +306,7 @@ app:
       model: ${EXERCISE_PLAN_MODEL:gemini-3.8-flash}
     media:
       enabled: ${EXERCISE_MEDIA_ENABLED:true}
-      model: ${EXERCISE_MEDIA_MODEL:gemini-3.1-flash-image-preview}
+      model: ${EXERCISE_MEDIA_MODEL:gemini-3.1-flash-image}
       # IMPL-19: feed a reference pose image to the image model when available.
       grounding-enabled: ${EXERCISE_MEDIA_GROUNDING_ENABLED:true}
   # IMPL-15: AI workout-program design. Second deliberate exception to the
@@ -342,4 +342,4 @@ app:
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${GEMINI_MODEL:gemini-3.8-flash}
     # Imagen for medication image generation
-    imagen-model: ${IMAGEN_MODEL:gemini-3.1-flash-image-preview}
+    imagen-model: ${IMAGEN_MODEL:gemini-3.1-flash-image}

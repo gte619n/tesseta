@@ -48,7 +48,7 @@ public class EquipmentImageService implements EquipmentImageGenerator, Equipment
         EquipmentImageStorage storage,
         EquipmentRepository equipmentRepository,
         @Value("${app.equipment.gemini-api-key:${GEMINI_API_KEY:}}") String apiKey,
-        @Value("${app.equipment.gemini-model:gemini-3.1-flash-image-preview}") String model
+        @Value("${app.equipment.gemini-model:gemini-3.1-flash-image}") String model
     ) {
         this.storage = storage;
         this.equipmentRepository = equipmentRepository;

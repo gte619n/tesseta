@@ -218,7 +218,7 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
 
     public GeminiFoodImageGenerator(
         Client client,
-        @Value("${app.nutrition.images.model:gemini-3.1-flash-image-preview}") String model
+        @Value("${app.nutrition.images.model:gemini-3.1-flash-image}") String model
     ) {
         this.client = client;
         this.model = model;
