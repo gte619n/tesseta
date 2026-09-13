@@ -7,6 +7,8 @@ import kotlinx.coroutines.tasks.await
 // Pushes a newly-issued Google ID token to every paired wear node.
 // Called from GoogleAuthRepository's onTokenIssued hook so the wear side
 // stays in lock-step with the phone — no independent sign-in on Wear.
+// A blank token is the sign-out signal: PhoneTokenSyncService clears the
+// wear-side cache instead of storing it (SignOutSideEffects publishes it).
 class PhoneTokenPublisher(private val context: Context) {
 
     companion object {

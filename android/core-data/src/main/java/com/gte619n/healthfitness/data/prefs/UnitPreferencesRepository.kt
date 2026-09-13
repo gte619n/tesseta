@@ -46,6 +46,12 @@ class UnitPreferencesRepository @Inject constructor(
         context.unitsStore.edit { it[keyTemperature] = unit.name }
     }
 
+    // Sign-out hygiene: units are a per-user preference and must not carry over
+    // to the next account on a shared device (SignOutSideEffects).
+    suspend fun clear() {
+        context.unitsStore.edit { it.clear() }
+    }
+
     private fun <T> String?.toEnum(default: T, parse: (String) -> T): T =
         this?.let { runCatching { parse(it) }.getOrNull() } ?: default
 }
