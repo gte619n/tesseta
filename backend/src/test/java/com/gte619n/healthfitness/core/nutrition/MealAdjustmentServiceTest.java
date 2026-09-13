@@ -192,7 +192,63 @@ class MealAdjustmentServiceTest {
         assertTrue(f.nutrition.findEntry(USER, DATE, entry.entryId()).orElseThrow().adjustment() == null);
     }
 
+    // ---- saveAsMeal: review-time override + single-product source update ----
+
+    @Test
+    void commit_reviewOverride_singleProduct_updatesOwnedSourceFoodInPlace() {
+        Fixture f = new Fixture(adjuster(biscottiCorrection()));
+        FoodEntry entry = f.biscotti(USER);
+        f.nutrition.beginAdjustment(USER, DATE, entry.entryId(), "the chocolate hazelnut ones", false);
+        f.svc.runAdjustment(USER, DATE, entry.entryId());
+
+        // The user flips "also update the saved food" ON at review time.
+        FoodEntry done = f.svc.commit(USER, DATE, entry.entryId(), true);
+
+        assertEquals("food-biscotti", done.foodId(), "the entry keeps its source catalog food");
+        CatalogFood corrected = f.catalog.get("food-biscotti");
+        assertEquals("Chocolate Hazelnut Biscotti", corrected.name());
+        assertEquals(60.0, corrected.macrosPer100g().carbsGrams(), 1e-6);
+        assertEquals(USER, corrected.createdBy());
+    }
+
+    @Test
+    void commit_singleProduct_sourceNotOwned_mintsFreshFoodAndLeavesSourceUntouched() {
+        Fixture f = new Fixture(adjuster(biscottiCorrection()));
+        FoodEntry entry = f.biscotti("someone-else");
+        f.nutrition.beginAdjustment(USER, DATE, entry.entryId(), "fix", true);
+        f.svc.runAdjustment(USER, DATE, entry.entryId());
+
+        FoodEntry done = f.svc.commit(USER, DATE, entry.entryId());
+
+        assertNotEquals("food-biscotti", done.foodId(),
+            "a shared catalog food is never mutated — a fresh one is minted");
+        assertEquals("Mini Biscotti", f.catalog.get("food-biscotti").name(),
+            "the other user's definition is untouched");
+    }
+
+    @Test
+    void commit_reviewOverrideFalse_suppressesStoredSaveAsMeal() {
+        // The fixture wires no MealDescriptionService (null), so a composite commit
+        // that still honored the stored saveAsMeal=true would NPE in saveMeal —
+        // completing proves the review-time override suppressed it.
+        Fixture f = new Fixture(adjuster(couscousCorrection()));
+        FoodEntry entry = f.lentilsAndRice();
+        f.nutrition.beginAdjustment(USER, DATE, entry.entryId(), "swap lentils for couscous", true);
+        f.svc.runAdjustment(USER, DATE, entry.entryId());
+
+        FoodEntry done = f.svc.commit(USER, DATE, entry.entryId(), false);
+
+        assertEquals("Pearl couscous and rice", done.foodName());
+        assertTrue(done.adjustment() == null, "commit clears the pending adjustment");
+    }
+
     // ---- helpers ----
+
+    private static MealAnalysis biscottiCorrection() {
+        return new MealAnalysis("Chocolate Hazelnut Biscotti", true, List.of(
+            new MealItem("Chocolate Hazelnut Biscotti", 30.0,
+                new Macros(498.0, 6.0, 60.0, 26.0, 3.0, 30.0), 0.9)));
+    }
 
     private static MealAnalysis couscousCorrection() {
         return new MealAnalysis("Pearl couscous and rice", false, List.of(
@@ -239,6 +295,19 @@ class MealAdjustmentServiceTest {
                 new com.gte619n.healthfitness.core.push.SyncChangeNotifier(e -> { }),
                 queue != null ? provider(queue) : empty(),
                 new com.gte619n.healthfitness.core.nutrition.AdjustReviewPublisher(e -> { }));
+        }
+
+        /**
+         * A single packaged-product entry backed by catalog food
+         * {@code food-biscotti} created by {@code createdBy}.
+         */
+        FoodEntry biscotti(String createdBy) {
+            Macros per100g = new Macros(480.0, 5.0, 65.0, 22.0, 2.0, 28.0);
+            catalog.create(createdBy, "Mini Biscotti", null, null, "product", per100g,
+                List.of(new ServingSize("30 g", 30.0)), 0, FoodSource.GEMINI_PHOTO,
+                null, "food-biscotti");
+            return nutrition.addEntry(USER, DATE, MealType.DINNER, "food-biscotti",
+                "Mini Biscotti", "30 g", 30.0, 1.0, per100g.scale(0.3), EntrySource.PHOTO);
         }
 
         /** A composite "Lentils and rice" entry with catalog-backed ingredients. */
@@ -326,7 +395,10 @@ class MealAdjustmentServiceTest {
         @Override public List<CatalogFood> findByImageStatus(FoodImageStatus status, int limit) {
             return List.of();
         }
-        @Override public void save(CatalogFood food) { foods.add(food); }
+        @Override public void save(CatalogFood food) {
+            foods.removeIf(f -> f.foodId().equals(food.foodId()));
+            foods.add(food);
+        }
         @Override public void saveConfirmation(String foodId, String userId) { }
         @Override public int countConfirmations(String foodId) { return 0; }
     }

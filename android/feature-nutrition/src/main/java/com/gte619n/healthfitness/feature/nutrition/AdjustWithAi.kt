@@ -44,8 +44,11 @@ import com.gte619n.healthfitness.ui.theme.type
  *  - else            → the free-text field + "also save this meal" + submit button
  *
  * Shared by the single-food ([EditEntrySheet]) and composite ([IngredientsSheet])
- * sheets. [isComposite] gates the "also save this meal" offer (a single food isn't
- * a meal); the choice is captured at submit and honored when the proposal commits.
+ * sheets. The "also save" offer propagates the correction to the source: a
+ * composite meal saves to the meal catalog, and a single food with a catalog
+ * [Entry.foodId] updates that saved food in place (server-side, only when the
+ * user created it). The choice is captured at submit, echoed back on the review
+ * sheet — where it can still be changed — and honored when the proposal commits.
  */
 @Composable
 fun AdjustWithAiSection(
@@ -88,7 +91,8 @@ fun AdjustWithAiSection(
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("e.g. that's pearl couscous, not lentils") },
             )
-            if (isComposite) {
+            val canSaveToSource = isComposite || !entry.foodId.isNullOrBlank()
+            if (canSaveToSource) {
                 Spacer(Modifier.height(4.dp))
                 Row(
                     modifier = Modifier
@@ -99,7 +103,7 @@ fun AdjustWithAiSection(
                     Checkbox(checked = saveAsMeal, onCheckedChange = { saveAsMeal = it })
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        "Also save this meal so it's right next time",
+                        saveToSourceLabel(isComposite = isComposite),
                         style = Hf.type.bodySm,
                         color = Hf.colors.textSecondary,
                     )
@@ -108,7 +112,7 @@ fun AdjustWithAiSection(
             Spacer(Modifier.height(8.dp))
             PrimaryButton("✨ Adjust with AI", Modifier.fillMaxWidth()) {
                 val text = instruction.trim()
-                if (text.isNotBlank()) onSubmitAdjust(text, saveAsMeal && isComposite)
+                if (text.isNotBlank()) onSubmitAdjust(text, saveAsMeal && canSaveToSource)
             }
         }
     }
@@ -117,8 +121,12 @@ fun AdjustWithAiSection(
 /**
  * The async-adjustment review-diff sheet: the stored proposal's revised meal name,
  * proposed items and old→new calories, with Apply/Discard. The server holds the
- * proposal (and the saveAsMeal choice captured at submit), so Apply just commits it
- * — no proposal round-trips from the client, mirroring [LeftoverReviewSheet].
+ * proposal, so Apply just commits it — no proposal round-trips from the client,
+ * mirroring [LeftoverReviewSheet]. The "also save" toggle is pre-filled from the
+ * choice captured at submit and sent with the commit as an override, so the user
+ * can change their mind after seeing the diff. It's offered when the proposal is
+ * a composite meal (saves to the meal catalog) or a single product whose entry
+ * has a source catalog food (updated in place server-side, when user-created).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,11 +134,16 @@ internal fun AdjustReviewSheet(
     entry: Entry,
     saving: Boolean,
     onDismiss: () -> Unit,
-    onApply: () -> Unit,
+    onApply: (saveAsMeal: Boolean) -> Unit,
     onDiscard: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val proposal = entry.adjustment?.proposal
+    val singleProduct = proposal?.packagedProduct == true && proposal.items.size == 1
+    val canSaveToSource = proposal != null && (!singleProduct || !entry.foodId.isNullOrBlank())
+    var saveToSource by remember(entry.entryId) {
+        mutableStateOf(entry.adjustment?.saveAsMeal ?: false)
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -180,17 +193,44 @@ internal fun AdjustReviewSheet(
                 }
             }
 
+            if (canSaveToSource) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !saving) { saveToSource = !saveToSource },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = saveToSource,
+                        onCheckedChange = { saveToSource = it },
+                        enabled = !saving,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        saveToSourceLabel(isComposite = !singleProduct),
+                        style = Hf.type.bodySm,
+                        color = Hf.colors.textSecondary,
+                    )
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Discard", Modifier.weight(1f)) { if (!saving) onDiscard() }
                 PrimaryButton(
                     if (saving) "Applying…" else "Apply",
                     Modifier.weight(1f),
-                ) { if (!saving && proposal != null) onApply() }
+                ) { if (!saving && proposal != null) onApply(saveToSource && canSaveToSource) }
             }
         }
     }
 }
+
+/** The "also save" copy: a composite saves a meal; a single food updates its saved food. */
+private fun saveToSourceLabel(isComposite: Boolean): String =
+    if (isComposite) "Also save this meal so it's right next time"
+    else "Also update the saved food so it's right next time"
 
 /** "  120 g · 210 kcal" style tail for a proposed item, omitting unknown parts. */
 private fun AdjustItem.portionSummary(): String {

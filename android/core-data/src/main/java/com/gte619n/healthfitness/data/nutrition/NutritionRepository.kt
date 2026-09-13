@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.db.entity.NutritionEntryEntity
 import com.gte619n.healthfitness.data.sync.MirrorRepositorySupport
 import com.gte619n.healthfitness.domain.nutrition.AdjustApplyRequest
+import com.gte619n.healthfitness.domain.nutrition.AdjustCommitRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewRequest
 import com.gte619n.healthfitness.domain.nutrition.AdjustPreviewResponse
 import com.gte619n.healthfitness.domain.nutrition.AdjustStartRequest
@@ -345,12 +346,14 @@ class NutritionRepository @Inject constructor(
     }
 
     /**
-     * Commit the stored adjustment proposal (D-Apply): bodiless — the server holds
-     * the proposal and the saveAsMeal choice. Refreshes so the row re-renders with
+     * Commit the stored adjustment proposal (D-Apply). The server holds the
+     * proposal and the submit-time saveAsMeal choice; a non-null [saveAsMeal]
+     * overrides that choice at review time (the sheet's toggle), while null — the
+     * notification Apply action — keeps it. Refreshes so the row re-renders with
      * the corrected name/macros and the settle-poll swaps in a regenerated image.
      */
-    suspend fun commitAdjust(date: String, entryId: String): Entry {
-        val entry = api.adjustCommit(date, entryId)
+    suspend fun commitAdjust(date: String, entryId: String, saveAsMeal: Boolean? = null): Entry {
+        val entry = api.adjustCommit(date, entryId, AdjustCommitRequest(saveAsMeal))
         fillDayAndSignal(date)
         return entry
     }

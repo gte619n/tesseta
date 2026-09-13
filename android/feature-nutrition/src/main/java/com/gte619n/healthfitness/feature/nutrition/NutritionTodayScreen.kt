@@ -147,7 +147,7 @@ fun NutritionTodayScreen(
     onSubmitAdjust: (entryId: String, instruction: String, saveAsMeal: Boolean) -> Unit = { _, _, _ -> },
     onReviewAdjust: (Entry) -> Unit = {},
     onCloseAdjustReview: () -> Unit = {},
-    onCommitAdjust: (String) -> Unit = {},
+    onCommitAdjust: (entryId: String, saveAsMeal: Boolean) -> Unit = { _, _ -> },
     onDiscardAdjust: (String) -> Unit = {},
     onDismissAdjustBanner: () -> Unit = {},
     // IMPL-LEFTOVER-01 (D4/D7/D15): leftover capture launch + review + restore.
@@ -283,7 +283,7 @@ fun NutritionTodayScreen(
             entry = reviewingAdjust,
             saving = state.savingAdjust,
             onDismiss = onCloseAdjustReview,
-            onApply = { onCommitAdjust(reviewingAdjust.entryId) },
+            onApply = { saveAsMeal -> onCommitAdjust(reviewingAdjust.entryId, saveAsMeal) },
             onDiscard = { onDiscardAdjust(reviewingAdjust.entryId) },
         )
     }
