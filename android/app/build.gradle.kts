@@ -148,6 +148,15 @@ android {
         compose = true
         buildConfig = true
     }
+
+    testOptions {
+        // JVM unit tests here are pure contract tests (Retrofit/MockWebServer),
+        // but production classes legitimately log via android.util.Log on
+        // swallowed error paths (e.g. TokenRegistration, GoogleAuthRepository).
+        // Return defaults for un-mocked framework calls so exercising those
+        // paths doesn't throw "not mocked" instead of the behaviour under test.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
