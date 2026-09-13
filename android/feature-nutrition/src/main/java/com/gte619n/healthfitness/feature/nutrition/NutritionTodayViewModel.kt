@@ -328,17 +328,19 @@ class NutritionTodayViewModel @Inject constructor(
 
     /**
      * Commit the stored adjustment proposal (the "Apply" path): the backend applies
-     * its stored proposal (bodiless), then refresh and close the review sheet. Runs
-     * on the ViewModel scope so closing the sheet can't cancel the in-flight commit.
-     * A composite meal's image regenerates server-side, so the settle-poll swaps it in.
+     * its stored proposal — with [saveAsMeal] overriding the submit-time "also
+     * save" choice, since the review sheet lets the user change it after seeing
+     * the diff — then refresh and close the review sheet. Runs on the ViewModel
+     * scope so closing the sheet can't cancel the in-flight commit. A composite
+     * meal's image regenerates server-side, so the settle-poll swaps it in.
      */
-    fun commitAdjust(entryId: String) {
+    fun commitAdjust(entryId: String, saveAsMeal: Boolean) {
         if (entryId.startsWith(PENDING_CAPTURE_PREFIX)) return
         val date = _state.value.date.format(ISO_DATE)
         _state.update { it.copy(savingAdjust = true) }
         viewModelScope.launch {
             try {
-                repository.commitAdjust(date, entryId)
+                repository.commitAdjust(date, entryId, saveAsMeal)
                 val day = repository.day(date)
                 _state.update {
                     it.copy(day = day, savingAdjust = false, reviewingAdjust = null, error = null)

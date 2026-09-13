@@ -182,11 +182,14 @@ public record EntryResponse(
      * Async "Adjust with AI" state for the clients. While {@code PENDING_REVIEW} it
      * carries the {@code proposal} the review diff renders; the {@code proposal}
      * shape mirrors the sync {@code AdjustPreviewResponse} so the client reuses one
-     * parser.
+     * parser. {@code saveAsMeal} echoes the choice captured at start so the review
+     * sheet can pre-fill its "also save" toggle (and let the user change it on
+     * commit).
      */
     public record AdjustmentDto(
         AdjustStatus status,
         String instruction,
+        boolean saveAsMeal,
         AdjustProposalDto proposal
     ) {}
 
@@ -212,7 +215,8 @@ public record EntryResponse(
         if (a == null) {
             return null;
         }
-        return new AdjustmentDto(a.status(), a.instruction(), adjustProposalDtoOf(a.proposal()));
+        return new AdjustmentDto(
+            a.status(), a.instruction(), a.saveAsMeal(), adjustProposalDtoOf(a.proposal()));
     }
 
     private static AdjustProposalDto adjustProposalDtoOf(

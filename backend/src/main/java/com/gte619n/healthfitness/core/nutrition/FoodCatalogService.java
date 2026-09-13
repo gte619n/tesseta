@@ -270,6 +270,68 @@ public class FoodCatalogService {
         return food;
     }
 
+    /**
+     * Apply an "Adjust with AI" correction to an existing catalog food IN PLACE —
+     * the "also update the saved food" path for a single-product entry. The
+     * catalog is globally shared, so only a food the user created may be mutated
+     * (someone else's — or a seeded — definition must not absorb one user's
+     * correction); drinks (whose calories carry alcohol math) and archived foods
+     * are also left alone. Returns empty when the food can't be corrected so the
+     * caller falls back to minting a fresh catalog food — the pre-existing
+     * behaviour. A rename regenerates the studio image (from the meal-capture
+     * photo when provided) since the picture no longer matches the name.
+     */
+    public Optional<CatalogFood> correctOwnFood(
+        String foodId,
+        String userId,
+        String name,
+        Macros macrosPer100g,
+        List<ServingSize> servingSizes,
+        String referencePhotoRef
+    ) {
+        if (foodId == null || foodId.isBlank() || userId == null) {
+            return Optional.empty();
+        }
+        CatalogFood existing = find(foodId).orElse(null);
+        if (existing == null || existing.isArchived() || existing.isDrink()
+            || !userId.equals(existing.createdBy())) {
+            return Optional.empty();
+        }
+        String newName = (name != null && !name.isBlank()) ? name : existing.name();
+        boolean renamed = !newName.equalsIgnoreCase(existing.name());
+        CatalogFood updated = new CatalogFood(
+            existing.foodId(),
+            newName,
+            newName.toLowerCase(),
+            existing.brand(),
+            existing.barcode(),
+            existing.category(),
+            macrosPer100g != null ? macrosPer100g.withDerivedCalories() : existing.macrosPer100g(),
+            servingSizes != null && !servingSizes.isEmpty() ? servingSizes : existing.servingSizes(),
+            0,
+            existing.source(),
+            existing.sourceRef(),
+            existing.status(),
+            existing.confirmationCount(),
+            existing.verifiedAt(),
+            existing.imageUrl(),
+            existing.imageStatus(),
+            existing.createdBy(),
+            existing.createdAt(),
+            null,
+            existing.alcohol(),
+            existing.archivedAt()
+        );
+        repository.save(updated);
+        if (renamed) {
+            FoodImageService images = foodImages.getIfAvailable();
+            if (images != null) {
+                images.enqueueGeneration(existing.foodId(), referencePhotoRef);
+            }
+        }
+        return Optional.of(updated);
+    }
+
     // ----- Drinks (IMPL-DRINK-01) --------------------------------------
 
     /**

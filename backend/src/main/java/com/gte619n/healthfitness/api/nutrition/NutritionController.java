@@ -452,19 +452,23 @@ public class NutritionController {
     /**
      * Commit the pending adjustment proposal the user accepted (the "Apply" path,
      * from the review sheet or the notification action). The server holds the
-     * proposal, so this is bodiless: it persists the stored proposal onto the entry
-     * (honoring the saved {@code saveAsMeal}, regenerating a composite's image) and
+     * proposal, so the body is optional: bodiless (the notification action) honors
+     * the {@code saveAsMeal} captured at start, while the review sheet may send
+     * {@code {saveAsMeal}} to override that choice after seeing the diff. Persists
+     * the stored proposal onto the entry (regenerating a composite's image) and
      * clears the pending state. Returns the updated entry.
      */
     @PostMapping("/{date}/entries/{entryId}/adjust/commit")
     public EntryResponse adjustCommit(
         @PathVariable LocalDate date,
-        @PathVariable String entryId
+        @PathVariable String entryId,
+        @RequestBody(required = false) AdjustCommitRequest body
     ) {
         String userId = currentUser.get().userId();
         FoodEntry entry;
         try {
-            entry = mealAdjustment.commit(userId, date, entryId);
+            entry = mealAdjustment.commit(
+                userId, date, entryId, body == null ? null : body.saveAsMeal());
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
@@ -1179,6 +1183,13 @@ public class NutritionController {
      * commit) read them back without re-prompting.
      */
     public record AdjustStartRequest(String instruction, boolean saveAsMeal) {}
+
+    /**
+     * Optional body for {@code POST …/adjust/commit}: a review-time override of the
+     * {@code saveAsMeal} choice captured at start. Null (or no body at all — the
+     * notification action) keeps the stored choice.
+     */
+    public record AdjustCommitRequest(Boolean saveAsMeal) {}
 
     /**
      * Response for the adjust preview: the revised meal plus the before/after

@@ -504,6 +504,8 @@ enum class AdjustStatus {
 data class MealAdjustment(
     val status: AdjustStatus? = null,
     val instruction: String? = null,
+    /** The "also save" choice captured at submit — pre-fills the review sheet's toggle. */
+    val saveAsMeal: Boolean = false,
     val proposal: AdjustPreviewResponse? = null,
 )
 
@@ -515,6 +517,14 @@ data class MealAdjustment(
 data class AdjustStartRequest(
     val instruction: String,
     val saveAsMeal: Boolean = false,
+)
+
+/**
+ * Body for POST …/adjust/commit: a review-time override of the saveAsMeal choice
+ * captured at start. Null keeps the stored choice (the notification-action path).
+ */
+data class AdjustCommitRequest(
+    val saveAsMeal: Boolean? = null,
 )
 
 // ---- Capture (multipart) proposals ---------------------------------------

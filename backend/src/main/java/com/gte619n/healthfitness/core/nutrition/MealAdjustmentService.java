@@ -232,10 +232,19 @@ public class MealAdjustmentService {
     /**
      * Commit the pending proposal (the "Apply" path, from the review sheet or the
      * notification action): persist the stored proposal onto the entry via
-     * {@link #apply} (honoring the saved {@code saveAsMeal}), then clear the
-     * adjustment state. Requires a {@code PENDING_REVIEW} proposal.
+     * {@link #apply}, then clear the adjustment state. Requires a
+     * {@code PENDING_REVIEW} proposal. The stored {@code saveAsMeal} choice is
+     * honored unless {@code saveAsMealOverride} is non-null — the review sheet
+     * lets the user change their mind after seeing the diff, while the bodiless
+     * notification-action commit passes null and keeps the submit-time choice.
      */
     public FoodEntry commit(String userId, LocalDate date, String entryId) {
+        return commit(userId, date, entryId, null);
+    }
+
+    /** As {@link #commit(String, LocalDate, String)} with the review-time override. */
+    public FoodEntry commit(
+        String userId, LocalDate date, String entryId, Boolean saveAsMealOverride) {
         FoodEntry entry = nutrition.findEntry(userId, date, entryId)
             .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
         MealAdjustment adj = entry.adjustment();
@@ -248,7 +257,8 @@ public class MealAdjustmentService {
             p.items().stream().map(it -> new AcceptedItem(
                 it.name(), it.servingLabel(), it.servingGrams(),
                 it.macrosPer100g(), it.macros())).toList());
-        apply(userId, date, entryId, accepted, adj.saveAsMeal());
+        apply(userId, date, entryId, accepted,
+            saveAsMealOverride != null ? saveAsMealOverride : adj.saveAsMeal());
         // apply() rebuilt the entry via the finalize paths (which preserve the
         // adjustment) — clear it now so the committed entry carries no pending state.
         FoodEntry cleared = nutrition.discardAdjustment(userId, date, entryId).orElse(null);
@@ -288,9 +298,11 @@ public class MealAdjustmentService {
      * one item finalizes as a catalog-backed single food; anything else finalizes
      * as a composite meal (reusing an existing ingredient's catalog food when the
      * name is unchanged, minting one otherwise) and regenerates the finished-meal
-     * image. When {@code saveAsMeal} is set, the corrected composite meal is also
-     * saved to the shared catalog for reuse. Fans out a sync change and returns
-     * the updated entry.
+     * image. When {@code saveAsMeal} is set the correction also reaches the
+     * source: a composite meal is saved to the shared catalog for reuse, and a
+     * single product updates the entry's own catalog food in place when the user
+     * created it (falling back to minting a fresh food otherwise). Fans out a
+     * sync change and returns the updated entry.
      */
     public FoodEntry apply(
         String userId, LocalDate date, String entryId,
@@ -312,9 +324,16 @@ public class MealAdjustmentService {
             Macros portion = item.macros() != null
                 ? item.macros()
                 : (item.macrosPer100g() != null ? item.macrosPer100g().scale(grams / 100.0) : Macros.zero());
-            CatalogFood food = catalog.create(
-                userId, item.name(), null, null, "product", item.macrosPer100g(),
-                List.of(new ServingSize(label, grams)), 0, FoodSource.GEMINI_PHOTO, entry.photoRef());
+            List<ServingSize> servings = List.of(new ServingSize(label, grams));
+            CatalogFood food = saveAsMeal
+                ? catalog.correctOwnFood(entry.foodId(), userId, item.name(),
+                    item.macrosPer100g(), servings, entry.photoRef()).orElse(null)
+                : null;
+            if (food == null) {
+                food = catalog.create(
+                    userId, item.name(), null, null, "product", item.macrosPer100g(),
+                    servings, 0, FoodSource.GEMINI_PHOTO, entry.photoRef());
+            }
             updated = nutrition.finalizeSingleFood(
                 userId, date, entryId, food.foodId(), item.name(), label, grams, 1.0, portion);
         } else {

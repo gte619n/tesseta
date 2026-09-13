@@ -101,18 +101,31 @@ class NutritionAdjustViewModelTest {
             adjustment = null,
         )
         val repo = mockk<NutritionRepository>(relaxed = true) {
-            coEvery { commitAdjust(any(), "e1") } returns committed
+            coEvery { commitAdjust(any(), "e1", any()) } returns committed
             coEvery { day(any()) } returns dayWith(committed)
         }
         val vm = viewModel(repo)
         vm.reviewAdjust(reviewEntry())
 
-        vm.commitAdjust("e1")
+        vm.commitAdjust("e1", saveAsMeal = false)
 
-        coVerify { repo.commitAdjust(date.toString(), "e1") }
+        coVerify { repo.commitAdjust(date.toString(), "e1", false) }
         val state = vm.state.value
         assertNull(state.reviewingAdjust)
         assertFalse(state.savingAdjust)
+    }
+
+    @Test
+    fun `commitAdjust forwards the review-time saveAsMeal override`() = runTest {
+        val repo = mockk<NutritionRepository>(relaxed = true) {
+            coEvery { day(any()) } returns dayWith(reviewEntry().copy(adjustment = null))
+        }
+        val vm = viewModel(repo)
+        vm.reviewAdjust(reviewEntry())
+
+        vm.commitAdjust("e1", saveAsMeal = true)
+
+        coVerify { repo.commitAdjust(date.toString(), "e1", true) }
     }
 
     @Test

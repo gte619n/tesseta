@@ -68,19 +68,7 @@ public class SyncChangePublisher {
         List<String> tokenValues = recipients.stream().map(FcmToken::token).toList();
         FcmSendResult result = sender.sendSyncData(tokenValues, event.collections());
 
-        // Prune tokens FCM rejected as unregistered/invalid (best-effort). Map the
-        // rejected token string back to its device id and delete the registration.
-        if (result != null && !result.unregisteredTokens().isEmpty()) {
-            for (FcmToken t : recipients) {
-                if (result.unregisteredTokens().contains(t.token())) {
-                    try {
-                        tokens.delete(event.userId(), t.deviceId());
-                    } catch (RuntimeException e) {
-                        log.log(Level.DEBUG,
-                            "Failed pruning stale token device=" + t.deviceId() + ": " + e);
-                    }
-                }
-            }
-        }
+        // Prune tokens FCM rejected as unregistered/invalid (best-effort).
+        FcmTokenPruning.prune(tokens, log, event.userId(), recipients, result);
     }
 }
