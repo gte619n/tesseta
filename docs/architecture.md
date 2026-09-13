@@ -111,11 +111,14 @@ posture** for this PHI-grade app — live in
 ## Decisions & plans
 
 - Architecture Decision Records: [`docs/decisions/`](decisions/).
-- Forward-looking work not yet built: [`docs/plans/`](plans/) — the
-  android↔web parity roadmap (Wear surfaces, sleep/push/dark-mode) and the
-  bulk-equipment-import plan. (Active workout logging shipped since — ADR-0012;
-  the roadmap doc itself is stale on that point.)
+- Forward-looking work not yet built: [`docs/plans/`](plans/) — currently the
+  AppFunctions/Gemini voice-logging plan (blocked on Google Early Access), the
+  android build-speed roadmap, the state-management robustness plan, and the
+  android stability omnibus (status under review).
 
-> Implementation specs (`IMPL-*`) that described already-shipped features have
-> been retired; their durable content lives in the reference docs above. Only
-> specs with open work remain under [`docs/specs/`](specs/).
+> Implementation specs (`IMPL-*`) and plans that described already-shipped
+> features were archived 2026-09 to
+> [`docs/archive/2026-09/`](archive/2026-09/) with per-file evidence headers;
+> their durable content lives in the reference docs above (start with the
+> [feature catalog](reference/feature-catalog.md)). There is no `docs/specs/`
+> directory anymore.

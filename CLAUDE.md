@@ -18,7 +18,8 @@
   posture: [`docs/requirements/`](docs/requirements/)
 - Architecture Decision Records: [`docs/decisions/`](docs/decisions/)
 - Forward-looking plans (work not yet built): [`docs/plans/`](docs/plans/)
-- Open implementation specs (only those with remaining work): [`docs/specs/`](docs/specs/)
+- Implemented/superseded specs & plans (historical): [`docs/archive/`](docs/archive/)
+  — all `IMPL-*` specs were archived 2026-09; there is no `docs/specs/` anymore
 - Per-component guidance: `backend/CLAUDE.md`, `android/CLAUDE.md`,
   `web/CLAUDE.md` override this file inside their respective directories.
 
@@ -90,5 +91,6 @@ This script:
 ## Tools
 - GCP project: `health-fitness-160`
 - Region: `us-central1`
-- `AGENTS.md` at the repo root is a **placeholder** for the Google Health API
-  Parity Tool context file — it has not been added yet, so don't rely on it.
+- `AGENTS.md` (formerly a never-filled placeholder for the Google Health API
+  Parity Tool context file) was archived 2026-09 to
+  `docs/archive/2026-09/AGENTS.md` — there is no `AGENTS.md` at the repo root.

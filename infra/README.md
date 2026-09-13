@@ -23,11 +23,11 @@ Idempotent — safe to re-run.
    keystore, the shared debug keystore, stores both in Secret Manager, and
    prints SHA-1 fingerprints. Then follow the three Console steps printed at
    the end (web + android phone + android wear OAuth clients). See
-   [`docs/specs/IMPL-02-google-auth.md`](../docs/specs/IMPL-02-google-auth.md)
-   for context.
-9. Download the Google Health API Parity context file from
-   <https://developers.google.com/health/get-started> and paste it into
-   `AGENTS.md` at the repo root.
+   [`docs/reference/patterns.md`](../docs/reference/patterns.md) (Auth) for
+   context.
+9. (Historical) A Google Health API Parity Tool context file was planned for
+   a root `AGENTS.md` but never added; the placeholder was archived to
+   `docs/archive/2026-09/AGENTS.md` in 2026-09.
 
 ## What it creates
 

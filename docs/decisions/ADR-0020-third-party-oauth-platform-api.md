@@ -1,7 +1,16 @@
 # ADR-0020: Third-party OAuth platform API
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-07-27
+
+> **Note (2026-09-13):** status flipped Proposed → Accepted by the audit
+> reconciliation pass — the platform shipped in full (authorization server +
+> `/v1` read API in `api.platform`/`api.v1`/`platform`, web consent page; prod
+> config per PR #156), though it has zero registered third-party consumers to
+> date. The companion implementation decision log that formerly sat at
+> `docs/decisions/ADR-0020-implementation-decision-log.md` was not an ADR and
+> now lives at
+> [`docs/archive/2026-09/plans/IMPL-OAUTH-01-decision-log.md`](../archive/2026-09/plans/IMPL-OAUTH-01-decision-log.md).
 
 ## Context
 

@@ -1,9 +1,9 @@
 # Feature catalog
 
 What is built, on which platform, and what is intentionally deferred or still a
-fixture. This is the durable replacement for the per-feature `IMPL-*` specs.
-For the forward-looking parity plan (Phases 7–9), see
-[`../plans/android-web-parity-roadmap.md`](../plans/android-web-parity-roadmap.md).
+fixture. This is the durable replacement for the per-feature `IMPL-*` specs
+(archived under [`../archive/2026-09/`](../archive/2026-09/), like the historical
+parity roadmap: [`../archive/2026-09/plans/android-web-parity-roadmap.md`](../archive/2026-09/plans/android-web-parity-roadmap.md)).
 
 Legend: ✅ shipped · ◐ partial · ⚠️ fixture/placeholder · ➖ not built (deferred).
 
@@ -48,8 +48,8 @@ when the vitals/feed went live. On Android the old `DashboardFlags` constants
 `showVitalsFixtures` and `showTodayCardFixtures` are now **dead** (defined but
 read nowhere); only `showRecentFeedFixtures` was ever a live gate and it is now
 `false`. The tracking spec
-[`../specs/IMPL-AND-01-dashboard-live-data.md`](../specs/IMPL-AND-01-dashboard-live-data.md)
-is retained only for the Readiness gap.
+([`../archive/2026-09/specs/IMPL-AND-01-dashboard-live-data.md`](../archive/2026-09/specs/IMPL-AND-01-dashboard-live-data.md),
+archived) is of historical interest only; the Readiness gap is tracked here.
 
 ## Known placeholders / cleanups
 

@@ -4,7 +4,7 @@ The repo's **first Cloud Function** — a Gen2, GCS-triggered function that
 generates webp thumbnails for exercise media. See
 [ADR-0017](../../docs/decisions/ADR-0017-gcs-thumbnail-cloud-function.md) and the
 Infra section of
-[IMPL-20](../../docs/specs/IMPL-20-exercise-admin-redesign.md).
+[IMPL-20 (archived)](../../docs/archive/2026-09/specs/IMPL-20-exercise-admin-redesign.md).
 
 ## What it does
 
