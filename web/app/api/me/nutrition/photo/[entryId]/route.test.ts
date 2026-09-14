@@ -29,9 +29,16 @@ describe("meal-photo proxy route", () => {
     const res = await GET(req, { params: Promise.resolve({ entryId: "e1" }) });
 
     expect(mockApiFetch).toHaveBeenCalledTimes(1);
-    const path = mockApiFetch.mock.calls[0][0] as string;
-    expect(path).toContain("/api/me/nutrition/photo/e1");
-    expect(path).toContain("date=2026-09-14"); // the forwarding, the whole point
+    // Assert on the call args without array indexing (repo tsconfig has
+    // noUncheckedIndexedAccess): the forwarded path must carry the entry + date.
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/me/nutrition/photo/e1"),
+      expect.anything(),
+    );
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      expect.stringContaining("date=2026-09-14"), // the forwarding, the whole point
+      expect.anything(),
+    );
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
       "https://storage.googleapis.com/bucket/signed?sig=abc",
