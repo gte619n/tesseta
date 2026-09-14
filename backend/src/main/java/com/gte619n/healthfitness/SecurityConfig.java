@@ -51,7 +51,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableMethodSecurity
 @EnableConfigurationProperties({
     AppAuthProperties.class, AppCorsProperties.class, AppSessionProperties.class,
-    AppPlatformProperties.class})
+    AppPlatformProperties.class,
+    com.gte619n.healthfitness.ratelimit.AppGeminiRateLimitProperties.class})
 public class SecurityConfig {
 
     // The resource server validates up to three distinct token families and
@@ -156,6 +157,7 @@ public class SecurityConfig {
         AppPlatformProperties platformProps,
         PlatformAuditLogger auditLogger,
         com.gte619n.healthfitness.core.platform.PlatformRateLimitStore rateLimitStore,
+        com.gte619n.healthfitness.ratelimit.AppGeminiRateLimitProperties geminiRateLimit,
         UserService userService,
         CurrentUserProvider currentUserProvider,
         UrlBasedCorsConfigurationSource corsSource
@@ -167,6 +169,13 @@ public class SecurityConfig {
         V1AuditFilter v1Audit = new V1AuditFilter(auditLogger);
         V1RateLimitFilter v1RateLimit = new V1RateLimitFilter(
             platformProps.getRateLimitRequests(), platformProps.getRateLimitWindow(), rateLimitStore);
+        // SEC-001: per-user limit on the first-party Gemini-backed endpoints,
+        // reusing the same store as the /v1 limiter. Off => no filter wired.
+        com.gte619n.healthfitness.ratelimit.AiRateLimitFilter aiRateLimit =
+            geminiRateLimit.isEnabled()
+                ? new com.gte619n.healthfitness.ratelimit.AiRateLimitFilter(
+                    geminiRateLimit.getRequests(), geminiRateLimit.getWindow(), rateLimitStore)
+                : null;
 
         http
             .csrf(csrf -> csrf.disable())
@@ -268,6 +277,14 @@ public class SecurityConfig {
             .addFilterAfter(v1RateLimit, V1AuditFilter.class)
             .httpBasic(b -> b.disable())
             .formLogin(f -> f.disable());
+
+        // SEC-001: first-party AI limiter runs after authentication is populated
+        // (so the principal/JWT sub is available for the per-user key), matching
+        // the platform limiter's placement.
+        if (aiRateLimit != null) {
+            http.addFilterAfter(aiRateLimit,
+                com.gte619n.healthfitness.auth.UserProvisioningFilter.class);
+        }
 
         if (authProps.isDevMode()) {
             http.addFilterBefore(new DevHeaderAuthFilter(),

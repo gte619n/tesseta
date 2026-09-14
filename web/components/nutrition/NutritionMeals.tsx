@@ -236,7 +236,7 @@ export function NutritionMeals({
             {activeEntry ? (
               <div className="flex items-center gap-3 rounded-[10px] border-[0.5px] border-accent bg-surface px-4 py-2.5 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
                 <FoodImage
-                  imageUrl={activeEntry.imageUrl}
+                  imageUrl={activeEntry.photoUrl ?? activeEntry.imageUrl}
                   imageStatus={activeEntry.imageStatus}
                   size={36}
                 />

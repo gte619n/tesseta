@@ -58,6 +58,7 @@ service; a user's use of the corresponding feature is the point of consent:
 | Google Cloud (Firestore, Cloud Run, KMS, GCS) | all stored data | hosting, storage, encryption |
 | Google Health API | activity/device data | ingestion from Fitbit hardware |
 | Google Gemini | text/images the user submits (lab PDFs, meal photos, chat) | extraction & AI features |
+| Firebase Crashlytics (Google) | crash stack traces + device/OS metadata from the Android/Wear apps (no PHI by design) | client crash reporting (audit OBS-002, added 2026-09-14) |
 
 A user-facing **privacy policy** is published at `website/public/privacy.html`
 (https://tesseta.com/privacy, last updated 2026-07-28). **However, the published
@@ -66,8 +67,14 @@ COMP-001, 2026-09-13):
 
 - §6/§7 promise record- and account-level **deletion** — no server-side account
   deletion or export exists (see §5 below).
-- §5 promises "you can only ever reach your own records" — meal photos are
-  currently served from a **public-read GCS bucket** (audit SEC-012).
+- §5 promises "you can only ever reach your own records" — meal photos were
+  served from a **public-read GCS bucket** (audit SEC-012). **Mitigation in
+  progress (2026-09-14, wave 2):** clients now load meal photos via an
+  authenticated backend endpoint (`GET /api/me/nutrition/photo/{entryId}` → a
+  short-lived signed URL); the final step (flipping the `-nutrition-photos`
+  bucket to private) is deferred until those clients ship — see
+  [IMPL-SEC-01](../plans/IMPL-SEC-01-private-media-buckets.md). Until the flip,
+  old public URLs remain fetchable.
 - §3 promises Gemini content "is not used to train third-party models" — true
   only on the paid API tier, which is unverified.
 
@@ -91,6 +98,11 @@ feature use, and neither client links the policy in-product (audit COMP-002).
 - No PHI or tokens in logs. OkHttp logging is at `BASIC` (no bodies/headers);
   auth code logs exceptions, never token values; the webhook logs the health user
   id but not payloads. This is a standing requirement for any new logging.
+- Backend logs are now **structured JSON** for Cloud Logging (audit OBS-003,
+  2026-09-14) with request/trace correlation; the no-PHI/no-token rule applies
+  unchanged. Client crash reporting (Crashlytics, Android/Wear) and the web
+  client-error log route must likewise carry **no PHI** — stack traces and
+  metadata only, never form values or health data.
 
 ## 7. Webhook integrity
 

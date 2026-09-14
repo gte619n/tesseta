@@ -331,7 +331,7 @@ function EntryRow({
         aria-label={`Edit ${entry.foodName}`}
       >
         <FoodImage
-          imageUrl={entry.imageUrl}
+          imageUrl={entry.photoUrl ?? entry.imageUrl}
           imageStatus={entry.imageStatus}
           size={40}
         />

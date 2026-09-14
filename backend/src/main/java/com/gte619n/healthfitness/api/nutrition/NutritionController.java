@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.api.nutrition;
 
+import com.gte619n.healthfitness.api.support.RequestTimeZone;
 import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.api.sync.WriteResult;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -65,6 +67,10 @@ public class NutritionController {
     private final MealAdjustmentService mealAdjustment;
     private final ServingHintService servingHints;
     private final LeftoverService leftovers;
+    // SEC-012: optional — absent in test contexts where the GCS beans are gated
+    // off (app.nutrition.capture.enabled=false). The photo endpoint 404s then.
+    private final org.springframework.beans.factory.ObjectProvider<
+        com.gte619n.healthfitness.integrations.nutrition.SignedUrlService> signedUrls;
 
     public NutritionController(
         CurrentUserProvider currentUser,
@@ -78,7 +84,9 @@ public class NutritionController {
         MealDescriptionService mealDescription,
         MealAdjustmentService mealAdjustment,
         ServingHintService servingHints,
-        LeftoverService leftovers
+        LeftoverService leftovers,
+        org.springframework.beans.factory.ObjectProvider<
+            com.gte619n.healthfitness.integrations.nutrition.SignedUrlService> signedUrls
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
@@ -92,6 +100,7 @@ public class NutritionController {
         this.mealAdjustment = mealAdjustment;
         this.servingHints = servingHints;
         this.leftovers = leftovers;
+        this.signedUrls = signedUrls;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -117,10 +126,14 @@ public class NutritionController {
     @GetMapping
     public List<LogResponse> list(
         @RequestParam(required = false) LocalDate from,
-        @RequestParam(required = false) LocalDate to
+        @RequestParam(required = false) LocalDate to,
+        @RequestHeader(value = RequestTimeZone.HEADER, required = false) String timezone
     ) {
         String userId = currentUser.get().userId();
-        LocalDate end = to != null ? to : LocalDate.now();
+        // "today" is the caller's local date (XPLAT-001): an explicit ?to= wins,
+        // else derive it from the X-Timezone header rather than the server's UTC
+        // clock, so an evening-in-a-western-zone request doesn't roll to tomorrow.
+        LocalDate end = to != null ? to : LocalDate.now(RequestTimeZone.resolve(timezone));
         LocalDate start = from != null ? from : end.minusDays(6);
         if (start.isAfter(end)) {
             throw new IllegalArgumentException("from must not be after to");
@@ -131,11 +144,51 @@ public class NutritionController {
     }
 
     @GetMapping("/today")
-    public ResponseEntity<LogResponse> today() {
+    public ResponseEntity<LogResponse> today(
+        @RequestParam(required = false) LocalDate date,
+        @RequestHeader(value = RequestTimeZone.HEADER, required = false) String timezone
+    ) {
         String userId = currentUser.get().userId();
-        return nutrition.findByDate(userId, LocalDate.now())
+        // XPLAT-001: canonical "today" = explicit ?date= wins, else the caller's
+        // local date from X-Timezone (UTC only when the header is missing).
+        LocalDate today = date != null ? date : LocalDate.now(RequestTimeZone.resolve(timezone));
+        return nutrition.findByDate(userId, today)
             .map(log -> ResponseEntity.ok(LogResponse.from(log)))
             .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    // ----- Meal photo (private, signed-URL redirect) --------------------
+
+    /**
+     * SEC-012 — serve a logged meal's capture photo without exposing the bucket:
+     * resolve the entry for the CURRENT user (ADR-0021 per-user scope; 404 if it
+     * isn't theirs, doesn't exist, or has no stored photo), then 302-redirect to a
+     * short-lived (15-min) V4 read-signed URL for the object. The raw
+     * {@code photoRef} stays server-internal; clients only ever see this path
+     * ({@code EntryResponse.photoUrl}). {@code ?date=} scopes the lookup to the
+     * entry's day so we never issue a cross-collection scan.
+     */
+    @GetMapping("/photo/{entryId}")
+    public ResponseEntity<Void> photo(
+        @PathVariable String entryId,
+        @RequestParam LocalDate date
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry = nutrition.findEntry(userId, date, entryId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND, "Photo not found"));
+        if (entry.photoRef() == null || entry.photoRef().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Photo not found");
+        }
+        com.gte619n.healthfitness.integrations.nutrition.SignedUrlService signer =
+            signedUrls.getIfAvailable();
+        String url = signer != null ? signer.signedReadUrl(entry.photoRef()) : null;
+        if (url == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Photo not found");
+        }
+        return ResponseEntity.status(HttpStatus.FOUND)
+            .location(java.net.URI.create(url))
+            .build();
     }
 
     // ----- Macro target -------------------------------------------------
@@ -852,13 +905,18 @@ public class NutritionController {
     public List<EntryResponse> recentMeals(
         @RequestParam(required = false, defaultValue = "14") int days,
         @RequestParam(required = false, defaultValue = "20") int limit,
-        @RequestParam(required = false) MealType meal
+        @RequestParam(required = false) MealType meal,
+        @RequestParam(required = false) LocalDate date,
+        @RequestHeader(value = RequestTimeZone.HEADER, required = false) String timezone
     ) {
         int boundedDays = Math.max(1, Math.min(days, 60));
         int boundedLimit = Math.max(1, Math.min(limit, 50));
         String userId = currentUser.get().userId();
+        // XPLAT-001: the recency window anchors on the caller's local "today"
+        // (explicit ?date= wins, else X-Timezone), not the server's UTC date.
+        LocalDate today = date != null ? date : LocalDate.now(RequestTimeZone.resolve(timezone));
         List<FoodEntry> all = new ArrayList<>(
-            nutrition.listRecentEntries(userId, LocalDate.now(), boundedDays));
+            nutrition.listRecentEntries(userId, today, boundedDays));
         all.sort(java.util.Comparator.comparing(
             FoodEntry::createdAt,
             java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));

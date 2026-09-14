@@ -245,7 +245,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Unbounded billing exposure on a public endpoint; single actor can generate a large bill quickly",
       "prompt": "Add per-user Firestore-backed fixed-window rate limiting (reuse PlatformRateLimitStore pattern) to /api/nutrition/capture/**, /api/nutrition/describe, /api/foods/*/image/regenerate and adjust/leftover endpoints, keyed by JWT sub, config via app.gemini.rate-limit-*; restrict image/regenerate to creator-or-admin; 429 + Retry-After; fail-open on Firestore errors with logging; test 31st call in window returns 429.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: per-user AI rate limiter (30/user/hr, 429), reuses PlatformRateLimitStore."
     },
     {
       "id": "SEC-002",
@@ -337,11 +341,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Backup/transfer remains a durable token-exfil vector",
       "prompt": "Add <exclude domain=\"file\" path=\"datastore/hf-auth.preferences_pb\"/> to cloud-backup and device-transfer in both app backup XMLs (file domain, NOT sharedpref); create equivalent rules for wear (hf-wear-auth) and wire into wear manifest; verify via bmgr backup/restore that restored app is signed out.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Android/Wear auth-token DataStores (hf-auth, hf-wear-auth) excluded from cloud backup + device transfer; wear backup rules added."
+      "implementation_note": "Deployed; auth-token DataStores excluded from backup."
     },
     {
       "id": "SEC-006",
@@ -415,11 +420,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Latent single-misconfig auth bypass across every future deploy-config edit",
       "prompt": "Add independent second guard: dev-login bean/handler additionally requires non-prod marker (project-id != health-fitness-160 or uat profile); refuse startup or hard-404 + ERROR log if enabled against prod audiences; keep uat.sh green; unit test flag+prod-marker still 404s.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "dev-login fail-closed in prod (requires flag AND non-prod project id; 404 under prod). New AuthControllerProdGuardTest."
+      "implementation_note": "Deployed; dev-login fail-closed in prod."
     },
     {
       "id": "SEC-009",
@@ -442,11 +448,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Negligible direct risk; pattern may be copied to future secret gates",
       "prompt": "Replace with MessageDigest.isEqual on UTF-8 bytes, keep blank-secret fail-closed and trim; extract shared SecretCompare helper used by all three secret-gated controllers; existing tests pass.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Internal-jobs shared-secret compare moved to constant-time SecretCompare (MessageDigest.isEqual); webhook gates unified onto it."
+      "implementation_note": "Deployed; constant-time secret compare."
     },
     {
       "id": "SEC-010",
@@ -492,11 +499,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Gadget waits for a feature change to arm it",
       "prompt": "Add OutboundFetchGuard (https-only, host allowlist, private/link-local/metadata IP rejection incl. 169.254.169.254, max 3 revalidated redirects) and apply in DrugImageGenerator.fetchReferenceImage and GroundingImageResolver; unit tests for metadata-IP and http rejection, allowlisted pass.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "SSRF guard (OutboundFetchGuard): https-only + private/metadata-IP rejection on the drug-image (allowlist) and grounding (scheme+IP) fetch sinks. TOCTOU caveat documented."
+      "implementation_note": "Deployed; SSRF guard on image fetch sinks."
     },
     {
       "id": "SEC-012",
@@ -521,11 +529,11 @@
       "regulatory_friction": "documentation",
       "null_option_cost": "Every meal photo ever taken remains world-fetchable; a published privacy-policy promise stays false; exposure compounds with each photo and each user.",
       "prompt": "(1) Inventory consumers of the public meal-photo URLs (backend image-URL builders incl. FoodImageService/MealPhotoStorage, web <img>/next-image usages, Android Coil loads) \u2014 check who consumes the public URLs before flipping anything. (2) Flip gs://health-fitness-160-nutrition-photos to uniform private access and remove the allUsers:objectViewer grant (fix infra/scripts/bootstrap-gcp.sh:77-79 so re-runs do not re-open it). (3) Serve photos via V4 signed URLs minted by the backend, or an authenticated backend proxy endpoint. (4) Verify meal photos still render on all three surfaces (backend-driven flows, web, android) before and after the flip.",
-      "status": "descoped",
+      "status": "partial",
       "implemented_by": [
-        "375bb8ca"
+        "feature/audit-wave-2"
       ],
-      "implementation_note": "De-scoped to IMPL-SEC-01 spec (naive bucket flip breaks image loading). Operator chose backlog, not blocking."
+      "implementation_note": "feature/audit-wave-2 Phase 1+2: backend signed-URL serving + photoUrl + web/android switched. Phase 3 (flip -nutrition-photos bucket private) DEFERRED to post-deploy (DEC-W2-1) \u2014 exposure not fully closed until then."
     },
     {
       "id": "SUP-001",
@@ -590,11 +598,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "near-term blocked deploy + known-vuln exposure",
       "prompt": "In `backend/build.gradle.kts`, change `extra[\\\"netty.version\\\"]` from `4.1.137.Final` to `4.1.138.Final`, update the comment block to cite the 2026-09-09 release (23 CVE batch), build and run tests.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "c4d8e796"
+        "c4d8e796",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "netty 4.1.137->4.1.138.Final. Resolves on merge+deploy (also clears the pending Trivy gate)."
+      "implementation_note": "Deployed; netty 4.1.138.Final."
     },
     {
       "id": "SUP-003",
@@ -678,12 +687,13 @@
       "regulatory_friction": "none",
       "null_option_cost": "low-likelihood compromise; forced migration at GCF nodejs20 retirement",
       "prompt": "In functions/exercise-thumbnails: bump engines.node to 22, sharp to ^0.35.4, @google-cloud/storage and functions-framework to latest majors; regenerate package-lock; `npm audit` to zero high; `node --check index.js`. Add a dependabot.yml npm entry for `/functions/exercise-thumbnails`. Note redeploy command for the operator (gcloud functions deploy, runtime nodejs22).",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "absorbed_into": "SOTA-003",
       "implemented_by": [
-        "feature/deadline-migrations"
+        "feature/deadline-migrations",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Bonus while regenerating the function lockfile: sharp 0.33->0.35, functions-framework 3->5, storage 7->8 (APIs verified stable). npm audit HIGH/CRITICAL cleared (12 mixed -> 4 moderate transitive uuid, unreachable/breaking-only-fix \u2014 left)."
+      "implementation_note": "Deployed; function deps refreshed, HIGH/CRITICAL CVEs cleared."
     },
     {
       "id": "SUP-006",
@@ -811,12 +821,13 @@
       "regulatory_friction": "none",
       "null_option_cost": "per-sync latency and Firestore reads grow linearly with days-of-use x users x sync frequency; eventual client sync timeouts",
       "prompt": "In FirestoreSyncChangeReader, replace per-parent `listDocuments()` enumeration for `nutritionDays/entries` (and `goalChatThreads/messages`) with a single per-user collectionGroup query filtered by a stored `userId` field on the leaf docs (add the field + composite index `(userId ASC, updatedAt ASC)` COLLECTION_GROUP in infra/firestore/firestore.indexes.json), or bound the parent enumeration by cursor (`nutritionDays` doc IDs are dates: only enumerate day-docs with date \u2265 cursor-derived floor, since an entry's `updatedAt` can only move forward). Also push the recent-window date bound into the Firestore query for heavy collections instead of the in-app `windowAllows` filter. FIRST MEASUREMENT: seed a test user with 730 nutritionDays docs in a dev database, time `SyncService.page(userId, cursor, 500)` and count Firestore RPCs (wrap Firestore with a counting interceptor or enable gRPC client logs).",
-      "status": "implemented-pending-verify",
+      "status": "resolved",
       "implemented_by": [
         "c4d8e796",
-        "06d2fc83"
+        "06d2fc83",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Cursor-bounded enumeration + full-scan valve (SyncEnumerationBounds); slack=7d per operator. Local unit tests green; emulator 730-day RPC-drop test still pending."
+      "implementation_note": "Merged #251, deployed (backend:2b5cbbd). Sync enumeration bounded."
     },
     {
       "id": "PERF-002",
@@ -842,13 +853,14 @@
       "regulatory_friction": "none",
       "null_option_cost": "~20s first dashboard daily per user; Android sync timeout retries",
       "prompt": "(a) Add `--min-instances=1` to the backend deploy in backend/cloudbuild.yaml (note: combined with the existing `--no-cpu-throttling`, an idle min-instance bills CPU continuously \u2014 check the pricing calculator; consider dropping `--no-cpu-throttling` now that image generation runs on Cloud Tasks, or scope always-on CPU carefully). (b) Enable Spring Boot CDS: extract the layered jar and do a training run in the Dockerfile (`java -XX:ArchiveClassesAtExit`), or adopt `spring.aot`/CRaC \u2014 target startup <5s. (c) Optionally `--min-instances=1` on web too (cheap, default 512Mi). FIRST MEASUREMENT: already measured \u2014 startup p95 15.7s; re-measure `container/startup_latencies` after CDS to confirm the win.",
-      "status": "implemented-pending-apply",
+      "status": "resolved",
       "skeptic": "demoted from critical: measurements real (15.7s startup p95, no min-instances) but harm is a once-daily ~20s latency hit at n\u22481; in direct tension with COST-001 \u2014 the reconciled end-state (request-based billing + min-instances=1 idle-throttled + CDS) must be decided jointly.",
       "implemented_by": [
         "c4d8e796",
-        "06d2fc83"
+        "06d2fc83",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Dockerfile CDS (non-fatal training) + cloudbuild --min-instances=1. Takes effect on next backend deploy; confirm startup p95<5s."
+      "implementation_note": "Merged+deployed; Cloud Run min-instances=1 confirmed live + CDS in image."
     },
     {
       "id": "PERF-003",
@@ -1078,12 +1090,13 @@
       "regulatory_friction": "none",
       "null_option_cost": "total-loss exposure vs ~$0 savings",
       "prompt": "In tesseta repo `infra/terraform/`, add: (1) `delete_protection_state = DELETE_PROTECTION_ENABLED` and `point_in_time_recovery_enablement = POINT_IN_TIME_RECOVERY_ENABLED` for database `production` in project `health-fitness-160` (import the existing `google_firestore_database` resource rather than recreating), (2) a `google_firestore_backup_schedule` (daily, retention 8w) on database `production`. Terraform may not be applied in this project (see `infra/terraform/README.md` \u2014 bootstrap is shell-scripted); mirror the equivalent one-time `gcloud firestore \u2026` commands in `infra/terraform/README.md` as `firestore_ttl.tf` already does. Then write `docs/runbooks/firestore-restore.md`: restore goes to a NEW database \u2192 repoint `app.persistence` database name or re-import; note backups exclude TTL policies and rules.",
-      "status": "implemented-pending-apply",
+      "status": "resolved",
       "implemented_by": [
         "248af4fe",
-        "06d2fc83"
+        "06d2fc83",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Terraform: backup schedules, PITR, delete-protection, GCS versioning + monthly cold exports. NOT applied (ADC down) \u2014 run infra/terraform/APPLY.md. Prod still unprotected until applied."
+      "implementation_note": "terraform applied to prod: backups+PITR+delete-protection+GCS versioning verified live."
     },
     {
       "id": "DATA-002",
@@ -1109,15 +1122,16 @@
       "regulatory_friction": "documentation",
       "null_option_cost": "slow cost growth + stale doc",
       "prompt": "Fix `infra/terraform/firestore_ttl.tf` to target database `production` (or parameterize database and declare both), and run/document the equivalent `gcloud firestore fields ttls update expiresAt --collection-group=idempotencyKeys --database=production` per the README convention. Add TTL or a scheduled purge for `refreshTokens`/`platformRefreshTokens`/`oauthCodes` expired docs (e.g. TTL on `expiresAt`), and write the retention schedule table privacy-and-compliance.md \u00a75 says is missing.",
-      "status": "implemented-pending-apply",
+      "status": "resolved",
       "skeptic": "demoted from high: idempotency correctness preserved by the in-code expired-as-absent re-check (FirestoreIdempotencyStore.java:47-49); revoked refresh tokens are stored as SHA-256 hashes and inert; cost is cents. \"IaC record falsified\" is a hygiene/compliance-doc point. 0.5-day fix.",
       "absorbs": [
         "COMP-006"
       ],
       "implemented_by": [
-        "248af4fe"
+        "248af4fe",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "TTL policy retargeted (default)->production. Effective on terraform apply."
+      "implementation_note": "Applied; TTL now ACTIVE on production db."
     },
     {
       "id": "DATA-003",
@@ -1365,10 +1379,14 @@
       "regulatory_friction": "none",
       "null_option_cost": "permanently misdated evening web entries; irreconcilable cross-device totals",
       "prompt": "In tesseta: web/app/me/nutrition/page.tsx computes today() via new Date().toISOString() (UTC) and backend NutritionController.java uses LocalDate.now() at lines 123/136/861 without RequestTimeZone, while android uses device-local LocalDate.now() and TodaysDosesController.java:50-56 shows the correct ?date=/X-Timezone pattern. Make the nutrition day key caller-local everywhere: web derives today() from the tz cookie (see web/lib/api.ts:73-87), backend NutritionController resolves LocalDate.now(RequestTimeZone.resolve(header)). Add a test for an 8pm America/New_York log.",
-      "status": "open",
+      "status": "implemented-on-branch",
       "absorbs": [
         "ARCH-004"
-      ]
+      ],
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: canonical \"today\" (backend ?date/X-Timezone; web local-date; android already correct). Resolves on merge+deploy."
     },
     {
       "id": "XPLAT-002",
@@ -1564,11 +1582,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "near zero",
       "prompt": "\"In tesseta: change web/lib/units.ts:27 LB_PER_KG from 2.20462 to 2.2046226218 to match android UnitFormat.kt:11 and backend LoadingProfileResolver.java:28, and add a 'keep in sync' comment naming all three sites. Check chart snapshots for 0.001% deltas.\" - **H1:** Backend `TodaysDosesService` lacks android's MONTHLY day-of-month clamp (`ReminderPlanner.kt:34-36`) or WEEKLY empty-days semantics \u2014 I only read the CYCLE/PRN arms of the backend switch. Verify: read `TodaysDosesService.java:90-128` in full and diff each `FrequencyType` arm against `ReminderPlanner.isDueOn`. - **H2:** Prod backend JVM default zone is UTC (asserted by `TimeZoneInterceptor.kt:9` and `TimezoneCookie.tsx:7-8` comments). Verify: Cloud Run service env/`-Duser.timezone` in `infra/` or the deploy `cloudbuild.yaml`. - **H3:** Web GET of a day whose entries include an `adjustment` object renders fine (extra JSON key ignored) \u2014 inferred from JS semantics, not tested. Verify: fixture render test of `NutritionMeals` with an EntryResponse-shaped payload. - **H4:** Composite entries with calorie-only ingredients actually occur in prod data (drives XPLAT-004 severity). Verify (privacy-safe): count, in the prod `production` Firestore, composite entries having any ingredient with all-null macro grams \u2014 aggregate count only, no content. - **H5:** The outbox replay for a composite portion PATCH sends only `quantity` (no macros), letting the server recompute authoritatively \u2014 the local recompute is display-only until pull. Verify: `OutboxEndpointRegistry.kt` + `OutboxReducer.kt` payload shape for `nutrition entries PATCH`. - XPLAT-001 compounds D-sync/backend findings: misdated web writes are *also* late to the phone while FCM is dead \u2014 two independent staleness sources on one ledger. - XPLAT-002's null-option depends on team discipline that a refactoring branch (`tesseta-refactoring`) is most likely to break; flag to D-release/process. - Platform idioms: no violations worth a finding \u2014 web fights nothing (server components + actions used idiomatically; `force-dynamic` is a deliberate no-offline stance), android is properly offline-first, wear's `:core-domain`-only dependency (`wear/build.gradle.kts:56`) is the right boundary.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Web KG_TO_LB unified to precise 2.2046226218 via lib/units.ts (4 copies deduped). Backend RecentActivityService drift noted for follow-up (DEC-501)."
+      "implementation_note": "Deployed; web KG_TO_LB unified."
     },
     {
       "id": "UX-001",
@@ -2157,15 +2176,16 @@
       "regulatory_friction": "none",
       "null_option_cost": "Every future outage discovered manually, days-to-weeks late; medication-reminder backend can die silently.",
       "prompt": "In infra/terraform, add monitoring.tf for project health-fitness-160: (1) a google_monitoring_notification_channel (email, operator address from a variable); (2) uptime checks + associated alert policies for https://api.tesseta.com/actuator/health and https://app.tesseta.com; (3) log-based metrics + >0 alert policies for: Cloud Build status=FAILURE, textPayload:'Nutrition job rejected', textPayload:'push dropped: no FCM tokens', Cloud Run Job execution failures (resource.type=cloud_run_job severity>=ERROR); (4) enable clouderrorreporting.googleapis.com. Keep everything in the existing variables.tf style; do not manage Cloud Run services.",
-      "status": "partial-pending-apply",
+      "status": "resolved",
       "absorbs": [
         "DX-001",
         "OBS-004"
       ],
       "implemented_by": [
-        "248af4fe"
+        "248af4fe",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Terraform alerts (5xx, uptime, deploy-failure, job-error, budget) + email channel. NOT applied. Severity-based alerting still benefits from OBS-003 (structured logs), which is NOT done."
+      "implementation_note": "Applied; email channel + 4 alert policies + uptime check live."
     },
     {
       "id": "OBS-002",
@@ -2188,8 +2208,12 @@
       "regulatory_friction": "documentation",
       "null_option_cost": "Client crash loops invisible; Wear has no user-report path at all; FCM-incident-class client symptoms never reach operator.",
       "prompt": "Add Firebase Crashlytics to the tesseta Android app and wear modules (google-services + FirebaseApp already wired via android/app/google-services.json; BoM at libs.versions.toml `firebaseBom`). Add the crashlytics gradle plugin and dependency via the version catalog, record non-fatal exceptions in TokenRegistration.kt catch blocks and the sync engine. For web (Next.js 15, web/), add @sentry/nextjs (or GlitchTip-compatible DSN via env), report from app/error.tsx, app/global-error.tsx and instrumentation.ts onRequestError. No PHI in event payloads: scrub request bodies; send only digest/route/userId-hash.",
-      "status": "open",
-      "skeptic": "demoted from critical: evidence solid (no Crashlytics/Sentry anywhere) but the \"no signals\" critical slot is OBS-001 (the root fix); actual fleet is a handful of internal testers, not Play. Note: adding Crashlytics/Sentry adds a sub-processor and requires privacy-policy \u00a74 update before shipping."
+      "status": "implemented-on-branch",
+      "skeptic": "demoted from critical: evidence solid (no Crashlytics/Sentry anywhere) but the \"no signals\" critical slot is OBS-001 (the root fix); actual fleet is a handful of internal testers, not Play. Note: adding Crashlytics/Sentry adds a sub-processor and requires privacy-policy \u00a74 update before shipping.",
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: Crashlytics (android :app) + web error-boundary\u2192log route. Wear crash coverage deferred (needs wear Firebase app)."
     },
     {
       "id": "OBS-003",
@@ -2214,7 +2238,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Severity-based alerting impossible; incident forensics remain text-grep; blocks OBS-001 quality.",
       "prompt": "Backend is Spring Boot 3.5 on Cloud Run logging plain text via the default console appender (backend/src/main/resources/logback-spring.xml). Switch console output to structured JSON that Cloud Logging parses natively (Spring Boot's built-in structured logging or logstash-logback-encoder emitting `severity`, `message`, `logging.googleapis.com/trace`). Add a servlet filter that parses the X-Cloud-Trace-Context header into the trace MDC key formatted as projects/health-fitness-160/traces/{id}. Keep local dev human-readable (profile-gate the JSON format). Verify multi-line stack traces arrive as single LogEntries.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: structured JSON backend logs + request/trace MDC."
     },
     {
       "id": "OBS-004",
@@ -2237,8 +2265,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Repeat of weeks-silent deploy failures; service/job image drift with no breadcrumb.",
       "prompt": "In backend/cloudbuild.yaml the four `gcloud run jobs update ... || true` steps swallow all failures to tolerate first-boot (job not yet created). Replace each with a guarded form: `if gcloud run jobs describe NAME --region=us-central1 >/dev/null 2>&1; then gcloud run jobs update NAME --image=... ; else echo 'job NAME not bootstrapped, skipping'; fi` so a real update failure fails the build. Separately (terraform, see OBS-001) add an alert on Cloud Build failures for triggers deploy-backend-on-main / deploy-web-on-main / android.",
-      "status": "open",
-      "absorbed_into": "OBS-001"
+      "status": "resolved",
+      "absorbed_into": "OBS-001",
+      "implementation_note": "Resolved: deploy-failure alert live (OBS-001) + || true masks replaced (CICD-005).",
+      "implemented_by": [
+        "deployed/applied 2026-09-14"
+      ]
     },
     {
       "id": "OBS-005",
@@ -2261,8 +2293,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Proven silent-data-loss class recurs with weeks-long discovery latency.",
       "prompt": "In android/core-data .../sync/SyncEngine.kt, ApplyOutcome.SKIPPED (unknown collection from CollectionRegistry.tableFor == null) is silently dropped at line ~132 and uncounted in PullResult. Add a skipped counter to PullResult, log each distinct unknown collection name once per pull at WARN, and (if Crashlytics is present) record a non-fatal with the collection name and sync schemaVersion. Update SyncEnginePullTest accordingly (note: 'dirty local edit that loses LWW' test is known-flaky under the full suite; don't chase it).",
-      "status": "open",
-      "absorbed_into": "ARCH-002"
+      "status": "implemented-on-branch",
+      "absorbed_into": "ARCH-002",
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: sync SKIPPED now logged+counted (backend + android SyncEngine)."
     },
     {
       "id": "OBS-006",
@@ -2285,7 +2321,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Current dead-push incident class stays invisible; next cert/config breakage repeats it.",
       "prompt": "Backend: in core/push/SyncChangePublisher.fanOut, the tokens.findByUser(...).isEmpty() early-return is silent; log it at WARN with userId (matching UserNotificationPusher's pattern) but rate-limited (once per user per hour) since sync events are high-volume. In integrations/push/FirebaseMessagingFcmSender.sendSyncData, promote the failure-count log from debug-gated to WARN when failureCount == batch.size() (total failure). Add a nightly registry health line: count of users with \u22651 FCM token vs users with recent sync activity, emitted from the gh-health-check Cloud Run Job path, as a single structured log line for a log-based alert.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: FCM empty-registry + batch-failure logging/counters."
     },
     {
       "id": "OBS-007",
@@ -2426,8 +2466,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Silent cross-tenant-leak risk on every backend change; indefensible in a privacy incident",
       "prompt": "In backend/src/test, build a cross-user isolation suite: for each MockMvc controller test package (blood, nutrition, medication, workouts, bodycomposition, goals), add tests that create a resource as JWT subject A and then GET/PATCH/DELETE it as subject B, asserting 404/403/empty-list. Reuse TestPersistenceConfig in-memory repos (they key by userId). Model on SecurityConfigTest.java jwt() post-processor usage. Also clone persistence/goals/StepRepositoryScopingTest.java for nutrition entries, adherence, medications, blood readings in the firestore-emulator tier.",
-      "status": "open",
-      "skeptic": "demoted from critical: the userId-scoping convention verifiably holds everywhere today (SEC sweep) \u2014 this is a missing regression guard against a future refactor, not a live defect. Highest-priority high."
+      "status": "implemented-on-branch",
+      "skeptic": "demoted from critical: the userId-scoping convention verifiably holds everywhere today (SEC sweep) \u2014 this is a missing regression guard against a future refactor, not a live defect. Highest-priority high.",
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: CrossUserIsolationTest (two subjects; foreign data denied)."
     },
     {
       "id": "TEST-002",
@@ -2450,9 +2494,13 @@
       "regulatory_friction": "none",
       "null_option_cost": "Every domain's 'tests will catch it' assumption false at the ship gate; repeat of Jul-2026 silent-red-main",
       "prompt": "Wire deploy gating: enable GitHub branch protection on main requiring android-ci/backend-ci/web-ci checks, and confirm the Cloud Build deploy-*-on-main triggers cannot fire on a commit whose checks failed (or convert deploys to GitHub Actions jobs with needs:). Separately add a scheduled workflow running :core-data:connectedDebugAndroidTest on ubuntu-latest with reactivecircus/android-emulator-runner, uploading the connected-test report.",
-      "status": "open",
+      "status": "resolved",
       "skeptic": "demoted from critical: largely duplicative of CICD-001 (same root cause, same live proof, same 0.5-day fix); the distinct halves are carried in TEST-003/TEST-004/TEST-007. CICD-001 is the fix owner.",
-      "absorbed_into": "CICD-001"
+      "absorbed_into": "CICD-001",
+      "implementation_note": "Substantially resolved: ruleset requires green CI to merge, and merge=deploy. (Instrumented/UAT tiers still not in CI \u2014 TEST-003/004 remain.)",
+      "implemented_by": [
+        "deployed/applied 2026-09-14"
+      ]
     },
     {
       "id": "TEST-003",
@@ -2642,16 +2690,17 @@
       "regulatory_friction": "none",
       "null_option_cost": "broken commits keep deploying; tested-status and shipped-status unlinked in a regulated app",
       "prompt": "In gte619n/tesseta, enable a GitHub ruleset on main requiring status checks android-ci, backend-ci, web-ci. Modify .github/workflows/{android,backend,web}-ci.yml to remove `paths:` triggers and instead add a first `changes` job using dorny/paths-filter with the same path lists; make the heavy jobs `needs: changes` and `if:` the filter output, so each workflow always reports success quickly when its component is untouched. Do not add review requirements.",
-      "status": "implemented-pending-apply",
+      "status": "resolved",
       "absorbs": [
         "CICD-012",
         "DX-002",
         "TEST-002"
       ],
       "implemented_by": [
-        "50f0a752"
+        "50f0a752",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Workflow early-exit refactor committed; branch-ruleset.json + apply script ready. Ruleset applied by operator AFTER this merges to main."
+      "implementation_note": "Ruleset main-protection ACTIVE (requires green CI, admin break-glass)."
     },
     {
       "id": "CICD-002",
@@ -2697,12 +2746,13 @@
       "regulatory_friction": "none",
       "null_option_cost": "one flaky fetch makes all future builds uninstallable updates; recovery = fleet uninstall (local data loss)",
       "prompt": "In android/cloudbuild.yaml compute-version, replace the dual versionCode scheme (commit count with minutes-since-1700000000 fallback) with a single monotonic scheme: read a high-water-mark integer from gs://health-fitness-160-android-releases/version-code, set VERSION_CODE=max(hwm+1, commit_count), write it back in distribute-firebase next to last-release-sha. Fail the build if neither git history nor the marker is readable.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "skeptic": "demoted from high: landmine requires a transient unshallow failure to arm (unobserved to date), and post-arming blast radius is the internal-tester fleet with bounded recovery (uninstall/reinstall; data re-derivable from server sync).",
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "android/cloudbuild versionCode: removed the minutes-since-anchor fallback + silent shallow under-count; fail loud if still shallow. Single monotonic scheme."
+      "implementation_note": "Merged; versionCode fail-loud (no incompatible fallback)."
     },
     {
       "id": "CICD-004",
@@ -2749,14 +2799,15 @@
       "regulatory_friction": "none",
       "null_option_cost": "jobs silently pinned to stale images until an incident",
       "prompt": "In backend/cloudbuild.yaml, rewrite the four update-*-job steps to `gcloud run jobs describe` first and only swallow the not-found case; a failed update on an existing job must fail the build.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "absorbs": [
         "OBS-004"
       ],
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "backend/cloudbuild: replaced four `jobs update ... || true` with describe-guards \u2014 missing job skipped+logged, real update failure now fails the build."
+      "implementation_note": "Merged; job-update describe-guards (no || true masking)."
     },
     {
       "id": "CICD-006",
@@ -2988,13 +3039,14 @@
       "regulatory_friction": "none",
       "null_option_cost": "Sudden total image-gen outage on Google's schedule; untenable now",
       "prompt": "Swap the four image-model defaults to gemini-3.1-flash-image, check prod env overrides, update CLAUDE.md, spot-check output quality.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "skeptic": "demoted from critical: model demonstrably still serves \u2014 passed \"earliest possible shutdown\" is a risk window, not an outage; blast radius is cosmetic image generation with graceful-if-silent degradation. Do the 15-minute config swap this week; urgency \u2260 criticality.",
       "implemented_by": [
         "c4d8e796",
-        "06d2fc83"
+        "06d2fc83",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Image model preview->GA across yml, 3 Java @Value defaults, and cloudbuild exercise-media (gemini-3-pro-image). Resolves on merge+deploy."
+      "implementation_note": "Deployed; GA image model ids live."
     },
     {
       "id": "SOTA-003",
@@ -3023,14 +3075,15 @@
       "regulatory_friction": "none",
       "null_option_cost": "Forced outage 2026-10-30",
       "prompt": "Bump engines to Node 24, verify sharp prebuilds, redeploy, confirm a thumbnail generates.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "absorbs": [
         "SUP-005"
       ],
       "implemented_by": [
-        "feature/deadline-migrations"
+        "feature/deadline-migrations",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "exercise-thumbnails function Node 20 -> 22 (deploy runtime nodejs22 + engines). Beats the 2026-10-30 GCF decommission. Deploy-time thumbnail smoke is the operator verification."
+      "implementation_note": "Function redeployed on nodejs22 (verified live 2026-09-14)."
     },
     {
       "id": "SOTA-004",
@@ -3064,11 +3117,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Security-patch cutoff 2026-10-21",
       "prompt": "Execute MIG-002 (Next 16.3 + React 19.3 + node:24 image + codemods + e2e).",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "feature/deadline-migrations"
+        "feature/deadline-migrations",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Next.js 15.5.24 -> 16.3.5 (+ eslint-config-next 16, React 19.3, middleware->proxy rename, eslint flat-config). Build/typecheck/tests green; next-auth beta.32 compatible. Resolves on merge+deploy. Stacked PR on #249."
+      "implementation_note": "Merged+deployed; Next.js 16.3.5 live (web:2b5cbbd)."
     },
     {
       "id": "SOTA-005",
@@ -3312,12 +3366,13 @@
       "regulatory_friction": "none",
       "null_option_cost": "~$900/yr, grows with traffic",
       "prompt": "Route remaining detached runAsync background work onto the durable NutritionJobQueue rail (mirror MealAdjustmentService queue-preferred pattern), then remove --no-cpu-throttling from backend/cloudbuild.yaml so billing is request-based; canary-verify studio images reach READY; do not touch min-instances.",
-      "status": "implemented-pending-apply",
+      "status": "resolved",
       "implemented_by": [
         "c4d8e796",
-        "06d2fc83"
+        "06d2fc83",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Option 2 applied in cloudbuild (dropped --no-cpu-throttling). Effective on next deploy; expect -$40..55/mo."
+      "implementation_note": "Deployed; --no-cpu-throttling dropped + min-instances=1 live."
     },
     {
       "id": "COST-002",
@@ -3502,8 +3557,12 @@
       "regulatory_friction": "documentation",
       "null_option_cost": "zero at 1 user; widens daily after user #2; regulator-visible at public launch",
       "prompt": "Reconcile Tesseta's two privacy documents: (1) update docs/requirements/privacy-and-compliance.md \u00a74/\u00a78 to state a policy IS published at website/public/privacy.html and cross-link it; (2) in privacy.html, change \u00a77 deletion wording to 'email us; we fulfil deletion manually within 30 days' until DELETE /api/me ships, and add a \u00a75 caveat that meal photos are currently served via unlisted public URLs (or better: privatize the bucket first and leave \u00a75 as-is); (3) write docs/runbooks/account-deletion.md that walks the DATA-003 \u00a7Deletion-checklist by hand.",
-      "status": "open",
-      "absorbed_into": "DATA-003"
+      "status": "partial",
+      "absorbed_into": "DATA-003",
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "Privacy posture doc aligned to reality + SEC-012 mitigation underway; published policy still over-promises deletion until DATA-003 ships. Partial."
     },
     {
       "id": "COMP-002",
@@ -3529,10 +3588,14 @@
       "regulatory_friction": "documentation",
       "null_option_cost": "consent story is 'implicit' with an unfindable policy",
       "prompt": "In tesseta: (1) fix AboutSection.kt PRIVACY_URL/TERMS_URL to https://tesseta.com/privacy and /terms; (2) add footer links to privacy/terms in web/app layout; (3) add a first-login acceptance interstitial (web+android) persisting {policyVersion, acceptedAt} on users/{sub} via a small backend endpoint; (4) add one-line disclosures 'Photos/PDFs you submit are processed by Google's Gemini API \u2014 see Privacy Policy' at the meal-capture, lab-upload, and goal-chat entry points.",
-      "status": "open",
+      "status": "implemented-on-branch",
       "absorbs": [
         "PROD-007"
-      ]
+      ],
+      "implemented_by": [
+        "feature/audit-wave-2"
+      ],
+      "implementation_note": "feature/audit-wave-2: in-product privacy/terms links (web profile + android About)."
     },
     {
       "id": "COMP-003",
@@ -3737,8 +3800,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Post-merge fire drills on dependency drift; first backend-touching merge eats accumulated breakage",
       "prompt": "Add a Trivy image-scan job to backend-ci.yml and web-ci.yml on PRs mirroring the cloudbuild flags (--severity=HIGH,CRITICAL --ignore-unfixed --exit-code=1), and document required branch-protection checks in docs/reference/deployment.md.",
-      "status": "open",
-      "absorbed_into": "CICD-001"
+      "status": "resolved",
+      "absorbed_into": "CICD-001",
+      "implementation_note": "Resolved: branch ruleset now gates merges (=deploys) on green CI. Trivy-at-deploy unchanged by design.",
+      "implemented_by": [
+        "deployed/applied 2026-09-14"
+      ]
     },
     {
       "id": "DX-003",
@@ -4226,11 +4293,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "Daily-glance surface shows a dead tile forever",
       "prompt": "Delete Readiness fixture + dead flags, or compute a readiness composite off live daily-metrics.",
-      "status": "implemented-on-branch",
+      "status": "resolved",
       "implemented_by": [
-        "feature/quick-wins"
+        "feature/quick-wins",
+        "deployed/applied 2026-09-14"
       ],
-      "implementation_note": "Removed dead DashboardFlags (showVitalsFixtures/showTodayCardFixtures), the Readiness fixture tile, and vitalsShortLabels. Kept live showRecentFeedFixtures."
+      "implementation_note": "Deployed; dead flags/tile removed."
     },
     {
       "id": "PROD-010",
@@ -4312,11 +4380,7 @@
   ],
   "implementation_update": {
     "date": "2026-09-14",
-    "branches": [
-      "feature/audit-remediation (PR #249)",
-      "feature/deadline-migrations (PR #250)",
-      "feature/quick-wins (PR #3)"
-    ],
-    "summary": "25 findings addressed: 10 safety/perf (#249), SOTA-003/004+SUP-005 (#250), 4 Phase-5 doc fixes marked, and 8 quick-wins (SEC-005/008/009/011, XPLAT-008, PROD-009, CICD-003/005) on #3."
+    "summary": "Wave-1 (safety/perf/migrations/quick-wins) merged, deployed to prod, and infra applied+verified; branch ruleset active. Wave-2 (XPLAT-001 + observability + multi-user-gate clusters) implemented on feature/audit-wave-2, pending PR/merge. SEC-012 Phase 3 (bucket flip) + COMP-001 (deletion) remain partial.",
+    "wave2_branch": "feature/audit-wave-2"
   }
 }

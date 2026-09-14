@@ -3,19 +3,10 @@ import type { Metadata } from "next";
 import { getHistory, getTarget } from "@/lib/nutrition-api";
 import type { DailyRollup, Macros } from "@/lib/types/nutrition";
 import { formatWholeNumber } from "@/lib/format-number";
+import { todayInUserZone, daysAgoInUserZone } from "@/lib/tz-date";
 
 export const metadata: Metadata = { title: "Nutrition History" };
 export const dynamic = "force-dynamic";
-
-function todayStr(): string {
-  return new Date().toISOString().split("T")[0] ?? "";
-}
-
-function nDaysAgoStr(n: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().split("T")[0] ?? "";
-}
 
 function parseRange(raw: string | string[] | undefined): 7 | 14 | 30 {
   if (raw === "14") return 14;
@@ -58,8 +49,9 @@ export default async function NutritionHistoryPage(props: {
 }) {
   const { range: rawRange } = await props.searchParams;
   const days = parseRange(rawRange);
-  const to = todayStr();
-  const from = nDaysAgoStr(days - 1);
+  // Range boundaries anchor on the user's local today (XPLAT-001), not UTC.
+  const to = await todayInUserZone();
+  const from = await daysAgoInUserZone(-(days - 1));
 
   const [rollups, target] = await Promise.all([
     getHistory(from, to).catch(() => [] as DailyRollup[]),

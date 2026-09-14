@@ -132,6 +132,14 @@ data class Entry(
     // Joined in from the entry's catalog food (null/"NONE" for manual entries).
     // For a composite (photo-logged) meal this is the finished-meal image.
     val imageUrl: String? = null,
+    // SEC-012: the backend-served photo endpoint for this entry, a relative path
+    // (`/api/me/nutrition/photo/{entryId}`) that 302-redirects to a short-lived
+    // signed URL. When present it is preferred over the raw [imageUrl] (a public
+    // GCS URL) — the repository resolves it against the backend base URL and folds
+    // it into [imageUrl] before it reaches the UI, so Coil (which follows the 302)
+    // loads the meal photo through the app's own endpoint instead of the bucket.
+    // Null on older servers → the client falls back to the raw [imageUrl].
+    val photoUrl: String? = null,
     val imageStatus: String = "NONE",
     // Background photo-analysis lifecycle: NONE for ordinary entries, ANALYZING
     // while a freshly captured photo is still being itemized server-side, then

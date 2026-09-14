@@ -485,7 +485,7 @@ function RecentList({
             onClick={() => onRelog(entry)}
             className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left first:rounded-t-[10px] last:rounded-b-[10px] hover:bg-canvas-sunken"
           >
-            <FoodImage imageUrl={entry.imageUrl} imageStatus={entry.imageStatus} size={40} />
+            <FoodImage imageUrl={entry.photoUrl ?? entry.imageUrl} imageStatus={entry.imageStatus} size={40} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium text-primary">
                 {entry.foodName}

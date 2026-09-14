@@ -54,6 +54,19 @@ class SyncEngine @Inject constructor(
 
     data class UpdatedElsewhere(val table: String, val id: String)
 
+    /**
+     * OBS-005: emits every pulled change the client could not route to a local
+     * table (`ApplyOutcome.SKIPPED`) — the exact silent-data-loss class behind the
+     * past slash-collection bug. A subscriber (crash-reporter non-fatal, debug
+     * screen) can surface it so an unknown/renamed backend collection is visible
+     * on day one instead of discovered weeks later. replay=1 so a late subscriber
+     * still sees the most recent drop.
+     */
+    private val _skippedChanges = MutableSharedFlow<SkippedChange>(replay = 1, extraBufferCapacity = 32)
+    val skippedChanges: SharedFlow<SkippedChange> = _skippedChanges
+
+    data class SkippedChange(val collection: String, val id: String)
+
     /** Result of a pull pass, for callers/workers to log/observe. */
     data class PullResult(
         val pages: Int,
@@ -62,6 +75,10 @@ class SyncEngine @Inject constructor(
         val discardedLocal: Int,
         val wiped: Boolean,
         val killSwitch: Boolean,
+        // OBS-005: count of pulled changes dropped because no local table could be
+        // resolved for their collection. >0 means data the server sent never
+        // reached the device — a signal to alert on, not silence.
+        val skipped: Int = 0,
     )
 
     /**
@@ -87,6 +104,7 @@ class SyncEngine @Inject constructor(
         var applied = 0
         var rejected = 0
         var discarded = 0
+        var skipped = 0
         var wiped = false
 
         while (true) {
@@ -100,7 +118,9 @@ class SyncEngine @Inject constructor(
             // clear resumes where we were.
             if (resp.killSwitch) {
                 flags.setKillSwitch(true)
-                return@withContext PullResult(pages, applied, rejected, discarded, wiped, killSwitch = true)
+                return@withContext PullResult(
+                    pages, applied, rejected, discarded, wiped, killSwitch = true, skipped = skipped,
+                )
             } else {
                 // A delta that does NOT assert the kill-switch clears any prior latch.
                 flags.setKillSwitch(false)
@@ -115,7 +135,7 @@ class SyncEngine @Inject constructor(
                 cursor = null
                 wiped = true
                 // Re-loop from scratch against the (now-empty) cursor.
-                pages = 0; applied = 0; rejected = 0; discarded = 0
+                pages = 0; applied = 0; rejected = 0; discarded = 0; skipped = 0
                 continue
             }
 
@@ -129,7 +149,23 @@ class SyncEngine @Inject constructor(
                         ApplyOutcome.APPLIED -> applied++
                         ApplyOutcome.REJECTED -> rejected++
                         ApplyOutcome.DISCARDED_LOCAL -> { applied++; discarded++ }
-                        ApplyOutcome.SKIPPED -> Unit
+                        // OBS-005: a pulled change we couldn't route to any local
+                        // table. Previously dropped silently — the slash-collection
+                        // data-loss class. Now count it, WARN with the offending
+                        // collection/id, and emit it so an operator surface can
+                        // alert. Routing itself is unchanged.
+                        ApplyOutcome.SKIPPED -> {
+                            skipped++
+                            // Guard so android.util.Log (unmocked on the plain-JVM
+                            // unit-test classpath) never breaks the pull loop.
+                            runCatching {
+                                android.util.Log.w(
+                                    LOG_TAG,
+                                    "Dropped unroutable sync change: collection=${change.collection} id=${change.id}",
+                                )
+                            }
+                            _skippedChanges.tryEmit(SkippedChange(change.collection, change.id))
+                        }
                     }
                 }
             }
@@ -150,7 +186,7 @@ class SyncEngine @Inject constructor(
                 .copy(cursor = cursor, lastFullSyncAt = System.currentTimeMillis()),
         )
 
-        PullResult(pages, applied, rejected, discarded, wiped, killSwitch = false)
+        PullResult(pages, applied, rejected, discarded, wiped, killSwitch = false, skipped = skipped)
     }
 
     private enum class ApplyOutcome { APPLIED, REJECTED, DISCARDED_LOCAL, SKIPPED }
@@ -231,6 +267,9 @@ class SyncEngine @Inject constructor(
     companion object {
         /** Client sync-protocol version (D13). Bump ⇒ wipe + full resync. */
         const val SYNC_SCHEMA_VERSION = 1
+
+        /** OBS-005: logcat tag for dropped-unroutable-change warnings. */
+        private const val LOG_TAG = "HFSync"
 
         /** Parse an ISO-8601 instant to epoch millis, tolerant of a numeric string. */
         fun parseMillis(iso: String): Long =

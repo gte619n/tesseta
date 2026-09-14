@@ -66,6 +66,12 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          # Override the action's default `tools platform-tools`: the obsolete
+          # Android SDK "tools" package was removed from sdkmanager and now fails
+          # setup ("Failed to find package 'tools'", exit 1). platform-tools is
+          # all CI needs; AGP downloads build-tools/platforms itself.
+          packages: platform-tools
 
       # Replaces the hand-rolled actions/cache block: setup-gradle keys per-job,
       # cleans stale entries before saving (the old whole-dir tarball only ever
@@ -126,6 +132,12 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          # Override the action's default `tools platform-tools`: the obsolete
+          # Android SDK "tools" package was removed from sdkmanager and now fails
+          # setup ("Failed to find package 'tools'", exit 1). platform-tools is
+          # all CI needs; AGP downloads build-tools/platforms itself.
+          packages: platform-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4

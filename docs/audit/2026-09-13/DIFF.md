@@ -1,5 +1,27 @@
 # DIFF — audit run 2026-09-13
 
+## Progress update — 2026-09-14 (wave 2, branch `feature/audit-wave-2`, PR #253)
+
+The last open critical + the observability and multi-user-gate clusters.
+**Zero open criticals remain** after this wave. Full statuses in `findings.json`.
+
+- **Wave-1 promoted to `resolved`** (merged to `main`, deployed, and infra
+  applied+verified in prod on 2026-09-14): PERF-001/002, COST-001, SOTA-002/003/004,
+  SUP-002/005, SEC-005/008/009/011, XPLAT-008, PROD-009, CICD-003/005, DATA-001/002,
+  OBS-001, CICD-001. Consequentially resolved by the ruleset+monitoring apply:
+  OBS-004, DX-002, TEST-002.
+- **Wave-2 `implemented-on-branch`** (`feature/audit-wave-2`, pending PR #253
+  merge): XPLAT-001 (critical), OBS-002/003/005/006, SEC-001, TEST-001, COMP-002.
+- **Partial:** SEC-012 (Phase 1+2 done: signed-URL serving + client switch;
+  Phase 3 bucket flip deferred to post-deploy) · COMP-001 (posture doc aligned;
+  published policy still over-promises until DATA-003 deletion ships).
+- **Also in PR #253:** backend `LB_PER_KG` twin fix (XPLAT-008 completion) +
+  a web test locking in the SEC-012 photo-proxy `?date` forwarding.
+
+Counts after this wave: **open criticals 0**, ~123 open total (mostly medium/low).
+
+---
+
 ## Progress update — 2026-09-14 (branch `feature/audit-remediation`)
 
 Implementation of the week-one safety batch + IMPL-PERF-01 workstreams A/B.

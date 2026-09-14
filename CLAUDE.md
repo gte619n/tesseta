@@ -63,10 +63,15 @@
   **path-filtered** — a component with no changed files no-ops (shows
   `neutral`/`skipped`). To redeploy an unchanged component, run its trigger
   manually.
-- **CI does not gate deploys.** GitHub PR checks and the Cloud Build deploy are
-  independent; a green PR can still fail to deploy. The failure shows only in the
-  `deploy-*-on-main` check-runs on the merge commit — watch those after every
-  merge.
+- **`main` is protected by the `main-protection` ruleset** (since 2026-09-14):
+  changes land via PR and six CI checks (`android-ci`, `backend-ci`, `web-ci`,
+  `terraform-ci`, both CodeQL `analyze`) must be green to merge; admins keep a
+  break-glass bypass. Prod deploy = merge to `main`, so CI now gates deploys at
+  the merge. The Cloud Build deploy still runs post-merge and can fail
+  independently — watch the `deploy-*-on-main` check-runs on the merge commit.
+- **CI workflows run only on PRs targeting `main`.** A stacked PR (base =
+  another feature branch) gets NO checks until it targets `main`; retarget its
+  base (or close/reopen) to trigger CI before relying on it.
 - The backend deploy runs a **Trivy image scan** at deploy time
   (`--severity=HIGH,CRITICAL --ignore-unfixed --exit-code=1`) that blocks
   promotion on any *fixable* HIGH/CRITICAL CVE. Fix by overriding the
@@ -82,6 +87,10 @@ This script:
 - Starts backend on http://localhost:8090 and web on http://localhost:3000
   (the backend is also served over HTTPS on :8443 via Tailscale for device testing)
 - Ctrl-C stops both servers
+
+**web/pnpm:** `package.json` pins `pnpm@10.32.1`; under corepack a different
+local pnpm refuses to run. Match it, run tooling via the local binaries
+(`web/node_modules/.bin/{next,eslint,tsc}`), or pass `--pm-on-fail=ignore`.
 
 ## Audits & archives
 - `docs/audit/<date>/` — dated audit runs. `findings.json` is the machine index
@@ -99,6 +108,15 @@ This script:
   local dev runs against `(default)`. Anything that names a DB must scope it via
   `FIRESTORE_DATABASE_ID` / `var.firestore_database` — hard-coding `(default)`
   silently writes to the wrong database.
+- **Operating GCP headless / from an agent:** interactive `gcloud auth login`
+  isn't available, so `gcloud auth print-access-token` (user creds) fails — but
+  **ADC works**. Use it for REST (`Authorization: Bearer $(gcloud auth
+  application-default print-access-token)` + `x-goog-user-project:
+  health-fitness-160`) and for `tofu`/`terraform` (GCS state backend + google
+  provider both read ADC). To run a `gcloud` command with ADC:
+  `export CLOUDSDK_AUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)`.
+- Gotcha: GNU `timeout` is NOT installed — don't wrap gcloud/curl in it; it
+  fails with 'command not found' and looks like an auth/API failure.
 - `AGENTS.md` (formerly a never-filled placeholder for the Google Health API
   Parity Tool context file) was archived 2026-09 to
   `docs/archive/2026-09/AGENTS.md` — there is no `AGENTS.md` at the repo root.

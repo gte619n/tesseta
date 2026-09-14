@@ -9,4 +9,7 @@ plugins {
     // auto-initializes FirebaseApp. Declared here (apply false) and applied only
     // in :app, which owns google-services.json.
     alias(libs.plugins.google.services) apply false
+    // OBS-002: Firebase Crashlytics plugin. Declared here (apply false) and applied
+    // only in :app, alongside google-services.
+    alias(libs.plugins.firebase.crashlytics) apply false
 }

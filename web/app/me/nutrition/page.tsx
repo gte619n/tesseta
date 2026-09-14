@@ -33,16 +33,19 @@ import { MEALS, mealForHour, isImageMissing } from "@/lib/types/nutrition";
 import { DailySummaryCard } from "@/components/nutrition/DailySummaryCard";
 import { NutritionMeals } from "@/components/nutrition/NutritionMeals";
 import { PendingImageRefresher } from "@/components/nutrition/PendingImageRefresher";
+import { todayInUserZone } from "@/lib/tz-date";
 
 export const metadata: Metadata = { title: "Nutrition" };
 export const dynamic = "force-dynamic";
 
-// Helpers for date navigation (server-side only)
-function today(): string {
-  return new Date().toISOString().split("T")[0] ?? "";
+// Helpers for date navigation (server-side only). "Today" is the user's local
+// date in their timezone (XPLAT-001) — an evening log in a negative-UTC-offset
+// zone must land on the local day, not tomorrow (UTC).
+async function today(): Promise<string> {
+  return todayInUserZone();
 }
 
-function parseDate(raw: string | string[] | undefined): string {
+async function parseDate(raw: string | string[] | undefined): Promise<string> {
   if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   return today();
 }
@@ -115,8 +118,9 @@ export default async function NutritionPage(props: {
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date: rawDate } = await props.searchParams;
-  const date = parseDate(rawDate);
-  const isToday = date === today();
+  const todayStr = await today();
+  const date = await parseDate(rawDate);
+  const isToday = date === todayStr;
 
   // Pre-fetch server-side (recents back the add modal's one-tap list; a
   // failure just leaves the list empty — search/describe still work). Bias
@@ -245,7 +249,7 @@ export default async function NutritionPage(props: {
 
   const prevDate = addDays(date, -1);
   const nextDate = addDays(date, 1);
-  const canGoForward = date < today();
+  const canGoForward = date < todayStr;
   // Keep refreshing while anything is still settling server-side: a generating
   // image, an async capture/describe still ANALYZING, OR a missing-but-expected
   // image the day-read self-heal will flip to PENDING and regenerate.

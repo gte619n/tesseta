@@ -1,8 +1,22 @@
 # IMPL-SEC-01 — Private Media Buckets (signed-URL serving)
 
-> Status: **planned** · Created 2026-09-13 · Source: audit finding SEC-012
-> (`docs/audit/2026-09-13/`), de-scoped from the safety batch per decision
-> DEC-002 because it is a cross-client breaking change, not a config flip.
+> Status: **Phase 1–2 implemented (wave 2, 2026-09-14); Phase 3 pending** · Source:
+> audit finding SEC-012, de-scoped from the safety batch per DEC-002 (a
+> cross-client breaking change, not a config flip).
+>
+> **Done (branch `feature/audit-wave-2`):** backend signed-URL serving
+> (`GET /api/me/nutrition/photo/{entryId}` → 302 to a 15-min V4 signed URL, per-user
+> authorized) + `photoUrl` on nutrition entry DTOs; web + Android now render meal
+> photos via `photoUrl` (with a fallback to the old field for older servers).
+>
+> **REMAINING — Phase 3 (the actual privacy win), do AFTER web+android deploy and
+> photo rendering is confirmed in prod:** flip the `-nutrition-photos` bucket to
+> private (remove `allUsers:objectViewer`). One change, independently reversible:
+> `gcloud storage buckets remove-iam-policy-binding gs://health-fitness-160-nutrition-photos --member=allUsers --role=roles/storage.objectViewer`
+> (or add it to the terraform bucket resource's IAM). Verify server-side re-reads
+> + the signed-URL path still render, and a direct GCS URL now 403s. Until this
+> flip, old public URLs remain fetchable — so the exposure isn't fully closed
+> until Phase 3 ships.
 
 ## Problem
 

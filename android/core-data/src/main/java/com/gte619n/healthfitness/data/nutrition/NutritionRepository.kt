@@ -74,6 +74,9 @@ class NutritionRepository @Inject constructor(
     private val ops: NutritionOpEnqueuer,
     private val previews: CapturePreviewStore,
     private val capture: NutritionCaptureRepository,
+    // SEC-012: needed to resolve an entry's relative `photoUrl`
+    // (`/api/me/nutrition/photo/{entryId}`) into the absolute URL Coil loads.
+    @com.gte619n.healthfitness.data.net.BackendBaseUrl private val baseUrl: String,
     moshi: Moshi,
 ) {
     private val rowAdapter = moshi.adapter(NutritionEntryRow::class.java)
@@ -109,6 +112,10 @@ class NutritionRepository @Inject constructor(
         val ingredients: List<EntryIngredient>?,
         val mealImageUrl: String?,
         val mealImageStatus: String?,
+        // SEC-012: the sync delta's counterpart of the REST `photoUrl` — the
+        // backend-served photo endpoint path. Nullable → older deltas omit it and
+        // the entry falls back to the raw [mealImageUrl].
+        val mealPhotoUrl: String?,
         val analysisStatus: String?,
         // IMPL-LEFTOVER-01: the sync delta carries the leftover state as a nested
         // `leftover` map with the SAME field names as the REST `leftover` object
@@ -132,6 +139,7 @@ class NutritionRepository @Inject constructor(
             macros = macros ?: Macros.EMPTY,
             source = source ?: "",
             imageUrl = mealImageUrl,
+            photoUrl = mealPhotoUrl,
             imageStatus = mealImageStatus ?: "NONE",
             analysisStatus = analysisStatus ?: "NONE",
             ingredients = ingredients,
@@ -664,7 +672,9 @@ class NutritionRepository @Inject constructor(
         // suppresses DRINKS from recentMeals; filter client-side too so a stale
         // backend can't leak one. cachedRecentDrinks() (the card's recents) is
         // separate and unaffected.
-        api.recentMeals(days, limit, meal).filterNot { it.meal.equals(DRINKS_WIRE, ignoreCase = true) }
+        api.recentMeals(days, limit, meal)
+            .filterNot { it.meal.equals(DRINKS_WIRE, ignoreCase = true) }
+            .map { it.resolvePhoto() }
 
     /**
      * food-search-local-first: the same recent distinct foods/meals as
@@ -741,11 +751,12 @@ class NutritionRepository @Inject constructor(
      */
     private fun rowToRecentEntry(row: NutritionEntryEntity): Entry? {
         runCatching { rowAdapter.fromJson(row.payloadJson) }.getOrNull()?.let { parsed ->
-            return parsed.entry.copy(date = parsed.date, syncState = row.syncState)
+            return parsed.entry.copy(date = parsed.date, syncState = row.syncState).resolvePhoto()
         }
         runCatching { syncDocAdapter.fromJson(row.payloadJson) }.getOrNull()?.let { doc ->
             return doc.toEntry(row.id.substringAfter('/', row.id))
                 .copy(date = doc.date, syncState = row.syncState)
+                .resolvePhoto()
         }
         return null
     }
@@ -927,7 +938,7 @@ class NutritionRepository @Inject constructor(
                 // REST envelope {date, entry} — the shape day()/fillDay write.
                 runCatching { rowAdapter.fromJson(row.payloadJson) }.getOrNull()
                     ?.takeIf { it.date == date }
-                    ?.let { return@mapNotNull it.entry.copy(syncState = row.syncState) }
+                    ?.let { return@mapNotNull it.entry.copy(syncState = row.syncState).resolvePhoto() }
                 // Flat server doc — the shape the generic sync engine writes. The
                 // entryId lives in the row id ("<date>/<entryId>"), not the doc.
                 runCatching { syncDocAdapter.fromJson(row.payloadJson) }.getOrNull()
@@ -936,6 +947,7 @@ class NutritionRepository @Inject constructor(
                         return@mapNotNull it
                             .toEntry(row.id.substringAfter('/', row.id))
                             .copy(syncState = row.syncState)
+                            .resolvePhoto()
                     }
                 null
             }
@@ -990,6 +1002,31 @@ class NutritionRepository @Inject constructor(
     )
 
     private fun composite(date: String, entryId: String) = "$date/$entryId"
+
+    /**
+     * SEC-012: prefer the backend photo endpoint over the raw (public GCS) image
+     * URL. When the server sent a [Entry.photoUrl] (a relative path), fold its
+     * absolute form into [Entry.imageUrl] so every existing image consumer
+     * (FoodThumbnail, dashboard, zoom dialog) loads the meal photo through
+     * `/api/me/nutrition/photo/{entryId}` — a 302 to a short-lived signed URL that
+     * Coil follows — instead of the bucket. Back-compat: a null [photoUrl] (older
+     * server) leaves [imageUrl] untouched. Only rewrites when there is a real image
+     * to show (imageUrl present or status READY) so an empty placeholder entry is
+     * unaffected.
+     */
+    private fun Entry.resolvePhoto(): Entry {
+        val rel = photoUrl ?: return this
+        if (imageUrl == null && imageStatus != "READY") return this
+        return copy(imageUrl = resolveAgainstBase(rel))
+    }
+
+    private fun resolveAgainstBase(pathOrUrl: String): String {
+        // Already absolute (defensive: a server that returns a full URL) → use as-is.
+        if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) return pathOrUrl
+        val base = if (baseUrl.endsWith("/")) baseUrl.dropLast(1) else baseUrl
+        val path = if (pathOrUrl.startsWith("/")) pathOrUrl else "/$pathOrUrl"
+        return "$base$path"
+    }
 
     private companion object {
         const val TARGET_ID = "target"

@@ -1,4 +1,5 @@
 import { getDay } from "./nutrition-api";
+import { todayInUserZone } from "./tz-date";
 import type { Macros } from "./types/nutrition";
 
 // Dashboard loader for the Nutrition card — today's macro totals against the
@@ -13,15 +14,11 @@ export type NutritionSummary = {
   target: Macros | null;
 };
 
-// Local calendar date as yyyy-MM-dd — same derivation the Nutrition page uses.
-function today(): string {
-  return new Date().toISOString().split("T")[0] ?? "";
-}
-
 export async function loadTodayNutrition(): Promise<NutritionSummary | null> {
   try {
     // getDay already joins in the active target, so no separate target fetch.
-    const day = await getDay(today());
+    // "Today" is the user's local date in their timezone (XPLAT-001), not UTC.
+    const day = await getDay(await todayInUserZone());
     return { date: day.date, totals: day.totals, target: day.target };
   } catch {
     return null;

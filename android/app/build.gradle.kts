@@ -11,6 +11,10 @@ plugins {
     // IMPL-AND-20 (Phase 6): processes app/google-services.json and wires
     // FirebaseApp auto-init for FCM. Applied last so it sees the android block.
     alias(libs.plugins.google.services)
+    // OBS-002: Firebase Crashlytics. Must be applied AFTER google-services so it
+    // can read the resolved FirebaseApp config. Crashlytics auto-initializes at
+    // startup — the dependency + plugin are all that's needed for crash capture.
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 // Base marketing version — the single source of truth for the "1.x" prefix.
@@ -204,6 +208,9 @@ dependencies {
     // (above) auto-initializes FirebaseApp from app/google-services.json.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // OBS-002: Crashlytics — client crash + non-fatal reporting to the operator.
+    // Versionless (BoM-pinned); auto-initializes, no runtime code required.
+    implementation(libs.firebase.crashlytics)
 
     implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)

@@ -34,6 +34,11 @@ markdownRenderer = "0.27.0"
 # FirebaseApp at startup.
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
+# OBS-002: Firebase Crashlytics client-crash reporting. The crashlytics artifact
+# version is pinned by the Firebase BoM above; only the Gradle plugin needs an
+# explicit version. 3.0.x is the current stable line and is compatible with
+# google-services 4.4.x / Firebase BoM 33.x (AGP 8 mapping upload).
+crashlyticsPlugin = "3.0.2"
 
 # IMPL-13 (Android Nutrition capture): CameraX preview/capture + ML Kit
 # on-device barcode scanning. The ML Kit vision artifacts are the *unbundled*
@@ -143,6 +148,8 @@ markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-
 # BoM platform constraint pins it.
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+# OBS-002: Crashlytics — versionless, pinned by the BoM.
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 
 # Wear
 wear-compose-material3 = { module = "androidx.wear.compose:compose-material3", version.ref = "wearComposeMaterial3" }
@@ -198,3 +205,6 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+# OBS-002: Crashlytics Gradle plugin — uploads the deobfuscation/mapping data and
+# enables the NDK/ANR wiring. Applied only in modules that ship crash reporting.
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlyticsPlugin" }

@@ -63,7 +63,9 @@ public class RecentActivityService {
     private static final int MED_LOOKBACK_DAYS = 7;
     private static final int FOOD_LOOKBACK_DAYS = 4;
 
-    private static final double LB_PER_KG = 2.20462;
+    // Full-precision kg↔lb factor, matching the rest of the backend/clients
+    // (XPLAT-008: the truncated 2.20462 had drifted here).
+    private static final double LB_PER_KG = 2.2046226218;
 
     private final WorkoutProgramService programs;
     private final WorkoutScheduleService schedule;
