@@ -19,6 +19,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import okhttp3.Cache
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -104,6 +105,27 @@ object NetworkModule {
             .addInterceptor(timeZone)
             .addInterceptor(logging)
             .authenticator(tokenAuthenticator)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+
+    // SEC-012: a dedicated OkHttp client for Coil's ImageLoader. It attaches the
+    // bearer to backend-host image loads (the private meal-photo endpoint) via a
+    // host-scoped NETWORK interceptor, so the token is sent on the backend hop but
+    // never on the GCS-signed-URL redirect it 302s to. Deliberately separate from
+    // the main client: no response cache (Coil has its own disk cache), no
+    // TimeZone/logging interceptors, and the auth is per-hop rather than the main
+    // client's application-level AuthInterceptor (which would ride the redirect).
+    @Provides
+    @Singleton
+    @Named("image")
+    fun provideImageOkHttpClient(
+        cache: IdTokenCache,
+        @BackendBaseUrl baseUrl: String,
+    ): OkHttpClient =
+        OkHttpClient.Builder()
+            .addNetworkInterceptor(
+                ImageAuthInterceptor(backendHostOf(baseUrl)) { cache.read().idToken })
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
@@ -216,4 +238,8 @@ object NetworkModule {
 
     private fun String.ensureTrailingSlash(): String =
         if (endsWith("/")) this else "$this/"
+
+    /** Host of the backend base URL, for scoping the image auth interceptor. */
+    private fun backendHostOf(baseUrl: String): String =
+        baseUrl.ensureTrailingSlash().toHttpUrlOrNull()?.host ?: ""
 }

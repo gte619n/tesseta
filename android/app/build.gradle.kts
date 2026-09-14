@@ -214,6 +214,9 @@ dependencies {
 
     implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)
+    // SEC-012: AppModule wires a bearer-attaching OkHttp client into Coil so the
+    // private meal-photo endpoint loads authenticate.
+    implementation(libs.okhttp)
 
     // IMPL-02: phone publishes ID tokens to paired wear nodes.
     implementation(libs.play.services.wearable)

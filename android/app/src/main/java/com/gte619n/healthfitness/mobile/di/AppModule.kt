@@ -12,6 +12,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
+import javax.inject.Named
 import javax.inject.Singleton
 
 // App-only bindings into the Hilt graph. core-data's NetworkModule consumes the
@@ -51,10 +53,18 @@ object AppModule {
     // implements ImageLoaderFactory and returns this, so Coil's AsyncImage uses
     // it app-wide. Without this Coil builds an unconfigured loader per process
     // with a smaller default disk cache.
+    //
+    // SEC-012: uses the @Named("image") OkHttp client so backend-host image loads
+    // (the private meal-photo endpoint) carry the bearer; without it that endpoint
+    // 401s and every capture-photo meal falls back to the placeholder.
     @Provides
     @Singleton
-    fun provideImageLoader(@ApplicationContext context: Context): ImageLoader =
+    fun provideImageLoader(
+        @ApplicationContext context: Context,
+        @Named("image") imageClient: OkHttpClient,
+    ): ImageLoader =
         ImageLoader.Builder(context)
+            .okHttpClient(imageClient)
             .crossfade(true)
             .memoryCache {
                 MemoryCache.Builder(context)

@@ -57,24 +57,40 @@ public record EntryResponse(
 ) {
     /** Bare mapping with no catalog image (used where the food isn't loaded). */
     public static EntryResponse from(FoodEntry e) {
-        return from(e, null, FoodImageStatus.NONE, null);
+        return from(e, null, FoodImageStatus.NONE, null, null);
     }
 
     /** Mapping enriched with the catalog food's generated image, when known. */
     public static EntryResponse from(FoodEntry e, String imageUrl, FoodImageStatus imageStatus) {
-        return from(e, imageUrl, imageStatus, null);
+        return from(e, imageUrl, imageStatus, null, null);
+    }
+
+    /** Full mapping without a private photo URL (SEC-012 gate off / no photo). */
+    public static EntryResponse from(
+        FoodEntry e,
+        String imageUrl,
+        FoodImageStatus imageStatus,
+        List<IngredientResponse> ingredients
+    ) {
+        return from(e, imageUrl, imageStatus, ingredients, null);
     }
 
     /**
      * Full mapping. For a composite (photo-logged) meal the {@code imageUrl}/
      * {@code imageStatus} are the finished-meal image and {@code ingredients}
      * lists the components (each with its own raw-ingredient image).
+     *
+     * <p>{@code photoUrl} is the SEC-012 private-photo redirect path (or null). It
+     * is decided by the caller (the controller, which owns the rollout flag) rather
+     * than computed here, so a DTO in a context that can't serve it stays null. Use
+     * {@link #photoUrlFor(FoodEntry)} to build the value when the flag is on.
      */
     public static EntryResponse from(
         FoodEntry e,
         String imageUrl,
         FoodImageStatus imageStatus,
-        List<IngredientResponse> ingredients
+        List<IngredientResponse> ingredients,
+        String photoUrl
     ) {
         return new EntryResponse(
             e.entryId(),
@@ -90,7 +106,7 @@ public record EntryResponse(
             imageUrl,
             imageStatus != null ? imageStatus : FoodImageStatus.NONE,
             e.analysisStatus() != null ? e.analysisStatus() : EntryAnalysisStatus.NONE,
-            photoUrlFor(e),
+            photoUrl,
             ingredients,
             e.createdAt(),
             leftoverDtoOf(e.leftover()),
@@ -101,10 +117,11 @@ public record EntryResponse(
     /**
      * SEC-012: the client-facing path to the signed-URL redirect for this entry's
      * stored capture photo. The date is carried so the redirect endpoint can
-     * resolve the entry per-user without a cross-collection scan (ADR-0021). Null
-     * when the entry has no stored photo.
+     * resolve the entry per-user without a cross-collection scan (ADR-0021).
+     * Returns null when the entry has no stored photo. The caller only invokes this
+     * when the {@code app.nutrition.signed-photo-url.enabled} rollout flag is on.
      */
-    private static String photoUrlFor(FoodEntry e) {
+    public static String photoUrlFor(FoodEntry e) {
         if (e.photoRef() == null || e.photoRef().isBlank()) {
             return null;
         }

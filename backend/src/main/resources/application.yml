@@ -234,6 +234,16 @@ app:
     bucket: ${NUTRITION_BUCKET:health-fitness-160-nutrition-photos}
     capture:
       enabled: ${NUTRITION_CAPTURE_ENABLED:true}
+    # SEC-012 rollout gate. When true, EntryResponse.photoUrl carries the private
+    # signed-URL redirect path (/api/me/nutrition/photo/{entryId}) and clients load
+    # the meal photo through it instead of the raw public bucket URL. Kept OFF by
+    # default: the redirect endpoint is authenticated, so only app builds that
+    # attach the bearer to image requests can load it. Older clients (and any that
+    # don't authenticate image loads) fall back to the public imageUrl when this is
+    # null. Flip ON only once auth-capable clients are in the field alongside the
+    # Phase-3 bucket-flip-to-private (DEC-W2-1).
+    signed-photo-url:
+      enabled: ${NUTRITION_SIGNED_PHOTO_URL_ENABLED:false}
     # IMPL-13 Milestone 4: AI studio images — generated once per unique catalog
     # food, asynchronously, reused forever. `images.enabled` gates the GCS
     # (FoodImageStorage) + Gemini (GeminiFoodImageGenerator) beans so unit tests
