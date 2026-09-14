@@ -154,10 +154,19 @@ steps:
     args:
       - -c
       - |
-        gcloud run jobs update goals-sustained-reeval \
-          --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
-          --region=us-central1 \
-          --project=$PROJECT_ID || true
+        # CICD-005: only tolerate a NOT-YET-PROVISIONED job (fresh project /
+        # not bootstrapped). If the job exists, a failed image update is a real
+        # error and must fail the build instead of silently stranding it on a
+        # stale image (the blanket `|| true` used to hide that).
+        if gcloud run jobs describe goals-sustained-reeval \
+            --region=us-central1 --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run jobs update goals-sustained-reeval \
+            --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
+            --region=us-central1 \
+            --project=$PROJECT_ID
+        else
+          echo "Cloud Run Job goals-sustained-reeval not provisioned; skipping image sync (bootstrap with its deploy-*-job.sh)."
+        fi
 
   # Keep the gh-health-check Cloud Run Job's image in sync with the deployed
   # service, same as the goals job above. Bootstrap once per project with
@@ -169,10 +178,16 @@ steps:
     args:
       - -c
       - |
-        gcloud run jobs update gh-health-check \
-          --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
-          --region=us-central1 \
-          --project=$PROJECT_ID || true
+        # CICD-005: tolerate a not-yet-provisioned job; surface real failures.
+        if gcloud run jobs describe gh-health-check \
+            --region=us-central1 --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run jobs update gh-health-check \
+            --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
+            --region=us-central1 \
+            --project=$PROJECT_ID
+        else
+          echo "Cloud Run Job gh-health-check not provisioned; skipping image sync (bootstrap with its deploy-*-job.sh)."
+        fi
 
   # Keep the gh-refresh Cloud Run Job's image in sync with the deployed
   # service, same as the jobs above. Bootstrap once per project with
@@ -184,10 +199,16 @@ steps:
     args:
       - -c
       - |
-        gcloud run jobs update gh-refresh \
-          --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
-          --region=us-central1 \
-          --project=$PROJECT_ID || true
+        # CICD-005: tolerate a not-yet-provisioned job; surface real failures.
+        if gcloud run jobs describe gh-refresh \
+            --region=us-central1 --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run jobs update gh-refresh \
+            --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
+            --region=us-central1 \
+            --project=$PROJECT_ID
+        else
+          echo "Cloud Run Job gh-refresh not provisioned; skipping image sync (bootstrap with its deploy-*-job.sh)."
+        fi
 
   # Keep the withings-refresh Cloud Run Job's image in sync with the deployed
   # service, same as gh-refresh above. Bootstrap once per project with
@@ -200,10 +221,16 @@ steps:
     args:
       - -c
       - |
-        gcloud run jobs update withings-refresh \
-          --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
-          --region=us-central1 \
-          --project=$PROJECT_ID || true
+        # CICD-005: tolerate a not-yet-provisioned job; surface real failures.
+        if gcloud run jobs describe withings-refresh \
+            --region=us-central1 --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run jobs update withings-refresh \
+            --image=us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA \
+            --region=us-central1 \
+            --project=$PROJECT_ID
+        else
+          echo "Cloud Run Job withings-refresh not provisioned; skipping image sync (bootstrap with its deploy-*-job.sh)."
+        fi
 
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA

@@ -7,6 +7,7 @@ import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.Storage;
 import com.gte619n.healthfitness.config.JsonSupport;
 import com.gte619n.healthfitness.core.exercise.ExerciseReference;
+import com.gte619n.healthfitness.integrations.config.OutboundFetchGuard;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -284,6 +285,15 @@ public class GroundingImageResolver {
     // ---- HTTP ----
 
     private String fetchString(String url) {
+        // SSRF guard (SEC-011): URLs here come from grounding/AI-derived sources
+        // and scraped page markup. We enforce https + reject private/link-local/
+        // metadata IPs on every hop; we intentionally do NOT host-allowlist here
+        // because the jefit/rb100 scrape path legitimately reaches arbitrary
+        // public CDNs, and allowlisting would break that happy path.
+        if (!OutboundFetchGuard.isAllowed(url)) {
+            log.debug("Grounding GET blocked by SSRF guard: {}", url);
+            return null;
+        }
         try {
             HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(TIMEOUT)
@@ -304,6 +314,13 @@ public class GroundingImageResolver {
 
     private byte[] fetchBytes(String url) {
         if (url == null || url.isBlank()) {
+            return null;
+        }
+        // SSRF guard (SEC-011): https-only, no private/metadata IPs. Own-bucket
+        // GCS URLs never reach here (they take the fetchOwnObjectBytes path via
+        // the SDK), so this only fences genuine external image fetches.
+        if (!OutboundFetchGuard.isAllowed(url)) {
+            log.debug("Grounding image GET blocked by SSRF guard: {}", url);
             return null;
         }
         try {

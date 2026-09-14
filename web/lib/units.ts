@@ -24,18 +24,21 @@ export const DEFAULT_UNIT_PREFERENCES: UnitPreferences = {
   temperature: "F",
 };
 
-const LB_PER_KG = 2.20462;
+// Canonical kg↔lb factor. Full precision to match the backend/Android value
+// (XPLAT-008: web had drifted to the truncated 2.20462, copied into several
+// files). Import this everywhere instead of re-declaring a local constant.
+export const KG_TO_LB = 2.2046226218;
 const CM_PER_INCH = 2.54;
 const INCHES_PER_FOOT = 12;
 
 // ---- Weight -------------------------------------------------------------
 
 export function lbToKg(lb: number): number {
-  return lb / LB_PER_KG;
+  return lb / KG_TO_LB;
 }
 
 export function kgToLb(kg: number): number {
-  return kg * LB_PER_KG;
+  return kg * KG_TO_LB;
 }
 
 export function weightUnitLabel(unit: WeightUnit): string {

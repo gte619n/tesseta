@@ -4,8 +4,15 @@
   data_extraction_rules.xml: keep the Keystore-wrapped SQLCipher passphrase and
   the encrypted offline DB out of cloud backup so a restored blob can never
   outlive its (non-backupable) Keystore key. See that file for the full rationale.
+
+  SEC-005: also exclude the plain-text auth DataStore ("hf-auth", holding the
+  id/refresh tokens — IdTokenCache.kt) so a long-lived, theft-undetectable
+  session credential cannot ride a backup onto another device. DataStore
+  Preferences files live under files/datastore/<name>.preferences_pb, so this is
+  the `file` domain (NOT sharedpref).
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="hf_offline_db_prefs.xml" />
     <exclude domain="database" path="hf-offline.db" />
+    <exclude domain="file" path="datastore/hf-auth.preferences_pb" />
 </full-backup-content>

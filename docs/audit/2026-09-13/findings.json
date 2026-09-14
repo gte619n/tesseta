@@ -195,7 +195,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Minor; grows with each platform addition",
       "prompt": "Docs-only edit to backend/CLAUDE.md: add platform (state allowed deps after grepping its imports) and uat (main-sources deliberately, gated by app.uat.stubs-enabled, needed by infra/scripts/uat.sh) to the root-package paragraph, <=10 lines, house style; optionally mark ADR-0020-implementation-decision-log.md as a companion log.",
-      "status": "open"
+      "status": "resolved",
+      "implemented_by": [
+        "Phase 5 (commits 088d97e1/957f25ef)"
+      ],
+      "implementation_note": "backend/CLAUDE.md package inventory now lists platform + uat (Phase 5 truth-pass)."
     },
     {
       "id": "ARCH-009",
@@ -333,7 +337,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Backup/transfer remains a durable token-exfil vector",
       "prompt": "Add <exclude domain=\"file\" path=\"datastore/hf-auth.preferences_pb\"/> to cloud-backup and device-transfer in both app backup XMLs (file domain, NOT sharedpref); create equivalent rules for wear (hf-wear-auth) and wire into wear manifest; verify via bmgr backup/restore that restored app is signed out.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "Android/Wear auth-token DataStores (hf-auth, hf-wear-auth) excluded from cloud backup + device transfer; wear backup rules added."
     },
     {
       "id": "SEC-006",
@@ -407,7 +415,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Latent single-misconfig auth bypass across every future deploy-config edit",
       "prompt": "Add independent second guard: dev-login bean/handler additionally requires non-prod marker (project-id != health-fitness-160 or uat profile); refuse startup or hard-404 + ERROR log if enabled against prod audiences; keep uat.sh green; unit test flag+prod-marker still 404s.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "dev-login fail-closed in prod (requires flag AND non-prod project id; 404 under prod). New AuthControllerProdGuardTest."
     },
     {
       "id": "SEC-009",
@@ -430,7 +442,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Negligible direct risk; pattern may be copied to future secret gates",
       "prompt": "Replace with MessageDigest.isEqual on UTF-8 bytes, keep blank-secret fail-closed and trim; extract shared SecretCompare helper used by all three secret-gated controllers; existing tests pass.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "Internal-jobs shared-secret compare moved to constant-time SecretCompare (MessageDigest.isEqual); webhook gates unified onto it."
     },
     {
       "id": "SEC-010",
@@ -476,7 +492,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Gadget waits for a feature change to arm it",
       "prompt": "Add OutboundFetchGuard (https-only, host allowlist, private/link-local/metadata IP rejection incl. 169.254.169.254, max 3 revalidated redirects) and apply in DrugImageGenerator.fetchReferenceImage and GroundingImageResolver; unit tests for metadata-IP and http rejection, allowlisted pass.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "SSRF guard (OutboundFetchGuard): https-only + private/metadata-IP rejection on the drug-image (allowlist) and grounding (scheme+IP) fetch sinks. TOCTOU caveat documented."
     },
     {
       "id": "SEC-012",
@@ -1514,7 +1534,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "doc rot compounds",
       "prompt": "In tesseta docs/reference/feature-catalog.md: add a 'Drinks' row (Backend \u2705 api/me/drinks + drink sessions; Web \u2705 /me/drinks catalog mgmt; Android \u2705 Drink Mode + settings/drinks) and extend the Nutrition row's notes with Adjust-with-AI (async, #245) and Remove Leftovers (#244, web read-only per spec D14). Cite web/app/me/drinks/page.tsx, android core-data DrinkApi.kt, EntryResponse.java adjustment/leftover fields.",
-      "status": "open"
+      "status": "resolved",
+      "implemented_by": [
+        "Phase 5 (commits 088d97e1/957f25ef)"
+      ],
+      "implementation_note": "feature-catalog.md gained Drinks + Adjust/Leftovers rows (Phase 5 truth-pass)."
     },
     {
       "id": "XPLAT-008",
@@ -1540,7 +1564,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "near zero",
       "prompt": "\"In tesseta: change web/lib/units.ts:27 LB_PER_KG from 2.20462 to 2.2046226218 to match android UnitFormat.kt:11 and backend LoadingProfileResolver.java:28, and add a 'keep in sync' comment naming all three sites. Check chart snapshots for 0.001% deltas.\" - **H1:** Backend `TodaysDosesService` lacks android's MONTHLY day-of-month clamp (`ReminderPlanner.kt:34-36`) or WEEKLY empty-days semantics \u2014 I only read the CYCLE/PRN arms of the backend switch. Verify: read `TodaysDosesService.java:90-128` in full and diff each `FrequencyType` arm against `ReminderPlanner.isDueOn`. - **H2:** Prod backend JVM default zone is UTC (asserted by `TimeZoneInterceptor.kt:9` and `TimezoneCookie.tsx:7-8` comments). Verify: Cloud Run service env/`-Duser.timezone` in `infra/` or the deploy `cloudbuild.yaml`. - **H3:** Web GET of a day whose entries include an `adjustment` object renders fine (extra JSON key ignored) \u2014 inferred from JS semantics, not tested. Verify: fixture render test of `NutritionMeals` with an EntryResponse-shaped payload. - **H4:** Composite entries with calorie-only ingredients actually occur in prod data (drives XPLAT-004 severity). Verify (privacy-safe): count, in the prod `production` Firestore, composite entries having any ingredient with all-null macro grams \u2014 aggregate count only, no content. - **H5:** The outbox replay for a composite portion PATCH sends only `quantity` (no macros), letting the server recompute authoritatively \u2014 the local recompute is display-only until pull. Verify: `OutboxEndpointRegistry.kt` + `OutboxReducer.kt` payload shape for `nutrition entries PATCH`. - XPLAT-001 compounds D-sync/backend findings: misdated web writes are *also* late to the phone while FCM is dead \u2014 two independent staleness sources on one ledger. - XPLAT-002's null-option depends on team discipline that a refactoring branch (`tesseta-refactoring`) is most likely to break; flag to D-release/process. - Platform idioms: no violations worth a finding \u2014 web fights nothing (server components + actions used idiomatically; `force-dynamic` is a deliberate no-offline stance), android is properly offline-first, wear's `:core-domain`-only dependency (`wear/build.gradle.kts:56`) is the right boundary.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "Web KG_TO_LB unified to precise 2.2046226218 via lib/units.ts (4 copies deduped). Backend RecentActivityService drift noted for follow-up (DEC-501)."
     },
     {
       "id": "UX-001",
@@ -2669,8 +2697,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "one flaky fetch makes all future builds uninstallable updates; recovery = fleet uninstall (local data loss)",
       "prompt": "In android/cloudbuild.yaml compute-version, replace the dual versionCode scheme (commit count with minutes-since-1700000000 fallback) with a single monotonic scheme: read a high-water-mark integer from gs://health-fitness-160-android-releases/version-code, set VERSION_CODE=max(hwm+1, commit_count), write it back in distribute-firebase next to last-release-sha. Fail the build if neither git history nor the marker is readable.",
-      "status": "open",
-      "skeptic": "demoted from high: landmine requires a transient unshallow failure to arm (unobserved to date), and post-arming blast radius is the internal-tester fleet with bounded recovery (uninstall/reinstall; data re-derivable from server sync)."
+      "status": "implemented-on-branch",
+      "skeptic": "demoted from high: landmine requires a transient unshallow failure to arm (unobserved to date), and post-arming blast radius is the internal-tester fleet with bounded recovery (uninstall/reinstall; data re-derivable from server sync).",
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "android/cloudbuild versionCode: removed the minutes-since-anchor fallback + silent shallow under-count; fail loud if still shallow. Single monotonic scheme."
     },
     {
       "id": "CICD-004",
@@ -2717,10 +2749,14 @@
       "regulatory_friction": "none",
       "null_option_cost": "jobs silently pinned to stale images until an incident",
       "prompt": "In backend/cloudbuild.yaml, rewrite the four update-*-job steps to `gcloud run jobs describe` first and only swallow the not-found case; a failed update on an existing job must fail the build.",
-      "status": "open",
+      "status": "implemented-on-branch",
       "absorbs": [
         "OBS-004"
-      ]
+      ],
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "backend/cloudbuild: replaced four `jobs update ... || true` with describe-guards \u2014 missing job skipped+logged, real update failure now fails the build."
     },
     {
       "id": "CICD-006",
@@ -3730,7 +3766,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Repeated discovery cost per machine/agent session; erodes trust in CLAUDE.md accuracy",
       "prompt": "Fix the 8080->8090 port claims in CLAUDE.md, README.md, and docs/reference/deployment.md; add Tailscale (+tailnet HTTPS certificates) and gcloud ADC login to the documented dev.sh prerequisites and to the script's preflight require() checks.",
-      "status": "open"
+      "status": "resolved",
+      "implemented_by": [
+        "Phase 5 (commits 088d97e1/957f25ef)"
+      ],
+      "implementation_note": "dev.sh port docs corrected to 8090 in CLAUDE.md/README/deployment.md (Phase 5 truth-pass)."
     },
     {
       "id": "DX-004",
@@ -3939,7 +3979,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Near-zero until a non-Claude agent is used, then confusing misbehavior with no obvious cause",
       "prompt": "Move the Google Health parity context destination to docs/reference/google-health-parity-context.md and make AGENTS.md either absent or a one-line pointer to CLAUDE.md; update infra/README.md step 9 and CLAUDE.md:83-84.",
-      "status": "open"
+      "status": "resolved",
+      "implemented_by": [
+        "Phase 5 (commits 088d97e1/957f25ef)"
+      ],
+      "implementation_note": "AGENTS.md placeholder archived to docs/archive/2026-09/ (Phase 5 reaping)."
     },
     {
       "id": "PROD-001",
@@ -4182,7 +4226,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Daily-glance surface shows a dead tile forever",
       "prompt": "Delete Readiness fixture + dead flags, or compute a readiness composite off live daily-metrics.",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/quick-wins"
+      ],
+      "implementation_note": "Removed dead DashboardFlags (showVitalsFixtures/showTodayCardFixtures), the Readiness fixture tile, and vitalsShortLabels. Kept live showRecentFeedFixtures."
     },
     {
       "id": "PROD-010",
@@ -4266,8 +4314,9 @@
     "date": "2026-09-14",
     "branches": [
       "feature/audit-remediation (PR #249)",
-      "feature/deadline-migrations (stacked PR)"
+      "feature/deadline-migrations (PR #250)",
+      "feature/quick-wins (PR #3)"
     ],
-    "summary": "13 findings addressed: 10 on the safety/perf branch + SOTA-003/004 and SUP-005 on the stacked deadline-migration branch."
+    "summary": "25 findings addressed: 10 safety/perf (#249), SOTA-003/004+SUP-005 (#250), 4 Phase-5 doc fixes marked, and 8 quick-wins (SEC-005/008/009/011, XPLAT-008, PROD-009, CICD-003/005) on #3."
   }
 }

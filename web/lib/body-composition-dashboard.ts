@@ -1,4 +1,5 @@
 import { apiJson } from "@/lib/api";
+import { KG_TO_LB } from "@/lib/units";
 import type { Reading } from "@/lib/types/body-composition";
 import type { WeightStat } from "@/components/dashboard/WeightStatCard";
 
@@ -8,7 +9,6 @@ import type { WeightStat } from "@/components/dashboard/WeightStatCard";
 // derivation, and the weight chart series/axis/labels. Extracted from
 // app/page.tsx.
 
-const KG_TO_LB = 2.20462;
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 
 export type BodyCompositionView = {

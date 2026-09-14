@@ -5,6 +5,7 @@ import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
+import com.gte619n.healthfitness.integrations.config.OutboundFetchGuard;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -197,6 +198,13 @@ public class DrugImageGenerator {
      * Fetch a reference image from RxImageAccess URL.
      */
     private Optional<byte[]> fetchReferenceImage(String imageUrl) {
+        // SSRF guard (SEC-011): this URL originates from external drug-visual
+        // lookup data (RxImageAccess/model), so fence it before fetching —
+        // https-only, host on the image allowlist, no private/metadata IPs.
+        if (!OutboundFetchGuard.isAllowedImageHost(imageUrl)) {
+            System.err.println("Rejected reference image URL (SSRF guard): " + imageUrl);
+            return Optional.empty();
+        }
         try {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(imageUrl))
