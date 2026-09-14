@@ -94,6 +94,14 @@
   wear manifest; set explicit `android:allowBackup="true"` on both so the posture
   is intentional. Closes the device-transfer/cloud-backup token-leak gap.
 
-## Final verification (lead agent)
+## Cherry-picked: workout-coach bug fixes (not an audit finding)
 
-_(appended after the backend agent + integrated verify)_
+- **DEC-507 — cherry-picked `5e35722f` from `workout-coach-improvements`** onto
+  this branch at operator request (→ new commit `0750f605`), folding it into
+  PR #251. Three android workout-coach fixes: persist last-set RIR, key the rep
+  prompt/cue to the engine target, unstale the post-rest announcement
+  (`android/feature-workouts/session/*`). The source branch was one commit ahead
+  of current `main` (merge-base = `b7e58b0b`), touching 5 files disjoint from the
+  audit work, so cherry-pick applied cleanly and kept the stack linear (vs a
+  merge). Verified: `:feature-workouts:compileDebugKotlin` SUCCESS;
+  SessionFormatTest 28/28, WorkoutSessionViewModelTest 21/21.
