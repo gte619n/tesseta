@@ -92,10 +92,14 @@ fun targetReps(prescription: Prescription): Int? {
 /**
  * The prefill for the next, not-yet-logged set of a prescription — the value
  * the logger shows on the pending row and the coach announces. Precedence
- * (IMPL-PROG-02 D1): what was carried within this session (the last logged set),
- * then the ENGINE PREDICTION ([Prescription.targetWeightLbs] / [targetReps]) as
- * the authoritative next target, then — only if there's no prediction — the final
- * set of the previous session ([lastSets]).
+ * (IMPL-PROG-02 D1): weight carries within this session (the last logged set)
+ * first, then the ENGINE PREDICTION ([Prescription.targetWeightLbs]), then the
+ * final set of the previous session ([lastSets]). REPS lead with the engine
+ * target ([targetReps]) — ahead of the within-session carry and last-session
+ * actuals — because the last-set RIR gate and the coach cue read this number,
+ * and a carried below-target rep count was suppressing the RIR pick and making
+ * the coach announce stale reps. Only when there's no engine decision does reps
+ * fall back to the carry.
  *
  * <p>Making the prediction win over last-session actual is the root-cause fix for
  * the "announcement/notification switched a second later" race: the shown number
@@ -130,7 +134,12 @@ fun prefillFor(
     } else {
         SetPrefill(
             weightLbs = previous?.weightLbs ?: prescription.targetWeightLbs ?: lastTime?.weightLbs,
-            reps = previous?.reps ?: targetReps(prescription) ?: lastTime?.reps
+            // Reps lead with the engine target (see the precedence note above). It's
+            // always repsMin/repsMax — i.e. ≥ the rep floor — so seeding the staged
+            // reps with it keeps the last-set RIR gate (repsOutcome vs the target)
+            // open and the coach cue on the engine's number. Carry/last-session only
+            // win when there's no engine decision (static program → targetReps null).
+            reps = targetReps(prescription) ?: previous?.reps ?: lastTime?.reps
                 ?: prescription.repsMax ?: prescription.repsMin,
         )
     }
