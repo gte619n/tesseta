@@ -111,21 +111,22 @@ resource "google_firestore_backup_schedule" "production_weekly" {
 # ---------------------------------------------------------------------------
 
 locals {
-  # App buckets enumerated from infra/scripts/bootstrap-gcp.sh + application.yml
-  # references cited in the cost audit (§1). Bucket names are
-  # ${project}-<suffix>. Exports bucket included (holds Firestore export copies).
+  # App buckets that ACTUALLY EXIST in health-fitness-160 (verified 2026-09-14 via
+  # the Storage API at apply time — the original list guessed `-food`/`-studio`/
+  # `-exports`, which don't exist, and missed the PHI upload buckets below).
+  # Includes the PHI-sensitive lab/scan/medication uploads (versioning protects
+  # against accidental overwrite/delete).
   versioned_bucket_names = [
     "${var.project_id}-nutrition-photos",
-    "${var.project_id}-food",
-    "${var.project_id}-studio",
     "${var.project_id}-equipment",
     "${var.project_id}-gym-photos",
     "${var.project_id}-exercise-media",
     "${var.project_id}-android-releases",
-    "${var.project_id}-exports",
-    # NOTE: `${var.project_id}-firestore-exports` is intentionally NOT here — it
-    # is managed in firestore_export.tf (DEC, 2026-09-13 interview: monthly cold
-    # exports), which needs an age-based lifecycle a for_each member can't carry.
+    "${var.project_id}-blood-tests",
+    "${var.project_id}-dexa-scans",
+    "${var.project_id}-medication-images",
+    # NOTE: `${var.project_id}-firestore-exports` is managed in firestore_export.tf
+    # (needs an age-based lifecycle a for_each member can't carry).
   ]
 }
 
