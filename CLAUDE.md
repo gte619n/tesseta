@@ -28,6 +28,13 @@
 - Trunk-based dev on `main`. Feature branches named `feature/<slug>` (see
   Worktrees below for the exact form).
 - One commit per logical change. Don't squash unrelated work.
+- **Android image loads don't share the API auth stack.** Coil's singleton
+  `ImageLoader` (AppModule) uses its own OkHttp client — the Retrofit
+  `AuthInterceptor`/bearer does NOT apply. Loading from an authenticated backend
+  endpoint (e.g. the SEC-012 private meal-photo redirect) requires a host-scoped
+  **network** interceptor that adds the bearer only on backend-host hops, so it
+  isn't sent on a cross-host 302 to a GCS signed URL (which rejects requests
+  carrying `Authorization`). See `ImageAuthInterceptor`.
 
 ## Worktrees
 - Worktrees live in `.worktrees/` at the repo root (not `.claude/worktrees/`).
