@@ -199,7 +199,18 @@ steps:
         set -euo pipefail
         FIREBASE_APP_ID="$(gcloud secrets versions access latest \
           --secret=firebase-android-app-id --project=$PROJECT_ID)"
-        curl -sL https://firebase.tools | bash
+        # CICD-007: install a PINNED firebase CLI standalone binary directly from
+        # GitHub releases. The old `curl -sL https://firebase.tools | bash`
+        # installer resolved a non-existent version (v15.30.1) and saved the 404
+        # page AS the binary ("firebase: line 1: Not: command not found"),
+        # failing every release deploy. `-f` fails on HTTP error, and the
+        # `firebase --version` check fails loudly if the download isn't a real
+        # binary. Bump FIREBASE_VERSION deliberately.
+        FIREBASE_VERSION="v15.30.0"
+        curl -sSfL -o /usr/local/bin/firebase \
+          "https://github.com/firebase/firebase-tools/releases/download/$${FIREBASE_VERSION}/firebase-tools-linux"
+        chmod +x /usr/local/bin/firebase
+        firebase --version
 
         # The App Distribution upload endpoint occasionally returns a transient
         # 5xx (e.g. HTTP 503) that has nothing to do with the build. Retry the
