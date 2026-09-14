@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 import type { Route } from "next";
 import { signIn } from "@/auth";
 import { apiJson } from "@/lib/api";
+import { KG_TO_LB } from "@/lib/units";
 import { DexaUploadButton } from "@/components/dexa/DexaUploadButton";
 import {
   BodyWeightCell,
@@ -54,7 +55,6 @@ type Row = {
 
 // Backend stores masses in kg for Google Health readings, in lbs for DEXA.
 // The page converts everything to imperial at render time.
-const KG_TO_LB = 2.20462;
 const SESSION_WINDOW_MS = 5 * 60 * 1000;
 
 // Google Health read scopes. Each data-type family needs its own scope:

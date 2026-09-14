@@ -6,10 +6,8 @@ import type { BiometricSummary } from "@/lib/biometrics-api";
 import { formatCadence } from "@/lib/format-cadence";
 import { formatObserved } from "@/lib/format-observed";
 import { formatNumber } from "@/lib/format-number";
-import { weightUnitLabel, weightValue } from "@/lib/units";
+import { KG_TO_LB, weightUnitLabel, weightValue } from "@/lib/units";
 import type { WeightUnit } from "@/lib/units";
-
-const KG_TO_LB = 2.20462;
 
 // Per-metric show/hide with the latest reading + how often it arrives. Toggling
 // optimistically updates the switch and persists the full hidden set via the

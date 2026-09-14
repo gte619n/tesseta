@@ -39,10 +39,14 @@
 ## AI Models
 - **General AI work** (text generation, parsing, extraction, lookup):
   `gemini-3.8-flash`
-- **Image generation**: `gemini-3.1-flash-image-preview`
+- **Image generation**: `gemini-3.1-flash-image` (GA; exercise-media generation
+  overrides to the higher-quality `gemini-3-pro-image` in prod)
 - **Documented Gemini Pro exceptions** (each sanctioned by an ADR): Goals chat
   (`gemini-3.1-pro-preview`, ADR-0005) and the workout-program designer
   (`gemini-3.1-pro-preview`, ADR-0013).
+- Prefer **GA model ids over `-preview`**: preview ids carry earliest-shutdown
+  dates and have expired unnoticed in prod (SOTA-002). Verify the current GA id
+  before pinning a model.
 - Don't introduce another Gemini model, or another provider (OpenAI, Anthropic,
   etc.), without an ADR.
 
@@ -91,6 +95,10 @@ This script:
 ## Tools
 - GCP project: `health-fitness-160`
 - Region: `us-central1`
+- Firestore **prod database is the *named* `production`** (not `(default)`);
+  local dev runs against `(default)`. Anything that names a DB must scope it via
+  `FIRESTORE_DATABASE_ID` / `var.firestore_database` — hard-coding `(default)`
+  silently writes to the wrong database.
 - `AGENTS.md` (formerly a never-filled placeholder for the Google Health API
   Parity Tool context file) was archived 2026-09 to
   `docs/archive/2026-09/AGENTS.md` — there is no `AGENTS.md` at the repo root.

@@ -1,9 +1,9 @@
 package com.gte619n.healthfitness.api.nutrition;
 
+import com.gte619n.healthfitness.config.SecretCompare;
 import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJob;
 import com.gte619n.healthfitness.core.nutrition.jobs.NutritionJobDispatcher;
 import com.gte619n.healthfitness.integrations.nutrition.CloudTasksNutritionJobQueue;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -65,7 +65,9 @@ public class NutritionJobController {
         @RequestBody NutritionJob job
     ) {
         String presented = token == null ? "" : token.trim();
-        if (secret.isBlank() || !Objects.equals(secret, presented)) {
+        // Constant-time compare (SEC-009): the blank-secret short-circuit stays
+        // (fail closed on misconfig), and both sides are already .trim()'d.
+        if (secret.isBlank() || !SecretCompare.constantTimeEquals(secret, presented)) {
             // Fail closed: an unset secret (misconfig) or a mismatch is rejected.
             log.warn("Nutrition job rejected — secret missing or mismatched");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

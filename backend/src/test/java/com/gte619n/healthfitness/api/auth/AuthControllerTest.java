@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -25,8 +26,13 @@ import org.springframework.test.web.servlet.MockMvc;
 // (resolution is covered elsewhere); here we pin the controller's own contract:
 // exchange mints a pair, refresh maps an invalid token to 401, logout is 204,
 // and a missing signing key surfaces as 503.
+//
+// dev-login carries a second prod guard (SEC-008): it is only permitted when the
+// deployment is non-prod. This slice runs under a non-prod project id so the
+// happy-path dev-login test exercises the enabled branch.
 @WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@TestPropertySource(properties = "app.gcp.project-id=demo-uat")
 class AuthControllerTest {
 
     @Autowired MockMvc mvc;

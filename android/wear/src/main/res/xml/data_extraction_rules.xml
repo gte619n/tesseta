@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup/transfer rules (Wear OS, API 31+). Mirrors the phone app's
+  data_extraction_rules.xml intent for the wear module.
+
+  SEC-005: the wear auth DataStore (`hf-wear-auth`, holding the Google ID token
+  relayed from the paired phone — WearIdTokenCache.kt) is a plain-text session
+  credential. Exclude it from both cloud-backup and device-transfer so it cannot
+  ride a backup/transfer onto another device. DataStore Preferences files live
+  under files/datastore/<name>.preferences_pb — hence the `file` domain, NOT
+  sharedpref.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore/hf-wear-auth.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/hf-wear-auth.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

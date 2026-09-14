@@ -86,7 +86,7 @@ echo "==> Deploying Gen2 Cloud Function ${FUNCTION_NAME} (source=${SOURCE_DIR})"
 gcloud functions deploy "${FUNCTION_NAME}" \
   --gen2 \
   --region="${REGION}" \
-  --runtime=nodejs20 \
+  --runtime=nodejs22 \
   --source="${SOURCE_DIR}" \
   --entry-point=generateThumbnail \
   --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \

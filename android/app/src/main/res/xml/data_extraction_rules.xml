@@ -13,14 +13,23 @@
   of backend data, so there is nothing to gain by backing it up — and good reason
   not to ship health data to cloud backups. Excluded from both cloud backup and
   device-to-device transfer.
+
+  SEC-005: the plain-text auth DataStore (`hf-auth`, holding the id/refresh
+  tokens — IdTokenCache.kt) is likewise excluded from both cloud-backup and
+  device-transfer, so a long-lived, theft-undetectable session credential cannot
+  ride a backup/transfer onto another device (mirrors the DB exclusion above per
+  ADR-0007 intent). DataStore Preferences files live under
+  files/datastore/<name>.preferences_pb — hence the `file` domain, NOT sharedpref.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="hf_offline_db_prefs.xml" />
         <exclude domain="database" path="hf-offline.db" />
+        <exclude domain="file" path="datastore/hf-auth.preferences_pb" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="hf_offline_db_prefs.xml" />
         <exclude domain="database" path="hf-offline.db" />
+        <exclude domain="file" path="datastore/hf-auth.preferences_pb" />
     </device-transfer>
 </data-extraction-rules>

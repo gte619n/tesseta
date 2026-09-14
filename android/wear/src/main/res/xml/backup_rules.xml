@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy auto-backup rules (Wear OS, API 30). Mirrors the phone app's
+  backup_rules.xml intent for the wear module.
+
+  SEC-005: the wear auth DataStore ("hf-wear-auth", holding the Google ID token
+  relayed from the paired phone — WearIdTokenCache.kt) is a plain-text session
+  credential. Exclude it from cloud backup so it cannot ride a backup onto
+  another device. DataStore Preferences files live under
+  files/datastore/<name>.preferences_pb, so this is the `file` domain (NOT
+  sharedpref).
+-->
+<full-backup-content>
+    <exclude domain="file" path="datastore/hf-wear-auth.preferences_pb" />
+</full-backup-content>

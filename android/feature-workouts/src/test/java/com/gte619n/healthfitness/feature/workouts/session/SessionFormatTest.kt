@@ -278,6 +278,29 @@ class SessionFormatTest {
     }
 
     @Test
+    fun `prefill reps prefer the engine target over the within-session carry`() {
+        // Engine reset the band to its bottom (6) on a weight increase. Even though
+        // the prior set THIS session was logged at 10, the pending set — and the
+        // last-set RIR gate and coach cue that both read this number — must track
+        // the engine's 6, not the carried 10. Carrying reps first was suppressing
+        // the RIR pick and announcing stale reps.
+        val up = rx(
+            repsMin = 6,
+            repsMax = 10,
+            targetWeightLbs = 155.0,
+            rationale = rationale(ProgressionDirection.UP),
+        )
+        val prefill = prefillFor(
+            up,
+            logged = listOf(LoggedSet(weightLbs = 155.0, reps = 10)),
+            lastSets = mapOf("ex-x" to listOf(LoggedSet(weightLbs = 145.0, reps = 12))),
+        )
+        assertEquals(6, prefill.reps)
+        // Weight still carries the in-session load (the bar you're actually under).
+        assertEquals(155.0, prefill.weightLbs)
+    }
+
+    @Test
     fun `prefill still carries last session when there is no prediction`() {
         // A static prescription (no target, no rationale) keeps carry-forward.
         val prefill = prefillFor(

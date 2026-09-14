@@ -111,13 +111,9 @@ data class Vital(
 // fixtures while their live data sources are wired up. Flip a flag off once a
 // region is fully live.
 object DashboardFlags {
-    const val showVitalsFixtures = true       // HRV / RHR / Readiness
     // Recent feed is live (DashboardViewModel.recentActivity ←
     // GET /api/me/recent-activity). Flip back to true to fall back to fixtures.
     const val showRecentFeedFixtures = false
-    // Today card: calories + macros are live (DashboardViewModel.nutrition).
-    // Only the workout line is still fixture-backed.
-    const val showTodayCardFixtures = true    // workout line only
 }
 
 // IMPL-AND-01: remaining static content the dashboard falls back to for the
@@ -136,6 +132,9 @@ object DashboardFallbacks {
 
     // Dashed no-data fixtures: a vital tile that has no live series shows "—"
     // (no fabricated value, delta, or trend line) so real data is unmistakable.
+    // Indexed by position from MetricVitals / PhoneTodayScreen: [0] Body,
+    // [1] HRV, [2] Resting HR. (PROD-009 removed the dead "Readiness" fixture
+    // tile, which was never rendered or indexed by any live surface.)
     val vitals = listOf(
         Vital(
             label = "Body",
@@ -161,17 +160,7 @@ object DashboardFallbacks {
             delta = null,
             sparkline = FLAT_SPARK,
         ),
-        Vital(
-            label = "Readiness",
-            icon = DashboardIcons.Flame,
-            value = "—",
-            unit = "%",
-            pill = null,
-            sparkline = FLAT_SPARK,
-        ),
     )
-
-    val vitalsShortLabels = listOf("Weight", "HRV", "RHR", "Ready")
 
     data class Macro(val label: String, val value: String, val unit: String, val pct: Float)
 

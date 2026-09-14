@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte619n.healthfitness.integrations.googlehealth.DailyMetricDataType;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthDataType;
+import com.gte619n.healthfitness.config.SecretCompare;
 import com.gte619n.healthfitness.integrations.googlehealth.GoogleHealthSignatureVerifier;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
@@ -142,17 +143,10 @@ public class GoogleHealthWebhookController {
     }
 
     private boolean isAuthorized(String header) {
+        // Fail closed on a blank configured secret (misconfig); constant-time
+        // compare via the shared helper (SEC-009).
         if (configuredSecret.isBlank()) return false;
-        if (header == null) return false;
-        return constantTimeEquals(header.getBytes(StandardCharsets.UTF_8),
-            configuredSecret.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static boolean constantTimeEquals(byte[] a, byte[] b) {
-        if (a.length != b.length) return false;
-        int diff = 0;
-        for (int i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-        return diff == 0;
+        return SecretCompare.constantTimeEquals(header, configuredSecret);
     }
 
     // Parse the common envelope once, then route on dataType. A single

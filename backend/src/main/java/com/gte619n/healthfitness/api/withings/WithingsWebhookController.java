@@ -1,8 +1,8 @@
 package com.gte619n.healthfitness.api.withings;
 
+import com.gte619n.healthfitness.config.SecretCompare;
 import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.core.user.UserRepository;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -135,16 +135,9 @@ public class WithingsWebhookController {
     }
 
     private boolean isAuthorized(String provided) {
-        if (configuredSecret.isBlank() || provided == null) return false;
-        return constantTimeEquals(
-            provided.getBytes(StandardCharsets.UTF_8),
-            configuredSecret.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static boolean constantTimeEquals(byte[] a, byte[] b) {
-        if (a.length != b.length) return false;
-        int diff = 0;
-        for (int i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-        return diff == 0;
+        // Fail closed on a blank configured secret; constant-time compare via
+        // the shared helper (SEC-009).
+        if (configuredSecret.isBlank()) return false;
+        return SecretCompare.constantTimeEquals(provided, configuredSecret);
     }
 }

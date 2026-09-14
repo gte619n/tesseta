@@ -210,6 +210,11 @@ class WorkoutSessionViewModel @Inject constructor(
             weightLbs = edited.weightLbs ?: base.weightLbs,
             reps = edited.reps ?: base.reps,
             rpe = edited.rpe ?: base.rpe,
+            // The final set's RIR pick (IMPL-PROG-02 F4/D4). Dropping these here
+            // silently discarded every tapped chip — observations all landed
+            // ABSENT and the engine could never leave double progression.
+            rir = edited.rir ?: base.rir,
+            rirSource = edited.rirSource ?: base.rirSource,
         )
         val updated = draft.logged[key].orEmpty() + set
         persistSets(key, updated)

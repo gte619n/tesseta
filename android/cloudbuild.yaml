@@ -32,22 +32,27 @@ steps:
       - |
         set -euo pipefail
 
-        # Cloud Build checks out a shallow clone; unshallow so `rev-list
-        # --count` reflects true main history. Network/auth may forbid it on a
-        # private repo, so this is best-effort.
+        # versionCode = commit count on main: monotonic, human-meaningful,
+        # increases every merge, and stays well under the 2.1e9 ceiling.
+        #
+        # CICD-003: this MUST come from the FULL history. A shallow clone yields
+        # a too-low count (an uninstallable downgrade), and the old
+        # minutes-since-anchor fallback (~1.49M) was a DIFFERENT numbering scheme
+        # that, once emitted, permanently buries commit-count — every later
+        # 634/635… build then looks like a downgrade and Play/the installer
+        # rejects it. So we fail the release LOUDLY rather than ever mint a code
+        # from an untrustworthy count.
+        #
+        # Cloud Build checks out a shallow clone; unshallow so `rev-list --count`
+        # reflects true main history.
         git -C /workspace fetch --unshallow --quiet 2>/dev/null || true
-
-        # versionCode: monotonic, ordered build number. Commit count on main is
-        # human-meaningful and increases with every merge; fall back to
-        # minutes-since-anchor (always available, strictly increasing per build,
-        # stays well under the 2.1e9 versionCode ceiling) if history is too
-        # shallow to count.
-        COMMIT_COUNT="$(git -C /workspace rev-list --count HEAD 2>/dev/null || echo 0)"
-        if [ "$$COMMIT_COUNT" -gt 1 ]; then
-          VERSION_CODE="$$COMMIT_COUNT"
-        else
-          VERSION_CODE="$(( ( $(date -u +%s) - 1700000000 ) / 60 ))"
+        if [ "$(git -C /workspace rev-parse --is-shallow-repository)" = "true" ]; then
+          echo "ERROR: repo still shallow after --unshallow; refusing to mint a versionCode from a partial commit count (would be an uninstallable downgrade)." >&2
+          exit 1
         fi
+        # set -euo pipefail (above) fails the build if rev-list errors — no
+        # silent `|| echo 0` fallback that could emit a bogus low code.
+        VERSION_CODE="$(git -C /workspace rev-list --count HEAD)"
 
         # baseVersionName is the single source of truth in build.gradle.kts;
         # read it so the marketing prefix isn't duplicated here.

@@ -117,6 +117,30 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
+    fun `logSet preserves the tapped RIR and its source`() = runTest {
+        // The final-set RIR chip (IMPL-PROG-02 F4/D4) rides the logged set as
+        // rir + rirSource. logSet's overlay used to copy only weight/reps/rpe,
+        // silently discarding every pick — all observations landed ABSENT.
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", squatKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.logSet(
+            squatKey,
+            LoggedSet(weightLbs = 185.0, reps = 8, rir = 2.0, rirSource = RIR_SOURCE_REPORTED),
+        )
+        advanceUntilIdle()
+
+        val appended = sets.captured.last()
+        assertEquals(2.0, appended.rir)
+        assertEquals(RIR_SOURCE_REPORTED, appended.rirSource)
+    }
+
+    @Test
     fun `first set prefills from the last time the exercise was done`() = runTest {
         val sets = slot<List<LoggedSet>>()
         coEvery {

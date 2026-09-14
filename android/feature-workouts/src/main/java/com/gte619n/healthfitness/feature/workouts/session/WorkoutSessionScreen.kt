@@ -487,6 +487,15 @@ private fun SessionBody(
         // when it finishes naturally (not skipped), re-announce the current
         // exercise so the user knows what's up. Skipping rest clears the timer,
         // restarting this effect with null and cancelling the pending cue.
+        // The post-rest cue reads steps/logged/lastSets through
+        // rememberUpdatedState: the effect delays for the whole rest, and the
+        // draft (an adjusted prescription, the set just logged) can change
+        // meanwhile — a plain capture would speak the values from when the rest
+        // STARTED (the "coach announces the old reps" bug), while re-keying the
+        // effect on them would restart the rest cue mid-countdown.
+        val stepsNow by rememberUpdatedState(steps)
+        val loggedNow by rememberUpdatedState(draft.logged)
+        val lastSetsNow by rememberUpdatedState(lastSets)
         LaunchedEffect(restTimer, voiceEnabled) {
             val timer = restTimer ?: return@LaunchedEffect
             // Only the between-sets rest announces "Rest N seconds"; the get-ready
@@ -500,8 +509,8 @@ private fun SessionBody(
                 announce(restAnnouncement(timer.totalSeconds))
             }
             if (remaining > 0) delay(remaining * 1_000)
-            steps.getOrNull(pagerState.currentPage)?.let { step ->
-                announceStep(step, draft.logged[step.key].orEmpty(), lastSets, announce)
+            stepsNow.getOrNull(pagerState.currentPage)?.let { step ->
+                announceStep(step, loggedNow[step.key].orEmpty(), lastSetsNow, announce)
             }
         }
         // Feature 3: blow the whistle the instant a rep set's rest countdown runs
