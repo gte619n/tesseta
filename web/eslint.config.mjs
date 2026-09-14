@@ -1,14 +1,12 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+// Next.js 16 ships `eslint-config-next` as native ESLint flat config arrays.
+// Spread them directly — the old FlatCompat().extends(...) wrapper breaks under
+// v16 ("Converting circular structure to JSON").
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-export default [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+const config = [
+  ...nextCoreWebVitals,
+  ...nextTypescript,
 ];
+
+export default config;

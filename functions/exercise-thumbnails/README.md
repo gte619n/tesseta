@@ -22,7 +22,7 @@ Infra section of
 
 ## Runtime
 
-- Node 20 + [`sharp`](https://sharp.pixelplumbing.com/) for the resize.
+- Node 22 + [`sharp`](https://sharp.pixelplumbing.com/) for the resize.
 - Entry point: `generateThumbnail` (exported via the functions-framework
   CloudEvent signature).
 

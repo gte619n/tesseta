@@ -658,8 +658,12 @@
       "regulatory_friction": "none",
       "null_option_cost": "low-likelihood compromise; forced migration at GCF nodejs20 retirement",
       "prompt": "In functions/exercise-thumbnails: bump engines.node to 22, sharp to ^0.35.4, @google-cloud/storage and functions-framework to latest majors; regenerate package-lock; `npm audit` to zero high; `node --check index.js`. Add a dependabot.yml npm entry for `/functions/exercise-thumbnails`. Note redeploy command for the operator (gcloud functions deploy, runtime nodejs22).",
-      "status": "open",
-      "absorbed_into": "SOTA-003"
+      "status": "implemented-on-branch",
+      "absorbed_into": "SOTA-003",
+      "implemented_by": [
+        "feature/deadline-migrations"
+      ],
+      "implementation_note": "Bonus while regenerating the function lockfile: sharp 0.33->0.35, functions-framework 3->5, storage 7->8 (APIs verified stable). npm audit HIGH/CRITICAL cleared (12 mixed -> 4 moderate transitive uuid, unreachable/breaking-only-fix \u2014 left)."
     },
     {
       "id": "SUP-006",
@@ -2983,10 +2987,14 @@
       "regulatory_friction": "none",
       "null_option_cost": "Forced outage 2026-10-30",
       "prompt": "Bump engines to Node 24, verify sharp prebuilds, redeploy, confirm a thumbnail generates.",
-      "status": "open",
+      "status": "implemented-on-branch",
       "absorbs": [
         "SUP-005"
-      ]
+      ],
+      "implemented_by": [
+        "feature/deadline-migrations"
+      ],
+      "implementation_note": "exercise-thumbnails function Node 20 -> 22 (deploy runtime nodejs22 + engines). Beats the 2026-10-30 GCF decommission. Deploy-time thumbnail smoke is the operator verification."
     },
     {
       "id": "SOTA-004",
@@ -3020,7 +3028,11 @@
       "regulatory_friction": "none",
       "null_option_cost": "Security-patch cutoff 2026-10-21",
       "prompt": "Execute MIG-002 (Next 16.3 + React 19.3 + node:24 image + codemods + e2e).",
-      "status": "open"
+      "status": "implemented-on-branch",
+      "implemented_by": [
+        "feature/deadline-migrations"
+      ],
+      "implementation_note": "Next.js 15.5.24 -> 16.3.5 (+ eslint-config-next 16, React 19.3, middleware->proxy rename, eslint flat-config). Build/typecheck/tests green; next-auth beta.32 compatible. Resolves on merge+deploy. Stacked PR on #249."
     },
     {
       "id": "SOTA-005",
@@ -4252,7 +4264,10 @@
   ],
   "implementation_update": {
     "date": "2026-09-14",
-    "branch": "feature/audit-remediation",
-    "summary": "10 findings addressed on the audit-remediation branch (safety batch + IMPL-PERF-01 A/B)."
+    "branches": [
+      "feature/audit-remediation (PR #249)",
+      "feature/deadline-migrations (stacked PR)"
+    ],
+    "summary": "13 findings addressed: 10 on the safety/perf branch + SOTA-003/004 and SUP-005 on the stacked deadline-migration branch."
   }
 }
