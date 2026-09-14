@@ -8,7 +8,7 @@
 `docs/test_reports/workout_logs/future_workouts.json` is a real training export
 — a 352-entry name-only exercise catalog plus a flat log of 411 completed
 sessions (2023-03 → 2025-11) tagged across 20 phases. We want it in Firestore as
-the basis for the workout-programs feature ([IMPL-15](../specs/IMPL-15-workout-programs.md)):
+the basis for the workout-programs feature ([IMPL-15](../archive/2026-09/specs/IMPL-15-workout-programs.md)):
 a populated catalog, the user's phase history, and the per-set weights actually
 lifted.
 

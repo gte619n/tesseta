@@ -10,9 +10,13 @@
 # growth in the steady state.
 #
 # A `google_firestore_field` with a `ttl_config` block targets a single field
-# across the named collection group. The project ID and the `(default)`
-# database match the rest of the deployment (project `health-fitness-160`,
-# Firestore native mode in `us-central1`).
+# across the named collection group. Prod traffic runs on the **`production`**
+# named database (NOT `(default)`), so the policy MUST target `production`
+# (project `health-fitness-160`, Firestore native mode in `us-central1`).
+#
+# DATA-002 fix (audit 2026-09-13): this previously targeted `(default)`, so the
+# live `production` database had NO active TTL on idempotencyKeys.expiresAt —
+# the infra-as-code record silently disagreed with prod. Corrected below.
 #
 # This file is the source of truth for the TTL policy. If Terraform is not yet
 # being applied for this project (the bootstrap is shell-scripted today, see
@@ -30,7 +34,7 @@
 # delete a document once its `expiresAt` Timestamp passes.
 resource "google_firestore_field" "idempotency_keys_ttl" {
   project    = var.project_id
-  database   = "(default)"
+  database   = var.firestore_database
   collection = "idempotencyKeys"
   field      = "expiresAt"
 

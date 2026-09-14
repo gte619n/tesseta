@@ -25,6 +25,11 @@ feature packages.
 - `com.gte619n.healthfitness` (root) — boot entrypoint (`HealthFitnessApplication`,
   `SecurityConfig`), plus `auth`/`config`/`admin`/`push` (cross-cutting infra) and
   `jobs` (Cloud Run batch entrypoints, `@Profile`-gated `CommandLineRunner`s).
+- `platform` — third-party OAuth platform infrastructure (ADR-0020): authorization/
+  token services, PKCE, RS256 keys/crypto, and the `/v1` audience/audit/rate-limit
+  filters. Its API controllers live in `api.platform` and `api.v1`.
+- `uat` — `UatStubConfig`: deterministic AI-client stubs so the full server boots
+  with no `GEMINI_API_KEY` for UAT/local end-to-end runs (`infra/scripts/uat.sh`).
 - `core.<feature>` — plain domain records + **pure-domain** services (pulls in
   `spring-context` for `@Service`/events/`@Cacheable`). Keep **Spring Web** out.
 - `api.<feature>` — controllers and DTOs, **and** the feature's

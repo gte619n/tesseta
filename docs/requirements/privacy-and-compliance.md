@@ -59,8 +59,22 @@ service; a user's use of the corresponding feature is the point of consent:
 | Google Health API | activity/device data | ingestion from Fitbit hardware |
 | Google Gemini | text/images the user submits (lab PDFs, meal photos, chat) | extraction & AI features |
 
-_(required)_ A user-facing **privacy policy** and an explicit **consent record**
-(what was granted, when) — currently consent is implicit in feature use.
+A user-facing **privacy policy** is published at `website/public/privacy.html`
+(https://tesseta.com/privacy, last updated 2026-07-28). **However, the published
+policy currently promises capabilities that are not built** (audit finding
+COMP-001, 2026-09-13):
+
+- §6/§7 promise record- and account-level **deletion** — no server-side account
+  deletion or export exists (see §5 below).
+- §5 promises "you can only ever reach your own records" — meal photos are
+  currently served from a **public-read GCS bucket** (audit SEC-012).
+- §3 promises Gemini content "is not used to train third-party models" — true
+  only on the paid API tier, which is unverified.
+
+Until those gaps close (or the policy is edited to match reality), treat the
+policy text as aspirational, not descriptive. _(required, still open)_ an explicit
+**consent record** (what was granted, when) — consent today is implicit in
+feature use, and neither client links the policy in-product (audit COMP-002).
 
 ## 5. Data-subject rights _(required)_
 
@@ -89,7 +103,10 @@ reliance on the shared secret alone.
 
 ## 8. Open compliance items (tracked)
 
-- Privacy policy + consent records (§4).
+- **Reconcile the published privacy policy with reality** (§4; audit COMP-001):
+  either ship deletion / privatize the photo bucket / verify the Gemini paid
+  tier, or amend the policy — the published promises must not outrun capability.
+- In-product policy links + consent/acceptance records (§4; audit COMP-002).
 - Account deletion + data export endpoints; retention schedule (§5).
 - Enable webhook signature verification; rotate the webhook secret (§7).
 - Formal HIPAA/GDPR assessment and a sub-processor DPA review before external

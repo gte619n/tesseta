@@ -254,7 +254,7 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         ExerciseService exerciseService,
         GroundingImageResolver grounding,
         Client client,
-        @Value("${app.exercises.media.model:gemini-3.1-flash-image-preview}") String model,
+        @Value("${app.exercises.media.model:gemini-3.1-flash-image}") String model,
         @Value("${app.exercises.media.grounding-enabled:true}") boolean groundingEnabled
     ) {
         this.storage = storage;

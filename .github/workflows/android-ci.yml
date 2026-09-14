@@ -1,15 +1,17 @@
 name: android-ci
 
+# CICD-001: this workflow now ALWAYS runs on pull_request to main (no top-level
+# `paths:` gate on the trigger) so it reports a conclusion on every PR and a
+# branch ruleset can safely require it. A first `changes` guard job detects
+# whether android/ (or this workflow) was touched; the heavy jobs `needs:` it
+# and short-circuit to success when nothing relevant changed. Net effect: a
+# docs-only PR still gets a green android-ci; a real android change still runs
+# the full suite and can still fail.
 on:
   push:
     branches: [main]
-    paths:
-      - 'android/**'
-      - '.github/workflows/android-ci.yml'
   pull_request:
-    paths:
-      - 'android/**'
-      - '.github/workflows/android-ci.yml'
+    branches: [main]
 
 # A force-push to a PR obsoletes the in-flight run; cancel it instead of
 # queueing behind it. Main pushes never cancel each other (every merge must
@@ -23,8 +25,32 @@ concurrency:
 # serially (the old single job) just added their wall times together.
 # Splitting them puts the R8/lint-vital long pole on its own runner.
 jobs:
+  # Early-exit guard. Reports quickly and always succeeds; its `changed` output
+  # tells the heavy jobs whether to run. On a push to main we force changed=true
+  # (belt-and-braces: main must always exercise the real build).
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.filter.outputs.android }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Detect android changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          # On push events paths-filter compares against the previous commit;
+          # for PRs it diffs against the base ref. If the filter can't resolve
+          # a base (rare), it defaults to changed, which fails safe (runs).
+          filters: |
+            android:
+              - 'android/**'
+              - '.github/workflows/android-ci.yml'
+
   test:
     name: debug + unit tests
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -83,6 +109,8 @@ jobs:
 
   release:
     name: release build (R8)
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -111,3 +139,25 @@ jobs:
         env:
           WEB_OAUTH_CLIENT_ID: ${{ vars.WEB_OAUTH_CLIENT_ID }}
         run: ./gradlew :app:assembleRelease
+
+  # Aggregate gate: one stable check name for the ruleset to require, regardless
+  # of how many heavy jobs exist or whether they were skipped. It succeeds when
+  # the component was unchanged (heavy jobs skipped) OR all heavy jobs passed,
+  # and fails if any heavy job failed. `if: always()` ensures it runs even when
+  # upstream jobs are skipped.
+  android-ci:
+    name: android-ci
+    needs: [changes, test, release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on heavy job results
+        run: |
+          echo "test=${{ needs.test.result }} release=${{ needs.release.result }}"
+          for r in "${{ needs.test.result }}" "${{ needs.release.result }}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "A required android job did not pass"; exit 1 ;;
+            esac
+          done
+          echo "android-ci gate passed"

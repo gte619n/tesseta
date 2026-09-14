@@ -27,7 +27,7 @@ below before changing anything.
 Auth (Google ID tokens across web/phone/wear), profile & unit preferences,
 Google Health ingestion, dashboard, blood markers + lab-PDF extraction, body
 composition + DEXA, medications + adherence + on-device dose reminders,
-AI-planned Goals, nutrition tracking + capture, gyms/equipment, an exercise
+AI-planned Goals, nutrition tracking + capture + drink logging, gyms/equipment, an exercise
 catalog with generated demos, and periodized workout programs — including an
 AI program designer, a full-screen set-by-set workout coach, and workout
 history. Admin surfaces (drug, equipment & exercise catalogs) are web-only. See
@@ -39,7 +39,7 @@ including deferred work (most Wear OS surfaces).
 The fastest path runs both servers with secrets pulled from GCP:
 
 ```bash
-bash infra/scripts/dev.sh   # backend :8080 + web :3000, Ctrl-C stops both
+bash infra/scripts/dev.sh   # backend :8090 + web :3000, Ctrl-C stops both
 ```
 
 Or per component:

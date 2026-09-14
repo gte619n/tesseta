@@ -17,7 +17,7 @@ truth for the UI, a sync engine reconciles it with the backend continuously,
 local edits push up immediately when online and queue when not, and the backend
 notifies the phone when new data is available to pull. The full implementation
 plan lives in
-[`IMPL-AND-20`](../plans/IMPL-AND-20-offline-first-sync.md); this ADR records
+[`IMPL-AND-20`](../archive/2026-09/plans/IMPL-AND-20-offline-first-sync.md); this ADR records
 the architectural decisions that constrain it.
 
 Several properties of the existing system shape the decision:

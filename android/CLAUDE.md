@@ -13,7 +13,8 @@
   repos return, not their interfaces.
 - **Backend is the system of record; the app is offline-first against it.**
   The backend owns Firestore and is the authority. On-device, `core-data` runs
-  an offline-first mirror (see `docs/plans/IMPL-AND-20-offline-first-sync.md`):
+  an offline-first mirror (ADR-0007; historical plan archived at
+  `docs/archive/2026-09/plans/IMPL-AND-20-offline-first-sync.md`):
   - **Reads** go through a local mirror backed by **Room (SQLCipher-encrypted)**
     via `MirrorRepositorySupport` / `MirrorStore`, kept fresh by `SyncEngine`
     (delta pulls, WorkManager workers, FCM push-to-pull).

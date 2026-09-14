@@ -12,7 +12,7 @@ image generation, and disallows any other model without an ADR.
 (`gemini-3.1-pro-preview`) and [ADR-0013](ADR-0013-workout-program-design-gemini-pro.md)
 workout-program design. This record is the third exception.
 
-[IMPL-15](../specs/IMPL-15-workout-programs.md) / [ADR-0008](ADR-0008-workout-history-import.md)
+[IMPL-15](../archive/2026-09/specs/IMPL-15-workout-programs.md) / [ADR-0008](ADR-0008-workout-history-import.md)
 seed an exercise catalog whose demo media so far is **still frames**
 (START/MID/END) from the approved image model. `Exercise.videoUrl` was always
 reserved "for future Veo." We now want short **looping demo videos** of the

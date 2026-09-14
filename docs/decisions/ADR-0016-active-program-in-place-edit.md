@@ -2,9 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-06-15
-- Relates to: [IMPL-18b](../specs/IMPL-18b-conversational-active-program-editing.md),
+- Relates to: [IMPL-18b](../archive/2026-09/specs/IMPL-18b-conversational-active-program-editing.md),
   [ADR-0012](ADR-0012-active-workout-logging.md) (completed sessions are history),
-  [IMPL-18 spec §Out of scope](../specs/IMPL-18-conversational-program-designer.md)
+  [IMPL-18 spec §Out of scope](../archive/2026-09/specs/IMPL-18-conversational-program-designer.md)
 
 ## Context
 

@@ -2,13 +2,13 @@
 
 - Status: Accepted
 - Date: 2026-06-16
-- Relates to: [IMPL-20](../specs/IMPL-20-exercise-admin-redesign.md),
-  [IMPL-19](../specs/IMPL-19-dynamic-demo-frames.md) (dynamic demo frames),
+- Relates to: [IMPL-20](../archive/2026-09/specs/IMPL-20-exercise-admin-redesign.md),
+  [IMPL-19](../archive/2026-09/specs/IMPL-19-dynamic-demo-frames.md) (dynamic demo frames),
   [ADR-0001](ADR-0001-three-component-architecture.md) (three-component architecture)
 
 ## Context
 
-The redesigned exercise admin ([IMPL-20](../specs/IMPL-20-exercise-admin-redesign.md))
+The redesigned exercise admin ([IMPL-20](../archive/2026-09/specs/IMPL-20-exercise-admin-redesign.md))
 renders a tile grid over 352 exercises, each with 1–5 frames and several
 candidate images per frame. Loading full-resolution images (stored
 `public, max-age=31536000, immutable` at up to ~1024px) for a dense grid is

@@ -13,7 +13,7 @@ Goals chat — and closed with: *"A second feature wants a non-flash model —
 that warrants its own ADR rather than widening this one."* This record is that
 second ADR.
 
-[IMPL-15](../specs/IMPL-15-workout-programs.md) ships AI workout-program
+[IMPL-15](../archive/2026-09/specs/IMPL-15-workout-programs.md) ships AI workout-program
 design: the user describes what they want, and Gemini designs a complete
 **Program → Phase → Workout Day → Block → Exercise** structure — a periodized
 mesocycle with sequenced phases (e.g. an accumulation block followed by a
@@ -57,7 +57,7 @@ generation ships flash only).
 - Scope is **workout-program design ONLY**. Exercise-catalog parsing and any
   other extraction stay on `gemini-3.5-flash`. Exercise demo-media generation
   stays on the image model `gemini-3.1-flash-image-preview`
-  ([IMPL-14](../specs/IMPL-14-exercise-library.md)). No other feature changes
+  ([IMPL-14](../archive/2026-09/specs/IMPL-14-exercise-library.md)). No other feature changes
   model.
 
 - The model is configured on its **own** environment variable,

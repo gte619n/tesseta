@@ -14,7 +14,7 @@ normalized data from the backend's REST API — never from Firestore directly.
 |---|---|---|
 | `backend/` | Spring Boot 3.5, Java 21 (virtual threads), Gradle Kotlin DSL, single-module | Cloud Run, `us-central1` |
 | `web/` | Next.js 15 App Router, TypeScript strict, Tailwind v4, pnpm | Cloud Run, `us-central1` |
-| `android/` | Kotlin 2.0, Jetpack Compose, Material 3, multi-module (+ Wear OS) | Play (phone + wear share `applicationId`) |
+| `android/` | Kotlin 2.0, Jetpack Compose, Material 3, multi-module (+ Wear OS) | Firebase App Distribution (`internal-testers`); no Play track — see [deployment.md](reference/deployment.md) |
 
 Why this split (full rationale in [ADR-0001](decisions/ADR-0001-three-component-architecture.md)):
 native Android buys first-class Health Connect / Wear OS / foldable support;
@@ -111,11 +111,14 @@ posture** for this PHI-grade app — live in
 ## Decisions & plans
 
 - Architecture Decision Records: [`docs/decisions/`](decisions/).
-- Forward-looking work not yet built: [`docs/plans/`](plans/) — the
-  android↔web parity roadmap (Wear surfaces, sleep/push/dark-mode) and the
-  bulk-equipment-import plan. (Active workout logging shipped since — ADR-0012;
-  the roadmap doc itself is stale on that point.)
+- Forward-looking work not yet built: [`docs/plans/`](plans/) — currently the
+  AppFunctions/Gemini voice-logging plan (blocked on Google Early Access), the
+  android build-speed roadmap, the state-management robustness plan, and the
+  android stability omnibus (status under review).
 
-> Implementation specs (`IMPL-*`) that described already-shipped features have
-> been retired; their durable content lives in the reference docs above. Only
-> specs with open work remain under [`docs/specs/`](specs/).
+> Implementation specs (`IMPL-*`) and plans that described already-shipped
+> features were archived 2026-09 to
+> [`docs/archive/2026-09/`](archive/2026-09/) with per-file evidence headers;
+> their durable content lives in the reference docs above (start with the
+> [feature catalog](reference/feature-catalog.md)). There is no `docs/specs/`
+> directory anymore.

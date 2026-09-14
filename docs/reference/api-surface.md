@@ -105,6 +105,9 @@ Two transport flags appear inline below:
 | `GET·POST /api/me/nutrition`, `GET /today`, `GET·PUT /target`, `GET /{date}` | Daily logs + macro target |
 | `POST·PATCH·DELETE /{date}/entries…`, `PATCH /{date}/entries/{entryId}/ingredients/{index}` | Food entry CRUD + per-ingredient edit on composite meals |
 | `POST /{date}/entries/{entryId}/image/regenerate` | Regenerate a logged entry's meal image |
+| `POST /{date}/entries/{entryId}/reanalyze` | Re-run the Gemini analysis of an entry's photo |
+| `POST /{date}/entries/{entryId}/adjust/start`, `/preview`, `/commit`, `/apply`, `/discard` | **Adjust-with-AI**: free-text correction of a logged meal. `start` kicks off the async path (202, `ADJUSTING` state, FCM review notification); `preview`+`apply` is the synchronous path; `commit` applies the pending proposal; `discard` clears pending/failed state |
+| `POST /{date}/entries/{entryId}/leftovers/analyze` **[multipart]**, `/apply`, `/discard`, `/restore` | **Remove Leftovers** (IMPL-LEFTOVER-01): photograph the plate → 202 `ANALYZING` → per-ingredient subtraction proposal → apply (live macros = consumed, served baseline preserved) / discard / restore the full portion |
 | `POST /{date}/composite-meal`, `POST /{date}/capture-meal` **[multipart]** | Log a multi-ingredient composite meal · log directly from a meal photo (Gemini) |
 | `GET /api/me/nutrition/meals/search` | Search the user's saved meals |
 | `POST /api/nutrition/capture/meal` **[multipart]**, `POST /capture/label` **[multipart]** | Gemini meal-photo / label extraction |
@@ -114,6 +117,15 @@ Two transport flags appear inline below:
 | `GET /api/me/nutrition/recent-meals?days&limit` | Distinct foods/meals logged recently (deduped by foodId or kind+name, newest first) — backs the add flow's one-tap recents list |
 | `POST /api/me/nutrition/{date}/relog` `{sourceDate, sourceEntryId, meal?}` | One-tap re-log: server-side copy of a past entry (reuses catalog foods, macros, ingredients and the finished-meal image — no AI rework) |
 | `GET /api/foods/search`, `GET /{foodId}`, `GET /barcode/{code}`, `POST`, `POST /{id}/confirm`, `POST /{id}/image/regenerate`, `POST /reindex-search` | Food catalog (+ rebuild the search index) |
+
+## Drinks (IMPL-DRINK-01)
+| Method · path | Purpose |
+|---|---|
+| `GET /api/me/drinks` | The user's drink list (catalog foods with `category="drink"`), in saved display order |
+| `PUT /api/me/drinks/order` | Persist the drink display order (`drinkOrder` on the user doc) |
+| `POST /api/me/drinks/analyze` | Gemini-analyze a described drink into macros (preview before create) |
+| `POST /api/me/drinks`, `PUT /{foodId}`, `DELETE /{foodId}` | Create / edit / archive a drink |
+| `POST /api/me/drinks/{foodId}/image/regenerate` | Regenerate a drink's image |
 
 ## Gyms / equipment
 | Method · path | Purpose |
@@ -137,6 +149,18 @@ Two transport flags appear inline below:
 |---|---|
 | `GET /api/me/sync?since&limit&schemaVersion&recentSince` | **Delta pull** backing the Android offline-first mirror (`SyncEngine`): changed records since a cursor, tombstones, schema version |
 | `GET /api/me/recent-activity` | Aggregated recent-activity feed (dashboard) |
+
+## Third-party platform (ADR-0020)
+The only surfaces **not** under `/api`. Shipped OAuth 2.1 authorization-code +
+PKCE platform for external read-only consumers; see
+[ADR-0020](../decisions/ADR-0020-third-party-oauth-platform-api.md).
+
+| Method · path | Purpose |
+|---|---|
+| `/oauth/*` | Authorization server: authorize (consent redirect), token (code exchange + refresh with successor-chain rotation, no grace) — `api.platform.OAuth*Controller` |
+| `/v1/*` | Versioned read API for third-party clients (user, nutrition, labs, workouts, medications) — platform tokens only (`PlatformAudienceFilter`), audited + rate-limited (`V1AuditFilter`, `V1RateLimitFilter`) |
+| `GET·DELETE /api/me/connected-apps…` | First-party management of granted third-party connections |
+| `/api/admin/oauth-clients…` | Admin-gated OAuth client registration |
 
 ## Webhook (ingestion)
 | Method · path | Purpose |

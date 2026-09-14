@@ -3,19 +3,40 @@ name: terraform-ci
 # Validates the infra-as-code on every change. fmt + validate need no cloud
 # credentials (init runs with -backend=false). `terraform plan` requires GCP
 # auth and is run manually against the remote state — see infra/README.md.
+#
+# CICD-001: always runs on pull_request to main (no top-level `paths:` gate) so
+# it reports a conclusion on every PR and a branch ruleset can require it. The
+# `changes` guard detects whether infra/terraform/ (or this workflow) was
+# touched; the heavy validate job `needs:` it and short-circuits to success when
+# unchanged. The `terraform-ci` aggregate job is the single stable check name
+# the ruleset requires.
 on:
   push:
     branches: [main]
-    paths:
-      - 'infra/terraform/**'
-      - '.github/workflows/terraform-ci.yml'
   pull_request:
-    paths:
-      - 'infra/terraform/**'
-      - '.github/workflows/terraform-ci.yml'
+    branches: [main]
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Detect terraform changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            terraform:
+              - 'infra/terraform/**'
+              - '.github/workflows/terraform-ci.yml'
+
   validate:
+    name: validate
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,3 +56,19 @@ jobs:
 
       - name: Validate
         run: tofu validate
+
+  # Aggregate gate: one stable check name for the ruleset. Succeeds when
+  # terraform was unchanged (validate skipped) OR validate passed.
+  terraform-ci:
+    name: terraform-ci
+    needs: [changes, validate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on validate result
+        run: |
+          echo "validate=${{ needs.validate.result }}"
+          case "${{ needs.validate.result }}" in
+            success|skipped) echo "terraform-ci gate passed" ;;
+            *) echo "terraform validate did not pass"; exit 1 ;;
+          esac
