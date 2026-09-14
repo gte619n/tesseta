@@ -15,6 +15,14 @@ drop-in with `terraform`.
 | `firestore_backup.tf` | DATA-001 | `google_firestore_database.production` (imported; enables PITR + delete-protection), `google_firestore_backup_schedule.production_daily` (7d), `.production_weekly` (14w), `google_storage_bucket.versioned[*]` (imported; versioning + noncurrent lifecycle) |
 | `firestore_ttl.tf` | DATA-002 | `google_firestore_field.idempotency_keys_ttl` re-targeted from `(default)` → `production` (via `var.firestore_database`) |
 | `monitoring.tf` | OBS-001 / OBS-004 / OBS-010 | email notification channel, backend 5xx alert, `/actuator/health` uptime check + alert, Cloud Build failure log-metric + alert, Cloud Run Job error log-metric + alert, (operator-gated) billing budget |
+| `firestore_export.tf` | DATA-001 (cold exports) | `google_storage_bucket.firestore_exports` (imported; versioning + 365d age lifecycle), `google_service_account.firestore_export` + IAM (`datastore.importExportAdmin`, bucket `objectAdmin`), `google_cloud_scheduler_job.firestore_monthly_export` (monthly export to GCS) |
+
+> **firestore_export.tf prerequisites:** enable the Cloud Scheduler API
+> (`gcloud services enable cloudscheduler.googleapis.com`) and confirm Cloud
+> Scheduler is available in `us-central1`. The job authenticates as the new
+> `firestore-export@` SA via OAuth; on first `apply` verify the export runs
+> (`gcloud scheduler jobs run firestore-monthly-export --location=us-central1`)
+> and lands objects under `gs://<project>-firestore-exports/scheduled/`.
 
 ## Prerequisites
 

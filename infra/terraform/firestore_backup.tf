@@ -123,7 +123,9 @@ locals {
     "${var.project_id}-exercise-media",
     "${var.project_id}-android-releases",
     "${var.project_id}-exports",
-    "${var.project_id}-firestore-exports",
+    # NOTE: `${var.project_id}-firestore-exports` is intentionally NOT here — it
+    # is managed in firestore_export.tf (DEC, 2026-09-13 interview: monthly cold
+    # exports), which needs an age-based lifecycle a for_each member can't carry.
   ]
 }
 

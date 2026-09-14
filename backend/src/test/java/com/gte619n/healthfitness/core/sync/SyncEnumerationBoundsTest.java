@@ -39,12 +39,14 @@ class SyncEnumerationBoundsTest {
 
     @Test
     void floorStaysWithinSlackAcrossAMultiYearAccount() {
-        // A 2-year-old cursor still only floors 35 days back from ITS date —
-        // this is what stops the enumeration growing with account age.
+        // A 2-year-old cursor still only floors BACKDATE_SLACK_DAYS back from ITS
+        // date — this is what stops the enumeration growing with account age.
         Instant twoYears = LocalDate.of(2028, 9, 13)
             .atStartOfDay(ZoneOffset.UTC).toInstant();
         String floor = SyncEnumerationBounds.dateFloorForCursor(cursorAt(twoYears));
-        assertThat(floor).isEqualTo("2028-08-09"); // 2028-09-13 minus 35 days
+        // 2028-09-13 minus the 7-day slack.
+        assertThat(floor).isEqualTo(
+            LocalDate.of(2028, 9, 13).minusDays(SyncEnumerationBounds.BACKDATE_SLACK_DAYS).toString());
     }
 
     @Test

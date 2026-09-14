@@ -28,17 +28,19 @@ public final class SyncEnumerationBounds {
      * How many days before the cursor's date the {@code nutritionDays}
      * enumeration floor is set, to cover backdated edits to recent past days.
      *
-     * <p>DECISION: no explicit max-backdate limit exists in the backend
-     * (nutrition entries accept any {@code LocalDate}; there is no server-side
-     * "you may only edit the last N days" rule), so this is a conservatively
-     * generous slack rather than a discovered constant. 35 days comfortably
-     * covers a month-plus of "fix last week's log" edits between two syncs of an
-     * active device; anything older than this is caught by the periodic
-     * full-scan fallback ({@link #isFullScanSync}). Widen if backdated-edit
-     * misses are ever reported (correctness is preserved by the fallback either
-     * way; a wider slack only trades a few more reads for faster convergence).
+     * <p>DECISION (operator, 2026-09-13 interview): set to 7 days. No explicit
+     * max-backdate limit exists in the backend (nutrition entries accept any
+     * {@code LocalDate}), but the operator confirmed users effectively edit only
+     * within the last week, so a 7-day fast-path floor captures the common case
+     * while keeping the per-sync enumeration minimal. Edits to entries OLDER
+     * than 7 days are a deliberate, accepted staleness trade: they still
+     * converge, just via the periodic full-scan fallback ({@link #isFullScanSync})
+     * rather than immediately. Correctness is preserved by the fallback either
+     * way; widen this constant if cross-device propagation of old-day edits is
+     * ever reported as too slow (a wider slack only trades more reads for faster
+     * convergence of rare old edits).
      */
-    public static final int BACKDATE_SLACK_DAYS = 35;
+    public static final int BACKDATE_SLACK_DAYS = 7;
 
     /**
      * Every Nth delta sync ignores the date floor and does a full parent

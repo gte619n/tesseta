@@ -36,23 +36,18 @@ steps:
 
   # Canary deploy: bring the new revision up with a stable `candidate` tag but
   # ZERO traffic, so the live revision keeps serving until it's proven healthy.
-  # ── PERF-002 / COST-001 RECOMMENDATION (not applied — operator cost decision) ──
+  # ── PERF-002 / COST-001 — Option 2 APPLIED (operator decision, 2026-09-13) ──
   # The audit measured backend p95 startup 15.7s and ~$81/mo of mostly-idle
   # compute driven by `--no-cpu-throttling` + the sync keepalive. The Dockerfile
-  # now adds Spring Boot CDS (targets startup <5s), which makes scale-to-zero far
-  # cheaper to tolerate. Per IMPL-PERF-01 Workstream B's decision matrix and the
-  # COST-001 async inventory (all durable background work is on the Cloud Tasks
-  # rail; the remaining fire-and-forget sites — nutrition image runAsync, the
-  # Withings/Google-Health webhook + backfill virtual threads, DrugCatalog cache
-  # warmers — are best-effort and merely run slower, not incorrectly, under
-  # CPU throttling), Agent 1 recommends **Option 2**:
-  #     - --min-instances=1          # keep one warm instance → ~1.3s p50, no cold start
-  #     (remove) --no-cpu-throttling # drop always-on CPU billing; CDS + warm instance cover latency
-  # Net effect vs today: warm always AND ≈ −$40 to −$55/mo (throttled idle
-  # instance bills per-request CPU + idle memory only). Rollback if a throttled
-  # background job regresses: re-add `--no-cpu-throttling` (single flag, instant).
-  # NOT changing the live flags below — apply deliberately after confirming the
-  # CDS startup win in `container/startup_latencies`.
+  # now adds Spring Boot CDS (targets startup <5s). The COST-001 async inventory
+  # found all durable background work is on the Cloud Tasks rail and the remaining
+  # fire-and-forget sites (nutrition image runAsync, Withings/Google-Health
+  # webhook + backfill virtual threads, DrugCatalog cache warmers) are best-effort
+  # — they run slower, not incorrectly, under CPU throttling. So we drop
+  # `--no-cpu-throttling` and add `--min-instances=1`: warm always (~1.3s p50) AND
+  # ≈ −$40 to −$55/mo vs today (a throttled idle instance bills per-request CPU +
+  # idle memory only). ROLLBACK if a throttled background job regresses: re-add
+  # `--no-cpu-throttling` (single flag, instant) and drop `--min-instances`.
   - id: deploy-candidate
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -76,15 +71,14 @@ steps:
       # forever) and breaking image stores ("Broken pipe"). 2Gi gives headroom.
       - --memory=2Gi
       - --cpu=2
-      # Studio-image generation runs on a detached CompletableFuture.runAsync
-      # thread that outlives the triggering request. With the default CPU
-      # throttling (CPU only allocated during a request) this low-traffic service
-      # starves that thread the moment the request returns — the in-flight Gemini
-      # call + multi-MB GCS upload stall until the socket resets ("Broken pipe" /
-      # "Error writing request body to server"), so we pay Gemini for an image
-      # that never gets stored. Always-allocated CPU lets the background work
-      # finish during the instance's post-request cooldown.
-      - --no-cpu-throttling
+      # PERF-002/COST-001 Option 2: keep one warm instance so the first
+      # dashboard/sync of the day skips the ~15.7s cold start (CDS in the
+      # Dockerfile cuts the remaining startup). Detached studio-image generation
+      # that formerly needed --no-cpu-throttling now runs on the Cloud Tasks rail
+      # in prod (NUTRITION_JOBS_MODE=cloud-tasks below); the leftover best-effort
+      # background threads tolerate throttling. Rollback: re-add
+      # --no-cpu-throttling and drop --min-instances if a background job regresses.
+      - --min-instances=1
       # Cap requests per instance well below the default 80: each meal capture
       # marshals multi-MB images (and spawns background image generation), so
       # packing dozens onto one instance is what blew past memory. At 16, Cloud
@@ -110,7 +104,7 @@ steps:
       # `?secret=` at subscribe time (see WithingsConnectController), so no
       # secret lives here. WITHINGS_CLIENT_ID/SECRET + WITHINGS_WEBHOOK_SECRET
       # come from Secret Manager below.
-      - --set-env-vars=^|^GCP_PROJECT_ID=$PROJECT_ID|CORS_ALLOWED_ORIGINS=https://app.tesseta.com,https://health-fitness-web-mbysudfbja-uc.a.run.app|GOOGLE_HEALTH_KMS_KEY=projects/$PROJECT_ID/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens|FIRESTORE_DATABASE_ID=production|ADMIN_EMAILS=evan.ruff@gmail.com,evan.ruff@oxos.com|EXERCISE_MEDIA_MODEL=gemini-3-pro-image-preview|PLATFORM_CONSENT_PAGE_URL=https://app.tesseta.com/oauth/authorize|NUTRITION_JOBS_MODE=cloud-tasks|NUTRITION_JOBS_HANDLER_URL=https://api.tesseta.com/internal/nutrition/jobs|WITHINGS_CALLBACK_URL=https://api.tesseta.com/api/webhooks/withings
+      - --set-env-vars=^|^GCP_PROJECT_ID=$PROJECT_ID|CORS_ALLOWED_ORIGINS=https://app.tesseta.com,https://health-fitness-web-mbysudfbja-uc.a.run.app|GOOGLE_HEALTH_KMS_KEY=projects/$PROJECT_ID/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens|FIRESTORE_DATABASE_ID=production|ADMIN_EMAILS=evan.ruff@gmail.com,evan.ruff@oxos.com|EXERCISE_MEDIA_MODEL=gemini-3-pro-image|PLATFORM_CONSENT_PAGE_URL=https://app.tesseta.com/oauth/authorize|NUTRITION_JOBS_MODE=cloud-tasks|NUTRITION_JOBS_HANDLER_URL=https://api.tesseta.com/internal/nutrition/jobs|WITHINGS_CALLBACK_URL=https://api.tesseta.com/api/webhooks/withings
       # OAUTH_* feed the IMPL-02 JWT audience check and the IMPL-04
       # refresh-token exchange. GOOGLE_HEALTH_WEBHOOK_SECRET is the
       # shared secret Google sends in the Authorization header on push

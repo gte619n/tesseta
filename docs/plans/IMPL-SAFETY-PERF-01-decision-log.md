@@ -5,6 +5,29 @@
 > decision made during autonomous implementation is recorded here for operator
 > review. Format: `DEC-NNN — decision — rationale — reversal`.
 
+## Interview outcomes (operator, 2026-09-13)
+
+Three rounds of structured review. Answers and the resulting code changes:
+
+| # | Decision | Operator choice | Change made |
+|---|---|---|---|
+| I-1 | PERF-002/COST-001 compute option | **Option 2** (warm + drop throttling) | `cloudbuild.yaml`: removed `--no-cpu-throttling`, added `--min-instances=1` (was documented-only) |
+| I-2 | PERF-001 backdate slack | **7 days** (was 35) | `SyncEnumerationBounds.BACKDATE_SLACK_DAYS` 35→7 + test + javadoc |
+| I-3 | SEC-012 sequencing | **Backlog, not blocking** | none — IMPL-SEC-01 spec stands, unprioritized |
+| I-4 | Who applies infra/ruleset | **Operator from runbooks** | none — confirms DEC-001 |
+| I-5 | Old-edit (>7d) propagation | **~16-sync full-scan is fine** | none — valve cadence unchanged; accepted staleness documented in `SyncEnumerationBounds` javadoc |
+| I-6 | CDS training-run risk | **Make training non-fatal** | `Dockerfile`: `|| true` + `:> app.jsa` fallback so a failed training boot never fails the image build |
+| I-7 | Backup coverage | **Add long-term cold exports** | new `firestore_export.tf`: monthly Cloud Scheduler export to GCS + dedicated SA + 365d lifecycle |
+| I-8 | Alert routing | **Email is fine** | none |
+| I-9 | Ruleset strictness | **Keep loose + break-glass** | none — confirms DEC-304/305/306 |
+| I-10 | Exercise-media pro image model (`gemini-3-pro-image-preview`) | **Verify + pin to GA** | `cloudbuild.yaml`: `EXERCISE_MEDIA_MODEL` → `gemini-3-pro-image` (GA confirmed 28 May 2026, ai.google.dev) |
+
+Re-verified after these changes: backend `compileJava` clean; `core.sync.*`
+green incl. `SyncEnumerationBoundsTest` 5/5 (slack=7); `tofu fmt` clean;
+`cloudbuild.yaml` + `application.yml` carry zero remaining `-preview` image ids.
+
+---
+
 ## Orchestration decisions (lead agent)
 
 **DEC-001 — Infra & GitHub changes are delivered as code + apply-scripts + docs, not applied live.**

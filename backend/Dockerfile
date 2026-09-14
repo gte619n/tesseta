@@ -27,14 +27,18 @@ WORKDIR /training
 COPY --from=builder /workspace/build/libs/app.jar app.jar
 RUN java -Djarmode=tools -jar app.jar extract --destination extracted
 # Training run against the exploded launcher: start, reach context-refresh, exit,
-# and persist the shared archive. `|| true` guards the non-zero exit some JVMs
-# report on the deliberate onRefresh shutdown; the build fails downstream only if
-# app.jsa was never written (the COPY below would error).
+# and persist the shared archive. DECISION (operator, 2026-09-13): the training
+# run is NON-FATAL — if it fails (e.g. a fail-closed bean needs a real credential
+# the build environment doesn't have), the image still builds, just without a
+# pre-baked archive. `|| true` swallows the training exit code; the `:> app.jsa`
+# fallback guarantees the file exists so the runtime COPY never errors. At runtime
+# `-XX:+AutoCreateSharedArchive` treats an empty/invalid archive as "regenerate,
+# don't fail" — so a failed training run costs the startup win, never the deploy.
 RUN cd extracted \
-    && java -XX:ArchiveClassesAtExit=/training/app.jsa \
+    && (java -XX:ArchiveClassesAtExit=/training/app.jsa \
             -Dspring.context.exit=onRefresh \
-            -jar app.jar || true \
-    && test -f /training/app.jsa
+            -jar app.jar || true) \
+    && ([ -s /training/app.jsa ] || : > /training/app.jsa)
 
 # Runtime stage
 FROM eclipse-temurin:21-jre
