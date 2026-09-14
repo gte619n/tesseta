@@ -172,12 +172,68 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
     /** Emitted routing name for nutrition entries (see SUBCOLLECTIONS). */
     private static final String NUTRITION_ENTRIES = "nutritionDays/entries";
 
+    private static final org.slf4j.Logger log =
+        org.slf4j.LoggerFactory.getLogger(FirestoreSyncChangeReader.class);
+
     private final Firestore firestore;
     private final FoodCatalogRepository foodCatalog;
+    // OBS-005: optional metrics — a Micrometer counter for pulled changes that
+    // the delta reader drops instead of emitting (previously a silent data-loss
+    // class). Absent in contexts without actuator; instrumentation is then a
+    // no-op WARN only.
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
-    public FirestoreSyncChangeReader(Firestore firestore, FoodCatalogRepository foodCatalog) {
+    public FirestoreSyncChangeReader(
+        Firestore firestore,
+        FoodCatalogRepository foodCatalog,
+        org.springframework.beans.factory.ObjectProvider<
+            io.micrometer.core.instrument.MeterRegistry> meterRegistry) {
         this.firestore = firestore;
         this.foodCatalog = foodCatalog;
+        this.meters = meterRegistry.getIfAvailable();
+    }
+
+    /**
+     * OBS-005 — a pulled change could NOT be routed/emitted in the delta feed and
+     * was dropped. This is the silent data-loss class the audit flagged: such a
+     * change used to vanish with no signal (the client-side SKIPPED mirror is the
+     * Android agent's counterpart). WARN + count it (tagged by collection) so the
+     * volume is visible in logs and metrics.
+     */
+    private void recordUnroutable(String collection, String id) {
+        log.warn("sync delta dropped an unroutable change: collection={} id={}", collection, id);
+        if (meters != null) {
+            meters.counter("sync.changes.dropped",
+                "collection", collection == null || collection.isBlank() ? "unknown" : collection)
+                .increment();
+        }
+    }
+
+    /**
+     * OBS-005 — a change was intentionally filtered out of this delta by the
+     * recent-window bound (not a data-loss: a later full-scan sync re-emits it).
+     * Counted (not WARN-logged, to avoid spam) so the filtered volume is still
+     * observable and distinguishable from the unroutable drops above.
+     */
+    private void countWindowFiltered(String collection) {
+        if (meters != null) {
+            meters.counter("sync.changes.window_filtered",
+                "collection", collection == null ? "unknown" : collection).increment();
+        }
+    }
+
+    /**
+     * Map a doc to a change, recording + dropping it if the result is unroutable
+     * (blank collection/id). Returns null when it must not be emitted.
+     */
+    private SyncChange toRoutableChange(String collection, String id, DocumentSnapshot doc) {
+        SyncChange change = toChange(collection, id, doc);
+        if (change == null || collection == null || collection.isBlank()
+            || id == null || id.isBlank()) {
+            recordUnroutable(collection, id);
+            return null;
+        }
+        return change;
     }
 
     @Override
@@ -192,9 +248,13 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
             CollectionReference ref = firestore.collection(USERS).document(userId).collection(name);
             for (QueryDocumentSnapshot doc : scan(ref, since, name, limit, /*subUserId*/ null)) {
                 if (!windowAllows(name, doc, window)) {
+                    countWindowFiltered(name);
                     continue;
                 }
-                all.add(toChange(name, doc.getId(), doc));
+                SyncChange change = toRoutableChange(name, doc.getId(), doc);
+                if (change != null) {
+                    all.add(change);
+                }
             }
         }
 
@@ -221,10 +281,14 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
                 // (e.g. "{med}/{adherenceId}"), matching the emitted change id.
                 for (QueryDocumentSnapshot doc : scan(ref, since, sub.emitted(), limit, userId)) {
                     if (!windowAllows(sub.emitted(), doc, window)) {
+                        countWindowFiltered(sub.emitted());
                         continue;
                     }
                     String id = subcollectionId(doc.getReference(), userId);
-                    all.add(toChange(sub.emitted(), id, doc));
+                    SyncChange change = toRoutableChange(sub.emitted(), id, doc);
+                    if (change != null) {
+                        all.add(change);
+                    }
                 }
             }
         }

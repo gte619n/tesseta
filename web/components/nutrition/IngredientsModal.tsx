@@ -156,7 +156,7 @@ export function IngredientsModal({
         {/* Header: finished-meal image + total */}
         <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-border-subtle px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <FoodImage imageUrl={entry.imageUrl} imageStatus={entry.imageStatus} size={64} />
+            <FoodImage imageUrl={entry.photoUrl ?? entry.imageUrl} imageStatus={entry.imageStatus} size={64} />
             <div className="min-w-0">
               <h2 className="m-0 truncate text-[16px] font-medium tracking-[-0.01em] text-primary">
                 {title.trim() || entry.foodName}

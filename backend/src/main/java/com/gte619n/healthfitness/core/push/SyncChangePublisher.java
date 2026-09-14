@@ -30,10 +30,33 @@ public class SyncChangePublisher {
 
     private final FcmTokenRepository tokens;
     private final FcmSender sender;
+    // OBS-006: optional metrics for FCM fan-out visibility. Absent in the focused
+    // unit test (no context); instrumentation is then a WARN-only no-op.
+    private final io.micrometer.core.instrument.MeterRegistry meters;
 
+    /** Spring-wired ctor: metrics injected when actuator is present. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public SyncChangePublisher(
+        FcmTokenRepository tokens,
+        FcmSender sender,
+        org.springframework.beans.factory.ObjectProvider<
+            io.micrometer.core.instrument.MeterRegistry> meterRegistry) {
+        this.tokens = tokens;
+        this.sender = sender;
+        this.meters = meterRegistry.getIfAvailable();
+    }
+
+    /** Test ctor without metrics. */
     public SyncChangePublisher(FcmTokenRepository tokens, FcmSender sender) {
         this.tokens = tokens;
         this.sender = sender;
+        this.meters = null;
+    }
+
+    private void count(String metric, String userId) {
+        if (meters != null) {
+            meters.counter(metric).increment();
+        }
     }
 
     @EventListener
@@ -50,6 +73,13 @@ public class SyncChangePublisher {
     private void fanOut(SyncChangedEvent event) {
         List<FcmToken> all = tokens.findByUser(event.userId());
         if (all.isEmpty()) {
+            // OBS-006: a user with ZERO registered tokens means EVERY sync push
+            // for them is silently dropped — this was the invisible dead-push
+            // class (the prod FCM-cert mismatch emptied the registry for
+            // everyone). WARN + count so the outage is observable, not silent.
+            log.log(Level.WARNING, "FCM fan-out found NO tokens for user=" + event.userId()
+                + " collections=" + event.collections() + " — push silently dropped");
+            count("fcm.fanout.no_tokens", event.userId());
             return;
         }
         // Suppress the originating device (D18). A null originDeviceId (server-
@@ -67,6 +97,21 @@ public class SyncChangePublisher {
 
         List<String> tokenValues = recipients.stream().map(FcmToken::token).toList();
         FcmSendResult result = sender.sendSyncData(tokenValues, event.collections());
+
+        // OBS-006: batch-send failures were debug-gated and thus invisible. A
+        // recipient that neither delivered nor was reported unregistered is a
+        // silent failure — WARN + count with the tallies so partial fan-out
+        // outages surface. (unregistered tokens are handled by the prune below.)
+        int attempted = recipients.size();
+        int delivered = result != null ? result.sentCount() : 0;
+        int unregistered = result != null ? result.unregisteredTokens().size() : attempted;
+        int failed = Math.max(0, attempted - delivered - unregistered);
+        if (failed > 0) {
+            log.log(Level.WARNING, "FCM fan-out partial failure for user=" + event.userId()
+                + " attempted=" + attempted + " delivered=" + delivered
+                + " unregistered=" + unregistered + " failed=" + failed);
+            count("fcm.fanout.batch_failures", event.userId());
+        }
 
         // Prune tokens FCM rejected as unregistered/invalid (best-effort).
         FcmTokenPruning.prune(tokens, log, event.userId(), recipients, result);

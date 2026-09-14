@@ -41,6 +41,10 @@ public record EntryResponse(
     String imageUrl,
     FoodImageStatus imageStatus,
     EntryAnalysisStatus analysisStatus,
+    // SEC-012: relative path to the per-user signed-URL redirect endpoint for the
+    // entry's stored capture photo (the raw photoRef stays server-internal). Null
+    // when the entry has no stored photo. Clients render the meal photo via this.
+    String photoUrl,
     List<IngredientResponse> ingredients,
     // When the entry was first logged (server timestamp). Lets clients order
     // entries on a cross-source activity timeline; null for a not-yet-persisted
@@ -86,11 +90,25 @@ public record EntryResponse(
             imageUrl,
             imageStatus != null ? imageStatus : FoodImageStatus.NONE,
             e.analysisStatus() != null ? e.analysisStatus() : EntryAnalysisStatus.NONE,
+            photoUrlFor(e),
             ingredients,
             e.createdAt(),
             leftoverDtoOf(e.leftover()),
             adjustmentDtoOf(e.adjustment())
         );
+    }
+
+    /**
+     * SEC-012: the client-facing path to the signed-URL redirect for this entry's
+     * stored capture photo. The date is carried so the redirect endpoint can
+     * resolve the entry per-user without a cross-collection scan (ADR-0021). Null
+     * when the entry has no stored photo.
+     */
+    private static String photoUrlFor(FoodEntry e) {
+        if (e.photoRef() == null || e.photoRef().isBlank()) {
+            return null;
+        }
+        return "/api/me/nutrition/photo/" + e.entryId() + "?date=" + e.date();
     }
 
     /** One ingredient of a composite meal, with its raw-ingredient image. */

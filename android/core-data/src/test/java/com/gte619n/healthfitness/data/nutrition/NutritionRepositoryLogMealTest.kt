@@ -75,6 +75,7 @@ class NutritionRepositoryLogMealTest {
             ops = mockk(relaxed = true),
             previews = CapturePreviewStore(),
             capture = mockk(relaxed = true),
+            baseUrl = "https://api.example.test",
             moshi = SyncTestMoshi.instance,
         )
     }

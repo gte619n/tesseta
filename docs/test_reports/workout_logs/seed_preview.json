@@ -6,7 +6,7 @@
     "sessions" : 411,
     "sessionExercisesSkipped" : 43,
     "unresolvedEquipmentNames" : [ "Barbell", "Cable Machine", "Dumbbells", "Kettlebells", "Machine" ],
-    "note" : "Enrichment here is the deterministic offline fake; the real job uses gemini-3.5-flash."
+    "note" : "Enrichment here is the deterministic offline fake; the real job uses gemini-3.8-flash."
   },
   "sampleExercises" : [ {
     "exerciseId" : "c87cdc44-76b5-4203-bc45-4f37b095d069",
@@ -31,11 +31,16 @@
     "videoUrl" : null,
     "demoPromptOverride" : null,
     "mediaStatus" : "NONE",
+    "demoPlan" : null,
+    "planStatus" : "NONE",
+    "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-14T15:35:45.884076Z",
-    "updatedAt" : "2026-06-14T15:35:45.884076Z",
-    "aliasOfExerciseId" : null
+    "createdAt" : "2026-09-14T18:44:45.060754Z",
+    "updatedAt" : "2026-09-14T18:44:45.060754Z",
+    "aliasOfExerciseId" : null,
+    "reviewed" : false,
+    "groundingImageUrls" : [ ]
   }, {
     "exerciseId" : "3f6ec27f-bbb2-479a-98d3-1aa0242f5511",
     "name" : "3-Point Dumbbell Row To Tricep Kick-Back",
@@ -59,11 +64,16 @@
     "videoUrl" : null,
     "demoPromptOverride" : null,
     "mediaStatus" : "NONE",
+    "demoPlan" : null,
+    "planStatus" : "NONE",
+    "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-14T15:35:45.884088Z",
-    "updatedAt" : "2026-06-14T15:35:45.884088Z",
-    "aliasOfExerciseId" : null
+    "createdAt" : "2026-09-14T18:44:45.060765Z",
+    "updatedAt" : "2026-09-14T18:44:45.060765Z",
+    "aliasOfExerciseId" : null,
+    "reviewed" : false,
+    "groundingImageUrls" : [ ]
   }, {
     "exerciseId" : "d09748b1-5876-42a9-a927-62a96aa772e8",
     "name" : "A-Skip",
@@ -84,11 +94,16 @@
     "videoUrl" : null,
     "demoPromptOverride" : null,
     "mediaStatus" : "NONE",
+    "demoPlan" : null,
+    "planStatus" : "NONE",
+    "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-14T15:35:45.884108Z",
-    "updatedAt" : "2026-06-14T15:35:45.884108Z",
-    "aliasOfExerciseId" : null
+    "createdAt" : "2026-09-14T18:44:45.060785Z",
+    "updatedAt" : "2026-09-14T18:44:45.060785Z",
+    "aliasOfExerciseId" : null,
+    "reviewed" : false,
+    "groundingImageUrls" : [ ]
   }, {
     "exerciseId" : "eb06d263-ab43-4352-9346-f32c8df5739b",
     "name" : "Airplane",
@@ -112,11 +127,16 @@
     "videoUrl" : null,
     "demoPromptOverride" : null,
     "mediaStatus" : "NONE",
+    "demoPlan" : null,
+    "planStatus" : "NONE",
+    "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-14T15:35:45.884113Z",
-    "updatedAt" : "2026-06-14T15:35:45.884113Z",
-    "aliasOfExerciseId" : null
+    "createdAt" : "2026-09-14T18:44:45.060792Z",
+    "updatedAt" : "2026-09-14T18:44:45.060792Z",
+    "aliasOfExerciseId" : null,
+    "reviewed" : false,
+    "groundingImageUrls" : [ ]
   }, {
     "exerciseId" : "c37ea438-db56-46be-b13e-eb95f32b62bb",
     "name" : "Alternating Bird Dog",
@@ -140,11 +160,16 @@
     "videoUrl" : null,
     "demoPromptOverride" : null,
     "mediaStatus" : "NONE",
+    "demoPlan" : null,
+    "planStatus" : "NONE",
+    "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-06-14T15:35:45.884118Z",
-    "updatedAt" : "2026-06-14T15:35:45.884118Z",
-    "aliasOfExerciseId" : null
+    "createdAt" : "2026-09-14T18:44:45.060797Z",
+    "updatedAt" : "2026-09-14T18:44:45.060797Z",
+    "aliasOfExerciseId" : null,
+    "reviewed" : false,
+    "groundingImageUrls" : [ ]
   } ],
   "program" : {
     "userId" : "seed-preview-user",
@@ -168,7 +193,8 @@
       "targetStartDate" : "2023-03-20",
       "targetEndDate" : "2023-12-08",
       "completedAt" : "2023-12-08T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_2",
       "title" : "Phase 2",
@@ -180,7 +206,8 @@
       "targetStartDate" : "2023-12-12",
       "targetEndDate" : "2024-01-05",
       "completedAt" : "2024-01-05T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_3",
       "title" : "Phase 3",
@@ -192,7 +219,8 @@
       "targetStartDate" : "2024-01-08",
       "targetEndDate" : "2024-03-01",
       "completedAt" : "2024-03-01T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_4",
       "title" : "Phase 4",
@@ -204,7 +232,8 @@
       "targetStartDate" : "2024-03-04",
       "targetEndDate" : "2024-03-12",
       "completedAt" : "2024-03-12T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_5",
       "title" : "Phase 5",
@@ -216,7 +245,8 @@
       "targetStartDate" : "2024-03-18",
       "targetEndDate" : "2024-07-05",
       "completedAt" : "2024-07-05T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_6",
       "title" : "Phase 6",
@@ -228,7 +258,8 @@
       "targetStartDate" : "2024-07-08",
       "targetEndDate" : "2024-08-02",
       "completedAt" : "2024-08-02T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_7",
       "title" : "Phase 7",
@@ -240,7 +271,8 @@
       "targetStartDate" : "2024-08-05",
       "targetEndDate" : "2024-09-05",
       "completedAt" : "2024-09-05T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_8",
       "title" : "Phase 8",
@@ -252,7 +284,8 @@
       "targetStartDate" : "2024-09-09",
       "targetEndDate" : "2024-10-25",
       "completedAt" : "2024-10-25T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_9",
       "title" : "Phase 9",
@@ -264,7 +297,8 @@
       "targetStartDate" : "2024-10-28",
       "targetEndDate" : "2024-12-20",
       "completedAt" : "2024-12-20T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_10",
       "title" : "Phase 10",
@@ -276,7 +310,8 @@
       "targetStartDate" : "2024-12-23",
       "targetEndDate" : "2024-12-30",
       "completedAt" : "2024-12-30T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_11",
       "title" : "Phase 11",
@@ -288,7 +323,8 @@
       "targetStartDate" : "2024-12-31",
       "targetEndDate" : "2025-01-06",
       "completedAt" : "2025-01-06T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_12",
       "title" : "Phase 12",
@@ -300,7 +336,8 @@
       "targetStartDate" : "2025-01-08",
       "targetEndDate" : "2025-02-14",
       "completedAt" : "2025-02-14T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_13",
       "title" : "Phase 13",
@@ -312,7 +349,8 @@
       "targetStartDate" : "2025-02-17",
       "targetEndDate" : "2025-03-18",
       "completedAt" : "2025-03-18T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_14",
       "title" : "Phase 14",
@@ -324,7 +362,8 @@
       "targetStartDate" : "2025-03-20",
       "targetEndDate" : "2025-03-31",
       "completedAt" : "2025-03-31T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_15",
       "title" : "Phase 15",
@@ -336,7 +375,8 @@
       "targetStartDate" : "2025-04-01",
       "targetEndDate" : "2025-05-13",
       "completedAt" : "2025-05-13T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_16",
       "title" : "Phase 16",
@@ -348,7 +388,8 @@
       "targetStartDate" : "2025-05-19",
       "targetEndDate" : "2025-06-27",
       "completedAt" : "2025-06-27T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_17",
       "title" : "Phase 17",
@@ -360,7 +401,8 @@
       "targetStartDate" : "2025-07-07",
       "targetEndDate" : "2025-08-21",
       "completedAt" : "2025-08-21T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_18",
       "title" : "Phase 18",
@@ -372,7 +414,8 @@
       "targetStartDate" : "2025-09-08",
       "targetEndDate" : "2025-09-19",
       "completedAt" : "2025-09-19T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_19",
       "title" : "Phase 19",
@@ -384,7 +427,8 @@
       "targetStartDate" : "2025-09-29",
       "targetEndDate" : "2025-10-30",
       "completedAt" : "2025-10-30T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     }, {
       "phaseId" : "Phase_20",
       "title" : "Phase 20",
@@ -396,11 +440,13 @@
       "targetStartDate" : "2025-11-10",
       "targetEndDate" : "2025-11-24",
       "completedAt" : "2025-11-24T23:59:59Z",
-      "days" : [ ]
+      "days" : [ ],
+      "nutritionGuidance" : null
     } ],
-    "createdAt" : "2026-06-14T15:35:45.887742Z",
-    "updatedAt" : "2026-06-14T15:35:45.887742Z",
-    "completedAt" : "2025-11-24T23:59:59Z"
+    "createdAt" : "2026-09-14T18:44:45.064565Z",
+    "updatedAt" : "2026-09-14T18:44:45.064565Z",
+    "completedAt" : "2025-11-24T23:59:59Z",
+    "nutritionGuidance" : null
   },
   "sampleCompletedSessions" : [ {
     "userId" : "seed-preview-user",
@@ -442,8 +488,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "54288b7b-c448-46a2-9f94-3a4b47ecde31",
           "orderIndex" : 1,
@@ -461,8 +513,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "d0054637-df9b-4e7d-b8bd-8093c283c270",
           "orderIndex" : 2,
@@ -480,8 +538,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
           "orderIndex" : 3,
@@ -499,8 +563,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "786db4f8-8fde-4ca0-be70-82934a80f155",
           "orderIndex" : 4,
@@ -518,8 +588,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "93d916b8-8750-4f12-9f10-803dc9efe6ae",
           "orderIndex" : 5,
@@ -537,8 +613,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e9546ffc-5031-4c0c-a0cb-cd63dc52e12d",
           "orderIndex" : 6,
@@ -556,8 +638,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "89c98826-ac42-4663-b10d-64be20bb6543",
           "orderIndex" : 7,
@@ -575,8 +663,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "03f65864-4560-483c-9e4d-ee1433a1d14e",
           "orderIndex" : 8,
@@ -594,8 +688,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "1c1f7c50-7520-4619-973b-1d095982a380",
           "orderIndex" : 9,
@@ -613,8 +713,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "9cfe83f9-cb9b-472b-b74f-332856f2c1a8",
           "orderIndex" : 10,
@@ -632,8 +738,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "4d7afa2f-79f4-4d43-961d-2d8d2cf876ba",
           "orderIndex" : 11,
@@ -651,8 +763,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "dffcf3af-c380-41c5-b087-919aec2b12df",
           "orderIndex" : 12,
@@ -670,8 +788,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
           "orderIndex" : 13,
@@ -689,8 +813,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "dfd49808-4a70-4748-a77b-6815500972e3",
           "orderIndex" : 14,
@@ -708,8 +838,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "daadfbf8-d95e-4b53-8fe0-b47c8aabce7b",
           "orderIndex" : 15,
@@ -727,8 +863,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 16,
@@ -746,8 +888,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
           "orderIndex" : 17,
@@ -765,13 +913,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-20T12:54:36Z",
-    "durationSeconds" : 2342
+    "durationSeconds" : 2342,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -812,8 +967,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "9a1239ad-cc33-4626-9bb7-bb1f2ca0d3ae",
           "orderIndex" : 1,
@@ -831,8 +992,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f879a9ca-ea05-4cbc-a18e-e406aa90d599",
           "orderIndex" : 2,
@@ -850,8 +1017,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5cd90771-08ab-4acc-b161-ea795bdec1bc",
           "orderIndex" : 3,
@@ -869,8 +1042,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e87da512-33dc-49bd-a082-7587fde6ffbd",
           "orderIndex" : 4,
@@ -888,8 +1067,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ef61b187-337d-4e16-96c0-0f8d07376454",
           "orderIndex" : 5,
@@ -907,8 +1092,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e5596e87-b454-4cec-a7ff-3b9eb597a538",
           "orderIndex" : 6,
@@ -926,8 +1117,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5cd90771-08ab-4acc-b161-ea795bdec1bc",
           "orderIndex" : 7,
@@ -945,8 +1142,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f879a9ca-ea05-4cbc-a18e-e406aa90d599",
           "orderIndex" : 8,
@@ -964,8 +1167,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2b9c81c5-b4cf-4217-85a2-376b56e5b022",
           "orderIndex" : 9,
@@ -983,8 +1192,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5e3cfc49-c849-4101-9403-7b680d7ba284",
           "orderIndex" : 10,
@@ -1002,8 +1217,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
           "orderIndex" : 11,
@@ -1021,8 +1242,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ba78112e-a5fe-4bed-9d1b-00d823a06fe1",
           "orderIndex" : 12,
@@ -1040,8 +1267,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b05297e7-07f6-4957-82ff-22285f4c8818",
           "orderIndex" : 13,
@@ -1059,8 +1292,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5e3cfc49-c849-4101-9403-7b680d7ba284",
           "orderIndex" : 14,
@@ -1078,8 +1317,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5cd90771-08ab-4acc-b161-ea795bdec1bc",
           "orderIndex" : 15,
@@ -1097,8 +1342,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
           "orderIndex" : 16,
@@ -1116,8 +1367,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b05297e7-07f6-4957-82ff-22285f4c8818",
           "orderIndex" : 17,
@@ -1135,8 +1392,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "20583950-3905-423e-af8c-14fd1a63a5da",
           "orderIndex" : 18,
@@ -1154,8 +1417,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3a031511-d397-45e8-a2e5-477d50b1ee69",
           "orderIndex" : 19,
@@ -1173,8 +1442,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 20,
@@ -1192,8 +1467,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "83e92e57-1a5b-4519-abba-bf0ce4d94c5f",
           "orderIndex" : 21,
@@ -1211,8 +1492,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "1bdacc5b-0498-440c-95ae-a0b7a9724eaa",
           "orderIndex" : 22,
@@ -1230,8 +1517,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e5596e87-b454-4cec-a7ff-3b9eb597a538",
           "orderIndex" : 23,
@@ -1249,8 +1542,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "671bf70b-f00f-46a4-b18e-58f74ba55915",
           "orderIndex" : 24,
@@ -1268,8 +1567,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e87da512-33dc-49bd-a082-7587fde6ffbd",
           "orderIndex" : 25,
@@ -1287,8 +1592,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5431d3c4-c5ca-40cb-a715-90042bdfd554",
           "orderIndex" : 26,
@@ -1306,13 +1617,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-21T08:13:04Z",
-    "durationSeconds" : 3137
+    "durationSeconds" : 3137,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -1353,8 +1671,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
           "orderIndex" : 1,
@@ -1372,20 +1696,32 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
           }, {
             "weightLbs" : 0.0,
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
           }, {
             "weightLbs" : 90.0,
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "503b7c88-7ddd-4774-bebb-dc64ac835c3f",
           "orderIndex" : 2,
@@ -1403,14 +1739,23 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
           }, {
             "weightLbs" : 60.0,
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 3,
@@ -1428,8 +1773,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ef996e99-c19f-4983-a41b-4dabdbebdc37",
           "orderIndex" : 4,
@@ -1447,8 +1798,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5ead766c-4ce8-4dc1-a508-eb77ff1ebcef",
           "orderIndex" : 5,
@@ -1466,8 +1823,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
           "orderIndex" : 6,
@@ -1485,8 +1848,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "fb1be931-102c-4b6e-be9f-4dca9c060dd3",
           "orderIndex" : 7,
@@ -1504,8 +1873,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
           "orderIndex" : 8,
@@ -1523,8 +1898,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "bb384570-684c-4e6a-8c00-b94db65c039f",
           "orderIndex" : 9,
@@ -1542,8 +1923,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "9e5b2641-3d88-4559-913e-e2e5a1601f3e",
           "orderIndex" : 10,
@@ -1561,8 +1948,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ed1a2edb-3442-4fcd-aba4-43aa367a9ddc",
           "orderIndex" : 11,
@@ -1580,8 +1973,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "87fdc7ba-a65c-46f2-a4c5-858cdca6317e",
           "orderIndex" : 12,
@@ -1599,8 +1998,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "dffcf3af-c380-41c5-b087-919aec2b12df",
           "orderIndex" : 13,
@@ -1618,8 +2023,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f38690c4-7e4a-41c7-8a84-115b1f9457f8",
           "orderIndex" : 14,
@@ -1637,8 +2048,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "65eb01f8-d9b8-43cc-82b5-8ba53b1b9414",
           "orderIndex" : 15,
@@ -1656,8 +2073,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "fb1be931-102c-4b6e-be9f-4dca9c060dd3",
           "orderIndex" : 16,
@@ -1675,13 +2098,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-23T08:39:41Z",
-    "durationSeconds" : 2363
+    "durationSeconds" : 2363,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -1722,8 +2152,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "bd3bc8b0-66c7-4e15-8f5d-b466ce5ddb4f",
           "orderIndex" : 1,
@@ -1741,8 +2177,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "83e92e57-1a5b-4519-abba-bf0ce4d94c5f",
           "orderIndex" : 2,
@@ -1760,8 +2202,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "140901b2-8a40-497d-8194-707724b8962b",
           "orderIndex" : 3,
@@ -1779,8 +2227,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3ae9fbbf-6053-404e-afc6-8ddb99e65ac9",
           "orderIndex" : 4,
@@ -1798,8 +2252,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3a031511-d397-45e8-a2e5-477d50b1ee69",
           "orderIndex" : 5,
@@ -1817,8 +2277,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "28fe2395-16e1-49a9-8b69-3524d682861b",
           "orderIndex" : 6,
@@ -1836,8 +2302,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "a523440b-0969-4a10-9eda-2793d9010510",
           "orderIndex" : 7,
@@ -1855,8 +2327,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "671bf70b-f00f-46a4-b18e-58f74ba55915",
           "orderIndex" : 8,
@@ -1874,8 +2352,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "75771082-dadf-46ee-8fd6-156c289b31ef",
           "orderIndex" : 9,
@@ -1893,8 +2377,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3a3ac9ca-e095-4db8-a91f-8172cf4ad2b9",
           "orderIndex" : 10,
@@ -1912,8 +2402,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ef61b187-337d-4e16-96c0-0f8d07376454",
           "orderIndex" : 11,
@@ -1931,8 +2427,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "c5d323da-ef62-4651-915f-ab94bab1361d",
           "orderIndex" : 12,
@@ -1950,8 +2452,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 13,
@@ -1969,8 +2477,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2ac69cba-389b-45c1-8e23-d257dbc2fe69",
           "orderIndex" : 14,
@@ -1988,8 +2502,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2b9c81c5-b4cf-4217-85a2-376b56e5b022",
           "orderIndex" : 15,
@@ -2007,8 +2527,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "c87cdc44-76b5-4203-bc45-4f37b095d069",
           "orderIndex" : 16,
@@ -2026,13 +2552,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-24T12:47:36Z",
-    "durationSeconds" : 2048
+    "durationSeconds" : 2048,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -2073,8 +2606,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
           "orderIndex" : 1,
@@ -2092,8 +2631,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "1634640b-a0c2-49d2-9434-5c487bcdf257",
           "orderIndex" : 2,
@@ -2111,8 +2656,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5a57e138-6991-4fb0-ae11-9b105d114497",
           "orderIndex" : 3,
@@ -2130,8 +2681,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "1370bfdf-3c14-4e48-8e41-3ab830cba681",
           "orderIndex" : 4,
@@ -2149,8 +2706,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "33c1dc82-75e2-414d-9e8d-b0338bae8346",
           "orderIndex" : 5,
@@ -2168,8 +2731,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "c87cdc44-76b5-4203-bc45-4f37b095d069",
           "orderIndex" : 6,
@@ -2187,8 +2756,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 7,
@@ -2206,8 +2781,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
           "orderIndex" : 8,
@@ -2225,8 +2806,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
           "orderIndex" : 9,
@@ -2244,8 +2831,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e5925814-dc30-4d6d-af76-c16c30d6311e",
           "orderIndex" : 10,
@@ -2263,8 +2856,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
           "orderIndex" : 11,
@@ -2282,8 +2881,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "77d3fd1d-575d-43e9-99b2-29621e2a4830",
           "orderIndex" : 12,
@@ -2301,8 +2906,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "0d2666d4-1943-405d-89f3-9eb2ba11b443",
           "orderIndex" : 13,
@@ -2320,8 +2931,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "cc787db8-bc30-4a2a-9177-5f6b36db7203",
           "orderIndex" : 14,
@@ -2339,8 +2956,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5d14721f-5fba-4d0e-89cc-94350cee64d2",
           "orderIndex" : 15,
@@ -2358,8 +2981,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3f9705dc-d38a-4a8d-86bb-fbbea4505345",
           "orderIndex" : 16,
@@ -2377,13 +3006,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-27T12:03:05Z",
-    "durationSeconds" : 2563
+    "durationSeconds" : 2563,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -2424,8 +3060,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b40f6452-8cc0-4822-a1f0-0bcc263a91b0",
           "orderIndex" : 1,
@@ -2443,8 +3085,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "c068ee2c-2ccd-4719-83f5-6bb2e0235f27",
           "orderIndex" : 2,
@@ -2462,8 +3110,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e2541f2c-9877-457e-be33-44c91cb1c1dd",
           "orderIndex" : 3,
@@ -2481,8 +3135,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5431d3c4-c5ca-40cb-a715-90042bdfd554",
           "orderIndex" : 4,
@@ -2500,8 +3160,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "14916c5a-abd2-4a4e-aa9f-0d802f514ec6",
           "orderIndex" : 5,
@@ -2519,8 +3185,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "d7f5bbfe-09cf-4465-a3fe-5a54a68da3e6",
           "orderIndex" : 6,
@@ -2538,8 +3210,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
           "orderIndex" : 7,
@@ -2557,8 +3235,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2c3d77ca-3664-46b3-b87a-0dec3eaa8dd6",
           "orderIndex" : 8,
@@ -2576,8 +3260,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "dfd49808-4a70-4748-a77b-6815500972e3",
           "orderIndex" : 9,
@@ -2595,8 +3285,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "9b00e02a-5844-4495-ad1b-e474eebd9f56",
           "orderIndex" : 10,
@@ -2614,8 +3310,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
           "orderIndex" : 11,
@@ -2633,8 +3335,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f0a369d7-86d7-41be-9434-dbe58e67e8a6",
           "orderIndex" : 12,
@@ -2652,8 +3360,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "facaa34d-1851-4e1c-a6c4-391ca5fa7afb",
           "orderIndex" : 13,
@@ -2671,8 +3385,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5790aff5-982b-469e-8bda-5785e71ef3a6",
           "orderIndex" : 14,
@@ -2690,8 +3410,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "4f93d69d-9b48-4ec5-926c-a0655b309fc0",
           "orderIndex" : 15,
@@ -2709,8 +3435,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "d6eab315-01de-4239-9e06-7674c096a230",
           "orderIndex" : 16,
@@ -2728,13 +3460,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-28T12:34:45Z",
-    "durationSeconds" : 2563
+    "durationSeconds" : 2563,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -2775,8 +3514,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "67f30dd3-308d-4cf3-902b-cd7e6c9d439e",
           "orderIndex" : 1,
@@ -2794,8 +3539,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ef61b187-337d-4e16-96c0-0f8d07376454",
           "orderIndex" : 2,
@@ -2813,8 +3564,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3b617364-bfa2-4405-9949-dc7b3c92ae58",
           "orderIndex" : 3,
@@ -2832,8 +3589,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "30cd322c-f9db-498e-86c0-5a8de628a304",
           "orderIndex" : 4,
@@ -2851,8 +3614,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2ac69cba-389b-45c1-8e23-d257dbc2fe69",
           "orderIndex" : 5,
@@ -2870,8 +3639,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ccb196c8-c2e9-44cd-b500-4343df9218a9",
           "orderIndex" : 6,
@@ -2889,8 +3664,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "cc787db8-bc30-4a2a-9177-5f6b36db7203",
           "orderIndex" : 7,
@@ -2908,8 +3689,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3268258a-bfff-4d57-86ad-82b8629bffd3",
           "orderIndex" : 8,
@@ -2927,8 +3714,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "a523440b-0969-4a10-9eda-2793d9010510",
           "orderIndex" : 9,
@@ -2946,8 +3739,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
           "orderIndex" : 10,
@@ -2965,8 +3764,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "75771082-dadf-46ee-8fd6-156c289b31ef",
           "orderIndex" : 11,
@@ -2984,8 +3789,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2f5a6ef6-c3eb-4590-8ea9-70f299f3bc0e",
           "orderIndex" : 12,
@@ -3003,8 +3814,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "855ee508-32e8-495a-a3c0-9e448c09be06",
           "orderIndex" : 13,
@@ -3022,8 +3839,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f39376cf-da3d-4f3a-a265-62f5a21884ca",
           "orderIndex" : 14,
@@ -3041,8 +3864,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "1cd8e669-9ae9-4ea4-8d8c-2fcbf844d849",
           "orderIndex" : 15,
@@ -3060,8 +3889,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f879a9ca-ea05-4cbc-a18e-e406aa90d599",
           "orderIndex" : 16,
@@ -3079,8 +3914,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "945f7973-aab1-47cb-910c-20ac1099fc19",
           "orderIndex" : 17,
@@ -3098,8 +3939,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 18,
@@ -3117,8 +3964,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3a3ac9ca-e095-4db8-a91f-8172cf4ad2b9",
           "orderIndex" : 19,
@@ -3136,8 +3989,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
           "orderIndex" : 20,
@@ -3155,8 +4014,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "43da8fe2-88ec-4366-b289-e240f9d68ab6",
           "orderIndex" : 21,
@@ -3174,8 +4039,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "0d2666d4-1943-405d-89f3-9eb2ba11b443",
           "orderIndex" : 22,
@@ -3193,8 +4064,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "671bf70b-f00f-46a4-b18e-58f74ba55915",
           "orderIndex" : 23,
@@ -3212,8 +4089,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3fc27ef1-0f22-4b53-986c-7580f7e38ae9",
           "orderIndex" : 24,
@@ -3231,13 +4114,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-30T12:01:48Z",
-    "durationSeconds" : 2725
+    "durationSeconds" : 2725,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -3278,8 +4168,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3224a217-e574-4e97-84f8-b2d0ebb300fc",
           "orderIndex" : 1,
@@ -3297,8 +4193,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2f16d4ad-e98e-4778-9909-5d6126af16bd",
           "orderIndex" : 2,
@@ -3316,8 +4218,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f3947c6a-300c-41ba-94f1-b2ee9221b102",
           "orderIndex" : 3,
@@ -3335,8 +4243,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b1c7d139-80cf-45c3-b4e5-b192de9c7abb",
           "orderIndex" : 4,
@@ -3354,8 +4268,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5b5f3d16-a9c9-4184-b0a8-e6eed41ef9d6",
           "orderIndex" : 5,
@@ -3373,8 +4293,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "54288b7b-c448-46a2-9f94-3a4b47ecde31",
           "orderIndex" : 6,
@@ -3392,8 +4318,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "945f7973-aab1-47cb-910c-20ac1099fc19",
           "orderIndex" : 7,
@@ -3411,8 +4343,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b9b4be0e-629d-4465-9c1e-aedc249c64c4",
           "orderIndex" : 8,
@@ -3430,8 +4368,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3f9705dc-d38a-4a8d-86bb-fbbea4505345",
           "orderIndex" : 9,
@@ -3449,8 +4393,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3a5ae87a-7fe7-4e89-a416-132f34370400",
           "orderIndex" : 10,
@@ -3468,8 +4418,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "cba50beb-a97f-4c2d-bb1a-8baebbba81dd",
           "orderIndex" : 11,
@@ -3487,8 +4443,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "03f65864-4560-483c-9e4d-ee1433a1d14e",
           "orderIndex" : 12,
@@ -3506,8 +4468,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5d6caaa0-4f57-4fd9-9673-234ed48b740d",
           "orderIndex" : 13,
@@ -3525,8 +4493,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "c37ea438-db56-46be-b13e-eb95f32b62bb",
           "orderIndex" : 14,
@@ -3544,8 +4518,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e2955067-2b2d-43dd-bc14-a41859efea34",
           "orderIndex" : 15,
@@ -3563,8 +4543,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "ccb196c8-c2e9-44cd-b500-4343df9218a9",
           "orderIndex" : 16,
@@ -3582,8 +4568,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "9d74b163-8f6d-46e3-9bf9-731631131cc0",
           "orderIndex" : 17,
@@ -3601,8 +4593,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 18,
@@ -3620,8 +4618,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "86e1be04-88af-49bf-87fb-57dcde24319d",
           "orderIndex" : 19,
@@ -3639,13 +4643,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-03-31T11:42:49Z",
-    "durationSeconds" : 1742
+    "durationSeconds" : 1742,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -3686,8 +4697,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3f9705dc-d38a-4a8d-86bb-fbbea4505345",
           "orderIndex" : 1,
@@ -3705,8 +4722,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
           "orderIndex" : 2,
@@ -3724,8 +4747,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5a57e138-6991-4fb0-ae11-9b105d114497",
           "orderIndex" : 3,
@@ -3743,8 +4772,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b23e63dc-8c3e-4548-838f-6835a68eda94",
           "orderIndex" : 4,
@@ -3762,8 +4797,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3fc27ef1-0f22-4b53-986c-7580f7e38ae9",
           "orderIndex" : 5,
@@ -3781,8 +4822,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "7c31587e-b4df-42d6-a833-dbabb1aca980",
           "orderIndex" : 6,
@@ -3800,8 +4847,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "8b8f1e5e-d520-4875-8e81-de5106dd92e0",
           "orderIndex" : 7,
@@ -3819,8 +4872,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5d14721f-5fba-4d0e-89cc-94350cee64d2",
           "orderIndex" : 8,
@@ -3838,8 +4897,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "a4e860d7-28cf-438a-83c8-65126c7fc67a",
           "orderIndex" : 9,
@@ -3857,8 +4922,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "33c1dc82-75e2-414d-9e8d-b0338bae8346",
           "orderIndex" : 10,
@@ -3876,8 +4947,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 11,
@@ -3895,8 +4972,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "c87cdc44-76b5-4203-bc45-4f37b095d069",
           "orderIndex" : 12,
@@ -3914,8 +4997,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "cc787db8-bc30-4a2a-9177-5f6b36db7203",
           "orderIndex" : 13,
@@ -3933,8 +5022,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "77d3fd1d-575d-43e9-99b2-29621e2a4830",
           "orderIndex" : 14,
@@ -3952,8 +5047,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "1634640b-a0c2-49d2-9434-5c487bcdf257",
           "orderIndex" : 15,
@@ -3971,8 +5072,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "1370bfdf-3c14-4e48-8e41-3ab830cba681",
           "orderIndex" : 16,
@@ -3990,8 +5097,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "0d2666d4-1943-405d-89f3-9eb2ba11b443",
           "orderIndex" : 17,
@@ -4009,8 +5122,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3b617364-bfa2-4405-9949-dc7b3c92ae58",
           "orderIndex" : 18,
@@ -4028,8 +5147,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "3268258a-bfff-4d57-86ad-82b8629bffd3",
           "orderIndex" : 19,
@@ -4047,13 +5172,20 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-04-03T12:01:26Z",
-    "durationSeconds" : 2496
+    "durationSeconds" : 2496,
+    "feeling" : null
   }, {
     "userId" : "seed-preview-user",
     "programId" : "imported-history",
@@ -4094,8 +5226,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "5790aff5-982b-469e-8bda-5785e71ef3a6",
           "orderIndex" : 1,
@@ -4113,8 +5251,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b596b9b4-753b-4b77-b1c0-96f8c7edd3f6",
           "orderIndex" : 2,
@@ -4132,8 +5276,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "facaa34d-1851-4e1c-a6c4-391ca5fa7afb",
           "orderIndex" : 3,
@@ -4151,8 +5301,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "2c3d77ca-3664-46b3-b87a-0dec3eaa8dd6",
           "orderIndex" : 4,
@@ -4170,8 +5326,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "e2541f2c-9877-457e-be33-44c91cb1c1dd",
           "orderIndex" : 5,
@@ -4189,8 +5351,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
           "orderIndex" : 6,
@@ -4208,8 +5376,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "dfd49808-4a70-4748-a77b-6815500972e3",
           "orderIndex" : 7,
@@ -4227,8 +5401,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "d6eab315-01de-4239-9e06-7674c096a230",
           "orderIndex" : 8,
@@ -4246,8 +5426,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "4f93d69d-9b48-4ec5-926c-a0655b309fc0",
           "orderIndex" : 9,
@@ -4265,8 +5451,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "f0a369d7-86d7-41be-9434-dbe58e67e8a6",
           "orderIndex" : 10,
@@ -4284,8 +5476,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
           "orderIndex" : 11,
@@ -4303,8 +5501,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b4aff7cf-488f-4702-bfd9-6dc5af55c408",
           "orderIndex" : 12,
@@ -4322,8 +5526,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "b40f6452-8cc0-4822-a1f0-0bcc263a91b0",
           "orderIndex" : 13,
@@ -4341,8 +5551,14 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         }, {
           "exerciseId" : "09aeab9d-0034-4cbc-92e2-a9698386d5cb",
           "orderIndex" : 14,
@@ -4360,12 +5576,19 @@
             "reps" : null,
             "rpe" : null,
             "restSeconds" : null,
-            "completedAt" : null
-          } ]
+            "completedAt" : null,
+            "durationSeconds" : null,
+            "rir" : null,
+            "rirSource" : null
+          } ],
+          "targetWeightLbs" : null,
+          "loadBasis" : null,
+          "rationale" : null
         } ]
       } ]
     },
     "completedAt" : "2023-04-04T13:03:05Z",
-    "durationSeconds" : 2004
+    "durationSeconds" : 2004,
+    "feeling" : null
   } ]
 }

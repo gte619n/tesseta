@@ -45,6 +45,9 @@ fun AboutSection(
     }
 }
 
-// Placeholder URLs; real URLs land in a follow-up content workstream.
-private const val PRIVACY_URL = "https://placeholder.tesseta.app/privacy"
-private const val TERMS_URL = "https://placeholder.tesseta.app/terms"
+// COMP-002: the real published policies served by the marketing site
+// (website/public/privacy.html + terms.html, canonical host tesseta.com; the
+// site's own nav links to these exact clean paths). Replaces the dead
+// placeholder.tesseta.app domain the audit flagged.
+private const val PRIVACY_URL = "https://tesseta.com/privacy"
+private const val TERMS_URL = "https://tesseta.com/terms"

@@ -1,3 +1,12 @@
+# OBS-003: structured (JSON) console logging for Cloud Logging. The logback-spring
+# config uses the Boot StructuredLogEncoder with this formatter in deployed
+# environments (local/test profiles keep the plain text pattern). Env override lets
+# an operator swap to a built-in format (ecs/gelf/logstash) or turn it off.
+logging:
+  structured:
+    format:
+      console: ${LOG_STRUCTURED_FORMAT:com.gte619n.healthfitness.observability.GcpStructuredLogFormatter}
+
 spring:
   application:
     name: health-fitness-backend
@@ -150,6 +159,15 @@ app:
     # google-genai Client built from this — see GeminiConfig. The per-module
     # `gemini-model` settings below still select the model per feature.
     api-key: ${GEMINI_API_KEY:}
+    # SEC-001: per-user fixed-window rate limit on the first-party Gemini-backed
+    # endpoints (meal capture/label, describe, adjust, leftovers, food image
+    # regenerate, goals + program chat). Open signup makes these a cost-abuse
+    # vector; the limiter fails open on a store outage (availability > enforcement).
+    rate-limit:
+      enabled: ${GEMINI_RATE_LIMIT_ENABLED:true}
+      # Conservative default: 30 AI calls / user / hour.
+      requests: ${GEMINI_RATE_LIMIT_REQUESTS:30}
+      window: ${GEMINI_RATE_LIMIT_WINDOW:1h}
   googlehealth:
     api-base-url: https://health.googleapis.com/v4
     oauth-token-url: https://oauth2.googleapis.com/token

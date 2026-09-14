@@ -29,6 +29,11 @@ export type Entry = {
   // Joined in from the entry's catalog food (null/NONE for manual entries).
   // For a composite (photo-logged) meal this is the finished-meal image.
   imageUrl: string | null;
+  // SEC-012 — the meal photo served via the backend proxy endpoint
+  // (/api/me/nutrition/photo/{entryId}, 302 → signed URL) rather than a raw
+  // public GCS URL. Prefer this over `imageUrl` when present; older servers
+  // that predate SEC-012 omit it and we fall back to `imageUrl`.
+  photoUrl?: string | null;
   imageStatus: ImageStatus;
   // Background AI-analysis lifecycle: ANALYZING while a captured photo or an
   // async-described meal is still resolving server-side, then READY/FAILED.

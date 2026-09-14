@@ -1,7 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!--
+      OBS-003 — structured (JSON) console logging for Cloud Logging.
+
+      In deployed environments (no local/test profile active) the console emits
+      one JSON object per line via our GcpStructuredLogFormatter, so Cloud
+      Logging parses severity/message/trace/MDC instead of ingesting opaque text.
+      The `logging.structured.format.console` property (application.yml) points the
+      Boot StructuredLogEncoder at that formatter.
+
+      Local + test runs keep the human-readable text pattern.
+    -->
+    <springProfile name="local,test">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    </springProfile>
+
+    <springProfile name="!local &amp; !test">
+        <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
+    </springProfile>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

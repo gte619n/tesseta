@@ -360,6 +360,38 @@ export default async function ProfilePage({
             </Link>
           </div>
         </section>
+
+        {/* COMP-002 — in-product links to the published legal policies. They
+            live on the marketing site (tesseta.com, Firebase Hosting), not this
+            Cloud Run app (app.tesseta.com), so link to the absolute canonical
+            URLs. Opened in a new tab so the user doesn't lose their place. */}
+        <section className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
+          <h2 className="m-0 caps-mono text-[10px] tracking-[0.08em] text-tertiary">
+            Legal
+          </h2>
+          <p className="mt-2 text-[13px] leading-[1.5] text-secondary">
+            How we handle your data and the terms you agree to when using
+            tesseta.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              href="https://tesseta.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
+            >
+              Privacy Policy
+            </a>
+            <a
+              href="https://tesseta.com/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex cursor-pointer rounded-md border-[0.5px] border-border-default bg-canvas px-4 py-2 text-[13px] font-medium text-primary"
+            >
+              Terms of Service
+            </a>
+          </div>
+        </section>
       </div>
     </main>
   );

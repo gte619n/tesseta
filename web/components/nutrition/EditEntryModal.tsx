@@ -242,7 +242,7 @@ export function EditEntryModal({
         <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-border-subtle px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <FoodImage
-              imageUrl={entry.imageUrl}
+              imageUrl={entry.photoUrl ?? entry.imageUrl}
               imageStatus={entry.imageStatus}
               size={64}
             />
