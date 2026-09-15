@@ -316,15 +316,17 @@ The official docs are ambiguous about API-key (vs Vertex) support, so **keep the
 Files-API upload as the confirmed path (D5)** and treat the URL shortcut as an
 optimization to confirm in the live smoke test below.
 
-**Remaining unknowns — both need a real API key, ~30 min live smoke test (S1b):**
-1. Confirm **`gemini-3.8-flash`** (the project's shared flash id, already used for
-   image vision in `MealPhotoExtractor`) accepts **video** input and returns a
-   clean tool-call equipment list. If not, select the current GA flash that does.
-2. Confirm whether the signed-URL / `gs://` direct-input shortcut works under the
-   API key (decides D5-vs-shortcut).
-   → Cheapest as a tiny throwaway `main()` or a `@Disabled` integration test hitting
-   the dev key with a 20–30 s sample clip; not wired into CI. No product code
-   depends on the answer — it only chooses D5 vs the shortcut and pins the model.
+**Spike S1b — RESOLVED (2026-09-15, live against the prod `gemini_api_key`):**
+1. ✅ **`gemini-3.8-flash` accepts video via the Files API and returns structured
+   tool output.** Ran an 8 s clip end-to-end (upload → poll `ACTIVE` → generate →
+   delete): a plain "describe" call returned an accurate account of the *motion*
+   over time (not a single frame), and the `detect_equipment` tool at
+   `MEDIA_RESOLUTION_LOW` returned a correct **empty** list for a no-equipment clip
+   (no hallucination). Cost matched the estimate: ~519 prompt tokens for 8 s
+   (~65 tok/s at LOW). **No model change needed — the config default stands.**
+2. ⏳ The signed-URL / `gs://` direct-input shortcut was **not** exercised (optional
+   D5 simplification). The confirmed Files-API-upload path — which the shipped code
+   uses — works, so this stays a nice-to-have to validate later.
 
 **Net:** greenlight to build. The SDK supports everything; cost is negligible with
 LOW media resolution; the only open items are a quick live model/URL confirmation
