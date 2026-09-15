@@ -39,6 +39,10 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+// SEC-012 rollout gate defaults off; turn it on here so the DTO photoUrl path is
+// exercised. The redirect endpoint itself is flag-independent.
+@org.springframework.test.context.TestPropertySource(
+    properties = "app.nutrition.signed-photo-url.enabled=true")
 @Import({TestPersistenceConfig.class, MealPhotoServingTest.StubSigner.class})
 class MealPhotoServingTest {
 

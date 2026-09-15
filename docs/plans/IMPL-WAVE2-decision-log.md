@@ -94,3 +94,45 @@ sub-processor; recorded in the privacy posture doc (COMP §4).
   mitigation-in-progress; structured-logging note). Published policy still
   over-promises deletion until DATA-003 ships — kept as an open item.
 - SEC-012 bucket-flip (Phase 3) deferred (DEC-W2-1); recorded in IMPL-SEC-01.
+
+## Post-deploy regression + fix — DEC-W2-4 (SEC-012 photo-serving)
+
+**Symptom (field):** after updating, most Nutrition images showed the utensil
+placeholder. Only entries whose image was a catalog studio image with NO stored
+capture photo (e.g. a plain protein shake) still rendered; every camera-/label-
+logged meal (composites, scanned snacks) went blank.
+
+**Root cause:** DEC-W2-1 correctly deferred the *bucket flip*, but the risk model
+missed that shipping the `photoUrl` DTO field is itself client-breaking,
+independent of the bucket. The backend emitted `photoUrl` unconditionally; the
+Android data layer folds it into `imageUrl`, so every capture-photo entry started
+loading through `GET /api/me/nutrition/photo/{id}` — an **authenticated**
+(`/api/me/**`) endpoint. Coil's ImageLoader used a plain OkHttp client with no
+bearer, so every such load 401'd → placeholder. The public bucket URL still
+worked, so the whole indirection bought nothing yet while breaking all clients.
+Not caught because `MealPhotoServingTest` runs with the dev auth header and
+Android verification never exercised a real image fetch; web was fine (its proxy
+authenticates server-side).
+
+**Fix (this branch):**
+- **Backend rollout gate.** `photoUrl` emission is now behind
+  `app.nutrition.signed-photo-url.enabled` (`NUTRITION_SIGNED_PHOTO_URL_ENABLED`,
+  **default false**). Off → DTO `photoUrl` is null and clients render the raw
+  public `imageUrl`; this un-breaks already-shipped app builds the moment the
+  backend deploys, no app update required. The `/photo/{id}` endpoint itself is
+  unchanged and flag-independent. Tests: `MealPhotoUrlGateTest` (off→null),
+  `MealPhotoServingTest` now sets the flag to exercise the on-path.
+- **Android image auth.** Coil's `ImageLoader` now uses a dedicated `@Named("image")`
+  OkHttp client with `ImageAuthInterceptor` — a **host-scoped network
+  interceptor** that adds the bearer only on backend-host hops. On the 302 to the
+  GCS signed URL (different host) it adds nothing, so GCS (which rejects a signed
+  request carrying `Authorization`) still serves. `ImageAuthInterceptorTest`
+  proves the bearer reaches the backend hop and never the redirect target.
+
+**Re-enable sequence (Phase 3 coordination).** Only after auth-capable app builds
+are in the field: (1) flip `NUTRITION_SIGNED_PHOTO_URL_ENABLED=true`; (2) do the
+IMPL-SEC-01 bucket IAM flip to private; (3) also emit `mealPhotoUrl` in the
+nutrition **sync delta** (the Android `SyncDoc` already reads it, but the backend
+sync serializer never writes it — today the sync path silently falls back to the
+public `mealImageUrl`, which is fine while the bucket is public but must be wired
+before the bucket goes private).

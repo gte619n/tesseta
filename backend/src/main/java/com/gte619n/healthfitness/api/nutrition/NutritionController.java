@@ -71,6 +71,11 @@ public class NutritionController {
     // off (app.nutrition.capture.enabled=false). The photo endpoint 404s then.
     private final org.springframework.beans.factory.ObjectProvider<
         com.gte619n.healthfitness.integrations.nutrition.SignedUrlService> signedUrls;
+    // SEC-012 rollout gate. When false, EntryResponse.photoUrl stays null and
+    // clients load the meal photo from the raw (public) imageUrl. Flip on only
+    // once auth-capable clients are in the field (they attach the bearer to image
+    // requests) alongside the Phase-3 bucket-flip. See application.yml.
+    private final boolean signedPhotoUrlEnabled;
 
     public NutritionController(
         CurrentUserProvider currentUser,
@@ -86,7 +91,9 @@ public class NutritionController {
         ServingHintService servingHints,
         LeftoverService leftovers,
         org.springframework.beans.factory.ObjectProvider<
-            com.gte619n.healthfitness.integrations.nutrition.SignedUrlService> signedUrls
+            com.gte619n.healthfitness.integrations.nutrition.SignedUrlService> signedUrls,
+        @org.springframework.beans.factory.annotation.Value(
+            "${app.nutrition.signed-photo-url.enabled:false}") boolean signedPhotoUrlEnabled
     ) {
         this.currentUser = currentUser;
         this.nutrition = nutrition;
@@ -101,6 +108,7 @@ public class NutritionController {
         this.servingHints = servingHints;
         this.leftovers = leftovers;
         this.signedUrls = signedUrls;
+        this.signedPhotoUrlEnabled = signedPhotoUrlEnabled;
     }
 
     // ----- Legacy day-total quick entry --------------------------------
@@ -1035,18 +1043,23 @@ public class NutritionController {
     }
 
     /** Map an entry, pulling images from a pre-loaded food cache. */
-    private static EntryResponse toResponse(FoodEntry e, Map<String, CatalogFood> foods) {
+    private EntryResponse toResponse(FoodEntry e, Map<String, CatalogFood> foods) {
+        // SEC-012: only hand out the private photo-redirect path when the rollout
+        // flag is on; otherwise leave it null so clients use the public imageUrl.
+        String photoUrl = signedPhotoUrlEnabled ? EntryResponse.photoUrlFor(e) : null;
         if (e.isComposite()) {
             // Composite meal: display image is the finished-meal image stored on
             // the entry; each ingredient carries its own raw-ingredient image.
             return EntryResponse.from(
-                e, e.mealImageUrl(), e.mealImageStatus(), ingredientResponses(e, foods));
+                e, e.mealImageUrl(), e.mealImageStatus(), ingredientResponses(e, foods), photoUrl);
         }
         CatalogFood food = e.foodId() != null ? foods.get(e.foodId()) : null;
         return EntryResponse.from(
             e,
             food != null ? food.imageUrl() : null,
-            food != null ? food.imageStatus() : FoodImageStatus.NONE);
+            food != null ? food.imageStatus() : FoodImageStatus.NONE,
+            null,
+            photoUrl);
     }
 
     /** Map a single entry, looking its catalog foods up on demand. */
