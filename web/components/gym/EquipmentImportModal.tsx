@@ -9,6 +9,8 @@ import type {
   ImportConfirmRequest,
   ConfirmItemAction,
   ImportConfirmResponse,
+  ScanRegisterResponse,
+  ScanStatusResponse,
 } from "@/lib/types/gym";
 
 interface EquipmentImportModalProps {
@@ -19,14 +21,27 @@ interface EquipmentImportModalProps {
   onSuccess: () => void;
   bulkImportPreview: (rawText: string) => Promise<ImportPreviewResponse>;
   bulkImportConfirm: (body: ImportConfirmRequest) => Promise<ImportConfirmResponse>;
+  // IMPL-GYM-003: when provided, a "Scan a video" source is offered. The detected
+  // list flows into the same preview/confirm stages below.
+  scanRegister?: (mimeType: string, sizeBytes: number) => Promise<ScanRegisterResponse>;
+  scanStart?: (scanId: string) => Promise<ScanStatusResponse>;
+  scanStatus?: (scanId: string) => Promise<ScanStatusResponse>;
+  scanConfirm?: (scanId: string, body: ImportConfirmRequest) => Promise<ImportConfirmResponse>;
 }
 
-type Stage = "input" | "parsing" | "preview" | "confirming" | "done";
+type Stage = "input" | "parsing" | "uploading" | "analyzing" | "preview" | "confirming" | "done";
+type Source = "text" | "video";
 
 type RowState = {
   selectedAction: ConfirmItemAction;
   nameOverride?: string;
 };
+
+// Client-enforced video guardrails (mirror the backend app.gym.video-scan limits).
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+const ACCEPTED_VIDEO = "video/mp4,video/quicktime";
+const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS = 4 * 60 * 1000;
 
 const SAMPLE_PLACEHOLDER = `Matrix treadmills [Certain].
 Hampton round dumbbells ranging up to 100 lbs [Likely].
@@ -56,12 +71,11 @@ function formatSpecs(specs: Record<string, unknown> | undefined | null): string 
   if (Array.isArray(weights) && weights.length > 0) {
     parts.push(`weights: ${weights.join(', ')} lbs`);
   }
-  // Generic key/value rendering for anything else (skip already-handled keys)
   const handled = new Set(['minWeight', 'maxWeight', 'increment', 'weights']);
   for (const [k, v] of Object.entries(specs)) {
     if (handled.has(k)) continue;
     if (v == null || v === '' || v === false) continue;
-    if (typeof v === 'object') continue; // skip nested objects/arrays in the catch-all
+    if (typeof v === 'object') continue;
     parts.push(`${k}: ${String(v)}`);
   }
   return parts.join(' · ');
@@ -76,27 +90,39 @@ function Spinner() {
   );
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export function EquipmentImportModal({
-  locationId,
   locationName,
   isOpen,
   onClose,
   onSuccess,
   bulkImportPreview,
   bulkImportConfirm,
+  scanRegister,
+  scanStart,
+  scanStatus,
+  scanConfirm,
 }: EquipmentImportModalProps) {
   const toast = useToast();
   const [stage, setStage] = useState<Stage>("input");
+  const [source, setSource] = useState<Source>("text");
   const [rawText, setRawText] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [scanId, setScanId] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
   const [rowStates, setRowStates] = useState<Record<number, RowState>>({});
   const [result, setResult] = useState<ImportConfirmResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const videoEnabled = Boolean(scanRegister && scanStart && scanStatus && scanConfirm);
   if (!isOpen) return null;
 
   function resetAndClose() {
     setStage("input");
+    setSource("text");
     setRawText("");
+    setVideoFile(null);
+    setScanId(null);
     setPreview(null);
     setRowStates({});
     setResult(null);
@@ -104,23 +130,62 @@ export function EquipmentImportModal({
     onClose();
   }
 
+  function seedPreview(previewResp: ImportPreviewResponse) {
+    const states: Record<number, RowState> = {};
+    for (const item of previewResp.items) {
+      states[item.index] = { selectedAction: defaultActionFor(item.action) };
+    }
+    setPreview(previewResp);
+    setRowStates(states);
+    setStage("preview");
+  }
+
   async function handleParse() {
     setError(null);
     setStage("parsing");
     try {
-      const previewResp = await bulkImportPreview(rawText);
-      const states: Record<number, RowState> = {};
-      for (const item of previewResp.items) {
-        states[item.index] = {
-          selectedAction: defaultActionFor(item.action),
-        };
-      }
-      setPreview(previewResp);
-      setRowStates(states);
-      setStage("preview");
+      seedPreview(await bulkImportPreview(rawText));
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Failed to parse equipment list";
-      setError(message);
+      setError(e instanceof Error ? e.message : "Failed to parse equipment list");
+      setStage("input");
+    }
+  }
+
+  async function handleAnalyzeVideo() {
+    if (!videoFile || !scanRegister || !scanStart || !scanStatus) return;
+    setError(null);
+    setStage("uploading");
+    try {
+      const reg = await scanRegister(videoFile.type, videoFile.size);
+      // Upload the raw video DIRECTLY to the signed URL from the browser.
+      const put = await fetch(reg.uploadUrl, {
+        method: reg.method,
+        headers: reg.headers,
+        body: videoFile,
+      });
+      if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+
+      setScanId(reg.scanId);
+      await scanStart(reg.scanId);
+      setStage("analyzing");
+
+      const deadline = Date.now() + POLL_TIMEOUT_MS;
+      for (;;) {
+        await sleep(POLL_INTERVAL_MS);
+        const status = await scanStatus(reg.scanId);
+        if (status.status === "READY" && status.preview) {
+          seedPreview(status.preview);
+          return;
+        }
+        if (status.status === "FAILED") {
+          throw new Error(status.error ?? "We couldn't read equipment from that video.");
+        }
+        if (Date.now() > deadline) {
+          throw new Error("Analysis is taking longer than expected. Try a shorter video.");
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Video analysis failed");
       setStage("input");
     }
   }
@@ -132,10 +197,7 @@ export function EquipmentImportModal({
     try {
       const items: ImportConfirmItem[] = preview.items.map((item) => {
         const state = rowStates[item.index] ?? { selectedAction: defaultActionFor(item.action) };
-        const confirmItem: ImportConfirmItem = {
-          index: item.index,
-          action: state.selectedAction,
-        };
+        const confirmItem: ImportConfirmItem = { index: item.index, action: state.selectedAction };
         if (state.selectedAction === "USE_MATCH" && item.match) {
           confirmItem.matchedEquipmentId = item.match.equipmentId;
         }
@@ -148,7 +210,10 @@ export function EquipmentImportModal({
         return confirmItem;
       });
 
-      const resp = await bulkImportConfirm({ items });
+      const resp =
+        source === "video" && scanConfirm && scanId
+          ? await scanConfirm(scanId, { items })
+          : await bulkImportConfirm({ items });
       setResult(resp);
       setStage("done");
       toast.success("Import complete", {
@@ -174,6 +239,19 @@ export function EquipmentImportModal({
     resetAndClose();
   }
 
+  function pickVideo(file: File | null) {
+    setError(null);
+    if (!file) {
+      setVideoFile(null);
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError("That video is over 200 MB. Please record a shorter walkthrough.");
+      return;
+    }
+    setVideoFile(file);
+  }
+
   const nonSkipCount = preview
     ? preview.items.filter((item) => (rowStates[item.index]?.selectedAction ?? defaultActionFor(item.action)) !== "SKIP").length
     : 0;
@@ -187,19 +265,67 @@ export function EquipmentImportModal({
         {stage === "input" && (
           <>
             <h2 className="mb-1 text-xl font-semibold text-primary">
-              Import equipment to {locationName}
+              Add equipment to {locationName}
             </h2>
-            <p className="mb-4 text-sm text-secondary">
-              Paste a list of equipment, one per line. We&apos;ll match it against the catalog
-              and create new submissions for anything we don&apos;t recognize.
-            </p>
 
-            <textarea
-              value={rawText}
-              onChange={(e) => setRawText(e.target.value)}
-              placeholder={SAMPLE_PLACEHOLDER}
-              className="min-h-[200px] w-full rounded-md border border-border-default bg-canvas px-3 py-2 text-sm text-primary placeholder:text-tertiary focus:outline-none focus:ring-2 focus:ring-accent"
-            />
+            {videoEnabled && (
+              <div className="mb-4 mt-2 inline-flex rounded-md border border-border-default bg-canvas p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSource("text")}
+                  className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium ${source === "text" ? "bg-accent text-inverse" : "text-secondary hover:text-primary"}`}
+                >
+                  Paste a list
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSource("video")}
+                  className={`cursor-pointer rounded px-3 py-1.5 text-sm font-medium ${source === "video" ? "bg-accent text-inverse" : "text-secondary hover:text-primary"}`}
+                >
+                  Scan a video
+                </button>
+              </div>
+            )}
+
+            {source === "text" && (
+              <>
+                <p className="mb-4 text-sm text-secondary">
+                  Paste a list of equipment, one per line. We&apos;ll match it against the catalog
+                  and create new submissions for anything we don&apos;t recognize.
+                </p>
+                <textarea
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  placeholder={SAMPLE_PLACEHOLDER}
+                  className="min-h-[200px] w-full rounded-md border border-border-default bg-canvas px-3 py-2 text-sm text-primary placeholder:text-tertiary focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </>
+            )}
+
+            {source === "video" && (
+              <>
+                <p className="mb-4 text-sm text-secondary">
+                  Upload a walkthrough video of the gym. We&apos;ll watch it and detect the
+                  equipment for you to review — record a slow, steady pass with good lighting.
+                </p>
+                <label className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border-default bg-canvas px-3 py-6 text-center hover:bg-surface">
+                  <input
+                    type="file"
+                    accept={ACCEPTED_VIDEO}
+                    className="hidden"
+                    onChange={(e) => pickVideo(e.target.files?.[0] ?? null)}
+                  />
+                  <span className="text-sm font-medium text-primary">
+                    {videoFile ? videoFile.name : "Choose a video (MP4 or MOV, up to 200 MB)"}
+                  </span>
+                  {videoFile && (
+                    <span className="text-xs text-tertiary">
+                      {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
+                    </span>
+                  )}
+                </label>
+              </>
+            )}
 
             {error && (
               <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-600">
@@ -215,40 +341,51 @@ export function EquipmentImportModal({
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={handleParse}
-                disabled={rawText.trim().length === 0}
-                className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Parse
-              </button>
+              {source === "text" ? (
+                <button
+                  type="button"
+                  onClick={handleParse}
+                  disabled={rawText.trim().length === 0}
+                  className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Parse
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAnalyzeVideo}
+                  disabled={!videoFile}
+                  className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Analyze video
+                </button>
+              )}
             </div>
           </>
         )}
 
-        {/* PARSING STAGE */}
-        {stage === "parsing" && (
+        {/* PARSING / UPLOADING / ANALYZING / CONFIRMING SPINNERS */}
+        {(stage === "parsing" || stage === "uploading" || stage === "analyzing" || stage === "confirming") && (
           <div className="flex flex-col items-center justify-center gap-4 py-16">
             <Spinner />
-            <p className="text-sm text-secondary">Parsing equipment list...</p>
-          </div>
-        )}
-
-        {/* CONFIRMING STAGE */}
-        {stage === "confirming" && (
-          <div className="flex flex-col items-center justify-center gap-4 py-16">
-            <Spinner />
-            <p className="text-sm text-secondary">Importing equipment...</p>
+            <p className="text-sm text-secondary">
+              {stage === "parsing" && "Parsing equipment list..."}
+              {stage === "uploading" && "Uploading video..."}
+              {stage === "analyzing" && "Watching the video and detecting equipment..."}
+              {stage === "confirming" && "Adding equipment..."}
+            </p>
+            {stage === "analyzing" && (
+              <p className="text-xs text-tertiary">This can take a minute for a longer walkthrough.</p>
+            )}
           </div>
         )}
 
         {/* PREVIEW STAGE */}
         {stage === "preview" && preview && (
           <>
-            <h2 className="mb-1 text-xl font-semibold text-primary">Review import</h2>
+            <h2 className="mb-1 text-xl font-semibold text-primary">Review equipment</h2>
             <p className="mb-4 text-sm text-secondary">
-              Choose what to do with each parsed item before importing.
+              Choose what to do with each detected item before adding it.
             </p>
 
             {/* Summary card */}
@@ -353,7 +490,7 @@ export function EquipmentImportModal({
                 disabled={nonSkipCount === 0}
                 className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-inverse hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Import {nonSkipCount} item{nonSkipCount === 1 ? "" : "s"}
+                Add {nonSkipCount} item{nonSkipCount === 1 ? "" : "s"}
               </button>
             </div>
           </>
