@@ -35,6 +35,13 @@
   **network** interceptor that adds the bearer only on backend-host hops, so it
   isn't sent on a cross-host 302 to a GCS signed URL (which rejects requests
   carrying `Authorization`). See `ImageAuthInterceptor`.
+- **A new persistence-backed bean breaks every `@SpringBootTest` until you stub
+  it.** Backend tests run with `firestore-enabled: false`, so the Firestore
+  repository impls (`@ConditionalOnProperty`) don't load — `TestPersistenceConfig`
+  supplies in-memory/stub beans instead. Adding a new *mandatory* bean (e.g. a
+  service) that depends on a NEW core repository interface fails context startup
+  for the ENTIRE suite until you add an in-memory bean for that repository to
+  `TestPersistenceConfig`.
 
 ## Worktrees
 - Worktrees live in `.worktrees/` at the repo root (not `.claude/worktrees/`).
@@ -56,6 +63,13 @@
   before pinning a model.
 - Don't introduce another Gemini model, or another provider (OpenAI, Anthropic,
   etc.), without an ADR.
+- **Video / large media to Gemini go through the Files API**, not inline bytes:
+  `client.files.upload(...)` → poll until `state == ACTIVE` → reference via
+  `Part.fromUri(uri, mime)` (see `GeminiFilesService` / `EquipmentVideoDetector`).
+  The app is API-key mode (not Vertex), so `gs://` direct input isn't available —
+  upload the bytes. Set `mediaResolution = MEDIA_RESOLUTION_LOW` to cut video
+  token cost (~100 tok/s vs ~300 at default). Small images still go inline via
+  `Part.fromBytes`.
 
 ## Never
 - Commit secrets, service account JSON keys, OAuth client secrets, or

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,6 +52,7 @@ fun GymDetailScreen(
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
     onDeleted: () -> Unit,
+    onScan: (String) -> Unit = {},
     vm: GymDetailViewModel = hiltViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -137,9 +139,15 @@ fun GymDetailScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             SectionTitle("Equipment")
-                            OutlinedButton(onClick = { showAddEquipment = true }) {
-                                Icon(Icons.Filled.Add, contentDescription = null)
-                                Text("  Add equipment")
+                            Row {
+                                OutlinedButton(onClick = { onScan(vm.locationId) }) {
+                                    Text("Scan video")
+                                }
+                                Spacer(Modifier.size(8.dp))
+                                OutlinedButton(onClick = { showAddEquipment = true }) {
+                                    Icon(Icons.Filled.Add, contentDescription = null)
+                                    Text("  Add")
+                                }
                             }
                         }
 

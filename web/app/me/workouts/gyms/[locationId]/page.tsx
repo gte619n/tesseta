@@ -13,6 +13,10 @@ import {
   removeEquipmentFromLocation,
   bulkImportPreview,
   bulkImportConfirm,
+  scanRegister,
+  scanStart,
+  scanStatus,
+  scanConfirm,
 } from "@/lib/gym-api";
 import { AMENITIES } from "@/lib/types/gym";
 import type {
@@ -22,6 +26,8 @@ import type {
   ImportPreviewResponse,
   ImportConfirmRequest,
   ImportConfirmResponse,
+  ScanRegisterResponse,
+  ScanStatusResponse,
 } from "@/lib/types/gym";
 import { DeleteLocationButton } from "@/components/gym/DeleteLocationButton";
 import { SetDefaultButton } from "@/components/gym/SetDefaultButton";
@@ -116,6 +122,33 @@ export default async function GymDetailPage({ params }: Props) {
   ): Promise<ImportConfirmResponse> {
     "use server";
     return bulkImportConfirm(locationId, body);
+  }
+
+  // IMPL-GYM-003: video-walkthrough equipment detection.
+  async function scanRegisterAction(
+    mimeType: string,
+    sizeBytes: number,
+  ): Promise<ScanRegisterResponse> {
+    "use server";
+    return scanRegister(locationId, mimeType, sizeBytes);
+  }
+
+  async function scanStartAction(scanId: string): Promise<ScanStatusResponse> {
+    "use server";
+    return scanStart(locationId, scanId);
+  }
+
+  async function scanStatusAction(scanId: string): Promise<ScanStatusResponse> {
+    "use server";
+    return scanStatus(locationId, scanId);
+  }
+
+  async function scanConfirmAction(
+    scanId: string,
+    body: ImportConfirmRequest,
+  ): Promise<ImportConfirmResponse> {
+    "use server";
+    return scanConfirm(locationId, scanId, body);
   }
 
   // Pre-fetch equipment objects for the location's equipmentIds.
@@ -258,6 +291,10 @@ export default async function GymDetailPage({ params }: Props) {
           submitEquipment={submitEquipmentAction}
           bulkImportPreview={bulkImportPreviewAction}
           bulkImportConfirm={bulkImportConfirmAction}
+          scanRegister={scanRegisterAction}
+          scanStart={scanStartAction}
+          scanStatus={scanStatusAction}
+          scanConfirm={scanConfirmAction}
         />
       </div>
     </main>

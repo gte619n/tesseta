@@ -8,6 +8,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.gte619n.healthfitness.feature.workouts.EditGymScreen
 import com.gte619n.healthfitness.feature.workouts.GymDetailScreen
+import com.gte619n.healthfitness.feature.workouts.GymScanScreen
 import com.gte619n.healthfitness.feature.workouts.GymsListScreen
 import com.gte619n.healthfitness.feature.workouts.NewGymScreen
 import com.gte619n.healthfitness.feature.workouts.program.ProgramDetailRoute
@@ -40,9 +41,12 @@ object WorkoutsRoutes {
 
     const val DETAIL = "workouts/gyms/{locationId}"
     const val EDIT = "workouts/gyms/{locationId}/edit"
+    // IMPL-GYM-003: detect equipment from a walkthrough video.
+    const val SCAN = "workouts/gyms/{locationId}/scan"
 
     fun gymDetail(locationId: String): String = "workouts/gyms/$locationId"
     fun editGym(locationId: String): String = "workouts/gyms/$locationId/edit"
+    fun gymScan(locationId: String): String = "workouts/gyms/$locationId/scan"
 
     // Conversational program designer chat (IMPL-AND-18). The optional
     // ?programId=… opens it in IMPL-18b edit mode against an active program.
@@ -178,7 +182,15 @@ fun NavGraphBuilder.workoutsGraph(
             onBack = { navController.popBackStack() },
             onEdit = { id -> navController.navigate(WorkoutsRoutes.editGym(id)) },
             onDeleted = { navController.popBackStack(WorkoutsRoutes.GYMS, inclusive = false) },
+            onScan = { id -> navController.navigate(WorkoutsRoutes.gymScan(id)) },
         )
+    }
+
+    composable(
+        route = WorkoutsRoutes.SCAN,
+        arguments = listOf(navArgument(WorkoutsRoutes.ARG_LOCATION_ID) { type = NavType.StringType }),
+    ) {
+        GymScanScreen(onBack = { navController.popBackStack() })
     }
 
     composable(

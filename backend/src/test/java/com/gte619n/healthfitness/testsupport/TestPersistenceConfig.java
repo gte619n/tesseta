@@ -170,6 +170,25 @@ public class TestPersistenceConfig {
         return new InMemoryLocationRepository();
     }
 
+    // IMPL-GYM-003: in-memory gym-video scan store (Firestore off in tests).
+    @Bean
+    com.gte619n.healthfitness.core.gym.EquipmentScanRepository equipmentScanRepository() {
+        return new com.gte619n.healthfitness.core.gym.EquipmentScanRepository() {
+            private final java.util.Map<String, com.gte619n.healthfitness.core.gym.EquipmentScan> store =
+                new java.util.concurrent.ConcurrentHashMap<>();
+            private String key(String u, String l, String id) { return u + "/" + l + "/" + id; }
+            @Override
+            public void save(com.gte619n.healthfitness.core.gym.EquipmentScan s) {
+                store.put(key(s.userId(), s.locationId(), s.scanId()), s);
+            }
+            @Override
+            public Optional<com.gte619n.healthfitness.core.gym.EquipmentScan> findById(
+                String u, String l, String id) {
+                return Optional.ofNullable(store.get(key(u, l, id)));
+            }
+        };
+    }
+
     @Bean
     EquipmentRepository equipmentRepository() {
         return new InMemoryEquipmentRepository();

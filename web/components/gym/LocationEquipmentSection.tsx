@@ -11,6 +11,8 @@ import type {
   ImportPreviewResponse,
   ImportConfirmRequest,
   ImportConfirmResponse,
+  ScanRegisterResponse,
+  ScanStatusResponse,
 } from "@/lib/types/gym";
 
 interface LocationEquipmentSectionProps {
@@ -28,6 +30,11 @@ interface LocationEquipmentSectionProps {
   submitEquipment: (data: CreateEquipmentRequest) => Promise<Equipment>;
   bulkImportPreview: (rawText: string) => Promise<ImportPreviewResponse>;
   bulkImportConfirm: (body: ImportConfirmRequest) => Promise<ImportConfirmResponse>;
+  // IMPL-GYM-003: video-scan actions (optional; enables the "Scan a video" source).
+  scanRegister?: (mimeType: string, sizeBytes: number) => Promise<ScanRegisterResponse>;
+  scanStart?: (scanId: string) => Promise<ScanStatusResponse>;
+  scanStatus?: (scanId: string) => Promise<ScanStatusResponse>;
+  scanConfirm?: (scanId: string, body: ImportConfirmRequest) => Promise<ImportConfirmResponse>;
 }
 
 export function LocationEquipmentSection({
@@ -41,6 +48,10 @@ export function LocationEquipmentSection({
   submitEquipment,
   bulkImportPreview,
   bulkImportConfirm,
+  scanRegister,
+  scanStart,
+  scanStatus,
+  scanConfirm,
 }: LocationEquipmentSectionProps) {
   const router = useRouter();
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -98,6 +109,10 @@ export function LocationEquipmentSection({
         onSuccess={handleImportSuccess}
         bulkImportPreview={bulkImportPreview}
         bulkImportConfirm={bulkImportConfirm}
+        scanRegister={scanRegister}
+        scanStart={scanStart}
+        scanStatus={scanStatus}
+        scanConfirm={scanConfirm}
       />
     </>
   );

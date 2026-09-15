@@ -221,3 +221,23 @@ export type ImportConfirmResponse = {
   skipped: number;
   failed: FailedImportItem[];
 };
+
+// IMPL-GYM-003: video-walkthrough equipment detection. The detected list is
+// surfaced through the SAME preview/confirm shapes as bulk import above.
+export type ScanStatus = 'REGISTERED' | 'UPLOADED' | 'ANALYZING' | 'READY' | 'FAILED';
+
+export type ScanRegisterResponse = {
+  scanId: string;
+  uploadUrl: string;
+  method: string;
+  headers: Record<string, string>;
+  status: ScanStatus;
+};
+
+export type ScanStatusResponse = {
+  scanId: string;
+  status: ScanStatus;
+  detectedCount: number | null;
+  preview: ImportPreviewResponse | null;
+  error: string | null;
+};

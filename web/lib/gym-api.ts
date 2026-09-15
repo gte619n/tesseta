@@ -9,6 +9,8 @@ import type {
   ImportPreviewResponse,
   ImportConfirmRequest,
   ImportConfirmResponse,
+  ScanRegisterResponse,
+  ScanStatusResponse,
 } from './types/gym';
 
 // Location APIs
@@ -274,5 +276,56 @@ export async function bulkImportConfirm(
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Bulk import confirm failed: ${res.status}`);
+  return res.json();
+}
+
+// Video-walkthrough equipment detection APIs (IMPL-GYM-003). The client uploads
+// the video DIRECTLY to the returned signed URL (browser fetch), then polls
+// status; the detected list is reviewed/confirmed via the same shapes as import.
+export async function scanRegister(
+  locationId: string,
+  mimeType: string,
+  sizeBytes: number,
+): Promise<ScanRegisterResponse> {
+  const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mimeType, sizeBytes }),
+  });
+  if (!res.ok) throw new Error(`Scan register failed: ${res.status}`);
+  return res.json();
+}
+
+export async function scanStart(
+  locationId: string,
+  scanId: string,
+): Promise<ScanStatusResponse> {
+  const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/scan/${scanId}/start`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`Scan start failed: ${res.status}`);
+  return res.json();
+}
+
+export async function scanStatus(
+  locationId: string,
+  scanId: string,
+): Promise<ScanStatusResponse> {
+  const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/scan/${scanId}`);
+  if (!res.ok) throw new Error(`Scan status failed: ${res.status}`);
+  return res.json();
+}
+
+export async function scanConfirm(
+  locationId: string,
+  scanId: string,
+  body: ImportConfirmRequest,
+): Promise<ImportConfirmResponse> {
+  const res = await apiFetch(`/api/me/gyms/${locationId}/equipment/scan/${scanId}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Scan confirm failed: ${res.status}`);
   return res.json();
 }
