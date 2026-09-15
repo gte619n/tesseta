@@ -61,7 +61,16 @@ public class BulkImportService {
      * step needs it.
      */
     public PreviewResult preview(String userId, String locationId, String rawText) {
-        List<ParsedEquipment> parsed = parser.parse(rawText);
+        return preview(userId, locationId, parser.parse(rawText));
+    }
+
+    /**
+     * IMPL-GYM-003: the matching half of {@link #preview(String, String, String)},
+     * for callers that already hold parsed items (e.g. the video-walkthrough
+     * detector) and must NOT re-run the text parser. Identical catalog fuzzy-match
+     * + per-item action classification, so the review/confirm UX is shared verbatim.
+     */
+    public PreviewResult preview(String userId, String locationId, List<ParsedEquipment> parsed) {
         // Match against the global active catalog AND the user's own non-rejected
         // submissions (PENDING_REVIEW items they previously imported or submitted).
         // Without this, repeated bulk imports duplicate the user's own pending items.

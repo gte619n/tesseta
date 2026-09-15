@@ -364,6 +364,30 @@ app:
       model: ${APP_WORKOUTS_SPLIT_MODEL:gemini-3.8-flash}
   gym:
     bucket: ${GYM_BUCKET:health-fitness-160-gym-photos}
+    # IMPL-GYM-003: detect gym equipment from a walkthrough video. `enabled` gates
+    # the GCS (GymVideoStorage) + Gemini Files (GeminiFilesService,
+    # EquipmentVideoDetector) beans so unit tests load the context without GCS/API
+    # creds — same pattern as nutrition capture. OFF by default; flip on once the
+    # capture UI ships and the bucket + (prod) Cloud Tasks queue exist.
+    video-scan:
+      enabled: ${GYM_VIDEO_SCAN_ENABLED:false}
+      # Dedicated, non-public bucket for raw walkthrough videos (deleted after
+      # each scan; a lifecycle rule is the retention backstop).
+      bucket: ${GYM_VIDEO_BUCKET:health-fitness-160-gym-scans}
+      # Video-capable flash model. Confirm the GA id accepts video (Spike S1b)
+      # before pinning away from the shared default.
+      model: ${GYM_VIDEO_SCAN_MODEL:${GEMINI_MODEL:gemini-3.8-flash}}
+      # Client-enforced too; validated at register. 200 MB.
+      max-bytes: ${GYM_VIDEO_MAX_BYTES:209715200}
+      # Max wait for the Files API to finish processing the uploaded video.
+      files-timeout-ms: ${GYM_VIDEO_FILES_TIMEOUT_MS:120000}
+    # Durable analysis rail. mode=local (default): in-process bounded executor —
+    # dev/tests. mode=cloud-tasks (prod): deferred follow-up mirroring nutrition.
+    jobs:
+      mode: ${GYM_JOBS_MODE:local}
+      local:
+        threads: ${GYM_JOBS_LOCAL_THREADS:2}
+        queue-capacity: ${GYM_JOBS_LOCAL_QUEUE_CAPACITY:100}
   medications:
     bucket: ${MEDICATIONS_BUCKET:health-fitness-160-medication-images}
     # Gemini with Google Search grounding for drug lookup
