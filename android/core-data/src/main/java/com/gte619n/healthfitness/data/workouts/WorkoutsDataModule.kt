@@ -75,6 +75,12 @@ object WorkoutsDataModule {
     @Singleton
     fun provideEquipmentApi(@Named("workoutsRetrofit") retrofit: Retrofit): EquipmentApi =
         retrofit.create(EquipmentApi::class.java)
+
+    // IMPL-GYM-003: gym-video equipment scan API.
+    @Provides
+    @Singleton
+    fun provideGymScanApi(@Named("workoutsRetrofit") retrofit: Retrofit): GymScanApi =
+        retrofit.create(GymScanApi::class.java)
 }
 // LocationRepository / EquipmentRepository are concrete @Inject classes — no
 // @Binds needed (Hilt provides them from their constructors).
