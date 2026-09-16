@@ -193,6 +193,19 @@ once → one field edit lost," never data at rest. The workout-session set-merge
 is the highest-value next step and is documented as such. **Reversible:** n/a
 (doc + decision; no behaviour change).
 
+## DEC-19 — Slice 7: parallelize recent-activity reads; don't swap the workout source
+The audit suggested replacing the workouts() programs×calendar N+1 with a single
+read of the flat `Workout` collection. But that flat doc lacks the day label,
+logged-set count, and duration the feed displays (they live on `ScheduledWorkout`),
+so swapping the source would change the feed's copy — out of bounds
+("never change copy"). Instead, killed the *latency* without changing output:
+`recent()`'s five independent sources now run concurrently (was sequential), and
+`workouts()` fans its per-program calendar reads out concurrently (was the N+1
+in series). Same result (re-sorted upstream), each source keeps its `safe`
+isolation. The food() per-day reads and the per-user-subcollection model stay
+(collectionGroup is forbidden by ADR-0021; 4 day-reads is inherent). Verified by
+the existing 5 RecentActivityServiceTest cases. **Reversible:** yes.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

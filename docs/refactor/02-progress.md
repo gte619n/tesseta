@@ -123,3 +123,16 @@ resolution; append-only data never conflicts; document the rule per entity type.
   all data-at-rest) and the workout-session set-merge (highest-value next step).
 - **Tests:** no behaviour change; all suites remain green.
 
+## Slice 7 — kill the fan-out latency on recent-activity
+**Target:** `GET /api/me/recent-activity` p50 609 ms (N+1: programs × calendar +
+5 sequential sources).
+- **Approach (DEC-19):** couldn't swap the workout source to the flat `Workout`
+  collection without regressing the feed's copy (that doc lacks day-label/sets/
+  duration). Killed the latency instead: the 5 independent sources now run
+  concurrently, and the per-program calendar reads inside `workouts()` fan out
+  concurrently — same output, wall-clock = slowest source/calendar not the sum.
+- **Expected effect:** with 5 sources + N programs previously serial, p50 drops
+  toward the slowest single read; measure in prod via `backend-latency.mjs`.
+- **Tests:** existing 5 `RecentActivityServiceTest` cases green (output
+  unchanged); full backend build green.
+

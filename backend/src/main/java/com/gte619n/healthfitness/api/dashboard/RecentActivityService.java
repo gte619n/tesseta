@@ -33,6 +33,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -98,15 +101,42 @@ public class RecentActivityService {
 
     /** The {@code limit} most-recent activity rows for the user, newest first. */
     public List<RecentActivityResponse> recent(String userId, int limit) {
+        // The five sources are independent per-user reads and the result is
+        // re-sorted by timestamp below, so run them concurrently rather than
+        // paying the sum of five sequential Firestore round-trips (this endpoint
+        // was ~609 ms p50). Virtual threads (the request already runs on one)
+        // make a per-call executor cheap; each source keeps its own `safe`
+        // isolation so one failing source still just drops out of the feed.
         List<RecentActivityResponse> events = new ArrayList<>();
-        events.addAll(safe("workouts", () -> workouts(userId)));
-        events.addAll(safe("weigh-ins", () -> weighIns(userId)));
-        events.addAll(safe("sleep", () -> sleep(userId)));
-        events.addAll(safe("food", () -> food(userId)));
-        events.addAll(safe("medications", () -> medications(userId)));
+        try (var scope = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<List<RecentActivityResponse>>> futures = List.of(
+                scope.submit(() -> safe("workouts", () -> workouts(userId))),
+                scope.submit(() -> safe("weigh-ins", () -> weighIns(userId))),
+                scope.submit(() -> safe("sleep", () -> sleep(userId))),
+                scope.submit(() -> safe("food", () -> food(userId))),
+                scope.submit(() -> safe("medications", () -> medications(userId))));
+            for (var f : futures) {
+                events.addAll(joinQuietly(f));
+            }
+        }
 
         events.sort(Comparator.comparing(RecentActivityResponse::timestamp).reversed());
         return events.stream().limit(limit).toList();
+    }
+
+    /** Await a source future; a failure is already isolated by {@code safe}, so
+     * treat an unexpected interruption/execution error as an empty source too. */
+    private static List<RecentActivityResponse> joinQuietly(
+        Future<List<RecentActivityResponse>> f) {
+        try {
+            return f.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        } catch (ExecutionException e) {
+            log.warn("recent-activity source failed", e.getCause());
+            return List.of();
+        }
     }
 
     // ── Sources ──────────────────────────────────────────────────────────
@@ -114,9 +144,22 @@ public class RecentActivityService {
     private List<RecentActivityResponse> workouts(String userId) {
         LocalDate to = LocalDate.now();
         LocalDate from = to.minusDays(WORKOUT_LOOKBACK_DAYS);
+        List<WorkoutProgram> programList = programs.list(userId);
+        // The scheduled-workout calendars live in a per-program subcollection, so
+        // reading them is one Firestore round-trip PER program (an N+1 the display
+        // needs — the flat Workout doc lacks the day label / logged sets). Fan the
+        // per-program reads out concurrently so the cost is the slowest calendar,
+        // not their sum. Same output (re-sorted upstream), no display change.
+        List<List<ScheduledWorkout>> calendars;
+        try (var scope = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<List<ScheduledWorkout>>> futures = programList.stream()
+                .map(p -> scope.submit(() -> schedule.calendar(userId, p.programId(), from, to)))
+                .toList();
+            calendars = futures.stream().map(RecentActivityService::joinCalendar).toList();
+        }
         List<RecentActivityResponse> out = new ArrayList<>();
-        for (WorkoutProgram p : programs.list(userId)) {
-            for (ScheduledWorkout sw : schedule.calendar(userId, p.programId(), from, to)) {
+        for (List<ScheduledWorkout> calendar : calendars) {
+            for (ScheduledWorkout sw : calendar) {
                 if (sw.status() != ScheduledStatus.COMPLETED) continue;
                 Instant ts = performedAt(sw);
                 if (ts == null) continue;
@@ -125,6 +168,18 @@ public class RecentActivityService {
             }
         }
         return out;
+    }
+
+    private static List<ScheduledWorkout> joinCalendar(Future<List<ScheduledWorkout>> f) {
+        try {
+            return f.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        } catch (ExecutionException e) {
+            log.warn("recent-activity calendar read failed", e.getCause());
+            return List.of();
+        }
     }
 
     private List<RecentActivityResponse> weighIns(String userId) {
