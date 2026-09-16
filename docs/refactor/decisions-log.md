@@ -124,6 +124,37 @@ The Phase 0 sweep flagged `GoogleHealthSignatureVerifier` and
 constructor), not fields. There is nothing to fix; slice 8's DI-cleanup item is
 dropped. **Reversible:** n/a (no change).
 
+## DEC-14 — Slice 4 split into 4a (outbox core, shipped) and 4b (write-path cutover, deferred)
+The plan pre-authorized this split. The web write path is Next server-actions
+invoked from client components; safely cutting the live nutrition/medication/
+workout writes over to the outbox (replicating the server-side body mapping on
+the client, adding optimistic UI + router.refresh on drain, without regressing
+the SSR UX) is a substantial, separately-reviewable change. **4a (this commit):**
+the durable infrastructure that closes DL-1 — a single typed IndexedDB layer
+(`web/lib/offline/idb.ts`), the mutation outbox with client-UUID/seq/timestamp +
+jittered backoff + park-on-terminal + survives-reload (`outbox.ts`), an
+allowlisted authenticated replay proxy (`app/api/outbox/replay`), the mutation
+client + drain triggers (online/visibility/interval), and the live drainer
+mounted in the global Providers. 10 unit tests (fake-indexeddb) prove the
+no-loss/no-duplicate/backoff/park/reload behaviour. **4b (next):** convert the
+three highest-traffic writes to `submitMutation` + optimistic UI, add the pending
+badge to the chrome, and a Playwright offline→online→sync-once e2e. **Reversible:** yes.
+
+## DEC-15 — Replay proxy is allowlisted, never a generic path forwarder
+The browser has no bearer token, so the outbox drains through a server route
+that attaches the session bearer. A generic "forward any path" proxy would let
+any page hit any backend endpoint (incl. admin) under the user's identity.
+**Decision:** `REPLAY_ENDPOINTS` pins the exact (method, path-pattern) pairs the
+proxy may forward — the user-data writes proven replay-safe by slice 3's write
+contract — and both the client `enqueue` and the server route reject anything
+else. Keep it in sync with `write-contract.md`. **Reversible:** yes.
+
+## DEC-16 — fake-indexeddb added as a devDependency
+Unit-testing the IndexedDB data layer in jsdom needs an IndexedDB implementation
+(jsdom has none). `fake-indexeddb` is the standard in-memory one; no existing dep
+provides it and a browser-only Playwright test would be far slower and can't
+assert the internal backoff/park state. Dev-only. **Reversible:** yes.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

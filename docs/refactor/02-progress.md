@@ -70,3 +70,23 @@ mutations stranding silently (DL-5). No runtime metric — correctness/robustnes
 - **Tests:** backend unit **870, 0 failures** (was 865) + 12 emulator integration
   green. Android/web untouched.
 
+## Slice 4a — web typed IndexedDB layer + mutation outbox (core)
+**Target:** DL-1 — the top data-loss risk (web loses any write on a flaky
+network). Split per DEC-14; 4b (live write-path cutover + e2e) is the follow-up.
+- **Shipped:** `web/lib/offline/` — a single typed IndexedDB layer, the mutation
+  outbox (client UUID = Idempotency-Key, monotonic seq, client timestamp,
+  jittered exponential backoff, park-on-terminal-4xx, survives tab close), an
+  **allowlisted** authenticated replay proxy (`app/api/outbox/replay`), the
+  mutation client with drain triggers (reconnect/visibility/interval), and the
+  live `OutboxDrainer` mounted in the global client Providers so a queued write
+  is retried on load.
+- **Metric:** shared first-load JS unchanged at **127 KB gz** (offline lib is
+  client-lazy, not in the shared chunk).
+- **Tests:** +10 web unit tests (fake-indexeddb) proving no-loss/no-duplicate on
+  2xx, backoff on 5xx, park on 4xx, 429/408 treated transient, survives reload,
+  rearm, and the ±50% jitter band. Web suite **70 tests, 0 failures** (was 60);
+  typecheck + lint + build green; `/api/outbox/replay` route registered.
+- **Deferred to 4b:** convert nutrition/medication/workout writes to
+  `submitMutation` + optimistic UI, pending badge in the chrome, Playwright
+  offline→online→sync-once e2e.
+
