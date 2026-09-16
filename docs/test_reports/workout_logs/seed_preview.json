@@ -36,8 +36,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:01:47.501028Z",
-    "updatedAt" : "2026-09-16T16:01:47.501028Z",
+    "createdAt" : "2026-09-16T16:34:21.433022Z",
+    "updatedAt" : "2026-09-16T16:34:21.433022Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -69,8 +69,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:01:47.501039Z",
-    "updatedAt" : "2026-09-16T16:01:47.501039Z",
+    "createdAt" : "2026-09-16T16:34:21.433033Z",
+    "updatedAt" : "2026-09-16T16:34:21.433033Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -99,8 +99,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:01:47.501059Z",
-    "updatedAt" : "2026-09-16T16:01:47.501059Z",
+    "createdAt" : "2026-09-16T16:34:21.433052Z",
+    "updatedAt" : "2026-09-16T16:34:21.433052Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -132,8 +132,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:01:47.501066Z",
-    "updatedAt" : "2026-09-16T16:01:47.501066Z",
+    "createdAt" : "2026-09-16T16:34:21.433058Z",
+    "updatedAt" : "2026-09-16T16:34:21.433058Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -165,8 +165,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:01:47.501071Z",
-    "updatedAt" : "2026-09-16T16:01:47.501071Z",
+    "createdAt" : "2026-09-16T16:34:21.433064Z",
+    "updatedAt" : "2026-09-16T16:34:21.433064Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -443,8 +443,8 @@
       "days" : [ ],
       "nutritionGuidance" : null
     } ],
-    "createdAt" : "2026-09-16T16:01:47.505058Z",
-    "updatedAt" : "2026-09-16T16:01:47.505058Z",
+    "createdAt" : "2026-09-16T16:34:21.436568Z",
+    "updatedAt" : "2026-09-16T16:34:21.436568Z",
     "completedAt" : "2025-11-24T23:59:59Z",
     "nutritionGuidance" : null
   },

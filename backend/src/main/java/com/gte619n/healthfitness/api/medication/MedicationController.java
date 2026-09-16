@@ -52,6 +52,22 @@ public class MedicationController {
     }
 
     /**
+     * A history-row id that is stable across an idempotent replay (BUG-02): a
+     * medication edit's document is set-semantics, but each edit also APPENDS a
+     * MedicationHistory row — with a random id that would duplicate the log on a
+     * replay (an offline outbox re-sends). When the caller supplies an
+     * {@code Idempotency-Key} (the Android outbox always does), derive the row id
+     * from it + a discriminator, so a replay upserts the SAME row; two genuinely
+     * distinct edits carry distinct keys and so still get distinct rows. With no
+     * key present we keep a random id (a keyless double-submit can still dup — the
+     * caller's risk, matching the rest of the write contract).
+     */
+    private String historyId(String discriminator) {
+        String key = syncWrite.idempotencyKey();
+        return key != null ? key + ":" + discriminator : UUID.randomUUID().toString();
+    }
+
+    /**
      * List all user medications (optionally filter by status).
      * Includes 30-day adherence summary for each medication.
      */
@@ -237,7 +253,7 @@ public class MedicationController {
 
         // Track dose change if applicable
         if (body.dose() != null && body.dose() != existing.dose()) {
-            String historyId = UUID.randomUUID().toString();
+            String historyId = historyId("dose");
             MedicationHistory change = new MedicationHistory(
                 historyId,
                 userId,
@@ -253,7 +269,7 @@ public class MedicationController {
 
         // Track frequency change
         if (body.frequency() != null && !body.frequency().equals(existing.frequency())) {
-            String historyId = UUID.randomUUID().toString();
+            String historyId = historyId("freq");
             MedicationHistory change = new MedicationHistory(
                 historyId,
                 userId,
@@ -348,7 +364,7 @@ public class MedicationController {
             DosagePeriod.changeDose(existing.dosagePeriods(), body.dose(), unit, effective);
         DosagePeriod.validate(dosagePeriods);
 
-        String historyId = UUID.randomUUID().toString();
+        String historyId = historyId("dose");
         history.save(new MedicationHistory(
             historyId,
             userId,
