@@ -256,6 +256,20 @@ stale-while-revalidate over the typed IndexedDB layer, DB bumped to v2 with an
 additive store) with 7 unit tests. Wiring the SSR pages / client components to
 hydrate from it is the cutover step, grouped with slice 4b. **Reversible:** yes.
 
+## DEC-23 — Slice 12: no forced deletions; final green gate is the deliverable
+The plan wanted a "net-negative LOC" deletion pass. In practice the slices ADDED
+focused, tested code (outbox, read-cache, contract tests, cache-first) and
+removed the one thing they obsoleted (the sequential `scan()` in slice 5). All
+new exports are either wired (`startOutboxDraining`) or documented 4b-cutover
+infrastructure with tests (`submitMutation`, `readThrough`, `swr`) — none are
+dead. The god files (RecentActivityService, FirestoreSyncChangeReader,
+NutritionController) were touched only where needed; decomposing them wholesale
+now would be exactly the "never rewrite a module wholesale" the guardrails
+forbid, and deleting pre-existing code I don't fully own is unsafe. **Decision:**
+no manufactured deletions; slice 12 delivers the final cross-codebase green
+verification (backend build + Android unit + R8 release + web typecheck/lint/
+test/build) that the mandate requires. **Reversible:** n/a.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

@@ -63,8 +63,7 @@ describe("swr", () => {
     let fresh: unknown = null;
     const immediate = await swr("k", async () => ({ n: 2 }), (v) => (fresh = v));
     expect(immediate.value).toEqual({ n: 1 }); // painted from cache at once
-    // Let the background refresh settle.
-    await new Promise((r) => setTimeout(r, 0));
+    await immediate.revalidation; // deterministic: wait for the background refresh
     expect(fresh).toEqual({ n: 2 });
     expect((await getCached("k"))?.value).toEqual({ n: 2 });
   });
@@ -72,7 +71,7 @@ describe("swr", () => {
   it("returns null on a cold key but still populates the cache", async () => {
     const immediate = await swr("cold", async () => ({ n: 9 }));
     expect(immediate.value).toBeNull();
-    await new Promise((r) => setTimeout(r, 0));
+    await immediate.revalidation;
     expect((await getCached("cold"))?.value).toEqual({ n: 9 });
   });
 });

@@ -192,3 +192,20 @@ client silently drops — the nutrition slash-collection sync loss).
 - **Tests:** web **77 tests, 0 failures** (+7); typecheck/lint/build green; shared
   bundle unchanged at 127 KB gz.
 
+## Slice 12 — hygiene + final green gate
+**Target:** delete obsoleted code; net-negative LOC; leave the tree green.
+- **Finding (DEC-23):** the slices added focused, tested code and removed the one
+  thing they obsoleted (slice 5's sequential `scan()`). All new exports are wired
+  or documented 4b-cutover infra with tests — none dead. No safe wholesale
+  god-file decomposition or pre-existing-code deletion to force.
+- **Fix found by the final gate:** one `swr` test was timing-flaky under the
+  parallel suite (`setTimeout(0)` raced the async IndexedDB write); exposed the
+  background `revalidation` promise so the refresh is awaited deterministically —
+  a real API improvement, not just a test patch.
+- **Final cross-codebase verification (all green):**
+  - Backend: `./gradlew build` — **871 unit + 12 emulator integration**, 0 failures.
+  - Android: `testDebugUnitTest` **591**, 0 failures; `:app:assembleRelease` (R8)
+    green; duplicate-class checks green.
+  - Web: typecheck + lint + **77 tests** + production build, all green; shared
+    first-load JS 127 KB gz (< 200 KB target).
+

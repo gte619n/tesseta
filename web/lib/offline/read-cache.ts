@@ -71,18 +71,26 @@ export async function readThrough<T>(
   }
 }
 
+export interface SwrResult<T> {
+  value: T | null;
+  storedAt: number | null;
+  /** Resolves when the background refresh settles (for tests / await-if-needed). */
+  revalidation: Promise<void>;
+}
+
 /**
- * Stale-while-revalidate: synchronously return whatever is cached (possibly
- * null) and kick off a background refresh, invoking `onFresh` if the value
- * changed. Useful for a client component that wants to paint immediately.
+ * Stale-while-revalidate: return whatever is cached (possibly null) at once and
+ * kick off a background refresh, invoking `onFresh` if it succeeds. The returned
+ * `revalidation` promise lets a caller await the refresh when it needs to
+ * (it never rejects — a failed refresh just keeps the cached value).
  */
 export async function swr<T>(
   key: string,
   fetcher: () => Promise<T>,
   onFresh?: (value: T) => void,
-): Promise<{ value: T | null; storedAt: number | null }> {
+): Promise<SwrResult<T>> {
   const cached = await getCached<T>(key);
-  void (async () => {
+  const revalidation = (async () => {
     try {
       const fresh = await fetcher();
       await putCached(key, fresh);
@@ -91,5 +99,9 @@ export async function swr<T>(
       /* offline / failed — keep serving the cached value */
     }
   })();
-  return cached ? { value: cached.value, storedAt: cached.storedAt } : { value: null, storedAt: null };
+  return {
+    value: cached ? cached.value : null,
+    storedAt: cached ? cached.storedAt : null,
+    revalidation,
+  };
 }
