@@ -35,3 +35,19 @@ mutations stranding silently (DL-5). No runtime metric — correctness/robustnes
 - **Tests:** +3 in `OutboxDrainTest` (24 total in that class); full Android suite
   **587 tests, 0 failures** (was 584). Backend/web untouched.
 
+## Slice 2 — remove Room destructive migration fallback + migration tests
+**Target:** DL-3 — a schema bump can no longer silently wipe outbox + drafts.
+- **Before:** `fallbackToDestructiveMigration()` — any un-migrated version bump
+  wipes the DB (incl. outbox rows + workout drafts that exist nowhere else).
+- **After:** `fallbackToDestructiveMigrationFrom(1, 2)` (only pre-outbox
+  pre-release schemas may wipe) + `…OnDowngrade()`. A forward bump to v8+ without
+  a migration now throws at open (fail loud). Migration list + version exposed as
+  `ALL_MIGRATIONS`/`SCHEMA_VERSION`.
+- **Tests:** JVM `HfDatabaseMigrationCoverageTest` (2 tests, runs in CI gate:
+  chain is contiguous to SCHEMA_VERSION; no v3+ in the destructive-from set).
+  Instrumented `HfDatabaseMigrationTest` (2 tests, **verified green on emulator**:
+  outbox row survives 3→7, draft survives 4→7).
+- **Bonus infra fix:** the entire core-data instrumented suite was crashing on a
+  Hilt boot-receiver before any test ran; stripped the receivers from the test
+  manifest (DEC-10). Android JVM suite **589 tests, 0 failures**.
+

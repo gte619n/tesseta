@@ -5,9 +5,34 @@
   a ServerSocket (needs INTERNET) and serves cleartext (blocked by default on
   API 28+). core-data is an otherwise manifest-less library, so this test-only
   manifest grants both to the androidTest APK.
+
+  It also strips the reminder BroadcastReceivers from the *test* APK. They are
+  @AndroidEntryPoint (Hilt) receivers; the androidTest process runs a plain
+  android.app.Application (not @HiltAndroidApp), so when the OS delivers a
+  protected broadcast (BOOT_COMPLETED / package events / TIME_SET) to the merged
+  ReminderBootReceiver the test process crashes with "Hilt BroadcastReceiver must
+  be attached to an @HiltAndroidApp Application" — taking down the whole
+  instrumented run before any test starts. The receivers are irrelevant to these
+  data-layer tests, so remove them from the merged manifest.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <!-- Fully-qualified names: a relative ".x" here would resolve against the
+             test application id (…data.test), not the library package, and fail to
+             match the node being removed. -->
+        <receiver
+            android:name="com.gte619n.healthfitness.data.reminders.ReminderAlarmReceiver"
+            tools:node="remove" />
+        <receiver
+            android:name="com.gte619n.healthfitness.data.reminders.ReminderActionReceiver"
+            tools:node="remove" />
+        <receiver
+            android:name="com.gte619n.healthfitness.data.reminders.ReminderBootReceiver"
+            tools:node="remove" />
+    </application>
 </manifest>

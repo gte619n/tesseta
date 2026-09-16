@@ -61,6 +61,41 @@ re-emitting once after a process restart is acceptable. The aging check runs in
 `drain()` (not `drainLocked`) so a queue of only-parked rows (never "due") still
 gets checked. **Reversible:** yes.
 
+## DEC-08 — Destructive fallback narrowed to pre-outbox schemas, not removed outright
+Schemas 1.json/2.json exist but have NO migrations — a plain
+`.fallbackToDestructiveMigration()` was the only path those versions had. Removing
+it wholesale would crash a real v1/v2 device on upgrade. But those versions
+predate the offline outbox/drafts entirely, so a wipe there loses only refetchable
+mirror data. **Decision:** `fallbackToDestructiveMigrationFrom(1, 2)` +
+`fallbackToDestructiveMigrationOnDowngrade()`. A forward bump to v8+ without a
+migration now THROWS (fail loud) instead of silently wiping outbox/drafts (DL-3);
+v1/v2 upgrades and dev downgrades still wipe safely. `DESTRUCTIVE_FALLBACK_FROM`
+is frozen and guarded by a test that forbids adding any v3+ entry. **Reversible:** yes.
+
+## DEC-09 — "Reversible migration + round-trip" satisfied by forward-fixture + fail-loud, not hand-written down-migrations
+The offline contract asks for "a reversible migration with a test that migrates
+real fixture data forward and back." Room migrations are one-way; authoring
+down-migrations that nothing calls would be dead speculative code (violates the
+"no speculative generality" standard). **Interpretation adopted:** (1) every
+version bump has an explicit forward `Migration` proven to preserve real fixture
+rows (instrumented `HfDatabaseMigrationTest`, verified green on the emulator:
+outbox row survives 3→7, draft survives 4→7); (2) "reverse" for the mirror
+tables is refetch-from-server (a downgrade wipe is safe by design); (3) the
+device-only tables are protected by making a missing forward migration throw.
+The fast JVM `HfDatabaseMigrationCoverageTest` gates the chain in CI. If true
+bidirectional migrations are wanted, revisit — logged for review. **Reversible:** yes.
+
+## DEC-10 — Fixed the core-data instrumented suite's boot-receiver crash (in-scope test infra)
+Running any core-data instrumented test on the emulator crashed the whole run
+before test 0: the main manifest's Hilt `ReminderBootReceiver` (@AndroidEntryPoint)
+merges into the test APK, which runs a plain `Application`, so an OS
+protected-broadcast delivery throws "Hilt BroadcastReceiver must be attached to
+an @HiltAndroidApp Application." Needed to run the new migration test at all, and
+it was silently blocking the existing sync instrumented tests too. **Decision:**
+strip the three reminder receivers from the androidTest manifest via
+`tools:node="remove"` (fully-qualified names, since a relative name resolves
+against the test app id). Minimal, standard, test-APK-only. **Reversible:** yes.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

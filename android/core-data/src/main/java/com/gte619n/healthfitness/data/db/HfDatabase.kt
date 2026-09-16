@@ -131,7 +131,7 @@ import net.sqlcipher.database.SupportFactory
     // the add-food search can serve cached foods/meals by name instantly, ahead of
     // the network. Additive MIGRATION_6_7 (two nullable columns); existing cache
     // rows stay valid and become name-searchable as they're re-fetched.
-    version = 7,
+    version = 7, // == SCHEMA_VERSION; kept literal for Room's annotation processor
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {
@@ -170,6 +170,25 @@ abstract class HfDatabase : RoomDatabase() {
 
     companion object {
         const val DB_NAME = "hf-offline.db"
+
+        /**
+         * The current Room schema version. Kept as a named constant so the
+         * migration-coverage test (`HfDatabaseMigrationCoverageTest`) can assert
+         * [ALL_MIGRATIONS] actually reaches it — a version bump without a matching
+         * migration now fails a fast JVM test instead of silently wiping the DB.
+         */
+        const val SCHEMA_VERSION = 7
+
+        /**
+         * The only versions permitted to fall back to a destructive wipe on
+         * upgrade. 1 and 2 are pre-release schemas that predate the offline
+         * outbox/drafts entirely, so a wipe there loses only mirror data the sync
+         * layer refetches — no irreplaceable local writes existed yet. Every later
+         * version holds outbox rows + workout drafts that live nowhere else, so a
+         * missing forward migration MUST throw (fail loud) rather than wipe them
+         * (baseline DL-3). Keep this list frozen: never add a v3+ version to it.
+         */
+        val DESTRUCTIVE_FALLBACK_FROM = intArrayOf(1, 2)
 
         /**
          * v3 → v4: add the workoutSessionDrafts table (ADR-0012). Additive —
@@ -249,6 +268,14 @@ abstract class HfDatabase : RoomDatabase() {
         }
 
         /**
+         * Every registered migration, in order. Referenced by [build] and asserted
+         * contiguous-up-to-[SCHEMA_VERSION] by the coverage test. Add the next
+         * `MIGRATION_n_n+1` here when you bump [SCHEMA_VERSION].
+         */
+        val ALL_MIGRATIONS: Array<Migration> =
+            arrayOf(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+
+        /**
          * Builds the encrypted database. Loads the SQLCipher native libs, fetches
          * the Keystore-wrapped passphrase, and hands it to [SupportFactory]
          * (which copies then zeroes the byte array).
@@ -267,13 +294,17 @@ abstract class HfDatabase : RoomDatabase() {
             val factory = SupportFactory(resolution.passphrase)
             return Room.databaseBuilder(context, HfDatabase::class.java, DB_NAME)
                 .openHelperFactory(factory)
-                // Known upgrades run additive migrations (the drafts table holds
-                // device-only data that a wipe would destroy)…
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
-                // …while schemaVersion bumps (D13) trigger an explicit wipe+resync
-                // at the sync layer, not a Room migration; fall back destructively
-                // so a mismatched on-disk schema can never wedge the app.
-                .fallbackToDestructiveMigration()
+                // Known upgrades run additive migrations (outbox + drafts hold
+                // device-only writes a wipe would destroy — baseline DL-3)…
+                .addMigrations(*ALL_MIGRATIONS)
+                // …a forward bump WITHOUT a matching migration now throws at open
+                // (fail loud) instead of silently wiping those tables. Only the
+                // pre-outbox pre-release schemas (1, 2) — which held no
+                // irreplaceable local data — may still wipe on upgrade.
+                .fallbackToDestructiveMigrationFrom(*DESTRUCTIVE_FALLBACK_FROM)
+                // A downgrade (a dev switching to an older branch) may wipe: it's a
+                // dev-only path and the sync layer refills from the backend.
+                .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
         }
     }
