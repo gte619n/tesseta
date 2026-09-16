@@ -242,6 +242,20 @@ backend test until the fixture is updated, which then forces the Android test to
 prove the registry routes it. Proven to catch drift (removing a line reddens the
 backend test). **Reversible:** yes.
 
+## DEC-22 — Slice 11: read-cache infra shipped; the other two items were already done on main
+Of slice 11's three planned items, two were already realized on main:
+`loadHiddenBiometrics` is already wrapped in React `cache()` (the "double fetch"
+was a Phase-0 read-sweep false positive), and the heavy client deps (@dnd-kit,
+react-markdown) are already route-split — the shared first-load JS is 127 KB,
+well under the 200 KB target, so they're not in the shared chunk. (Dynamic-
+importing react-markdown with `ssr:false` was considered and rejected: it risks a
+visible unstyled-then-styled flash in chat, i.e. a visual change.) The remaining
+substantive item, the read-through cache, is shipped as **infrastructure** (like
+the slice-4a outbox core): `lib/offline/read-cache.ts` (readThrough +
+stale-while-revalidate over the typed IndexedDB layer, DB bumped to v2 with an
+additive store) with 7 unit tests. Wiring the SSR pages / client components to
+hydrate from it is the cutover step, grouped with slice 4b. **Reversible:** yes.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

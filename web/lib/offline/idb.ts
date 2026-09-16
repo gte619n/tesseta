@@ -8,10 +8,12 @@
 // version-bumped schema.
 
 const DB_NAME = "tesseta-offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** Object store names. Add here + bump DB_VERSION + handle in onupgradeneeded. */
 export const STORE_OUTBOX = "outbox";
+/** Read-through cache store (repeat-view speed + offline reads). */
+export const STORE_READCACHE = "readcache";
 
 /** One queued mutation. `id` doubles as the Idempotency-Key sent on replay. */
 export interface OutboxRecord {
@@ -60,6 +62,10 @@ export function openDb(): Promise<IDBDatabase> {
         // Drain reads in seq order; the index keeps that cheap.
         store.createIndex("seq", "seq", { unique: false });
         store.createIndex("nextAttemptAt", "nextAttemptAt", { unique: false });
+      }
+      // v2: additive read-through cache store (never drops the outbox).
+      if (!db.objectStoreNames.contains(STORE_READCACHE)) {
+        db.createObjectStore(STORE_READCACHE, { keyPath: "key" });
       }
     };
     req.onsuccess = () => {

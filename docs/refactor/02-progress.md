@@ -177,3 +177,18 @@ client silently drops — the nutrition slash-collection sync loss).
   the internal `/api/me` surface (only the `/v1` platform API is specced).
 - **Tests:** backend **871 unit** + 12 integration green; Android **591** green.
 
+## Slice 11 — web read-through cache (infra) + repeat-view speed
+**Target:** repeat-view LCP + offline reads; dedupe dashboard fetch; trim bundle.
+- **Already on main (DEC-22):** `loadHiddenBiometrics` is already `cache()`-wrapped
+  (the "double fetch" was a read-sweep false positive); the heavy deps are already
+  route-split (shared JS 127 KB < 200 KB target).
+- **Shipped:** the read-through cache **infrastructure** — `lib/offline/read-cache.ts`
+  (`readThrough` with maxAge + stale-on-error, `swr` stale-while-revalidate) over
+  the typed IndexedDB layer (DB v2, additive store). 7 unit tests: cold fetch,
+  fresh hit, revalidate-past-maxAge, stale-fallback-when-offline, throw-when-empty,
+  swr immediate+refresh.
+- **Deferred (with 4b):** hydrating the SSR pages/client components from the cache
+  (the repeat-view LCP + offline-read cutover).
+- **Tests:** web **77 tests, 0 failures** (+7); typecheck/lint/build green; shared
+  bundle unchanged at 127 KB gz.
+
