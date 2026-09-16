@@ -162,3 +162,18 @@ resolution; append-only data never conflicts; document the rule per entity type.
   survives failed revalidation) + `@Before` cache stub; full Android suite
   **590 tests, 0 failures**.
 
+## Slice 10 — cross-client collection contract, enforced
+**Target:** the recurring wire-contract-drift bug (a backend collection the
+client silently drops — the nutrition slash-collection sync loss).
+- **Shipped:** a shared fixture `docs/reference/sync-emitted-collections.txt`,
+  pinned on the backend side to `FirestoreSyncChangeReader.emittedCollectionNames()`
+  (new accessor) and on the Android side to `CollectionRegistry.tableFor(...)`.
+  A backend collection change fails the backend test until the fixture updates,
+  which forces the Android test to prove the registry routes the new collection.
+- **Proven:** removing a fixture line reddens the backend contract test
+  (verified); all 23 emitted collections are routed by the Android registry
+  today (no gap found).
+- **Dropped (DEC-21):** the OpenAPI→TS web codegen — no OpenAPI source exists for
+  the internal `/api/me` surface (only the `/v1` platform API is specced).
+- **Tests:** backend **871 unit** + 12 integration green; Android **591** green.
+

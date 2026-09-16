@@ -168,6 +168,24 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         new Subcollection(List.of("workoutPrograms"), "scheduled", "workoutPrograms/scheduled")
     );
 
+    /**
+     * Every distinct {@code collection} string this reader can stamp on a
+     * {@link SyncChange} — the canonical cross-client contract. Each client's
+     * collection router (Android {@code CollectionRegistry}) MUST handle every
+     * one, or a change silently drops (the class of bug that once left
+     * cross-device nutrition entries and adherence unrouted). Locked to a shared
+     * fixture by {@code SyncEmittedCollectionsContractTest} on this side and the
+     * Android registry test on the other.
+     */
+    public static java.util.SortedSet<String> emittedCollectionNames() {
+        java.util.SortedSet<String> names = new java.util.TreeSet<>(TOP_LEVEL);
+        for (Subcollection sub : SUBCOLLECTIONS) {
+            names.add(sub.emitted());
+        }
+        names.add(USERS);
+        return names;
+    }
+
     /** Field keys never forwarded to clients in {@code doc}. */
     private static final Set<String> STRIPPED_KEYS = Set.of(SYNC_STATUS_KEY);
 

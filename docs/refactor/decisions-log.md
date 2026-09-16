@@ -227,6 +227,21 @@ improvable:
 a risky change against an already-correct design (guardrail: stop rather than push
 through). Slice delivered as a verified finding. **Reversible:** n/a.
 
+## DEC-21 — Slice 10: shipped the collection contract fixture; dropped the OpenAPI→TS codegen
+The plan had two parts. **Dropped:** generating web `lib/types/` from the backend
+OpenAPI snapshot — the only OpenAPI spec is the `/v1` third-party platform API
+(`tesseta-platform-v1.yaml`), NOT the internal `/api/me` surface the web app
+consumes, so there's no source to generate the synced-entity types from without
+first authoring OpenAPI for the entire internal API (a large change out of scope).
+**Shipped:** the higher-value half — the backend↔Android collection contract that
+closes the exact bug class that dropped cross-device nutrition entries. A shared
+fixture (`docs/reference/sync-emitted-collections.txt`) is pinned on the backend
+side to `FirestoreSyncChangeReader.emittedCollectionNames()` and on the Android
+side to `CollectionRegistry.tableFor(...)`. A backend collection change fails the
+backend test until the fixture is updated, which then forces the Android test to
+prove the registry routes it. Proven to catch drift (removing a line reddens the
+backend test). **Reversible:** yes.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the
