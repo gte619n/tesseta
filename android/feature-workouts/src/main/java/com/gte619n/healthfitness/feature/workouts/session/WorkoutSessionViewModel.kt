@@ -224,11 +224,17 @@ class WorkoutSessionViewModel @Inject constructor(
     /**
      * Log a timed exercise's set with the measured [durationSeconds] (from the
      * hold timer) rather than the prescribed default — the timed counterpart to
-     * checking off a rep set. Unlike a rep set it starts *no* rest countdown: the
-     * guided stretch flow paces the next hold with its own "get ready" pre-roll
-     * (or jumps straight to the next lift), so a rest overlay would only fight it.
+     * checking off a rep set.
+     *
+     * IMPL-FIXPACK-01 Phase 3: a *completed* timed exercise now starts the
+     * prescribed rest before the next one, exactly like a rep set — a real,
+     * screen-level, skippable rest (fixing "it skipped the rest entirely" and the
+     * runaway pre-roll that had no reachable stop). Between sets of the *same* hold
+     * there's still no rest: the guided flow paces the next hold with its own "get
+     * ready" pre-roll, so a rest is folded in only at the exercise boundary. When
+     * that rest ends the screen arms a short get-ready for the next timed hold.
      */
-    fun logTimedSet(key: PrescriptionKey, durationSeconds: Int) {
+    fun logTimedSet(key: PrescriptionKey, durationSeconds: Int, timedEffort: String? = null) {
         val draft = _state.value.draft ?: return
         val current = draft.logged[key].orEmpty()
         val at = now()
@@ -236,10 +242,14 @@ class WorkoutSessionViewModel @Inject constructor(
             durationSeconds = durationSeconds,
             restSeconds = restSecondsBefore(draft, at),
             completedAt = at,
+            // IMPL-FIXPACK-01 Phase 4: the final timed set carries the more/same/less
+            // capability signal (null on earlier sets and rep sets).
+            timedEffort = timedEffort,
         )
         val updated = current + set
         persistSets(key, updated)
-        startRestOrComplete(draft, key, updated, at, startRest = false)
+        val exerciseDone = updated.size >= (draft.prescription(key)?.sets ?: 1)
+        startRestOrComplete(draft, key, updated, at, startRest = exerciseDone)
     }
 
     /** Replace one logged set after an inline weight/reps/duration edit. */

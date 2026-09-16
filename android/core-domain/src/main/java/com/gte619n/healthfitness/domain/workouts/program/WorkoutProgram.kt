@@ -92,6 +92,16 @@ data class LoggedSet(
     val completedAt: Instant? = null,
     /** Held time for a timed exercise (stretch/mobility/cardio); the time-based counterpart to [reps]. */
     val durationSeconds: Int? = null,
+    /**
+     * IMPL-FIXPACK-01 Phase 4: the "could I do more/less?" capability signal for a
+     * timed exercise's final set — RIR makes no sense for a hold, so this captures
+     * whether the hold was too easy / about right / too hard. `LESS | SAME | MORE`
+     * (capability: MORE = could have held longer). Nullable: only the final timed
+     * set carries it, and rep sets / legacy rows never do. Captured now; the
+     * progression engine still skips timed exercises (see SessionLoop), so it does
+     * not yet move next-session targets.
+     */
+    val timedEffort: String? = null,
 )
 
 /** Direction the progression engine moved the prescription vs. last time. */

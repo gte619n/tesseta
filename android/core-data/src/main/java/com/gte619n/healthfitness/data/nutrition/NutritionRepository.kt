@@ -30,7 +30,7 @@ import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
-import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
+import com.gte619n.healthfitness.domain.nutrition.forPortion
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -273,6 +273,88 @@ class NutritionRepository @Inject constructor(
             lastUpdate = System.currentTimeMillis(),
         )
         return merged
+    }
+
+    /** The ingredient a [removeIngredient] took out, so the UI can offer Undo. */
+    data class RemovedIngredient(val entry: Entry, val ingredient: EntryIngredient, val index: Int)
+
+    /**
+     * Remove one ingredient from a composite meal (a background artefact the photo
+     * captured but that isn't part of the meal), resum the entry and write it as an
+     * offline-first local mirror update — same rail as [updateComposite], so the day
+     * total drops instantly and the change rides the outbox to the server + other
+     * devices. Returns the removed ingredient (with its index) so the caller can
+     * offer Undo via [restoreIngredient]. Refuses to remove the last ingredient (a
+     * composite with no ingredients has no meaningful total).
+     */
+    suspend fun removeIngredient(date: String, entryId: String, index: Int): RemovedIngredient {
+        val current = entriesForDate(date).firstOrNull { it.entryId == entryId }
+        val ingredients = current?.ingredients
+        require(current != null && ingredients != null && index in ingredients.indices) {
+            "invalid ingredient index: $index"
+        }
+        require(ingredients.size > 1) { "a meal must keep at least one ingredient" }
+        val removed = ingredients[index]
+        val remaining = ingredients.toMutableList().apply { removeAt(index) }
+        val merged = current.copy(
+            ingredients = remaining,
+            macros = compositeTotal(remaining, current.quantity),
+        )
+        support.updateLocal(
+            table = MirrorTables.NUTRITION_ENTRIES,
+            id = composite(date, entryId),
+            payloadJson = rowAdapter.toJson(NutritionEntryRow(date, merged)),
+            lastUpdate = System.currentTimeMillis(),
+        )
+        return RemovedIngredient(merged, removed, index)
+    }
+
+    /**
+     * Undo a [removeIngredient]: re-insert [ingredient] at its original [index] and
+     * resum, again as an offline-first local write. Clamps the index in case the
+     * list changed underneath.
+     */
+    suspend fun restoreIngredient(
+        date: String,
+        entryId: String,
+        index: Int,
+        ingredient: EntryIngredient,
+    ): Entry {
+        val current = entriesForDate(date).firstOrNull { it.entryId == entryId }
+            ?: return ingredientRestoreFallback(date, entryId, ingredient)
+        val ingredients = current.ingredients.orEmpty().toMutableList()
+        val at = index.coerceIn(0, ingredients.size)
+        ingredients.add(at, ingredient)
+        val merged = current.copy(
+            ingredients = ingredients,
+            macros = compositeTotal(ingredients, current.quantity),
+        )
+        support.updateLocal(
+            table = MirrorTables.NUTRITION_ENTRIES,
+            id = composite(date, entryId),
+            payloadJson = rowAdapter.toJson(NutritionEntryRow(date, merged)),
+            lastUpdate = System.currentTimeMillis(),
+        )
+        return merged
+    }
+
+    private suspend fun ingredientRestoreFallback(
+        date: String,
+        entryId: String,
+        ingredient: EntryIngredient,
+    ): Entry {
+        // The entry vanished from the mirror between remove and undo — nothing to
+        // re-attach to. Return a best-effort single-ingredient entry so the caller
+        // doesn't crash; in practice the row is always present for an open sheet.
+        return Entry(
+            entryId = entryId,
+            meal = "",
+            foodName = ingredient.name,
+            quantity = 1.0,
+            macros = ingredient.macros,
+            source = "MANUAL",
+            ingredients = listOf(ingredient),
+        )
     }
 
     suspend fun deleteEntry(date: String, entryId: String) {
@@ -797,17 +879,60 @@ class NutritionRepository @Inject constructor(
         return entry
     }
 
-    suspend fun updateIngredient(
+    /**
+     * Save a composite meal's edits — the meal title, the whole-meal portion, and
+     * every ingredient's quantity multiplier — as one offline-first local mirror
+     * write. Each ingredient's macros are re-scaled from its per-100g baseline (the
+     * same maths as the sheet's live preview and the backend's
+     * `CompositeIngredient.withPortion`), the entry total is resummed with
+     * [compositeTotal], and the merged entry is written via [MirrorRepositorySupport.updateLocal]
+     * so the day total updates instantly and the change rides the outbox to the
+     * server + other devices — the same rail [patchEntry] uses.
+     *
+     * Replaces the old network-first per-ingredient PATCH, which was the only
+     * nutrition mutation left on the REST rail after the offline-first refactor
+     * (#258) and silently dropped edits: its `fillDay` re-pull ([refreshInto])
+     * skips locally-dirty rows, so a just-logged / unsynced composite never got the
+     * server's re-scaled macros back and the day total never moved. Non-composite
+     * or unmirrored entries fall back to [patchEntry] (title/portion only).
+     */
+    suspend fun updateComposite(
         date: String,
         entryId: String,
-        index: Int,
-        body: UpdateIngredientRequest,
+        title: String,
+        portion: Double,
+        quantities: List<Double>,
     ): Entry {
-        // Re-portioning a composite ingredient re-runs server-side macro math; keep
-        // it on the network and refresh the mirror for the date.
-        val entry = api.updateIngredient(date, entryId, index, body)
-        fillDayAndSignal(date)
-        return entry
+        val current = entriesForDate(date).firstOrNull { it.entryId == entryId }
+        val ingredients = current?.ingredients
+        if (current == null || ingredients.isNullOrEmpty()) {
+            return patchEntry(
+                date, entryId,
+                EntryPatchRequest(foodName = title, quantity = portion),
+            )
+        }
+        val updatedIngredients = ingredients.mapIndexed { index, ing ->
+            val qty = quantities.getOrNull(index) ?: (ing.quantity ?: 1.0)
+            // Re-scale from the per-100g baseline; ingredients without one keep
+            // their frozen snapshot (nothing to re-scale from) — same fallback the
+            // sheet's live preview uses.
+            val rescaled = ing.macrosPer100g?.forPortion(ing.servingGrams ?: 0.0, qty)
+                ?: ing.macros
+            ing.copy(quantity = qty, macros = rescaled)
+        }
+        val merged = current.copy(
+            foodName = title.ifBlank { current.foodName },
+            quantity = portion,
+            ingredients = updatedIngredients,
+            macros = compositeTotal(updatedIngredients, portion),
+        )
+        support.updateLocal(
+            table = MirrorTables.NUTRITION_ENTRIES,
+            id = composite(date, entryId),
+            payloadJson = rowAdapter.toJson(NutritionEntryRow(date, merged)),
+            lastUpdate = System.currentTimeMillis(),
+        )
+        return merged
     }
 
     /** Returns the active macro target, or null when the server replies 204. */

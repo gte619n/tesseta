@@ -101,6 +101,8 @@ fun NutritionTodayRoute(
         onUpdateEntry = viewModel::updateEntry,
         onFetchServingHint = viewModel::servingHint,
         onSaveComposite = viewModel::saveCompositeMeal,
+        onRemoveIngredient = viewModel::removeIngredient,
+        onUndoRemoveIngredient = viewModel::undoRemoveIngredient,
         onSubmitAdjust = viewModel::submitAdjust,
         onReviewAdjust = viewModel::reviewAdjust,
         onCloseAdjustReview = viewModel::closeAdjustReview,
@@ -143,6 +145,10 @@ fun NutritionTodayScreen(
     onUpdateEntry: (String, com.gte619n.healthfitness.domain.nutrition.EntryPatchRequest) -> Unit,
     onFetchServingHint: suspend (String) -> String?,
     onSaveComposite: (String, String, Double, List<Double>) -> Unit,
+    // IMPL-FIXPACK-01 Phase 2: remove a background-artefact ingredient (immediate)
+    // and Undo the last removal from the snackbar.
+    onRemoveIngredient: (entryId: String, index: Int) -> Unit = { _, _ -> },
+    onUndoRemoveIngredient: () -> Unit = {},
     // "Adjust with AI" (async): submit a correction, review the proposal, commit/discard.
     onSubmitAdjust: (entryId: String, instruction: String, saveAsMeal: Boolean) -> Unit = { _, _, _ -> },
     onReviewAdjust: (Entry) -> Unit = {},
@@ -248,6 +254,9 @@ fun NutritionTodayScreen(
                 onSaveComposite(composite.entryId, title, portion, quantities)
             },
             fetchServingHint = onFetchServingHint,
+            onRemoveIngredient = { index -> onRemoveIngredient(composite.entryId, index) },
+            onUndoRemoveIngredient = onUndoRemoveIngredient,
+            onRegenerateImage = { onRetryImage(composite.entryId) },
             onSubmitAdjust = { instruction, saveAsMeal ->
                 onSubmitAdjust(composite.entryId, instruction, saveAsMeal)
             },

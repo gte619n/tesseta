@@ -16,6 +16,12 @@
     <string name="workout_session_rir_hint">How many more could you have done?</string>
     <string name="workout_session_rir_max">5+</string>
     <string name="workout_session_rir_required">Pick reps in reserve</string>
+    <!-- IMPL-FIXPACK-01 Phase 4: timed-exercise more/same/less (capability). -->
+    <string name="workout_session_timed_effort_header">Could you have held longer?</string>
+    <string name="workout_session_timed_effort_less">Less</string>
+    <string name="workout_session_timed_effort_same">About right</string>
+    <string name="workout_session_timed_effort_more">More</string>
+    <string name="workout_session_timed_effort_hint">Tap one to finish this set</string>
     <string name="workout_session_rationale_why">Why</string>
     <string name="workout_session_time_header">Time</string>
     <string name="workout_session_set_pending">Tap the circle to log</string>

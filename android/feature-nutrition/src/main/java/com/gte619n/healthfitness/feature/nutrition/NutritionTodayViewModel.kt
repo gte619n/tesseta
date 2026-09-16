@@ -20,7 +20,6 @@ import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
-import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -254,35 +253,74 @@ class NutritionTodayViewModel @Inject constructor(
         quantities: List<Double>,
     ) {
         val date = _state.value.date.format(ISO_DATE)
-        val current = _state.value.editingComposite ?: return
+        _state.value.editingComposite ?: return
         _state.update { it.copy(savingIngredient = true) }
         viewModelScope.launch {
             try {
-                // Ingredient quantity changes first — each resum preserves the
-                // existing portion — then patch the title/portion so the entry's
-                // total reflects the fresh ingredient totals scaled by it.
-                current.ingredients?.forEachIndexed { i, ing ->
-                    val newQty = quantities.getOrNull(i) ?: (ing.quantity ?: 1.0)
-                    if ((ing.quantity ?: 1.0) != newQty) {
-                        repository.updateIngredient(
-                            date, entryId, i, UpdateIngredientRequest(quantity = newQty),
-                        )
-                    }
-                }
-                val newTitle = title.takeIf { it.isNotBlank() && it != current.foodName }
-                val newPortion = portion.takeIf { it != current.quantity }
-                if (newTitle != null || newPortion != null) {
-                    repository.patchEntry(
-                        date, entryId,
-                        EntryPatchRequest(foodName = newTitle, quantity = newPortion),
-                    )
-                }
+                // One offline-first local write commits the title, the whole-meal
+                // portion and every ingredient's quantity together: the repository
+                // re-scales each ingredient from its per-100g baseline and resums
+                // the entry total, so the day reflects the edit instantly (and the
+                // change rides the outbox to the server). Replaces the old
+                // per-ingredient network PATCH that silently dropped edits on a
+                // still-dirty entry after the offline-first refactor.
+                repository.updateComposite(
+                    date = date,
+                    entryId = entryId,
+                    title = title,
+                    portion = portion.takeIf { it > 0 } ?: 1.0,
+                    quantities = quantities,
+                )
                 val day = repository.day(date)
                 _state.update {
                     it.copy(day = day, savingIngredient = false, editingComposite = null, error = null)
                 }
             } catch (e: Exception) {
                 _state.update { it.copy(savingIngredient = false, error = e.message ?: "Save failed") }
+            }
+        }
+    }
+
+    // The last ingredient removed from a composite, kept so the snackbar Undo can
+    // put it back. Not in UI state — the snackbar lives in the sheet and drives the
+    // undo callback; the VM only needs to remember what to restore.
+    private var lastRemoved: NutritionRepository.RemovedIngredient? = null
+
+    /**
+     * IMPL-FIXPACK-01 Phase 2: remove one ingredient from the open composite meal
+     * (a background artefact the photo captured). Direct, immediate, offline-first:
+     * the entry resums and the day total drops at once, and the change rides the
+     * outbox. Remembers the removed ingredient so [undoRemoveIngredient] can restore
+     * it from the snackbar. Refuses (surfaces an error) when only one remains.
+     */
+    fun removeIngredient(entryId: String, index: Int) {
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                val removed = repository.removeIngredient(date, entryId, index)
+                lastRemoved = removed
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, editingComposite = removed.entry, error = null) }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Couldn't remove the ingredient") }
+            }
+        }
+    }
+
+    /** Undo the most recent ingredient removal (the snackbar "Undo" action). */
+    fun undoRemoveIngredient() {
+        val removed = lastRemoved ?: return
+        lastRemoved = null
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                val entry = repository.restoreIngredient(
+                    date, removed.entry.entryId, removed.index, removed.ingredient,
+                )
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, editingComposite = entry, error = null) }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Couldn't restore the ingredient") }
             }
         }
     }

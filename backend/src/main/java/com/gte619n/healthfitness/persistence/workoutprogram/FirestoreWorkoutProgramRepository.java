@@ -221,6 +221,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                             sm.put("durationSeconds", s.durationSeconds());
                             sm.put("rir", s.rir());  // IMPL-PROG-01 D1
                             sm.put("rirSource", s.rirSource() == null ? null : s.rirSource().name());
+                            sm.put("timedEffort", s.timedEffort());  // IMPL-FIXPACK-01 Phase 4
                             ls.add(sm);
                         }
                         rm.put("loggedSets", ls);
@@ -454,7 +455,8 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
                 intOrNull(m.get("durationSeconds")),
                 rir instanceof Number n3 ? n3.doubleValue() : null,
                 rirSourceStr == null ? null
-                    : com.gte619n.healthfitness.core.progression.RirSource.valueOf(rirSourceStr)));
+                    : com.gte619n.healthfitness.core.progression.RirSource.valueOf(rirSourceStr),
+                str(m.get("timedEffort"))));
         }
         return out;
     }

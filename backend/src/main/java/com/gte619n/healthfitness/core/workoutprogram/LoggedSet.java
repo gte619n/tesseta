@@ -21,6 +21,13 @@ import java.time.Instant;
  * input (IMPL-PROG-01 D1). Both nullable: legacy/imported rows predate them, in
  * which case the engine reads {@link #effectiveRir()} which converts the legacy
  * {@code rpe} as {@code 10 − rpe} (M2).
+ *
+ * <p>{@code timedEffort} (IMPL-FIXPACK-01 Phase 4) is the "could I do more/less?"
+ * capability signal for a timed exercise's final set — {@code LESS | SAME | MORE}
+ * (capability: {@code MORE} = could have held longer). RIR is meaningless for a
+ * hold, so this is its timed counterpart. Nullable: only the final timed set
+ * carries it. Captured now; the progression engine still skips timed exercises
+ * ({@code SessionLoop}), so it does not yet move next-session targets.
  */
 public record LoggedSet(
     Double weightLbs,
@@ -30,14 +37,15 @@ public record LoggedSet(
     Instant completedAt,
     Integer durationSeconds,
     Double rir,
-    com.gte619n.healthfitness.core.progression.RirSource rirSource
+    com.gte619n.healthfitness.core.progression.RirSource rirSource,
+    String timedEffort
 ) {
     /**
      * Pre-timed-logging signature. Delegates with {@code durationSeconds} null so
      * existing callers (importer, completion service, tests) compile unchanged.
      */
     public LoggedSet(Double weightLbs, Integer reps, Double rpe, Integer restSeconds, Instant completedAt) {
-        this(weightLbs, reps, rpe, restSeconds, completedAt, null, null, null);
+        this(weightLbs, reps, rpe, restSeconds, completedAt, null, null, null, null);
     }
 
     /**
@@ -46,7 +54,17 @@ public record LoggedSet(
      */
     public LoggedSet(Double weightLbs, Integer reps, Double rpe, Integer restSeconds,
                      Instant completedAt, Integer durationSeconds) {
-        this(weightLbs, reps, rpe, restSeconds, completedAt, durationSeconds, null, null);
+        this(weightLbs, reps, rpe, restSeconds, completedAt, durationSeconds, null, null, null);
+    }
+
+    /**
+     * Pre-timedEffort signature (IMPL-FIXPACK-01 Phase 4). Delegates with
+     * {@code timedEffort} null so every existing caller compiles unchanged.
+     */
+    public LoggedSet(Double weightLbs, Integer reps, Double rpe, Integer restSeconds,
+                     Instant completedAt, Integer durationSeconds, Double rir,
+                     com.gte619n.healthfitness.core.progression.RirSource rirSource) {
+        this(weightLbs, reps, rpe, restSeconds, completedAt, durationSeconds, rir, rirSource, null);
     }
 
     /**
