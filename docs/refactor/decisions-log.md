@@ -206,6 +206,27 @@ isolation. The food() per-day reads and the per-user-subcollection model stay
 (collectionGroup is forbidden by ADR-0021; 4 day-reads is inherent). Verified by
 the existing 5 RecentActivityServiceTest cases. **Reversible:** yes.
 
+## DEC-20 — Slice 8: cold-start & auth-refresh premises already satisfied on main; no safe change to force
+Investigated each slice-8 item and found the work already done or not safely
+improvable:
+- **CDS** (the real cold-start lever): already fully shipped in the Dockerfile
+  (PERF-002) — exploded-jar training run with `-Dspring.context.exit=onRefresh`,
+  `-XX:ArchiveClassesAtExit`, self-healing `-XX:+AutoCreateSharedArchive` at
+  runtime. Nothing to add.
+- **Lazy AI clients:** `GeminiConfig` already builds ONE conditionally-created,
+  lightweight `Client` (a builder call, no work); the client classes just hold a
+  reference. `@Lazy` would shave nothing measurable and can't be verified without
+  a deploy, so not worth the startup-validation risk.
+- **Field injection:** false positive (DEC-13).
+- **auth/refresh (1.27 s p50):** SHA-256 (fast, not a KDF, correctly). The user
+  read is already `@Cacheable(userById)`. The remaining cost is the token
+  rotation — `tryMarkRotated` (compare-and-set) then `save(successor)` — which is
+  **order-dependent by design** (the CAS is the theft-detection guarantee), so it
+  can't be batched or parallelized. The latency is inherent Firestore write cost.
+**Decision:** no code change; forcing lazy-init or reordering auth writes would be
+a risky change against an already-correct design (guardrail: stop rather than push
+through). Slice delivered as a verified finding. **Reversible:** n/a.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

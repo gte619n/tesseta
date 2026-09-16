@@ -136,3 +136,14 @@ resolution; append-only data never conflicts; document the rule per entity type.
 - **Tests:** existing 5 `RecentActivityServiceTest` cases green (output
   unchanged); full backend build green.
 
+## Slice 8 — backend cold start: already handled on main (verified finding)
+**Target:** ~13 s cold start; auth/refresh 1.27 s p50.
+- **Finding (DEC-20):** the cold-start lever (Spring CDS) is already fully shipped
+  in the Dockerfile (PERF-002). The AI-client beans are cheap (lazy-init would
+  shave nothing measurable). Field injection was a false positive (DEC-13). In
+  auth/refresh, the user read is already cached and the token rotation is an
+  order-dependent compare-and-set (theft detection) that can't be batched — the
+  latency is inherent Firestore write cost.
+- **Outcome:** no safe code change to make; forcing one would risk an
+  already-correct design. Recorded as a finding; builds unchanged/green.
+
