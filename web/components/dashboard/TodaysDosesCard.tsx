@@ -4,19 +4,30 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 import { formatDose, TIME_WINDOW_LABELS } from "@/lib/types/medication";
+import { logDoseOffline } from "@/lib/offline/writes";
 
 interface TodaysDosesCardProps {
   doses: TodaysDose[];
-  logDose: (medicationId: string, window: TimeWindow) => Promise<void>;
   compact?: boolean;
 }
 
-export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDosesCardProps) {
+export function TodaysDosesCard({ doses, compact = false }: TodaysDosesCardProps) {
   const [isPending, startTransition] = useTransition();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // Optimistic "taken" overlay keyed by `${medicationId}:${window}`. Cleared when
+  // the server-rendered `doses` prop refreshes (the outbox drain reconciles).
+  const [optimisticTaken, setOptimisticTaken] = useState<Record<string, boolean>>({});
+  useEffect(() => setOptimisticTaken({}), [doses]);
 
-  const takenCount = doses.filter(d => d.taken).length;
-  const totalCount = doses.length;
+  // Render off an overlaid view so an offline "take" shows immediately and the
+  // write survives via the outbox; the global pending badge shows it syncing.
+  const view = doses.map((d) => ({
+    ...d,
+    taken: optimisticTaken[`${d.medicationId}:${d.window}`] ?? d.taken,
+  }));
+
+  const takenCount = view.filter(d => d.taken).length;
+  const totalCount = view.length;
   const allTaken = totalCount > 0 && takenCount === totalCount;
 
   // Once every dose is checked off the card collapses to a compact "Complete"
@@ -29,9 +40,20 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
 
   function handleToggle(medicationId: string, window: TimeWindow) {
     const key = `${medicationId}:${window}`;
+    // Optimistically check it off, then journal to the outbox. Adherence is
+    // idempotent per (med, date, window), so a replay is a no-op.
+    setOptimisticTaken((prev) => ({ ...prev, [key]: true }));
     setPendingId(key);
     startTransition(async () => {
-      await logDose(medicationId, window);
+      try {
+        await logDoseOffline(medicationId, window);
+      } catch {
+        setOptimisticTaken((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }
       setPendingId(null);
     });
   }
@@ -95,13 +117,13 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
           </div>
         </div>
 
-        {doses.length === 0 ? (
+        {view.length === 0 ? (
           <p className="mt-3 text-[13px] text-secondary">
             No scheduled doses for today.
           </p>
         ) : showDoses ? (
           <div className="mt-3 space-y-1.5">
-            {doses.map((dose) => {
+            {view.map((dose) => {
               const key = `${dose.medicationId}:${dose.window}`;
               const isLoading = isPending && pendingId === key;
 
@@ -161,13 +183,13 @@ export function TodaysDosesCard({ doses, logDose, compact = false }: TodaysDoses
         </span>
       </div>
 
-      {doses.length === 0 ? (
+      {view.length === 0 ? (
         <p className="mt-4 text-center text-[13px] text-secondary">
           No scheduled doses for today.
         </p>
       ) : (
         <div className="mt-4 space-y-2">
-          {doses.map((dose) => {
+          {view.map((dose) => {
             const key = `${dose.medicationId}:${dose.window}`;
             const isLoading = isPending && pendingId === key;
 

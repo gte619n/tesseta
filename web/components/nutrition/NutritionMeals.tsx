@@ -29,35 +29,34 @@ import { useToast } from "@/components/ui/Toast";
 import { FoodImage } from "@/components/nutrition/FoodImage";
 import { MealSection } from "@/components/nutrition/MealSection";
 import { formatWholeNumber } from "@/lib/format-number";
+import {
+  addEntryOffline,
+  deleteEntryOffline,
+  updateEntryOffline,
+} from "@/lib/offline/writes";
+
+// Add/edit/delete of entries route through the offline outbox (client-side) with
+// optimistic updates below, so those three are no longer server-action props.
+type AddEntryFields = {
+  meal: Meal;
+  foodId: string | null;
+  foodName: string;
+  servingLabel: string;
+  servingGrams: number;
+  quantity: number;
+  macros: Macros;
+  source: "MANUAL" | "CATALOG";
+};
 
 type Props = {
   meals: MealGroup[];
   date: string;
-  addEntry: (
-    date: string,
-    body: {
-      meal: Meal;
-      foodId: string | null;
-      foodName: string;
-      servingLabel: string;
-      servingGrams: number;
-      quantity: number;
-      macros: Macros;
-      source: "MANUAL" | "CATALOG";
-    },
-  ) => Promise<void>;
-  updateEntry: (
-    date: string,
-    entryId: string,
-    body: UpdateEntryBody,
-  ) => Promise<void>;
   updateIngredient: (
     date: string,
     entryId: string,
     index: number,
     body: UpdateIngredientBody,
   ) => Promise<void>;
-  deleteEntry: (date: string, entryId: string) => Promise<void>;
   regenerateImage: (date: string, entryId: string) => Promise<void>;
   servingHint: (date: string, entryId: string) => Promise<string | null>;
   searchFoods: (q: string) => Promise<
@@ -113,6 +112,33 @@ function sumMacros(entries: Entry[]): Macros {
 }
 
 /**
+ * Apply a patch to an entry wherever it lives, moving it to `patch.meal`'s group
+ * if the meal changed, and re-summing every affected subtotal. Handles both a
+ * field edit and a drag-move. Returns the groups unchanged if the id isn't found.
+ */
+function patchEntryInGroups(
+  groups: MealGroup[],
+  entryId: string,
+  patch: Partial<Entry>,
+): MealGroup[] {
+  let moved: Entry | null = null;
+  const withoutEntry = groups.map((g) => {
+    const found = g.entries.find((e) => e.entryId === entryId);
+    if (!found) return g;
+    moved = { ...found, ...patch };
+    const entries = g.entries.filter((e) => e.entryId !== entryId);
+    return { ...g, entries, subtotal: sumMacros(entries) };
+  });
+  if (moved === null) return groups;
+  const target: Entry = moved;
+  return withoutEntry.map((g) =>
+    g.meal === target.meal
+      ? { ...g, entries: [...g.entries, target], subtotal: sumMacros([...g.entries, target]) }
+      : g,
+  );
+}
+
+/**
  * Client wrapper around the meal sections that wires up drag-and-drop: hold the
  * grip on any entry and drop it on another meal to recategorise it. We move the
  * entry optimistically (re-summing both subtotals), then PATCH its `meal` on the
@@ -121,10 +147,7 @@ function sumMacros(entries: Entry[]): Macros {
 export function NutritionMeals({
   meals: initialMeals,
   date,
-  addEntry,
-  updateEntry,
   updateIngredient,
-  deleteEntry,
   regenerateImage,
   servingHint,
   searchFoods,
@@ -162,6 +185,80 @@ export function NutritionMeals({
     setActiveId(String(event.active.id));
   }
 
+  // Add/edit/delete now go through the offline outbox: apply an optimistic
+  // update to the local `meals` state, then journal the mutation (survives a
+  // flaky network / tab close). The OutboxDrainer's router.refresh() after a
+  // successful drain re-syncs `meals` to server truth via the initialMeals
+  // effect above. On the rare journaling failure we roll back.
+
+  /** Insert an optimistic entry into its meal group. Client-minted id. */
+  async function handleAdd(entryDate: string, body: AddEntryFields): Promise<void> {
+    const id = crypto.randomUUID();
+    const optimistic: Entry = {
+      entryId: id,
+      meal: body.meal,
+      foodId: body.foodId,
+      foodName: body.foodName,
+      servingLabel: body.servingLabel,
+      servingGrams: body.servingGrams,
+      quantity: body.quantity,
+      macros: body.macros,
+      source: body.source,
+      imageUrl: null,
+      imageStatus: "NONE",
+      createdAt: null, // placeholder until the drain + refresh brings server truth
+    };
+    const previous = meals;
+    setMeals((groups) =>
+      groups.map((g) =>
+        g.meal === body.meal
+          ? { ...g, entries: [...g.entries, optimistic], subtotal: sumMacros([...g.entries, optimistic]) }
+          : g,
+      ),
+    );
+    try {
+      await addEntryOffline(entryDate, { id, ...body });
+    } catch {
+      setMeals(previous);
+      toast.error("Couldn't log entry");
+    }
+  }
+
+  /** Optimistically patch an entry (fields and/or its meal group) then queue it. */
+  async function handleUpdate(
+    entryDate: string,
+    entryId: string,
+    body: UpdateEntryBody,
+  ): Promise<void> {
+    const previous = meals;
+    setMeals((groups) => patchEntryInGroups(groups, entryId, body));
+    try {
+      await updateEntryOffline(entryDate, entryId, body);
+    } catch {
+      setMeals(previous);
+      toast.error("Couldn't save changes");
+    }
+  }
+
+  /** Optimistically drop an entry then queue the delete. */
+  async function handleDelete(entryDate: string, entryId: string): Promise<void> {
+    const previous = meals;
+    setMeals((groups) =>
+      groups.map((g) => {
+        const entries = g.entries.filter((e) => e.entryId !== entryId);
+        return entries.length === g.entries.length
+          ? g
+          : { ...g, entries, subtotal: sumMacros(entries) };
+      }),
+    );
+    try {
+      await deleteEntryOffline(entryDate, entryId);
+    } catch {
+      setMeals(previous);
+      toast.error("Couldn't remove entry");
+    }
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const entryId = String(event.active.id);
     const targetMeal = event.over ? (String(event.over.id) as Meal) : null;
@@ -171,25 +268,12 @@ export function NutritionMeals({
     const source = meals.find((g) =>
       g.entries.some((e) => e.entryId === entryId),
     );
-    const moved = source?.entries.find((e) => e.entryId === entryId);
-    if (!source || !moved || source.meal === targetMeal) return;
+    if (!source || source.meal === targetMeal) return;
 
     const previous = meals;
-    const next = meals.map((g) => {
-      if (g.meal === source.meal) {
-        const entries = g.entries.filter((e) => e.entryId !== entryId);
-        return { ...g, entries, subtotal: sumMacros(entries) };
-      }
-      if (g.meal === targetMeal) {
-        const entries = [...g.entries, { ...moved, meal: targetMeal }];
-        return { ...g, entries, subtotal: sumMacros(entries) };
-      }
-      return g;
-    });
-    setMeals(next);
-
+    setMeals((groups) => patchEntryInGroups(groups, entryId, { meal: targetMeal }));
     try {
-      await updateEntry(date, entryId, { meal: targetMeal });
+      await updateEntryOffline(date, entryId, { meal: targetMeal });
       toast.success(`Moved to ${MEAL_LABELS[targetMeal]}`);
     } catch {
       setMeals(previous);
@@ -211,10 +295,10 @@ export function NutritionMeals({
             key={group.meal}
             group={group}
             date={date}
-            addEntry={addEntry}
-            updateEntry={updateEntry}
+            addEntry={handleAdd}
+            updateEntry={handleUpdate}
             updateIngredient={updateIngredient}
-            deleteEntry={deleteEntry}
+            deleteEntry={handleDelete}
             regenerateImage={regenerateImage}
             servingHint={servingHint}
             searchFoods={searchFoods}

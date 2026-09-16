@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { cache } from "react";
 import type { Session } from "next-auth";
-import { revalidatePath } from "next/cache";
 import { absoluteTitle } from "@/lib/page-metadata";
 import { auth } from "@/auth";
 import { BloodPanel } from "@/components/dashboard/BloodPanel";
@@ -15,7 +14,7 @@ import { TodaysDosesCard } from "@/components/dashboard/TodaysDosesCard";
 import { WeightStatCard } from "@/components/dashboard/WeightStatCard";
 import { LiveDateline } from "@/components/dashboard/LiveDateline";
 import { isAdmin } from "@/lib/admin";
-import { apiFetch, apiJson } from "@/lib/api";
+import { apiJson } from "@/lib/api";
 import { loadRecentFeed } from "@/lib/recent-feed";
 import { loadBloodPanel } from "@/lib/blood-panel";
 import { loadBodyComposition } from "@/lib/body-composition-dashboard";
@@ -23,7 +22,7 @@ import { loadDailyMetrics, emptyVital } from "@/lib/dashboard-vitals";
 import { loadHiddenBiometrics } from "@/lib/biometrics-api";
 import { loadTodayNutrition } from "@/lib/nutrition-dashboard";
 import { loadWorkoutSummary } from "@/lib/workout-dashboard";
-import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
+import type { TodaysDose } from "@/lib/types/medication";
 
 export const metadata = absoluteTitle("tesseta");
 
@@ -155,21 +154,9 @@ async function BloodPanelSection() {
 
 async function TodaysDosesSection() {
   const todaysDoses = await loadTodaysDoses();
-
-  async function logDose(medicationId: string, window: TimeWindow) {
-    "use server";
-    const res = await apiFetch(`/api/me/medications/${medicationId}/adherence`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ window }),
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to log dose: ${res.status}`);
-    }
-    revalidatePath("/");
-  }
-
-  return <TodaysDosesCard doses={todaysDoses} logDose={logDose} compact />;
+  // Logging a dose routes through the client-side offline outbox (see
+  // TodaysDosesCard + lib/offline/writes), so no server action is passed here.
+  return <TodaysDosesCard doses={todaysDoses} compact />;
 }
 
 async function RecentFeedSection() {

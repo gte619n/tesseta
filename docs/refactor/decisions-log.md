@@ -270,6 +270,24 @@ no manufactured deletions; slice 12 delivers the final cross-codebase green
 verification (backend build + Android unit + R8 release + web typecheck/lint/
 test/build) that the mandate requires. **Reversible:** n/a.
 
+## DEC-24 — Slice 4b: live web writes cut over to the outbox (owner-approved)
+Owner chose "do 4b now, all three paths in one pass." Cut nutrition
+(add/edit/delete), medication adherence, and workout session completion from
+their server actions to the client-side outbox. Pattern: the client component
+applies an optimistic update to local state, calls a thin `lib/offline/writes`
+helper (`submitMutation` → journal → drain via the allowlisted proxy), and the
+`OutboxDrainer` calls `router.refresh()` after a successful drain to swap the
+optimistic overlay for server truth. Nutrition entries use a client-minted id
+(the backend create already honours `body.id`) so the optimistic row and the
+server row share identity. The now-dead server actions + their orphaned imports
+were removed (hygiene). A pending badge (invisible at zero) shows queued writes.
+**E2E scope:** the full authenticated offline→online→sync UI flow needs a running
+backend + session the Playwright harness doesn't have; instead I added (a) a
+`writes.test.ts` integration test proving each of the 5 cutover writes journals a
+correctly-targeted, allowlisted mutation, and (b) a Playwright spec hitting the
+real dev server that proves the replay-proxy allowlist gate (400 on a
+non-allowlisted path, passes the gate on an allowlisted one). **Reversible:** yes.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

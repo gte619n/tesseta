@@ -5,10 +5,7 @@ import {
   getDay,
   getTarget,
   getRecentMeals,
-  addEntry,
-  updateEntry,
   updateIngredient,
-  deleteEntry,
   regenerateEntryImage,
   servingHint,
   searchFoods,
@@ -20,10 +17,8 @@ import {
   adjustApply,
 } from "@/lib/nutrition-api";
 import type {
-  Meal,
   Macros,
   NutritionDay,
-  UpdateEntryBody,
   UpdateIngredientBody,
   LogDescribedMealBody,
   RelogBody,
@@ -138,33 +133,10 @@ export default async function NutritionPage(props: {
 
   // ── Server actions passed as props ──────────────────────────────────
 
-  async function addEntryAction(
-    entryDate: string,
-    body: {
-      meal: Meal;
-      foodId: string | null;
-      foodName: string;
-      servingLabel: string;
-      servingGrams: number;
-      quantity: number;
-      macros: Macros;
-      source: "MANUAL" | "CATALOG";
-    },
-  ) {
-    "use server";
-    await addEntry(entryDate, body);
-    revalidatePath("/me/nutrition");
-  }
-
-  async function updateEntryAction(
-    entryDate: string,
-    entryId: string,
-    body: UpdateEntryBody,
-  ) {
-    "use server";
-    await updateEntry(entryDate, entryId, body);
-    revalidatePath("/me/nutrition");
-  }
+  // Add / edit / delete of nutrition entries now route through the client-side
+  // offline outbox (see NutritionMeals + lib/offline/writes), so their server
+  // actions were removed. The remaining actions below are the AI / ingredient
+  // flows that stay server-side.
 
   async function updateIngredientAction(
     entryDate: string,
@@ -177,11 +149,6 @@ export default async function NutritionPage(props: {
     revalidatePath("/me/nutrition");
   }
 
-  async function deleteEntryAction(entryDate: string, entryId: string) {
-    "use server";
-    await deleteEntry(entryDate, entryId);
-    revalidatePath("/me/nutrition");
-  }
 
   async function regenerateImageAction(entryDate: string, entryId: string) {
     "use server";
@@ -356,10 +323,7 @@ export default async function NutritionPage(props: {
         <NutritionMeals
           meals={day.meals}
           date={date}
-          addEntry={addEntryAction}
-          updateEntry={updateEntryAction}
           updateIngredient={updateIngredientAction}
-          deleteEntry={deleteEntryAction}
           regenerateImage={regenerateImageAction}
           servingHint={servingHintAction}
           searchFoods={searchFoodsAction}

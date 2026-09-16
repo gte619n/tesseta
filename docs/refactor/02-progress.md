@@ -209,3 +209,21 @@ client silently drops — the nutrition slash-collection sync loss).
   - Web: typecheck + lint + **77 tests** + production build, all green; shared
     first-load JS 127 KB gz (< 200 KB target).
 
+
+## Slice 4b — live web writes cut over to the outbox (owner-approved)
+**Target:** actually close DL-1 in the running app (4a shipped only the infra).
+- **Cut over all three paths** to the client-side outbox with optimistic UI:
+  nutrition add/edit/delete (`NutritionMeals` — client-minted entry id + optimistic
+  insert/patch/remove), medication adherence (`TodaysDosesCard` — optimistic
+  "taken" overlay), workout session completion (`ProgramThisWeek` — optimistic
+  status flip). Each journals via `lib/offline/writes` and reconciles through the
+  `OutboxDrainer`'s `router.refresh()` after a successful drain. Removed the now-
+  dead server actions + orphaned imports. Added a pending badge (hidden at zero).
+- **Result:** a write made offline (or on a flaky network) is journaled and
+  replayed on reconnect with the client UUID as the Idempotency-Key — no longer
+  lost, and the backend dedupes the replay.
+- **Tests:** +6 `writes.test.ts` (each cutover write journals a correctly-targeted,
+  allowlisted mutation) → web unit **83, 0 failures**; +3 Playwright e2e
+  (`outbox-replay.spec.ts`, real dev server: allowlist gate 400s a bad path,
+  passes an allowed one). Typecheck + lint (0 errors) + build green. Full
+  authenticated offline→online UI flow noted as manual (needs the dev stack).

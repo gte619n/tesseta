@@ -58,11 +58,23 @@ export async function submitMutation(input: SubmitInput): Promise<string> {
   return id;
 }
 
+/** Subscribers notified after a drain that actually synced ≥1 mutation. Used to
+ *  reconcile server-rendered views (router.refresh) once the server has the write. */
+const syncedListeners = new Set<Listener>();
+
+export function onSynced(listener: Listener): () => void {
+  syncedListeners.add(listener);
+  return () => syncedListeners.delete(listener);
+}
+
 /** Runs a drain and notifies subscribers of the resulting queue change. */
 export async function drainNow(): Promise<void> {
   try {
     const result = await drain();
     if (result.sent || result.failed || result.parked) notify();
+    // A successful sync means the server now holds these writes — let SSR views
+    // reconcile (drop their optimistic overlay for server truth).
+    if (result.sent > 0) syncedListeners.forEach((l) => l());
   } catch {
     // Drain failures are self-healing (rows stay queued); nothing to surface here.
   }
