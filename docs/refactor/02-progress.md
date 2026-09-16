@@ -22,3 +22,16 @@ metric it targeted, measured the same way.
 - **Builds:** backend `build jacocoTestReport` green; jacoco now aggregates unit
   + integration execution data. Android/web untouched (still green from Phase 0).
 
+## Slice 1 — Android outbox backoff jitter + parked-row aging
+**Target:** eliminate reconnect lockstep (baseline problem #9) and stop parked
+mutations stranding silently (DL-5). No runtime metric — correctness/robustness.
+- **Jitter:** `jitteredBackoffMillis` applies full ±50% jitter to the 30 s→6 h
+  ladder; retries no longer align across rows/devices. Verified: band + ceiling
+  test, and a "two failing rows get different backoffs" test.
+- **Aging:** a parked (terminal-4xx) row past 24 h now emits one
+  `outbox-parked-aging` diagnostics record (was: invisible until the user opened
+  a feature banner). Verified: nudge fires once past threshold, not before, and
+  not twice.
+- **Tests:** +3 in `OutboxDrainTest` (24 total in that class); full Android suite
+  **587 tests, 0 failures** (was 584). Backend/web untouched.
+

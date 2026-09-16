@@ -14,6 +14,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.min
+import kotlin.random.Random
 
 /**
  * IMPL-AND-20 (Phase 4) — the offline write queue + ordered, backed-off drain (D7).
@@ -43,9 +44,20 @@ class OutboxRepository @Inject constructor(
     private val diagnostics: SyncDiagnostics,
     @IoDispatcher private val io: CoroutineDispatcher,
     private val clock: () -> Long = { System.currentTimeMillis() },
+    // Injected so backoff jitter is deterministic under test. Returns a value in
+    // [0.0, 1.0); the drain maps it onto the ±50% jitter band (see [jitteredBackoffMillis]).
+    private val random: () -> Double = { Random.Default.nextDouble() },
 ) {
     /** Serializes [drain] so overlapping triggers can't double-send or race cleanup. */
     private val drainMutex = Mutex()
+
+    /**
+     * Parked mutations already surfaced to diagnostics for aging past the
+     * [PARKED_AGING_THRESHOLD_MILLIS] window. Process-scoped (like [SyncDiagnostics]
+     * itself) so we nudge once per row per session instead of re-recording on every
+     * drain — the outbox row stays the durable source of truth for what's stranded.
+     */
+    private val agedParkedSurfaced = mutableSetOf<String>()
 
     /** Reactive pending-mutation count for the global sync indicator (D11). */
     fun pendingCount(): Flow<Int> = outboxDao.observePendingCount()
@@ -124,7 +136,14 @@ class OutboxRepository @Inject constructor(
      * due row and double-send, or one's `delete` can race the other's replay.
      */
     suspend fun drain(): DrainResult = withContext(io) {
-        drainMutex.withLock { drainLocked() }
+        drainMutex.withLock {
+            val result = drainLocked()
+            // Runs on every drain, including one with no due rows: a parked row is
+            // never "due" (drainLocked early-returns when nothing is due), so aging
+            // must be checked here or a queue of only-parked rows would never nudge.
+            surfaceAgedParkedRows(clock())
+            result
+        }
     }
 
     private suspend fun drainLocked(): DrainResult {
@@ -217,7 +236,9 @@ class OutboxRepository @Inject constructor(
                     outboxDao.recordFailure(
                         mutationId = mutation.mutationId,
                         attempts = attempts,
-                        nextAttemptAt = if (terminal) PARKED_NEXT_ATTEMPT else now + backoffMillis(attempts),
+                        nextAttemptAt =
+                            if (terminal) PARKED_NEXT_ATTEMPT
+                            else now + jitteredBackoffMillis(attempts, random()),
                     )
                     mirror.markFailed(mutation.entityTable, mutation.entityId)
                     // Record the reason instead of swallowing it (Workstream B). The
@@ -258,6 +279,34 @@ class OutboxRepository @Inject constructor(
         return DrainResult(sent = sent, failed = failed, collapsed = collapsed)
     }
 
+    /**
+     * Surface parked (terminal-4xx) mutations that have been stranded past
+     * [PARKED_AGING_THRESHOLD_MILLIS]. A parked row is invisible to the automatic
+     * drain (only manual retry/restore revives it), so without this it can sit on
+     * one device indefinitely with no signal beyond a feature-level banner the user
+     * may never open (baseline DL-5). We record one diagnostics entry per aged row
+     * per session; [agedParkedSurfaced] dedupes, and rows that leave the parked set
+     * (restored/discarded/rearmed) are pruned so a re-park re-notifies.
+     */
+    private suspend fun surfaceAgedParkedRows(now: Long) {
+        val parked = outboxDao.listParked(PARKED_NEXT_ATTEMPT)
+        val parkedIds = parked.mapTo(mutableSetOf()) { it.mutationId }
+        agedParkedSurfaced.retainAll(parkedIds)
+        for (row in parked) {
+            val ageMillis = now - row.createdAt
+            if (ageMillis < PARKED_AGING_THRESHOLD_MILLIS) continue
+            if (!agedParkedSurfaced.add(row.mutationId)) continue
+            diagnostics.record(
+                source = "outbox-parked-aging",
+                message = "A change has been unable to sync for over " +
+                    "${ageMillis / (60 * 60 * 1000)}h and needs manual retry.",
+                table = row.entityTable,
+                entityId = row.entityId,
+                terminal = true,
+            )
+        }
+    }
+
     /** Delete exactly the snapshotted rows of a chain (never rows added mid-drain). */
     private suspend fun clearChain(chain: List<OutboxEntity>?) {
         val ids = chain?.map { it.mutationId }.orEmpty()
@@ -276,16 +325,34 @@ class OutboxRepository @Inject constructor(
         const val BASE_BACKOFF_MILLIS = 30_000L // 30s
         const val MAX_BACKOFF_MILLIS = 6L * 60 * 60 * 1000 // 6h ceiling (D10 floor)
 
+        /** A parked row must age this long before it nudges diagnostics (DL-5). */
+        const val PARKED_AGING_THRESHOLD_MILLIS = 24L * 60 * 60 * 1000 // 24h
+
         /**
          * `nextAttemptAt` sentinel for terminally-rejected mutations: never due
          * for an automatic drain, only a manual [rearmFailed] revives them.
          */
         const val PARKED_NEXT_ATTEMPT = Long.MAX_VALUE
 
-        /** Exponential backoff: 30s, 60s, 120s, … capped at 6h. */
+        /** Deterministic exponential ladder: 30s, 60s, 120s, … capped at 6h. */
         fun backoffMillis(attempts: Int): Long {
             val exp = BASE_BACKOFF_MILLIS shl (attempts - 1).coerceIn(0, 20)
             return min(exp, MAX_BACKOFF_MILLIS)
+        }
+
+        /**
+         * The ladder value with **full ±50% jitter** applied (baseline problem #9).
+         * Without jitter every device that dropped offline together retries in
+         * lockstep and stampedes the backend the instant connectivity returns; the
+         * fixed ladder also synchronizes a single device's own competing drains.
+         * [rand] in [0.0, 1.0) maps onto factor [0.5, 1.5], so the result stays in
+         * [0.5×, 1.5×] of the ladder value, clamped to the 6h ceiling. rand=0.5 →
+         * exactly the ladder value.
+         */
+        fun jitteredBackoffMillis(attempts: Int, rand: Double): Long {
+            val base = backoffMillis(attempts)
+            val factor = 0.5 + rand.coerceIn(0.0, 1.0)
+            return min((base * factor).toLong(), MAX_BACKOFF_MILLIS)
         }
     }
 }

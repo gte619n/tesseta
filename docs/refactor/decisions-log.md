@@ -42,6 +42,25 @@ slice-8/slice-9 deltas adequately (it already showed release 428 ms vs debug
 800 ms target proves marginal on real hardware. **Reversible:** yes — additive
 module, can be introduced without touching app code.
 
+## DEC-06 — Backoff jitter is full ±50%, injected random for testability
+The plan said "±50% jitter". Implemented as a pure companion
+`jitteredBackoffMillis(attempts, rand)` mapping `rand∈[0,1)` onto factor
+[0.5, 1.5]× the existing deterministic ladder, clamped to the 6h ceiling. The
+ladder function `backoffMillis` is kept intact (tests + readability). The repo
+takes an injected `random: () -> Double` (default `Random.Default.nextDouble()`)
+so drains are deterministic under test. **Reversible:** yes.
+
+## DEC-07 — Parked-row aging surfaced via process-scoped dedupe, not a new column
+Emitting a diagnostics nudge when a parked (terminal-4xx) row ages past 24h
+needs to fire once, not every drain. Two options: a persisted `agingSurfaced`
+column (a Room schema bump — which slice 2 is specifically de-risking, so adding
+one here is self-defeating) or an in-memory surfaced-id set. **Decision:**
+in-memory set, matching `SyncDiagnostics`'s own process-scoped design — the
+outbox row stays the durable truth; the nudge is a diagnostic aid, and
+re-emitting once after a process restart is acceptable. The aging check runs in
+`drain()` (not `drainLocked`) so a queue of only-parked rows (never "due") still
+gets checked. **Reversible:** yes.
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the
