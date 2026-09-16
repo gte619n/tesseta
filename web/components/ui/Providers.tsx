@@ -1,5 +1,7 @@
 "use client";
 
+import { OutboxDrainer } from "../offline/OutboxDrainer";
+import { PendingBadge } from "../offline/PendingBadge";
 import { ConfirmProvider } from "./ConfirmDialog";
 import { Toaster } from "./Toast";
 import { UnitsProvider } from "./UnitsProvider";
@@ -13,6 +15,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <UnitsProvider>
       <Toaster>
         <ConfirmProvider>{children}</ConfirmProvider>
+        <OutboxDrainer />
+        <PendingBadge />
       </Toaster>
     </UnitsProvider>
   );

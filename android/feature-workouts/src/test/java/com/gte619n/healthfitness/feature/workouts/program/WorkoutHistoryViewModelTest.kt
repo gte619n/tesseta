@@ -8,13 +8,16 @@ import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.time.LocalDate
@@ -27,6 +30,12 @@ class WorkoutHistoryViewModelTest {
 
     private val repo: WorkoutProgramRepository = mockk()
     private val sessionRepo: WorkoutSessionRepository = mockk()
+
+    @Before
+    fun stubCache() {
+        // Default: no cached first page (cold load). The cache-first test overrides.
+        every { repo.cachedFirstHistoryPage() } returns null
+    }
 
     private fun row(id: String, phaseId: String = "ph1") = ScheduledWorkout(
         scheduledId = id,
@@ -118,5 +127,23 @@ class WorkoutHistoryViewModelTest {
 
         assertEquals(listOf("b"), vm.state.value.sessions.map { it.scheduledId })
         coVerify { sessionRepo.reset("p1", "a") }
+    }
+
+    @Test
+    fun `cached first page shows immediately and survives a failed revalidation`() = runTest {
+        // ADR-0018: a cached first page renders without a loading spinner, and an
+        // offline revalidation keeps it visible instead of replacing it with an error.
+        every { repo.cachedFirstHistoryPage() } returns
+            WorkoutHistoryPage(items = listOf(row("cached")), page = 0, total = 1, hasMore = false)
+        coEvery { repo.workoutHistoryPage(0, any()) } returns
+            Result.failure(RuntimeException("offline"))
+
+        val vm = WorkoutHistoryViewModel(repo, sessionRepo)
+        advanceUntilIdle()
+
+        val s = vm.state.value
+        assertFalse(s.loading)
+        assertNull("cached data must not be replaced by an error", s.error)
+        assertEquals(listOf("cached"), s.sessions.map { it.scheduledId })
     }
 }

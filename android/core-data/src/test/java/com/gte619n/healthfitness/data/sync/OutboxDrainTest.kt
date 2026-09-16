@@ -32,6 +32,11 @@ class OutboxDrainTest {
     private lateinit var diagnostics: SyncDiagnostics
     private var now = 1_000L
 
+    // Controls backoff jitter deterministically. Each drain reads one draw per
+    // failed row (in seq order); when empty it defaults to 0.5 → jitter factor
+    // 1.0 → backoff equals the plain ladder value (so the base assertion holds).
+    private val randomDraws = ArrayDeque<Double>()
+
     @Before
     fun setUp() {
         server = MockWebServer()
@@ -52,6 +57,7 @@ class OutboxDrainTest {
             diagnostics = diagnostics,
             io = Dispatchers.Unconfined,
             clock = { now },
+            random = { randomDraws.removeFirstOrNull() ?: 0.5 },
         )
     }
 
@@ -138,8 +144,78 @@ class OutboxDrainTest {
         val queued = outboxDao.listByEntity("med-3").single()
         assertEquals(1, queued.attempts)
         assertEquals(mutationId, queued.mutationId)
-        // First-attempt backoff = base (30s) added to the drain clock.
+        // First-attempt backoff = base (30s) added to the drain clock. With the
+        // jitter random pinned to 0.5 the jitter factor is exactly 1.0, so this
+        // still equals the plain ladder value.
         assertEquals(now + OutboxRepository.BASE_BACKOFF_MILLIS, queued.nextAttemptAt)
+    }
+
+    @Test
+    fun `jittered backoff stays within the plus-or-minus 50 percent band`() {
+        // Full jitter: rand=0.0 → 0.5x base, rand=0.5 → 1.0x, rand≈1.0 → 1.5x.
+        val base = OutboxRepository.backoffMillis(3)
+        assertEquals(base / 2, OutboxRepository.jitteredBackoffMillis(3, 0.0))
+        assertEquals(base, OutboxRepository.jitteredBackoffMillis(3, 0.5))
+        assertEquals((base * 1.5).toLong(), OutboxRepository.jitteredBackoffMillis(3, 1.0))
+        // Every point in [0,1] must land inside the band and never exceed the ceiling.
+        var r = 0.0
+        while (r <= 1.0) {
+            val v = OutboxRepository.jitteredBackoffMillis(5, r)
+            assertTrue("$v >= 0.5x base", v >= base / 2 - 1)
+            assertTrue("$v <= ceiling", v <= OutboxRepository.MAX_BACKOFF_MILLIS)
+            r += 0.05
+        }
+    }
+
+    @Test
+    fun `two failing rows get different backoffs under jitter (no lockstep)`() = runTest {
+        // Different random draws per row → distinct nextAttemptAt, so devices/rows
+        // don't all retry in the same instant and stampede the backend.
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("j1", """{"id":"j1"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("j2", """{"id":"j2"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "j1", """{"id":"j1"}""")
+        repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "j2", """{"id":"j2"}""")
+        // Distinct draws per row (read in seq order): j1 at 0.1, j2 at 0.9.
+        randomDraws.addAll(listOf(0.1, 0.9))
+        server.enqueue(MockResponse().setResponseCode(500))
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        repo.drain()
+
+        val a = outboxDao.listByEntity("j1").single().nextAttemptAt
+        val b = outboxDao.listByEntity("j2").single().nextAttemptAt
+        assertTrue("backoffs differ under jitter ($a vs $b)", a != b)
+    }
+
+    @Test
+    fun `a parked row aged past 24h nudges diagnostics once`() = runTest {
+        mirror.upsert(
+            MirrorTables.WORKOUT_SCHEDULED,
+            MirrorRowData("p9/s9", """{"id":"p9/s9"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        repo.enqueue(OutboxOp.UPDATE, MirrorTables.WORKOUT_SCHEDULED, "p9/s9", """{"id":"p9/s9"}""")
+        server.enqueue(MockResponse().setResponseCode(422).setBody("""{"message":"gone"}"""))
+        repo.drain() // parks the row (createdAt = now = 1000)
+
+        // Not yet aged: still just the terminal-park record, no aging nudge.
+        now += 60 * 60 * 1000 // +1h
+        repo.drain()
+        assertTrue(diagnostics.recent.value.none { it.source == "outbox-parked-aging" })
+
+        // Past the 24h threshold: exactly one aging nudge.
+        now += 24L * 60 * 60 * 1000 // +24h more
+        repo.drain()
+        repo.drain() // second drain must NOT double-record
+        val aging = diagnostics.recent.value.filter { it.source == "outbox-parked-aging" }
+        assertEquals(1, aging.size)
+        assertEquals(MirrorTables.WORKOUT_SCHEDULED, aging.single().table)
+        assertEquals(true, aging.single().terminal)
     }
 
     @Test

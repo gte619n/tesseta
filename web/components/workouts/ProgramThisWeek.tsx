@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   ScheduledWorkoutResponse,
   PrescriptionExercise,
-  CompleteSessionRequest,
   CustomizePrescriptionRequest,
 } from "@/lib/types/workout-program";
 import type { ExerciseResponse } from "@/lib/types/exercise";
@@ -13,6 +12,7 @@ import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
 import { LogSessionModal } from "./LogSessionModal";
 import { BLOCK_TYPE_LABEL } from "@/lib/types/exercise";
 import { formatPrescription } from "@/lib/workout-format";
+import { logSessionOffline } from "@/lib/offline/writes";
 
 function formatDayDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
@@ -25,7 +25,7 @@ function formatDayDate(iso: string): string {
 export function ProgramThisWeek({
   sessions,
   today,
-  logSession,
+  programId,
   customizeSession,
   suggestExercises,
 }: {
@@ -33,14 +33,11 @@ export function ProgramThisWeek({
   // Today as YYYY-MM-DD, computed by the server page on the same request
   // clock as the week range. Passed as a prop so SSR and hydration agree.
   today: string;
-  // Server action: completion upsert for one of this program's sessions
-  // (ADR-0012 D6 — log today's result / edit actuals, no live logger).
-  logSession: (
-    scheduledId: string,
-    input: CompleteSessionRequest,
-  ) => Promise<void>;
+  // The program these sessions belong to — needed to build the completion path
+  // for the client-side offline write.
+  programId: string;
   // Server action: in-workout swap / rep-set edit (#4), current session or
-  // whole program.
+  // whole program. Not routed through the outbox (not on the replay allowlist).
   customizeSession: (
     scheduledId: string,
     input: CustomizePrescriptionRequest,
@@ -55,6 +52,13 @@ export function ProgramThisWeek({
   const router = useRouter();
   const [sheetExercise, setSheetExercise] = useState<PrescriptionExercise | null>(null);
   const [logTarget, setLogTarget] = useState<ScheduledWorkoutResponse | null>(null);
+  // Optimistic session-status overlay, cleared when the server re-renders (the
+  // outbox drain reconciles). Completion goes through the offline outbox so it
+  // survives a flaky network; the status flips immediately here.
+  const [statusOverride, setStatusOverride] = useState<
+    Record<string, ScheduledWorkoutResponse["status"]>
+  >({});
+  useEffect(() => setStatusOverride({}), [sessions]);
 
   if (sessions.length === 0) {
     return (
@@ -64,7 +68,11 @@ export function ProgramThisWeek({
     );
   }
 
-  const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...sessions]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((s) =>
+      statusOverride[s.scheduledId] ? { ...s, status: statusOverride[s.scheduledId]! } : s,
+    );
 
   return (
     <>
@@ -83,11 +91,15 @@ export function ProgramThisWeek({
       <LogSessionModal
         session={logTarget}
         onClose={() => setLogTarget(null)}
-        onSaved={() => {
-          setLogTarget(null);
-          router.refresh();
+        onSaved={() => setLogTarget(null)}
+        save={async (input) => {
+          const scheduledId = logTarget!.scheduledId;
+          // Optimistically flip the status; journal the completion to the outbox
+          // (idempotent set-semantics PUT). The OutboxDrainer's refresh reconciles
+          // once it syncs.
+          setStatusOverride((prev) => ({ ...prev, [scheduledId]: input.status }));
+          await logSessionOffline(programId, scheduledId, input);
         }}
-        save={(input) => logSession(logTarget!.scheduledId, input)}
         customize={(input) => customizeSession(logTarget!.scheduledId, input)}
         suggestExercises={suggestExercises}
         onCustomized={() => router.refresh()}

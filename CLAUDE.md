@@ -42,6 +42,28 @@
   service) that depends on a NEW core repository interface fails context startup
   for the ENTIRE suite until you add an in-memory bean for that repository to
   `TestPersistenceConfig`.
+- **New mutating endpoints must be replay-safe and classified.** Every
+  POST/PUT/PATCH/DELETE is enforced by `WriteContractTest`: add it to
+  `backend/src/test/resources/write-contract.txt` (`CATEGORY|METHOD path`) or the
+  build fails. An offline client replays mutations, so a create must be idempotent
+  (client-minted id or `SyncWriteContext.idempotentCreate`), never `NEEDS_FIX`.
+  Rationale: `docs/reference/write-contract.md`.
+- **New synced Firestore collections must be routed on every client.** The
+  backend's delta-emitted collection set is pinned by a shared fixture: add the
+  collection to `docs/reference/sync-emitted-collections.txt` (or
+  `SyncEmittedCollectionsContractTest` fails) AND to Android's `CollectionRegistry`
+  (or `CollectionRegistryContractTest` fails). Skipping the registry silently
+  drops cross-device changes — the bug class this contract closes.
+- **Android Room schema bumps fail loud.** Bumping `HfDatabase` version requires a
+  `Migration` in `ALL_MIGRATIONS` (+ bump `SCHEMA_VERSION`) and a fixture
+  round-trip test; a missing forward migration now THROWS at open instead of
+  destructively wiping the outbox/drafts (only pre-outbox schemas 1–2 may still
+  wipe). `HfDatabaseMigrationCoverageTest` gates the chain.
+- **Offline-safe web writes go through the outbox.** Client mutations that must
+  survive a flaky network use `web/lib/offline/writes` (→ IndexedDB outbox →
+  `/api/outbox/replay`), not a bare server action, and apply optimistic UI. A new
+  replayable endpoint must be added to `web/lib/offline/replay-endpoints.ts` (the
+  authenticated-proxy allowlist) or the outbox refuses to enqueue it.
 
 ## Worktrees
 - Worktrees live in `.worktrees/` at the repo root (not `.claude/worktrees/`).

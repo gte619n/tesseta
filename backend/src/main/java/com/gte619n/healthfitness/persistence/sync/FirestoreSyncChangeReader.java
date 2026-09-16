@@ -13,6 +13,7 @@ import com.gte619n.healthfitness.core.sync.SyncRecentWindow;
 import com.gte619n.healthfitness.core.sync.SyncStatus;
 import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.Timestamp;
+import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.Blob;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -21,6 +22,7 @@ import com.google.cloud.firestore.FieldPath;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
+import com.google.cloud.firestore.QuerySnapshot;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -166,6 +168,24 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         new Subcollection(List.of("workoutPrograms"), "scheduled", "workoutPrograms/scheduled")
     );
 
+    /**
+     * Every distinct {@code collection} string this reader can stamp on a
+     * {@link SyncChange} — the canonical cross-client contract. Each client's
+     * collection router (Android {@code CollectionRegistry}) MUST handle every
+     * one, or a change silently drops (the class of bug that once left
+     * cross-device nutrition entries and adherence unrouted). Locked to a shared
+     * fixture by {@code SyncEmittedCollectionsContractTest} on this side and the
+     * Android registry test on the other.
+     */
+    public static java.util.SortedSet<String> emittedCollectionNames() {
+        java.util.SortedSet<String> names = new java.util.TreeSet<>(TOP_LEVEL);
+        for (Subcollection sub : SUBCOLLECTIONS) {
+            names.add(sub.emitted());
+        }
+        names.add(USERS);
+        return names;
+    }
+
     /** Field keys never forwarded to clients in {@code doc}. */
     private static final Set<String> STRIPPED_KEYS = Set.of(SYNC_STATUS_KEY);
 
@@ -241,21 +261,20 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         String userId, SyncCursor since, int limit, SyncRecentWindow window) {
         List<SyncChange> all = new ArrayList<>();
 
-        // Top-level collections: a bounded ascending scan per collection. We
-        // fetch up to `limit` from each then merge + truncate, which guarantees
-        // a correct globally-ordered prefix of size `limit`.
+        // Every per-collection scan is an independent per-user read, and the
+        // result is re-sorted by CANONICAL_ORDER + truncated below, so append
+        // order is irrelevant. Issue ALL the scan queries concurrently, then
+        // collect — turning wall-clock from the sum of ~20 sequential Firestore
+        // round-trips (the dominant cost of the slowest hot endpoint,
+        // GET /api/me/sync) into roughly the slowest single round-trip. Output is
+        // identical to the previous sequential scan — same queries, re-sorted by
+        // CANONICAL_ORDER — exercised end-to-end by the emulator sync tests.
+        List<ScanTask> tasks = new ArrayList<>();
+
+        // Top-level collections: one bounded ascending scan each.
         for (String name : TOP_LEVEL) {
             CollectionReference ref = firestore.collection(USERS).document(userId).collection(name);
-            for (QueryDocumentSnapshot doc : scan(ref, since, name, limit, /*subUserId*/ null)) {
-                if (!windowAllows(name, doc, window)) {
-                    countWindowFiltered(name);
-                    continue;
-                }
-                SyncChange change = toRoutableChange(name, doc.getId(), doc);
-                if (change != null) {
-                    all.add(change);
-                }
-            }
+            tasks.add(new ScanTask(scanQuery(ref, since, limit), name, /*subUserId*/ null));
         }
 
         // Subcollections via strict per-user enumeration (IMPL-AND-20 #10):
@@ -279,16 +298,28 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
                 leafCollections(userRef, sub.parentChain(), sub.leaf(), since, fullScan)) {
                 // Pass userId so the cursor tiebreak probes the composite id
                 // (e.g. "{med}/{adherenceId}"), matching the emitted change id.
-                for (QueryDocumentSnapshot doc : scan(ref, since, sub.emitted(), limit, userId)) {
-                    if (!windowAllows(sub.emitted(), doc, window)) {
-                        countWindowFiltered(sub.emitted());
-                        continue;
-                    }
-                    String id = subcollectionId(doc.getReference(), userId);
-                    SyncChange change = toRoutableChange(sub.emitted(), id, doc);
-                    if (change != null) {
-                        all.add(change);
-                    }
+                tasks.add(new ScanTask(scanQuery(ref, since, limit), sub.emitted(), userId));
+            }
+        }
+
+        // Issue the user-profile read alongside the scans, then collect them all.
+        ApiFuture<DocumentSnapshot> userDocFuture =
+            firestore.collection(USERS).document(userId).get();
+
+        for (ScanTask task : tasks) {
+            List<QueryDocumentSnapshot> docs = filterAfterCursor(
+                await(task.future()).getDocuments(), since, task.emitted(), task.subUserId());
+            for (QueryDocumentSnapshot doc : docs) {
+                if (!windowAllows(task.emitted(), doc, window)) {
+                    countWindowFiltered(task.emitted());
+                    continue;
+                }
+                String id = task.subUserId() == null
+                    ? doc.getId()
+                    : subcollectionId(doc.getReference(), userId);
+                SyncChange change = toRoutableChange(task.emitted(), id, doc);
+                if (change != null) {
+                    all.add(change);
                 }
             }
         }
@@ -296,7 +327,7 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         // The user profile document (auth-critical: never archive-filtered, but
         // emitted in the delta so clients mirror it). Sanitized to drop the
         // encrypted googleHealth blob.
-        DocumentSnapshot userDoc = await(firestore.collection(USERS).document(userId).get());
+        DocumentSnapshot userDoc = await(userDocFuture);
         if (userDoc.exists()) {
             SyncChange change = toChange(USERS, userId, userDoc);
             if (since == null || since.isBefore(change)) {
@@ -375,15 +406,21 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
      * {@link SyncCursor#isBefore}, so docs sharing the cursor's timestamp are
      * neither skipped nor duplicated.
      */
-    private List<QueryDocumentSnapshot> scan(
-        CollectionReference ref, SyncCursor since, String emittedCollection, int limit,
-        String subUserId) {
+    /** One issued-but-not-awaited scan, plus the context to process its result. */
+    private record ScanTask(ApiFuture<QuerySnapshot> future, String emitted, String subUserId) {}
+
+    /**
+     * Issue (without awaiting) the bounded ascending scan for one collection.
+     * Returning the future lets {@link #readChanges} start every collection's
+     * read concurrently and await them together.
+     */
+    private ApiFuture<QuerySnapshot> scanQuery(CollectionReference ref, SyncCursor since, int limit) {
         Query q = ref.orderBy(UPDATED_AT, Query.Direction.ASCENDING);
         if (since != null) {
-            q = q.whereGreaterThanOrEqualTo(UPDATED_AT, Timestamp.ofTimeMicroseconds(since.lastUpdateMillis() * 1000L));
+            q = q.whereGreaterThanOrEqualTo(
+                UPDATED_AT, Timestamp.ofTimeMicroseconds(since.lastUpdateMillis() * 1000L));
         }
-        List<QueryDocumentSnapshot> docs = await(q.limit(limit + 1).get()).getDocuments();
-        return filterAfterCursor(docs, since, emittedCollection, subUserId);
+        return q.limit(limit + 1).get();
     }
 
     /**

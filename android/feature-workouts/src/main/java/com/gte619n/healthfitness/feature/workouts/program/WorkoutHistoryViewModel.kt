@@ -49,8 +49,18 @@ class WorkoutHistoryViewModel @Inject constructor(
     /** (Re)load from the first page, replacing whatever is shown. */
     fun load() {
         nextPage = 0
+        // ADR-0018: if a first page from this session is already cached, show it
+        // immediately (no spinner on re-entry) and revalidate underneath. Only a
+        // cold first load with nothing cached shows the loading state.
+        val cached = repository.cachedFirstHistoryPage()
         viewModelScope.launch {
-            _state.update { State(loading = true) }
+            _state.update {
+                if (cached != null) {
+                    State(loading = false, sessions = cached.items, hasMore = cached.hasMore)
+                } else {
+                    State(loading = true)
+                }
+            }
             repository.workoutHistoryPage(0, PAGE_SIZE)
                 .onSuccess { page ->
                     nextPage = 1
@@ -59,8 +69,16 @@ class WorkoutHistoryViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
-                    _state.update {
-                        State(loading = false, error = e.message ?: "Couldn't load workout history")
+                    _state.update { current ->
+                        // If we're already showing a cached page, a failed
+                        // revalidation must not replace it with an error — keep the
+                        // cached rows visible (ADR-0018). Only a cold load with
+                        // nothing to show surfaces the error.
+                        if (cached != null) {
+                            current.copy(loading = false)
+                        } else {
+                            State(loading = false, error = e.message ?: "Couldn't load workout history")
+                        }
                     }
                 }
         }

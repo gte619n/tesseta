@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.api.equipment;
 
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.equipment.Equipment;
 import com.gte619n.healthfitness.core.equipment.EquipmentService;
@@ -20,32 +21,47 @@ public class UserEquipmentController {
 
     private final EquipmentService equipmentService;
     private final CurrentUserProvider currentUser;
+    private final SyncWriteContext syncWrite;
 
     public UserEquipmentController(
         EquipmentService equipmentService,
-        CurrentUserProvider currentUser
+        CurrentUserProvider currentUser,
+        SyncWriteContext syncWrite
     ) {
         this.equipmentService = equipmentService;
         this.currentUser = currentUser;
+        this.syncWrite = syncWrite;
     }
 
     /**
-     * Submit new equipment (creates with ownerId=userId, status=PENDING_REVIEW)
+     * Submit new equipment (creates with ownerId=userId, status=PENDING_REVIEW).
+     *
+     * <p>Idempotent on the {@code Idempotency-Key} header: {@code submitEquipment}
+     * mints an {@code "eq_…"} id server-side, so a replayed submission would
+     * otherwise create a duplicate PENDING_REVIEW row. A replay returns the
+     * originally-submitted equipment.
      */
     @PostMapping
     public ResponseEntity<EquipmentResponse> submit(@Valid @RequestBody CreateEquipmentRequest request) {
         String userId = currentUser.get().userId();
 
-        Equipment equipment = equipmentService.submitEquipment(
+        EquipmentResponse response = syncWrite.idempotentCreate(
+            "equipment:submit",
             userId,
-            request.name(),
-            request.category(),
-            request.subcategory(),
-            request.specSchema(),
-            request.specs()
-        );
+            () -> {
+                Equipment equipment = equipmentService.submitEquipment(
+                    userId,
+                    request.name(),
+                    request.category(),
+                    request.subcategory(),
+                    request.specSchema(),
+                    request.specs()
+                );
+                return new SyncWriteContext.Created<>(equipment.equipmentId(), EquipmentResponse.from(equipment));
+            },
+            equipmentId -> equipmentService.findById(equipmentId).map(EquipmentResponse::from));
 
-        return ResponseEntity.status(201).body(EquipmentResponse.from(equipment));
+        return ResponseEntity.status(201).body(response);
     }
 
     /**

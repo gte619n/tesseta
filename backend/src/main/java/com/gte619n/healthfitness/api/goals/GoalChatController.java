@@ -231,6 +231,27 @@ public class GoalChatController {
             return ResponseEntity.badRequest().body(GoalProposalDto.from(validated));
         }
 
+        // Idempotent on the Idempotency-Key header: committing mints a whole
+        // Goal→Phase→Step aggregate with server-generated UUIDs, so a blind
+        // replay (or a double-tapped commit) would build a duplicate goal. A
+        // replay returns the id of the originally-committed goal instead.
+        CommitResponse committed = syncWrite.idempotentCreate(
+            "goalsChatCommit:create",
+            userId,
+            () -> {
+                String id = commitAggregate(userId, validated);
+                return new SyncWriteContext.Created<>(id, new CommitResponse(id));
+            },
+            goalId -> goals.findById(userId, goalId).map(g -> new CommitResponse(goalId)));
+        return ResponseEntity.ok(committed);
+    }
+
+    /**
+     * Builds and persists the whole Goal→Phase→Step aggregate, runs the initial
+     * evaluation, and fans out to the user's other devices. Returns the new goal
+     * id. Called at most once per Idempotency-Key by {@link #commit}.
+     */
+    private String commitAggregate(String userId, GoalProposal validated) {
         // Create the Goal, then its Phases and Steps in order, reusing the
         // SAME service/repository methods the manual CRUD controllers use.
         String goalId = UUID.randomUUID().toString();
@@ -289,7 +310,7 @@ public class GoalChatController {
         syncNotifier.changed(userId, originDevice,
             "goals", "goals/phases", "goals/phases/steps");
 
-        return ResponseEntity.ok(new CommitResponse(goalId));
+        return goalId;
     }
 
     // ---- GET /api/me/goals/chat/threads ----

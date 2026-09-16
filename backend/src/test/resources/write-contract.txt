@@ -1,0 +1,161 @@
+# Offline write contract classification. Each line: CATEGORY|METHOD path.
+# Enforced by WriteContractTest — every live mutating endpoint must appear here
+# and none may be NEEDS_FIX. Rationale per category: docs/reference/write-contract.md.
+#
+# KEY_GUARDED        create routed through SyncWriteContext.idempotentCreate (Idempotency-Key)
+# DETERMINISTIC_ID   create/upsert whose doc id is client-supplied or deterministic
+# SET_SEMANTICS      PUT/PATCH (or a set-toggle POST) that replays to the same state
+# IDEMPOTENT_DELETE  DELETE — re-deleting converges
+# NON_PERSISTING_POST POST that persists no durable user doc (search/lookup/stream/preview/auth/toggle)
+# EXEMPT             non-idempotent but accepted (admin catalog/config, AI-cost, webhooks with own dedup)
+#
+# NOTE: the /v1 platform + /oauth endpoints are behind app.platform.enabled
+# (off in the test profile) and are pinned separately by V1OpenApiSnapshotTest.
+
+# ---- DELETE: idempotent by definition ----
+IDEMPOTENT_DELETE|DELETE /api/me/blood/{readingId}
+IDEMPOTENT_DELETE|DELETE /api/me/devices/fcm
+IDEMPOTENT_DELETE|DELETE /api/me/drinks/{foodId}
+IDEMPOTENT_DELETE|DELETE /api/me/equipment/{equipmentId}
+IDEMPOTENT_DELETE|DELETE /api/me/goals/chat/threads/{threadId}
+IDEMPOTENT_DELETE|DELETE /api/me/goals/{goalId}
+IDEMPOTENT_DELETE|DELETE /api/me/goals/{goalId}/phases/{phaseId}
+IDEMPOTENT_DELETE|DELETE /api/me/goals/{goalId}/phases/{phaseId}/steps/{stepId}
+IDEMPOTENT_DELETE|DELETE /api/me/google-health/connect
+IDEMPOTENT_DELETE|DELETE /api/me/gyms/{locationId}
+IDEMPOTENT_DELETE|DELETE /api/me/gyms/{locationId}/photo
+IDEMPOTENT_DELETE|DELETE /api/me/nutrition/{date}/entries/{entryId}
+IDEMPOTENT_DELETE|DELETE /api/me/withings/connect
+IDEMPOTENT_DELETE|DELETE /api/me/workout-programs/chat/threads/{threadId}
+IDEMPOTENT_DELETE|DELETE /api/me/workout-programs/{programId}
+
+# ---- PATCH: field set-semantics on an identified resource ----
+SET_SEMANTICS|PATCH /api/admin/equipment/{equipmentId}
+SET_SEMANTICS|PATCH /api/admin/exercises/{exerciseId}
+SET_SEMANTICS|PATCH /api/me
+SET_SEMANTICS|PATCH /api/me/goals/{goalId}
+SET_SEMANTICS|PATCH /api/me/goals/{goalId}/phases/{phaseId}
+SET_SEMANTICS|PATCH /api/me/goals/{goalId}/phases/{phaseId}/steps/{stepId}
+SET_SEMANTICS|PATCH /api/me/gyms/{locationId}
+SET_SEMANTICS|PATCH /api/me/gyms/{locationId}/equipment/{equipmentId}
+SET_SEMANTICS|PATCH /api/me/nutrition/{date}/entries/{entryId}
+SET_SEMANTICS|PATCH /api/me/nutrition/{date}/entries/{entryId}/ingredients/{index}
+SET_SEMANTICS|PATCH /api/me/workout-programs/{programId}
+
+# ---- PUT: whole-resource / set-semantics ----
+SET_SEMANTICS|PUT /api/admin/exercises/{exerciseId}/grounding
+SET_SEMANTICS|PUT /api/admin/exercises/{exerciseId}/plan
+SET_SEMANTICS|PUT /api/me/biometrics/visibility
+DETERMINISTIC_ID|PUT /api/me/devices/fcm
+SET_SEMANTICS|PUT /api/me/drinks/order
+SET_SEMANTICS|PUT /api/me/drinks/{foodId}
+SET_SEMANTICS|PUT /api/me/goals/{goalId}/phases/order
+SET_SEMANTICS|PUT /api/me/goals/{goalId}/phases/{phaseId}/steps/order
+SET_SEMANTICS|PUT /api/me/nutrition/target
+SET_SEMANTICS|PUT /api/me/progression/block-parameters
+SET_SEMANTICS|PUT /api/me/workout-programs/settings
+DETERMINISTIC_ID|PUT /api/me/workout-programs/{programId}/sessions/{scheduledId}
+
+# ---- POST: user-data creates (must be replay-safe) ----
+KEY_GUARDED|POST /api/foods
+KEY_GUARDED|POST /api/me/blood
+KEY_GUARDED|POST /api/me/drinks
+KEY_GUARDED|POST /api/me/equipment
+KEY_GUARDED|POST /api/me/goals
+KEY_GUARDED|POST /api/me/goals/chat/{threadId}/commit
+KEY_GUARDED|POST /api/me/goals/{goalId}/phases
+KEY_GUARDED|POST /api/me/goals/{goalId}/phases/{phaseId}/steps
+KEY_GUARDED|POST /api/me/gyms
+KEY_GUARDED|POST /api/me/nutrition/{date}/capture-meal
+KEY_GUARDED|POST /api/me/nutrition/{date}/composite-meal
+KEY_GUARDED|POST /api/me/nutrition/{date}/describe-meal
+KEY_GUARDED|POST /api/me/nutrition/{date}/describe-meal-async
+KEY_GUARDED|POST /api/me/nutrition/{date}/entries
+KEY_GUARDED|POST /api/me/nutrition/{date}/relog
+KEY_GUARDED|POST /api/me/workout-programs
+KEY_GUARDED|POST /api/me/workout-programs/chat/{threadId}/commit
+DETERMINISTIC_ID|POST /api/me/nutrition
+DETERMINISTIC_ID|POST /api/me/workout-programs/{programId}/activate
+DETERMINISTIC_ID|POST /api/me/workout-programs/{programId}/sessions
+
+# ---- POST: set-semantics on an identified resource ----
+SET_SEMANTICS|POST /api/foods/{foodId}/confirm
+SET_SEMANTICS|POST /api/me/goals/{goalId}/nutrition-target
+SET_SEMANTICS|POST /api/me/nutrition/meals/{mealId}/archive
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/adjust/apply
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/adjust/commit
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/adjust/discard
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/adjust/start
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/leftovers/analyze
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/leftovers/apply
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/leftovers/discard
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/leftovers/restore
+SET_SEMANTICS|POST /api/me/nutrition/{date}/entries/{entryId}/reanalyze
+SET_SEMANTICS|POST /api/me/progression/state/{exerciseId}/reset
+SET_SEMANTICS|POST /api/me/workout-programs/{programId}/nutrition-target
+SET_SEMANTICS|POST /api/me/workout-programs/{programId}/sessions/{scheduledId}/prescription
+
+# ---- POST: nothing durable persisted (replay harmless) ----
+NON_PERSISTING_POST|POST /api/admin/google-health/sync
+NON_PERSISTING_POST|POST /api/admin/withings/refresh-all
+NON_PERSISTING_POST|POST /api/admin/withings/sync
+NON_PERSISTING_POST|POST /api/auth/dev-login
+NON_PERSISTING_POST|POST /api/auth/exchange
+NON_PERSISTING_POST|POST /api/auth/logout
+NON_PERSISTING_POST|POST /api/auth/refresh
+NON_PERSISTING_POST|POST /api/foods/{foodId}/image/regenerate
+NON_PERSISTING_POST|POST /api/me/drinks/analyze
+NON_PERSISTING_POST|POST /api/me/drinks/{foodId}/image/regenerate
+NON_PERSISTING_POST|POST /api/me/goals/chat
+NON_PERSISTING_POST|POST /api/me/goals/{goalId}/reevaluate
+NON_PERSISTING_POST|POST /api/me/google-health/check
+NON_PERSISTING_POST|POST /api/me/google-health/connect
+NON_PERSISTING_POST|POST /api/me/gyms/{locationId}/default
+NON_PERSISTING_POST|POST /api/me/gyms/{locationId}/equipment/import/preview
+NON_PERSISTING_POST|POST /api/me/gyms/{locationId}/equipment/scan
+NON_PERSISTING_POST|POST /api/me/gyms/{locationId}/equipment/scan/{scanId}/start
+NON_PERSISTING_POST|POST /api/me/gyms/{locationId}/photo
+NON_PERSISTING_POST|POST /api/me/nutrition/{date}/entries/{entryId}/adjust/preview
+NON_PERSISTING_POST|POST /api/me/nutrition/{date}/entries/{entryId}/image/regenerate
+NON_PERSISTING_POST|POST /api/me/withings/check
+NON_PERSISTING_POST|POST /api/me/withings/connect
+NON_PERSISTING_POST|POST /api/me/workout-programs/chat
+NON_PERSISTING_POST|POST /api/me/workout-programs/{programId}/last-sets
+NON_PERSISTING_POST|POST /api/me/workout-programs/{programId}/validate
+NON_PERSISTING_POST|POST /api/nutrition/capture/label
+NON_PERSISTING_POST|POST /api/nutrition/capture/meal
+
+# ---- EXEMPT: admin catalog/config, AI-cost, webhooks/internal with own dedup ----
+EXEMPT|POST /api/admin/equipment
+EXEMPT|POST /api/admin/equipment/{equipmentId}/regenerate-image
+EXEMPT|POST /api/admin/equipment/{equipmentId}/upload-image
+EXEMPT|POST /api/admin/equipment/{sourceId}/merge-into/{targetId}
+EXEMPT|POST /api/admin/exercises
+EXEMPT|POST /api/admin/exercises/{exerciseId}/grounding/upload
+EXEMPT|POST /api/admin/exercises/{exerciseId}/regenerate-media
+EXEMPT|POST /api/admin/exercises/{exerciseId}/regenerate-plan
+EXEMPT|POST /api/admin/exercises/{exerciseId}/upload-frame
+EXEMPT|POST /api/admin/exercises/{sourceId}/merge-into/{targetId}
+EXEMPT|POST /api/exercises/{exerciseId}/flag-frame
+EXEMPT|POST /api/foods/reindex-search
+EXEMPT|POST /api/me/gyms/{locationId}/equipment/import/confirm
+EXEMPT|POST /api/me/gyms/{locationId}/equipment/scan/{scanId}/confirm
+EXEMPT|POST /api/nutrition/describe
+EXEMPT|POST /api/webhooks/google-health
+EXEMPT|POST /api/webhooks/withings
+EXEMPT|POST /internal/nutrition/jobs
+
+# ---- Admin catalog set-semantics / deletes (config, not offline-outbox data) ----
+SET_SEMANTICS|POST /api/admin/equipment/{equipmentId}/approve
+SET_SEMANTICS|POST /api/admin/equipment/{equipmentId}/reject
+SET_SEMANTICS|POST /api/admin/equipment/{equipmentId}/select-image
+IDEMPOTENT_DELETE|POST /api/admin/equipment/{equipmentId}/delete-image
+DETERMINISTIC_ID|POST /api/admin/exercises/seed
+SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/approve-media
+SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/approve-plan
+SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/archive
+IDEMPOTENT_DELETE|POST /api/admin/exercises/{exerciseId}/delete-frame
+IDEMPOTENT_DELETE|POST /api/admin/exercises/{exerciseId}/grounding/remove
+SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/publish
+SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/reviewed
+SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/select-frame

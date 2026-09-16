@@ -116,6 +116,8 @@ internal class FakeOutboxDao : OutboxDao {
         }
     override suspend fun listByEntity(entityId: String): List<OutboxEntity> =
         store.filter { it.entityId == entityId }.sortedBy { it.seq }
+    override suspend fun listParked(parkedAt: Long): List<OutboxEntity> =
+        store.filter { it.nextAttemptAt == parkedAt }.sortedBy { it.createdAt }
     override suspend fun listAll(): List<OutboxEntity> = store.sortedBy { it.seq }
     override suspend fun maxSeq(): Long? = store.maxOfOrNull { it.seq }
     override suspend fun recordFailure(mutationId: String, attempts: Int, nextAttemptAt: Long) {

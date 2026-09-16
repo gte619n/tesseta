@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.api.workoutprogram;
 
 import com.gte619n.healthfitness.api.nutrition.MacrosDto;
 import com.gte619n.healthfitness.api.support.RequestTimeZone;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
@@ -58,6 +59,7 @@ public class WorkoutProgramController {
     private final ExercisePerformanceDigestService digests;
     private final WorkoutProgramNutritionService programNutrition;
     private final SyncChangeNotifier syncNotifier;
+    private final SyncWriteContext syncWrite;
 
     public WorkoutProgramController(
         CurrentUserProvider currentUser,
@@ -70,7 +72,8 @@ public class WorkoutProgramController {
         WorkoutSessionCoach coach,
         ExercisePerformanceDigestService digests,
         WorkoutProgramNutritionService programNutrition,
-        SyncChangeNotifier syncNotifier
+        SyncChangeNotifier syncNotifier,
+        SyncWriteContext syncWrite
     ) {
         this.currentUser = currentUser;
         this.service = service;
@@ -83,6 +86,7 @@ public class WorkoutProgramController {
         this.digests = digests;
         this.programNutrition = programNutrition;
         this.syncNotifier = syncNotifier;
+        this.syncWrite = syncWrite;
     }
 
     @GetMapping
@@ -94,13 +98,23 @@ public class WorkoutProgramController {
     @PostMapping
     public ResponseEntity<WorkoutProgramDeepResponse> create(@RequestBody CreateProgramRequest body) {
         String userId = currentUser.get().userId();
-        WorkoutProgram input = new WorkoutProgram(
-            userId, null, body.title(), body.description(), body.goalId(),
-            ProgramStatus.DRAFT, body.source(), body.startDate(), body.schedule(),
-            null, body.phases(), null, null, null);
-        WorkoutProgram created = service.create(input);
-        syncNotifier.changed(userId, null, "workoutPrograms");
-        return ResponseEntity.status(HttpStatus.CREATED).body(assembler.deep(created));
+        // Idempotent on the Idempotency-Key header: program creation mints a
+        // "wp_…" id server-side, so an outbox replay would otherwise create a
+        // duplicate program. A replay returns the originally-created program.
+        WorkoutProgramDeepResponse response = syncWrite.idempotentCreate(
+            "workoutPrograms:create",
+            userId,
+            () -> {
+                WorkoutProgram input = new WorkoutProgram(
+                    userId, null, body.title(), body.description(), body.goalId(),
+                    ProgramStatus.DRAFT, body.source(), body.startDate(), body.schedule(),
+                    null, body.phases(), null, null, null);
+                WorkoutProgram created = service.create(input);
+                syncNotifier.changed(userId, null, "workoutPrograms");
+                return new SyncWriteContext.Created<>(created.programId(), assembler.deep(created));
+            },
+            programId -> service.findById(userId, programId).map(assembler::deep));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{programId}")

@@ -54,6 +54,15 @@ interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE entityId = :entityId ORDER BY seq ASC")
     suspend fun listByEntity(entityId: String): List<OutboxEntity>
 
+    /**
+     * All mutations parked on a terminal 4xx (across every table), oldest first.
+     * The drain uses this to nudge diagnostics when a parked row ages past its
+     * stranded-too-long threshold (DL-5); parked rows are otherwise invisible to
+     * the automatic drain.
+     */
+    @Query("SELECT * FROM outbox WHERE nextAttemptAt = :parkedAt ORDER BY createdAt ASC")
+    suspend fun listParked(parkedAt: Long): List<OutboxEntity>
+
     @Query("SELECT * FROM outbox ORDER BY seq ASC")
     suspend fun listAll(): List<OutboxEntity>
 

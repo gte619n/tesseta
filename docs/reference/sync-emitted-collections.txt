@@ -1,0 +1,32 @@
+# Canonical cross-client sync contract: every `collection` string the backend's
+# delta reader (GET /api/me/sync) can stamp on a change. Both sides test against
+# this file:
+#   - backend  SyncEmittedCollectionsContractTest  ⟵ FirestoreSyncChangeReader.emittedCollectionNames()
+#   - android  CollectionRegistryContractTest       ⟶ CollectionRegistry.tableFor(...) must route each
+# A backend change to the emitted set fails the backend test until this file is
+# updated; updating it then forces the Android registry test to prove the client
+# routes the new collection (instead of silently dropping it — the bug this
+# closes). One entry per line; sorted; '#' comments and blank lines ignored.
+bloodReadings
+bloodTestReports
+bodyComposition
+dailyMetrics
+deviceSyncs
+dexaScans
+goalChatThreads
+goalChatThreads/messages
+goals
+goals/phases
+goals/phases/steps
+locations
+medications
+medications/adherence
+medications/history
+nutritionDailyLogs
+nutritionDays/entries
+nutritionTargets
+protocols
+users
+weeklyWorkoutAggregates
+workoutPrograms
+workoutPrograms/scheduled

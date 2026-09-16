@@ -9,7 +9,6 @@ import {
   activateProgram,
   deleteProgram,
   updateProgram,
-  completeSession,
   customizePrescription,
   getProgramNutritionGuidance,
   applyProgramNutrition,
@@ -17,7 +16,6 @@ import {
 import { getExerciseSuggestions } from "@/lib/exercise-admin-api";
 import type {
   ScheduledWorkoutResponse,
-  CompleteSessionRequest,
   CustomizePrescriptionRequest,
 } from "@/lib/types/workout-program";
 import type { ExerciseResponse } from "@/lib/types/exercise";
@@ -116,16 +114,8 @@ export default async function ProgramDetailPage(props: {
 
   // Completion upsert for one of this week's sessions (ADR-0012 / IMPL-17 D6).
   // History and the hub counts read the same records, so revalidate them too.
-  async function logSession(
-    scheduledId: string,
-    input: CompleteSessionRequest,
-  ) {
-    "use server";
-    await completeSession(id, scheduledId, input);
-    revalidatePath(detailPath);
-    revalidatePath("/me/workouts/history");
-    revalidatePath("/me/workouts");
-  }
+  // Session completion routes through the client-side offline outbox (see
+  // ProgramThisWeek + lib/offline/writes), so it no longer has a server action.
 
   // In-workout swap / rep-set edit (#4). `applyToProgram` also rewrites the
   // template + future sessions, so revalidate the roadmap-bearing detail page.
@@ -203,7 +193,7 @@ export default async function ProgramDetailPage(props: {
           <ProgramThisWeek
             sessions={weekSessions}
             today={todayIso()}
-            logSession={logSession}
+            programId={program.programId}
             customizeSession={customizeSession}
             suggestExercises={suggestExercises}
           />

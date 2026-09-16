@@ -1,3 +1,7 @@
+import java.util.concurrent.atomic.AtomicLong
+import org.gradle.api.tasks.testing.TestDescriptor
+import org.gradle.api.tasks.testing.TestResult
+
 plugins {
     java
     jacoco
@@ -133,15 +137,39 @@ tasks.test {
 val integrationTest by tasks.registering(Test::class) {
     description = "Runs Firestore-emulator integration tests."
     group = "verification"
+    // A bare Test task has no sources of its own. Point it at the `test` source
+    // set's compiled output and runtime classpath — the emulator-tagged classes
+    // live alongside the unit tests, split only by JUnit tag. Without this the
+    // task resolves to NO-SOURCE and silently skips (locally AND in CI), which
+    // is exactly how the 8 firestore-emulator classes went unrun (baseline DL-6).
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform {
         includeTags("firestore-emulator")
     }
     shouldRunAfter(tasks.test)
     environment("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY") ?: "")
-    systemProperty(
-        "firestore.emulator.required",
+    val emulatorRequired =
         System.getProperty("firestore.emulator.required", System.getenv("CI") ?: "false")
-    )
+    systemProperty("firestore.emulator.required", emulatorRequired)
+    // Fail loudly if the wiring regresses and the suite runs zero tests while
+    // the emulator is required (CI). A skip must never masquerade as a pass again.
+    if (emulatorRequired == "true") {
+        val executed = AtomicLong(0)
+        afterSuite(
+            KotlinClosure2<TestDescriptor, TestResult, Unit>({ desc, result ->
+                if (desc.parent == null) executed.set(result.testCount)
+            })
+        )
+        doLast {
+            if (executed.get() == 0L) {
+                throw GradleException(
+                    "integrationTest ran 0 tests but firestore.emulator.required=true — " +
+                        "the emulator suite is not wired (see DL-6). Refusing to pass."
+                )
+            }
+        }
+    }
 }
 
 tasks.named("check") {
