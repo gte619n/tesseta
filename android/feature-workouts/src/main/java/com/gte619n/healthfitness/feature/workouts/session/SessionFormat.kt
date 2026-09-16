@@ -237,6 +237,28 @@ const val RIR_SOURCE_REPORTED = "REPORTED"
 /** [LoggedSet.rirSource] value for a value we inferred from the rep outcome. */
 const val RIR_SOURCE_INFERRED_TARGET = "INFERRED_TARGET"
 
+// ---- timed-exercise effort (IMPL-FIXPACK-01 Phase 4) -----------------------
+//
+// RIR is meaningless for a hold, but the coach still needs to know whether the
+// hold was too easy / about right / too hard. So the final set of a timed
+// exercise captures a one-tap CAPABILITY signal (mirrors the last-set RIR gate).
+// Values are stored on [LoggedSet.timedEffort]. Semantics are capability, not
+// felt-effort: MORE = "could have held longer" (too easy). Captured now; the
+// progression engine still skips timed exercises, so it doesn't move targets yet.
+
+/** [LoggedSet.timedEffort]: the hold was too hard — could have done less. */
+const val TIMED_EFFORT_LESS = "LESS"
+
+/** [LoggedSet.timedEffort]: the hold was about right. */
+const val TIMED_EFFORT_SAME = "SAME"
+
+/** [LoggedSet.timedEffort]: the hold was too easy — could have held longer/more. */
+const val TIMED_EFFORT_MORE = "MORE"
+
+/** The three timed-effort choices, ordered least → most capability. */
+val TIMED_EFFORT_CHOICES: List<String> =
+    listOf(TIMED_EFFORT_LESS, TIMED_EFFORT_SAME, TIMED_EFFORT_MORE)
+
 /**
  * The RIR we pre-select on the last set's chip row, inference-first: if the set
  * already carries a reported [LoggedSet.rir] (re-opened/edited), keep it; else

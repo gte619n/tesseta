@@ -122,6 +122,24 @@ class WorkoutSessionDtoTest {
     }
 
     @Test
+    fun `timed set carries the more-same-less capability signal both directions`() {
+        // IMPL-FIXPACK-01 Phase 4: the final timed set's timedEffort must round-trip.
+        val domain = LoggedSet(durationSeconds = 45, timedEffort = "MORE")
+        val back = domain.toDto().toDomain()
+        assertEquals("MORE", back.timedEffort)
+        assertEquals(domain, back)
+    }
+
+    @Test
+    fun `legacy logged set decodes with timedEffort null`() {
+        // A rep set / older payload never carries timedEffort — must stay null.
+        val set = moshi.adapter(LoggedSetDto::class.java)
+            .fromJson("""{"weightLbs":135.0,"reps":8}""")!!
+        assertNull(set.timedEffort)
+        assertNull(set.toDomain().timedEffort)
+    }
+
+    @Test
     fun `scheduled workout decodes outcome fields and tolerates their absence`() {
         val adapter = moshi.adapter(ScheduledWorkoutDto::class.java)
 

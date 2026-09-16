@@ -39,10 +39,13 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
@@ -235,7 +238,7 @@ fun WorkoutSessionScreen(
     onBack: () -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
-    onLogTimed: (PrescriptionKey, Int) -> Unit,
+    onLogTimed: (PrescriptionKey, Int, String?) -> Unit,
     onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
     // Timed-hold get-ready pre-roll controls (routed through the shared countdown).
@@ -407,7 +410,7 @@ private fun SessionBody(
     onShowOverview: (Boolean) -> Unit,
     onToggleSet: (PrescriptionKey, Int) -> Unit,
     onEditSet: (PrescriptionKey, Int, LoggedSet) -> Unit,
-    onLogTimed: (PrescriptionKey, Int) -> Unit,
+    onLogTimed: (PrescriptionKey, Int, String?) -> Unit,
     onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
     onStartGetReady: (Int) -> Unit,
@@ -662,7 +665,7 @@ private fun SessionBody(
                     onFlagFrame = onFlagFrame,
                     onToggleSet = { index -> onToggleSet(step.key, index) },
                     onEditSet = { index, set -> onEditSet(step.key, index, set) },
-                    onLogTimed = { seconds -> onLogTimed(step.key, seconds) },
+                    onLogTimed = { seconds, effort -> onLogTimed(step.key, seconds, effort) },
                     onLogSet = { set -> onLogSet(step.key, set) },
                     restRemainingSeconds = restRemaining,
                     restKind = restKind,
@@ -766,7 +769,7 @@ private fun ExercisePage(
     onFlagFrame: (String, String) -> Unit,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
-    onLogTimed: (Int) -> Unit,
+    onLogTimed: (Int, String?) -> Unit,
     onLogSet: (LoggedSet) -> Unit,
     // Non-null while a countdown is running: seconds left, ticked off the shared timer.
     restRemainingSeconds: Long? = null,
@@ -1756,7 +1759,7 @@ private fun TimedSetsSection(
     onAutoStartConsumed: () -> Unit,
     onToggleSet: (Int) -> Unit,
     onEditSet: (Int, LoggedSet) -> Unit,
-    onLogTimed: (Int) -> Unit,
+    onLogTimed: (Int, String?) -> Unit,
 ) {
     val totalRows = maxOf(prescription.sets ?: 1, logged.size)
     val hasPending = logged.size < totalRows
@@ -1814,6 +1817,9 @@ private fun TimedSetsSection(
                         // same hold to auto-start (the last set instead advances the
                         // page, where the section unmounts and this is a no-op).
                         onAutoComplete = { autoStartSet = pendingIndex + 1 },
+                        // IMPL-FIXPACK-01 Phase 4: gate the final set on the
+                        // more/same/less capability pick.
+                        requireEffort = pendingIndex == totalRows - 1,
                     )
                 }
             }
@@ -1858,6 +1864,16 @@ private fun CompletedTimedRow(
             decimals = 0,
             suffix = "s",
         )
+        // IMPL-FIXPACK-01 Phase 4: show the captured more/same/less on the row.
+        timedEffortIcon(set.timedEffort)?.let { (icon, desc) ->
+            Icon(
+                icon,
+                contentDescription = desc,
+                tint = Hf.colors.textSecondary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        }
         if (canUndo) {
             IconButton(onClick = onUndo, modifier = Modifier.size(36.dp)) {
                 Icon(
@@ -1869,6 +1885,86 @@ private fun CompletedTimedRow(
             }
         }
     }
+}
+
+/**
+ * IMPL-FIXPACK-01 Phase 4: the final timed set's capability gate — the timed
+ * counterpart to the last-set RIR chips. RIR is meaningless for a hold, so this
+ * asks "could you have held longer?" as three icons: down = could do LESS (too
+ * hard), — = about right, up = could do MORE (too easy). A blind pick (nothing
+ * pre-selected); the hold can't finish until one is tapped. Semantics are
+ * capability (D-TF-MEANING): up ⇒ [TIMED_EFFORT_MORE].
+ */
+@Composable
+private fun TimedEffortSelector(onPick: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        CapsLabel(
+            stringResource(R.string.workout_session_timed_effort_header),
+            color = Hf.colors.textTertiary,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            TimedEffortChip(
+                icon = Icons.Filled.KeyboardArrowDown,
+                label = stringResource(R.string.workout_session_timed_effort_less),
+                modifier = Modifier.weight(1f),
+                onClick = { onPick(TIMED_EFFORT_LESS) },
+            )
+            TimedEffortChip(
+                icon = Icons.Filled.Remove,
+                label = stringResource(R.string.workout_session_timed_effort_same),
+                modifier = Modifier.weight(1f),
+                onClick = { onPick(TIMED_EFFORT_SAME) },
+            )
+            TimedEffortChip(
+                icon = Icons.Filled.KeyboardArrowUp,
+                label = stringResource(R.string.workout_session_timed_effort_more),
+                modifier = Modifier.weight(1f),
+                onClick = { onPick(TIMED_EFFORT_MORE) },
+            )
+        }
+        Text(
+            stringResource(R.string.workout_session_timed_effort_hint),
+            style = Hf.type.bodySm,
+            color = Hf.colors.textTertiary,
+        )
+    }
+}
+
+@Composable
+private fun TimedEffortChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Hf.colors.canvasMuted)
+            .border(1.dp, Hf.colors.borderStrong, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(icon, contentDescription = label, tint = Hf.colors.textPrimary, modifier = Modifier.size(22.dp))
+        Text(label, style = Hf.type.bodySm, color = Hf.colors.textPrimary)
+    }
+}
+
+/** The history-row icon + description for a stored [LoggedSet.timedEffort], or null. */
+private fun timedEffortIcon(
+    effort: String?,
+): Pair<androidx.compose.ui.graphics.vector.ImageVector, String>? = when (effort) {
+    TIMED_EFFORT_LESS -> Icons.Filled.KeyboardArrowDown to "Could do less"
+    TIMED_EFFORT_SAME -> Icons.Filled.Remove to "About right"
+    TIMED_EFFORT_MORE -> Icons.Filled.KeyboardArrowUp to "Could do more"
+    else -> null
 }
 
 /**
@@ -1911,8 +2007,12 @@ private fun HoldTimer(
     onClearGetReady: () -> Unit,
     autoStart: Boolean,
     onAutoStartConsumed: () -> Unit,
-    onLog: (Int) -> Unit,
+    onLog: (Int, String?) -> Unit,
     onAutoComplete: () -> Unit,
+    // IMPL-FIXPACK-01 Phase 4: the final timed set gates completion on the
+    // more/same/less capability pick (RIR's timed counterpart). Non-final sets log
+    // straight through with a null effort.
+    requireEffort: Boolean = false,
 ) {
     val targetSeconds = prescription.durationSeconds
     val target = targetSeconds ?: 0
@@ -1933,6 +2033,11 @@ private fun HoldTimer(
     // True once this timer has finished/handed off its hold, so its dispose-time
     // cleanup won't clear the *next* set's freshly-started get-ready.
     var handedOff by rememberSaveable { mutableStateOf(false) }
+    // IMPL-FIXPACK-01 Phase 4: on the final timed set, the hold ending doesn't log
+    // immediately — it parks here (with the measured [pendingEffortDuration]) until
+    // the user taps a more/same/less icon (the required gate).
+    var awaitingEffort by rememberSaveable { mutableStateOf(false) }
+    var pendingEffortDuration by rememberSaveable { mutableStateOf(0) }
 
     fun secondsSince(anchorMillis: Long): Long =
         Duration.between(Instant.ofEpochMilli(anchorMillis), now).seconds.coerceAtLeast(0L)
@@ -2010,16 +2115,36 @@ private fun HoldTimer(
             firedDone = true
             beep(ToneGenerator.TONE_PROP_ACK)
             if (voiceEnabled) announce("Time's up")
-            // Mark the set complete automatically and hand the block on.
-            onLog(target)
-            onAutoComplete()
-            handedOff = true
             holdArmed = false
             holdAnchor = null
+            if (requireEffort) {
+                // Final set: stop the clock and wait for the more/same/less pick
+                // before logging + handing on (the required gate).
+                pendingEffortDuration = target
+                awaitingEffort = true
+            } else {
+                // Mark the set complete automatically and hand the block on.
+                onLog(target, null)
+                onAutoComplete()
+                handedOff = true
+            }
         }
     }
 
     Spacer(Modifier.height(10.dp))
+    // Final-set gate: once the hold is done, show the more/same/less picker instead
+    // of the start/stop button and don't log/advance until the user chooses.
+    if (awaitingEffort) {
+        TimedEffortSelector(
+            onPick = { effort ->
+                onLog(pendingEffortDuration, effort)
+                onAutoComplete()
+                handedOff = true
+                awaitingEffort = false
+            },
+        )
+        return
+    }
     Button(
         onClick = {
             when {
@@ -2028,11 +2153,17 @@ private fun HoldTimer(
                 // Tap while holding (or paused mid-hold) logs early with whatever
                 // time is on the clock; no hand-off to the next set's pre-roll.
                 holdArmed -> {
-                    onLog(elapsed.toInt())
-                    handedOff = true
+                    firedHalf = false; firedTen = false; firedDone = false
                     holdArmed = false
                     holdAnchor = null
-                    firedHalf = false; firedTen = false; firedDone = false
+                    if (requireEffort) {
+                        // Final set: gate the early stop on the effort pick too.
+                        pendingEffortDuration = elapsed.toInt()
+                        awaitingEffort = true
+                    } else {
+                        onLog(elapsed.toInt(), null)
+                        handedOff = true
+                    }
                 }
                 else -> startHold()
             }
@@ -2736,7 +2867,7 @@ private fun WorkoutSessionPreview() {
             onBack = {},
             onToggleSet = { _, _ -> },
             onEditSet = { _, _, _ -> },
-            onLogTimed = { _, _ -> },
+            onLogTimed = { _, _, _ -> },
             onLogSet = { _, _ -> },
             onDismissRest = {},
             onRequestFinish = {},

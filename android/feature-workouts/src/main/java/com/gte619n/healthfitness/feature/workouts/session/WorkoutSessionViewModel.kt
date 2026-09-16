@@ -234,7 +234,7 @@ class WorkoutSessionViewModel @Inject constructor(
      * ready" pre-roll, so a rest is folded in only at the exercise boundary. When
      * that rest ends the screen arms a short get-ready for the next timed hold.
      */
-    fun logTimedSet(key: PrescriptionKey, durationSeconds: Int) {
+    fun logTimedSet(key: PrescriptionKey, durationSeconds: Int, timedEffort: String? = null) {
         val draft = _state.value.draft ?: return
         val current = draft.logged[key].orEmpty()
         val at = now()
@@ -242,6 +242,9 @@ class WorkoutSessionViewModel @Inject constructor(
             durationSeconds = durationSeconds,
             restSeconds = restSecondsBefore(draft, at),
             completedAt = at,
+            // IMPL-FIXPACK-01 Phase 4: the final timed set carries the more/same/less
+            // capability signal (null on earlier sets and rep sets).
+            timedEffort = timedEffort,
         )
         val updated = current + set
         persistSets(key, updated)

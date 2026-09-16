@@ -116,6 +116,31 @@ class SessionLoopTest {
         assertFalse(predictions.findByUser(USER).isEmpty());
     }
 
+    @Test
+    void timedExerciseWithCapabilitySignalIsSkippedByProgression() {
+        // IMPL-FIXPACK-01 Phase 4: the final timed set now carries a more/same/less
+        // capability signal (timedEffort), but D-TF-DRIVE is "capture only" — the
+        // engine must still skip timed exercises (SessionLoop D21). So a completed
+        // timed-only session logs NO observations, seeds NO belief, and writes NO
+        // next prescription.
+        LoggedSet held = new LoggedSet(null, null, null, 30, NOW, 45, null, null, "MORE");
+        Prescription rx = new Prescription("plank", 0, 3, null, null, 45, null, 30, null, null, null,
+            List.of(held, held, held), null, "seed");
+        WorkoutDay day = new WorkoutDay("d1", "Day 1", null, null, 0,
+            List.of(new Block("b1", BlockType.MAIN, "Main", 0, List.of(rx))));
+        ScheduledWorkout completed = new ScheduledWorkout(USER, PROGRAM, id(TODAY), TODAY, "ph1", "d1",
+            "Day 1", 1, false, null, ScheduledStatus.COMPLETED, day, NOW, 3600, null);
+        scheduled.save(completed);
+
+        loop.onSessionCompleted(USER, completed);
+
+        assertTrue(observations.findByExercise(USER, "plank").isEmpty(), "timed exercise logs no observations");
+        assertTrue(states.find(USER, "plank").isEmpty(), "timed exercise seeds no belief");
+        // The captured signal itself survives on the logged set (capture, not drive).
+        assertEquals("MORE", completed.session().blocks().get(0).prescriptions().get(0)
+            .loggedSets().get(0).timedEffort());
+    }
+
     // ---- fixtures ----
 
     private static LoggedSet set(double weight, int reps) {

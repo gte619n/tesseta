@@ -143,6 +143,10 @@ data class LoggedSetDto(
     val restSeconds: Int? = null,
     val completedAt: Instant? = null,
     val durationSeconds: Int? = null,
+    // IMPL-FIXPACK-01 Phase 4: timed-exercise "could do more/less" capability
+    // signal (`LESS | SAME | MORE`), final timed set only. Nullable so rep sets and
+    // legacy payloads decode.
+    val timedEffort: String? = null,
 )
 
 /**
@@ -384,6 +388,7 @@ fun LoggedSetDto.toDomain(): LoggedSet = LoggedSet(
     restSeconds = restSeconds,
     completedAt = completedAt,
     durationSeconds = durationSeconds,
+    timedEffort = timedEffort,
 )
 
 fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
@@ -395,6 +400,7 @@ fun LoggedSet.toDto(): LoggedSetDto = LoggedSetDto(
     restSeconds = restSeconds,
     completedAt = completedAt,
     durationSeconds = durationSeconds,
+    timedEffort = timedEffort,
 )
 
 fun PrescriptionRationaleDto.toDomain(): PrescriptionRationale = PrescriptionRationale(

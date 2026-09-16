@@ -150,4 +150,37 @@ the 10s fallback) rather than a real rest — "it skipped the rest entirely."
 
 ## Phase 4 — Timed more/same/less capture
 
-_(entries appended during implementation)_
+- **DL-4-1** (field type) — Stored as a nullable `String` (`LESS|SAME|MORE`) on
+  `LoggedSet` across domain, DTO, and the backend record — matching the existing
+  `rirSource` String convention rather than introducing a shared cross-language
+  enum. Android UI type-safety comes from the `TIMED_EFFORT_*` constants in
+  `SessionFormat.kt` (mirrors `RIR_SOURCE_*`). Null-tolerant everywhere (rep sets
+  and legacy rows).
+- **DL-4-2** (backend record compat) — Added `timedEffort` as the last record
+  component of `LoggedSet` and a new 8-arg convenience constructor delegating with
+  `timedEffort = null`, so every existing caller (importer, digests, tests) compiles
+  unchanged; the request path (Jackson) and Firestore read/write were extended to
+  carry it.
+- **DL-4-3** (final-set gate, D-TF-WHEN/D-TF-GATE) — The gate lives in `HoldTimer`:
+  when the *final* timed set's hold ends (target reached OR stopped early), it parks
+  in `awaitingEffort` and renders `TimedEffortSelector` instead of logging; only a
+  tap calls `onLog(duration, effort)` + `onAutoComplete`. So the set can't complete
+  (and the session can't auto-advance) until the pick — a true required gate, the
+  timed analogue of the last-set RIR gate. Non-final sets log straight through.
+- **DL-4-4** (semantics, D-TF-MEANING) — Capability: up = `MORE` (could hold
+  longer / too easy), — = `SAME`, down = `LESS` (too hard). Header reads "Could you
+  have held longer?" to match the up=more mapping.
+- **DL-4-5** (capture only, D-TF-DRIVE) — No progression-engine change:
+  `SessionLoop` still `continue`s on `durationSeconds != null` (line 91). A backend
+  test (`timedExerciseWithCapabilitySignalIsSkippedByProgression`) proves a timed
+  session with `timedEffort` set logs no observations, seeds no belief, and writes
+  no next prescription — while the signal itself persists on the logged set.
+  Progression wiring is the deferred Phase 5.
+- **DL-4-6** (scope, D-TF-SCOPE) — Applies to any timed set (`isTimed` /
+  `durationSeconds`), i.e. all timed exercises, since the gate is on the timed hold
+  card that every timed prescription uses.
+- **DL-4-7** (test boundary) — Data path (round-trip both directions, null
+  tolerance), VM capture (effort rides the logged set; non-final carries none), and
+  the engine-skip invariant are unit-tested. The Compose gate (must-pick-before-
+  complete, three-icon render, history icon) has no full-screen Compose UI-test
+  harness here; validated by construction + the spec's manual in-app step.

@@ -213,6 +213,42 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
+    fun `logTimedSet records the more-same-less capability signal`() = runTest {
+        // IMPL-FIXPACK-01 Phase 4: the final timed set's capability pick rides the
+        // logged set as timedEffort (captured now; the engine still skips timed).
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.logTimedSet(plankKey, 42, TIMED_EFFORT_MORE)
+        advanceUntilIdle()
+
+        val appended = sets.captured.single()
+        assertEquals(42, appended.durationSeconds)
+        assertEquals(TIMED_EFFORT_MORE, appended.timedEffort)
+    }
+
+    @Test
+    fun `a non-final timed set carries no effort signal`() = runTest {
+        val sets = slot<List<LoggedSet>>()
+        coEvery {
+            repo.updateSets("p1", "s2", plankKey, capture(sets))
+        } returns Result.success(ProgramFixtures.activeDraft)
+
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.logTimedSet(plankKey, 40) // no effort passed (non-final set)
+        advanceUntilIdle()
+
+        assertNull(sets.captured.single().timedEffort)
+    }
+
+    @Test
     fun `unchecking a logged row removes it without starting a rest timer`() = runTest {
         val sets = slot<List<LoggedSet>>()
         coEvery {
