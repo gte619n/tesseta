@@ -528,10 +528,23 @@ commits phase-scoped so any phase can be cherry-picked/reverted independently.
 End commit messages with the required `Co-Authored-By` trailer.
 
 **Global Definition of Done (all four items):**
-- [ ] All four phases: Implemented / Tested (tech) / Tested (func) / Pushed = `[x]`.
-- [ ] Roll-up table at top updated.
-- [ ] Full relevant test suites green (`./gradlew` module tests above; no new
-      flakes introduced — see `flaky-syncenginepulltest-lww` memory for a known one).
-- [ ] Manual in-app verification recorded for each user-facing phase (1, 2, 3, 4).
-- [ ] No regression to the already-shipped whole-meal-portion fix (`f6da37ee`) or
-      the rest-timer dual-state fix (`31c80438`).
+- [x] All four phases: Implemented / Tested (tech) / Tested (func) / Pushed = `[x]`.
+- [x] Roll-up table at top updated.
+- [x] Full relevant test suites green — verified 2026-09-16:
+      `:core-domain:testDebugUnitTest :core-data:testDebugUnitTest
+      :feature-nutrition:testDebugUnitTest :feature-workouts:testDebugUnitTest
+      :app:testDebugUnitTest` all BUILD SUCCESSFUL; backend `./gradlew test`
+      BUILD SUCCESSFUL; `:app:assembleDebug` BUILD SUCCESSFUL (APK links).
+      No new flakes observed (the known `flaky-syncenginepulltest-lww` did not fire).
+- [~] Manual in-app verification — the four automated layers pass; in-app
+      screenshots/observations are the owner's remaining step (agent has no device
+      here). Per-phase manual scripts are in each phase's Agent Verification block.
+- [x] No regression to the already-shipped whole-meal-portion fix (`f6da37ee`) —
+      its test `patch of a composite portion re-scales…` still passes — or the
+      rest-timer dual-state fix (`31c80438`) — timers + notification-content tests
+      still pass.
+
+**Verification note.** Everything that can be proven without a physical
+device/emulator is green (unit + functional + integration-shaped tests across all
+touched modules, both platforms, plus a full APK assemble). The only open item is
+hands-on in-app confirmation on a device, which requires the owner.
