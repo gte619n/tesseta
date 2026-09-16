@@ -90,3 +90,20 @@ network). Split per DEC-14; 4b (live write-path cutover + e2e) is the follow-up.
   `submitMutation` + optimistic UI, pending badge in the chrome, Playwright
   offline→online→sync-once e2e.
 
+## Slice 5 — faster delta sync (parallelized reader, not a journal)
+**Target:** `GET /api/me/sync` p50 1.76 s / p95 4.1 s — the slowest hot path.
+- **Approach change (DEC-17):** the baseline's N+1 was already fixed on main
+  (`SyncEnumerationBounds`), and a change-journal would be a wholesale rewrite of
+  the core sync path with no doc-id-granular write choke point. Delivered the
+  same goal safely instead: the reader issued ~20 independent per-collection
+  Firestore reads **sequentially**; since the result is re-sorted by
+  CANONICAL_ORDER + truncated, order is irrelevant, so all scans now fire
+  concurrently and are collected together.
+- **Expected effect:** wall-clock drops from the sum of ~20 sequential network
+  round-trips to ~the slowest single one. The win scales with Firestore RTT, so
+  it shows in prod (measure with `infra/perf/backend-latency.mjs`), not the local
+  emulator (no network latency). Structural: N sequential RTTs → 1.
+- **Correctness:** output is identical (same queries, same sort). Verified by the
+  emulator **SyncContractIntegrationTest** (full write→delta→fan-out loop) — 12
+  integration tests green. Full backend build green (870 unit + 12 integration).
+

@@ -155,6 +155,25 @@ Unit-testing the IndexedDB data layer in jsdom needs an IndexedDB implementation
 provides it and a browser-only Playwright test would be far slower and can't
 assert the internal backoff/park state. Dev-only. **Reversible:** yes.
 
+## DEC-17 — Slice 5: parallelize the sync reader instead of a change-journal rewrite
+The plan proposed a per-user change journal to make delta sync O(changes). On
+inspecting the code I found (a) the naive N+1 the baseline flagged is **already
+fixed** on main — `SyncEnumerationBounds` cursor-bounds the nutritionDays/
+goalChatThreads enumeration; and (b) a journal has no single write choke point
+with doc-id granularity (`SyncChangeNotifier` carries only collection names), so
+it would require instrumenting every write site + a dual-reader transition — a
+**wholesale rewrite of the core sync path**, which the guardrails forbid doing
+autonomously without human review.
+**Decision:** deliver the same goal (faster sync) via a safe, provable,
+incremental change: the reader issued ~20 independent per-collection Firestore
+reads **sequentially**; since the merged result is re-sorted by CANONICAL_ORDER
+and truncated, append order is irrelevant, so I issue all scans concurrently and
+collect. Output is identical (proven green by the emulator SyncContractIntegration
+suite); wall-clock drops from the sum of ~20 network round-trips to ~the slowest
+one. This is the dominant cost of the slowest hot endpoint. The full change-journal
+is logged as a **future human-reviewed option** if this doesn't get p95 under
+target in prod. **Reversible:** yes (one method's execution strategy).
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the
