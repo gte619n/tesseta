@@ -20,7 +20,6 @@ import com.gte619n.healthfitness.domain.nutrition.Meal
 import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.MealSearchResult
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
-import com.gte619n.healthfitness.domain.nutrition.UpdateIngredientRequest
 import com.gte619n.healthfitness.domain.nutrition.forPortion
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -254,29 +253,24 @@ class NutritionTodayViewModel @Inject constructor(
         quantities: List<Double>,
     ) {
         val date = _state.value.date.format(ISO_DATE)
-        val current = _state.value.editingComposite ?: return
+        _state.value.editingComposite ?: return
         _state.update { it.copy(savingIngredient = true) }
         viewModelScope.launch {
             try {
-                // Ingredient quantity changes first — each resum preserves the
-                // existing portion — then patch the title/portion so the entry's
-                // total reflects the fresh ingredient totals scaled by it.
-                current.ingredients?.forEachIndexed { i, ing ->
-                    val newQty = quantities.getOrNull(i) ?: (ing.quantity ?: 1.0)
-                    if ((ing.quantity ?: 1.0) != newQty) {
-                        repository.updateIngredient(
-                            date, entryId, i, UpdateIngredientRequest(quantity = newQty),
-                        )
-                    }
-                }
-                val newTitle = title.takeIf { it.isNotBlank() && it != current.foodName }
-                val newPortion = portion.takeIf { it != current.quantity }
-                if (newTitle != null || newPortion != null) {
-                    repository.patchEntry(
-                        date, entryId,
-                        EntryPatchRequest(foodName = newTitle, quantity = newPortion),
-                    )
-                }
+                // One offline-first local write commits the title, the whole-meal
+                // portion and every ingredient's quantity together: the repository
+                // re-scales each ingredient from its per-100g baseline and resums
+                // the entry total, so the day reflects the edit instantly (and the
+                // change rides the outbox to the server). Replaces the old
+                // per-ingredient network PATCH that silently dropped edits on a
+                // still-dirty entry after the offline-first refactor.
+                repository.updateComposite(
+                    date = date,
+                    entryId = entryId,
+                    title = title,
+                    portion = portion.takeIf { it > 0 } ?: 1.0,
+                    quantities = quantities,
+                )
                 val day = repository.day(date)
                 _state.update {
                     it.copy(day = day, savingIngredient = false, editingComposite = null, error = null)

@@ -269,6 +269,115 @@ class NutritionRepositoryLogMealTest {
             val logged = loggedEntry()
             assertEquals(250.0, logged.macros.caloriesKcal!!, 0.0001)
         }
+
+    // --- IMPL-FIXPACK-01 Phase 1: editing a single ingredient's quantity must
+    // move the DAY total (the reported bug), offline-first, even for a still-dirty
+    // (just-logged / unsynced) composite. The old network path re-pulled the day
+    // and refreshInto skipped the dirty row, so the day total never changed. ---
+
+    private fun per100gIngredient(kcal: Double, protein: Double) =
+        com.gte619n.healthfitness.domain.nutrition.EntryIngredient(
+            name = "ingredient",
+            servingGrams = 100.0,
+            quantity = 1.0,
+            // At servingGrams=100, quantity=1.0 the portion macros equal the
+            // per-100g baseline; halving quantity halves them (forPortion maths).
+            macros = Macros(caloriesKcal = kcal, proteinGrams = protein),
+            macrosPer100g = Macros(caloriesKcal = kcal, proteinGrams = protein),
+        )
+
+    private fun rescalableComposite() = Entry(
+        entryId = "e1",
+        meal = "dinner",
+        foodName = "Salmon plate",
+        quantity = 1.0,
+        macros = Macros(caloriesKcal = 500.0, proteinGrams = 40.0),
+        source = "MANUAL",
+        imageUrl = "http://img/salmon.png",
+        imageStatus = "READY",
+        ingredients = listOf(
+            per100gIngredient(300.0, 30.0),
+            per100gIngredient(200.0, 10.0),
+        ),
+    )
+
+    /** Seed a composite row directly into the mirror with a chosen dirty flag. */
+    private suspend fun seedComposite(entry: Entry, dirty: Boolean) {
+        val adapter = SyncTestMoshi.instance
+            .adapter(NutritionRepository.NutritionEntryRow::class.java)
+        mirror.upsert(
+            MirrorTables.NUTRITION_ENTRIES,
+            MirrorRowData(
+                id = "$date/${entry.entryId}",
+                payloadJson = adapter.toJson(NutritionRepository.NutritionEntryRow(date, entry)),
+                lastUpdate = 1_000L,
+                status = "ACTIVE",
+                dirty = dirty,
+                syncState = if (dirty) "PENDING" else "SYNCED",
+            ),
+        )
+    }
+
+    @Test
+    fun `editing an ingredient quantity moves the day total for a synced composite`() =
+        runBlocking {
+            val whole = rescalableComposite()
+            coEvery { api.getDay(date) } returns NutritionDay(
+                date = date,
+                totals = whole.macros,
+                meals = listOf(MealGroup("dinner", whole.macros, listOf(whole))),
+            )
+            repository.refreshDay(date) // clean (SYNCED) mirror row
+            assertEquals(500.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
+
+            // Halve the first ingredient (Qty 1 -> 0.5); keep the second at 1.0.
+            repository.updateComposite(date, "e1", "Salmon plate", 1.0, listOf(0.5, 1.0))
+
+            // 300*0.5 + 200 = 350 kcal ; 30*0.5 + 10 = 25 g protein.
+            val day = repository.day(date)
+            assertEquals(350.0, day.totals.caloriesKcal!!, 0.0001)
+            assertEquals(25.0, day.totals.proteinGrams!!, 0.0001)
+            val logged = loggedEntry()
+            assertEquals(0.5, logged.ingredients!!.first().quantity!!, 0.0001)
+            assertEquals(350.0, logged.macros.caloriesKcal!!, 0.0001)
+        }
+
+    @Test
+    fun `editing an ingredient quantity moves the day total even for a still-dirty composite`() =
+        runBlocking {
+            // The exact regression: a just-logged composite is still dirty/PENDING.
+            // The old network path's fillDay re-pull skipped the dirty row, so the
+            // re-scaled macros never reached the mirror and the day total was stale.
+            seedComposite(rescalableComposite(), dirty = true)
+            assertEquals(500.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
+
+            repository.updateComposite(date, "e1", "Salmon plate", 1.0, listOf(0.5, 1.0))
+
+            assertEquals(350.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
+        }
+
+    @Test
+    fun `ingredient quantity edit updates the day total offline (no network)`() = runBlocking {
+        seedComposite(rescalableComposite(), dirty = false)
+        // Offline: any network read blows up. The edit + day read must not touch it.
+        coEvery { api.getDay(date) } throws RuntimeException("offline")
+
+        repository.updateComposite(date, "e1", "Salmon plate", 1.0, listOf(0.5, 1.0))
+
+        assertEquals(350.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
+    }
+
+    @Test
+    fun `composite portion and ingredient edits compose into the day total`() = runBlocking {
+        seedComposite(rescalableComposite(), dirty = false)
+
+        // Half the first ingredient AND half the whole-meal portion:
+        // ((300*0.5) + 200) * 0.5 = 175 kcal.
+        repository.updateComposite(date, "e1", "Salmon plate", 0.5, listOf(0.5, 1.0))
+
+        assertEquals(175.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
+        assertEquals(0.5, loggedEntry().quantity, 0.0001)
+    }
 }
 
 private class FakeNutritionEntryDao(private val mirror: FakeMirrorOps) : NutritionEntryDao {
