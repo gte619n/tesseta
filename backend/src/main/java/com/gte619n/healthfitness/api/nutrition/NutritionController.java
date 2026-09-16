@@ -755,11 +755,23 @@ public class NutritionController {
         byte[] bytes = readPhotoBytes(photo);
         MealType resolved = meal != null ? meal : mealForHour(LocalTime.now().getHour());
         try {
-            FoodEntry entry = mealCapture.captureMeal(userId, date, resolved, bytes, photo.getContentType());
-            // Wake other devices to the new ANALYZING placeholder; the async
-            // finalize fans out again (origin=null) when it flips to READY/FAILED.
-            syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(entry));
+            // Idempotent on the Idempotency-Key header (an offline outbox replays
+            // the multipart POST); without a key this is the prior single-shot
+            // create. A replay returns the originally-created placeholder instead
+            // of logging a second ANALYZING entry.
+            EntryResponse response = syncWrite.idempotentCreate(
+                "nutritionCaptureMeal:create",
+                userId,
+                () -> {
+                    FoodEntry entry =
+                        mealCapture.captureMeal(userId, date, resolved, bytes, photo.getContentType());
+                    // Wake other devices to the new ANALYZING placeholder; the async
+                    // finalize fans out again (origin=null) when it flips to READY/FAILED.
+                    syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+                    return new SyncWriteContext.Created<>(entry.entryId(), toResponse(entry));
+                },
+                entryId -> nutrition.findEntry(userId, date, entryId).map(this::toResponse));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(
                 HttpStatus.UNPROCESSABLE_ENTITY, "meal analysis is unavailable");
@@ -982,10 +994,20 @@ public class NutritionController {
         }
         String userId = currentUser.get().userId();
         MealType resolved = body.meal() != null ? body.meal() : mealForHour(LocalTime.now().getHour());
-        FoodEntry entry = nutrition.relogEntry(
-            userId, date, resolved, body.sourceDate(), body.sourceEntryId());
-        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(entry));
+        // Idempotent on the Idempotency-Key header: a re-log is a create with a
+        // server-minted id, so an outbox replay would otherwise duplicate the
+        // copied entry. A replay returns the originally re-logged entry.
+        EntryResponse response = syncWrite.idempotentCreate(
+            "nutritionRelog:create",
+            userId,
+            () -> {
+                FoodEntry entry = nutrition.relogEntry(
+                    userId, date, resolved, body.sourceDate(), body.sourceEntryId());
+                syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+                return new SyncWriteContext.Created<>(entry.entryId(), toResponse(entry));
+            },
+            entryId -> nutrition.findEntry(userId, date, entryId).map(this::toResponse));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /** Identity for recent-meals dedupe: foodId when present, else kind + name. */

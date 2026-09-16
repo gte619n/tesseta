@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.config.SseEvents;
 import com.gte619n.healthfitness.config.JsonSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte619n.healthfitness.config.SseStreamer;
+import com.gte619n.healthfitness.api.sync.SyncWriteContext;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseAvailabilityService;
@@ -74,6 +75,7 @@ public class WorkoutProgramChatController {
     private static final ObjectMapper JSON = JsonSupport.WEB;
 
     private final CurrentUserProvider currentUser;
+    private final SyncWriteContext syncWrite;
     private final WorkoutProgramChatClient chatClient;
     private final WorkoutProgramChatRepository chat;
     private final UserHealthSnapshotService snapshots;
@@ -104,9 +106,11 @@ public class WorkoutProgramChatController {
         WorkoutProgramValidator validator,
         WorkoutProgramAssembler assembler,
         WorkoutSettingsService workoutSettings,
-        SseStreamer sseStreamer
+        SseStreamer sseStreamer,
+        SyncWriteContext syncWrite
     ) {
         this.currentUser = currentUser;
+        this.syncWrite = syncWrite;
         this.chatClient = chatClient;
         this.chat = chat;
         this.snapshots = snapshots;
@@ -333,8 +337,18 @@ public class WorkoutProgramChatController {
         if (!issues.isEmpty()) {
             return ResponseEntity.unprocessableEntity().body(Map.of("issues", issues));
         }
-        WorkoutProgram created = service.create(input);
-        return ResponseEntity.status(HttpStatus.CREATED).body(assembler.deep(created));
+        // Idempotent on the Idempotency-Key header: a new-thread commit mints a
+        // "wp_…" program id server-side, so a replayed/double-tapped commit would
+        // otherwise create a duplicate program. A replay returns the original.
+        WorkoutProgramDeepResponse response = syncWrite.idempotentCreate(
+            "workoutProgramsChatCommit:create",
+            userId,
+            () -> {
+                WorkoutProgram created = service.create(input);
+                return new SyncWriteContext.Created<>(created.programId(), assembler.deep(created));
+            },
+            programId -> service.findById(userId, programId).map(assembler::deep));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /** Health snapshot + STRICTLY per-gym allow-lists, scoped to the form's gyms. */

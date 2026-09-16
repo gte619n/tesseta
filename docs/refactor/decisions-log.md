@@ -96,6 +96,34 @@ strip the three reminder receivers from the androidTest manifest via
 `tools:node="remove"` (fully-qualified names, since a relative name resolves
 against the test app id). Minimal, standard, test-APK-only. **Reversible:** yes.
 
+## DEC-11 — Write contract enforced by a live-endpoint registry test, not per-method annotations
+Classifying replay-safety needs a mechanism that fails on any *new* unclassified
+mutating endpoint. Options: annotate all ~132 handlers (very invasive) or a
+checked-in registry the test cross-checks against the live surface. **Decision:**
+registry (`backend/src/test/resources/write-contract.txt`, `CATEGORY|METHOD path`
+lines) + `WriteContractTest` that introspects `RequestMappingHandlerMapping`,
+fails on any live endpoint missing from the registry, any `NEEDS_FIX`, and any
+stale entry. Keys are the exact Spring patterns (captured by running the test),
+so no format drift. **Reversible:** yes.
+
+## DEC-12 — Fixed all 6 NEEDS_FIX creates via the existing idempotentCreate; deferred 2 history-append dups
+The audit found 6 server-minted creates with no replay guard (capture-meal,
+relog, goal-chat commit, workout-program create, workout-chat commit, equipment
+submit). All 6 routed through `SyncWriteContext.idempotentCreate` (the same
+pattern the 9 already-guarded creates use), so a replay returns the original.
+The 2 soft issues (MedicationController.update/changeDose append UUID-keyed
+history rows → replay duplicates the *history log*, though the med doc converges)
+are logged as BUG-02 rather than fixed inline: the fix needs a deterministic
+history-row id, a larger change to the history model, and the primary resource
+is already safe. **Reversible:** yes.
+
+## DEC-13 — Baseline's "2 field-injection violations" were a false positive
+The Phase 0 sweep flagged `GoogleHealthSignatureVerifier` and
+`WithingsWebhookController` as field-injection. The audit confirmed both
+`@Autowired`s are on **constructors** (to disambiguate a secondary/test
+constructor), not fields. There is nothing to fix; slice 8's DI-cleanup item is
+dropped. **Reversible:** n/a (no change).
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the

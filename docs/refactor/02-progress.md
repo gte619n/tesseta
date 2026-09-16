@@ -51,3 +51,22 @@ mutations stranding silently (DL-5). No runtime metric — correctness/robustnes
   Hilt boot-receiver before any test ran; stripped the receivers from the test
   manifest (DEC-10). Android JVM suite **589 tests, 0 failures**.
 
+## Slice 3 — uniform server idempotency + enforced write contract
+**Target:** every mutating endpoint safe to replay before the web outbox (slice
+4) starts replaying blindly.
+- **Audit:** all **132 live mutating endpoints** classified (subagent read all 63
+  controllers). Found **6 unguarded server-minted creates** (capture-meal, relog,
+  goal-chat commit, workout-program create, workout-chat commit, equipment
+  submit) — all routed through `SyncWriteContext.idempotentCreate`, so a replay
+  returns the original instead of duplicating.
+- **Enforcement:** `WriteContractTest` introspects the live surface and fails on
+  any unclassified endpoint, any `NEEDS_FIX`, or any stale registry entry —
+  replay-safety can no longer be silently skipped. Registry:
+  `write-contract.txt`; rationale doc: `docs/reference/write-contract.md`.
+- **Also:** added `SyncWriteContextTest` (4 tests) — the first direct coverage of
+  the `idempotentCreate` primitive all guarded creates rely on. Confirmed the
+  baseline's "2 field-injection violations" were a false positive (constructor
+  `@Autowired`), so slice 8 loses that item (DEC-13).
+- **Tests:** backend unit **870, 0 failures** (was 865) + 12 emulator integration
+  green. Android/web untouched.
+
