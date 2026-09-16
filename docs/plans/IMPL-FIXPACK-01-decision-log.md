@@ -103,7 +103,50 @@ because `patchEntry` was already moved to the offline-first local re-sum rail
 
 ## Phase 3 — Timed timer/rest fix
 
-_(entries appended during implementation)_
+**Confirmed root cause.** Timed sets logged with `startRestOrComplete(startRest =
+false)` (`WorkoutSessionViewModel.logTimedSet`), so a completed timed exercise
+started **no rest**. The screen's auto-advance instead handed off directly to the
+next hold's **get-ready pre-roll** (`autoStartStep = nextIndex` for timed→timed),
+which auto-started via `HoldTimer`'s `LaunchedEffect(autoStart)`. That pre-roll's
+only controls (Start now / Pause / Reset) live *inside* the hold card; the
+screen-level overlay/bar render a **Skip only for `Kind.REST`, not `GET_READY`**.
+During the page auto-advance the card is mid-transition, so the countdown ran with
+no reachable Skip/stop — "the timer continued to run and I had no way to reset or
+stop it," and because it was a short get-ready (next exercise's `restSeconds`, or
+the 10s fallback) rather than a real rest — "it skipped the rest entirely."
+
+- **DL-3-1** (rest between timed exercises, D-TMR-REST) — `logTimedSet` now starts
+  the prescribed rest when the timed set *completes the exercise* (last set) and
+  the session isn't over — symmetric with rep sets (`startRest = exerciseDone`).
+  Between sets of the *same* hold the get-ready pre-roll still paces the next hold
+  (unchanged), so a rest is folded in only at the exercise boundary. A `Kind.REST`
+  renders the screen-level Skip on both the bar and the overlay, so it is always
+  controllable and never orphaned (fixes D-TMR-CTRL too).
+- **DL-3-2** (controllable get-ready after rest, D-TMR-TRANS) — Removed the direct
+  timed→timed `autoStartStep` get-ready hand-off (the uncontrolled runaway). A new
+  screen effect starts a **short** get-ready (`GET_READY_SECONDS` = 10s, not the
+  full `restSeconds`, since the rest already gave recovery) once the between-exercise
+  rest ends (expired or skipped) on a timed page whose first set hasn't started.
+  `HoldTimer` then auto-starts the hold when that get-ready expires, and its
+  Pause/Reset/Start-now controls are present — auto-advance kept, fully controllable.
+- **DL-3-3** (no competing timers / race) — Because the get-ready is armed only
+  *after* the rest clears, a rest and a get-ready are never live at once, so
+  nothing clobbers or orphans the other. `clearRest` on genuine session completion
+  is unchanged (still fires only when `draft.isComplete`). Rep→timed transitions
+  benefit too: the rep rest ends → the timed page gets a get-ready.
+- **DL-3-4** (bonus generality) — The post-rest get-ready effect keys on "a REST
+  just ended on a timed page with 0 logged sets," so it also smooths rep→timed and
+  manual-swipe-into-timed, without affecting rep→rep (rep pages aren't timed).
+- **DL-3-5** (test coverage boundary) — The behavioural core (a completed timed
+  exercise starts the prescribed rest; a non-final timed set does not; the session
+  end still auto-completes with no trailing rest) is covered by
+  `WorkoutSessionViewModelTest` (new + existing tests pass, no regression). The
+  post-rest → get-ready hand-off lives in a Compose `LaunchedEffect` in
+  `WorkoutSessionScreen`; there's no full-screen Compose UI-test harness in this
+  module, so it's validated by construction + the manual in-app verification step
+  in the spec (two back-to-back timed exercises → controllable rest w/ Skip →
+  get-ready → hold). The notification-content builder test still passes (no
+  orphaned notification).
 
 ## Phase 4 — Timed more/same/less capture
 

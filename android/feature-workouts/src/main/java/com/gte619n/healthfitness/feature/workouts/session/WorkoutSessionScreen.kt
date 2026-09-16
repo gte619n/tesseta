@@ -551,12 +551,13 @@ private fun SessionBody(
                 pagerState.currentPage < steps.size - 1
             ) {
                 val nextIndex = pagerState.currentPage + 1
-                // Hand off to the next page's guided "get ready" pre-roll only
-                // when a completed hold flows into another hold; a hold into a
-                // lift just advances and waits for the user to log manually.
-                autoStartStep = if (step.prescription.isTimed &&
-                    steps.getOrNull(nextIndex)?.prescription?.isTimed == true
-                ) nextIndex else null
+                // IMPL-FIXPACK-01 Phase 3: a completed timed exercise now starts a
+                // real prescribed rest (see logTimedSet) that carries the recovery
+                // AND a screen-level Skip; the next timed hold's short get-ready is
+                // armed when that rest ends (the post-rest effect below). So we no
+                // longer hand a get-ready straight across here — that was the
+                // uncontrollable runaway pre-roll the user hit.
+                autoStartStep = null
                 // Run the scroll on [scope], not this effect's coroutine: the
                 // pager flips currentPage at the animation's midpoint, which
                 // re-keys this LaunchedEffect and would otherwise cancel the
@@ -591,6 +592,26 @@ private fun SessionBody(
         // its Start now / Pause / Reset drive the same shared timer.
         val restKind = restTimer?.kind
         val getReady = restTimer?.takeIf { it.kind == Kind.GET_READY }
+
+        // ---- between-exercise rest → next hold's get-ready (IMPL-FIXPACK-01 P3) --
+        // After the prescribed rest that follows a completed timed exercise ends
+        // (expired or skipped), start a SHORT get-ready pre-roll for the next timed
+        // exercise so its hold auto-starts — controllable (Pause / Reset / Start
+        // now) and never orphaned, since the rest itself carried the screen-level
+        // Skip. Rep exercises need no pre-roll, so this arms only a timed page whose
+        // first set hasn't started yet. Keyed on the REST going inactive so it fires
+        // once per rest; a get-ready (Kind.GET_READY) never satisfies restActive.
+        var restWasActive by remember { mutableStateOf(false) }
+        val restActive = restTimer?.kind == Kind.REST && restRemaining != null
+        LaunchedEffect(restActive, pagerState.currentPage) {
+            val restJustEnded = restWasActive && !restActive
+            restWasActive = restActive
+            if (!restJustEnded) return@LaunchedEffect
+            val step = steps.getOrNull(pagerState.currentPage) ?: return@LaunchedEffect
+            if (step.prescription.isTimed && (draft.logged[step.key]?.size ?: 0) == 0) {
+                onStartGetReady(GET_READY_SECONDS.toInt())
+            }
+        }
 
         if (overview) {
             restRemaining?.let {

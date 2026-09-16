@@ -303,6 +303,36 @@ class WorkoutSessionViewModelTest {
     }
 
     @Test
+    fun `completing a timed exercise starts the prescribed rest when the session is not done`() =
+        runTest {
+            // IMPL-FIXPACK-01 Phase 3: back-to-back timed exercises used to skip the
+            // rest entirely (logTimedSet started none) and hand off to an
+            // uncontrollable get-ready. Now the last set of a timed exercise starts
+            // the prescribed rest (screen-level, skippable) when the session isn't
+            // over. Plank 2 of 3 done, squat untouched -> finishing the plank is an
+            // exercise boundary, not the session end.
+            coEvery {
+                repo.updateSets("p1", "s2", plankKey, any())
+            } returns Result.success(ProgramFixtures.activeDraft)
+            draftFlow.value = ProgramFixtures.activeDraft.copy(
+                logged = mapOf(plankKey to List(2) { LoggedSet(durationSeconds = 45) }),
+            )
+            val vm = vm()
+            advanceUntilIdle()
+
+            vm.logTimedSet(plankKey, 40) // -> plank 3 of 3, squat still 0 of 3
+
+            advanceUntilIdle()
+
+            // The plank's prescribed 30s rest now runs (it was skipped before the fix)
+            // and the session has NOT auto-completed.
+            assertEquals(30, timers.rest.value!!.totalSeconds)
+            assertEquals(WorkoutSessionTimers.Kind.REST, timers.rest.value!!.kind)
+            assertNull(vm.state.value.prompt)
+            assertFalse(vm.state.value.autoCompleted)
+        }
+
+    @Test
     fun `finish flow shows the summary then enqueues completion and surfaces the recap`() = runTest {
         coEvery { repo.finish("p1", "s2") } returns Result.success(Unit)
         coEvery { repo.fetchRecap("p1", "s2") } returns "Strong squats — nice work."

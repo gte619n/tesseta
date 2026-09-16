@@ -79,7 +79,7 @@ Global roll-up (update as phases complete):
 |-------|:-----------:|:-------------:|:-------------:|:------:|
 | 1 — Ingredient qty → day totals | [x] | [x] | [x] | [x] |
 | 2 — Remove ingredient (+undo, opt-in re-title/re-image) | [x] | [x] | [x] | [x] |
-| 3 — Timed-exercise timer/rest fix | [ ] | [ ] | [ ] | [ ] |
+| 3 — Timed-exercise timer/rest fix | [x] | [x] | [x] | [x] |
 | 4 — Timed more/same/less capture | [ ] | [ ] | [ ] | [ ] |
 
 ---
