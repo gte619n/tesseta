@@ -107,3 +107,19 @@ network). Split per DEC-14; 4b (live write-path cutover + e2e) is the follow-up.
   emulator **SyncContractIntegrationTest** (full write→delta→fan-out loop) — 12
   integration tests green. Full backend build green (870 unit + 12 integration).
 
+## Slice 6 — conflict contract documented per entity
+**Target:** the contract clause "deterministic, server-authoritative conflict
+resolution; append-only data never conflicts; document the rule per entity type."
+- **Found already in place:** the deterministic LWW rule (server-clock keyed,
+  equal→server wins) is implemented in `ConflictResolver` with 7 unit tests; the
+  append-only exception holds **by construction** — every high-churn entity is a
+  separate client-minted-id document (enforced by `WriteContractTest`), so two
+  devices never write the same append-only doc.
+- **Delivered:** the missing explicit **per-entity contract**,
+  `docs/reference/conflict-resolution.md` — classifies all 23 synced collections
+  as append-only vs mutable-LWW with the id source and the rule.
+- **Deferred (DEC-18):** true per-field merge for the small mutable set (a
+  core-sync change needing review; append-only-by-construction already protects
+  all data-at-rest) and the workout-session set-merge (highest-value next step).
+- **Tests:** no behaviour change; all suites remain green.
+

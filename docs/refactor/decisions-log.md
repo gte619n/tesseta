@@ -174,6 +174,25 @@ one. This is the dominant cost of the slowest hot endpoint. The full change-jour
 is logged as a **future human-reviewed option** if this doesn't get p95 under
 target in prod. **Reversible:** yes (one method's execution strategy).
 
+## DEC-18 — Slice 6: document the per-entity rule; defer per-field merge for mutable entities
+Investigating the conflict path showed the deterministic, server-authoritative
+LWW rule is already implemented and well-tested: `ConflictResolver` keys on the
+server clock (equal-timestamp → server wins) with 7 unit tests covering every
+case. And the append-only exception already holds **by construction** — every
+high-churn entity (nutrition entries, blood/body readings, adherence, logged
+sets) is a separate document with a client-minted/deterministic id, enforced by
+slice 3's `WriteContractTest`, so two devices never write the same append-only
+doc. The genuinely missing deliverable was the explicit **per-entity contract
+document** the mandate asks for → `docs/reference/conflict-resolution.md`.
+**Deferred:** true per-field merge for the small set of *mutable* entities
+(goals, meds, profile), which today resolve by document-level LWW. Implementing
+it means field-diffing in the sync engine or reworking every mutable PATCH to
+partial-merge writes — a core-sync-path change needing human review, and the
+residual risk is only "two devices edit different fields of the same goal at
+once → one field edit lost," never data at rest. The workout-session set-merge
+is the highest-value next step and is documented as such. **Reversible:** n/a
+(doc + decision; no behaviour change).
+
 ## DEC-05 — integrationTest zero-test guard is CI-only
 The new guard throws if `integrationTest` runs 0 tests while
 `firestore.emulator.required=true` (the CI condition). Locally, where the
