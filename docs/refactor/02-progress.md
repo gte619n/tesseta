@@ -147,3 +147,18 @@ resolution; append-only data never conflicts; document the rule per entity type.
 - **Outcome:** no safe code change to make; forcing one would risk an
   already-correct design. Recorded as a finding; builds unchanged/green.
 
+## Slice 9 — Android workout history is now cache-first (ADR-0018)
+**Target:** the one network-only read with no offline fallback (baseline problem
+#10) — a spinner on every re-entry and an error offline.
+- **Change:** the `@Singleton` repository keeps the last successful first page in
+  memory; `workoutHistoryPage(0)` caches on success and falls back to the cached
+  page on failure. The ViewModel renders the cached page immediately (no spinner
+  on re-entry) and keeps it visible if revalidation fails.
+- **Effect:** re-entering the screen is instant (no spinner), and after one
+  successful load the screen survives going offline within the session. (Full
+  cross-process-restart offline would want a Room table — deferred; the durable
+  copy is the server and this screen is append-only review data.)
+- **Tests:** +1 `WorkoutHistoryViewModelTest` case (cached shows instantly +
+  survives failed revalidation) + `@Before` cache stub; full Android suite
+  **590 tests, 0 failures**.
+

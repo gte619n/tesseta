@@ -183,9 +183,29 @@ class WorkoutProgramRepository @Inject internal constructor(
             }
         }
 
+    // The last successfully-loaded first page of workout history, kept in memory
+    // so a re-entry can render instantly and an offline load can still show
+    // something (ADR-0018 cache-first; this screen was the one network-only read
+    // with no fallback). Process-scoped: the durable copy is the server; this is
+    // just a warm cache, cleared with the singleton on sign-out.
+    @Volatile
+    private var cachedFirstPage: WorkoutHistoryPage? = null
+
+    /** The cached first history page for immediate display, or null before the
+     *  first successful load this process (ADR-0018). */
+    fun cachedFirstHistoryPage(): WorkoutHistoryPage? = cachedFirstPage
+
     suspend fun workoutHistoryPage(page: Int, size: Int): Result<WorkoutHistoryPage> =
         withContext(Dispatchers.IO) {
             runCatching { api.workoutHistory(page = page, size = size).toDomain() }
+                .onSuccess { if (page == 0) cachedFirstPage = it }
+                .recoverCatching { e ->
+                    // Offline/failed first page: fall back to the cached first page
+                    // rather than surfacing an error, if we have one. Later pages
+                    // have no cache and propagate the failure unchanged.
+                    val cached = cachedFirstPage
+                    if (page == 0 && cached != null) cached else throw e
+                }
         }
 
     suspend fun nutritionGuidance(
