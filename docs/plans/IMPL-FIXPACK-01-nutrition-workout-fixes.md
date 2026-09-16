@@ -78,7 +78,7 @@ Global roll-up (update as phases complete):
 | Phase | Implemented | Tested (tech) | Tested (func) | Pushed |
 |-------|:-----------:|:-------------:|:-------------:|:------:|
 | 1 — Ingredient qty → day totals | [x] | [x] | [x] | [x] |
-| 2 — Remove ingredient (+undo, opt-in re-title/re-image) | [ ] | [ ] | [ ] | [ ] |
+| 2 — Remove ingredient (+undo, opt-in re-title/re-image) | [x] | [x] | [x] | [x] |
 | 3 — Timed-exercise timer/rest fix | [ ] | [ ] | [ ] | [ ] |
 | 4 — Timed more/same/less capture | [ ] | [ ] | [ ] | [ ] |
 

@@ -275,6 +275,88 @@ class NutritionRepository @Inject constructor(
         return merged
     }
 
+    /** The ingredient a [removeIngredient] took out, so the UI can offer Undo. */
+    data class RemovedIngredient(val entry: Entry, val ingredient: EntryIngredient, val index: Int)
+
+    /**
+     * Remove one ingredient from a composite meal (a background artefact the photo
+     * captured but that isn't part of the meal), resum the entry and write it as an
+     * offline-first local mirror update — same rail as [updateComposite], so the day
+     * total drops instantly and the change rides the outbox to the server + other
+     * devices. Returns the removed ingredient (with its index) so the caller can
+     * offer Undo via [restoreIngredient]. Refuses to remove the last ingredient (a
+     * composite with no ingredients has no meaningful total).
+     */
+    suspend fun removeIngredient(date: String, entryId: String, index: Int): RemovedIngredient {
+        val current = entriesForDate(date).firstOrNull { it.entryId == entryId }
+        val ingredients = current?.ingredients
+        require(current != null && ingredients != null && index in ingredients.indices) {
+            "invalid ingredient index: $index"
+        }
+        require(ingredients.size > 1) { "a meal must keep at least one ingredient" }
+        val removed = ingredients[index]
+        val remaining = ingredients.toMutableList().apply { removeAt(index) }
+        val merged = current.copy(
+            ingredients = remaining,
+            macros = compositeTotal(remaining, current.quantity),
+        )
+        support.updateLocal(
+            table = MirrorTables.NUTRITION_ENTRIES,
+            id = composite(date, entryId),
+            payloadJson = rowAdapter.toJson(NutritionEntryRow(date, merged)),
+            lastUpdate = System.currentTimeMillis(),
+        )
+        return RemovedIngredient(merged, removed, index)
+    }
+
+    /**
+     * Undo a [removeIngredient]: re-insert [ingredient] at its original [index] and
+     * resum, again as an offline-first local write. Clamps the index in case the
+     * list changed underneath.
+     */
+    suspend fun restoreIngredient(
+        date: String,
+        entryId: String,
+        index: Int,
+        ingredient: EntryIngredient,
+    ): Entry {
+        val current = entriesForDate(date).firstOrNull { it.entryId == entryId }
+            ?: return ingredientRestoreFallback(date, entryId, ingredient)
+        val ingredients = current.ingredients.orEmpty().toMutableList()
+        val at = index.coerceIn(0, ingredients.size)
+        ingredients.add(at, ingredient)
+        val merged = current.copy(
+            ingredients = ingredients,
+            macros = compositeTotal(ingredients, current.quantity),
+        )
+        support.updateLocal(
+            table = MirrorTables.NUTRITION_ENTRIES,
+            id = composite(date, entryId),
+            payloadJson = rowAdapter.toJson(NutritionEntryRow(date, merged)),
+            lastUpdate = System.currentTimeMillis(),
+        )
+        return merged
+    }
+
+    private suspend fun ingredientRestoreFallback(
+        date: String,
+        entryId: String,
+        ingredient: EntryIngredient,
+    ): Entry {
+        // The entry vanished from the mirror between remove and undo — nothing to
+        // re-attach to. Return a best-effort single-ingredient entry so the caller
+        // doesn't crash; in practice the row is always present for an open sheet.
+        return Entry(
+            entryId = entryId,
+            meal = "",
+            foodName = ingredient.name,
+            quantity = 1.0,
+            macros = ingredient.macros,
+            source = "MANUAL",
+            ingredients = listOf(ingredient),
+        )
+    }
+
     suspend fun deleteEntry(date: String, entryId: String) {
         support.deleteLocal(
             MirrorTables.NUTRITION_ENTRIES,

@@ -378,6 +378,64 @@ class NutritionRepositoryLogMealTest {
         assertEquals(175.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
         assertEquals(0.5, loggedEntry().quantity, 0.0001)
     }
+
+    // --- IMPL-FIXPACK-01 Phase 2: remove an ingredient (background artefact) ---
+
+    @Test
+    fun `removing an ingredient drops the day total and reports what was removed`() = runBlocking {
+        seedComposite(rescalableComposite(), dirty = false)
+
+        // Remove the second ingredient (200 kcal, 10 g protein).
+        val removed = repository.removeIngredient(date, "e1", 1)
+
+        assertEquals(1, removed.index)
+        assertEquals(200.0, removed.ingredient.macros.caloriesKcal!!, 0.0001)
+        val day = repository.day(date)
+        assertEquals(300.0, day.totals.caloriesKcal!!, 0.0001)
+        assertEquals(30.0, day.totals.proteinGrams!!, 0.0001)
+        assertEquals(1, loggedEntry().ingredients!!.size)
+    }
+
+    @Test
+    fun `undoing a removal restores the ingredient and the day total`() = runBlocking {
+        seedComposite(rescalableComposite(), dirty = false)
+
+        val removed = repository.removeIngredient(date, "e1", 1)
+        assertEquals(300.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
+
+        repository.restoreIngredient(date, "e1", removed.index, removed.ingredient)
+
+        val day = repository.day(date)
+        assertEquals(500.0, day.totals.caloriesKcal!!, 0.0001)
+        assertEquals(2, loggedEntry().ingredients!!.size)
+        // Restored at its original index.
+        assertEquals(200.0, loggedEntry().ingredients!![1].macros.caloriesKcal!!, 0.0001)
+    }
+
+    @Test
+    fun `removing an ingredient works offline`() = runBlocking {
+        seedComposite(rescalableComposite(), dirty = false)
+        coEvery { api.getDay(date) } throws RuntimeException("offline")
+
+        repository.removeIngredient(date, "e1", 1)
+
+        assertEquals(300.0, repository.day(date).totals.caloriesKcal!!, 0.0001)
+    }
+
+    @Test
+    fun `removing the last ingredient is refused`() = runBlocking {
+        val single = rescalableComposite().copy(
+            ingredients = listOf(rescalableComposite().ingredients!!.first()),
+            macros = Macros(caloriesKcal = 300.0, proteinGrams = 30.0),
+        )
+        seedComposite(single, dirty = false)
+
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repository.removeIngredient(date, "e1", 0) }
+        }
+        // Untouched.
+        assertEquals(1, loggedEntry().ingredients!!.size)
+    }
 }
 
 private class FakeNutritionEntryDao(private val mirror: FakeMirrorOps) : NutritionEntryDao {

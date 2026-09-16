@@ -60,7 +60,46 @@ because `patchEntry` was already moved to the offline-first local re-sum rail
 
 ## Phase 2 — Remove ingredient
 
-_(entries appended during implementation)_
+- **DL-2-1** (deviation from spec Step 1) — Removal is implemented as an
+  **offline-first local mirror write** (`NutritionRepository.removeIngredient` /
+  `restoreIngredient`), NOT a new REST `DELETE .../ingredients/{index}` endpoint.
+  Reasoning: after #258 every nutrition mutation is offline-first and rides the
+  outbox; Phase 1 just fixed a bug caused precisely by the *one* mutation left on
+  the network rail. Adding a network-first delete would reintroduce that class of
+  bug (offline breakage + dirty-row skips) and be inconsistent. The removal writes
+  the re-summed entry via `updateLocal`, which rides the outbox UPDATE to the
+  server + other devices — the exact rail `patchEntry`/`updateComposite` use. No
+  backend change needed; the server LWW-stores the pushed doc (fewer ingredients +
+  recomputed macros), same shape it already accepts. Reversible.
+- **DL-2-2** (undo) — `removeIngredient` returns the removed `EntryIngredient`;
+  the VM stashes it (`lastRemovedIngredient`) so a snackbar **Undo** re-inserts it
+  at its original index via `restoreIngredient` and re-sums. Snackbar is hosted
+  inside the IngredientsSheet (like DrinkCard's self-hosted snackbar).
+- **DL-2-3** (last-ingredient guard) — Removing the final ingredient is refused
+  (repo throws; the sheet also disables the trash icon when one ingredient
+  remains). A composite with zero ingredients is invalid (its total would be
+  meaningless). Chose refuse over auto-convert-to-single to keep it predictable.
+- **DL-2-4** (opt-in AI re-title, D-RM-TITLE) — Delivered by **reusing the shipped
+  Adjust-with-AI flow** (`onSubmitAdjust`) rather than a new Gemini "rename"
+  endpoint. After a removal the sheet shows a one-tap "Re-title with AI" that
+  submits a constrained instruction naming the removed item(s) and asking only to
+  rename to match remaining ingredients (not add anything), `saveAsMeal=false`
+  (D-RM-SAVED). The adjust flow's built-in preview/review step lets the user
+  discard if the re-analysis re-adds the item — mitigating the re-add risk while
+  avoiding new AI wiring. Reversible.
+- **DL-2-5** (opt-in image regen, D-RM-PHOTO) — Delivered by reusing the existing
+  `regenerateEntryImage` (backend `POST .../image/regenerate`), surfaced as a
+  one-tap "Regenerate photo" after a removal. It regenerates the finished-meal
+  image from the entry's current name — reflecting the removal once it syncs.
+- **DL-2-6** (sheet state) — The sheet is driven by the reactive `entry`; the
+  per-ingredient `quantities` state is keyed on `entry.entryId` + ingredient count
+  so it re-initialises when an ingredient is removed/restored (indices stay
+  aligned with the persisted list). Tradeoff: an un-saved in-progress qty edit is
+  discarded when a *different* ingredient is removed in the same session — minor,
+  and removal is an infrequent corrective action.
+- **DL-2-7** (save-as-meal untouched, D-RM-SAVED) — Removal only writes the
+  logged day entry; nothing calls the save-as-meal catalog path, and the re-title
+  reuse passes `saveAsMeal=false`. No catalog copy is modified.
 
 ## Phase 3 — Timed timer/rest fix
 

@@ -11,9 +11,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -22,11 +29,13 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.gte619n.healthfitness.domain.nutrition.Entry
 import com.gte619n.healthfitness.domain.nutrition.EntryIngredient
 import com.gte619n.healthfitness.domain.nutrition.forPortion
@@ -56,6 +65,12 @@ fun IngredientsSheet(
     // "Adjust with AI" (async): submit a free-text correction; review when ready.
     onSubmitAdjust: (instruction: String, saveAsMeal: Boolean) -> Unit,
     onReviewAdjust: () -> Unit,
+    // IMPL-FIXPACK-01 Phase 2: remove a background artefact the photo captured
+    // (direct, immediate — the day resums at once), with a snackbar Undo, plus the
+    // opt-in "Re-title with AI" (reuses onSubmitAdjust) and "Regenerate photo".
+    onRemoveIngredient: (index: Int) -> Unit = {},
+    onUndoRemoveIngredient: () -> Unit = {},
+    onRegenerateImage: () -> Unit = {},
     // IMPL-LEFTOVER-01 (D4/D7/D15): "Remove Leftovers" launch, "Review leftovers"
     // (a PENDING_REVIEW awaiting the diff), and "Restore full portion" (APPLIED).
     savingLeftover: Boolean = false,
@@ -70,9 +85,17 @@ fun IngredientsSheet(
         value = fetchServingHint(entry.entryId)
     }
     var title by remember(entry.entryId) { mutableStateOf(entry.foodName) }
-    val quantities = remember(entry.entryId) {
+    // Re-key on the ingredient count too: removing/restoring an ingredient changes
+    // the reactive entry, and the per-index quantities must re-align with the new
+    // list (a rare in-progress qty edit on another row is discarded — acceptable).
+    val quantities = remember(entry.entryId, ingredients.size) {
         mutableStateListOf(*ingredients.map { trimAmount(it.quantity ?: 1.0) }.toTypedArray())
     }
+    // Names of ingredients removed this session — drives the opt-in "clean up the
+    // title/photo" row and the AI re-title instruction. Cleared item-by-item on Undo.
+    val removedNames = remember(entry.entryId) { mutableStateListOf<String>() }
+    val snackbarHost = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     // Whole-meal portion = the entry's own quantity, persisted per entry. Scales
     // the displayed total; the ingredients keep their full-recipe amounts.
     var portion by remember(entry.entryId) { mutableStateOf(entry.quantity) }
@@ -176,7 +199,56 @@ fun IngredientsSheet(
                         ingredient = ingredient,
                         quantity = quantities.getOrElse(index) { "1" },
                         onQuantityChange = { quantities[index] = it },
+                        // Keep at least one ingredient: hide remove on the last row.
+                        onRemove = if (ingredients.size > 1) {
+                            {
+                                removedNames.add(ingredient.name)
+                                onRemoveIngredient(index)
+                                scope.launch {
+                                    val result = snackbarHost.showSnackbar(
+                                        message = "Removed ${ingredient.name}",
+                                        actionLabel = "Undo",
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        onUndoRemoveIngredient()
+                                        if (removedNames.isNotEmpty()) removedNames.removeAt(removedNames.lastIndex)
+                                    }
+                                }
+                            }
+                        } else {
+                            null
+                        },
                     )
+                }
+            }
+
+            // After removing a background artefact, the title/photo can be stale.
+            // Both clean-ups are opt-in (D-RM-TITLE / D-RM-PHOTO): re-title reuses
+            // the Adjust-with-AI flow (with a preview to review); photo reuses the
+            // existing finished-meal image regeneration. Neither touches a saved-meal
+            // copy (saveAsMeal = false).
+            if (removedNames.isNotEmpty()) {
+                SheetSection("Clean up") {
+                    Text(
+                        "Removed ${removedNames.joinToString(", ")}. Update the title or photo to match?",
+                        style = Hf.type.bodySm,
+                        color = Hf.colors.textSecondary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SecondaryButton("Re-title with AI", Modifier.weight(1f)) {
+                            onSubmitAdjust(
+                                "I removed these items that were not part of the meal: " +
+                                    "${removedNames.joinToString(", ")}. " +
+                                    "Rename the meal to match only its remaining ingredients. " +
+                                    "Do not add any items.",
+                                false,
+                            )
+                        }
+                        SecondaryButton("Regenerate photo", Modifier.weight(1f)) {
+                            onRegenerateImage()
+                        }
+                    }
                 }
             }
 
@@ -213,6 +285,10 @@ fun IngredientsSheet(
                     )
                 }
             }
+
+            // Self-hosted, anchored under the content so the "Removed X · Undo"
+            // snackbar shows over the sheet (the sheet has no Scaffold host).
+            SnackbarHost(hostState = snackbarHost)
         }
     }
 }
@@ -222,6 +298,8 @@ private fun IngredientCard(
     ingredient: EntryIngredient,
     quantity: String,
     onQuantityChange: (String) -> Unit,
+    // Null hides the remove control (e.g. the last remaining ingredient).
+    onRemove: (() -> Unit)? = null,
 ) {
     val baseGrams = ingredient.servingGrams ?: 0.0
     val qty = quantity.toDoubleOrNull() ?: 1.0
@@ -254,6 +332,15 @@ private fun IngredientCard(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
+            if (onRemove != null) {
+                IconButton(onClick = onRemove) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = "Remove ${ingredient.name}",
+                        tint = Hf.colors.textTertiary,
+                    )
+                }
+            }
         }
     }
 }

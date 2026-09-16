@@ -281,6 +281,50 @@ class NutritionTodayViewModel @Inject constructor(
         }
     }
 
+    // The last ingredient removed from a composite, kept so the snackbar Undo can
+    // put it back. Not in UI state — the snackbar lives in the sheet and drives the
+    // undo callback; the VM only needs to remember what to restore.
+    private var lastRemoved: NutritionRepository.RemovedIngredient? = null
+
+    /**
+     * IMPL-FIXPACK-01 Phase 2: remove one ingredient from the open composite meal
+     * (a background artefact the photo captured). Direct, immediate, offline-first:
+     * the entry resums and the day total drops at once, and the change rides the
+     * outbox. Remembers the removed ingredient so [undoRemoveIngredient] can restore
+     * it from the snackbar. Refuses (surfaces an error) when only one remains.
+     */
+    fun removeIngredient(entryId: String, index: Int) {
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                val removed = repository.removeIngredient(date, entryId, index)
+                lastRemoved = removed
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, editingComposite = removed.entry, error = null) }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Couldn't remove the ingredient") }
+            }
+        }
+    }
+
+    /** Undo the most recent ingredient removal (the snackbar "Undo" action). */
+    fun undoRemoveIngredient() {
+        val removed = lastRemoved ?: return
+        lastRemoved = null
+        val date = _state.value.date.format(ISO_DATE)
+        viewModelScope.launch {
+            try {
+                val entry = repository.restoreIngredient(
+                    date, removed.entry.entryId, removed.index, removed.ingredient,
+                )
+                val day = repository.day(date)
+                _state.update { it.copy(day = day, editingComposite = entry, error = null) }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Couldn't restore the ingredient") }
+            }
+        }
+    }
+
     /**
      * Adjust with AI (async) — submit a free-text correction as a durable op that
      * survives backgrounding/process death, then close the edit sheet. The op flips
