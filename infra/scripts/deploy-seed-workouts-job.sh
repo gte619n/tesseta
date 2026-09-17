@@ -50,12 +50,16 @@ SECRETS="OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT
 ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@SPRING_PROFILES_ACTIVE=job-seed-workouts@APP_WORKOUTS_SEED_JSON_PATH=${JSON_PATH}@APP_WORKOUTS_SEED_USER_ID=${USER_ID}"
 
 echo "==> Deploying Cloud Run Job ${JOB_NAME} (image=${IMAGE}, user=${USER_ID})"
+# --memory=2Gi: same image as the backend service, whose ENTRYPOINT sets
+# -XX:MaxRAMPercentage=65.0 (tuned for 2Gi). Cloud Run job default 512Mi
+# OOM-kills the JVM mid-Spring-boot (see backend/Dockerfile).
 gcloud run jobs deploy "${JOB_NAME}" \
   --image="${IMAGE}" \
   --region="${REGION}" \
   --service-account="${RUNTIME_SA}" \
   --set-env-vars="${ENV_VARS}" \
   --set-secrets="${SECRETS}" \
+  --memory=2Gi \
   --max-retries=1 \
   --task-timeout=3600 \
   --project="${PROJECT_ID}"

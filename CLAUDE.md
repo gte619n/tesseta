@@ -121,6 +121,13 @@
   BOM-managed transitive version via an `extra["<lib>.version"]` property in
   `backend/build.gradle.kts` (see the existing block there). This runs only at
   deploy time, not in PR CI, so it can silently keep prod on a stale revision.
+- **Cloud Run Jobs reuse the backend image, which is tuned for 2Gi.** The image
+  `ENTRYPOINT` hardcodes `-XX:MaxRAMPercentage=65.0` (`backend/Dockerfile`), so
+  any Cloud Run surface running it — service *or* job — must be provisioned
+  `--memory=2Gi`. Cloud Run Jobs default to **512Mi**, at which the JVM is
+  OOM-killed mid-Spring-boot before the runner executes (no app logs, trips the
+  `cloud_run_job_errors` alert). Every `infra/scripts/deploy-*job*.sh` must pass
+  `--memory=2Gi`; a new job script that omits it fails silently on every run.
 
 ## Local Development
 Run `bash infra/scripts/dev.sh` to start both backend and web servers locally.
