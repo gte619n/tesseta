@@ -32,7 +32,46 @@ object WorkoutSessionNotificationContent {
         val elapsedSinceMillis: Long?,
         /** Epoch millis the rest chronometer counts down to (rest mode). */
         val countdownToMillis: Long?,
+        /**
+         * The "Log set" action the notification offers for the set the user is on,
+         * or null when there's nothing to log right now (mid-rest, all sets done,
+         * or no session snapshot). [WorkoutSessionService] turns it into a
+         * notification action button.
+         */
+        val action: SetAction? = null,
     )
+
+    /**
+     * The action the notification's "Log set" button performs for the current set.
+     * Non-final rep sets log straight from the shade ([QuickLog]); the final
+     * working set — and any timed hold — must be finished in the app ([OpenToLog]),
+     * because the athlete still has to pick the reps-in-reserve the engine needs
+     * (or run the hold timer).
+     */
+    sealed interface SetAction {
+        /**
+         * Log the current set with these prefilled defaults straight from the
+         * notification, then start the prescribed rest — the shade counterpart of
+         * checking the set off in the logger. [expectedLoggedCount] is how many
+         * sets are already logged for this prescription; the receiver logs only
+         * when the live draft still agrees, so a stale tap can't double-log.
+         */
+        data class QuickLog(
+            val blockId: String,
+            val orderIndex: Int,
+            val expectedLoggedCount: Int,
+            val weightLbs: Double?,
+            val reps: Int?,
+        ) : SetAction
+
+        /**
+         * Open the app on this session so the set is finished there. Used for the
+         * final working set (its reps-in-reserve is a mandatory, blind pick — see
+         * the logger's `requireRir` gate) and for timed holds (the guided hold
+         * timer / effort capture lives in the app).
+         */
+        object OpenToLog : SetAction
+    }
 
     /** The exercise + set the user is on, with its prescribed/carried load. */
     data class CurrentSet(
@@ -97,6 +136,10 @@ object WorkoutSessionNotificationContent {
                 },
                 elapsedSinceMillis = draft.startedAt.toEpochMilli(),
                 countdownToMillis = null,
+                // Only offer the log button while a set is actually up: mid-rest
+                // the "current" set is the *next* one, and logging it early would
+                // skip the rest the athlete is still taking.
+                action = setAction(draft, lastSets),
             )
         }
     }
@@ -111,27 +154,73 @@ object WorkoutSessionNotificationContent {
         draft: WorkoutSessionDraft,
         lastSets: Map<String, List<LoggedSet>> = emptyMap(),
     ): CurrentSet? {
+        val pending = pending(draft) ?: return null
+        return CurrentSet(
+            name = pending.prescription.exercise?.name ?: pending.prescription.exerciseId,
+            setNumber = pending.logged.size + 1,
+            totalSets = pending.total,
+            loadLabel = loadLabel(pending.prescription, pending.logged, lastSets),
+        )
+    }
+
+    /**
+     * The "Log set" action for the set the user is on, or null when there's
+     * nothing to log (every prescription complete / no snapshot). A non-final rep
+     * set logs from the shade with its prefilled defaults ([SetAction.QuickLog]);
+     * the final working set — where the mandatory RIR pick lives — and any timed
+     * hold send the athlete into the app ([SetAction.OpenToLog]).
+     */
+    fun setAction(
+        draft: WorkoutSessionDraft,
+        lastSets: Map<String, List<LoggedSet>> = emptyMap(),
+    ): SetAction? {
+        val pending = pending(draft) ?: return null
+        // The guided hold timer + effort capture live in the app, never the shade.
+        if (pending.prescription.isTimed) return SetAction.OpenToLog
+        // The final working set's RIR is a blind, mandatory pick (the logger's
+        // `requireRir` gate). Prefilled reps are the engine target (≥ the rep
+        // floor), so it's always gated — hand off to the app rather than log blind.
+        val isFinalSet = pending.logged.size + 1 >= pending.total
+        if (isFinalSet) return SetAction.OpenToLog
+        val prefill = prefillFor(pending.prescription, pending.logged, lastSets)
+        return SetAction.QuickLog(
+            blockId = pending.key.blockId,
+            orderIndex = pending.key.orderIndex,
+            expectedLoggedCount = pending.logged.size,
+            weightLbs = prefill.weightLbs,
+            reps = prefill.reps,
+        )
+    }
+
+    /** Convenience for callers that only need the current exercise's name. */
+    fun currentExerciseName(draft: WorkoutSessionDraft): String? = currentSet(draft)?.name
+
+    /** The prescription + its logged sets for the set the user is on (see [currentSet]). */
+    private data class Pending(
+        val prescription: Prescription,
+        val key: PrescriptionKey,
+        val logged: List<LoggedSet>,
+        val total: Int,
+    )
+
+    /**
+     * The first prescription (blocks then prescriptions in `orderIndex` order)
+     * with fewer logged sets than prescribed (`sets = null` counts as one) — the
+     * one exercise the coach is on. Null once every prescription is fully logged,
+     * or when the draft has no session snapshot at all.
+     */
+    private fun pending(draft: WorkoutSessionDraft): Pending? {
         val day = draft.scheduled.session ?: return null
         for (block in day.blocks.sortedBy { it.orderIndex }) {
             for (prescription in block.prescriptions.sortedBy { it.orderIndex }) {
                 val key = PrescriptionKey(block.blockId, prescription.orderIndex)
                 val logged = draft.logged[key].orEmpty()
                 val total = prescription.sets ?: 1
-                if (logged.size < total) {
-                    return CurrentSet(
-                        name = prescription.exercise?.name ?: prescription.exerciseId,
-                        setNumber = logged.size + 1,
-                        totalSets = total,
-                        loadLabel = loadLabel(prescription, logged, lastSets),
-                    )
-                }
+                if (logged.size < total) return Pending(prescription, key, logged, total)
             }
         }
         return null
     }
-
-    /** Convenience for callers that only need the current exercise's name. */
-    fun currentExerciseName(draft: WorkoutSessionDraft): String? = currentSet(draft)?.name
 
     /**
      * The carried (or prescribed) load for the upcoming set — resolved by the same

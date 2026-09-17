@@ -207,9 +207,105 @@ class WorkoutSessionNotificationContentTest {
         assertNull(content.elapsedSinceMillis)
     }
 
+    // ---- "Log set" action --------------------------------------------------
+
+    @Test
+    fun `a non-final rep set offers a quick-log carrying the prefilled defaults`() {
+        // Warmup done + bench set 1 logged (135 x 8) -> set 2 of 3 is a non-final
+        // working set, so it logs straight from the shade.
+        val draft = draft(
+            logged = mapOf(
+                PrescriptionKey("b-warmup", 0) to listOf(loggedSet()),
+                PrescriptionKey("b-main", 0) to listOf(loggedSet()),
+            ),
+        )
+
+        val action = WorkoutSessionNotificationContent.from(draft, rest = null, now = now).action
+
+        val quick = action as WorkoutSessionNotificationContent.SetAction.QuickLog
+        assertEquals("b-main", quick.blockId)
+        assertEquals(0, quick.orderIndex)
+        assertEquals(1, quick.expectedLoggedCount)
+        assertEquals(135.0, quick.weightLbs!!, 0.0)
+        assertEquals(8, quick.reps)
+    }
+
+    @Test
+    fun `the final working set hands off to the app for the RIR pick`() {
+        // Warmup + bench sets 1 and 2 logged -> set 3 of 3 is the final working set.
+        val draft = draft(
+            logged = mapOf(
+                PrescriptionKey("b-warmup", 0) to listOf(loggedSet()),
+                PrescriptionKey("b-main", 0) to List(2) { loggedSet() },
+            ),
+        )
+
+        val action = WorkoutSessionNotificationContent.from(draft, rest = null, now = now).action
+
+        assertEquals(WorkoutSessionNotificationContent.SetAction.OpenToLog, action)
+    }
+
+    @Test
+    fun `a single-set prescription is a final set and opens the app`() {
+        // Nothing logged -> the warmup (Air Bike, sets=null -> 1) is up, and its
+        // only set is final, so the shade can't blind-log it.
+        val action = WorkoutSessionNotificationContent.from(draft(), rest = null, now = now).action
+
+        assertEquals(WorkoutSessionNotificationContent.SetAction.OpenToLog, action)
+    }
+
+    @Test
+    fun `a timed hold opens the app rather than quick-logging`() {
+        val draft = draft(scheduled = scheduled(session = timedDay()))
+
+        val action = WorkoutSessionNotificationContent.from(draft, rest = null, now = now).action
+
+        assertEquals(WorkoutSessionNotificationContent.SetAction.OpenToLog, action)
+    }
+
+    @Test
+    fun `no log action while resting — the current set is the next one`() {
+        // Warmup done + bench set 1 logged: a non-final set is up, but a running
+        // rest means the athlete hasn't reached it yet.
+        val draft = draft(
+            logged = mapOf(
+                PrescriptionKey("b-warmup", 0) to listOf(loggedSet()),
+                PrescriptionKey("b-main", 0) to listOf(loggedSet()),
+            ),
+        )
+        val rest = RestTimer(totalSeconds = 90, endsAt = now.plusSeconds(45))
+
+        val action = WorkoutSessionNotificationContent.from(draft, rest = rest, now = now).action
+
+        assertNull(action)
+    }
+
+    @Test
+    fun `no log action once every set is logged`() {
+        val action = WorkoutSessionNotificationContent
+            .from(draft(logged = allLogged()), rest = null, now = now).action
+
+        assertNull(action)
+    }
+
     // ---- fixtures ----------------------------------------------------------
 
     private fun loggedSet() = LoggedSet(weightLbs = 135.0, reps = 8)
+
+    /** A one-exercise day whose only prescription is a timed hold. */
+    private fun timedDay() = day().copy(
+        blocks = listOf(
+            Block(
+                blockId = "b-stretch",
+                type = BlockType.STRETCH,
+                title = "Stretch",
+                orderIndex = 0,
+                prescriptions = listOf(
+                    prescription("ex-plank", "Plank", 0, sets = 3).copy(durationSeconds = 45),
+                ),
+            ),
+        ),
+    )
 
     /** All prescriptions logged to their prescribed set counts. */
     private fun allLogged(): Map<PrescriptionKey, List<LoggedSet>> = mapOf(

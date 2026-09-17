@@ -179,5 +179,15 @@
             android:name=".workouts.WorkoutSessionService"
             android:foregroundServiceType="health"
             android:exported="false" />
+
+        <!-- "Log set" action on the active-workout notification: quick-logs the
+             current set's suggested weight × reps without opening the app. -->
+        <receiver
+            android:name=".workouts.WorkoutSetLogReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.gte619n.healthfitness.WORKOUT_LOG_SET" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
