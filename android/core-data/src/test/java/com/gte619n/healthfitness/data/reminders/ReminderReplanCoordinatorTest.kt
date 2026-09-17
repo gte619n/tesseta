@@ -5,6 +5,8 @@ import com.gte619n.healthfitness.data.db.dao.MedicationDao
 import com.gte619n.healthfitness.data.db.entity.MedicationAdherenceEntity
 import com.gte619n.healthfitness.data.db.entity.MedicationEntity
 import com.gte619n.healthfitness.data.sync.SyncSignals
+import com.gte619n.healthfitness.domain.medications.TimeWindow
+import com.gte619n.healthfitness.domain.medications.TodaysDose
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +29,7 @@ class ReminderReplanCoordinatorTest {
 
     private val rows = MutableStateFlow<List<MedicationEntity>>(emptyList())
     private val adherenceRows = MutableStateFlow<List<MedicationAdherenceEntity>>(emptyList())
+    private val todaysDoses = MutableStateFlow<List<TodaysDose>>(emptyList())
     private val dao = FakeMedicationDao(rows)
     private val adherenceDao = FakeAdherenceDao(adherenceRows)
     private val signals = SyncSignals()
@@ -38,6 +41,7 @@ class ReminderReplanCoordinatorTest {
         syncSignals = signals,
         scope = scope,
         replan = { replans.incrementAndGet() },
+        todaysDoses = todaysDoses,
     ).also { it.start() }
 
     @Test
@@ -115,6 +119,46 @@ class ReminderReplanCoordinatorTest {
         advanceUntilIdle()
         assertEquals(3, replans.get())
     }
+
+    @Test
+    fun replansWhenTheTodaysDosesProjectionTakenSetChanges() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        coordinator(CoroutineScope(dispatcher))
+        advanceUntilIdle()
+        // Initial projection emission is dropped — no replan yet.
+        assertEquals(0, replans.get())
+
+        // App start seeds the checklist (not-taken). Still no taken-set change from
+        // the dropped initial, so this first non-empty emission counts as the change.
+        todaysDoses.value = listOf(dose("m1", TimeWindow.MORNING, taken = false))
+        advanceTimeBy(ReminderReplanCoordinator.DEBOUNCE_MILLIS + 50)
+        advanceUntilIdle()
+        assertEquals(1, replans.get())
+
+        // A dose checked off on another device (e.g. the web app) revalidates the
+        // projection to taken=true → the reminder must recompute even though no
+        // mirror row changed here.
+        todaysDoses.value = listOf(dose("m1", TimeWindow.MORNING, taken = true))
+        advanceTimeBy(ReminderReplanCoordinator.DEBOUNCE_MILLIS + 50)
+        advanceUntilIdle()
+        assertEquals(2, replans.get())
+
+        // A projection revalidation that does NOT change the taken set is ignored.
+        todaysDoses.value = listOf(dose("m1", TimeWindow.MORNING, taken = true))
+        advanceTimeBy(ReminderReplanCoordinator.DEBOUNCE_MILLIS + 50)
+        advanceUntilIdle()
+        assertEquals(2, replans.get())
+    }
+
+    private fun dose(medicationId: String, window: TimeWindow, taken: Boolean) = TodaysDose(
+        medicationId = medicationId,
+        drugName = "Drug $medicationId",
+        window = window,
+        dose = 1.0,
+        unit = "mg",
+        taken = taken,
+        takenAt = null,
+    )
 
     private fun row(id: String, lastUpdate: Long) = MedicationEntity(
         id = id,

@@ -2,14 +2,18 @@ package com.gte619n.healthfitness.data.reminders
 
 import com.gte619n.healthfitness.data.db.dao.MedicationAdherenceDao
 import com.gte619n.healthfitness.data.db.dao.MedicationDao
+import com.gte619n.healthfitness.data.medications.MedicationRepository
 import com.gte619n.healthfitness.data.sync.SyncSignals
+import com.gte619n.healthfitness.domain.medications.TodaysDose
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -32,6 +36,18 @@ import javax.inject.Singleton
  *     when a push carries the `medications` or `medicationReminderSettings`
  *     collection hint (or no hint at all), so a change made on another device
  *     re-arms here as soon as the silent FCM wakeup arrives.
+ *  3. **Today's-doses projection** — observes [MedicationRepository.observeTodaysDoses],
+ *     the reactive server checklist (projection cache + adherence mirror), and
+ *     re-plans when the taken set changes. This is what closes the loop for a dose
+ *     checked off on ANOTHER device (e.g. the web app): opening the app revalidates
+ *     the `today` projection, which flips those doses to taken and lands in the
+ *     cache — but that cache write is NOT a mirror write, so neither the medication
+ *     nor the adherence observer above fires. Without this the reminder's
+ *     "N medications to take" stayed stale (still counting the remotely-taken
+ *     doses) until an alarm fired, an in-app dose was logged, or the ~6h periodic
+ *     delta pull finally landed the adherence day-rows in the mirror. The engine's
+ *     [ReminderEngine.replan] already unions the projection into its taken set, so
+ *     it computes the correct count the moment this triggers it.
  *
  * [start] is idempotent and called once from `HealthFitnessApp.onCreate`. The
  * coordinator owns an application-lifetime scope; there is nothing to tear down.
@@ -44,6 +60,9 @@ class ReminderReplanCoordinator internal constructor(
     private val scope: CoroutineScope,
     /** The replan/refresh action — the engine in production; a probe in tests. */
     private val replan: suspend () -> Unit,
+    /** Reactive today's-doses checklist (projection + mirror); empty in tests that
+     *  don't exercise the projection trigger. */
+    private val todaysDoses: Flow<List<TodaysDose>> = emptyFlow(),
 ) {
     @Inject
     constructor(
@@ -51,12 +70,14 @@ class ReminderReplanCoordinator internal constructor(
         medicationDao: MedicationDao,
         adherenceDao: MedicationAdherenceDao,
         syncSignals: SyncSignals,
+        medicationRepository: MedicationRepository,
     ) : this(
         medicationDao = medicationDao,
         adherenceDao = adherenceDao,
         syncSignals = syncSignals,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         replan = { engine.replan() },
+        todaysDoses = medicationRepository.observeTodaysDoses(),
     )
 
     @Volatile private var started = false
@@ -96,6 +117,19 @@ class ReminderReplanCoordinator internal constructor(
         // config + the local mirror, so this stays offline-safe.
         adherenceDao.observeAll()
             .map { rows -> rows.map { it.id to it.lastUpdate }.toSet() }
+            .distinctUntilChanged()
+            .drop(1)
+            .debounce(DEBOUNCE_MILLIS)
+            .onEach { runCatching { replan() } }
+            .launchIn(scope)
+
+        // 4. Re-plan when the today's-doses projection's taken set changes — the
+        // path a remote (e.g. web) check-off actually reaches this device through.
+        // Fingerprint on (med, window, taken) so only a genuine taken-status change
+        // triggers a replan (not an unrelated projection revalidation); drop(1)
+        // skips the initial replay (app start already replans directly).
+        todaysDoses
+            .map { doses -> doses.map { Triple(it.medicationId, it.window, it.taken) }.toSet() }
             .distinctUntilChanged()
             .drop(1)
             .debounce(DEBOUNCE_MILLIS)
