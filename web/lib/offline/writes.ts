@@ -47,14 +47,36 @@ export function deleteEntryOffline(date: string, entryId: string): Promise<strin
   });
 }
 
-/** Log a medication dose (idempotent per (med, date, window) on the server). */
-export function logDoseOffline(medicationId: string, window: string): Promise<string> {
+/** Log a medication dose (idempotent per (med, date, window) on the server).
+ *  `date` is the user's local calendar day (yyyy-MM-dd); without it the backend
+ *  falls back to the server's own date, which lands an evening dose on the
+ *  wrong day for negative-UTC-offset users. */
+export function logDoseOffline(
+  medicationId: string,
+  window: string,
+  date?: string,
+): Promise<string> {
   return submitMutation({
     kind: "medication.logDose",
     endpoint: "medications.adherence.log",
     method: "POST",
     path: `/api/me/medications/${medicationId}/adherence`,
-    body: { window },
+    body: { window, ...(date ? { date } : {}) },
+  });
+}
+
+/** Undo a dose log (uncheck). Idempotent delete: the drain treats a 404 replay
+ *  as success (the log is already gone). */
+export function unlogDoseOffline(
+  medicationId: string,
+  date: string,
+  window: string,
+): Promise<string> {
+  return submitMutation({
+    kind: "medication.unlogDose",
+    endpoint: "medications.adherence.undo",
+    method: "DELETE",
+    path: `/api/me/medications/${medicationId}/adherence/${date}/${window}`,
   });
 }
 

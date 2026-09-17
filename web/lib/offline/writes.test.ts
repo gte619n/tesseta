@@ -8,6 +8,7 @@ import {
   deleteEntryOffline,
   logDoseOffline,
   logSessionOffline,
+  unlogDoseOffline,
   updateEntryOffline,
 } from "./writes";
 
@@ -76,13 +77,21 @@ describe("nutrition writes", () => {
 });
 
 describe("medication + workout writes", () => {
-  it("logDoseOffline journals a replayable adherence POST", async () => {
-    await logDoseOffline("med-1", "MORNING");
+  it("logDoseOffline journals a replayable adherence POST carrying the local date", async () => {
+    await logDoseOffline("med-1", "MORNING", "2026-09-17");
     const [row] = await listPending();
     expect(row!.method).toBe("POST");
     expect(row!.path).toBe("/api/me/medications/med-1/adherence");
     expect(isReplayable(row!.method, row!.path)).toBe(true);
-    expect((row!.body as { window: string }).window).toBe("MORNING");
+    expect(row!.body).toEqual({ window: "MORNING", date: "2026-09-17" });
+  });
+
+  it("unlogDoseOffline journals a replayable adherence DELETE (uncheck)", async () => {
+    await unlogDoseOffline("med-1", "2026-09-17", "MORNING");
+    const [row] = await listPending();
+    expect(row!.method).toBe("DELETE");
+    expect(row!.path).toBe("/api/me/medications/med-1/adherence/2026-09-17/MORNING");
+    expect(isReplayable(row!.method, row!.path)).toBe(true);
   });
 
   it("logSessionOffline journals a replayable session PUT", async () => {
@@ -100,9 +109,10 @@ describe("every cutover write is on the proxy allowlist", () => {
     await updateEntryOffline("2026-09-16", "e1", {});
     await deleteEntryOffline("2026-09-16", "e1");
     await logDoseOffline("m1", "NOON");
+    await unlogDoseOffline("m1", "2026-09-17", "NOON");
     await logSessionOffline("wp_1", "s1", {});
     const rows = await listPending();
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(6);
     for (const r of rows) {
       expect(isReplayable(r.method, r.path)).toBe(true);
     }

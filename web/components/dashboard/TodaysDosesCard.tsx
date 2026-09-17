@@ -4,20 +4,48 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import type { TodaysDose, TimeWindow } from "@/lib/types/medication";
 import { formatDose, TIME_WINDOW_LABELS } from "@/lib/types/medication";
-import { logDoseOffline } from "@/lib/offline/writes";
+import { logDoseOffline, unlogDoseOffline } from "@/lib/offline/writes";
 
 interface TodaysDosesCardProps {
   doses: TodaysDose[];
   compact?: boolean;
 }
 
+/** The user's local calendar day (yyyy-MM-dd). Runs in the browser, so the
+ *  ambient zone IS the user's zone — the same one the `tz` cookie records and
+ *  the server's today's-doses read resolves against (XPLAT-001). */
+function localToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 export function TodaysDosesCard({ doses, compact = false }: TodaysDosesCardProps) {
   const [isPending, startTransition] = useTransition();
   const [pendingId, setPendingId] = useState<string | null>(null);
-  // Optimistic "taken" overlay keyed by `${medicationId}:${window}`. Cleared when
-  // the server-rendered `doses` prop refreshes (the outbox drain reconciles).
+  // Optimistic "taken" overlay keyed by `${medicationId}:${window}`. Reconciled
+  // per-key when the server-rendered `doses` prop refreshes: an entry is dropped
+  // only once the server agrees with it. A wholesale clear here reverted every
+  // still-queued toggle whenever ANY other mutation synced (e.g. the second of
+  // two rapid clicks flipped back unchecked when the first one's sync triggered
+  // router.refresh).
   const [optimisticTaken, setOptimisticTaken] = useState<Record<string, boolean>>({});
-  useEffect(() => setOptimisticTaken({}), [doses]);
+  useEffect(() => {
+    setOptimisticTaken((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const d of doses) {
+        const key = `${d.medicationId}:${d.window}`;
+        if (key in next && next[key] === d.taken) {
+          delete next[key];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [doses]);
 
   // Render off an overlaid view so an offline "take" shows immediately and the
   // write survives via the outbox; the global pending badge shows it syncing.
@@ -38,15 +66,21 @@ export function TodaysDosesCard({ doses, compact = false }: TodaysDosesCardProps
   }, [allTaken]);
   const showDoses = !allTaken || expanded;
 
-  function handleToggle(medicationId: string, window: TimeWindow) {
+  function handleToggle(medicationId: string, window: TimeWindow, taken: boolean) {
     const key = `${medicationId}:${window}`;
-    // Optimistically check it off, then journal to the outbox. Adherence is
-    // idempotent per (med, date, window), so a replay is a no-op.
-    setOptimisticTaken((prev) => ({ ...prev, [key]: true }));
+    const date = localToday();
+    // Optimistically flip it, then journal to the outbox. Both directions are
+    // replay-safe: the log is idempotent per (med, date, window) and the un-log
+    // is an idempotent delete.
+    setOptimisticTaken((prev) => ({ ...prev, [key]: !taken }));
     setPendingId(key);
     startTransition(async () => {
       try {
-        await logDoseOffline(medicationId, window);
+        if (taken) {
+          await unlogDoseOffline(medicationId, date, window);
+        } else {
+          await logDoseOffline(medicationId, window, date);
+        }
       } catch {
         setOptimisticTaken((prev) => {
           const next = { ...prev };
@@ -134,7 +168,7 @@ export function TodaysDosesCard({ doses, compact = false }: TodaysDosesCardProps
                 >
                   <button
                     type="button"
-                    onClick={() => handleToggle(dose.medicationId, dose.window)}
+                    onClick={() => handleToggle(dose.medicationId, dose.window, dose.taken)}
                     disabled={isLoading}
                     className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
                       dose.taken
@@ -200,7 +234,7 @@ export function TodaysDosesCard({ doses, compact = false }: TodaysDosesCardProps
               >
                 <button
                   type="button"
-                  onClick={() => handleToggle(dose.medicationId, dose.window)}
+                  onClick={() => handleToggle(dose.medicationId, dose.window, dose.taken)}
                   disabled={isLoading}
                   className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                     dose.taken
