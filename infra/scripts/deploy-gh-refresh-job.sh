@@ -45,6 +45,10 @@ SECRETS="OAUTH_ALLOWED_AUDIENCES=oauth-allowed-audiences:latest,OAUTH_WEB_CLIENT
 # key the web service mounts (PlatformKeys fails closed otherwise).
 ENV_VARS="^@^GCP_PROJECT_ID=${PROJECT_ID}@GOOGLE_HEALTH_KMS_KEY=projects/${PROJECT_ID}/locations/us-central1/keyRings/auth/cryptoKeys/google-health-refresh-tokens@FIRESTORE_DATABASE_ID=production@APP_FCM_ENABLED=true@PLATFORM_ALLOW_EPHEMERAL_KEY=true@SPRING_PROFILES_ACTIVE=job-gh-refresh"
 
+# --memory=2Gi mirrors the backend service. The image's ENTRYPOINT hardcodes
+# -XX:MaxRAMPercentage=65.0 (tuned for a 2Gi container — see backend/Dockerfile);
+# on Cloud Run's 512Mi job default the JVM heap + metaspace + CDS overrun the
+# cgroup and the task is OOM-killed mid-Spring-boot before the refresh runs.
 echo "==> Deploying Cloud Run Job ${JOB_NAME} (image=${IMAGE})"
 gcloud run jobs deploy "${JOB_NAME}" \
   --image="${IMAGE}" \
@@ -52,6 +56,7 @@ gcloud run jobs deploy "${JOB_NAME}" \
   --service-account="${RUNTIME_SA}" \
   --set-env-vars="${ENV_VARS}" \
   --set-secrets="${SECRETS}" \
+  --memory=2Gi \
   --max-retries=1 \
   --task-timeout=900 \
   --project="${PROJECT_ID}"
