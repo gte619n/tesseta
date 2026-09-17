@@ -6,4 +6,6 @@
     <string name="workout_session_channel_name">Active workout</string>
     <string name="workout_session_channel_description">Timer and progress for the workout session in progress</string>
     <string name="workout_session_notification_title">Workout in progress</string>
+    <!-- Action button on the active-workout notification (WorkoutSetLogReceiver). -->
+    <string name="workout_session_notification_log_set">Log set</string>
 </resources>

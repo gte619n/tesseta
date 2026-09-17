@@ -270,6 +270,15 @@ class WorkoutSessionService : Service() {
             .setContentTitle(content.title)
             .setContentText(content.text)
             .apply {
+                // "Log set": quick-log a non-final rep set straight from the shade,
+                // or open the app to finish the final set (RIR) / a timed hold.
+                content.action?.let { action ->
+                    addAction(
+                        R.drawable.ic_stat_workout,
+                        getString(R.string.workout_session_notification_log_set),
+                        logActionIntent(draft, action),
+                    )
+                }
                 when {
                     content.countdownToMillis != null -> {
                         setUsesChronometer(true)
@@ -310,6 +319,39 @@ class WorkoutSessionService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+    /**
+     * The "Log set" button's intent. A [WorkoutSessionNotificationContent.SetAction.QuickLog]
+     * broadcasts to [WorkoutSetLogReceiver], carrying the exact prefill the shade
+     * showed so the logged set matches it (no re-derivation, no double-log — the
+     * receiver guards on the logged count). [WorkoutSessionNotificationContent.SetAction.OpenToLog]
+     * reuses the deep-link into the session (final-set RIR / timed hold live in the app).
+     * FLAG_UPDATE_CURRENT refreshes the extras on every re-post (the intents are
+     * otherwise equal, so the shade always logs the CURRENT set).
+     */
+    private fun logActionIntent(
+        draft: WorkoutSessionDraft,
+        action: WorkoutSessionNotificationContent.SetAction,
+    ): PendingIntent = when (action) {
+        is WorkoutSessionNotificationContent.SetAction.QuickLog ->
+            PendingIntent.getBroadcast(
+                this,
+                SET_LOG_REQUEST_CODE,
+                Intent(this, WorkoutSetLogReceiver::class.java)
+                    .setAction(WorkoutSetLogReceiver.ACTION_LOG_SET)
+                    .putExtra(WorkoutSetLogReceiver.EXTRA_PROGRAM_ID, draft.programId)
+                    .putExtra(WorkoutSetLogReceiver.EXTRA_SCHEDULED_ID, draft.scheduledId)
+                    .putExtra(WorkoutSetLogReceiver.EXTRA_BLOCK_ID, action.blockId)
+                    .putExtra(WorkoutSetLogReceiver.EXTRA_ORDER_INDEX, action.orderIndex)
+                    .putExtra(WorkoutSetLogReceiver.EXTRA_EXPECTED_COUNT, action.expectedLoggedCount)
+                    .apply {
+                        action.weightLbs?.let { putExtra(WorkoutSetLogReceiver.EXTRA_WEIGHT, it) }
+                        action.reps?.let { putExtra(WorkoutSetLogReceiver.EXTRA_REPS, it) }
+                    },
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        WorkoutSessionNotificationContent.SetAction.OpenToLog -> sessionContentIntent(draft)
+    }
+
     private fun baseBuilder(): NotificationCompat.Builder =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_workout)
@@ -347,6 +389,9 @@ class WorkoutSessionService : Service() {
 
         /** Request code for the ongoing-notification deep-link PendingIntent. */
         private const val SESSION_DEEP_LINK_REQUEST_CODE = 0x5E57
+
+        /** Request code for the "Log set" quick-log broadcast PendingIntent. */
+        private const val SET_LOG_REQUEST_CODE = 0x5E58
 
         /** Rest-end beep loudness (0–100) and length. */
         private const val BEEP_VOLUME = 80
