@@ -119,55 +119,69 @@ export interface DrainResult {
 }
 
 /**
- * Replay every due mutation in seq order. A 2xx clears the row; a terminal 4xx
- * (except 408/429) parks it out of the auto-drain (surfaced in the failed UI); a
- * transient failure backs off with jitter. Safe to call concurrently — a simple
- * in-flight guard prevents overlapping drains double-sending.
+ * Replay every due mutation in seq order. A 2xx clears the row (so does a 404
+ * on a DELETE — the target is already gone, which is what the delete wanted); a
+ * terminal 4xx (except 408/429) parks it out of the auto-drain (surfaced in the
+ * failed UI); a transient failure backs off with jitter. Safe to call
+ * concurrently — an in-flight guard prevents overlapping drains double-sending,
+ * and a drain requested mid-drain (e.g. a second rapid click enqueued while the
+ * first was replaying) makes the running drain take another pass instead of
+ * being dropped, so the new mutation doesn't sit queued until the next timer.
  */
 let draining = false;
+let rerunRequested = false;
 export async function drain(
   transport: ReplayTransport = httpReplayTransport,
-  now: number = Date.now(),
+  now?: number,
   rand: () => number = Math.random,
 ): Promise<DrainResult> {
-  if (draining) return { sent: 0, failed: 0, parked: 0 };
+  if (draining) {
+    rerunRequested = true;
+    return { sent: 0, failed: 0, parked: 0 };
+  }
   draining = true;
   try {
-    const due = (await listPending()).filter((r) => !r.parked && r.nextAttemptAt <= now);
     let sent = 0;
     let failed = 0;
     let parked = 0;
-    for (const record of due) {
-      let result: { ok: boolean; status: number; message?: string };
-      try {
-        result = await transport(record);
-      } catch (e) {
-        result = { ok: false, status: 0, message: (e as Error).message };
+    do {
+      rerunRequested = false;
+      const passNow = now ?? Date.now();
+      const due = (await listPending()).filter((r) => !r.parked && r.nextAttemptAt <= passNow);
+      for (const record of due) {
+        let result: { ok: boolean; status: number; message?: string };
+        try {
+          result = await transport(record);
+        } catch (e) {
+          result = { ok: false, status: 0, message: (e as Error).message };
+        }
+        const deletedAlready = record.method === "DELETE" && result.status === 404;
+        if (result.ok || deletedAlready) {
+          await remove(record.id);
+          sent++;
+          continue;
+        }
+        const terminal = result.status >= 400 && result.status < 500
+          && result.status !== 408 && result.status !== 429;
+        if (terminal) {
+          await put({ ...record, parked: true, lastError: result.message ?? `HTTP ${result.status}` });
+          parked++;
+        } else {
+          const attempts = record.attempts + 1;
+          await put({
+            ...record,
+            attempts,
+            nextAttemptAt: passNow + jitteredBackoffMs(attempts, rand()),
+            lastError: result.message ?? `HTTP ${result.status}`,
+          });
+          failed++;
+        }
       }
-      if (result.ok) {
-        await remove(record.id);
-        sent++;
-        continue;
-      }
-      const terminal = result.status >= 400 && result.status < 500
-        && result.status !== 408 && result.status !== 429;
-      if (terminal) {
-        await put({ ...record, parked: true, lastError: result.message ?? `HTTP ${result.status}` });
-        parked++;
-      } else {
-        const attempts = record.attempts + 1;
-        await put({
-          ...record,
-          attempts,
-          nextAttemptAt: now + jitteredBackoffMs(attempts, rand()),
-          lastError: result.message ?? `HTTP ${result.status}`,
-        });
-        failed++;
-      }
-    }
+    } while (rerunRequested);
     return { sent, failed, parked };
   } finally {
     draining = false;
+    rerunRequested = false;
   }
 }
 

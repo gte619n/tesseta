@@ -42,6 +42,7 @@ describe("replay allowlist", () => {
     expect(isReplayable("POST", "/api/me/nutrition/2026-09-16/entries")).toBe(true);
     expect(isReplayable("PATCH", "/api/me/nutrition/2026-09-16/entries/e1")).toBe(true);
     expect(isReplayable("POST", "/api/me/medications/m1/adherence")).toBe(true);
+    expect(isReplayable("DELETE", "/api/me/medications/m1/adherence/2026-09-17/MORNING")).toBe(true);
     // Not on the allowlist — a compromised/buggy caller must not proxy these.
     expect(isReplayable("POST", "/api/admin/drugs")).toBe(false);
     expect(isReplayable("DELETE", "/api/me/goals/g1")).toBe(false);
@@ -114,6 +115,51 @@ describe("drain", () => {
     const result = await drain(transport, T0, () => 0.5);
     expect(result.failed).toBe(1);
     expect(result.parked).toBe(0);
+  });
+
+  it("re-runs for a mutation enqueued mid-drain instead of dropping the request", async () => {
+    // Two rapid checkbox clicks: the second submitMutation enqueues + calls
+    // drain() while the first drain is still replaying. The in-flight drain must
+    // pick the new row up in a follow-up pass, not leave it queued for 30s.
+    await enqueue({ id: "id-a", ...NUTRITION_POST });
+    const sent: string[] = [];
+    const transport: ReplayTransport = async (r) => {
+      sent.push(r.id);
+      if (r.id === "id-a") {
+        await enqueue({ id: "id-b", ...NUTRITION_POST });
+        // The concurrent drain call returns immediately (in-flight guard)...
+        expect(await drain(transport, T0)).toEqual({ sent: 0, failed: 0, parked: 0 });
+      }
+      return { ok: true, status: 202 };
+    };
+    // ...but the running drain takes another pass and sends the new row too.
+    const result = await drain(transport, T0);
+    expect(result.sent).toBe(2);
+    expect(sent).toEqual(["id-a", "id-b"]);
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it("treats a 404 on a DELETE as success (target already gone), not a park", async () => {
+    await enqueue({
+      id: "id-del",
+      now: T0,
+      kind: "medication.unlogDose",
+      endpoint: "medications.adherence.undo",
+      method: "DELETE",
+      path: "/api/me/medications/m1/adherence/2026-09-17/MORNING",
+      body: null,
+    });
+    const result = await drain(async () => ({ ok: false, status: 404 }), T0);
+    expect(result.sent).toBe(1);
+    expect(result.parked).toBe(0);
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it("still parks a 404 on a non-DELETE (the target should exist)", async () => {
+    await enqueue({ id: "id-1", ...NUTRITION_POST });
+    const result = await drain(async () => ({ ok: false, status: 404 }), T0);
+    expect(result.parked).toBe(1);
+    expect(await pendingCount()).toBe(1);
   });
 
   it("survives a reload: a queued row drains after the connection reopens", async () => {
