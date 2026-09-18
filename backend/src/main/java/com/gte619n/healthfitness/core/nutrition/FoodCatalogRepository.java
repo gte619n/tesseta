@@ -29,6 +29,15 @@ public interface FoodCatalogRepository {
         return List.of();
     }
 
+    /**
+     * Every catalog food (archived included). Backs the admin de-dup sweep; the
+     * catalog is shared/global and modest, so a single scan is fine. Default empty
+     * for non-persistent stubs.
+     */
+    default List<CatalogFood> findAll() {
+        return List.of();
+    }
+
     void save(CatalogFood food);
 
     /**

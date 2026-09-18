@@ -13,6 +13,7 @@
 # (off in the test profile) and are pinned separately by V1OpenApiSnapshotTest.
 
 # ---- DELETE: idempotent by definition ----
+IDEMPOTENT_DELETE|DELETE /api/foods/{foodId}
 IDEMPOTENT_DELETE|DELETE /api/me/blood/{readingId}
 IDEMPOTENT_DELETE|DELETE /api/me/devices/fcm
 IDEMPOTENT_DELETE|DELETE /api/me/drinks/{foodId}
@@ -137,6 +138,7 @@ EXEMPT|POST /api/admin/exercises/{exerciseId}/regenerate-plan
 EXEMPT|POST /api/admin/exercises/{exerciseId}/upload-frame
 EXEMPT|POST /api/admin/exercises/{sourceId}/merge-into/{targetId}
 EXEMPT|POST /api/exercises/{exerciseId}/flag-frame
+EXEMPT|POST /api/foods/dedupe
 EXEMPT|POST /api/foods/reindex-search
 EXEMPT|POST /api/me/gyms/{locationId}/equipment/import/confirm
 EXEMPT|POST /api/me/gyms/{locationId}/equipment/scan/{scanId}/confirm

@@ -144,6 +144,7 @@ fun AddFoodSheet(
                         viewModel.reset()
                     },
                     onArchiveMeal = { viewModel.onArchiveMeal(it.mealId) },
+                    onDeleteFood = { viewModel.onDeleteFood(it.foodId) },
                     onDescribe = {
                         onDescribeAsync(meal, it)
                         viewModel.reset()
@@ -177,6 +178,7 @@ private fun SearchPane(
     onRelogRecent: (Entry) -> Unit,
     onLogMeal: (MealSearchResult) -> Unit,
     onArchiveMeal: (MealSearchResult) -> Unit,
+    onDeleteFood: (Food) -> Unit,
     onDescribe: (String) -> Unit,
     onQuickAdd: () -> Unit,
 ) {
@@ -262,7 +264,11 @@ private fun SearchPane(
                         }
                     }
                     items(state.results, key = { it.foodId }) { food ->
-                        FoodRow(food = food, onClick = { onPick(food) })
+                        FoodRow(
+                            food = food,
+                            onClick = { onPick(food) },
+                            onDelete = { onDeleteFood(food) },
+                        )
                     }
                 }
             }
@@ -417,7 +423,7 @@ private fun MealRow(meal: MealSearchResult, onClick: () -> Unit, onArchive: () -
 }
 
 @Composable
-private fun FoodRow(food: Food, onClick: () -> Unit) {
+private fun FoodRow(food: Food, onClick: () -> Unit, onDelete: () -> Unit) {
     HfCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Row(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
@@ -437,6 +443,16 @@ private fun FoodRow(food: Food, onClick: () -> Unit) {
                     style = Hf.type.monoSm,
                     color = Hf.colors.textSecondary,
                 )
+            }
+            // Subtle delete: archives this food so it (and other duplicates you
+            // prune) never comes back in search — on every device. Its own
+            // clickable consumes the tap so the row's pick action doesn't fire.
+            Box(
+                modifier = Modifier
+                    .clickable { onDelete() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                Text("✕", style = Hf.type.bodySm, color = Hf.colors.textTertiary)
             }
         }
     }

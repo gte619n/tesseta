@@ -9,6 +9,7 @@ import {
   regenerateEntryImage,
   servingHint,
   searchFoods,
+  deleteFood,
   searchMeals,
   describeMealAsync,
   logDescribedMeal,
@@ -185,6 +186,11 @@ export default async function NutritionPage(props: {
     return searchFoods(q);
   }
 
+  async function deleteFoodAction(foodId: string) {
+    "use server";
+    await deleteFood(foodId);
+  }
+
   async function searchMealsAction(q: string) {
     "use server";
     return searchMeals(q);
@@ -327,6 +333,7 @@ export default async function NutritionPage(props: {
           regenerateImage={regenerateImageAction}
           servingHint={servingHintAction}
           searchFoods={searchFoodsAction}
+          deleteFood={deleteFoodAction}
           searchMeals={searchMealsAction}
           describeMealAsync={describeMealAsyncAction}
           logMeal={logMealAction}

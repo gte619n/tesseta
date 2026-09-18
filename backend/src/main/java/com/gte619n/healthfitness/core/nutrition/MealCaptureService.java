@@ -258,7 +258,10 @@ public class MealCaptureService {
             Macros per100g = item.macrosPer100g();
             Macros portion = per100g != null ? per100g.scale((grams > 0 ? grams : 0.0) / 100.0) : Macros.zero();
             String label = gramsLabel(grams);
-            CatalogFood food = catalog.create(
+            // Creation-time de-dup guard: reuse an existing ingredient food of the
+            // same name instead of minting a new one every capture. Lossless — the
+            // logged macros ride on the CompositeIngredient below, not the food.
+            CatalogFood food = catalog.resolveOrCreate(
                 userId, item.name(), null, null, "ingredient", per100g,
                 List.of(new ServingSize(label, grams > 0 ? grams : 100.0)), 0,
                 FoodSource.GEMINI_PHOTO, null);

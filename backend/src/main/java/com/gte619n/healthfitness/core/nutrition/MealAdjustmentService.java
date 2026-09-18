@@ -397,7 +397,10 @@ public class MealAdjustmentService {
                 .map(CompositeIngredient::foodId)
                 .filter(id -> id != null && !id.isBlank())
                 .findFirst()
-                .orElseGet(() -> catalog.create(
+                // A genuinely new ingredient: reuse an existing catalog food of the
+                // same name if one exists (creation-time de-dup) instead of minting
+                // a duplicate; the logged macros ride on the CompositeIngredient.
+                .orElseGet(() -> catalog.resolveOrCreate(
                     userId, item.name(), null, null, "ingredient", per100g,
                     List.of(new ServingSize(label, grams)), 0,
                     FoodSource.GEMINI_PHOTO, null).foodId());

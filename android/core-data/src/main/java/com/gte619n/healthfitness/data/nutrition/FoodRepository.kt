@@ -102,6 +102,21 @@ class FoodRepository @Inject constructor(
 
     suspend fun confirm(foodId: String): Food = api.confirm(foodId).also { cache(it) }
 
+    /**
+     * Delete (soft-delete / archive) a catalog food so it stops appearing in
+     * search. The backend hides archived foods from search on every device, so
+     * this "syncs everywhere"; here we also drop the row from the local "food"
+     * cache so the offline [localSearch] can't resurface it. A 404 means it was
+     * already gone — treated as success (idempotent delete).
+     */
+    suspend fun deleteFood(foodId: String) {
+        val response = api.delete(foodId)
+        if (!response.isSuccessful && response.code() != 404) {
+            throw IllegalStateException("Delete failed (${response.code()})")
+        }
+        cacheDao.deleteById(CACHE_TYPE, foodId)
+    }
+
     // ---- catalog cache (offline-fix) ----
 
     // IMPL-DRINK-01 (IL-13): a drink must never enter the "food" cache that

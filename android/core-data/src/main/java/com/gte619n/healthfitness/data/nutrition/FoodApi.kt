@@ -2,7 +2,9 @@ package com.gte619n.healthfitness.data.nutrition
 
 import com.gte619n.healthfitness.domain.nutrition.Food
 import com.gte619n.healthfitness.domain.nutrition.FoodCreateRequest
+import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -33,4 +35,9 @@ interface FoodApi {
 
     @POST("api/foods/{foodId}/confirm")
     suspend fun confirm(@Path("foodId") foodId: String): Food
+
+    // Soft-delete (archive) a catalog food so it stops appearing in search
+    // everywhere. 204 on success; 404 when it's already gone (treated as success).
+    @DELETE("api/foods/{foodId}")
+    suspend fun delete(@Path("foodId") foodId: String): Response<Unit>
 }
