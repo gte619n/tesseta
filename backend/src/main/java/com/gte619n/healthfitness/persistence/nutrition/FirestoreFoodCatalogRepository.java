@@ -125,6 +125,12 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
     }
 
     @Override
+    public List<CatalogFood> findAll() {
+        return await(collection().get()).getDocuments().stream()
+            .map(FirestoreFoodCatalogRepository::toFood).toList();
+    }
+
+    @Override
     public void save(CatalogFood food) {
         DocumentReference docRef = collection().document(food.foodId());
         DocumentSnapshot existing = await(docRef.get());

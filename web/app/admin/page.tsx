@@ -54,6 +54,13 @@ export default async function AdminOverviewPage() {
           line2="Edit, regenerate, or merge"
         />
         <SectionCard
+          href="/admin/nutrition"
+          icon="salad"
+          title="Nutrition"
+          line1="Shared food catalog"
+          line2="Remove duplicate foods"
+        />
+        <SectionCard
           href="/admin/oauth"
           icon="plug-connected"
           title="OAuth clients"

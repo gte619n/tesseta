@@ -1,9 +1,11 @@
 package com.gte619n.healthfitness.core.nutrition;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -166,15 +168,53 @@ public class FoodCatalogService {
      * and its already-generated studio image — instead of minting duplicates.
      */
     public Optional<CatalogFood> findProduct(String name, String brand) {
+        return findReusable(name, brand, "product");
+    }
+
+    /**
+     * An existing, non-archived catalog food to reuse instead of minting a
+     * duplicate: exact (case-insensitive) name, matching brand when one is given,
+     * and matching category when one is given. When several match, the "best" one
+     * ({@link #KEEP_PREFERENCE}: verified &gt; imaged &gt; confirmed &gt; oldest)
+     * is chosen so reuse is stable. Archived foods are skipped so a food the user
+     * deleted is never resurrected by the next capture.
+     */
+    Optional<CatalogFood> findReusable(String name, String brand, String category) {
         if (name == null || name.isBlank()) {
             return Optional.empty();
         }
         return repository.searchByNamePrefix(name.toLowerCase(), SEARCH_LIMIT).stream()
-            .filter(f -> "product".equalsIgnoreCase(f.category()))
+            .filter(f -> !f.isArchived() && !f.isDrink())
             .filter(f -> f.name() != null && f.name().equalsIgnoreCase(name))
+            .filter(f -> category == null || category.equalsIgnoreCase(f.category()))
             .filter(f -> brand == null
                 || (f.brand() != null && f.brand().equalsIgnoreCase(brand)))
-            .findFirst();
+            .max(KEEP_PREFERENCE);
+    }
+
+    /**
+     * Creation-time de-dup guard: reuse an existing matching catalog food (see
+     * {@link #findReusable}) instead of minting a duplicate, else {@link #create}.
+     * This is what stops photo/adjust capture piling up a fresh food every time
+     * the same ingredient is seen. Lossless for composite ingredients — their
+     * logged macros live on the {@code CompositeIngredient}, so the reused catalog
+     * food only supplies the id and its already-generated image.
+     */
+    public CatalogFood resolveOrCreate(
+        String createdByUserId,
+        String name,
+        String brand,
+        String barcode,
+        String category,
+        Macros macrosPer100g,
+        List<ServingSize> servingSizes,
+        int defaultServingIndex,
+        FoodSource source,
+        String referencePhotoRef
+    ) {
+        return findReusable(name, brand, category).orElseGet(() -> create(
+            createdByUserId, name, brand, barcode, category, macrosPer100g,
+            servingSizes, defaultServingIndex, source, referencePhotoRef));
     }
 
     /** Create a manual / AI-derived catalog food. Starts {@code UNVERIFIED}. */
@@ -483,17 +523,111 @@ public class FoodCatalogService {
             .toList();
     }
 
+    /**
+     * Soft-delete (archive) any catalog food: hide it from search + listings but
+     * keep the document (so already-logged entries that froze its data are
+     * unaffected, and the delete is reversible). Search excludes archived foods on
+     * every device, so this is the whole "deleted foods never reappear, everywhere"
+     * story — the catalog is server-authoritative, not sync-mirrored.
+     */
+    public CatalogFood archive(String foodId) {
+        return archiveAt(get(foodId), Instant.now());
+    }
+
     /** Soft-delete (archive) a drink: hide it from listings; keep the document. */
     public CatalogFood archiveDrink(String foodId) {
-        CatalogFood food = get(foodId);
+        return archive(foodId);
+    }
+
+    private CatalogFood archiveAt(CatalogFood food, Instant when) {
         CatalogFood updated = new CatalogFood(
             food.foodId(), food.name(), food.nameLower(), food.brand(), food.barcode(),
             food.category(), food.macrosPer100g(), food.servingSizes(), food.defaultServingIndex(),
             food.source(), food.sourceRef(), food.status(), food.confirmationCount(),
             food.verifiedAt(), food.imageUrl(), food.imageStatus(), food.createdBy(),
-            food.createdAt(), null, food.alcohol(), Instant.now());
+            food.createdAt(), null, food.alcohol(), when);
         repository.save(updated);
         return updated;
+    }
+
+    /**
+     * One-off catalog de-duplication sweep (admin). Photo/description capture mints
+     * a fresh catalog food per ingredient with no reuse check, so repeatedly
+     * photographing e.g. "grilled chicken breast" leaves a pile of near-identical
+     * entries. This groups the non-archived catalog by {@link #dedupeKey} (name +
+     * brand + barcode + category + rounded macros), keeps the "best" member of each
+     * group (see {@link #KEEP_PREFERENCE}) and archives the rest. Reversible — it
+     * only sets {@code archivedAt}. Returns the number of foods archived.
+     */
+    public int dedupe() {
+        Map<String, List<CatalogFood>> groups = new LinkedHashMap<>();
+        for (CatalogFood f : repository.findAll()) {
+            if (f.isArchived() || f.isDrink()) {
+                continue;
+            }
+            groups.computeIfAbsent(dedupeKey(f), k -> new ArrayList<>()).add(f);
+        }
+        int archived = 0;
+        Instant now = Instant.now();
+        for (List<CatalogFood> group : groups.values()) {
+            if (group.size() < 2) {
+                continue;
+            }
+            CatalogFood keep = group.stream().max(KEEP_PREFERENCE).orElse(group.get(0));
+            for (CatalogFood f : group) {
+                if (!f.foodId().equals(keep.foodId())) {
+                    archiveAt(f, now);
+                    archived++;
+                }
+            }
+        }
+        return archived;
+    }
+
+    /**
+     * Two foods collapse only when their name, brand, barcode, category AND
+     * per-100g macros (rounded to whole numbers) all match — deliberately strict so
+     * genuinely-distinct branded products (different barcodes/macros) are never
+     * merged; the target is the flood of identical capture-minted entries.
+     */
+    private static String dedupeKey(CatalogFood f) {
+        Macros m = f.macrosPer100g();
+        return String.join("",
+            f.nameLower() == null ? "" : f.nameLower(),
+            f.brand() == null ? "" : f.brand().toLowerCase(),
+            f.barcode() == null ? "" : f.barcode(),
+            f.category() == null ? "" : f.category(),
+            m == null ? "" : (round(m.caloriesKcal()) + "/" + round(m.proteinGrams())
+                + "/" + round(m.carbsGrams()) + "/" + round(m.fatGrams())));
+    }
+
+    private static long round(Double v) {
+        return v == null ? 0L : Math.round(v);
+    }
+
+    /** Highest-scoring member of a duplicate group is the one we keep. */
+    private static final Comparator<CatalogFood> KEEP_PREFERENCE =
+        Comparator.comparingInt(FoodCatalogService::keepScore)
+            // Tie-break: keep the oldest (the original), so ids logged entries may
+            // reference stay alive. reverseOrder ⇒ max() prefers the earliest.
+            .thenComparing(
+                f -> f.createdAt() == null ? Instant.MAX : f.createdAt(),
+                Comparator.reverseOrder());
+
+    private static int keepScore(CatalogFood f) {
+        int score = 0;
+        if (f.status() == FoodStatus.VERIFIED) {
+            score += 100;
+        }
+        if (f.imageStatus() == FoodImageStatus.READY) {
+            score += 20;
+        }
+        score += Math.min(f.confirmationCount(), 10);
+        // Curated sources (USDA / Open Food Facts / manual) beat capture-minted ones.
+        if (f.source() != null && !f.source().name().startsWith("GEMINI")) {
+            score += 5;
+        }
+        return score;
     }
 
     /**

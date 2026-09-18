@@ -156,6 +156,23 @@ class AddFoodViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Delete a catalog food from the search results — the way to prune duplicate
+     * entries (e.g. the many near-identical foods that photo capture mints). Drops
+     * it from the visible list immediately (optimistic) and tells the backend to
+     * archive it, which hides it from search on every device. Already-logged
+     * entries are unaffected. On failure the food is restored to the list so the
+     * user can retry.
+     */
+    fun onDeleteFood(foodId: String) {
+        val previous = _state.value.results
+        _state.update { it.copy(results = it.results.filterNot { f -> f.foodId == foodId }) }
+        viewModelScope.launch {
+            runCatching { foods.deleteFood(foodId) }
+                .onFailure { _state.update { st -> st.copy(results = previous) } }
+        }
+    }
+
     fun reset() {
         searchJob?.cancel()
         _state.value = AddFoodUiState(

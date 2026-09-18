@@ -65,6 +65,7 @@ type Props = {
       source: string;
     }[]
   >;
+  deleteFood: (foodId: string) => Promise<void>;
   searchMeals: (q: string) => Promise<MealSearchResult[]>;
   describeMealAsync: (
     date: string,
@@ -94,6 +95,7 @@ export function MealSection({
   regenerateImage,
   servingHint,
   searchFoods,
+  deleteFood,
   searchMeals,
   describeMealAsync,
   logMeal,
@@ -240,6 +242,7 @@ export function MealSection({
         recents={recents}
         addEntry={addEntry}
         searchFoods={searchFoods}
+        deleteFood={deleteFood}
         searchMeals={searchMeals}
         describeMealAsync={describeMealAsync}
         logMeal={logMeal}

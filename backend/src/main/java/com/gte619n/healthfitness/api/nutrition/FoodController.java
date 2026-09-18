@@ -7,10 +7,12 @@ import com.gte619n.healthfitness.core.nutrition.CatalogFood;
 import com.gte619n.healthfitness.core.nutrition.FoodCatalogService;
 import com.gte619n.healthfitness.core.nutrition.FoodSource;
 import com.gte619n.healthfitness.core.nutrition.ServingSize;
+import com.gte619n.healthfitness.core.push.SyncChangeNotifier;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,12 +30,17 @@ public class FoodController {
     private final CurrentUserProvider currentUser;
     private final FoodCatalogService catalog;
     private final SyncWriteContext syncWrite;
+    private final SyncChangeNotifier syncNotifier;
 
     public FoodController(
-        CurrentUserProvider currentUser, FoodCatalogService catalog, SyncWriteContext syncWrite) {
+        CurrentUserProvider currentUser,
+        FoodCatalogService catalog,
+        SyncWriteContext syncWrite,
+        SyncChangeNotifier syncNotifier) {
         this.currentUser = currentUser;
         this.catalog = catalog;
         this.syncWrite = syncWrite;
+        this.syncNotifier = syncNotifier;
     }
 
     @GetMapping("/search")
@@ -116,6 +123,34 @@ public class FoodController {
         String userId = currentUser.get().userId();
         CatalogFood food = catalog.confirm(foodId, userId);
         return FoodResponse.from(food);
+    }
+
+    /**
+     * Delete (soft-delete / archive) a catalog food so it stops appearing in
+     * search everywhere — the way to prune duplicate entries. The document is
+     * kept, so previously-logged entries (which froze the food's macros) are
+     * unaffected and the delete is reversible. 204 on success; 404 if unknown.
+     */
+    @DeleteMapping("/{foodId}")
+    public ResponseEntity<Void> delete(@PathVariable String foodId) {
+        String userId = currentUser.get().userId();
+        try {
+            catalog.archive(foodId);
+            syncNotifier.changed(userId, syncWrite.originDeviceId(), "foodCatalog");
+            return ResponseEntity.noContent().build();
+        } catch (java.util.NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+
+    /**
+     * One-off admin cleanup: archive duplicate catalog foods (keeps the best of
+     * each name/brand/macro group). Idempotent — re-running finds nothing new.
+     */
+    @PostMapping("/dedupe")
+    @AdminOnly
+    public Map<String, Integer> dedupe() {
+        return Map.of("archived", catalog.dedupe());
     }
 
     /**

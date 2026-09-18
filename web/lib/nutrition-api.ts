@@ -175,6 +175,15 @@ export function createFood(body: CreateFoodBody): Promise<Food> {
   return send<Food>("/api/foods", "POST", body);
 }
 
+/**
+ * Delete (soft-delete / archive) a catalog food so it stops appearing in search
+ * everywhere — the way to prune duplicate entries. The document is kept, so
+ * already-logged entries (which froze the food's macros) are unaffected.
+ */
+export function deleteFood(foodId: string): Promise<void> {
+  return send<void>(`/api/foods/${foodId}`, "DELETE");
+}
+
 // ── Describe a meal ──────────────────────────────────────────────────
 
 /**

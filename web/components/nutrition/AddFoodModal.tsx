@@ -54,6 +54,7 @@ type Props = {
     },
   ) => Promise<void>;
   searchFoods: (q: string) => Promise<FoodResult[]>;
+  deleteFood: (foodId: string) => Promise<void>;
   searchMeals: (q: string) => Promise<MealSearchResult[]>;
   describeMealAsync: (date: string, body: LogDescribedMealBody) => Promise<void>;
   logMeal: (date: string, body: LogDescribedMealBody) => Promise<void>;
@@ -91,6 +92,7 @@ export function AddFoodModal({
   recents,
   addEntry,
   searchFoods,
+  deleteFood,
   searchMeals,
   describeMealAsync,
   logMeal,
@@ -173,6 +175,7 @@ export function AddFoodModal({
             recents={recents}
             addEntry={addEntry}
             searchFoods={searchFoods}
+            deleteFood={deleteFood}
             searchMeals={searchMeals}
             describeMealAsync={describeMealAsync}
             logMeal={logMeal}
@@ -195,6 +198,7 @@ function SearchPane({
   recents,
   addEntry,
   searchFoods,
+  deleteFood,
   searchMeals,
   describeMealAsync,
   logMeal,
@@ -208,6 +212,7 @@ function SearchPane({
   recents: Entry[];
   addEntry: Props["addEntry"];
   searchFoods: Props["searchFoods"];
+  deleteFood: Props["deleteFood"];
   searchMeals: Props["searchMeals"];
   describeMealAsync: Props["describeMealAsync"];
   logMeal: Props["logMeal"];
@@ -269,6 +274,19 @@ function SearchPane({
     toast.info(`Logging “${text}” to ${MEAL_LABELS[meal]}…`);
     describeMealAsync(date, { description: text, meal }).catch(() => {
       toast.error("Couldn't start that meal — try again");
+    });
+  }
+
+  // Prune a duplicate: archive the food so it stops appearing in search
+  // everywhere. Drops it from the visible list optimistically; on failure it's
+  // restored and a toast fires. Already-logged entries keep their frozen macros.
+  function handleDeleteFood(food: FoodResult) {
+    setResults((rs) => rs.filter((r) => r.foodId !== food.foodId));
+    deleteFood(food.foodId).catch(() => {
+      setResults((rs) =>
+        rs.some((r) => r.foodId === food.foodId) ? rs : [...rs, food],
+      );
+      toast.error("Couldn't delete that food — try again");
     });
   }
 
@@ -390,35 +408,49 @@ function SearchPane({
           {results.length > 0 && (
             <div className="divide-y divide-border-subtle rounded-[10px] border-[0.5px] border-border-default">
               {results.map((food) => (
-                <button
+                <div
                   key={food.foodId}
-                  type="button"
-                  onClick={() => setSelected(food)}
-                  className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left first:rounded-t-[10px] last:rounded-b-[10px] hover:bg-canvas-sunken"
+                  className="group flex items-center first:rounded-t-[10px] last:rounded-b-[10px] hover:bg-canvas-sunken"
                 >
-                  <FoodImage imageUrl={food.imageUrl} imageStatus={food.imageStatus} size={40} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium text-primary">
-                      {food.name}
-                    </div>
-                    {food.brand && (
-                      <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
-                        {food.brand}
+                  <button
+                    type="button"
+                    onClick={() => setSelected(food)}
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-3 pl-4 text-left"
+                  >
+                    <FoodImage imageUrl={food.imageUrl} imageStatus={food.imageStatus} size={40} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-medium text-primary">
+                        {food.name}
                       </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="font-mono text-[12px] tabular-nums text-secondary">
-                      {formatWholeNumber(food.macrosPer100g.caloriesKcal ?? 0)}
-                      <span className="ml-0.5 text-[10px] text-tertiary">kcal/100g</span>
+                      {food.brand && (
+                        <div className="caps-mono mt-0.5 text-[9px] tracking-[0.04em] text-tertiary">
+                          {food.brand}
+                        </div>
+                      )}
                     </div>
-                    <div className="caps-mono mt-0.5 text-[9px] text-tertiary">
-                      P {formatWholeNumber(food.macrosPer100g.proteinGrams ?? 0)}g · C{" "}
-                      {formatWholeNumber(food.macrosPer100g.carbsGrams ?? 0)}g · F{" "}
-                      {formatWholeNumber(food.macrosPer100g.fatGrams ?? 0)}g
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono text-[12px] tabular-nums text-secondary">
+                        {formatWholeNumber(food.macrosPer100g.caloriesKcal ?? 0)}
+                        <span className="ml-0.5 text-[10px] text-tertiary">kcal/100g</span>
+                      </div>
+                      <div className="caps-mono mt-0.5 text-[9px] text-tertiary">
+                        P {formatWholeNumber(food.macrosPer100g.proteinGrams ?? 0)}g · C{" "}
+                        {formatWholeNumber(food.macrosPer100g.carbsGrams ?? 0)}g · F{" "}
+                        {formatWholeNumber(food.macrosPer100g.fatGrams ?? 0)}g
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                  {/* Prune a duplicate: hides this food from search everywhere. */}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteFood(food)}
+                    aria-label={`Delete ${food.name} from search`}
+                    title="Remove from search"
+                    className="shrink-0 cursor-pointer px-3 py-3 text-tertiary hover:text-alert"
+                  >
+                    <i className="ti ti-trash text-[13px]" aria-hidden />
+                  </button>
+                </div>
               ))}
             </div>
           )}
