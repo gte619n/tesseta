@@ -90,12 +90,9 @@ export function logAdHocRun(
   );
 }
 
-// A client-minted ad-hoc run id. crypto.randomUUID is available in the browser
-// and in the Node runtime the route handlers use.
+// A client-minted ad-hoc run id. Uses crypto.randomUUID (a global in both the
+// browser and the Node runtime the route handlers run on) — no insecure
+// Math.random fallback (CodeQL "insecure randomness").
 export function newAdHocSessionId(): string {
-  const uuid =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-  return `aws_${uuid.replace(/-/g, "").slice(0, 12)}`;
+  return `aws_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
