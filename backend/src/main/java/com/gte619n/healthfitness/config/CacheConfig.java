@@ -45,6 +45,7 @@ public class CacheConfig {
     public static final String USER_BY_ID = "userById";
     public static final String USER_HEALTH_SNAPSHOT = "userHealthSnapshot";
     public static final String EXERCISE_DIGEST = "exerciseDigest";
+    public static final String WORKOUT_STATS = "workoutStats";
 
     @Bean
     public CacheManager cacheManager() {
@@ -61,7 +62,11 @@ public class CacheConfig {
             caffeineCache(USER_HEALTH_SNAPSHOT, Duration.ofSeconds(60), 5_000),
             // Per-user exercise-performance scan (IMPL-18). Same brief TTL so a
             // freshly completed session surfaces within a minute.
-            caffeineCache(EXERCISE_DIGEST, Duration.ofSeconds(60), 5_000)
+            caffeineCache(EXERCISE_DIGEST, Duration.ofSeconds(60), 5_000),
+            // Per-user workout-stats scan (IMPL-WEB-WORKOUT-01). Same brief TTL as
+            // its exerciseDigest sibling; also evicted explicitly on session
+            // completion (WorkoutStatsCacheEvictor) so the common case is instant.
+            caffeineCache(WORKOUT_STATS, Duration.ofSeconds(60), 5_000)
         ));
         return manager;
     }

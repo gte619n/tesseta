@@ -28,15 +28,8 @@ export default async function ProgramsPage() {
     programs.filter((p) => p.status === status);
 
   return (
-    <main className="min-h-screen bg-canvas p-8">
+    <main className="bg-canvas px-8 pb-16 pt-6">
       <div className="mx-auto max-w-[920px] space-y-6">
-        <Link
-          href={"/me/workouts" as Route}
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-tertiary hover:text-secondary"
-        >
-          ← Workouts
-        </Link>
-
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="m-0 text-[22px] font-medium tracking-[-0.015em] text-primary">

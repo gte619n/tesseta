@@ -22,6 +22,8 @@ import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramValidator;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutSessionCompletionService;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutSessionCompletionService.InvalidSessionLogException;
+import com.gte619n.healthfitness.core.workoutstats.WorkoutStatsService;
+import com.gte619n.healthfitness.core.workoutstats.WorkoutStatsService.Neighbors;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -58,6 +60,7 @@ public class WorkoutProgramController {
     private final WorkoutSessionCoach coach;
     private final ExercisePerformanceDigestService digests;
     private final WorkoutProgramNutritionService programNutrition;
+    private final WorkoutStatsService stats;
     private final SyncChangeNotifier syncNotifier;
     private final SyncWriteContext syncWrite;
 
@@ -72,6 +75,7 @@ public class WorkoutProgramController {
         WorkoutSessionCoach coach,
         ExercisePerformanceDigestService digests,
         WorkoutProgramNutritionService programNutrition,
+        WorkoutStatsService stats,
         SyncChangeNotifier syncNotifier,
         SyncWriteContext syncWrite
     ) {
@@ -85,6 +89,7 @@ public class WorkoutProgramController {
         this.coach = coach;
         this.digests = digests;
         this.programNutrition = programNutrition;
+        this.stats = stats;
         this.syncNotifier = syncNotifier;
         this.syncWrite = syncWrite;
     }
@@ -344,6 +349,32 @@ public class WorkoutProgramController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return assembler.scheduled(userId, schedule.calendar(userId, programId, from, to));
+    }
+
+    /**
+     * One performed session in full (IMPL-WEB-WORKOUT-01 §5.5), for the web
+     * session-detail page. Beyond the standard scheduled shape (blocks →
+     * exercises → prescribed vs logged sets, program/phase titles) it carries the
+     * PR set keys to badge and the adjacent COMPLETED sessions to page to. 404
+     * when the session doesn't exist for this user.
+     */
+    @GetMapping("/{programId}/sessions/{scheduledId}")
+    public SessionDetailResponse sessionDetail(
+        @PathVariable String programId,
+        @PathVariable String scheduledId
+    ) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        ScheduledWorkout sw = schedule.session(userId, programId, scheduledId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        Map<String, WorkoutProgram> programsById = Map.of(programId,
+            service.findById(userId, programId).orElseThrow());
+        ScheduledWorkoutResponse response = assembler.scheduled(userId, List.of(sw), programsById).get(0);
+        List<String> prSetKeys = stats.prSetKeys(userId, programId, scheduledId);
+        Neighbors neighbors = stats.neighbors(userId, programId, scheduledId);
+        return new SessionDetailResponse(response, prSetKeys, neighbors.prev(), neighbors.next());
     }
 
     /**
