@@ -342,6 +342,10 @@ public class WorkoutStatsService {
         Map<String, List<SessionBest>> bestByExercise, Map<String, String> names) {
         List<WorkoutStats.TrackedExercise> out = new ArrayList<>();
         for (Map.Entry<String, List<SessionBest>> e : bestByExercise.entrySet()) {
+            // A single session is a data point, not a trend: the picker only lists
+            // exercises the chart can actually draw a line for (≥2 sessions), so it
+            // stays a short, meaningful list rather than every exercise ever logged.
+            if (e.getValue().size() < 2) continue;
             String id = e.getKey();
             LocalDate last = e.getValue().stream()
                 .map(b -> b.date).filter(d -> d != null).max(Comparator.naturalOrder()).orElse(null);
