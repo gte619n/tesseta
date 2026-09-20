@@ -14,6 +14,10 @@ type Tab = { href: string; label: string; exact?: boolean };
 
 const TABS: Tab[] = [
   { href: "/me/workouts", label: "Overview", exact: true },
+  // Ad-hoc workout library (IMPL-ADHOC-01): a first-class "do a workout whenever"
+  // home, distinct from periodized Programs. Prefix-matches so /library/generate
+  // (and a future /library/{id}) keep this tab active.
+  { href: "/me/workouts/library", label: "Library" },
   { href: "/me/workouts/history", label: "History" },
   { href: "/me/workouts/programs", label: "Programs" },
   { href: "/me/workouts/progression", label: "Progression" },

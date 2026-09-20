@@ -87,6 +87,17 @@ object CollectionRegistry {
         put("scheduled", MirrorTables.WORKOUT_SCHEDULED)
         put("workoutPrograms/scheduled", MirrorTables.WORKOUT_SCHEDULED)
         put("workoutPrograms.scheduled", MirrorTables.WORKOUT_SCHEDULED)
+
+        // Ad-hoc workout library (IMPL-ADHOC-01). The template docs
+        // ("adhocWorkouts") match the table name verbatim (canonical). The run
+        // sessions arrive under the SLASH form "adhocWorkouts/sessions" with the
+        // composite id "{adhocId}/{sessionId}"; without this alias every pulled
+        // ad-hoc run would resolve to null and be skipped (the same class of bug
+        // the adherence/nutrition slash aliases above fixed). The local sessions
+        // table name differs from the wire string, so it needs an explicit alias.
+        put("sessions", MirrorTables.ADHOC_SESSIONS)
+        put("adhocWorkouts/sessions", MirrorTables.ADHOC_SESSIONS)
+        put("adhocWorkouts.sessions", MirrorTables.ADHOC_SESSIONS)
     }
 
     /** Local table names accepted verbatim (collection string == table name). */
@@ -117,6 +128,7 @@ object CollectionRegistry {
     private val idFields: Map<String, String> = mapOf(
         MirrorTables.LOCATIONS to "locationId",
         MirrorTables.WORKOUT_PROGRAMS to "programId",
+        MirrorTables.ADHOC_WORKOUTS to "adhocId",
         MirrorTables.MEDICATIONS to "medicationId",
         MirrorTables.BODY_COMPOSITION to "recordId",
         MirrorTables.BLOOD_READINGS to "readingId",

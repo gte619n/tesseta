@@ -32,6 +32,8 @@ import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.db.dao.UserProfileDao
 import com.gte619n.healthfitness.data.db.dao.WeeklyWorkoutAggregateDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
+import com.gte619n.healthfitness.data.db.dao.AdHocSessionDao
+import com.gte619n.healthfitness.data.db.dao.AdHocWorkoutDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutSessionDraftDao
 import com.gte619n.healthfitness.data.db.entity.BloodReadingEntity
@@ -60,6 +62,8 @@ import com.gte619n.healthfitness.data.db.entity.SyncStateEntity
 import com.gte619n.healthfitness.data.db.entity.UserProfileEntity
 import com.gte619n.healthfitness.data.db.entity.WeeklyWorkoutAggregateEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutProgramEntity
+import com.gte619n.healthfitness.data.db.entity.AdHocSessionEntity
+import com.gte619n.healthfitness.data.db.entity.AdHocWorkoutEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutScheduledEntity
 import com.gte619n.healthfitness.data.db.entity.WorkoutSessionDraftEntity
 import net.sqlcipher.database.SupportFactory
@@ -103,6 +107,8 @@ import net.sqlcipher.database.SupportFactory
         WeeklyWorkoutAggregateEntity::class,
         WorkoutProgramEntity::class,
         WorkoutScheduledEntity::class,
+        AdHocWorkoutEntity::class,
+        AdHocSessionEntity::class,
         UserProfileEntity::class,
         // device-local (non-mirror) tables
         WorkoutSessionDraftEntity::class,
@@ -131,7 +137,7 @@ import net.sqlcipher.database.SupportFactory
     // the add-food search can serve cached foods/meals by name instantly, ahead of
     // the network. Additive MIGRATION_6_7 (two nullable columns); existing cache
     // rows stay valid and become name-searchable as they're re-fetched.
-    version = 7, // == SCHEMA_VERSION; kept literal for Room's annotation processor
+    version = 8, // == SCHEMA_VERSION; kept literal for Room's annotation processor
     exportSchema = true,
 )
 abstract class HfDatabase : RoomDatabase() {
@@ -160,6 +166,8 @@ abstract class HfDatabase : RoomDatabase() {
     abstract fun weeklyWorkoutAggregateDao(): WeeklyWorkoutAggregateDao
     abstract fun workoutProgramDao(): WorkoutProgramDao
     abstract fun workoutScheduledDao(): WorkoutScheduledDao
+    abstract fun adHocWorkoutDao(): AdHocWorkoutDao
+    abstract fun adHocSessionDao(): AdHocSessionDao
     abstract fun userProfileDao(): UserProfileDao
 
     abstract fun workoutSessionDraftDao(): WorkoutSessionDraftDao
@@ -177,7 +185,7 @@ abstract class HfDatabase : RoomDatabase() {
          * [ALL_MIGRATIONS] actually reaches it — a version bump without a matching
          * migration now fails a fast JVM test instead of silently wiping the DB.
          */
-        const val SCHEMA_VERSION = 7
+        const val SCHEMA_VERSION = 8
 
         /**
          * The only versions permitted to fall back to a destructive wipe on
@@ -268,12 +276,45 @@ abstract class HfDatabase : RoomDatabase() {
         }
 
         /**
+         * v7 → v8: add the ad-hoc workout library mirror tables (IMPL-ADHOC-01) —
+         * `adhocWorkouts` (templates) + `adhocSessions` (runs). Additive; both are
+         * mirror tables the sync layer refills from the backend, so a wipe would
+         * only lose refetchable data — but the additive migration keeps the outbox
+         * + drafts intact. Column defs must match the generated 8.json exactly so
+         * Room's identity-hash validation passes (same shape as every mirror table).
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `adhocWorkouts` (`id` TEXT NOT NULL, " +
+                        "`payloadJson` TEXT NOT NULL, `lastUpdate` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, `dirty` INTEGER NOT NULL, " +
+                        "`syncState` TEXT NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_adhocWorkouts_lastUpdate` " +
+                        "ON `adhocWorkouts` (`lastUpdate`)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `adhocSessions` (`id` TEXT NOT NULL, " +
+                        "`payloadJson` TEXT NOT NULL, `lastUpdate` INTEGER NOT NULL, " +
+                        "`status` TEXT NOT NULL, `dirty` INTEGER NOT NULL, " +
+                        "`syncState` TEXT NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_adhocSessions_lastUpdate` " +
+                        "ON `adhocSessions` (`lastUpdate`)",
+                )
+            }
+        }
+
+        /**
          * Every registered migration, in order. Referenced by [build] and asserted
          * contiguous-up-to-[SCHEMA_VERSION] by the coverage test. Add the next
          * `MIGRATION_n_n+1` here when you bump [SCHEMA_VERSION].
          */
         val ALL_MIGRATIONS: Array<Migration> =
-            arrayOf(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            arrayOf(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
 
         /**
          * Builds the encrypted database. Loads the SQLCipher native libs, fetches

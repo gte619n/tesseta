@@ -66,6 +66,12 @@ object MirrorTables {
     const val WEEKLY_WORKOUT_AGGREGATES = "weeklyWorkoutAggregates"
     const val WORKOUT_PROGRAMS = "workoutPrograms"
     const val WORKOUT_SCHEDULED = "workoutScheduled"
+    // Ad-hoc workout library (IMPL-ADHOC-01): reusable templates + their run
+    // sessions. The template table name matches the backend collection verbatim
+    // (canonical route); sessions use a distinct local name aliased in
+    // CollectionRegistry to the "adhocWorkouts/sessions" wire string.
+    const val ADHOC_WORKOUTS = "adhocWorkouts"
+    const val ADHOC_SESSIONS = "adhocSessions"
     const val USER_PROFILE = "userProfile"
 
     /** Every in-scope mirror table, in the order the sync engine pulls them. */
@@ -75,6 +81,6 @@ object MirrorTables {
         GOAL_STEPS, GOAL_CHAT_THREADS, GOAL_CHAT_MESSAGES, NUTRITION_DAILY_LOGS,
         NUTRITION_ENTRIES, NUTRITION_TARGETS, LOCATIONS, DAILY_METRICS,
         DEVICE_SYNCS, DEXA_SCANS, WEEKLY_WORKOUT_AGGREGATES, WORKOUT_PROGRAMS,
-        WORKOUT_SCHEDULED, USER_PROFILE,
+        WORKOUT_SCHEDULED, ADHOC_WORKOUTS, ADHOC_SESSIONS, USER_PROFILE,
     )
 }

@@ -36,8 +36,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:34:21.433022Z",
-    "updatedAt" : "2026-09-16T16:34:21.433022Z",
+    "createdAt" : "2026-09-20T18:15:58.674025Z",
+    "updatedAt" : "2026-09-20T18:15:58.674025Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -69,8 +69,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:34:21.433033Z",
-    "updatedAt" : "2026-09-16T16:34:21.433033Z",
+    "createdAt" : "2026-09-20T18:15:58.674036Z",
+    "updatedAt" : "2026-09-20T18:15:58.674036Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -99,8 +99,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:34:21.433052Z",
-    "updatedAt" : "2026-09-16T16:34:21.433052Z",
+    "createdAt" : "2026-09-20T18:15:58.674057Z",
+    "updatedAt" : "2026-09-20T18:15:58.674057Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -132,8 +132,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:34:21.433058Z",
-    "updatedAt" : "2026-09-16T16:34:21.433058Z",
+    "createdAt" : "2026-09-20T18:15:58.674063Z",
+    "updatedAt" : "2026-09-20T18:15:58.674063Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -165,8 +165,8 @@
     "reference" : null,
     "status" : "PUBLISHED",
     "contributorId" : null,
-    "createdAt" : "2026-09-16T16:34:21.433064Z",
-    "updatedAt" : "2026-09-16T16:34:21.433064Z",
+    "createdAt" : "2026-09-20T18:15:58.674068Z",
+    "updatedAt" : "2026-09-20T18:15:58.674068Z",
     "aliasOfExerciseId" : null,
     "reviewed" : false,
     "groundingImageUrls" : [ ]
@@ -443,8 +443,8 @@
       "days" : [ ],
       "nutritionGuidance" : null
     } ],
-    "createdAt" : "2026-09-16T16:34:21.436568Z",
-    "updatedAt" : "2026-09-16T16:34:21.436568Z",
+    "createdAt" : "2026-09-20T18:15:58.677597Z",
+    "updatedAt" : "2026-09-20T18:15:58.677597Z",
     "completedAt" : "2025-11-24T23:59:59Z",
     "nutritionGuidance" : null
   },
@@ -491,7 +491,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -516,7 +517,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -541,7 +543,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -566,7 +569,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -591,7 +595,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -616,7 +621,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -641,7 +647,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -666,7 +673,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -691,7 +699,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -716,7 +725,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -741,7 +751,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -766,7 +777,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -791,7 +803,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -816,7 +829,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -841,7 +855,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -866,7 +881,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -891,7 +907,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -916,7 +933,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -970,7 +988,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -995,7 +1014,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1020,7 +1040,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1045,7 +1066,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1070,7 +1092,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1095,7 +1118,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1120,7 +1144,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1145,7 +1170,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1170,7 +1196,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1195,7 +1222,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1220,7 +1248,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1245,7 +1274,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1270,7 +1300,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1295,7 +1326,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1320,7 +1352,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1345,7 +1378,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1370,7 +1404,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1395,7 +1430,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1420,7 +1456,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1445,7 +1482,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1470,7 +1508,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1495,7 +1534,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1520,7 +1560,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1545,7 +1586,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1570,7 +1612,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1595,7 +1638,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1620,7 +1664,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1674,7 +1719,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1699,7 +1745,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           }, {
             "weightLbs" : 0.0,
             "reps" : null,
@@ -1708,7 +1755,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           }, {
             "weightLbs" : 90.0,
             "reps" : null,
@@ -1717,7 +1765,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1742,7 +1791,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           }, {
             "weightLbs" : 60.0,
             "reps" : null,
@@ -1751,7 +1801,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1776,7 +1827,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1801,7 +1853,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1826,7 +1879,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1851,7 +1905,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1876,7 +1931,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1901,7 +1957,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1926,7 +1983,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1951,7 +2009,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -1976,7 +2035,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2001,7 +2061,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2026,7 +2087,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2051,7 +2113,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2076,7 +2139,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2101,7 +2165,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2155,7 +2220,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2180,7 +2246,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2205,7 +2272,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2230,7 +2298,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2255,7 +2324,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2280,7 +2350,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2305,7 +2376,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2330,7 +2402,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2355,7 +2428,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2380,7 +2454,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2405,7 +2480,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2430,7 +2506,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2455,7 +2532,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2480,7 +2558,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2505,7 +2584,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2530,7 +2610,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2555,7 +2636,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2609,7 +2691,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2634,7 +2717,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2659,7 +2743,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2684,7 +2769,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2709,7 +2795,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2734,7 +2821,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2759,7 +2847,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2784,7 +2873,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2809,7 +2899,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2834,7 +2925,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2859,7 +2951,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2884,7 +2977,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2909,7 +3003,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2934,7 +3029,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2959,7 +3055,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -2984,7 +3081,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3009,7 +3107,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3063,7 +3162,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3088,7 +3188,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3113,7 +3214,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3138,7 +3240,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3163,7 +3266,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3188,7 +3292,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3213,7 +3318,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3238,7 +3344,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3263,7 +3370,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3288,7 +3396,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3313,7 +3422,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3338,7 +3448,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3363,7 +3474,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3388,7 +3500,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3413,7 +3526,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3438,7 +3552,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3463,7 +3578,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3517,7 +3633,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3542,7 +3659,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3567,7 +3685,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3592,7 +3711,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3617,7 +3737,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3642,7 +3763,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3667,7 +3789,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3692,7 +3815,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3717,7 +3841,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3742,7 +3867,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3767,7 +3893,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3792,7 +3919,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3817,7 +3945,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3842,7 +3971,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3867,7 +3997,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3892,7 +4023,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3917,7 +4049,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3942,7 +4075,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3967,7 +4101,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -3992,7 +4127,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4017,7 +4153,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4042,7 +4179,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4067,7 +4205,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4092,7 +4231,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4117,7 +4257,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4171,7 +4312,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4196,7 +4338,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4221,7 +4364,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4246,7 +4390,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4271,7 +4416,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4296,7 +4442,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4321,7 +4468,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4346,7 +4494,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4371,7 +4520,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4396,7 +4546,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4421,7 +4572,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4446,7 +4598,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4471,7 +4624,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4496,7 +4650,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4521,7 +4676,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4546,7 +4702,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4571,7 +4728,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4596,7 +4754,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4621,7 +4780,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4646,7 +4806,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4700,7 +4861,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4725,7 +4887,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4750,7 +4913,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4775,7 +4939,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4800,7 +4965,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4825,7 +4991,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4850,7 +5017,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4875,7 +5043,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4900,7 +5069,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4925,7 +5095,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4950,7 +5121,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -4975,7 +5147,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5000,7 +5173,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5025,7 +5199,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5050,7 +5225,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5075,7 +5251,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5100,7 +5277,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5125,7 +5303,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5150,7 +5329,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5175,7 +5355,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5229,7 +5410,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5254,7 +5436,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5279,7 +5462,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5304,7 +5488,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5329,7 +5514,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5354,7 +5540,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5379,7 +5566,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5404,7 +5592,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5429,7 +5618,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5454,7 +5644,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5479,7 +5670,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5504,7 +5696,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5529,7 +5722,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5554,7 +5748,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,
@@ -5579,7 +5774,8 @@
             "completedAt" : null,
             "durationSeconds" : null,
             "rir" : null,
-            "rirSource" : null
+            "rirSource" : null,
+            "timedEffort" : null
           } ],
           "targetWeightLbs" : null,
           "loadBasis" : null,

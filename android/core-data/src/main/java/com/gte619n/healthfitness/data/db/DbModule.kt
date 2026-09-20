@@ -27,6 +27,8 @@ import com.gte619n.healthfitness.data.db.dao.SyncStateDao
 import com.gte619n.healthfitness.data.db.dao.UserProfileDao
 import com.gte619n.healthfitness.data.db.dao.WeeklyWorkoutAggregateDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutProgramDao
+import com.gte619n.healthfitness.data.db.dao.AdHocSessionDao
+import com.gte619n.healthfitness.data.db.dao.AdHocWorkoutDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutScheduledDao
 import com.gte619n.healthfitness.data.db.dao.WorkoutSessionDraftDao
 import dagger.Module
@@ -84,6 +86,8 @@ object DbModule {
     @Provides fun provideWeeklyWorkoutAggregateDao(db: HfDatabase): WeeklyWorkoutAggregateDao = db.weeklyWorkoutAggregateDao()
     @Provides fun provideWorkoutProgramDao(db: HfDatabase): WorkoutProgramDao = db.workoutProgramDao()
     @Provides fun provideWorkoutScheduledDao(db: HfDatabase): WorkoutScheduledDao = db.workoutScheduledDao()
+    @Provides fun provideAdHocWorkoutDao(db: HfDatabase): AdHocWorkoutDao = db.adHocWorkoutDao()
+    @Provides fun provideAdHocSessionDao(db: HfDatabase): AdHocSessionDao = db.adHocSessionDao()
     @Provides fun provideUserProfileDao(db: HfDatabase): UserProfileDao = db.userProfileDao()
 
     @Provides fun provideWorkoutSessionDraftDao(db: HfDatabase): WorkoutSessionDraftDao = db.workoutSessionDraftDao()

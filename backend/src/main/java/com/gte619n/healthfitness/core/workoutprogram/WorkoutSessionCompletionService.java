@@ -88,7 +88,10 @@ public class WorkoutSessionCompletionService {
     private final WeeklyWorkoutAggregateRepository aggregates;
     private final MetricChangedPublisher metricChangedPublisher;
     private final ApplicationEventPublisher events;
+    /** Non-program completed-session sources (ad-hoc runs), IMPL-ADHOC-01 AD-06. */
+    private final List<CompletedSessionSource> extraSources;
 
+    /** Back-compat constructor (unit tests): no extra completed-session sources. */
     public WorkoutSessionCompletionService(
         ScheduledWorkoutRepository scheduled,
         WorkoutProgramRepository programs,
@@ -97,12 +100,26 @@ public class WorkoutSessionCompletionService {
         MetricChangedPublisher metricChangedPublisher,
         ApplicationEventPublisher events
     ) {
+        this(scheduled, programs, workouts, aggregates, metricChangedPublisher, events, List.of());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public WorkoutSessionCompletionService(
+        ScheduledWorkoutRepository scheduled,
+        WorkoutProgramRepository programs,
+        WorkoutRepository workouts,
+        WeeklyWorkoutAggregateRepository aggregates,
+        MetricChangedPublisher metricChangedPublisher,
+        ApplicationEventPublisher events,
+        List<CompletedSessionSource> extraSources
+    ) {
         this.scheduled = scheduled;
         this.programs = programs;
         this.workouts = workouts;
         this.aggregates = aggregates;
         this.metricChangedPublisher = metricChangedPublisher;
         this.events = events;
+        this.extraSources = extraSources == null ? List.of() : extraSources;
     }
 
     /**
@@ -340,7 +357,31 @@ public class WorkoutSessionCompletionService {
                 totalTonnage += tonnageOf(sw.session());
             }
         }
+        // Ad-hoc (non-program) completed runs count toward the same week (AD-06),
+        // so streaks/volume treat "a workout as a workout" (spec D6/surfacing).
+        for (CompletedSessionSource src : extraSources) {
+            List<CompletedSessionSource.PerformedSession> performed =
+                src.completedSessions(userId, weekStart, weekEnd);
+            if (performed == null) continue;
+            for (CompletedSessionSource.PerformedSession ps : performed) {
+                if (ps == null || ps.session() == null) continue;
+                sessionCount++;
+                totalTonnage += tonnageOf(ps.session());
+            }
+        }
         aggregates.save(new WeeklyWorkoutAggregate(userId, weekStart, totalTonnage, sessionCount, null, null));
+    }
+
+    /**
+     * Recompute one ISO week's aggregate across programs + all non-program
+     * sources (IMPL-ADHOC-01 AD-06). The ad-hoc run lifecycle calls this after
+     * saving its session so program and ad-hoc completions write the SAME unified
+     * aggregate (no last-writer-wins divergence). Also republishes the workout
+     * metric keys so goals react.
+     */
+    public void recomputeWeekFor(String userId, LocalDate sessionDate) {
+        recomputeWeek(userId, sessionDate);
+        metricChangedPublisher.publishAll(userId, WORKOUT_KEYS);
     }
 
     /**

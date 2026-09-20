@@ -147,6 +147,19 @@ EXEMPT|POST /api/webhooks/google-health
 EXEMPT|POST /api/webhooks/withings
 EXEMPT|POST /internal/nutrition/jobs
 
+# ---- IMPL-ADHOC-01: ad-hoc workout library ----
+# generate = preview only (not persisted); create = server-minted id guarded by
+# Idempotency-Key; PATCH/restore = idempotent field/state set; DELETE = tombstone;
+# the run PUT upserts on a client-minted deterministic sessionId; last-sets is a
+# read served over POST.
+NON_PERSISTING_POST|POST /api/me/adhoc-workouts/generate
+KEY_GUARDED|POST /api/me/adhoc-workouts
+SET_SEMANTICS|PATCH /api/me/adhoc-workouts/{adhocId}
+IDEMPOTENT_DELETE|DELETE /api/me/adhoc-workouts/{adhocId}
+SET_SEMANTICS|POST /api/me/adhoc-workouts/{adhocId}/restore
+DETERMINISTIC_ID|PUT /api/me/adhoc-workouts/{adhocId}/sessions/{sessionId}
+NON_PERSISTING_POST|POST /api/me/adhoc-workouts/{adhocId}/last-sets
+
 # ---- Admin catalog set-semantics / deletes (config, not offline-outbox data) ----
 SET_SEMANTICS|POST /api/admin/equipment/{equipmentId}/approve
 SET_SEMANTICS|POST /api/admin/equipment/{equipmentId}/reject
