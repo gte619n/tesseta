@@ -53,7 +53,14 @@
   collection to `docs/reference/sync-emitted-collections.txt` (or
   `SyncEmittedCollectionsContractTest` fails) AND to Android's `CollectionRegistry`
   (or `CollectionRegistryContractTest` fails). Skipping the registry silently
-  drops cross-device changes — the bug class this contract closes.
+  drops cross-device changes — the bug class this contract closes. **Also bump
+  Android `SyncEngine.MIRROR_SCHEMA_VERSION`**: existing installs sync by an
+  incremental cursor, so a newly-routed collection's rows created *before* that
+  cursor stay orphaned and never appear (a pre-support build skipped them and
+  advanced the cursor past them). The bump makes `ensureState` reset the cursor
+  once for a backfilling full scan. This is client-local — do NOT bump
+  `SYNC_SCHEMA_VERSION` (the wire/server D13 version) for this, or every pull
+  mismatches the server and wipe-loops.
 - **Android Room schema bumps fail loud.** Bumping `HfDatabase` version requires a
   `Migration` in `ALL_MIGRATIONS` (+ bump `SCHEMA_VERSION`) and a fixture
   round-trip test; a missing forward migration now THROWS at open instead of
