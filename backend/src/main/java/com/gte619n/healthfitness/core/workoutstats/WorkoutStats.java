@@ -18,7 +18,8 @@ import java.util.List;
  * @param recentPrs         newest-first, capped at 5 (see {@link WorkoutStatsService})
  * @param chartDefaultLifts the lifts the strength chart defaults to (top by
  *                          observation count, ≤1 per movement pattern)
- * @param trackedExercises  every exercise with ≥1 logged set (picker population)
+ * @param trackedExercises  every exercise with a plottable trend — logged on ≥2
+ *                          sessions — newest-performed first (picker population)
  */
 public record WorkoutStats(
     Streak streak,
@@ -58,6 +59,6 @@ public record WorkoutStats(
     /** An exercise the strength chart can plot, with its display name. */
     public record LiftRef(String exerciseId, String exerciseName) {}
 
-    /** An exercise with logged history, for the chart's lift picker. */
+    /** An exercise with a plottable strength trend (≥2 sessions), for the chart's lift picker. */
     public record TrackedExercise(String exerciseId, String exerciseName, LocalDate lastPerformed) {}
 }

@@ -55,9 +55,18 @@ export default async function WorkoutsOverviewPage() {
     }
   }
 
-  // Strength chart: default lift's history fetched server-side for first paint;
-  // the picker fetches the rest client-side via the route handler.
-  const defaultLift = stats?.chartDefaultLifts?.[0] ?? null;
+  // Strength chart: default to a *major* lift that actually has trend data — the
+  // first main-pattern default the user has logged on ≥2 sessions (so the chart
+  // opens on a real trend, not an empty one) — falling back to the most-recent
+  // tracked lift, then any default. Its history is fetched server-side for first
+  // paint; the picker fetches the rest client-side via the route handler.
+  const tracked = stats?.trackedExercises ?? [];
+  const trackedIds = new Set(tracked.map((e) => e.exerciseId));
+  const defaultLift =
+    stats?.chartDefaultLifts?.find((l) => trackedIds.has(l.exerciseId)) ??
+    tracked[0] ??
+    stats?.chartDefaultLifts?.[0] ??
+    null;
   const [initialHistory, weekReview] = await Promise.all([
     defaultLift ? getE1rmHistory(defaultLift.exerciseId).catch(() => null) : Promise.resolve(null),
     getWeekReview().catch(() => []),

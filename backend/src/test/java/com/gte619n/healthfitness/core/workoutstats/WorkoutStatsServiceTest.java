@@ -292,6 +292,28 @@ class WorkoutStatsServiceTest {
         assertFalse(ids.contains("bench")); // pattern already used by incline
     }
 
+    // ---- BT-12 ----
+
+    @Test
+    void trackedExercisesRequireTwoSessionsForAPlottableTrend() {
+        seedProgram("p1");
+        LocalDate d1 = CURRENT_MONDAY.minusWeeks(3);
+        LocalDate d2 = CURRENT_MONDAY.minusWeeks(2);
+        LocalDate d3 = CURRENT_MONDAY.minusWeeks(1);
+        // 'bench' performed on two days → a plottable trend; 'squat' only once →
+        // excluded from the picker (a single point isn't a trend).
+        saveSession("p1", d1, "bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(185.0, 5, null, null, instant(d1))));
+        saveSession("p1", d2, "bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(195.0, 5, null, null, instant(d2))));
+        saveSession("p1", d3, "squat", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(315.0, 5, null, null, instant(d3))));
+
+        List<String> ids = service.stats(USER, TODAY, 26).trackedExercises().stream()
+            .map(WorkoutStats.TrackedExercise::exerciseId).toList();
+        assertEquals(List.of("bench"), ids);
+    }
+
     // ---- BT-13 ----
 
     @Test

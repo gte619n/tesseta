@@ -59,8 +59,11 @@ class WorkoutStatsControllerTest {
     @Test
     void statsSummaryReturnsSeriesAndStreakShape() throws Exception {
         seedProgram("p1");
-        LocalDate d = LocalDate.now().minusDays(3);
-        seedCompleted("p1", d, List.of(new LoggedSet(135.0, 8, null, null, instant(d))));
+        // Two bench sessions → a plottable trend, so it appears in the picker.
+        LocalDate d1 = LocalDate.now().minusDays(10);
+        LocalDate d2 = LocalDate.now().minusDays(3);
+        seedCompleted("p1", d1, List.of(new LoggedSet(130.0, 8, null, null, instant(d1))));
+        seedCompleted("p1", d2, List.of(new LoggedSet(135.0, 8, null, null, instant(d2))));
 
         mvc.perform(get("/api/me/workout-stats?weeks=12").header("X-Dev-User", USER))
             .andExpect(status().isOk())
