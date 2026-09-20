@@ -314,6 +314,28 @@ class WorkoutStatsServiceTest {
         assertEquals(List.of("bench"), ids);
     }
 
+    @Test
+    void trackedExercisesExcludeNonStrengthMovements() {
+        seedProgram("p1");
+        LocalDate d1 = CURRENT_MONDAY.minusWeeks(3);
+        LocalDate d2 = CURRENT_MONDAY.minusWeeks(2);
+        // 'catcow' done twice but at 0 lb (bodyweight/stretch) → every e1RM is 0, so
+        // it carries no strength signal and must NOT appear in the strength picker,
+        // even though it clears the ≥2-session bar. 'row' is weighted → included.
+        saveSession("p1", d1, "catcow", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(0.0, 10, null, null, instant(d1))));
+        saveSession("p1", d2, "catcow", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(0.0, 10, null, null, instant(d2))));
+        saveSession("p1", d1, "row", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(95.0, 8, null, null, instant(d1))));
+        saveSession("p1", d2, "row", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(105.0, 8, null, null, instant(d2))));
+
+        List<String> ids = service.stats(USER, TODAY, 26).trackedExercises().stream()
+            .map(WorkoutStats.TrackedExercise::exerciseId).toList();
+        assertEquals(List.of("row"), ids);
+    }
+
     // ---- BT-13 ----
 
     @Test

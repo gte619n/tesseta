@@ -346,6 +346,11 @@ public class WorkoutStatsService {
             // exercises the chart can actually draw a line for (≥2 sessions), so it
             // stays a short, meaningful list rather than every exercise ever logged.
             if (e.getValue().size() < 2) continue;
+            // Strength picker only (the chart is an e1RM trend): require at least one
+            // weighted set (e1rm > 0). Bodyweight / stretch / cardio movements logged
+            // at 0 lb produce e1rm=0 bests and carry no strength signal, so they'd
+            // otherwise flood the picker with un-chartable lines.
+            if (e.getValue().stream().noneMatch(b -> b.e1rm > 0)) continue;
             String id = e.getKey();
             LocalDate last = e.getValue().stream()
                 .map(b -> b.date).filter(d -> d != null).max(Comparator.naturalOrder()).orElse(null);
