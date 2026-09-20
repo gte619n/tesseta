@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   E1rmHistory,
   LiftRef,
@@ -108,19 +108,7 @@ export function StrengthTrendChart({
           Strength trend
         </div>
         {options.length > 0 && (
-          <select
-            aria-label="Choose a lift to chart"
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            className="max-w-[180px] rounded-[8px] border border-border-default bg-canvas px-2 py-1 text-[12px] text-primary"
-            data-testid="lift-picker"
-          >
-            {options.map((o) => (
-              <option key={o.exerciseId} value={o.exerciseId}>
-                {o.exerciseName}
-              </option>
-            ))}
-          </select>
+          <LiftPicker options={options} selected={selected} onSelect={setSelected} />
         )}
       </div>
 
@@ -197,6 +185,142 @@ export function StrengthTrendChart({
             engine&apos;s current belief.
           </p>
         </>
+      )}
+    </div>
+  );
+}
+
+// A compact, searchable, Tesseta-styled lift picker (replaces the native
+// <select>). Filters the option list by a case-insensitive name substring;
+// closes on outside-click or Escape. The trigger keeps data-testid="lift-picker"
+// and each option is a role="option" button so the whole thing is keyboard- and
+// test-drivable.
+function LiftPicker({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: LiftRef[];
+  selected: string;
+  onSelect: (exerciseId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selectedName =
+    options.find((o) => o.exerciseId === selected)?.exerciseName ?? "Choose a lift";
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? options.filter((o) => o.exerciseName.toLowerCase().includes(q))
+    : options;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        data-testid="lift-picker"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((o) => !o);
+          setQuery("");
+        }}
+        className="flex max-w-[200px] items-center gap-1.5 rounded-[8px] border border-border-default bg-canvas px-2.5 py-1 text-[12px] text-primary hover:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent"
+      >
+        <span className="truncate">{selectedName}</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 text-tertiary"
+          aria-hidden
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-30 mt-1 w-[248px] overflow-hidden rounded-[10px] border border-border-default bg-surface shadow-[0_16px_48px_rgba(0,0,0,0.16)]">
+          <div className="border-b-[0.5px] border-border-subtle p-2">
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search lifts…"
+              data-testid="lift-search"
+              className="w-full rounded-md border border-border-default bg-canvas px-2.5 py-1.5 text-[12px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+          <ul role="listbox" className="max-h-[260px] overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-[12px] text-tertiary">No matching lifts</li>
+            ) : (
+              filtered.map((o) => {
+                const active = o.exerciseId === selected;
+                return (
+                  <li key={o.exerciseId}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      data-testid="lift-option"
+                      onClick={() => {
+                        onSelect(o.exerciseId);
+                        setOpen(false);
+                        setQuery("");
+                      }}
+                      className={
+                        "flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12px] hover:bg-canvas " +
+                        (active ? "text-accent-dim" : "text-primary")
+                      }
+                    >
+                      <span className="truncate">{o.exerciseName}</span>
+                      {active && (
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="shrink-0"
+                          aria-hidden
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>
       )}
     </div>
   );

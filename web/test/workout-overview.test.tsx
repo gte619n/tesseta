@@ -127,7 +127,10 @@ describe("E2E-6 · StrengthTrendChart defaults then fetches on lift switch", () 
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await userEvent.selectOptions(screen.getByTestId("lift-picker"), "ex_squat");
+    // Open the searchable picker, narrow with the search box, then pick.
+    await userEvent.click(screen.getByTestId("lift-picker"));
+    await userEvent.type(screen.getByTestId("lift-search"), "squat");
+    await userEvent.click(screen.getByText("Back Squat"));
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/workout-stats/e1rm-history?exerciseId=ex_squat",
