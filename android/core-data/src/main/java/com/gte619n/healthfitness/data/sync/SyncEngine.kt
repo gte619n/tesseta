@@ -130,7 +130,7 @@ class SyncEngine @Inject constructor(
             if (resp.schemaVersion != SYNC_SCHEMA_VERSION) {
                 dbWiper.wipeMirrors()
                 syncStateDao.upsert(
-                    SyncStateEntity(cursor = null, schemaVersion = SYNC_SCHEMA_VERSION, lastFullSyncAt = null),
+                    SyncStateEntity(cursor = null, schemaVersion = MIRROR_SCHEMA_VERSION, lastFullSyncAt = null),
                 )
                 cursor = null
                 wiped = true
@@ -182,7 +182,7 @@ class SyncEngine @Inject constructor(
 
         syncStateDao.upsert(
             (syncStateDao.get()
-                ?: SyncStateEntity(cursor = cursor, schemaVersion = SYNC_SCHEMA_VERSION, lastFullSyncAt = null))
+                ?: SyncStateEntity(cursor = cursor, schemaVersion = MIRROR_SCHEMA_VERSION, lastFullSyncAt = null))
                 .copy(cursor = cursor, lastFullSyncAt = System.currentTimeMillis()),
         )
 
@@ -250,8 +250,27 @@ class SyncEngine @Inject constructor(
     }
 
     private suspend fun ensureState(): SyncStateEntity {
-        syncStateDao.get()?.let { return it }
-        val fresh = SyncStateEntity(cursor = null, schemaVersion = SYNC_SCHEMA_VERSION, lastFullSyncAt = null)
+        syncStateDao.get()?.let { existing ->
+            // One-time full re-sync when the client's mirror generation advances —
+            // i.e. the app added a new synced collection ([MIRROR_SCHEMA_VERSION]).
+            // Reset the cursor to null so the NEXT pull is a full scan that
+            // backfills the new collection; a plain delta would leave rows created
+            // before this install's cursor orphaned — the class of bug where a
+            // web-created ad-hoc workout never reached the phone (the pre-support
+            // build SKIPPED the change and advanced the cursor past it, so the
+            // supporting build never re-requested it). Distinct from the D13
+            // SERVER-driven wipe (resp.schemaVersion vs [SYNC_SCHEMA_VERSION]):
+            // this is client-local, compares the STORED generation to the current
+            // one, updates it once, and so can never wipe-loop. No mirror wipe is
+            // needed — a full re-pull is LWW-idempotent over the rows already held.
+            if (existing.schemaVersion != MIRROR_SCHEMA_VERSION) {
+                val migrated = existing.copy(cursor = null, schemaVersion = MIRROR_SCHEMA_VERSION)
+                syncStateDao.upsert(migrated)
+                return migrated
+            }
+            return existing
+        }
+        val fresh = SyncStateEntity(cursor = null, schemaVersion = MIRROR_SCHEMA_VERSION, lastFullSyncAt = null)
         syncStateDao.upsert(fresh)
         return fresh
     }
@@ -265,8 +284,27 @@ class SyncEngine @Inject constructor(
     }
 
     companion object {
-        /** Client sync-protocol version (D13). Bump ⇒ wipe + full resync. */
+        /**
+         * Wire sync-protocol version (D13), sent on every request and compared to
+         * the server's advertised version. SERVER-driven: a mismatch means the
+         * server changed its protocol and the client wipes + full-resyncs. Must
+         * track the backend's value — never bump this client-only or every pull
+         * mismatches the (unchanged) server value and wipe-loops.
+         */
         const val SYNC_SCHEMA_VERSION = 1
+
+        /**
+         * Client-local mirror generation: the set of synced collections this build
+         * mirrors. Persisted in [SyncStateEntity.schemaVersion]; when it advances
+         * (a new synced collection was added), [ensureState] resets the cursor once
+         * so a full scan backfills the new collection on existing installs.
+         *
+         * BUMP THIS whenever a collection is added to the sync mirror
+         * (CollectionRegistry / MirrorTables) — otherwise rows created before an
+         * install's cursor stay orphaned and never appear (see [ensureState]).
+         * gen 2 = added adhocWorkouts + adhocWorkouts/sessions (IMPL-ADHOC-01).
+         */
+        const val MIRROR_SCHEMA_VERSION = 2
 
         /** OBS-005: logcat tag for dropped-unroutable-change warnings. */
         private const val LOG_TAG = "HFSync"

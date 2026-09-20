@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.data.sync
 
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
+import com.gte619n.healthfitness.data.db.entity.SyncStateEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -221,5 +222,54 @@ class SyncEnginePullTest {
         assertTrue(flags.writes.contains(true))
         // Only one request made despite hasMore=true (we bail on kill-switch).
         assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `an older mirror generation resets the cursor for a one-time full backfill`() = runTest {
+        // An existing install from the previous mirror generation, mid-stream.
+        syncState.upsert(
+            SyncStateEntity(
+                cursor = "old-cursor",
+                schemaVersion = SyncEngine.MIRROR_SCHEMA_VERSION - 1,
+                lastFullSyncAt = 123L,
+            ),
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """{"schemaVersion":1,"changes":[],"nextCursor":"fresh","hasMore":false,"killSwitch":false}""",
+            ),
+        )
+
+        engine.pull()
+
+        // The stale cursor was dropped: the pull ran as a full scan (no `since`),
+        // so a collection added this generation backfills instead of staying
+        // orphaned behind `old-cursor`.
+        val req = server.takeRequest()
+        assertTrue("cursor reset ⇒ no since param", !req.path!!.contains("since="))
+        assertTrue("did not resume from the stale cursor", !req.path!!.contains("old-cursor"))
+        // Generation advanced + persisted, so it never re-triggers.
+        assertEquals(SyncEngine.MIRROR_SCHEMA_VERSION, syncState.get()!!.schemaVersion)
+    }
+
+    @Test
+    fun `a current mirror generation resumes from its cursor (no reset)`() = runTest {
+        syncState.upsert(
+            SyncStateEntity(
+                cursor = "keep-cursor",
+                schemaVersion = SyncEngine.MIRROR_SCHEMA_VERSION,
+                lastFullSyncAt = 123L,
+            ),
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """{"schemaVersion":1,"changes":[],"nextCursor":"next","hasMore":false,"killSwitch":false}""",
+            ),
+        )
+
+        engine.pull()
+
+        val req = server.takeRequest()
+        assertTrue("resumes from the stored cursor", req.path!!.contains("since=keep-cursor"))
     }
 }
