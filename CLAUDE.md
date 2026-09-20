@@ -106,6 +106,14 @@
   **path-filtered** — a component with no changed files no-ops (shows
   `neutral`/`skipped`). To redeploy an unchanged component, run its trigger
   manually.
+- **The Android release ships via Firebase App Distribution — it is NOT
+  auto-installed.** `release-android-on-main` builds the R8 release and uploads it
+  to Firebase App Distribution (CI holds `roles/firebaseappdistro.admin`); a
+  tester must manually update through the App Tester app. Unlike the backend/web
+  Cloud Run deploys (live the moment the merge deploy finishes), an Android change
+  reaches no device until the build is installed — rule this in/out first when a
+  client change "isn't showing up", but don't stop there if the tester confirms
+  they're on the new build.
 - **`main` is protected by the `main-protection` ruleset** (since 2026-09-14):
   changes land via PR and six CI checks (`android-ci`, `backend-ci`, `web-ci`,
   `terraform-ci`, both CodeQL `analyze`) must be green to merge; admins keep a
