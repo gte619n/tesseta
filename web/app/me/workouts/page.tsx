@@ -1,372 +1,109 @@
-import Link from "next/link";
-import { getLocations } from "@/lib/gym-api";
-import { listPrograms, getWorkoutHistorySummary } from "@/lib/workout-program-api";
+import { listPrograms, getProgramDeep, getProgramCalendar, getWorkoutHistory } from "@/lib/workout-program-api";
+import { getWorkoutStats } from "@/lib/workout-stats-api";
+import { buildCurrentProgramView } from "@/lib/workout-overview";
+import { addDays } from "@/lib/workout-stats-format";
+import { StreakHero } from "@/components/workouts/StreakHero";
+import { ConsistencyHeatmap } from "@/components/workouts/ConsistencyHeatmap";
+import { CurrentProgramCard, type CurrentProgramView } from "@/components/workouts/CurrentProgramCard";
+import { LatestWorkouts } from "@/components/workouts/LatestWorkouts";
+import { StrengthTrendChart } from "@/components/workouts/StrengthTrendChart";
+import { WeeklyVolumeChart } from "@/components/workouts/WeeklyVolumeChart";
+import { PatternBalanceCard } from "@/components/workouts/PatternBalanceCard";
+import { RecentPrsCard } from "@/components/workouts/RecentPrsCard";
+import { getWeekReview } from "@/lib/progression-api";
+import { getE1rmHistory } from "@/lib/workout-stats-api";
 import { pageMetadata } from "@/lib/page-metadata";
 
 export const metadata = pageMetadata("Workouts");
 
 export const dynamic = "force-dynamic";
 
-// "Mar 20, 2026" — TZ-stable for date-only strings.
-function formatShortDate(iso: string): string {
-  const value = iso.length === 10 ? `${iso}T00:00:00` : iso;
-  return new Date(value).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+// The workout Overview dashboard (IMPL-WEB-WORKOUT-01): streak + consistency
+// hero, current program, latest workouts, and the progress charts. A thin
+// server component — it only fetches and hands plain props to the presentational
+// cards, each of which degrades to a friendly empty state (D12) so the page
+// never blanks, even for a brand-new user or when the stats endpoint is absent.
+
+function todayIso(): string {
+  // Server clock is UTC in prod; the backend already resolves the user's local
+  // week via X-Timezone, and the heatmap only needs day-grain, so UTC today is
+  // fine for the client-side grid framing.
+  return new Date().toISOString().slice(0, 10);
 }
 
-export default async function WorkoutsPage() {
-  // Fetch in parallel; a failure on any card's summary shouldn't blank the hub.
-  const [locations, programs, historySummary] = await Promise.all([
-    getLocations().catch(() => []),
+export default async function WorkoutsOverviewPage() {
+  const today = todayIso();
+
+  const [stats, programs, history] = await Promise.all([
+    getWorkoutStats(26).catch(() => null),
     listPrograms().catch(() => []),
-    getWorkoutHistorySummary().catch(() => ({ count: 0, lastWorkoutDate: null })),
+    getWorkoutHistory(0, 5).catch(() => null),
   ]);
-  const defaultLocation = locations.find((l) => l.isDefault);
-  const activeProgramCount = programs.filter((p) => p.status === "ACTIVE").length;
+
+  const activeProgram = programs.find((p) => p.status === "ACTIVE") ?? null;
+
+  // Build the current-program view (deep + a 3-week calendar window for the next
+  // session). Best-effort: any failure degrades the card to its empty CTA.
+  let currentProgram: CurrentProgramView | null = null;
+  if (activeProgram) {
+    const [deep, calendar] = await Promise.all([
+      getProgramDeep(activeProgram.programId).catch(() => null),
+      getProgramCalendar(activeProgram.programId, today, addDays(today, 21)).catch(() => []),
+    ]);
+    if (deep) {
+      currentProgram = buildCurrentProgramView(deep, calendar, today);
+    }
+  }
+
+  // Strength chart: default lift's history fetched server-side for first paint;
+  // the picker fetches the rest client-side via the route handler.
+  const defaultLift = stats?.chartDefaultLifts?.[0] ?? null;
+  const [initialHistory, weekReview] = await Promise.all([
+    defaultLift ? getE1rmHistory(defaultLift.exerciseId).catch(() => null) : Promise.resolve(null),
+    getWeekReview().catch(() => []),
+  ]);
+
+  const latestSessions = history?.items ?? [];
 
   return (
-    <main className="min-h-screen bg-canvas p-8">
-      <div className="mx-auto max-w-[920px] space-y-6">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-tertiary hover:text-secondary"
-        >
-          ← Dashboard
-        </Link>
-
-        <header>
-          <h1 className="m-0 text-[22px] font-medium tracking-[-0.015em] text-primary">
-            Workouts
-          </h1>
-          <p className="mt-1 text-[13px] text-secondary">
-            Track workouts, manage gyms, and view your training history.
-          </p>
-        </header>
-
-        {/* Progression Engine — prominent full-width feature entry. Tracks
-            strength per exercise and drives weights/reps across every program. */}
-        <Link
-          href="/me/workouts/progression"
-          className="group block rounded-[16px] border border-accent/40 bg-accent-bg px-6 py-5 shadow-[0_2px_16px_rgba(92,122,46,0.10)] ring-1 ring-accent/10 transition-colors hover:border-accent/70"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mt-0.5 shrink-0 text-accent-dim"
-              >
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                <polyline points="17 6 23 6 23 12" />
-              </svg>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-[17px] font-medium text-primary">
-                    Progression Engine
-                  </h2>
-                  <span className="caps-mono rounded-full bg-accent/15 px-2 py-0.5 text-[9px] tracking-[0.06em] text-accent-dim">
-                    Auto
-                  </span>
-                </div>
-                <p className="mt-1 max-w-[560px] text-[13px] leading-relaxed text-secondary">
-                  Tracks your true strength per exercise and adjusts weights,
-                  reps, and sets after every workout — the trends and settings
-                  driving your numbers across every program.
-                </p>
-              </div>
-            </div>
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0 text-accent/70 transition-colors group-hover:text-accent-dim"
-            >
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
+    <main className="bg-canvas px-8 pb-16 pt-6">
+      <div className="mx-auto max-w-[1040px]">
+        {/* Cards brick-pack (CSS masonry) so they flow into gaps instead of
+            aligning into rows with dead whitespace. `break-inside-avoid` keeps a
+            card whole; `mb-4` is the vertical gutter. */}
+        <div className="columns-1 gap-4 lg:columns-2">
+          <div className="mb-4 break-inside-avoid">
+            <StreakHero streak={stats?.streak ?? null} />
           </div>
-        </Link>
-
-        <section className="grid grid-cols-2 gap-4">
-          {/* Gyms Card */}
-          <Link
-            href="/me/workouts/gyms"
-            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-accent"
-                  >
-                    <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
-                  </svg>
-                  <h2 className="text-[16px] font-medium text-primary">
-                    Gyms
-                  </h2>
-                </div>
-                <p className="mt-2 text-[13px] text-secondary">
-                  Manage gym locations and track equipment.
-                </p>
-              </div>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-tertiary transition-colors group-hover:text-accent"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </div>
-            {locations.length > 0 && (
-              <div className="mt-4 border-t border-border-subtle pt-3">
-                <div className="flex items-center gap-2 text-[12px] text-tertiary">
-                  <span className="font-medium text-primary">
-                    {locations.length}
-                  </span>
-                  location{locations.length !== 1 && "s"}
-                  {defaultLocation && (
-                    <>
-                      <span className="text-border-default">•</span>
-                      <span>Default: {defaultLocation.name}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </Link>
-
-          {/* Workout History Card */}
-          <Link
-            href="/me/workouts/history"
-            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-accent"
-                  >
-                    <path d="M12 8v4l3 3" />
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                  <h2 className="text-[16px] font-medium text-primary">
-                    History
-                  </h2>
-                </div>
-                <p className="mt-2 text-[13px] text-secondary">
-                  View past workouts and track progress.
-                </p>
-              </div>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-tertiary transition-colors group-hover:text-accent"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </div>
-            {historySummary.count > 0 && (
-              <div className="mt-4 border-t border-border-subtle pt-3">
-                <div className="flex items-center gap-2 text-[12px] text-tertiary">
-                  <span className="font-medium text-primary">{historySummary.count}</span>
-                  workout{historySummary.count !== 1 && "s"}
-                  {historySummary.lastWorkoutDate && (
-                    <>
-                      <span className="text-border-default">•</span>
-                      <span>Last: {formatShortDate(historySummary.lastWorkoutDate)}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </Link>
-
-          {/* Log Workout Card - Coming Soon */}
-          <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 opacity-50">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-tertiary"
-                  >
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  <h2 className="text-[16px] font-medium text-primary">
-                    Log Workout
-                  </h2>
-                </div>
-                <p className="mt-2 text-[13px] text-secondary">
-                  Record exercises, sets, and reps.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 border-t border-border-subtle pt-3">
-              <span className="rounded-full bg-canvas px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-tertiary">
-                Coming soon
-              </span>
-            </div>
+          <div className="mb-4 break-inside-avoid">
+            <ConsistencyHeatmap days={stats?.heatmap ?? []} today={today} />
           </div>
-
-          {/* Programs Card */}
-          <Link
-            href="/me/workouts/programs"
-            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-accent"
-                  >
-                    <line x1="8" y1="6" x2="21" y2="6" />
-                    <line x1="8" y1="12" x2="21" y2="12" />
-                    <line x1="8" y1="18" x2="21" y2="18" />
-                    <line x1="3" y1="6" x2="3.01" y2="6" />
-                    <line x1="3" y1="12" x2="3.01" y2="12" />
-                    <line x1="3" y1="18" x2="3.01" y2="18" />
-                  </svg>
-                  <h2 className="text-[16px] font-medium text-primary">
-                    Programs
-                  </h2>
-                </div>
-                <p className="mt-2 text-[13px] text-secondary">
-                  Create and follow periodized training programs.
-                </p>
-              </div>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-tertiary transition-colors group-hover:text-accent"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </div>
-            {programs.length > 0 && (
-              <div className="mt-4 border-t border-border-subtle pt-3">
-                <div className="flex items-center gap-2 text-[12px] text-tertiary">
-                  <span className="font-medium text-primary">{programs.length}</span>
-                  program{programs.length !== 1 && "s"}
-                  {activeProgramCount > 0 && (
-                    <>
-                      <span className="text-border-default">•</span>
-                      <span>{activeProgramCount} active</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </Link>
-
-          {/* Preferences Card */}
-          <Link
-            href="/me/workouts/preferences"
-            className="group rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5 transition-colors hover:border-accent/60"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-accent"
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                  <h2 className="text-[16px] font-medium text-primary">
-                    Preferences
-                  </h2>
-                </div>
-                <p className="mt-2 text-[13px] text-secondary">
-                  Standing notes the program builder follows every time.
-                </p>
-              </div>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-tertiary transition-colors group-hover:text-accent"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </div>
-          </Link>
-        </section>
+          <div className="mb-4 break-inside-avoid">
+            <CurrentProgramCard program={currentProgram} />
+          </div>
+          <div className="mb-4 break-inside-avoid">
+            <LatestWorkouts sessions={latestSessions} />
+          </div>
+          <div className="mb-4 break-inside-avoid">
+            <StrengthTrendChart
+              lifts={stats?.trackedExercises ?? []}
+              defaultLifts={stats?.chartDefaultLifts ?? []}
+              initialHistory={initialHistory}
+            />
+          </div>
+          <div className="mb-4 break-inside-avoid">
+            <WeeklyVolumeChart
+              series={stats?.weeklySeries ?? []}
+              weeklyTarget={stats?.streak?.weeklyTarget ?? 0}
+            />
+          </div>
+          <div className="mb-4 break-inside-avoid">
+            <PatternBalanceCard review={weekReview} />
+          </div>
+          <div className="mb-4 break-inside-avoid">
+            <RecentPrsCard prs={stats?.recentPrs ?? []} />
+          </div>
+        </div>
       </div>
     </main>
   );

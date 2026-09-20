@@ -198,6 +198,9 @@ export type ScheduledWorkoutResponse = {
   // Performed-session metadata (history import). Null for PLANNED sessions.
   completedAt: string | null;
   durationSeconds: number | null;
+  // Post-workout mood check (1..5), captured on the finish screen. Null when
+  // skipped or the session isn't COMPLETED.
+  feeling?: number | null;
 };
 
 // ── Session completion (IMPL-17 D2) ──────────────────────────────────

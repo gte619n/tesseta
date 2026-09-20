@@ -10,6 +10,19 @@ test("serves the app shell unauthenticated", async ({ page }) => {
   await expect(page).toHaveTitle(/.+/);
 });
 
+// E2E-11 (reachable-surface portion): the global app shell must not overflow
+// horizontally at phone width. The authenticated Overview itself is verified by
+// construction (grid-cols-1 default, lg:grid-cols-2) + RTL component tests
+// (decision IL-9); this guards the shared shell the Overview renders inside.
+test("app shell has no horizontal overflow at phone width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1); // sub-pixel tolerance
+});
+
 test("sends security headers on every response", async ({ page }) => {
   const response = await page.goto("/");
   const headers = response?.headers() ?? {};

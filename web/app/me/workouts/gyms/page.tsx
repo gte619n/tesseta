@@ -11,15 +11,8 @@ export default async function GymsPage() {
   const locations = await getLocations();
 
   return (
-    <main className="min-h-screen bg-canvas p-8">
+    <main className="bg-canvas px-8 pb-16 pt-6">
       <div className="mx-auto max-w-[920px] space-y-6">
-        <Link
-          href="/me/workouts"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.04em] text-tertiary hover:text-secondary"
-        >
-          ← Workouts
-        </Link>
-
         <header className="flex items-start justify-between">
           <div>
             <h1 className="m-0 text-[22px] font-medium tracking-[-0.015em] text-primary">

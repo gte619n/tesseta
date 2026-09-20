@@ -50,6 +50,19 @@ export function WorkoutCard({ summary }: { summary: WorkoutSummary | null }) {
             </span>
           </div>
 
+          {summary.streak && (
+            <div className="mt-3 flex items-center gap-2" data-testid="workout-card-streak">
+              <span className="font-mono text-[13px] font-medium text-accent-dim tabular-nums">
+                {summary.streak.current} wk
+              </span>
+              <span className="text-[11px] text-tertiary">streak</span>
+              <span className="text-border-default">·</span>
+              <span className="font-mono text-[11px] text-tertiary tabular-nums">
+                {summary.streak.thisWeekCompleted}/{summary.streak.weeklyTarget} this week
+              </span>
+            </div>
+          )}
+
           <div className="mt-4 border-t border-border-subtle pt-3">
             <div className="caps-mono text-[9px] tracking-[0.08em] text-tertiary">
               Active program
