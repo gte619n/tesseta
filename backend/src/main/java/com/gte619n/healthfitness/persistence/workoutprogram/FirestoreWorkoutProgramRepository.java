@@ -156,7 +156,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
         return out;
     }
 
-    static List<Map<String, Object>> daysToWire(List<WorkoutDay> days) {
+    public static List<Map<String, Object>> daysToWire(List<WorkoutDay> days) {
         List<Map<String, Object>> out = new ArrayList<>();
         if (days == null) return out;
         for (WorkoutDay d : days) {
@@ -302,7 +302,7 @@ public class FirestoreWorkoutProgramRepository implements WorkoutProgramReposito
     }
 
     @SuppressWarnings("unchecked")
-    static List<WorkoutDay> daysFromWire(Object raw) {
+    public static List<WorkoutDay> daysFromWire(Object raw) {
         List<WorkoutDay> out = new ArrayList<>();
         if (!(raw instanceof List<?> list)) return out;
         for (Object o : list) {

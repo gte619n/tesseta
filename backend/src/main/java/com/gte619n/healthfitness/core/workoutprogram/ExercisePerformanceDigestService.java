@@ -39,11 +39,22 @@ public class ExercisePerformanceDigestService {
 
     private final WorkoutProgramRepository programs;
     private final ScheduledWorkoutRepository scheduled;
+    /** Non-program completed-session sources (ad-hoc runs), IMPL-ADHOC-01 AD-06. */
+    private final List<CompletedSessionSource> extraSources;
 
+    /** Program-only constructor (back-compat for unit tests). */
     public ExercisePerformanceDigestService(
         WorkoutProgramRepository programs, ScheduledWorkoutRepository scheduled) {
+        this(programs, scheduled, List.of());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ExercisePerformanceDigestService(
+        WorkoutProgramRepository programs, ScheduledWorkoutRepository scheduled,
+        List<CompletedSessionSource> extraSources) {
         this.programs = programs;
         this.scheduled = scheduled;
+        this.extraSources = extraSources == null ? List.of() : extraSources;
     }
 
     /**
@@ -151,6 +162,27 @@ public class ExercisePerformanceDigestService {
                                 .add(new PerformedSet(
                                     date, set.weightLbs(), set.reps(), set.rpe(),
                                     set.completedAt(), program.programId()));
+                        }
+                    }
+                }
+            }
+        }
+        // Ad-hoc (non-program) completed runs feed the same history/e1RM (AD-06).
+        for (CompletedSessionSource src : extraSources) {
+            for (CompletedSessionSource.PerformedSession ps
+                : nullSafe(src.completedSessions(userId, LocalDate.MIN, LocalDate.MAX))) {
+                if (ps == null || ps.session() == null || ps.date() == null) continue;
+                for (Block block : nullSafe(ps.session().blocks())) {
+                    if (block == null) continue;
+                    for (Prescription rx : nullSafe(block.prescriptions())) {
+                        if (rx == null || rx.exerciseId() == null) continue;
+                        for (LoggedSet set : nullSafe(rx.loggedSets())) {
+                            if (set == null) continue;
+                            byExercise
+                                .computeIfAbsent(rx.exerciseId(), k -> new ArrayList<>())
+                                .add(new PerformedSet(
+                                    ps.date(), set.weightLbs(), set.reps(), set.rpe(),
+                                    set.completedAt(), ps.sourceId()));
                         }
                     }
                 }

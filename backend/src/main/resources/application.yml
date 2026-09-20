@@ -344,6 +344,14 @@ app:
     enabled: ${WORKOUT_PROGRAMS_ENABLED:true}
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${WORKOUT_PROGRAM_GEMINI_MODEL:gemini-3.1-pro-preview}
+  # IMPL-ADHOC-01: single-workout AI generator for the ad-hoc workout library.
+  # `enabled` gates the GeminiAdHocWorkoutGenerator bean; it shares the same
+  # GEMINI_API_KEY + shared Client as the program designer (already live in
+  # prod), so on-by-default is safe. When off (or no key) the generate endpoint
+  # returns 503 and the rest of the library (CRUD, run, sync) is unaffected.
+  adhoc-workouts:
+    enabled: ${ADHOC_WORKOUTS_ENABLED:true}
+    gemini-model: ${ADHOC_WORKOUT_GEMINI_MODEL:gemini-3.1-pro-preview}
   # IMPL-COACH: best-effort AI post-workout recap on the session-completion
   # response. Uses gemini-3.8-flash (the approved general-work text model) via
   # the shared client; absent without GEMINI_API_KEY, so the recap is simply

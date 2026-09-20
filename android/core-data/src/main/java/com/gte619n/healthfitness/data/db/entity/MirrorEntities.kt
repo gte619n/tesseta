@@ -236,6 +236,26 @@ data class WorkoutScheduledEntity(
     override val syncState: String,
 ) : MirrorRow
 
+@Entity(tableName = MirrorTables.ADHOC_WORKOUTS, indices = [Index("lastUpdate")])
+data class AdHocWorkoutEntity(
+    @PrimaryKey override val id: String,
+    override val payloadJson: String,
+    override val lastUpdate: Long,
+    override val status: String,
+    override val dirty: Boolean,
+    override val syncState: String,
+) : MirrorRow
+
+@Entity(tableName = MirrorTables.ADHOC_SESSIONS, indices = [Index("lastUpdate")])
+data class AdHocSessionEntity(
+    @PrimaryKey override val id: String,
+    override val payloadJson: String,
+    override val lastUpdate: Long,
+    override val status: String,
+    override val dirty: Boolean,
+    override val syncState: String,
+) : MirrorRow
+
 @Entity(tableName = MirrorTables.USER_PROFILE, indices = [Index("lastUpdate")])
 data class UserProfileEntity(
     @PrimaryKey override val id: String,

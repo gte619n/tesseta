@@ -81,13 +81,16 @@ class DbKeystoreCryptoTest {
     }
 
     @Test
-    fun `mirror table catalog lists all 23 in-scope collections exactly once`() {
+    fun `mirror table catalog lists all 25 in-scope collections exactly once`() {
         val tables = com.gte619n.healthfitness.data.db.entity.MirrorTables.ALL
-        assertEquals(23, tables.size)
+        // 23 original + adhocWorkouts + adhocSessions (IMPL-ADHOC-01).
+        assertEquals(25, tables.size)
         assertEquals("no duplicate table names", tables.size, tables.toSet().size)
         assertTrue(tables.contains("medications"))
         assertTrue(tables.contains("workoutPrograms"))
         assertTrue(tables.contains("workoutScheduled"))
+        assertTrue(tables.contains("adhocWorkouts"))
+        assertTrue(tables.contains("adhocSessions"))
         assertTrue(tables.contains("userProfile"))
     }
 }

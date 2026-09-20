@@ -48,6 +48,10 @@ import com.gte619n.healthfitness.ui.theme.type
  */
 enum class WorkoutsTab(val label: String) {
     THIS_WEEK("This Week"),
+    // Ad-hoc workout library (IMPL-ADHOC-01): a first-class "do a workout
+    // whenever" section, right after the dashboard and distinct from periodized
+    // Programs — mirrors the web "Library" tab.
+    LIBRARY("Library"),
     PROGRAMS("Programs"),
     HISTORY("History"),
     GYMS("Gyms"),
@@ -80,6 +84,7 @@ fun WorkoutsHubRoute(
                 onOpenProgression = onOpenProgression,
             )
         },
+        libraryContent = { WorkoutLibraryRoute() },
         programsContent = {
             ProgramsListRoute(
                 onBack = {},
@@ -107,6 +112,7 @@ fun WorkoutsHubScreen(
     onBack: () -> Unit,
     onDesignNew: () -> Unit = {},
     landingContent: @Composable () -> Unit = {},
+    libraryContent: @Composable () -> Unit = {},
     programsContent: @Composable () -> Unit = {},
     historyContent: @Composable () -> Unit = {},
     gymsContent: @Composable () -> Unit = {},
@@ -147,6 +153,7 @@ fun WorkoutsHubScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when (selectedTab) {
                 WorkoutsTab.THIS_WEEK -> landingContent()
+                WorkoutsTab.LIBRARY -> libraryContent()
                 WorkoutsTab.PROGRAMS -> programsContent()
                 WorkoutsTab.HISTORY -> historyContent()
                 WorkoutsTab.GYMS -> gymsContent()

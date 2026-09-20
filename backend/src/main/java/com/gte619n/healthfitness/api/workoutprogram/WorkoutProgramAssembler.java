@@ -117,6 +117,25 @@ public class WorkoutProgramAssembler {
     }
 
     /**
+     * Resolve one standalone {@link WorkoutDay} into a {@link DayResponse} with
+     * exercise summaries + gym name (IMPL-ADHOC-01). Used by the ad-hoc workout
+     * responses, which carry a single embedded day rather than a phase tree.
+     */
+    public DayResponse day(String userId, WorkoutDay d) {
+        if (d == null) {
+            return null;
+        }
+        Map<String, Exercise> exercisesById = exercisesFor(collectExerciseIdsFromDays(List.of(d)));
+        Map<String, ExerciseSummary> summaries = summariesFrom(exercisesById);
+        Set<String> locIds = new HashSet<>();
+        if (d.locationId() != null) {
+            locIds.add(d.locationId());
+        }
+        Map<String, String> gymNames = gymNamesFor(userId, locIds);
+        return dayResponse(d, summaries, exercisesById, gymNames);
+    }
+
+    /**
      * Scheduled responses enriched with program + phase titles for the Workout
      * History view's delineation headers. {@code programsById} carries the owning
      * programs (with their phases); ids absent from the map resolve to null titles

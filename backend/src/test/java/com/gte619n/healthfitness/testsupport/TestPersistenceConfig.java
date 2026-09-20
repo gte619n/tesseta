@@ -228,6 +228,19 @@ public class TestPersistenceConfig {
         return new com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryWorkoutSettingsRepository();
     }
 
+    // IMPL-ADHOC-01: in-memory ad-hoc workout library + run-session stores so the
+    // full context wires the AdHocWorkoutService / AdHocSessionService /
+    // AdHocCompletedSessionSource beans when firestore-enabled=false.
+    @Bean
+    com.gte619n.healthfitness.core.adhoc.AdHocWorkoutRepository adHocWorkoutRepository() {
+        return new com.gte619n.healthfitness.testsupport.adhoc.InMemoryAdHocWorkoutRepository();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.adhoc.AdHocSessionRepository adHocSessionRepository() {
+        return new com.gte619n.healthfitness.testsupport.adhoc.InMemoryAdHocSessionRepository();
+    }
+
     @Bean
     GoalRepository goalRepository() {
         return new InMemoryGoalRepository();

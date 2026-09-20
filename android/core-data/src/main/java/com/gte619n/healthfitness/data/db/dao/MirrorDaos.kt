@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.gte619n.healthfitness.data.db.entity.AdHocSessionEntity
+import com.gte619n.healthfitness.data.db.entity.AdHocWorkoutEntity
 import com.gte619n.healthfitness.data.db.entity.BloodReadingEntity
 import com.gte619n.healthfitness.data.db.entity.BloodTestReportEntity
 import com.gte619n.healthfitness.data.db.entity.BodyCompositionEntity
@@ -500,6 +502,54 @@ interface WeeklyWorkoutAggregateDao {
     suspend fun markArchived(id: String, lastUpdate: Long)
 
     @Query("DELETE FROM weeklyWorkoutAggregates WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
+interface AdHocWorkoutDao {
+    @Query("SELECT * FROM adhocWorkouts WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
+    fun observeActive(): Flow<List<AdHocWorkoutEntity>>
+
+    @Query("SELECT * FROM adhocWorkouts WHERE status != 'ARCHIVED'")
+    suspend fun listActive(): List<AdHocWorkoutEntity>
+
+    @Query("SELECT * FROM adhocWorkouts WHERE id = :id")
+    suspend fun getById(id: String): AdHocWorkoutEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: AdHocWorkoutEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(rows: List<AdHocWorkoutEntity>)
+
+    @Query("UPDATE adhocWorkouts SET status = 'ARCHIVED', lastUpdate = :lastUpdate WHERE id = :id")
+    suspend fun markArchived(id: String, lastUpdate: Long)
+
+    @Query("DELETE FROM adhocWorkouts WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
+interface AdHocSessionDao {
+    @Query("SELECT * FROM adhocSessions WHERE status != 'ARCHIVED' ORDER BY lastUpdate DESC")
+    fun observeActive(): Flow<List<AdHocSessionEntity>>
+
+    @Query("SELECT * FROM adhocSessions WHERE status != 'ARCHIVED'")
+    suspend fun listActive(): List<AdHocSessionEntity>
+
+    @Query("SELECT * FROM adhocSessions WHERE id = :id")
+    suspend fun getById(id: String): AdHocSessionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: AdHocSessionEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(rows: List<AdHocSessionEntity>)
+
+    @Query("UPDATE adhocSessions SET status = 'ARCHIVED', lastUpdate = :lastUpdate WHERE id = :id")
+    suspend fun markArchived(id: String, lastUpdate: Long)
+
+    @Query("DELETE FROM adhocSessions WHERE id = :id")
     suspend fun delete(id: String)
 }
 

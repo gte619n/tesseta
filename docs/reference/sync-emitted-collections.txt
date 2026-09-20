@@ -7,6 +7,8 @@
 # updated; updating it then forces the Android registry test to prove the client
 # routes the new collection (instead of silently dropping it — the bug this
 # closes). One entry per line; sorted; '#' comments and blank lines ignored.
+adhocWorkouts
+adhocWorkouts/sessions
 bloodReadings
 bloodTestReports
 bodyComposition

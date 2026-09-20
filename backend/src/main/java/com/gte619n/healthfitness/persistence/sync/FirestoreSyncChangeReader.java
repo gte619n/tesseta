@@ -125,7 +125,8 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         "deviceSyncs",
         "dexaScans",
         "weeklyWorkoutAggregates",
-        "workoutPrograms"
+        "workoutPrograms",
+        "adhocWorkouts"
     );
 
     /**
@@ -165,7 +166,12 @@ public class FirestoreSyncChangeReader implements SyncChangeReader {
         // Per-user enumeration walks workoutPrograms → scheduled directly, so the
         // online-only workout-program *chat* (its own messages leaf) is never
         // reached. Workout-program chat is web-driven SSE and not synced.
-        new Subcollection(List.of("workoutPrograms"), "scheduled", "workoutPrograms/scheduled")
+        new Subcollection(List.of("workoutPrograms"), "scheduled", "workoutPrograms/scheduled"),
+        // Ad-hoc run sessions: users/{uid}/adhocWorkouts/{id}/sessions/{id}
+        // (IMPL-ADHOC-01). Emitted as "adhocWorkouts/sessions" with id
+        // "{adhocId}/{sessionId}" — the Android CollectionRegistry MUST register
+        // this slash-form alias or cross-device runs silently drop.
+        new Subcollection(List.of("adhocWorkouts"), "sessions", "adhocWorkouts/sessions")
     );
 
     /**

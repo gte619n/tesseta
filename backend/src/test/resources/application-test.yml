@@ -81,6 +81,11 @@ app:
     # IMPL-15: skip the live GeminiWorkoutProgramChatClient (needs an API key).
     # Chat tests install a fake WorkoutProgramChatClient via @TestConfiguration.
     enabled: false
+  adhoc-workouts:
+    # IMPL-ADHOC-01: skip the live GeminiAdHocWorkoutGenerator (needs an API key
+    # at construction). The E2E controller test installs a stub AdHocWorkoutGenerator
+    # via @TestConfiguration; everything else skips the live bean.
+    enabled: false
   workouts:
     split:
       # Skip the live GeminiWorkoutBlockClassifier (needs an API key at
