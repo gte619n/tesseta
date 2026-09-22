@@ -17,6 +17,7 @@ type Cell = {
   day: number;
   count: number;
   ref: { programId: string; scheduledId: string } | null;
+  isDeload: boolean;
   future: boolean;
 } | null;
 
@@ -42,6 +43,7 @@ function buildMonth(
       day: d,
       count: hit?.sessionCount ?? 0,
       ref: hit?.first ?? null,
+      isDeload: hit?.isDeload ?? false,
       future: date > todayIso,
     });
   }
@@ -113,14 +115,16 @@ export function ConsistencyHeatmap({
                     heatmapIntensityClass(cell) +
                     (cell.count > 0 ? " font-medium text-white" : " text-tertiary");
                   if (cell.ref && cell.count > 0) {
+                    const deloadSuffix = cell.isDeload ? " · deload" : "";
                     return (
                       <Link
                         key={cell.date}
                         href={`/me/workouts/history/${cell.ref.programId}/${cell.ref.scheduledId}` as Route}
-                        aria-label={`${cell.count} workout${cell.count !== 1 ? "s" : ""} on ${cell.date}`}
-                        title={`${cell.date}: ${cell.count} workout${cell.count !== 1 ? "s" : ""}`}
+                        aria-label={`${cell.count} workout${cell.count !== 1 ? "s" : ""} on ${cell.date}${deloadSuffix}`}
+                        title={`${cell.date}: ${cell.count} workout${cell.count !== 1 ? "s" : ""}${deloadSuffix}`}
                         data-testid="heatmap-day"
                         data-date={cell.date}
+                        data-deload={cell.isDeload ? "true" : "false"}
                         className={cls + " transition-transform hover:scale-110"}
                       >
                         {cell.day}

@@ -305,6 +305,25 @@ fun WorkoutSessionScreen(
                 null
             },
         )
+        // IMPL-DELOAD-01 (P3): a scheduled deload week is named up front so the
+        // reduced targets read as intentional, not a regression.
+        if (draft?.scheduled?.isDeload == true) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Hf.colors.warnBg)
+                    .padding(horizontal = 18.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Pill(stringResource(R.string.workout_session_deload_pill), HfTone.Warn)
+                Text(
+                    stringResource(R.string.workout_session_deload_banner),
+                    style = Hf.type.bodySm,
+                    color = Hf.colors.textSecondary,
+                )
+            }
+        }
         when {
             draft == null && state.loading -> LoadingState(Modifier.fillMaxSize())
             draft == null && state.error != null -> ErrorState(
@@ -656,6 +675,7 @@ private fun SessionBody(
                     now = now,
                     voiceEnabled = voiceEnabled,
                     announce = announce,
+                    isDeload = draft.scheduled.isDeload,
                     substituteOptions = substituteOptions,
                     substituteLoading = substituteLoading,
                     substituteError = substituteError,
@@ -692,6 +712,14 @@ private fun SessionBody(
         }
     }
 }
+
+/**
+ * IMPL-DELOAD-01 (P3): the session-start voice cue for a scheduled deload week.
+ * Spoken before the opening exercise cue. A constant (not a resource) because
+ * the announcer speaks it verbatim and unit tests assert it.
+ */
+internal const val DELOAD_START_CUE =
+    "Deload week. Today is lighter on purpose — your plan resumes next session."
 
 /** Speak the exercise + its effective (prefilled) load — shared by both cues. */
 private fun announceStep(
@@ -760,6 +788,9 @@ private fun ExercisePage(
     now: Instant,
     voiceEnabled: Boolean,
     announce: (String) -> Unit,
+    // IMPL-DELOAD-01 (P3): the session is a scheduled deload — the start cue
+    // names it so lighter targets read as intentional.
+    isDeload: Boolean = false,
     substituteOptions: List<ExerciseSummary>,
     substituteLoading: Boolean,
     substituteError: String?,
@@ -891,7 +922,12 @@ private fun ExercisePage(
                     lastSets = lastSets,
                     showStart = showStart,
                     onStart = {
-                        if (voiceEnabled) announceStep(step, logged, lastSets, announce)
+                        if (voiceEnabled) {
+                            // IMPL-DELOAD-01 (P3): lead with the deload cue so the
+                            // reduced numbers that follow read as intentional.
+                            if (isDeload) announce(DELOAD_START_CUE)
+                            announceStep(step, logged, lastSets, announce)
+                        }
                         onStarted()
                     },
                     onToggleSet = onToggleSet,

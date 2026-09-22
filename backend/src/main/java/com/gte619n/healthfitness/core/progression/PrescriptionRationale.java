@@ -31,6 +31,7 @@ public record PrescriptionRationale(
             case FALLBACK_STALE -> "based on your last session";
             case FALLBACK_SANITY -> "held (sanity)";
             case FALLBACK_UNMATERIALIZED -> "based on your last session";
+            case DELOAD -> "deload week";
         });
         if (inputs != null && !inputs.isEmpty()) {
             sb.append(" · ").append(String.join("; ", inputs));

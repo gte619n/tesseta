@@ -427,7 +427,72 @@ class WorkoutSessionCompletionServiceTest {
         assertEquals("bp", prescription(updated, 1).exerciseId());
     }
 
+    // ---- IMPL-DELOAD-01 P0: engine target survives completion (RC-2) ----
+
+    @Test
+    void completePreservesEngineTargetBasisAndRationale() {
+        // The engine stamped target 140 + rationale on the PLANNED session; after
+        // completion the snapshot must still carry them (audit + the progression
+        // loop's lastPrescribed both depend on it).
+        ScheduledWorkout sw = seedPlannedWithTarget("p1", 140.0);
+
+        ScheduledWorkout updated = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0, List.of(new LoggedSet(190.0, 8, null, null, null)))));
+
+        Prescription rx0 = prescription(updated, 0);
+        assertEquals(140.0, rx0.targetWeightLbs(), 1e-9);
+        assertEquals("engine", rx0.loadBasis());
+        assertEquals(com.gte619n.healthfitness.core.progression.ProgressionPath.KALMAN,
+            rx0.rationale().path());
+        // And it round-trips through the repository, not just the return value.
+        Prescription stored = prescription(
+            scheduled.findById(USER, "p1", sw.scheduledId()).orElseThrow(), 0);
+        assertEquals(140.0, stored.targetWeightLbs(), 1e-9);
+        assertEquals(com.gte619n.healthfitness.core.progression.ProgressionPath.KALMAN,
+            stored.rationale().path());
+    }
+
+    @Test
+    void substitutedSlotClearsEngineTargetAndRationale() {
+        // A mid-session substitute performs a DIFFERENT movement — the designed
+        // exercise's target/rationale would be misleading, so they are nulled (DD-1).
+        ScheduledWorkout sw = seedPlannedWithTarget("p1", 140.0);
+
+        ScheduledWorkout updated = service.complete(
+            USER, "p1", sw.scheduledId(), ScheduledStatus.COMPLETED, FINISHED, 3600,
+            List.of(new LoggedPrescription("b1", 0,
+                List.of(new LoggedSet(60.0, 10, null, null, null)), "db-press")));
+
+        Prescription rx0 = prescription(updated, 0);
+        assertEquals("db-press", rx0.exerciseId());
+        assertNull(rx0.targetWeightLbs());
+        assertNull(rx0.loadBasis());
+        assertNull(rx0.rationale());
+    }
+
     // ---- fixtures ----
+
+    /** A planned session whose first prescription carries an engine target + rationale. */
+    private ScheduledWorkout seedPlannedWithTarget(String programId, double targetLbs) {
+        seedProgram(programId);
+        var rationale = new com.gte619n.healthfitness.core.progression.PrescriptionRationale(
+            com.gte619n.healthfitness.core.progression.ProgressionPath.KALMAN,
+            com.gte619n.healthfitness.core.progression.Direction.UP,
+            5.0, null, null,
+            com.gte619n.healthfitness.core.progression.Confidence.HIGH,
+            List.of("e1RM ~250 lb"));
+        Prescription withTarget = new Prescription(
+            "sq", 0, 3, 5, 8, null, null, 120, null, null, null, null,
+            targetLbs, "engine", rationale);
+        WorkoutDay day = new WorkoutDay("d1", "Lower", DayOfWeek.WED, "gym-1", 0, List.of(
+            new Block("b1", BlockType.MAIN, "Main", 0, List.of(withTarget, rx("bp", 1)))));
+        ScheduledWorkout sw = new ScheduledWorkout(
+            USER, programId, DATE + "_d1", DATE, "ph1", "d1", "Lower",
+            1, false, "gym-1", ScheduledStatus.PLANNED, day, null, null, null);
+        scheduled.save(sw);
+        return sw;
+    }
 
     private ScheduledWorkout seedPlanned(String programId) {
         return seedPlanned(programId, DATE);

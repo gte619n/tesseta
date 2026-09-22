@@ -219,6 +219,14 @@ function HistoryRow({
             <span className="text-[14px] font-medium text-primary">
               {session.dayLabel}
             </span>
+            {session.isDeload && (
+              <span
+                className="caps-mono ml-2 rounded-[3px] bg-warn-bg px-1.5 py-px text-[9px] tracking-[0.06em] text-warn"
+                data-testid="deload-badge"
+              >
+                Deload
+              </span>
+            )}
             <div className="caps-mono mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] tracking-[0.06em] text-tertiary">
               <span>{formatWhen(session)}</span>
               {clock ? <span>· {clock}</span> : null}

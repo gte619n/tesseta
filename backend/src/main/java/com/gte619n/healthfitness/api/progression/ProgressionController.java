@@ -12,6 +12,16 @@ import com.gte619n.healthfitness.core.progression.ProgressionState;
 import com.gte619n.healthfitness.core.progression.ProgressionStateRepository;
 import com.gte619n.healthfitness.core.progression.SuccessCriterion;
 import com.gte619n.healthfitness.core.progression.WeekLoop;
+import com.gte619n.healthfitness.core.workoutprogram.Block;
+import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
+import com.gte619n.healthfitness.core.workoutprogram.Prescription;
+import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
+import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
+import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
+import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +33,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -40,16 +51,21 @@ public class ProgressionController {
     private final ProgressionStateRepository states;
     private final ExerciseRepository exercises;
     private final LoadConventionResolver conventions;
+    private final WorkoutProgramRepository programs;
+    private final ScheduledWorkoutRepository scheduled;
 
     public ProgressionController(
         CurrentUserProvider currentUser, ProgressionEngine engine,
         ProgressionStateRepository states, ExerciseRepository exercises,
-        LoadConventionResolver conventions) {
+        LoadConventionResolver conventions,
+        WorkoutProgramRepository programs, ScheduledWorkoutRepository scheduled) {
         this.currentUser = currentUser;
         this.engine = engine;
         this.states = states;
         this.exercises = exercises;
         this.conventions = conventions;
+        this.programs = programs;
+        this.scheduled = scheduled;
     }
 
     /** e1rm / sigma / confidence / trend for one exercise. */
@@ -115,6 +131,78 @@ public class ProgressionController {
                     factor, s.e1rmLbs() * factor);
             })
             .toList();
+    }
+
+    /** How many log rows the audit returns (newest first). */
+    private static final int LOG_LIMIT = 100;
+
+    /**
+     * IMPL-DELOAD-01 (D4/DD-7): the per-lift progression audit — one row per
+     * completed session the exercise appeared in, newest first, carrying the
+     * engine's target/basis/rationale (retained at completion since P0; null for
+     * pre-retention history) beside the top performed set. Derived on read from
+     * the completed sessions; nothing new is stored.
+     */
+    @GetMapping("/log")
+    public ProgressionLogDto log(@RequestParam String exerciseId) {
+        String userId = currentUser.get().userId();
+        Exercise ex = exercises.findById(exerciseId).orElse(null);
+        int loadFactor = conventions.factor(userId, exerciseId);
+
+        List<ProgressionLogRowDto> rows = new ArrayList<>();
+        for (WorkoutProgram program : programs.findByUserIncludingArchived(userId)) {
+            if (program == null || program.programId() == null) continue;
+            for (ScheduledWorkout sw : scheduled.findByProgram(
+                    userId, program.programId(), LocalDate.MIN, LocalDate.MAX)) {
+                if (sw == null || sw.status() != ScheduledStatus.COMPLETED
+                    || sw.session() == null || sw.session().blocks() == null || sw.date() == null) {
+                    continue;
+                }
+                for (Block b : sw.session().blocks()) {
+                    if (b == null || b.prescriptions() == null) continue;
+                    for (Prescription rx : b.prescriptions()) {
+                        if (rx == null || !exerciseId.equals(rx.exerciseId())
+                            || rx.durationSeconds() != null) {
+                            continue;
+                        }
+                        rows.add(logRow(sw, program.programId(), rx, loadFactor));
+                    }
+                }
+            }
+        }
+        rows.sort(Comparator.comparing(ProgressionLogRowDto::date).reversed());
+        if (rows.size() > LOG_LIMIT) rows = new ArrayList<>(rows.subList(0, LOG_LIMIT));
+        return new ProgressionLogDto(
+            exerciseId, ex != null ? ex.name() : exerciseId, loadFactor, rows);
+    }
+
+    private static ProgressionLogRowDto logRow(
+        ScheduledWorkout sw, String programId, Prescription rx, int loadFactor) {
+        Double topWeight = null;
+        Integer topReps = null;
+        int loggedCount = 0;
+        if (rx.loggedSets() != null) {
+            for (LoggedSet s : rx.loggedSets()) {
+                if (s == null) continue;
+                loggedCount++;
+                if (s.weightLbs() != null && s.reps() != null
+                    && (topWeight == null || s.weightLbs() > topWeight)) {
+                    topWeight = s.weightLbs();
+                    topReps = s.reps();
+                }
+            }
+        }
+        var rationale = rx.rationale();
+        return new ProgressionLogRowDto(
+            sw.date().toString(),
+            rationale != null && rationale.path() != null ? rationale.path().name() : null,
+            rationale != null && rationale.direction() != null ? rationale.direction().name() : null,
+            rx.targetWeightLbs(), rx.loadBasis(),
+            rationale != null && rationale.inputs() != null ? rationale.inputs() : List.of(),
+            topWeight, topReps, loggedCount, sw.isDeload(),
+            programId, sw.scheduledId(),
+            rx.targetWeightLbs() == null ? null : rx.targetWeightLbs() * loadFactor,
+            topWeight == null ? null : topWeight * loadFactor);
     }
 
     /** Manual mode override (D12) — pins params so the block loop won't overwrite. */
@@ -189,4 +277,23 @@ public class ProgressionController {
         // IMPL-PROG-LOAD-01 (D3/D8): 1 or 2, and the pre-doubled total for
         // per-hand lifts so the strength view compares to barbell lifts.
         int loadFactor, double e1rmTotalLbs) {}
+
+    /** IMPL-DELOAD-01 (D4): the per-lift progression audit envelope. */
+    public record ProgressionLogDto(
+        String exerciseId, String exerciseName, int loadFactor, List<ProgressionLogRowDto> rows) {}
+
+    /**
+     * One completed session's row in the audit: what the engine wanted
+     * ({@code targetWeightLbs}/{@code loadBasis}/{@code rationaleInputs}) vs
+     * what was performed (top set), plus provenance ({@code path}) and the
+     * deload flag. Target fields are null for history completed before target
+     * retention (P0) or for pre-engine sessions. {@code *TotalLbs} carry the
+     * per-hand ×2 for dumbbell/dual-cable lifts (IMPL-PROG-LOAD-01 D9).
+     */
+    public record ProgressionLogRowDto(
+        String date, String path, String direction,
+        Double targetWeightLbs, String loadBasis, List<String> rationaleInputs,
+        Double topSetWeightLbs, Integer topSetReps, int loggedSetCount, boolean isDeload,
+        String programId, String scheduledId,
+        Double targetTotalLbs, Double topSetTotalLbs) {}
 }

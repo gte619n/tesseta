@@ -11,6 +11,7 @@ import type {
   SessionDetailResponse,
 } from "@/lib/types/workout-stats";
 import type { ScheduledWorkoutResponse } from "@/lib/types/workout-program";
+import type { ProgressionLog } from "@/lib/types/progression";
 
 // Current week Monday for the fixture "today" of 2026-09-16 (a Wednesday).
 export const ALPHA_WEEK_START = "2026-09-14";
@@ -58,11 +59,14 @@ export const alphaStats: WorkoutStats = {
       date: "2026-09-12",
       sessionCount: 1,
       first: { programId: "wp_alpha", scheduledId: "2026-09-12_d1" },
+      isDeload: false,
     },
     {
+      // IMPL-DELOAD-01: a deload-week session day (badged in the tooltip).
       date: "2026-08-30",
       sessionCount: 1,
       first: { programId: "wp_alpha", scheduledId: "2026-08-30_d3" },
+      isDeload: true,
     },
   ],
   recentPrs: [
@@ -244,6 +248,104 @@ export const alphaSessionDetail: SessionDetailResponse = {
   prSetKeys: ["b1:0:1"],
   prev: { programId: "wp_alpha", scheduledId: "2026-08-30_d3", date: "2026-08-30" },
   next: null,
+};
+
+// IMPL-DELOAD-01 P2: a completed DELOAD session — target 36 retained, athlete
+// did 35 top set → session detail shows the Deload badge, the target delta, and
+// the load basis.
+export const alphaDeloadSessionDetail: SessionDetailResponse = {
+  session: {
+    ...alphaSessionDetail.session,
+    scheduledId: "2026-09-19_d1",
+    date: "2026-09-19",
+    dayLabel: "Push (deload)",
+    isDeload: true,
+    session: {
+      ...alphaSessionDetail.session.session,
+      blocks: [
+        {
+          blockId: "b1",
+          type: "MAIN",
+          title: "Main",
+          orderIndex: 0,
+          prescriptions: [
+            {
+              ...alphaSessionDetail.session.session.blocks[0]!.prescriptions[0]!,
+              sets: 2,
+              targetWeightLbs: 36,
+              loadBasis: "deload week · resumes 40 lb next week",
+              loggedSets: [
+                { weightLbs: 35, reps: 12, rir: 4, rirSource: "REPORTED", rpe: null, restSeconds: 120, completedAt: null },
+                { weightLbs: 35, reps: 12, rir: 3, rirSource: "REPORTED", rpe: null, restSeconds: 120, completedAt: null },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  },
+  prSetKeys: [],
+  prev: null,
+  next: null,
+};
+
+// IMPL-DELOAD-01 P2: a progression-log fixture — a HOLD row, a DELOAD row, and
+// a pre-retention row (null target), for a per-hand (×2) dumbbell lift.
+export const dbPressProgressionLog: ProgressionLog = {
+  exerciseId: "ex_db_press",
+  exerciseName: "Dumbbell Overhead Press",
+  loadFactor: 2,
+  rows: [
+    {
+      date: "2026-09-21",
+      path: "DELOAD",
+      direction: "DOWN",
+      targetWeightLbs: 35,
+      loadBasis: "deload week",
+      rationaleInputs: ["deload week → 10% lighter, sets ×0.5", "resumes 40 lb next week"],
+      topSetWeightLbs: 35,
+      topSetReps: 12,
+      loggedSetCount: 2,
+      isDeload: true,
+      programId: "wp_alpha",
+      scheduledId: "2026-09-21_d1",
+      targetTotalLbs: 70,
+      topSetTotalLbs: 70,
+    },
+    {
+      date: "2026-09-14",
+      path: "WARMUP",
+      direction: "HOLD",
+      targetWeightLbs: 40,
+      loadBasis: "double progression",
+      rationaleInputs: ["last: 40×8,8,8", "in range → add a rep toward 12"],
+      topSetWeightLbs: 40,
+      topSetReps: 8,
+      loggedSetCount: 3,
+      isDeload: false,
+      programId: "wp_alpha",
+      scheduledId: "2026-09-14_d1",
+      targetTotalLbs: 80,
+      topSetTotalLbs: 80,
+    },
+    {
+      // Completed before target retention shipped: no target/rationale survives.
+      date: "2026-09-07",
+      path: null,
+      direction: null,
+      targetWeightLbs: null,
+      loadBasis: null,
+      rationaleInputs: [],
+      topSetWeightLbs: 35,
+      topSetReps: 12,
+      loggedSetCount: 3,
+      isDeload: false,
+      programId: "wp_alpha",
+      scheduledId: "2026-09-07_d1",
+      targetTotalLbs: null,
+      topSetTotalLbs: 70,
+    },
+  ],
 };
 
 // Five most-recent sessions, newest first, for the LatestWorkouts list.

@@ -120,7 +120,15 @@ public class SessionLoop {
 
         List<LoggedSet> sets = rx.loggedSets();
         String sessionId = completed.scheduledId();
-        recordObservations(userId, sessionId, exerciseId, sets, profile);
+        boolean deload = completed.isDeload();
+        recordObservations(userId, sessionId, exerciseId, sets, profile, deload);
+
+        // IMPL-DELOAD-01 (D2/D3/DD-4): a scheduled deload session is observe-only.
+        // Sets are recorded (flagged DELOAD) but the belief is not corrected, no
+        // predictions are logged, and NO prescription is derived or written —
+        // post-deload sessions already carry the trajectory target stamped by the
+        // last non-deload completion, so the earned progression resumes untouched.
+        if (deload) return;
 
         double workingLoad = SessionAnalysis.workingLoad(sets);
         LoggedSet lastSet = SessionAnalysis.lastWorkingSet(sets);
@@ -144,14 +152,21 @@ public class SessionLoop {
         // ---- next-session prescription ----
         PrescribedLoad next = tightenBandOnIncrease(derivePrescription(
             userId, exerciseId, updated, sets, workingLoad, rx, block, pattern, mechanic, profile, now));
-        writeback.applyNextPrescription(userId, exerciseId, next, completed.date());
+        // IMPL-DELOAD-01 (DD-2): the increment rides along so deload-week
+        // sessions get a physically-loadable reduced target.
+        writeback.applyNextPrescription(
+            userId, exerciseId, next, completed.date(), profile.loadIncrementLbs());
     }
 
     // ---- observations ----
 
     private void recordObservations(
-        String userId, String sessionId, String exerciseId, List<LoggedSet> sets, ExerciseLoadingProfile profile) {
+        String userId, String sessionId, String exerciseId, List<LoggedSet> sets,
+        ExerciseLoadingProfile profile, boolean deload) {
         LoggedSet last = SessionAnalysis.lastWorkingSet(sets);
+        // IMPL-DELOAD-01 (D3): deload-week sets are flagged so any future
+        // consumer knows they were intentionally submaximal.
+        Set<ContextFlag> flags = deload ? Set.of(ContextFlag.DELOAD) : Set.of();
         List<SetObservation> batch = new ArrayList<>();
         int idx = 1;
         for (LoggedSet s : sets) {
@@ -160,7 +175,7 @@ public class SessionLoop {
             batch.add(new SetObservation(
                 UUID.randomUUID().toString(), userId, sessionId, exerciseId, idx++,
                 s == last, s.weightLbs() == null ? 0 : s.weightLbs(), s.reps(),
-                source, s.effectiveRir(), null, s.completedAt(), Set.of()));
+                source, s.effectiveRir(), null, s.completedAt(), flags));
         }
         observations.saveAll(batch);
     }

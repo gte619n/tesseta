@@ -19,5 +19,11 @@ public enum ProgressionPath {
     /** Fallback: session not server-materialized (ad-hoc / beyond window, D23). */
     FALLBACK_UNMATERIALIZED,
     /** Warm-up window: Kalman is shadow-only, deterministic prescribes (D5). */
-    WARMUP
+    WARMUP,
+    /**
+     * IMPL-DELOAD-01 (D1): a scheduled deload-week session — target deliberately
+     * reduced from the earned trajectory; the trajectory resumes unchanged on the
+     * next non-deload session.
+     */
+    DELOAD
 }

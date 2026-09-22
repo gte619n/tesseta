@@ -27,6 +27,8 @@ export type HeatmapDay = {
   date: string; // ISO date
   sessionCount: number;
   first: SessionRef;
+  // IMPL-DELOAD-01 (D4): the day's representative session was a scheduled deload.
+  isDeload: boolean;
 };
 
 export type PrPoint = {

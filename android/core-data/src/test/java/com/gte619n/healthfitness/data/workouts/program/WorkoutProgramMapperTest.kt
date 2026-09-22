@@ -219,4 +219,39 @@ class WorkoutProgramMapperTest {
         assertEquals(0.0, performed.loggedSets[1].weightLbs!!, 0.0)
         assertNull(performed.loggedSets[1].reps)
     }
+
+    // IMPL-DELOAD-01 (P3/DD-3 compat gate): the backend now emits a DELOAD
+    // rationale path. `path` is a raw pass-through string and the enum fields
+    // fall back on unknown values, so a new — or entirely unknown — path can
+    // never crash the decode of an older app.
+    @Test
+    fun `deload rationale path passes through and unknown enums fall back`() {
+        val deload = PrescriptionRationaleDto(
+            path = "DELOAD",
+            direction = "DOWN",
+            deltaLbs = -5.0,
+            deltaSets = -1,
+            confidence = "HIGH",
+            inputs = listOf("deload week → 10% lighter, sets ×0.5"),
+        ).toDomain()
+        assertEquals("DELOAD", deload.path)
+        assertEquals(-5.0, deload.deltaLbs!!, 0.0)
+        assertEquals(listOf("deload week → 10% lighter, sets ×0.5"), deload.inputs)
+
+        // A path/direction/confidence this app version has never heard of.
+        val unknown = PrescriptionRationaleDto(
+            path = "SOME_FUTURE_PATH",
+            direction = "SIDEWAYS",
+            confidence = "COSMIC",
+        ).toDomain()
+        assertEquals("SOME_FUTURE_PATH", unknown.path)
+        assertEquals(
+            com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection.HOLD,
+            unknown.direction,
+        )
+        assertEquals(
+            com.gte619n.healthfitness.domain.workouts.program.ProgressionConfidence.LOW,
+            unknown.confidence,
+        )
+    }
 }

@@ -42,6 +42,7 @@ describe("buildHeatmapGrid", () => {
         date: "2026-06-15",
         sessionCount: 2,
         first: { programId: "p1", scheduledId: "2026-06-15_d1" },
+        isDeload: false,
       },
     ];
     const grid = buildHeatmapGrid(days, today, 2);

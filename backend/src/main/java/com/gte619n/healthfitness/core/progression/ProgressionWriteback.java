@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.core.progression;
 
 import com.gte619n.healthfitness.core.exercise.BlockType;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
+import com.gte619n.healthfitness.core.workoutprogram.DeloadModifier;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
@@ -39,11 +40,23 @@ public class ProgressionWriteback {
         this.scheduled = scheduled;
     }
 
+    /** Back-compat (tests): stamp with no increment snapping on deload sessions. */
+    public void applyNextPrescription(String userId, String exerciseId, PrescribedLoad load, LocalDate afterDate) {
+        applyNextPrescription(userId, exerciseId, load, afterDate, 0);
+    }
+
     /**
      * Stamp {@code load} onto every future PLANNED occurrence of {@code exerciseId}
      * in eligible blocks, strictly after {@code afterDate}.
+     *
+     * <p>IMPL-DELOAD-01 (D1/DD-2): sessions flagged {@code isDeload} receive a
+     * DELOAD-transformed prescription (sets × modifier, load reduced and floored
+     * to {@code incrementLbs}); all other sessions receive the full trajectory
+     * target. The trajectory therefore always lives on the post-deload sessions,
+     * which is what lets a deload completion skip writeback entirely (D2).
      */
-    public void applyNextPrescription(String userId, String exerciseId, PrescribedLoad load, LocalDate afterDate) {
+    public void applyNextPrescription(
+        String userId, String exerciseId, PrescribedLoad load, LocalDate afterDate, double incrementLbs) {
         for (WorkoutProgram program : programs.findByUser(userId)) {
             if (program.status() != ProgramStatus.ACTIVE) continue;
             List<ScheduledWorkout> future = scheduled.findByProgram(
@@ -51,7 +64,7 @@ public class ProgressionWriteback {
             List<ScheduledWorkout> edited = new ArrayList<>();
             for (ScheduledWorkout sw : future) {
                 if (sw.status() != ScheduledStatus.PLANNED || sw.session() == null) continue;
-                WorkoutDay rewritten = rewriteDay(sw.session(), exerciseId, load);
+                WorkoutDay rewritten = rewriteDay(sw.session(), exerciseId, load, sw.isDeload(), incrementLbs);
                 if (rewritten != null) edited.add(withSession(sw, rewritten));
             }
             if (!edited.isEmpty()) scheduled.saveSessions(edited);
@@ -59,7 +72,8 @@ public class ProgressionWriteback {
     }
 
     /** Rebuild a day with the load applied to matching prescriptions; null if nothing matched. */
-    private static WorkoutDay rewriteDay(WorkoutDay day, String exerciseId, PrescribedLoad load) {
+    private static WorkoutDay rewriteDay(
+        WorkoutDay day, String exerciseId, PrescribedLoad load, boolean isDeload, double incrementLbs) {
         if (day.blocks() == null) return null;
         boolean touched = false;
         List<Block> newBlocks = new ArrayList<>();
@@ -71,7 +85,9 @@ public class ProgressionWriteback {
             List<Prescription> newRxs = new ArrayList<>();
             for (Prescription rx : block.prescriptions()) {
                 if (exerciseId.equals(rx.exerciseId()) && rx.durationSeconds() == null) {
-                    newRxs.add(stamp(rx, load));
+                    PrescribedLoad effective = isDeload
+                        ? deloadTransform(load, rx.deloadModifier(), incrementLbs) : load;
+                    newRxs.add(stamp(rx, effective));
                     touched = true;
                 } else {
                     newRxs.add(rx);
@@ -82,6 +98,36 @@ public class ProgressionWriteback {
         if (!touched) return null;
         return new WorkoutDay(day.dayId(), day.label(), day.dayOfWeek(), day.locationId(),
             day.orderIndex(), newBlocks);
+    }
+
+    /** Default deload dose when the program author set no {@link DeloadModifier} (D1). */
+    static final double DEFAULT_DELOAD_SETS_MULTIPLIER = 0.5;
+    static final double DEFAULT_DELOAD_INTENSITY_DELTA = -0.10;
+
+    /**
+     * The D1 deload dose: sets × multiplier (min 1) and load × (1 + delta),
+     * floored to the exercise's real increment so the reduced weight is
+     * physically loadable. The rationale names the trajectory target it resumes.
+     */
+    static PrescribedLoad deloadTransform(PrescribedLoad load, DeloadModifier modifier, double incrementLbs) {
+        double setsMult = modifier != null && modifier.setsMultiplier() != null
+            ? modifier.setsMultiplier() : DEFAULT_DELOAD_SETS_MULTIPLIER;
+        double intensityDelta = modifier != null && modifier.intensityDelta() != null
+            ? modifier.intensityDelta() : DEFAULT_DELOAD_INTENSITY_DELTA;
+        int deloadSets = Math.max(1, (int) Math.round(load.sets() * setsMult));
+        double deloadLoad = ProgressionMath.floorToIncrement(
+            load.targetWeightLbs() * (1 + intensityDelta), incrementLbs);
+        PrescriptionRationale rationale = new PrescriptionRationale(
+            ProgressionPath.DELOAD, Direction.DOWN,
+            deloadLoad - load.targetWeightLbs(), null, deloadSets - load.sets(), Confidence.HIGH,
+            List.of(
+                "deload week → " + Math.round(Math.abs(intensityDelta) * 100) + "% lighter, sets ×" + setsMult,
+                "resumes " + fmt(load.targetWeightLbs()) + " lb next week"));
+        return new PrescribedLoad(deloadSets, load.repsMin(), load.repsMax(), deloadLoad, rationale);
+    }
+
+    private static String fmt(double v) {
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
     }
 
     private static Prescription stamp(Prescription rx, PrescribedLoad load) {

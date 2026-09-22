@@ -67,6 +67,14 @@ export function SessionDetail({ detail }: { detail: SessionDetailResponse }) {
           <span className="font-mono text-[12px] text-tertiary tabular-nums">
             {formatDateUpper(session.date)}
           </span>
+          {session.isDeload && (
+            <span
+              className="caps-mono rounded-[3px] bg-warn-bg px-1.5 py-px text-[9px] tracking-[0.06em] text-warn"
+              data-testid="deload-badge"
+            >
+              Deload
+            </span>
+          )}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-secondary">
           {session.programTitle && <span>{session.programTitle}</span>}
@@ -105,6 +113,19 @@ export function SessionDetail({ detail }: { detail: SessionDetailResponse }) {
                 const name = rx.exercise?.name ?? rx.exerciseId;
                 const logged = rx.loggedSets ?? [];
                 const prescribed = prescribedLabel(rx);
+                // IMPL-DELOAD-01 (D4): target vs achieved — the top performed
+                // weight against the engine's retained target.
+                const topWeight = logged.reduce<number | null>(
+                  (max, s) =>
+                    s.weightLbs != null && (max == null || s.weightLbs > max)
+                      ? s.weightLbs
+                      : max,
+                  null,
+                );
+                const targetDelta =
+                  rx.targetWeightLbs != null && topWeight != null
+                    ? topWeight - rx.targetWeightLbs
+                    : null;
                 return (
                   <div key={`${block.blockId}:${rx.orderIndex}`}>
                     <div className="flex items-baseline justify-between gap-2">
@@ -115,6 +136,22 @@ export function SessionDetail({ detail }: { detail: SessionDetailResponse }) {
                         </span>
                       )}
                     </div>
+                    {targetDelta != null && targetDelta !== 0 && (
+                      <div
+                        className="mt-0.5 font-mono text-[10px] tabular-nums text-tertiary"
+                        data-testid="target-delta"
+                      >
+                        did {formatNumber(topWeight!)} vs target{" "}
+                        {formatNumber(rx.targetWeightLbs!)} (
+                        {targetDelta > 0 ? "+" : ""}
+                        {formatNumber(targetDelta)} lb)
+                      </div>
+                    )}
+                    {rx.loadBasis && (
+                      <div className="mt-0.5 text-[10px] text-tertiary" data-testid="load-basis">
+                        {rx.loadBasis}
+                      </div>
+                    )}
                     {logged.length > 0 ? (
                       <ul className="mt-1.5 flex flex-wrap gap-1.5">
                         {logged.map((set, i) => {
