@@ -278,12 +278,11 @@ class SessionFormatTest {
     }
 
     @Test
-    fun `prefill reps prefer the engine target over the within-session carry`() {
-        // Engine reset the band to its bottom (6) on a weight increase. Even though
-        // the prior set THIS session was logged at 10, the pending set — and the
-        // last-set RIR gate and coach cue that both read this number — must track
-        // the engine's 6, not the carried 10. Carrying reps first was suppressing
-        // the RIR pick and announcing stale reps.
+    fun `prefill carries a higher achieved rep count forward, above the engine target`() {
+        // Engine reset the band bottom to 6 on a weight increase, but the prior set
+        // THIS session already hit 10 at that load. Beating the target carries the
+        // higher count forward (#3) — the next set proposes 10, not a snap-back to
+        // 6. Reps ≥ target keep the last-set RIR gate open and the coach cue right.
         val up = rx(
             repsMin = 6,
             repsMax = 10,
@@ -295,9 +294,28 @@ class SessionFormatTest {
             logged = listOf(LoggedSet(weightLbs = 155.0, reps = 10)),
             lastSets = mapOf("ex-x" to listOf(LoggedSet(weightLbs = 145.0, reps = 12))),
         )
-        assertEquals(6, prefill.reps)
+        assertEquals(10, prefill.reps)
         // Weight still carries the in-session load (the bar you're actually under).
         assertEquals(155.0, prefill.weightLbs)
+    }
+
+    @Test
+    fun `prefill never proposes fewer reps than the engine target`() {
+        // A below-target set THIS session (5 vs a band bottom of 6) must NOT drag the
+        // pending set under the engine's floor — that would false-trip the last-set
+        // RIR gate (reps < min reads as a miss). The engine target (6) leads.
+        val up = rx(
+            repsMin = 6,
+            repsMax = 10,
+            targetWeightLbs = 155.0,
+            rationale = rationale(ProgressionDirection.UP),
+        )
+        val prefill = prefillFor(
+            up,
+            logged = listOf(LoggedSet(weightLbs = 155.0, reps = 5)),
+            lastSets = emptyMap(),
+        )
+        assertEquals(6, prefill.reps)
     }
 
     @Test

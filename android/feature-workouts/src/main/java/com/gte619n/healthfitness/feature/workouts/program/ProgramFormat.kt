@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.domain.common.DayOfWeek
 import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
+import com.gte619n.healthfitness.domain.workouts.program.ProgressionDirection
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutDay
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -54,6 +55,62 @@ fun prescriptionSummary(p: Prescription): String {
     p.tempo?.takeIf { it.isNotBlank() }?.let { parts += "tempo $it" }
 
     return parts.joinToString(" · ")
+}
+
+/**
+ * The concrete, coaching-first target line: "45 lb · 4 × 15 · rest 90s". Unlike
+ * [prescriptionSummary] it leads with the engine's actual load and a single
+ * FIXED rep target (no rep range / RPE / tempo clutter) — what to lift, how many,
+ * how long to rest. A bodyweight movement reads "BW"; a timed hold reads its
+ * duration. Pieces are omitted when their value is absent. The ▲/▼ trend is
+ * rendered by the caller from [Prescription.rationale] (see the session screen).
+ */
+fun prescriptionTargetLine(p: Prescription): String {
+    val parts = mutableListOf<String>()
+    if (p.isTimed) {
+        p.durationSeconds?.let { parts += durationLabel(it) }
+    } else {
+        weightTargetLabel(p)?.let { parts += it }
+        setsRepsTargetLabel(p)?.let { parts += it }
+    }
+    p.restSeconds?.let { parts += "rest ${restLabel(it)}" }
+    return parts.joinToString(" · ")
+}
+
+/**
+ * The single, fixed rep target the athlete aims for this set — no range. Right
+ * after a load increase ([ProgressionDirection.UP]) that's the BOTTOM of the band
+ * (the heavier load stays achievable); otherwise the TOP (work reps up before the
+ * next jump). Mirrors [session][com.gte619n.healthfitness.feature.workouts.session]
+ * `targetReps`, but always returns a value for display (never gates on an engine
+ * decision). Null only when the prescription carries no rep target at all.
+ */
+fun fixedRepTarget(p: Prescription): Int? =
+    if (p.rationale?.direction == ProgressionDirection.UP) {
+        p.repsMin ?: p.repsMax
+    } else {
+        p.repsMax ?: p.repsMin
+    }
+
+/** "45 lb" for a loaded target, "BW" for a bodyweight movement, null when unknown. */
+private fun weightTargetLabel(p: Prescription): String? {
+    val lbs = p.targetWeightLbs
+    return when {
+        lbs != null && lbs > 0.0 -> "${trimNumber(lbs)} lb"
+        p.isBodyweight -> "BW"
+        else -> null
+    }
+}
+
+/** "4 × 15" using the fixed rep target, "4 sets" when reps are unknown. */
+private fun setsRepsTargetLabel(p: Prescription): String? {
+    val reps = fixedRepTarget(p)
+    return when {
+        p.sets != null && reps != null -> "${p.sets} × $reps"
+        p.sets != null -> "${p.sets} sets"
+        reps != null -> "$reps reps"
+        else -> null
+    }
 }
 
 private fun setsRepsLabel(p: Prescription): String? {

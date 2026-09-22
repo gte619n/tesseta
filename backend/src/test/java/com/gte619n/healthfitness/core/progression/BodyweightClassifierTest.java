@@ -32,6 +32,15 @@ class BodyweightClassifierTest {
     }
 
     @Test
+    void explicitBodyweightNameIsBodyweight() {
+        // A high-rep lower-body movement whose pattern isn't a "loaded" push/pull
+        // still classifies when the name says bodyweight (e.g. calf raises), so it
+        // gets a bodyweight offset and the high-rep progression band.
+        assertThat(BodyweightClassifier.isBodyweight(
+            ex("Bodyweight Calf Raise", MovementPattern.OTHER, Mechanic.ISOLATION, List.of()))).isTrue();
+    }
+
+    @Test
     void cablePushdownIsNotBodyweight() {
         // The exact regression: a weighted cable lift must NOT read as bodyweight
         // just because it has no prediction yet.

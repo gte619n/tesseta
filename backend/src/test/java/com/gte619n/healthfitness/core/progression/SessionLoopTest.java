@@ -169,7 +169,65 @@ class SessionLoopTest {
         assertTrue(next.targetWeightLbs() > 147, "old +5% cap would have suppressed this");
     }
 
+    @Test
+    void bodyweightHighRepMovementResetsToHighFloorOnFirstLoad() {
+        // A bodyweight calf raise trained at 20 reps: the engine adds the first small
+        // load (+5 lb) but must reset reps to the HIGH-rep floor (15), not collapse to
+        // the strength band's min. Regression for "reps dropped way down + a 5 lb".
+        exercises.save(calf());
+        scheduled.save(plannedCalf(TODAY.plusDays(7)));
+        LoggedSet bw = new LoggedSet(0.0, 20, null, 120, NOW, null, 2.0, RirSource.REPORTED);
+        ScheduledWorkout completed = completedCalf(TODAY, List.of(bw, bw, bw));
+        scheduled.save(completed);
+
+        loop.onSessionCompleted(USER, completed);
+
+        Prescription next = calfPrescription(
+            scheduled.findById(USER, PROGRAM, idCalf(TODAY.plusDays(7))).orElseThrow());
+        assertEquals(5.0, next.targetWeightLbs(), 1e-9, "first external load is one increment");
+        assertNotNull(next.rationale());
+        assertEquals(Direction.UP, next.rationale().direction());
+        assertEquals(15, next.repsMin(), "reset to the high-rep floor, not the strength min (8)");
+        assertEquals(16, next.repsMax(), "band tightened to min..min+1 on the increase");
+    }
+
     // ---- fixtures ----
+
+    private static final String CALF = "calf";
+
+    private ScheduledWorkout completedCalf(LocalDate date, List<LoggedSet> sets) {
+        Prescription rx = new Prescription(CALF, 0, 3, 8, 12, null, null, 60, null, null, null,
+            sets, 0.0, "seed");
+        WorkoutDay day = new WorkoutDay("d2", "Day 2", null, null, 0,
+            List.of(new Block("b2", BlockType.ACCESSORY, "Accessory", 0, List.of(rx))));
+        return new ScheduledWorkout(USER, PROGRAM, idCalf(date), date, "ph1", "d2", "Day 2", 1, false,
+            null, ScheduledStatus.COMPLETED, day, NOW, 3600, null);
+    }
+
+    private ScheduledWorkout plannedCalf(LocalDate date) {
+        Prescription rx = new Prescription(CALF, 0, 3, 8, 12, null, null, 60, null, null, null, null);
+        WorkoutDay day = new WorkoutDay("d2", "Day 2", null, null, 0,
+            List.of(new Block("b2", BlockType.ACCESSORY, "Accessory", 0, List.of(rx))));
+        return new ScheduledWorkout(USER, PROGRAM, idCalf(date), date, "ph1", "d2", "Day 2", 1, false,
+            null, ScheduledStatus.PLANNED, day, null, null, null);
+    }
+
+    private static Prescription calfPrescription(ScheduledWorkout sw) {
+        return sw.session().blocks().get(0).prescriptions().get(0);
+    }
+
+    private static String idCalf(LocalDate date) {
+        return date + "_d2";
+    }
+
+    private static Exercise calf() {
+        return new Exercise(CALF, "Bodyweight Calf Raise", "bodyweight calf raise", List.of(),
+            MovementPattern.OTHER, List.of("calves"), List.of(),
+            Laterality.BILATERAL, Mechanic.ISOLATION, null, List.of(), List.of(),
+            List.of(BlockType.ACCESSORY), null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
+            null, Instant.now(), Instant.now(), null, false, List.of());
+    }
 
     private static LoggedSet set(double weight, int reps) {
         return new LoggedSet(weight, reps, null, 120, NOW, null, 2.0, RirSource.REPORTED);

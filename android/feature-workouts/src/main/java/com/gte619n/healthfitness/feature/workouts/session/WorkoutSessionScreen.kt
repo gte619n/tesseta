@@ -109,7 +109,7 @@ import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.R
 import com.gte619n.healthfitness.feature.workouts.program.ProgramFixtures
-import com.gte619n.healthfitness.feature.workouts.program.prescriptionSummary
+import com.gte619n.healthfitness.feature.workouts.program.prescriptionTargetLine
 import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseThumbnail
 import com.gte619n.healthfitness.feature.workouts.program.ui.exerciseImageUrl
 import com.gte619n.healthfitness.ui.HealthFitnessTheme
@@ -843,7 +843,9 @@ private fun ExercisePage(
                 style = Hf.type.headingLg.copy(fontSize = 24.sp),
                 color = Hf.colors.textPrimary,
             )
-            val target = prescriptionSummary(prescription)
+            // Concrete plan: weight · sets × fixed-reps · rest (no RPE/tempo). The
+            // ▲/▼ trend + delta + "why" is carried by the RationaleStrip below.
+            val target = prescriptionTargetLine(prescription)
             if (target.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(target, style = Hf.type.monoMd.copy(fontSize = 16.sp), color = Hf.colors.textSecondary)
@@ -2506,9 +2508,12 @@ private fun OverviewRow(step: SessionStep, loggedCount: Int, onClick: () -> Unit
                 style = Hf.type.headingMd.copy(fontSize = 14.sp),
                 color = Hf.colors.textPrimary,
             )
-            val summary = prescriptionSummary(step.prescription)
+            val summary = prescriptionTargetLine(step.prescription)
             if (summary.isNotBlank()) {
-                Text(summary, style = Hf.type.monoSm, color = Hf.colors.textSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(summary, style = Hf.type.monoSm, color = Hf.colors.textSecondary)
+                    TrendArrow(step.prescription.rationale?.direction)
+                }
             }
         }
         Text(
@@ -2517,6 +2522,23 @@ private fun OverviewRow(step: SessionStep, loggedCount: Int, onClick: () -> Unit
             color = if (done) Hf.colors.accent else Hf.colors.textTertiary,
         )
     }
+}
+
+/**
+ * A compact ▲/▼ progression-trend glyph shown beside a target line in the
+ * overview list: green ▲ when the engine raised the load/reps, red ▼ when it
+ * lowered them, nothing on HOLD or no engine decision (matches [RationaleStrip]'s
+ * direction colouring). Includes its own leading gap.
+ */
+@Composable
+private fun TrendArrow(direction: ProgressionDirection?) {
+    val (glyph, color) = when (direction) {
+        ProgressionDirection.UP -> "▲" to Hf.colors.accent
+        ProgressionDirection.DOWN -> "▼" to Hf.colors.alert
+        else -> return
+    }
+    Spacer(Modifier.width(6.dp))
+    Text(glyph, style = Hf.type.bodySm, color = color)
 }
 
 // ---- bottom action bars ----

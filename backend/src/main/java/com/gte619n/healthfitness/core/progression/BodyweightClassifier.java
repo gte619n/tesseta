@@ -26,7 +26,8 @@ public final class BodyweightClassifier {
 
     /**
      * True iff this movement is loaded by the athlete's own bodyweight. Hard-coded
-     * name patterns win (highest confidence); otherwise a movement with no
+     * name patterns win (highest confidence) — including an explicit "bodyweight"
+     * in the name (e.g. "Bodyweight Calf Raise"); otherwise a movement with no
      * equipment requirement and a loaded (push/pull) pattern is treated as
      * bodyweight. Anything requiring equipment (barbell, dumbbell, cable, machine)
      * is NOT bodyweight, regardless of load.
@@ -34,7 +35,7 @@ public final class BodyweightClassifier {
     public static boolean isBodyweight(Exercise ex) {
         if (ex == null) return false;
         String n = ex.nameLower() == null ? "" : ex.nameLower();
-        if (containsAny(n, "pull-up", "pull up", "pullup", "chin-up", "chin up",
+        if (containsAny(n, "bodyweight", "pull-up", "pull up", "pullup", "chin-up", "chin up",
             "chinup", "dip", "push-up", "push up", "pushup", "muscle-up", "inverted row")) {
             return true;
         }
