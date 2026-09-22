@@ -134,13 +134,21 @@ fun prefillFor(
     } else {
         SetPrefill(
             weightLbs = previous?.weightLbs ?: prescription.targetWeightLbs ?: lastTime?.weightLbs,
-            // Reps lead with the engine target (see the precedence note above). It's
-            // always repsMin/repsMax — i.e. ≥ the rep floor — so seeding the staged
-            // reps with it keeps the last-set RIR gate (repsOutcome vs the target)
-            // open and the coach cue on the engine's number. Carry/last-session only
-            // win when there's no engine decision (static program → targetReps null).
-            reps = targetReps(prescription) ?: previous?.reps ?: lastTime?.reps
-                ?: prescription.repsMax ?: prescription.repsMin,
+            // Reps lead with the engine target (see the precedence note above), but
+            // never propose FEWER reps than you already hit this session: beating the
+            // target on a set carries the higher count forward to the following sets
+            // (#3) instead of snapping back to the lower target. Carrying a *higher*
+            // count is safe — reps ≥ target keep the last-set RIR gate open and the
+            // coach cue correct (the old concern was a lower carry suppressing them).
+            // With no engine decision (static program) reps fall back to the carry.
+            reps = run {
+                val engineTarget = targetReps(prescription)
+                val carried = previous?.reps
+                when {
+                    engineTarget != null -> maxOf(engineTarget, carried ?: engineTarget)
+                    else -> carried ?: lastTime?.reps ?: prescription.repsMax ?: prescription.repsMin
+                }
+            },
         )
     }
 }

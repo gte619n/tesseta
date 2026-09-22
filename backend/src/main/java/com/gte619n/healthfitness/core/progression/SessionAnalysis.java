@@ -23,6 +23,15 @@ public final class SessionAnalysis {
         return max;
     }
 
+    /** Highest rep count achieved on any rep-based set; 0 if none. */
+    public static int maxReps(List<LoggedSet> sets) {
+        int max = 0;
+        for (LoggedSet s : rep(sets)) {
+            if (s.reps() != null && s.reps() > max) max = s.reps();
+        }
+        return max;
+    }
+
     /** Reps achieved on each set at (approximately) the working load. */
     public static List<Integer> repsAtWorkingLoad(List<LoggedSet> sets, double workingLoad) {
         List<Integer> out = new ArrayList<>();

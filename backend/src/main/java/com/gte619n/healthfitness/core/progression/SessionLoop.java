@@ -48,6 +48,16 @@ public class SessionLoop {
     static final double OUTPERFORM_RIR_MIN = 1.0;
     /** Wide seed uncertainty so day-one prescriptions self-correct fast (D6). */
     static final double SEED_SIGMA_FRACTION = 0.08;
+    /**
+     * High-rep band for a bodyweight movement being trained ABOVE the normal
+     * strength band (e.g. 20-rep calf raises). Adding the first external load then
+     * resets reps to this floor (20 → 15 + one increment) instead of collapsing to
+     * the strength band's min. Only applied when the athlete's demonstrated reps
+     * exceed the block band's top, so strength-range bodyweight work (8–12 pull-ups)
+     * keeps the normal band.
+     */
+    static final int BODYWEIGHT_HIGH_REP_MIN = 15;
+    static final int BODYWEIGHT_HIGH_REP_MAX = 20;
 
     private static final Set<BlockType> ELIGIBLE_BLOCKS =
         EnumSet.of(BlockType.MAIN, BlockType.ACCESSORY, BlockType.CORE);
@@ -233,6 +243,15 @@ public class SessionLoop {
         MovementPattern pattern, Mechanic mechanic, ExerciseLoadingProfile profile, Instant now) {
 
         RepBand band = block.repBand(pattern);
+        // A bodyweight-loaded movement trained above the normal band (20-rep calf
+        // raises) switches to a high-rep band so the first external load resets
+        // reps to a high floor (20 → 15) rather than to the strength-band min.
+        // Only bodyweight movements carry a load offset, so that flags them; the
+        // demonstrated-reps gate keeps strength-range bodyweight work on its band.
+        boolean bodyweight = profile.loadOffsetLbs() > 0;
+        if (bodyweight && SessionAnalysis.maxReps(sets) > band.max()) {
+            band = new RepBand(BODYWEIGHT_HIGH_REP_MIN, BODYWEIGHT_HIGH_REP_MAX);
+        }
         double targetRir = block.rirCap(mechanic);
         int sets_ = weeklyTargetSets(userId, pattern, completedRx.sets() == null ? sets.size() : completedRx.sets());
 
