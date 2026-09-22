@@ -38,6 +38,11 @@ export type PrPoint = {
   date: string; // ISO date
   programId: string;
   scheduledId: string;
+  // IMPL-PROG-LOAD-01 (D3/D8): 1 or 2, and pre-doubled TOTAL values for per-hand
+  // lifts (dumbbell / dual-cable). Web renders the totals.
+  loadFactor: number;
+  e1rmTotalLbs: number;
+  weightTotalLbs: number;
 };
 
 export type LiftRef = {
@@ -66,6 +71,9 @@ export type E1rmPoint = {
   weightLbs: number | null;
   reps: number | null;
   lowConfidence: boolean;
+  // IMPL-PROG-LOAD-01: pre-doubled TOTAL values for per-hand lifts.
+  e1rmTotalLbs: number;
+  weightTotalLbs: number | null;
 };
 
 export type E1rmBelief = {
@@ -79,6 +87,9 @@ export type E1rmHistory = {
   exerciseName: string;
   points: E1rmPoint[];
   currentBelief: E1rmBelief | null;
+  // IMPL-PROG-LOAD-01: 1 for total-load lifts, 2 for per-hand. Multiply the
+  // belief by this; the points already carry pre-doubled totals.
+  loadFactor: number;
 };
 
 // A pointer to an adjacent session for prev/next navigation on the detail page.

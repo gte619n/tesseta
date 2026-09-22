@@ -13,6 +13,7 @@ import com.gte619n.healthfitness.core.exercise.Laterality;
 import com.gte619n.healthfitness.core.exercise.Mechanic;
 import com.gte619n.healthfitness.core.exercise.MovementPattern;
 import com.gte619n.healthfitness.core.location.DayOfWeek;
+import com.gte619n.healthfitness.core.progression.LoadConventionResolver;
 import com.gte619n.healthfitness.core.progression.ProgressionState;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
@@ -25,6 +26,7 @@ import com.gte619n.healthfitness.core.workoutprogram.WorkoutDay;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutSettings;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutSettingsService;
+import com.gte619n.healthfitness.testsupport.InMemoryEquipmentRepository;
 import com.gte619n.healthfitness.testsupport.InMemoryExerciseRepository;
 import com.gte619n.healthfitness.testsupport.progression.InMemoryProgressionRepositories;
 import com.gte619n.healthfitness.testsupport.workoutprogram.InMemoryScheduledWorkoutRepository;
@@ -66,8 +68,11 @@ class WorkoutStatsServiceTest {
         settingsRepo = new InMemoryWorkoutSettingsRepository();
         exercises = new InMemoryExerciseRepository();
         states = new InMemoryProgressionRepositories.State();
+        LoadConventionResolver conventions = new LoadConventionResolver(
+            exercises, new InMemoryEquipmentRepository(),
+            new InMemoryProgressionRepositories.Profiles());
         service = new WorkoutStatsService(
-            programs, scheduled, new WorkoutSettingsService(settingsRepo), exercises, states);
+            programs, scheduled, new WorkoutSettingsService(settingsRepo), exercises, states, conventions);
     }
 
     // ---- BT-1 ----
@@ -263,6 +268,50 @@ class WorkoutStatsServiceTest {
         assertEquals(1580.0, elapsed.tonnageLbs(), 1e-9);
     }
 
+    // ---- IMPL-PROG-LOAD-01 P1: per-hand → total reporting ----
+
+    @Test
+    void perHandDumbbellLiftReportsTotalLoad() {
+        // The lifter logs per hand (60). A bilateral dumbbell lift is PER_HAND
+        // (factor 2), so tonnage, PRs, and the e1RM history all report TOTAL load,
+        // while a barbell lift in the same week stays factor 1. Hand-computed
+        // (P1 functional gate).
+        setTarget(1);
+        seedProgram("p1");
+        seedDumbbellExercise("db-bench");
+        seedExercise("bb-bench", MovementPattern.PUSH_HORIZONTAL); // barbell → factor 1
+        LocalDate wk = CURRENT_MONDAY.minusWeeks(1);
+
+        // DB bench across two days in the elapsed week (60/hand ×10, then 65/hand ×10).
+        saveSession("p1", wk, "db-bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(60.0, 10, null, null, instant(wk))));
+        saveSession("p1", wk.plusDays(1), "db-bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(65.0, 10, null, null, instant(wk.plusDays(1)))));
+        // Barbell bench 100×5 = 500, factor 1.
+        saveSession("p1", wk.plusDays(2), "bb-bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(100.0, 5, null, null, instant(wk.plusDays(2)))));
+
+        WorkoutStats stats = service.stats(USER, TODAY, 26);
+
+        // Tonnage: DB doubled (60×10 + 65×10)×2 = 2500, barbell 500 → 3000 total.
+        WorkoutStats.WeekPoint week = stats.weeklySeries().get(24);
+        assertEquals(3000.0, week.tonnageLbs(), 1e-9);
+
+        // PR: the 65/hand session is a new best. loadFactor 2, totals doubled.
+        WorkoutStats.PrPoint pr = stats.recentPrs().stream()
+            .filter(p -> p.exerciseId().equals("db-bench")).findFirst().orElseThrow();
+        assertEquals(2, pr.loadFactor());
+        assertEquals(pr.e1rmLbs() * 2, pr.e1rmTotalLbs(), 1e-9);
+        assertEquals(130.0, pr.weightTotalLbs(), 1e-9); // 65 per hand → 130 total
+
+        // e1RM history for the DB lift carries the factor + pre-doubled points.
+        E1rmHistory h = service.e1rmHistory(USER, "db-bench");
+        assertEquals(2, h.loadFactor());
+        E1rmHistory.Point p0 = h.points().get(0);
+        assertEquals(p0.e1rmLbs() * 2, p0.e1rmTotalLbs(), 1e-9);
+        assertEquals(120.0, p0.weightTotalLbs(), 1e-9); // 60 per hand → 120 total
+    }
+
     // ---- BT-11 ----
 
     @Test
@@ -410,6 +459,16 @@ class WorkoutStatsServiceTest {
 
     private void seedExercise(String id, MovementPattern pattern) {
         exercises.save(new Exercise(id, id, id, List.of(), pattern, List.of(), List.of(),
+            Laterality.BILATERAL, Mechanic.COMPOUND, null, List.of(), List.of(), List.of(BlockType.MAIN),
+            null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED,
+            null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,
+            null, Instant.now(), Instant.now(), null, false, List.of()));
+    }
+
+    /** A bilateral dumbbell lift → LoadConvention.PER_HAND (factor 2) via name derivation. */
+    private void seedDumbbellExercise(String id) {
+        exercises.save(new Exercise(id, "Dumbbell Bench Press", "dumbbell bench press", List.of(),
+            MovementPattern.PUSH_HORIZONTAL, List.of(), List.of(),
             Laterality.BILATERAL, Mechanic.COMPOUND, null, List.of(), List.of(), List.of(BlockType.MAIN),
             null, false, List.of(), null, null, ExerciseMediaStatus.APPROVED,
             null, ExerciseMediaStatus.NONE, null, ExerciseStatus.PUBLISHED,

@@ -3,6 +3,7 @@ import type { Route } from "next";
 import type { PrPoint } from "@/lib/types/workout-stats";
 import { formatNumber } from "@/lib/format-number";
 import { formatDateUpper } from "@/lib/format-date";
+import { isPerHand } from "@/lib/per-hand";
 
 // Recent personal records (IMPL-WEB-WORKOUT-01 D21): the last few PR sessions,
 // each linking to its session detail. A PR is a new best estimated 1RM for a
@@ -37,11 +38,16 @@ export function RecentPrsCard({ prs }: { prs: PrPoint[] }) {
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="font-mono text-[13px] font-medium text-accent-dim tabular-nums">
-                    {formatNumber(pr.e1rmLbs)} lb
+                    {formatNumber(pr.e1rmTotalLbs ?? pr.e1rmLbs)} lb
                   </div>
                   {pr.reps != null && (
                     <div className="font-mono text-[10px] text-tertiary tabular-nums">
-                      {formatNumber(pr.weightLbs)} × {pr.reps}
+                      {formatNumber(pr.weightTotalLbs ?? pr.weightLbs)} × {pr.reps}
+                      {isPerHand(pr.loadFactor) && (
+                        <span className="ml-1">
+                          ({formatNumber((pr.weightTotalLbs ?? pr.weightLbs) / 2)}/hand)
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

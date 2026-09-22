@@ -47,18 +47,32 @@ public class FirestoreExerciseLoadingProfileRepository implements ExerciseLoadin
         body.put("loadIncrementLbs", p.loadIncrementLbs());
         body.put("loadOffsetLbs", p.loadOffsetLbs());
         body.put("progressionEligible", p.progressionEligible());
+        // IMPL-PROG-LOAD-01 (IL-2): persist the per-hand/total override when set.
+        body.put("loadConventionOverride",
+            p.loadConventionOverride() == null ? null : p.loadConventionOverride().name());
         return body;
     }
 
     private static ExerciseLoadingProfile toProfile(String userId, DocumentSnapshot s) {
         Double increment = s.getDouble("loadIncrementLbs");
         Double offset = s.getDouble("loadOffsetLbs");
+        String convention = s.getString("loadConventionOverride");
         return new ExerciseLoadingProfile(
             userId,
             s.getString("exerciseId"),
             increment == null ? 0.0 : increment,
             offset == null ? 0.0 : offset,
-            Boolean.TRUE.equals(s.getBoolean("progressionEligible"))
+            Boolean.TRUE.equals(s.getBoolean("progressionEligible")),
+            parseConvention(convention)
         );
+    }
+
+    private static com.gte619n.healthfitness.core.exercise.LoadConvention parseConvention(String raw) {
+        if (raw == null) return null;
+        try {
+            return com.gte619n.healthfitness.core.exercise.LoadConvention.valueOf(raw);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 }

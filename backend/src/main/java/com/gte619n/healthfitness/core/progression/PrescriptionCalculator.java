@@ -17,7 +17,11 @@ public final class PrescriptionCalculator {
 
     private PrescriptionCalculator() {}
 
-    /** A single strong day can't produce a load you can't repeat (§6.4). */
+    /**
+     * Legacy flat jump cap (retired IMPL-PROG-LOAD-01 IL-7 — the +5% cap is
+     * replaced by the increment-based speculative cap below; kept only so any
+     * external reference still resolves).
+     */
     public static final double JUMP_CAP = 1.05;
     /** Confidence widening drops the load this much when uncertainty is high. */
     public static final double WIDEN_LOAD_DROP = 0.025;
@@ -27,9 +31,11 @@ public final class PrescriptionCalculator {
      * @param band block-loop rep range
      * @param targetRir block-loop RIR cap for this exercise's mechanic
      * @param loadOffsetLbs bodyweight/machine offset (§4.4)
-     * @param incrementLbs smallest step
-     * @param lastPrescribedLoad the load prescribed last time (for the jump cap); ≤0 if none
-     * @param lastPerformedLoad the load actually used last time (for the increment floor); ≤0 if none
+     * @param incrementLbs smallest real step (from the gym, D7)
+     * @param lastPrescribedLoad the load prescribed last time; ≤0 if none
+     * @param lastPerformedLoad the load actually used last time (demonstrated); ≤0 if none
+     * @param outperformed the lifter beat the prescription with reps in reserve
+     *        (IMPL-PROG-LOAD-01 D13/D14) — trust the demonstrated load
      * @param sets number of sets to prescribe
      */
     public static PrescribedLoad calculate(
@@ -40,6 +46,7 @@ public final class PrescriptionCalculator {
         double incrementLbs,
         double lastPrescribedLoad,
         double lastPerformedLoad,
+        boolean outperformed,
         int sets
     ) {
         List<String> inputs = new ArrayList<>();
@@ -50,10 +57,14 @@ public final class PrescriptionCalculator {
 
         double rawLoad = ProgressionMath.rawLoad(state.e1rmLbs(), targetReps, targetRir, loadOffsetLbs);
 
-        // 1) Jump cap.
-        if (lastPrescribedLoad > 0 && rawLoad > lastPrescribedLoad * JUMP_CAP) {
-            rawLoad = lastPrescribedLoad * JUMP_CAP;
-            inputs.add("capped to +5%");
+        // 1) Speculative one-increment cap (IL-7): don't jump more than one real
+        // increment past the higher of what was prescribed or actually performed.
+        // A genuinely heavier demonstrated load raises this ceiling (via
+        // lastPerformedLoad), so proven capacity is never suppressed (D13).
+        double capBasis = Math.max(lastPrescribedLoad, lastPerformedLoad);
+        if (capBasis > 0 && rawLoad > capBasis + incrementLbs) {
+            rawLoad = capBasis + incrementLbs;
+            inputs.add("capped to +1 increment");
         }
 
         // 2) Confidence widening: uncertain belief → easier, wider set.
@@ -61,6 +72,18 @@ public final class PrescriptionCalculator {
             outBand = new RepBand(Math.max(1, band.min() - 1), band.max() + 1);
             rawLoad *= (1.0 - WIDEN_LOAD_DROP);
             inputs.add("low confidence → wider range, lighter");
+        }
+
+        // 3) Demonstrated-override floor (D13/D14): if the lifter beat the target
+        // with reps in reserve, match what they actually lifted (no add on top).
+        // Applied last so confidence widening can't pull the target under a load
+        // the lifter already proved.
+        if (outperformed && lastPerformedLoad > 0) {
+            double floor = ProgressionMath.floorToIncrement(lastPerformedLoad, incrementLbs);
+            if (rawLoad < floor) {
+                rawLoad = floor;
+                inputs.add("matched demonstrated load");
+            }
         }
 
         double prescribed = ProgressionMath.floorToIncrement(rawLoad, incrementLbs);

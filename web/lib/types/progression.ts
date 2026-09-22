@@ -15,6 +15,10 @@ export interface ExerciseStrength {
   /** "LOW" | "MEDIUM" | "HIGH" — from the belief's relative uncertainty. */
   confidence: string;
   observationCount: number;
+  // IMPL-PROG-LOAD-01 (D3/D8): 1 or 2, and the pre-doubled TOTAL for per-hand
+  // lifts so the strength view compares to barbell lifts.
+  loadFactor: number;
+  e1rmTotalLbs: number;
 }
 
 // The backend's weekly analysis for one movement pattern (e.g. PUSH_HORIZONTAL):

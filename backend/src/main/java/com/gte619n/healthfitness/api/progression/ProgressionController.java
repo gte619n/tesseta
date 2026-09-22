@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.core.exercise.ExerciseRepository;
 import com.gte619n.healthfitness.core.progression.BlockLoop;
 import com.gte619n.healthfitness.core.progression.BlockMode;
 import com.gte619n.healthfitness.core.progression.BlockParameters;
+import com.gte619n.healthfitness.core.progression.LoadConventionResolver;
 import com.gte619n.healthfitness.core.progression.ProgressionEngine;
 import com.gte619n.healthfitness.core.progression.ProgressionState;
 import com.gte619n.healthfitness.core.progression.ProgressionStateRepository;
@@ -38,14 +39,17 @@ public class ProgressionController {
     private final ProgressionEngine engine;
     private final ProgressionStateRepository states;
     private final ExerciseRepository exercises;
+    private final LoadConventionResolver conventions;
 
     public ProgressionController(
         CurrentUserProvider currentUser, ProgressionEngine engine,
-        ProgressionStateRepository states, ExerciseRepository exercises) {
+        ProgressionStateRepository states, ExerciseRepository exercises,
+        LoadConventionResolver conventions) {
         this.currentUser = currentUser;
         this.engine = engine;
         this.states = states;
         this.exercises = exercises;
+        this.conventions = conventions;
     }
 
     /** e1rm / sigma / confidence / trend for one exercise. */
@@ -95,16 +99,20 @@ public class ProgressionController {
             .findByIds(all.stream().map(ProgressionState::exerciseId).toList())
             .stream()
             .collect(Collectors.toMap(Exercise::exerciseId, e -> e));
+        Map<String, Integer> factors = conventions.factors(
+            userId, all.stream().map(ProgressionState::exerciseId).toList());
         return all.stream()
             .filter(s -> s.e1rmLbs() > 0) // skip cold states with no belief yet
             .sorted(Comparator.comparingDouble(ProgressionState::e1rmLbs).reversed())
             .map(s -> {
                 Exercise ex = byId.get(s.exerciseId());
+                int factor = factors.getOrDefault(s.exerciseId(), 1);
                 return new ExerciseStrengthDto(
                     s.exerciseId(),
                     ex != null ? ex.name() : s.exerciseId(),
                     ex != null ? ex.movementPattern().name() : null,
-                    s.e1rmLbs(), s.confidence().name(), s.observationCount());
+                    s.e1rmLbs(), s.confidence().name(), s.observationCount(),
+                    factor, s.e1rmLbs() * factor);
             })
             .toList();
     }
@@ -177,5 +185,8 @@ public class ProgressionController {
 
     public record ExerciseStrengthDto(
         String exerciseId, String name, String movementPattern,
-        double e1rmLbs, String confidence, int observationCount) {}
+        double e1rmLbs, String confidence, int observationCount,
+        // IMPL-PROG-LOAD-01 (D3/D8): 1 or 2, and the pre-doubled total for
+        // per-hand lifts so the strength view compares to barbell lifts.
+        int loadFactor, double e1rmTotalLbs) {}
 }
