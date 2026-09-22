@@ -16,6 +16,8 @@ import {
   alphaStats,
   alphaBenchHistory,
   alphaSquatHistory,
+  alphaDumbbellHistory,
+  perHandPrList,
   alphaSessionDetail,
   alphaLatest,
   emptyStats,
@@ -155,6 +157,51 @@ describe("E2E-7 · RecentPrsCard lists exactly the PRs with values and links", (
     );
     expect(within(rows[1]!).getByText("Romanian Deadlift")).toBeInTheDocument();
     expect(within(rows[1]!).getByText("367.5 lb")).toBeInTheDocument();
+  });
+});
+
+// IMPL-PROG-LOAD-01 P2 functional gate: per-hand lifts show TOTAL as the primary
+// value with a per-hand secondary; barbell (total-load) lifts show a plain number.
+describe("PROG-LOAD P2 · per-hand → total display", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("RecentPrsCard shows total primary + per-hand secondary for a dumbbell PR", () => {
+    render(<RecentPrsCard prs={perHandPrList} />);
+    const rows = screen.getAllByTestId("pr-row");
+    // Dumbbell row: total e1RM 210, total weight 180, per-hand 90.
+    const db = within(rows[0]!);
+    expect(db.getByText("Dumbbell Bench Press")).toBeInTheDocument();
+    expect(rows[0]!).toHaveTextContent("210 lb"); // total e1RM, not 105
+    expect(rows[0]!).toHaveTextContent("180 × 5"); // total weight
+    expect(rows[0]!).toHaveTextContent("90/hand"); // per-hand secondary
+    // Barbell row: plain total, no per-hand suffix.
+    expect(rows[1]!).toHaveTextContent("262.5 lb");
+    expect(rows[1]!).not.toHaveTextContent("/hand");
+  });
+
+  it("StrengthTrendChart headline is total load with a per-hand secondary", () => {
+    render(
+      <StrengthTrendChart
+        lifts={alphaStats.trackedExercises}
+        defaultLifts={alphaStats.chartDefaultLifts}
+        initialHistory={alphaDumbbellHistory}
+      />,
+    );
+    // Belief 106/hand → 212 total is the headline; 106/hand is the secondary.
+    expect(screen.getByTestId("strength-latest")).toHaveTextContent("212");
+    expect(screen.getByText(/106\/hand/)).toBeInTheDocument();
+  });
+
+  it("StrengthTrendChart stays plain for a barbell lift (no per-hand)", () => {
+    render(
+      <StrengthTrendChart
+        lifts={alphaStats.trackedExercises}
+        defaultLifts={alphaStats.chartDefaultLifts}
+        initialHistory={alphaBenchHistory}
+      />,
+    );
+    expect(screen.getByTestId("strength-latest")).toHaveTextContent("265");
+    expect(screen.queryByText(/\/hand/)).toBeNull();
   });
 });
 

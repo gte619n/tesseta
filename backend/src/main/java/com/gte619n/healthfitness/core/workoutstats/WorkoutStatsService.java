@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.config.CacheConfig;
 import com.gte619n.healthfitness.core.exercise.Exercise;
 import com.gte619n.healthfitness.core.exercise.ExerciseRepository;
 import com.gte619n.healthfitness.core.exercise.MovementPattern;
+import com.gte619n.healthfitness.core.progression.LoadConventionResolver;
 import com.gte619n.healthfitness.core.progression.ProgressionState;
 import com.gte619n.healthfitness.core.progression.ProgressionStateRepository;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
@@ -73,19 +74,22 @@ public class WorkoutStatsService {
     private final WorkoutSettingsService settings;
     private final ExerciseRepository exercises;
     private final ProgressionStateRepository states;
+    private final LoadConventionResolver conventions;
 
     public WorkoutStatsService(
         WorkoutProgramRepository programs,
         ScheduledWorkoutRepository scheduled,
         WorkoutSettingsService settings,
         ExerciseRepository exercises,
-        ProgressionStateRepository states
+        ProgressionStateRepository states,
+        LoadConventionResolver conventions
     ) {
         this.programs = programs;
         this.scheduled = scheduled;
         this.settings = settings;
         this.exercises = exercises;
         this.states = states;
+        this.conventions = conventions;
     }
 
     // ---- public read model ----
@@ -104,7 +108,7 @@ public class WorkoutStatsService {
         WorkoutStats.Streak streak = streak(scan.sessions, target, today);
         List<WorkoutStats.WeekPoint> weekly = weeklySeries(scan.sessions, today, series);
         List<WorkoutStats.HeatmapDay> heatmap = heatmap(scan.sessions, today);
-        List<WorkoutStats.PrPoint> prs = recentPrs(scan.bestByExercise, names);
+        List<WorkoutStats.PrPoint> prs = recentPrs(scan.bestByExercise, names, scan.factorByExercise);
         List<WorkoutStats.LiftRef> defaults = chartDefaultLifts(userId);
         List<WorkoutStats.TrackedExercise> tracked = trackedExercises(scan.bestByExercise, names);
 
@@ -115,16 +119,20 @@ public class WorkoutStatsService {
     public E1rmHistory e1rmHistory(String userId, String exerciseId) {
         Scan scan = scan(userId);
         String name = exerciseNames(Set.of(exerciseId)).getOrDefault(exerciseId, exerciseId);
+        int factor = scan.factorByExercise.getOrDefault(exerciseId,
+            conventions.factor(userId, exerciseId));
         List<SessionBest> bests = scan.bestByExercise.getOrDefault(exerciseId, List.of());
         List<E1rmHistory.Point> points = new ArrayList<>();
         for (SessionBest b : bests) {
-            points.add(new E1rmHistory.Point(b.date, b.e1rm, b.weightLbs, b.reps, b.lowConfidence));
+            Double weightTotal = b.weightLbs == null ? null : b.weightLbs * factor;
+            points.add(new E1rmHistory.Point(
+                b.date, b.e1rm, b.weightLbs, b.reps, b.lowConfidence, b.e1rm * factor, weightTotal));
         }
         E1rmHistory.Belief belief = states.find(userId, exerciseId)
             .filter(s -> s.e1rmLbs() > 0)
             .map(s -> new E1rmHistory.Belief(s.e1rmLbs(), s.sigmaLbs(), s.confidence().name()))
             .orElse(null);
-        return new E1rmHistory(exerciseId, name, points, belief);
+        return new E1rmHistory(exerciseId, name, points, belief, factor);
     }
 
     /**
@@ -272,14 +280,18 @@ public class WorkoutStatsService {
     // ---- derivation: PRs / lifts ----
 
     static List<WorkoutStats.PrPoint> recentPrs(
-        Map<String, List<SessionBest>> bestByExercise, Map<String, String> names) {
+        Map<String, List<SessionBest>> bestByExercise, Map<String, String> names,
+        Map<String, Integer> factors) {
         List<WorkoutStats.PrPoint> all = new ArrayList<>();
         for (Map.Entry<String, List<SessionBest>> e : bestByExercise.entrySet()) {
             String id = e.getKey();
             String name = names.getOrDefault(id, id);
+            int factor = factors.getOrDefault(id, 1);
             for (SessionBest pr : personalRecords(e.getValue())) {
+                double weight = pr.weightLbs == null ? 0.0 : pr.weightLbs;
                 all.add(new WorkoutStats.PrPoint(
-                    id, name, pr.e1rm, pr.weightLbs, pr.reps, pr.date, pr.programId, pr.scheduledId));
+                    id, name, pr.e1rm, weight, pr.reps, pr.date, pr.programId, pr.scheduledId,
+                    factor, pr.e1rm * factor, weight * factor));
             }
         }
         all.sort(Comparator
@@ -375,18 +387,34 @@ public class WorkoutStatsService {
      */
     @Cacheable(cacheNames = CacheConfig.WORKOUT_STATS, key = "#userId")
     Scan scan(String userId) {
-        List<CompletedSession> sessions = new ArrayList<>();
-        Map<String, List<SessionBest>> bestByExercise = new LinkedHashMap<>();
+        // Collect completed rows once, gathering the exercise ids they reference so
+        // the per-hand→total load factor (IMPL-PROG-LOAD-01 IL-10) can be resolved
+        // in a single batch before we compute tonnage.
+        List<Row> rows = new ArrayList<>();
+        Set<String> exerciseIds = new java.util.LinkedHashSet<>();
         for (WorkoutProgram program : nullSafe(programs.findByUserIncludingArchived(userId))) {
             if (program == null || program.programId() == null) continue;
-            List<ScheduledWorkout> rows =
+            List<ScheduledWorkout> found =
                 scheduled.findByProgram(userId, program.programId(), LocalDate.MIN, LocalDate.MAX);
-            for (ScheduledWorkout sw : nullSafe(rows)) {
+            for (ScheduledWorkout sw : nullSafe(found)) {
                 if (sw == null || sw.status() != ScheduledStatus.COMPLETED || sw.session() == null) continue;
                 LocalDate date = sw.date();
                 if (date == null) continue;
-                indexSession(sessions, bestByExercise, program.programId(), sw, date);
+                rows.add(new Row(program.programId(), sw, date));
+                for (Block block : nullSafe(sw.session().blocks())) {
+                    if (block == null) continue;
+                    for (Prescription rx : nullSafe(block.prescriptions())) {
+                        if (rx != null && rx.exerciseId() != null) exerciseIds.add(rx.exerciseId());
+                    }
+                }
             }
+        }
+        Map<String, Integer> factors = conventions.factors(userId, exerciseIds);
+
+        List<CompletedSession> sessions = new ArrayList<>();
+        Map<String, List<SessionBest>> bestByExercise = new LinkedHashMap<>();
+        for (Row row : rows) {
+            indexSession(sessions, bestByExercise, row.programId, row.sw, row.date, factors);
         }
         // Order each exercise's bests chronologically for the PR walk and curve.
         for (List<SessionBest> list : bestByExercise.values()) {
@@ -394,13 +422,13 @@ public class WorkoutStatsService {
                 .comparing((SessionBest b) -> b.date)
                 .thenComparing(b -> b.completedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
         }
-        return new Scan(sessions, bestByExercise);
+        return new Scan(sessions, bestByExercise, factors);
     }
 
     private static void indexSession(
         List<CompletedSession> sessions,
         Map<String, List<SessionBest>> bestByExercise,
-        String programId, ScheduledWorkout sw, LocalDate date) {
+        String programId, ScheduledWorkout sw, LocalDate date, Map<String, Integer> factors) {
 
         double tonnage = 0.0;
         int loggedSetCount = 0;
@@ -411,13 +439,15 @@ public class WorkoutStatsService {
             if (block == null) continue;
             for (Prescription rx : nullSafe(block.prescriptions())) {
                 if (rx == null || rx.exerciseId() == null) continue;
+                int factor = factors.getOrDefault(rx.exerciseId(), 1);
                 List<LoggedSet> logged = nullSafe(rx.loggedSets());
                 for (int i = 0; i < logged.size(); i++) {
                     LoggedSet set = logged.get(i);
                     if (set == null) continue;
                     loggedSetCount++;
                     if (set.weightLbs() != null && set.reps() != null) {
-                        tonnage += set.weightLbs() * set.reps();
+                        // Total-load tonnage: per-hand lifts count double (D10).
+                        tonnage += set.weightLbs() * factor * set.reps();
                     }
                     SessionBest candidate = candidate(
                         rx.exerciseId(), date, sw, programId, set, block.blockId(), rx.orderIndex(), i);
@@ -513,6 +543,15 @@ public class WorkoutStatsService {
         Double weightLbs, Integer reps, double e1rm, boolean lowConfidence,
         String blockId, int orderIndex, int setIndex) {}
 
-    /** The cached raw scan: per-session summaries + per-exercise chronological bests. */
-    record Scan(List<CompletedSession> sessions, Map<String, List<SessionBest>> bestByExercise) {}
+    /**
+     * The cached raw scan: per-session summaries + per-exercise chronological
+     * bests + the per-exercise per-hand→total load factor (IMPL-PROG-LOAD-01).
+     */
+    record Scan(
+        List<CompletedSession> sessions,
+        Map<String, List<SessionBest>> bestByExercise,
+        Map<String, Integer> factorByExercise) {}
+
+    /** A completed session paired with its program id, for the two-pass scan. */
+    private record Row(String programId, ScheduledWorkout sw, LocalDate date) {}
 }

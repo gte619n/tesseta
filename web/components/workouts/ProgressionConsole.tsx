@@ -7,6 +7,7 @@ import type {
   ExerciseStrength,
 } from "@/lib/types/progression";
 import type { EnergyBalance } from "@/lib/types/plan";
+import { isPerHand } from "@/lib/per-hand";
 
 // The progression console body (IMPL-PROG-01), ported from Android. Sections:
 // "This week" (per-pattern volume trends), "Estimated strength" (per-lift e1RM —
@@ -181,11 +182,16 @@ function StrengthCard({ strength }: { strength: ExerciseStrength[] }) {
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2.5">
-              <span className="font-mono text-[15px] font-medium text-primary">
-                {Math.round(s.e1rmLbs)}
+              <span className="text-right font-mono text-[15px] font-medium text-primary">
+                {Math.round(s.e1rmTotalLbs ?? s.e1rmLbs)}
                 <span className="ml-0.5 text-[11px] font-normal text-tertiary">
                   lb
                 </span>
+                {isPerHand(s.loadFactor) && (
+                  <span className="ml-1 block text-[10px] font-normal text-tertiary">
+                    {Math.round((s.e1rmTotalLbs ?? s.e1rmLbs) / 2)}/hand
+                  </span>
+                )}
               </span>
               <Pill tone={confidenceTone(s.confidence)}>
                 {titleCase(s.confidence)}

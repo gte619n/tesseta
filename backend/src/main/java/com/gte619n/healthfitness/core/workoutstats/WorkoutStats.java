@@ -50,11 +50,19 @@ public record WorkoutStats(
     /** A stable pointer to one performed session (for deep-linking). */
     public record SessionRef(String programId, String scheduledId) {}
 
-    /** A personal-record session: a new best estimated 1RM for an exercise. */
+    /**
+     * A personal-record session: a new best estimated 1RM for an exercise.
+     *
+     * <p>IMPL-PROG-LOAD-01 (D3/D8): {@code e1rmLbs}/{@code weightLbs} are the raw
+     * logged (per-hand) numbers; {@code loadFactor} (1 or 2) and the pre-doubled
+     * {@code e1rmTotalLbs}/{@code weightTotalLbs} express total load so dumbbell
+     * lifts compare to barbell lifts. Web renders the totals.
+     */
     public record PrPoint(
         String exerciseId, String exerciseName,
         double e1rmLbs, double weightLbs, Integer reps,
-        LocalDate date, String programId, String scheduledId) {}
+        LocalDate date, String programId, String scheduledId,
+        int loadFactor, double e1rmTotalLbs, double weightTotalLbs) {}
 
     /** An exercise the strength chart can plot, with its display name. */
     public record LiftRef(String exerciseId, String exerciseName) {}

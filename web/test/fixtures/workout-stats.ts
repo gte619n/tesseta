@@ -7,6 +7,7 @@
 import type {
   WorkoutStats,
   E1rmHistory,
+  PrPoint,
   SessionDetailResponse,
 } from "@/lib/types/workout-stats";
 import type { ScheduledWorkoutResponse } from "@/lib/types/workout-program";
@@ -74,6 +75,9 @@ export const alphaStats: WorkoutStats = {
       date: "2026-09-12",
       programId: "wp_alpha",
       scheduledId: "2026-09-12_d1",
+      loadFactor: 1,
+      e1rmTotalLbs: 262.5,
+      weightTotalLbs: 225,
     },
     {
       exerciseId: "ex_rdl",
@@ -84,6 +88,9 @@ export const alphaStats: WorkoutStats = {
       date: "2026-08-30",
       programId: "wp_alpha",
       scheduledId: "2026-08-30_d3",
+      loadFactor: 1,
+      e1rmTotalLbs: 367.5,
+      weightTotalLbs: 315,
     },
   ],
   chartDefaultLifts: [
@@ -102,14 +109,59 @@ export const alphaBenchHistory: E1rmHistory = {
   exerciseId: "ex_bench",
   exerciseName: "Barbell Bench Press",
   points: [
-    { date: "2026-05-04", e1rmLbs: 205, weightLbs: 205, reps: null, lowConfidence: true },
-    { date: "2026-06-01", e1rmLbs: 227.5, weightLbs: 195, reps: 5, lowConfidence: false },
-    { date: "2026-07-06", e1rmLbs: 233.3, weightLbs: 200, reps: 5, lowConfidence: false },
-    { date: "2026-08-03", e1rmLbs: 245.0, weightLbs: 210, reps: 5, lowConfidence: false },
-    { date: "2026-08-30", e1rmLbs: 250.8, weightLbs: 215, reps: 5, lowConfidence: false },
-    { date: "2026-09-12", e1rmLbs: 262.5, weightLbs: 225, reps: 5, lowConfidence: false },
+    { date: "2026-05-04", e1rmLbs: 205, weightLbs: 205, reps: null, lowConfidence: true, e1rmTotalLbs: 205, weightTotalLbs: 205 },
+    { date: "2026-06-01", e1rmLbs: 227.5, weightLbs: 195, reps: 5, lowConfidence: false, e1rmTotalLbs: 227.5, weightTotalLbs: 195 },
+    { date: "2026-07-06", e1rmLbs: 233.3, weightLbs: 200, reps: 5, lowConfidence: false, e1rmTotalLbs: 233.3, weightTotalLbs: 200 },
+    { date: "2026-08-03", e1rmLbs: 245.0, weightLbs: 210, reps: 5, lowConfidence: false, e1rmTotalLbs: 245.0, weightTotalLbs: 210 },
+    { date: "2026-08-30", e1rmLbs: 250.8, weightLbs: 215, reps: 5, lowConfidence: false, e1rmTotalLbs: 250.8, weightTotalLbs: 215 },
+    { date: "2026-09-12", e1rmLbs: 262.5, weightLbs: 225, reps: 5, lowConfidence: false, e1rmTotalLbs: 262.5, weightTotalLbs: 225 },
   ],
   currentBelief: { e1rmLbs: 265, sigmaLbs: 6.2, confidence: "HIGH" },
+  loadFactor: 1,
+};
+
+// IMPL-PROG-LOAD-01 P2: a mixed PR list — one barbell (factor 1) and one
+// dumbbell (factor 2, 90/hand → 180 total) — for the per-hand display test.
+export const perHandPrList: PrPoint[] = [
+  {
+    exerciseId: "ex_db_press",
+    exerciseName: "Dumbbell Bench Press",
+    e1rmLbs: 105,
+    weightLbs: 90,
+    reps: 5,
+    date: "2026-09-11",
+    programId: "wp_alpha",
+    scheduledId: "2026-09-11_d1",
+    loadFactor: 2,
+    e1rmTotalLbs: 210,
+    weightTotalLbs: 180,
+  },
+  {
+    exerciseId: "ex_bb_bench",
+    exerciseName: "Barbell Bench Press",
+    e1rmLbs: 262.5,
+    weightLbs: 225,
+    reps: 5,
+    date: "2026-09-12",
+    programId: "wp_alpha",
+    scheduledId: "2026-09-12_d1",
+    loadFactor: 1,
+    e1rmTotalLbs: 262.5,
+    weightTotalLbs: 225,
+  },
+];
+
+// IMPL-PROG-LOAD-01: a per-hand dumbbell lift (loadFactor 2). Points carry
+// pre-doubled totals; belief 105/hand → 210 total.
+export const alphaDumbbellHistory: E1rmHistory = {
+  exerciseId: "ex_db_press",
+  exerciseName: "Dumbbell Bench Press",
+  points: [
+    { date: "2026-08-14", e1rmLbs: 93.3, weightLbs: 80, reps: 5, lowConfidence: false, e1rmTotalLbs: 186.6, weightTotalLbs: 160 },
+    { date: "2026-09-11", e1rmLbs: 105, weightLbs: 90, reps: 5, lowConfidence: false, e1rmTotalLbs: 210, weightTotalLbs: 180 },
+  ],
+  currentBelief: { e1rmLbs: 106, sigmaLbs: 4, confidence: "HIGH" },
+  loadFactor: 2,
 };
 
 // The squat curve returned by the (mocked) picker fetch when the user switches
@@ -118,10 +170,11 @@ export const alphaSquatHistory: E1rmHistory = {
   exerciseId: "ex_squat",
   exerciseName: "Back Squat",
   points: [
-    { date: "2026-07-06", e1rmLbs: 370, weightLbs: 315, reps: 5, lowConfidence: false },
-    { date: "2026-09-10", e1rmLbs: 402, weightLbs: 345, reps: 5, lowConfidence: false },
+    { date: "2026-07-06", e1rmLbs: 370, weightLbs: 315, reps: 5, lowConfidence: false, e1rmTotalLbs: 370, weightTotalLbs: 315 },
+    { date: "2026-09-10", e1rmLbs: 402, weightLbs: 345, reps: 5, lowConfidence: false, e1rmTotalLbs: 402, weightTotalLbs: 345 },
   ],
   currentBelief: { e1rmLbs: 405, sigmaLbs: 8, confidence: "HIGH" },
+  loadFactor: 1,
 };
 
 // The 2026-09-12 bench session in full: 185×5 then 225×5 (the PR set at index 1).

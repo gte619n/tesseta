@@ -141,6 +141,34 @@ class SessionLoopTest {
             .loggedSets().get(0).timedEffort());
     }
 
+    @Test
+    void demonstratedHeavierSessionWithReserveCarriesForward() {
+        // IMPL-PROG-LOAD-01 P4 (D13/D14): the lifter was prescribed 140 but pressed
+        // 190×8 with RIR 2 (reps in reserve). On the Kalman path the next target
+        // must MATCH the demonstrated 190 (snapped to the real increment), NOT the
+        // old +5%-of-140 cap (147).
+        Instant past = NOW.minusSeconds(86400L * 30); // belief established a month ago
+        states.save(new ProgressionState(USER, BENCH, 250, 5, past, 10, 0,
+            NOW.minusSeconds(86400L), 1)); // kalmanEligibleAt in the past → live
+        scheduled.save(plannedBench(TODAY.plusDays(7)));
+
+        LoggedSet s = new LoggedSet(190.0, 8, null, 120, NOW, null, 2.0, RirSource.REPORTED);
+        Prescription rx = new Prescription(BENCH, 0, 3, 8, 12, null, null, 120, null, null, null,
+            List.of(s, s, s), 140.0, "engine"); // lastPrescribed = 140
+        WorkoutDay day = new WorkoutDay("d1", "Day 1", null, null, 0,
+            List.of(new Block("b1", BlockType.MAIN, "Main", 0, List.of(rx))));
+        ScheduledWorkout completed = new ScheduledWorkout(USER, PROGRAM, id(TODAY), TODAY, "ph1", "d1",
+            "Day 1", 1, false, null, ScheduledStatus.COMPLETED, day, NOW, 3600, null);
+        scheduled.save(completed);
+
+        loop.onSessionCompleted(USER, completed);
+
+        Prescription next = benchPrescription(
+            scheduled.findById(USER, PROGRAM, id(TODAY.plusDays(7))).orElseThrow());
+        assertEquals(190.0, next.targetWeightLbs(), 1e-9, "matched demonstrated load");
+        assertTrue(next.targetWeightLbs() > 147, "old +5% cap would have suppressed this");
+    }
+
     // ---- fixtures ----
 
     private static LoggedSet set(double weight, int reps) {

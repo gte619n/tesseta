@@ -40,6 +40,12 @@ public class SessionLoop {
     static final int COLD_START_MIN_OBS = 6;
     /** Kalman output beyond ±this of last load fails the sanity band → fallback (§6.6). */
     static final double SANITY_BAND = 0.10;
+    /**
+     * IMPL-PROG-LOAD-01 (D14/IL-8): a lifter must leave at least this many reps in
+     * reserve on the last working set for a heavier-than-prescribed session to
+     * count as "outperformed" and be carried forward. RIR 0 (grinding) does not.
+     */
+    static final double OUTPERFORM_RIR_MIN = 1.0;
     /** Wide seed uncertainty so day-one prescriptions self-correct fast (D6). */
     static final double SEED_SIGMA_FRACTION = 0.08;
 
@@ -101,7 +107,9 @@ public class SessionLoop {
 
     private void processExercise(String userId, ScheduledWorkout completed, Prescription rx, BlockParameters block) {
         String exerciseId = rx.exerciseId();
-        ExerciseLoadingProfile profile = profiles.resolve(userId, exerciseId);
+        // IMPL-PROG-LOAD-01 (D7): resolve the real load increment from the gym
+        // this session was performed at.
+        ExerciseLoadingProfile profile = profiles.resolve(userId, exerciseId, completed.locationId());
         if (!profile.progressionEligible()) return;
 
         Exercise exercise = exercises.findById(exerciseId).orElse(null);
@@ -228,9 +236,15 @@ public class SessionLoop {
 
         // Kalman path with a ±10% sanity band → fallback.
         double lastPrescribed = completedRx.targetWeightLbs() != null ? completedRx.targetWeightLbs() : workingLoad;
+        // IMPL-PROG-LOAD-01 (D13/D14): did the lifter beat the prescription with
+        // reps in reserve? If so, the calculator trusts the demonstrated load.
+        LoggedSet lastSet = SessionAnalysis.lastWorkingSet(sets);
+        boolean outperformed = workingLoad > lastPrescribed + 1e-6
+            && lastSet != null && lastSet.effectiveRir() != null
+            && lastSet.effectiveRir() >= OUTPERFORM_RIR_MIN;
         PrescribedLoad kalman = PrescriptionCalculator.calculate(
             state, band, targetRir, profile.loadOffsetLbs(), profile.loadIncrementLbs(),
-            lastPrescribed, workingLoad, sets_);
+            lastPrescribed, workingLoad, outperformed, sets_);
         if (workingLoad > 0 && Math.abs(kalman.targetWeightLbs() - workingLoad) > SANITY_BAND * workingLoad) {
             List<Integer> repsAtLoad = SessionAnalysis.repsAtWorkingLoad(sets, workingLoad);
             boolean priorFailed = priorSessionFailedBottom(userId, exerciseId, band, sets);

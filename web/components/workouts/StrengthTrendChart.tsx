@@ -9,6 +9,7 @@ import type {
 import { projectSeries, toLinePath, toAreaPath } from "@/lib/chart";
 import { formatNumber } from "@/lib/format-number";
 import { formatDateUpper } from "@/lib/format-date";
+import { isPerHand } from "@/lib/per-hand";
 
 // Estimated-1RM trend per lift (IMPL-WEB-WORKOUT-01 D5/D6/D15). Defaults to the
 // top lift; a picker charts any tracked exercise, fetched lazily through the
@@ -59,12 +60,24 @@ export function StrengthTrendChart({
       .then((data: E1rmHistory | null) => {
         if (cancelled) return;
         setHistory(
-          data ?? { exerciseId: selected, exerciseName: selected, points: [], currentBelief: null },
+          data ?? {
+            exerciseId: selected,
+            exerciseName: selected,
+            points: [],
+            currentBelief: null,
+            loadFactor: 1,
+          },
         );
       })
       .catch(() => {
         if (!cancelled) {
-          setHistory({ exerciseId: selected, exerciseName: selected, points: [], currentBelief: null });
+          setHistory({
+            exerciseId: selected,
+            exerciseName: selected,
+            points: [],
+            currentBelief: null,
+            loadFactor: 1,
+          });
         }
       })
       .finally(() => {
@@ -77,12 +90,18 @@ export function StrengthTrendChart({
   }, [selected]);
 
   const points = history?.points ?? [];
-  const values = points.map((p) => p.e1rmLbs);
+  // IMPL-PROG-LOAD-01 (D3/D9): chart TOTAL load so dumbbell lifts compare to
+  // barbell lifts; the belief is per-hand, so scale it by the factor.
+  const factor = history?.loadFactor ?? 1;
+  const values = points.map((p) => p.e1rmTotalLbs);
+  const beliefTotal = history?.currentBelief
+    ? history.currentBelief.e1rmLbs * factor
+    : null;
   const hasData = values.length > 0;
 
   const geom = useMemo(() => {
     const all = [...values];
-    if (history?.currentBelief) all.push(history.currentBelief.e1rmLbs);
+    if (beliefTotal != null) all.push(beliefTotal);
     const min = Math.min(...all);
     const max = Math.max(...all);
     const pad = (max - min) * 0.1 || max * 0.05 || 1;
@@ -94,12 +113,13 @@ export function StrengthTrendChart({
       padX: PAD_X,
       padBottom: PAD_BOTTOM,
     };
-  }, [values, history]);
+  }, [values, beliefTotal]);
 
   const projected = hasData ? projectSeries(values, geom) : [];
   const linePath = toLinePath(projected);
   const areaPath = toAreaPath(projected, HEIGHT - PAD_BOTTOM);
   const latest = points[points.length - 1] ?? null;
+  const headline = beliefTotal ?? latest?.e1rmTotalLbs ?? 0;
 
   return (
     <div className="rounded-[14px] border-[0.5px] border-border-default bg-surface px-6 py-5">
@@ -123,12 +143,11 @@ export function StrengthTrendChart({
               className="font-mono text-[24px] font-medium leading-none text-primary tabular-nums"
               data-testid="strength-latest"
             >
-              {formatNumber(
-                history?.currentBelief?.e1rmLbs ?? latest?.e1rmLbs ?? 0,
-              )}
+              {formatNumber(headline)}
             </span>
             <span className="text-[12px] text-tertiary">
               lb e1RM{history?.currentBelief ? "" : " (est.)"}
+              {isPerHand(factor) ? ` · ${formatNumber(headline / 2)}/hand` : ""}
             </span>
           </div>
 
@@ -152,7 +171,7 @@ export function StrengthTrendChart({
                   cy={pt.y}
                   r={hover === i ? 3.5 : 2}
                   data-testid="strength-point"
-                  data-e1rm={formatNumber(points[i]!.e1rmLbs)}
+                  data-e1rm={formatNumber(points[i]!.e1rmTotalLbs)}
                   className={
                     points[i]!.lowConfidence ? "fill-tertiary" : "fill-accent"
                   }
@@ -171,7 +190,12 @@ export function StrengthTrendChart({
                   {formatDateUpper(points[hover]!.date)}
                 </div>
                 <div className="mt-0.5 font-medium text-primary tabular-nums">
-                  {formatNumber(points[hover]!.e1rmLbs)} lb
+                  {formatNumber(points[hover]!.e1rmTotalLbs)} lb
+                  {isPerHand(factor) && (
+                    <span className="ml-1 text-tertiary">
+                      ({formatNumber(points[hover]!.e1rmTotalLbs / 2)}/hand)
+                    </span>
+                  )}
                   {points[hover]!.lowConfidence && (
                     <span className="ml-1 text-tertiary">(est.)</span>
                   )}

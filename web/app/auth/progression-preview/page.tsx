@@ -64,11 +64,11 @@ const SAMPLE_BLOCK: BlockParameters = {
 };
 
 const SAMPLE_STRENGTH: ExerciseStrength[] = [
-  { exerciseId: "e1", name: "Conventional Deadlift", movementPattern: "HINGE", e1rmLbs: 405, confidence: "HIGH", observationCount: 11 },
-  { exerciseId: "e2", name: "Barbell Back Squat", movementPattern: "SQUAT", e1rmLbs: 315, confidence: "HIGH", observationCount: 14 },
-  { exerciseId: "e3", name: "Barbell Bench Press", movementPattern: "PUSH_HORIZONTAL", e1rmLbs: 245, confidence: "MEDIUM", observationCount: 6 },
-  { exerciseId: "e4", name: "Overhead Press", movementPattern: "PUSH_VERTICAL", e1rmLbs: 150, confidence: "MEDIUM", observationCount: 7 },
-  { exerciseId: "e5", name: "Weighted Pull-Up", movementPattern: "PULL_VERTICAL", e1rmLbs: 90, confidence: "LOW", observationCount: 3 },
+  { exerciseId: "e1", name: "Conventional Deadlift", movementPattern: "HINGE", e1rmLbs: 405, confidence: "HIGH", observationCount: 11, loadFactor: 1, e1rmTotalLbs: 405 },
+  { exerciseId: "e2", name: "Barbell Back Squat", movementPattern: "SQUAT", e1rmLbs: 315, confidence: "HIGH", observationCount: 14, loadFactor: 1, e1rmTotalLbs: 315 },
+  { exerciseId: "e3", name: "Barbell Bench Press", movementPattern: "PUSH_HORIZONTAL", e1rmLbs: 245, confidence: "MEDIUM", observationCount: 6, loadFactor: 1, e1rmTotalLbs: 245 },
+  { exerciseId: "e4", name: "Dumbbell Bench Press", movementPattern: "PUSH_HORIZONTAL", e1rmLbs: 105, confidence: "MEDIUM", observationCount: 7, loadFactor: 2, e1rmTotalLbs: 210 },
+  { exerciseId: "e5", name: "Weighted Pull-Up", movementPattern: "PULL_VERTICAL", e1rmLbs: 90, confidence: "LOW", observationCount: 3, loadFactor: 1, e1rmTotalLbs: 90 },
 ];
 
 const SAMPLE_GOAL = { title: "Drop to 12% body fat", domain: "BODY_COMPOSITION" };
