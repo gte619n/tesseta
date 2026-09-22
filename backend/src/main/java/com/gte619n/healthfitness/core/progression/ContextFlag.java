@@ -12,5 +12,10 @@ public enum ContextFlag {
     TIME_CONSTRAINED,
     DEFICIT,
     /** Derived from a low end-of-workout feeling (1–2 of 5), the sole v1 producer (D20). */
-    ROUGH_SESSION
+    ROUGH_SESSION,
+    /**
+     * IMPL-DELOAD-01 (D3): the set was performed in a scheduled deload week —
+     * intentionally submaximal, so it never corrects the strength belief.
+     */
+    DELOAD
 }

@@ -72,4 +72,53 @@ class ProgressionControllerTest {
         mvc.perform(post("/api/me/progression/state/ex1/reset").header("X-Dev-User", USER))
             .andExpect(status().isNoContent());
     }
+
+    @Autowired com.gte619n.healthfitness.core.workoutprogram.WorkoutProgramRepository programs;
+    @Autowired com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository scheduled;
+
+    /** IMPL-DELOAD-01 P2 gate: /log derives target-vs-achieved rows from completed sessions. */
+    @Test
+    void progressionLogReturnsTargetVsAchievedRows() throws Exception {
+        String user = "user-prog-log";
+        programs.save(new com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram(
+            user, "p1", "Prog", null, null,
+            com.gte619n.healthfitness.core.workoutprogram.ProgramStatus.ACTIVE,
+            com.gte619n.healthfitness.core.workoutprogram.ProgramSource.MANUAL,
+            null, null, null, java.util.List.of(), null, null, null));
+
+        var rationale = new com.gte619n.healthfitness.core.progression.PrescriptionRationale(
+            com.gte619n.healthfitness.core.progression.ProgressionPath.DELOAD,
+            com.gte619n.healthfitness.core.progression.Direction.DOWN,
+            -5.0, null, -1, com.gte619n.healthfitness.core.progression.Confidence.HIGH,
+            java.util.List.of("deload week → 10% lighter, sets ×0.5"));
+        var rx = new com.gte619n.healthfitness.core.workoutprogram.Prescription(
+            "ohp", 0, 2, 8, 12, null, null, 120, null, null, null,
+            java.util.List.of(
+                new com.gte619n.healthfitness.core.workoutprogram.LoggedSet(35.0, 12, null, null, null),
+                new com.gte619n.healthfitness.core.workoutprogram.LoggedSet(35.0, 12, null, null, null)),
+            35.0, "deload week", rationale);
+        var day = new com.gte619n.healthfitness.core.workoutprogram.WorkoutDay(
+            "d1", "Push", null, null, 0, java.util.List.of(
+                new com.gte619n.healthfitness.core.workoutprogram.Block(
+                    "b1", com.gte619n.healthfitness.core.exercise.BlockType.MAIN, "Main", 0,
+                    java.util.List.of(rx))));
+        scheduled.save(new com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout(
+            user, "p1", "2026-09-21_d1", java.time.LocalDate.of(2026, 9, 21), "ph1", "d1", "Push",
+            4, true, null, com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus.COMPLETED,
+            day, Instant.parse("2026-09-21T17:00:00Z"), 3600, null));
+
+        mvc.perform(get("/api/me/progression/log").param("exerciseId", "ohp")
+                .header("X-Dev-User", user))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.exerciseId").value("ohp"))
+            .andExpect(jsonPath("$.rows.length()").value(1))
+            .andExpect(jsonPath("$.rows[0].date").value("2026-09-21"))
+            .andExpect(jsonPath("$.rows[0].path").value("DELOAD"))
+            .andExpect(jsonPath("$.rows[0].direction").value("DOWN"))
+            .andExpect(jsonPath("$.rows[0].targetWeightLbs").value(35.0))
+            .andExpect(jsonPath("$.rows[0].topSetWeightLbs").value(35.0))
+            .andExpect(jsonPath("$.rows[0].topSetReps").value(12))
+            .andExpect(jsonPath("$.rows[0].loggedSetCount").value(2))
+            .andExpect(jsonPath("$.rows[0].isDeload").value(true));
+    }
 }

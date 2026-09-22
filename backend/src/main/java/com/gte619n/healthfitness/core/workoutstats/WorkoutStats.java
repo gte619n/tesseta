@@ -44,8 +44,11 @@ public record WorkoutStats(
     /** One week of the volume series. {@code tonnageLbs} is Σ(weight×reps). */
     public record WeekPoint(LocalDate weekStart, int sessions, double tonnageLbs) {}
 
-    /** One workout day for the consistency heatmap. */
-    public record HeatmapDay(LocalDate date, int sessionCount, SessionRef first) {}
+    /**
+     * One workout day for the consistency heatmap. {@code isDeload} is true when
+     * the day's representative session was a scheduled deload (IMPL-DELOAD-01 D4).
+     */
+    public record HeatmapDay(LocalDate date, int sessionCount, SessionRef first, boolean isDeload) {}
 
     /** A stable pointer to one performed session (for deep-linking). */
     public record SessionRef(String programId, String scheduledId) {}

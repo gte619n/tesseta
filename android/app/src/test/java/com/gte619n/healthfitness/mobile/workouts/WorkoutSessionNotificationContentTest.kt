@@ -123,6 +123,16 @@ class WorkoutSessionNotificationContentTest {
         assertNull(content.countdownToMillis)
     }
 
+    // IMPL-DELOAD-01 (P3): the shade names a scheduled deload week.
+    @Test
+    fun `deload session carries a deload suffix in the title`() {
+        val draft = draft(scheduled = scheduled().copy(isDeload = true))
+
+        val content = WorkoutSessionNotificationContent.from(draft, rest = null, now = now)
+
+        assertEquals("Push Day · deload", content.title)
+    }
+
     @Test
     fun `active text carries set progress and the upcoming load`() {
         // Bench's first set logged (135 x 8) -> next is set 2, carrying that load.

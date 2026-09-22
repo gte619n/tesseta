@@ -169,9 +169,11 @@ function StrengthCard({ strength }: { strength: ExerciseStrength[] }) {
     <Card>
       <div className="divide-y divide-border-subtle">
         {strength.map((s) => (
-          <div
+          <a
             key={s.exerciseId}
-            className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+            href={`/me/workouts/progression/log/${encodeURIComponent(s.exerciseId)}`}
+            data-testid="strength-row-link"
+            className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0 transition-colors hover:bg-canvas"
           >
             <div className="min-w-0">
               <p className="truncate text-[14px] text-primary">{s.name}</p>
@@ -197,12 +199,13 @@ function StrengthCard({ strength }: { strength: ExerciseStrength[] }) {
                 {titleCase(s.confidence)}
               </Pill>
             </div>
-          </div>
+          </a>
         ))}
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-tertiary">
         Estimated 1-rep max per lift — the engine&apos;s core belief, and what
-        your prescribed working weights are derived from.
+        your prescribed working weights are derived from. Tap a lift for its
+        full progression log (target vs achieved, session by session).
       </p>
     </Card>
   );

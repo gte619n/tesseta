@@ -320,12 +320,24 @@ public class WorkoutSessionCompletionService {
                     List<LoggedSet> sets = setsByKey.get(k);
                     // A mid-session substitute (#4) re-points the slot at the
                     // exercise actually performed; absent, the designed one stands.
+                    boolean substituted = substituteByKey.containsKey(k)
+                        && !substituteByKey.get(k).equals(rx.exerciseId());
                     String exerciseId = substituteByKey.getOrDefault(k, rx.exerciseId());
+                    // IMPL-DELOAD-01 P0 (RC-2/DD-1): the engine's target, basis, and
+                    // rationale SURVIVE completion so (a) completed sessions are
+                    // auditable (target vs achieved) and (b) the progression loop
+                    // sees the true lastPrescribed (the demonstrated-override and
+                    // PredictionLog depend on it). A substituted slot nulls them —
+                    // they describe the originally-designed movement, not the one
+                    // performed.
                     rxs.add(new Prescription(
                         exerciseId, rx.orderIndex(), rx.sets(), rx.repsMin(), rx.repsMax(),
                         rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(),
                         rx.notes(), rx.deloadModifier(),
-                        sets == null ? null : List.copyOf(sets)));
+                        sets == null ? null : List.copyOf(sets),
+                        substituted ? null : rx.targetWeightLbs(),
+                        substituted ? null : rx.loadBasis(),
+                        substituted ? null : rx.rationale()));
                 }
             }
             blocks.add(new Block(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));

@@ -4,6 +4,7 @@ import type {
   BlockParameters,
   UpdateBlockParametersRequest,
   ExerciseStrength,
+  ProgressionLog,
 } from "./types/progression";
 import type { EnergyBalance } from "./types/plan";
 
@@ -35,6 +36,14 @@ export function getStrength(): Promise<ExerciseStrength[]> {
 // should tolerate a throw (the coherence page treats it as "no engine data").
 export function getEnergyBalance(): Promise<EnergyBalance> {
   return apiJson<EnergyBalance>("/api/me/progression/energy-balance");
+}
+
+// The per-lift progression audit (IMPL-DELOAD-01 D4): one row per completed
+// session, newest first — engine target vs performed top set + rationale.
+export function getProgressionLog(exerciseId: string): Promise<ProgressionLog> {
+  return apiJson<ProgressionLog>(
+    `/api/me/progression/log?exerciseId=${encodeURIComponent(exerciseId)}`,
+  );
 }
 
 // ── Mutations ────────────────────────────────────────────────────────

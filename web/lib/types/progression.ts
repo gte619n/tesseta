@@ -62,3 +62,36 @@ export interface UpdateBlockParametersRequest {
   successCriterion?: string;
   expectedDriftPerDay?: number;
 }
+
+// ── Progression audit log (IMPL-DELOAD-01 D4) ────────────────────────
+//   GET api/me/progression/log?exerciseId=… → ProgressionLog
+
+// One completed session's audit row: what the engine wanted (target/basis/
+// rationale — null for history completed before target retention) vs the top
+// performed set, plus provenance and the deload flag. `*TotalLbs` carry the
+// per-hand ×2 for dumbbell/dual-cable lifts.
+export interface ProgressionLogRow {
+  date: string; // ISO date
+  /** ProgressionPath enum name (KALMAN | DOUBLE_PROGRESSION | WARMUP | DELOAD | FALLBACK_*), or null. */
+  path: string | null;
+  /** "UP" | "DOWN" | "HOLD", or null. */
+  direction: string | null;
+  targetWeightLbs: number | null;
+  loadBasis: string | null;
+  rationaleInputs: string[];
+  topSetWeightLbs: number | null;
+  topSetReps: number | null;
+  loggedSetCount: number;
+  isDeload: boolean;
+  programId: string;
+  scheduledId: string;
+  targetTotalLbs: number | null;
+  topSetTotalLbs: number | null;
+}
+
+export interface ProgressionLog {
+  exerciseId: string;
+  exerciseName: string;
+  loadFactor: number;
+  rows: ProgressionLogRow[];
+}

@@ -12,6 +12,8 @@ import { RecentPrsCard } from "@/components/workouts/RecentPrsCard";
 import { SessionDetail } from "@/components/workouts/SessionDetail";
 import { WorkoutCard } from "@/components/dashboard/WorkoutCard";
 
+import { ProgressionLogTable } from "@/components/workouts/ProgressionLogTable";
+
 import {
   alphaStats,
   alphaBenchHistory,
@@ -19,6 +21,8 @@ import {
   alphaDumbbellHistory,
   perHandPrList,
   alphaSessionDetail,
+  alphaDeloadSessionDetail,
+  dbPressProgressionLog,
   alphaLatest,
   emptyStats,
   ALPHA_TODAY,
@@ -202,6 +206,68 @@ describe("PROG-LOAD P2 · per-hand → total display", () => {
     );
     expect(screen.getByTestId("strength-latest")).toHaveTextContent("265");
     expect(screen.queryByText(/\/hand/)).toBeNull();
+  });
+});
+
+// IMPL-DELOAD-01 P2 functional gate: the web progression audit — deload badges,
+// target-vs-achieved on session detail, and the per-lift progression log.
+describe("DELOAD P2 · progression audit surfaces", () => {
+  it("SessionDetail shows the deload badge, target delta, and load basis", () => {
+    render(<SessionDetail detail={alphaDeloadSessionDetail} />);
+    expect(screen.getByTestId("deload-badge")).toHaveTextContent("Deload");
+    // Target 36, did 35 → −1 lb delta, and the retained basis line renders.
+    expect(screen.getByTestId("target-delta")).toHaveTextContent(
+      "did 35 vs target 36 (-1 lb)",
+    );
+    expect(screen.getByTestId("load-basis")).toHaveTextContent(
+      "deload week · resumes 40 lb next week",
+    );
+  });
+
+  it("SessionDetail shows no deload badge on a normal session", () => {
+    render(<SessionDetail detail={alphaSessionDetail} />);
+    expect(screen.queryByTestId("deload-badge")).toBeNull();
+  });
+
+  it("ConsistencyHeatmap marks the deload day", () => {
+    render(<ConsistencyHeatmap days={alphaStats.heatmap} today={ALPHA_TODAY} />);
+    const days = screen.getAllByTestId("heatmap-day");
+    const deloadDay = days.find((d) => d.getAttribute("data-date") === "2026-08-30")!;
+    const normalDay = days.find((d) => d.getAttribute("data-date") === "2026-09-12")!;
+    expect(deloadDay).toHaveAttribute("data-deload", "true");
+    expect(deloadDay.getAttribute("title")).toContain("deload");
+    expect(normalDay).toHaveAttribute("data-deload", "false");
+  });
+
+  it("ProgressionLogTable renders target vs achieved with per-hand totals", () => {
+    render(<ProgressionLogTable log={dbPressProgressionLog} />);
+    const rows = screen.getAllByTestId("progression-log-row");
+    expect(rows).toHaveLength(3);
+
+    // DELOAD row: warn-badged path, doubled totals (35/hand → 70 total).
+    expect(rows[0]!).toHaveAttribute("data-deload", "true");
+    expect(within(rows[0]!).getByTestId("log-path")).toHaveTextContent("Deload");
+    expect(within(rows[0]!).getByTestId("log-target")).toHaveTextContent(
+      "target 70 (35/hand)",
+    );
+    expect(within(rows[0]!).getByTestId("log-rationale")).toHaveTextContent(
+      "resumes 40 lb next week",
+    );
+
+    // HOLD row: warm-up path, target 80 total (40/hand), achieved 80 × 8.
+    expect(within(rows[1]!).getByTestId("log-path")).toHaveTextContent("Warm-up");
+    expect(within(rows[1]!).getByTestId("log-target")).toHaveTextContent(
+      "target 80 (40/hand)",
+    );
+    expect(within(rows[1]!).getByTestId("log-achieved")).toHaveTextContent(
+      "did 80 (40/hand) × 8",
+    );
+
+    // Pre-retention row degrades gracefully: no target, achieved still shown.
+    expect(within(rows[2]!).getByTestId("log-target")).toHaveTextContent("target —");
+    expect(within(rows[2]!).getByTestId("log-achieved")).toHaveTextContent(
+      "did 70 (35/hand) × 12",
+    );
   });
 });
 

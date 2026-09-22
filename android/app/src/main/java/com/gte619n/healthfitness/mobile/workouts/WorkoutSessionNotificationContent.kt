@@ -99,13 +99,20 @@ object WorkoutSessionNotificationContent {
         lastSets: Map<String, List<LoggedSet>> = emptyMap(),
     ): Content {
         val current = currentSet(draft, lastSets)
+        // IMPL-DELOAD-01 (P3): a scheduled deload week is named in the title so
+        // the lighter targets read as intentional from the shade too.
+        val title = if (draft.scheduled.isDeload) {
+            "${draft.scheduled.dayLabel} · deload"
+        } else {
+            draft.scheduled.dayLabel
+        }
         return when {
             rest != null && rest.isRunning(now) -> {
                 // The get-ready pre-roll before a timed hold and the between-sets
                 // rest share the countdown; only the verb differs.
                 val verb = if (rest.kind == Kind.GET_READY) "Get ready" else "Resting"
                 Content(
-                    title = draft.scheduled.dayLabel,
+                    title = title,
                     text = if (current != null) "$verb — next: ${current.describe()}" else verb,
                     elapsedSinceMillis = null,
                     countdownToMillis = rest.endsAt?.toEpochMilli(),
@@ -117,7 +124,7 @@ object WorkoutSessionNotificationContent {
             rest != null && rest.isPaused -> {
                 val remaining = restCountdownLabel(rest.remainingSeconds(now))
                 Content(
-                    title = draft.scheduled.dayLabel,
+                    title = title,
                     text = if (current != null) {
                         "Paused · $remaining — next: ${current.describe()}"
                     } else {
@@ -128,7 +135,7 @@ object WorkoutSessionNotificationContent {
                 )
             }
             else -> Content(
-                title = draft.scheduled.dayLabel,
+                title = title,
                 text = if (current != null) {
                     "Now: ${current.describe()}"
                 } else {

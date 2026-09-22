@@ -3,6 +3,9 @@
 <resources>
     <string name="workout_session_title">Workout</string>
     <string name="workout_session_start">Start workout</string>
+    <!-- IMPL-DELOAD-01 (P3): scheduled deload-week indication in the logger. -->
+    <string name="workout_session_deload_pill">Deload</string>
+    <string name="workout_session_deload_banner">Lighter on purpose — your plan resumes next week.</string>
     <string name="workout_start_today">Start this workout today</string>
     <string name="workout_session_review">Review</string>
     <string name="workout_session_resume">Resume</string>

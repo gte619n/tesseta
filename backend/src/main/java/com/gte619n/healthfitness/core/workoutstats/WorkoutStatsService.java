@@ -264,7 +264,7 @@ public class WorkoutStatsService {
                 CompletedSession s = e.getValue();
                 out.add(new WorkoutStats.HeatmapDay(
                     e.getKey(), counts.get(e.getKey())[0],
-                    new WorkoutStats.SessionRef(s.programId, s.scheduledId)));
+                    new WorkoutStats.SessionRef(s.programId, s.scheduledId), s.isDeload));
             });
         return out;
     }
@@ -464,7 +464,8 @@ public class WorkoutStatsService {
         }
         sessions.add(new CompletedSession(
             date, programId, sw.scheduledId(), sw.dayLabel(),
-            sw.completedAt(), sw.durationSeconds(), sw.feeling(), loggedSetCount, tonnage));
+            sw.completedAt(), sw.durationSeconds(), sw.feeling(), loggedSetCount, tonnage,
+            sw.isDeload()));
     }
 
     /**
@@ -535,7 +536,7 @@ public class WorkoutStatsService {
     record CompletedSession(
         LocalDate date, String programId, String scheduledId, String dayLabel,
         Instant completedAt, Integer durationSeconds, Integer feeling,
-        int loggedSetCount, double tonnage) {}
+        int loggedSetCount, double tonnage, boolean isDeload) {}
 
     /** The best set of one exercise in one session, with its render-tree location. */
     record SessionBest(

@@ -53,6 +53,42 @@ class WorkoutScheduleServiceTest {
     }
 
     @Test
+    void deloadWeekSnapshotsMaterializeWithReducedSets() {
+        // IMPL-DELOAD-01 DD-5: deload-week sessions start with halved working
+        // sets (min 1) — warm-up blocks and non-deload weeks untouched.
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Push", DayOfWeek.MON, "home", 0, List.of(
+            new Block(null, BlockType.WARMUP, "Warmup", 0, List.of(
+                new Prescription("band", 0, 2, 10, 15, null, null, 60, null, null, null, null))),
+            new Block(null, BlockType.MAIN, "Main", 1, List.of(
+                new Prescription("ohp", 0, 4, 8, 12, null, null, 120, null, null, null, null),
+                new Prescription("raise", 1, 1, 12, 15, null, null, 60, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Block", null, 0, null,
+            2, 2, null, null, null, List.of(mon));
+        LocalDate start = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY))
+            .plusWeeks(1);
+        WorkoutProgram created = programService.create(new WorkoutProgram(
+            "u1", null, "Test", null, null, ProgramStatus.DRAFT,
+            ProgramSource.MANUAL, start, null, null, List.of(phase), null, null, null));
+
+        List<ScheduledWorkout> sessions = scheduleService.activate("u1", created.programId());
+
+        ScheduledWorkout normal = sessions.stream().filter(s -> !s.isDeload()).findFirst().orElseThrow();
+        ScheduledWorkout deload = sessions.stream().filter(ScheduledWorkout::isDeload).findFirst().orElseThrow();
+        // Normal week: untouched (warmup 2, main 4 and 1).
+        assertEquals(4, normal.session().blocks().get(1).prescriptions().get(0).sets());
+        // Deload week: main 4→2, the 1-set accessory clamps to 1, warm-up untouched.
+        assertEquals(2, deload.session().blocks().get(1).prescriptions().get(0).sets());
+        assertEquals(1, deload.session().blocks().get(1).prescriptions().get(1).sets());
+        assertEquals(2, deload.session().blocks().get(0).prescriptions().get(0).sets());
+    }
+
+    @Test
     void reactivatePreservesCompletedSessionsAndRewritesOnlyFuturePlanned() {
         FakeProgramRepo programs = new FakeProgramRepo();
         FakeScheduledRepo scheduled = new FakeScheduledRepo();

@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.core.workoutprogram;
 
+import com.gte619n.healthfitness.core.exercise.BlockType;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
@@ -58,7 +61,10 @@ public class WorkoutScheduleService {
                         date + "_" + day.dayId(),
                         date, phase.phaseId(), day.dayId(), day.label(),
                         week, isDeload, day.locationId(),
-                        ScheduledStatus.PLANNED, day,
+                        // IMPL-DELOAD-01 (DD-5): deload-week snapshots start with
+                        // reduced sets so the week is lighter even before the
+                        // engine has stamped any target. Load stays engine-owned.
+                        ScheduledStatus.PLANNED, isDeload ? withDeloadSets(day) : day,
                         null, null, null
                     ));
                 }
@@ -111,6 +117,47 @@ public class WorkoutScheduleService {
         );
         scheduled.save(session);
         return session;
+    }
+
+    /** Working-set block types whose set counts a deload week reduces (mirrors the engine's D21 set). */
+    private static final Set<BlockType> DELOAD_ELIGIBLE_BLOCKS =
+        EnumSet.of(BlockType.MAIN, BlockType.ACCESSORY, BlockType.CORE);
+    private static final double DELOAD_SETS_MULTIPLIER = 0.5;
+
+    /**
+     * IMPL-DELOAD-01 (D1/DD-5): a deload-week day snapshot carries reduced set
+     * counts — per-prescription {@link DeloadModifier#setsMultiplier()} when the
+     * program author set one, else × 0.5 — clamped to a minimum of one set.
+     * Warm-up/timed/other block types and prescriptions without a set count are
+     * left untouched.
+     */
+    private static WorkoutDay withDeloadSets(WorkoutDay day) {
+        if (day.blocks() == null) return day;
+        List<Block> blocks = new ArrayList<>();
+        for (Block b : day.blocks()) {
+            if (b.type() == null || !DELOAD_ELIGIBLE_BLOCKS.contains(b.type()) || b.prescriptions() == null) {
+                blocks.add(b);
+                continue;
+            }
+            List<Prescription> rxs = new ArrayList<>();
+            for (Prescription rx : b.prescriptions()) {
+                if (rx.sets() == null) {
+                    rxs.add(rx);
+                    continue;
+                }
+                double mult = rx.deloadModifier() != null && rx.deloadModifier().setsMultiplier() != null
+                    ? rx.deloadModifier().setsMultiplier() : DELOAD_SETS_MULTIPLIER;
+                int sets = Math.max(1, (int) Math.round(rx.sets() * mult));
+                rxs.add(new Prescription(
+                    rx.exerciseId(), rx.orderIndex(), sets, rx.repsMin(), rx.repsMax(),
+                    rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(),
+                    rx.notes(), rx.deloadModifier(), rx.loggedSets(),
+                    rx.targetWeightLbs(), rx.loadBasis(), rx.rationale()));
+            }
+            blocks.add(new Block(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
+        }
+        return new WorkoutDay(day.dayId(), day.label(), day.dayOfWeek(), day.locationId(),
+            day.orderIndex(), blocks);
     }
 
     public List<ScheduledWorkout> calendar(String userId, String programId, LocalDate from, LocalDate to) {
