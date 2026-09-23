@@ -1,76 +1,45 @@
-// IMPL-IOS-01 Phase 1 — `:shared:core`, the Kotlin Multiplatform module that
-// carries the ONE implementation of the domain models, the sync/outbox engine,
-// the collection registry, and the shared presentation state that both the
-// Android app and the native iOS app consume (D1).
+// IMPL-IOS-01 — `:shared:core` KMP module.
 //
-// Targets:
-//   - jvm()                 → runs the full commonTest suite fast in CI (ubuntu)
-//   - androidTarget()       → what the Android app links against
-//   - iosArm64 / iosSimulatorArm64 → the device + Apple-silicon simulator; the
-//                             XCFramework the SwiftUI app embeds via SKIE (D1)
-//
-// ⚠️ VERIFICATION STATUS (see decision log D-EXEC-1): this module is AUTHORED
-// but not yet CI-green. Compiling it requires the Phase 0D toolchain migration
-// (Kotlin 2.0.21→2.4.x, matching KSP, Room 2.8 KMP) which is deliberately
-// deferred so it does not destabilize the shipping Android build. The version
-// refs below are the 0D TARGET versions, not the repo's current ones.
-
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+// PHASE 0D NOTE (2026-09-23): the spec's target versions (Kotlin 2.4 / AGP 9 /
+// Room 2.8) do not exist yet — the current toolchain top is Kotlin 2.2.x. This
+// build is configured to what is REAL and to what the iOS-enabling goal needs:
+// verifying the shared LOGIC (domain + sync + presentation ViewModels) compiles
+// and its commonTest suite passes on the JVM. That needs neither Kotlin/Native,
+// Room, SKIE, nor the Android SDK, so those targets/deps are deferred behind the
+// commented blocks below and re-enabled when the XCFramework / concrete DAOs are
+// built. Nothing here touches `android/`.
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidLibrary)
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.skie)
+    // Deferred until the iOS framework / Android-consume steps:
+    // alias(libs.plugins.androidLibrary)
+    // alias(libs.plugins.skie)
 }
 
 kotlin {
     jvm()
 
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_21)
-        }
-    }
-
-    val xcfName = "SharedCore"
-    listOf(iosArm64(), iosSimulatorArm64()).forEach { iosTarget ->
-        iosTarget.binaries.framework {
-            baseName = xcfName
-            isStatic = true
-        }
-    }
+    // Deferred (need Android SDK / Kotlin-Native + SKIE). Re-enable for the
+    // XCFramework build once the JVM logic is green:
+    //
+    // androidTarget { compilerOptions { jvmTarget.set(JvmTarget.JVM_21) } }
+    // listOf(iosArm64(), iosSimulatorArm64()).forEach {
+    //     it.binaries.framework { baseName = "SharedCore"; isStatic = true }
+    // }
 
     sourceSets {
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
-            // androidx.lifecycle ViewModel + Room ship KMP artifacts as of the
-            // 0D target versions; shared ViewModels (D2) and the mirror DB
-            // (D5, Room KMP) live in commonMain.
             implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.ktor.client.core)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.turbine)
         }
-        androidMain.dependencies {
-            implementation(libs.ktor.client.okhttp)
-        }
-        iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
-        }
-    }
-}
-
-android {
-    namespace = "com.gte619n.healthfitness.shared"
-    compileSdk = 35
-    defaultConfig {
-        minSdk = 29
     }
 }

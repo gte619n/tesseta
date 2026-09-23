@@ -211,7 +211,9 @@ class WorkoutsHubViewModel(
                 }
             // Fold in the weekly target so the streak recomputes on a calendar
             // change AND on a settings change (local save or sync push).
-            combine(loads, settingsRepository.weeklyStreakTarget) { result, target -> result to target }
+            combine(loads, settingsRepository.weeklyStreakTarget) {
+                result: Result<LandingLoad>, target: Int -> result to target
+            }
                 .collect { (result, target) ->
                     result
                         .onSuccess { applyLoad(it, target) }

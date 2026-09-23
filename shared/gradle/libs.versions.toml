@@ -1,25 +1,21 @@
-# IMPL-IOS-01 Phase 1 — version catalog for the standalone `:shared` KMP build.
-# These are the Phase 0D TARGET versions (Kotlin 2.4.x line etc.), intentionally
-# ahead of android/gradle/libs.versions.toml (Kotlin 2.0.21 / AGP 8.7.3). When
-# 0D lands, the two catalogs reconcile onto one set. See decision log D-EXEC-1.
+# IMPL-IOS-01 — version catalog for the standalone `:shared` KMP build.
+# Phase 0D reality (2026-09-23): pinned to REAL, mutually-compatible versions
+# (Kotlin 2.2.x is the current top; the spec's 2.4/AGP-9 do not exist yet).
+# Room/SKIE/Ktor-Darwin are declared for the deferred iOS-framework step but not
+# yet applied by build.gradle.kts (JVM-logic-first).
 
 [versions]
+kotlin = "2.2.20"
 agp = "8.7.3"
-# 0D target — Compose Multiplatform is NOT used (native SwiftUI, D1), so the
-# Kotlin bump is driven by Room-KMP / lifecycle-KMP maturity, not CMP.
-kotlin = "2.0.21"
-ksp = "2.0.21-1.0.27"
+ksp = "2.2.20-2.0.2"
 coroutines = "1.9.0"
 serialization = "1.7.3"
 datetime = "0.6.1"
 ktor = "3.0.1"
-# androidx.lifecycle 2.8.x ships KMP artifacts (ViewModel in commonMain).
-lifecycle = "2.8.7"
-# Room KMP (2.7+) — the D5 storage swap off net.zetetic SQLCipher.
+lifecycle = "2.8.4"
 room = "2.7.0-alpha11"
 sqlite = "2.5.0-alpha11"
-# SKIE (Touchlab) — Swift-friendly interop: StateFlow→AsyncSequence, sealed→enum.
-skie = "0.9.5"
+skie = "0.10.1"
 turbine = "1.1.0"
 
 [libraries]

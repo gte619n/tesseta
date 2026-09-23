@@ -268,7 +268,9 @@ class SyncConvergenceTest {
             mirror.writeLocal(table, id, value, lastUpdate = "9999-local-$id-$value")
             outbox.enqueue(
                 OutboxOp(
-                    id = "$name-$id-${op.name}-$value",
+                    // The op id IS the row id — clearDirty / delete target the mirror
+                    // row by this. Uniqueness across clients lives on idempotencyKey.
+                    id = id,
                     collection = table,
                     docJson = value,
                     operation = op,
