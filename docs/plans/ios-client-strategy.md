@@ -1,6 +1,9 @@
 # iOS Client Strategy (iPhone + iPad)
 
-> Status: **decision doc — no build committed** · Created 2026-09-13 · Source:
+> Status: **superseded — build committed via
+> [IMPL-IOS-01](IMPL-IOS-01-ios-client-parity.md)** (owner request 2026-09-22
+> replaced the PWA demand gate; prerequisites 1–3 carry over as its Phase 0).
+> Originally: decision doc — no build committed · Created 2026-09-13 · Source:
 > audit run [`docs/audit/2026-09-13/`](../audit/2026-09-13/INDEX.md) (D6
 > cross-platform, D16 product gaps, D12 SOTA) + operator discussion.
 
