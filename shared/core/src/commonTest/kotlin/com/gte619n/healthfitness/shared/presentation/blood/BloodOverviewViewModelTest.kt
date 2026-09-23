@@ -11,6 +11,7 @@ import com.gte619n.healthfitness.shared.domain.blood.ReferenceRange
 import com.gte619n.healthfitness.shared.domain.blood.UploadEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -77,6 +78,7 @@ class BloodOverviewViewModelTest {
         val readings = FakeReadingRepo(MutableStateFlow(listOf(reading(BloodMarker.LDL, 90.0, "2026-08-01"))))
         val reports = FakeReportRepo(MutableStateFlow(listOf(report("2026-09-01", ldl = 80.0))))
         val vm = BloodOverviewViewModel(readings, reports)
+        backgroundScope.launch { vm.state.collect {} }
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -102,6 +104,7 @@ class BloodOverviewViewModelTest {
             FakeReadingRepo(MutableStateFlow(emptyList())),
             FakeReportRepo(MutableStateFlow(many)),
         )
+        backgroundScope.launch { vm.state.collect {} }
         advanceUntilIdle()
         val ready = assertIs<BloodOverviewViewModel.UiState.Ready>(vm.state.value)
         assertEquals(10, ready.recentReports.size)
@@ -113,6 +116,7 @@ class BloodOverviewViewModelTest {
             FakeReadingRepo(MutableStateFlow(emptyList())),
             FakeReportRepo(throwOnObserve = true),
         )
+        backgroundScope.launch { vm.state.collect {} }
         advanceUntilIdle()
         assertIs<BloodOverviewViewModel.UiState.Error>(vm.state.value)
     }

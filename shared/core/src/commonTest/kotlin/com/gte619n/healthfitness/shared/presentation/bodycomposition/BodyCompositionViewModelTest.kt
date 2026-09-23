@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.shared.domain.prefs.UnitPreferences
 import com.gte619n.healthfitness.shared.domain.prefs.WeightUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -66,6 +67,8 @@ class BodyCompositionViewModelTest {
         val body = FakeBodyRepo(MutableStateFlow(snapshot))
         val dexa = FakeDexaRepo(MutableStateFlow(listOf(scan)))
         val vm = BodyCompositionViewModel(body, dexa, FakeUnitPrefs(WeightUnit.KILOGRAMS))
+        backgroundScope.launch { vm.state.collect {} }
+        backgroundScope.launch { vm.weightUnit.collect {} }
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -83,6 +86,8 @@ class BodyCompositionViewModelTest {
         val body = FakeBodyRepo(MutableStateFlow(snapshot), refreshThrows = true)
         val dexa = FakeDexaRepo(MutableStateFlow(listOf(scan)))
         val vm = BodyCompositionViewModel(body, dexa, FakeUnitPrefs())
+        backgroundScope.launch { vm.state.collect {} }
+        backgroundScope.launch { vm.weightUnit.collect {} }
         advanceUntilIdle()
 
         // Data still present, no error surfaced because we had something to show.
@@ -95,6 +100,8 @@ class BodyCompositionViewModelTest {
         val body = FakeBodyRepo(emptyFlow(), refreshThrows = true)
         val dexa = FakeDexaRepo(MutableStateFlow(emptyList()))
         val vm = BodyCompositionViewModel(body, dexa, FakeUnitPrefs())
+        backgroundScope.launch { vm.state.collect {} }
+        backgroundScope.launch { vm.weightUnit.collect {} }
         advanceUntilIdle()
 
         assertNull(vm.state.value.snapshot)
