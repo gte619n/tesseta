@@ -84,6 +84,28 @@ targets:
     #         echo "warning: SwiftLint not installed"
     #       fi
 
+  # D10 Live Activity widget extension. The ActivityKit ATTRIBUTES + controller
+  # (ios/HealthFitness/LiveActivity/WorkoutActivityAttributes.swift,
+  # WorkoutActivityController.swift) compile into the app target above. The
+  # WIDGET UI (WorkoutLiveActivityWidget + its WidgetBundle entry point) must
+  # live in this extension; at integration, move those two files under
+  # ios/WorkoutWidget/ and add WorkoutActivityAttributes.swift to BOTH targets
+  # (shared source). Left declared-but-commented until that move so `xcodegen
+  # generate` on the current tree doesn't reference an empty sources path.
+  # WorkoutWidgetExtension:
+  #   type: app-extension
+  #   platform: iOS
+  #   sources:
+  #     - path: WorkoutWidget
+  #     - path: HealthFitness/LiveActivity/WorkoutActivityAttributes.swift  # shared
+  #   settings:
+  #     base:
+  #       PRODUCT_BUNDLE_IDENTIFIER: com.gte619n.healthfitness.WorkoutWidget
+  #       INFOPLIST_KEY_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  #   dependencies:
+  #     - sdk: WidgetKit.framework
+  #     - sdk: SwiftUI.framework
+
   HealthFitnessTests:
     type: bundle.unit-test
     platform: iOS

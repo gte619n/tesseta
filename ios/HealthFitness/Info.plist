@@ -53,6 +53,13 @@
     <key>NSCameraUsageDescription</key>
     <string>Take photos of meals to log nutrition, and scan barcodes or nutrition labels.</string>
 
+    <!-- D10: ActivityKit Live Activity for the active workout (lock screen +
+         Dynamic Island), replacing Android's foreground-service chronometer. -->
+    <key>NSSupportsLiveActivities</key>
+    <true/>
+    <key>NSSupportsLiveActivitiesFrequentUpdates</key>
+    <true/>
+
     <!-- Standard scene/launch config for a SwiftUI lifecycle app. -->
     <key>UIApplicationSceneManifest</key>
     <dict>
