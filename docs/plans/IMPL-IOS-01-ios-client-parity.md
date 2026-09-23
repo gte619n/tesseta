@@ -1,6 +1,7 @@
 # IMPL-IOS-01 — Native iOS Client (iPhone + iPad) at Android Parity
 
-> Status: **planned** · Created 2026-09-22 · Source: owner request ("iOS client
+> Status: **planned — decisions locked via owner interview 2026-09-22** ·
+> Created 2026-09-22 · Source: owner request ("iOS client
 > at functional parity with the Android client, multi-agent buildable") +
 > [`ios-client-strategy.md`](ios-client-strategy.md) (this spec supersedes its
 > "no build committed" status — the owner's direct request replaces the PWA
@@ -82,7 +83,7 @@ thin `@Observable` bridge per screen.
 | D2 | Shared presentation: androidx ViewModel (KMP) + StateFlow; SwiftUI observes via SKIE | VMs that touch Android APIs (camera, notifications) split into shared state-holder + platform delegate `expect/actual`. |
 | D3 | Serialization in shared code: kotlinx.serialization (replaces Moshi in `core-domain`/`core-data`) | Moshi is JVM-only. Codec swap is gated by the ARCH-002 contract fixtures (Phase 0) so wire compatibility is proven, not assumed. |
 | D4 | Networking: Ktor client (OkHttp engine on Android, Darwin engine on iOS) replaces Retrofit in shared repositories | Auth interceptor/authenticator behavior (silent refresh on 401, reuse-grace tolerance) ported as Ktor plugins with the existing tests carried over. |
-| D5 | Storage: Room KMP (2.8+, bundled SQLite driver); encryption at rest = platform (iOS `NSFileProtectionComplete`; Android relies on FBE, minSdk 29) — retires `net.zetetic` SQLCipher (closes SUP-003) | ⚠️ Changes Android's at-rest posture from app-layer SQLCipher to OS file-based encryption. **Owner sign-off required before Phase 1.** Fallback if rejected: SQLDelight + SQLCipher drivers on both platforms (adds a DAO-layer rewrite, +4–6 d). |
+| D5 | Storage: Room KMP (2.8+, bundled SQLite driver); encryption at rest = platform (iOS `NSFileProtectionComplete`; Android relies on FBE, minSdk 29) — retires `net.zetetic` SQLCipher (closes SUP-003) | Changes Android's at-rest posture from app-layer SQLCipher to OS file-based encryption. **Owner signed off 2026-09-22.** (Rejected fallback: SQLDelight + SQLCipher drivers on both platforms.) |
 | D6 | iOS auth: GoogleSignIn iOS SDK → `/api/auth/exchange`; tokens in Keychain (`kSecAttrAccessibleAfterFirstUnlock` so background sync can read them); offline-first cached-session launch identical to Android | Backend: add the new iOS OAuth client ID to `OAUTH_ALLOWED_AUDIENCES` (config-only). |
 | D7 | Push: Firebase iOS SDK (FCM→APNs). Backend and `PUT /api/me/devices/fcm` registry unchanged | Silent `sync` messages arrive as `content-available` pushes — iOS throttles these (no delivery guarantee, ~budgeted per hour). Mitigation: foreground-activation pull + BGAppRefreshTask floor + user-visible pushes (leftover/adjust) carry their own sync trigger. |
 | D8 | Background execution: BGAppRefreshTask (periodic delta pull, best-effort) + BGProcessingTask (outbox drain on connectivity) + always pull on foreground activation | Accept weaker guarantees than WorkManager; the offline-first read model means staleness is cosmetic, and outbox drains on next open at worst. |
@@ -93,9 +94,12 @@ thin `@Observable` bridge per screen.
 | D13 | Distribution: TestFlight internal testing only (parity with Firebase App Distribution internal-testers). No App Store submission in v1 | Defers the Sign in with Apple mandate (App Review 4.8 applies to App Store distribution). If v2 goes to the App Store, backend gains an `apple` issuer in `/exchange` — flagged now, not built now. |
 | D14 | CI: GitHub Actions `macos-15` runners; `ios-ci.yml` mirrors the android-ci pattern (paths-filter guard, parallel jobs, aggregate gate). Release lane also GitHub Actions + fastlane (Cloud Build offers no macOS) | Build number = `git rev-list --count HEAD` (CICD-003 parity); release notes via Gemini reusing the Android lane's script. |
 | D15 | Signing: App Store Connect API key + fastlane (cert/profile sync via `match` backed by a GCS bucket, consistent with the repo's GCS habit); secrets mirrored into GitHub Actions secrets from Secret Manager | One-time human setup (owner): Apple Developer enrollment, bundle IDs, Firebase iOS app + APNs key upload. |
-| D16 | Minimum OS: iOS 17 / iPadOS 17 (Observation framework, mature ActivityKit; ~95% device coverage in 2026). iPad = same app, size-class adaptive (Android's 600dp breakpoint ↔ `.regular` horizontal size class) | |
+| D16 | Minimum OS: **latest major only** (iOS 26 / iPadOS 26 at kickoff) — personal-use posture, owner devices are always current; no `@available` guards, newest SwiftUI/ActivityKit APIs used freely. iPad is a **v1 requirement**: same app, size-class adaptive (Android's 600dp breakpoint ↔ `.regular` horizontal size class), built per-wave (Wave F is polish, not enablement) | Owner interview 2026-09-22. |
 | D17 | XPLAT-002 min-client-version handshake ships **before** the first iOS TestFlight build | Three continuously-deployed clients without version negotiation is not survivable. |
 | D18 | iOS repo layout: `ios/` (Xcode project, SwiftUI, fastlane) + `shared/` (KMP modules extracted from `android/core-*`); Android modules consume `shared/` unchanged in behavior | Keeps paths-filter CI guards clean: `ios/**`, `shared/**`. |
+| D19 | Phase 1 lands as a **single long-lived branch** (`shared-core-extraction`): all of 1A–1D merge to main at once. Owner accepts the big-bang release on the daily-driver Android app in exchange for full isolation until merge day | Owner interview 2026-09-22 (chose over incremental and hybrid). Mitigations mandatory: weekly rebase onto main, android-ci green on the branch at all times, the 1B device-DB migration test green before merge, and a 1-week owner-device soak of a branch-built APK **before** the merge (Firebase App Distribution can serve branch builds). |
+| D20 | **Soft freeze** on `android/core-data`, `android/core-domain`, and ViewModel files for the lifetime of the Phase 1 branch: no new feature work merges into those paths; UI-level, backend, and web work continue freely | Owner interview 2026-09-22. Keeps the extraction branch's rebases cheap. In-flight branches touching core (deload/progression/ad-hoc) should merge **before** Phase 1 starts. |
+| D21 | Agent fan-out scale: as specced (~5 agents Phase 0, ~6 in 1C, ~10 peak in Phase 3). Wave order as specced: A (dashboard/settings) → B (meds) → C (nutrition) → D (workouts) → E (health/goals) → F (iPad polish) | Owner interview 2026-09-22. |
 
 ## Phased plan
 
@@ -113,23 +117,32 @@ All four are independent and agent-parallelizable; 0E has human-only steps.
 | 0B | **XPLAT-002 version negotiation**: `X-Client` / min-version handshake endpoint + 426-style upgrade signal; Android adopts | Backend + Android shipped; contract fixture added |
 | 0C | **XPLAT-001 day-key fix**: one canonical "today" (`?date=` + `X-Timezone`) across backend/web/Android | Audit finding closed; fixture added |
 | 0D | **A0 toolchain ride (MIG-001)**: Kotlin 2.4.x, AGP 9.x, Room 2.8.x, Compose BOM current — Android alone, shipped and stable | android-ci green 2 weeks, no runtime regressions |
-| 0E | **Apple/CI bootstrap**: Apple Developer enrollment 👤, bundle IDs, Firebase iOS app + APNs auth key 👤, App Store Connect API key 👤, fastlane match store, GitHub `macos-15` smoke workflow (empty SwiftUI app builds + uploads to TestFlight) | A signed hello-world reaches TestFlight from CI |
+| 0E | **Apple/CI bootstrap**: owner already has a personal Apple Developer account (no enrollment wait). Remaining: bundle IDs, Firebase iOS app + APNs auth key 👤, App Store Connect API key 👤, fastlane match store, GitHub `macos-15` smoke workflow (empty SwiftUI app builds + uploads to TestFlight) | A signed hello-world reaches TestFlight from CI |
 
 👤 = owner-in-the-loop step; everything else is agent-executable.
 
 ### Phase 1 — Shared core extraction (the critical path)
 
-Sequenced; 1C fans out per-domain after the engine core lands.
+Per D19: all of Phase 1 lives on one long-lived branch
+(`shared-core-extraction`) and merges to main as a single unit. Discipline
+while the branch lives: weekly rebase onto main, android-ci green on the
+branch continuously, and the D20 soft freeze on `core-data`/`core-domain`/
+ViewModels (merge in-flight core-touching branches — deload, progression,
+ad-hoc — **before** starting). Sequenced; 1C fans out per-domain after the
+engine core lands.
 
 | WS | Work | Definition of done |
 |---|---|---|
 | 1A | `core-domain` → KMP `shared/domain`: pure models, units, macros math, Moshi→kotlinx.serialization | All existing unit tests pass from `commonTest`; contract fixtures (0A) pass through the **new** codec on JVM — this is the codec-swap proof |
-| 1B | Storage swap per D5: Room KMP, retire SQLCipher (Android migration path: decrypt-copy on first launch, tested against a real device DB) | Instrumented migration test green; Android ships and soaks 1 week |
+| 1B | Storage swap per D5: Room KMP, retire SQLCipher (Android migration path: decrypt-copy on first launch, tested against a real device DB) | Instrumented migration test green on the branch, exercised against a snapshot of the owner's real device DB |
 | 1C | `core-data` → KMP `shared/data`: CollectionRegistry (all 25 collections + slash aliases), mirror entities/DAOs, SyncEngine (cursor, LWW MergeConflictResolver, schemaVersion resync), Outbox + replay client (Idempotency-Key, client IDs, origin-device header), Ktor network layer, auth token plumbing (silent refresh, reuse-grace), repositories per domain. Fan-out after engine core: one agent per domain repository cluster (meds, nutrition, workouts, health, goals, misc) | Full core-data unit suite (39+ files) ported to `commonTest` and green on **both** JVM and `iosSimulatorArm64` targets; Android app consumes `shared/*` with zero behavior diff (existing android-ci suite is the regression harness) |
 | 1D | Shared ViewModels: extract the ~40 pure state-holder VMs to `shared/presentation` (KMP ViewModel); platform-coupled VMs (camera, notifications, TTS) split state-holder vs. `expect/actual` delegate | Android screens re-wired to shared VMs, all VM unit tests in commonTest, android-ci green |
 
-**Gate:** Android release built entirely on `shared/` soaks on the owner's
-device for a week with no sync regressions before Phase 2 UI fan-out.
+**Gate (pre-merge, per D19):** a branch-built Android APK (distributed via
+Firebase App Distribution) soaks on the owner's device for a week with no
+sync/auth/migration regressions; full android-ci + contract-fixture suites
+green; then the branch merges to main as one unit and Phase 2 UI fan-out
+begins.
 
 ### Phase 2 — iOS app shell
 
@@ -311,12 +324,15 @@ of 2A.
 
 Top risks, with mitigations:
 
-1. **Phase 1 destabilizes the working Android app** (biggest). Mitigation:
-   android-ci as regression harness at every step, 1-week soak gates on 1B and
-   end-of-1, behavior-diff-zero rule, `interactive_workout`-style abandoned
-   branches avoided by landing each WS to main behind the soak gates.
-2. **D5 encryption posture change rejected** → fallback SQLDelight+SQLCipher
-   (+4–6 d, DAO rewrite). Decide before 1B starts.
+1. **Phase 1 destabilizes the working Android app** (biggest, amplified by
+   the D19 long-lived-branch choice — the whole extraction hits the daily
+   driver in one release). Mitigation: android-ci green on the branch
+   continuously, weekly rebases, D20 soft freeze keeping conflicts cheap, the
+   real-device-DB migration test, and the mandatory 1-week branch-APK soak
+   *before* merge. Watch for `interactive_workout`-style branch abandonment:
+   the weekly-rebase rule is the tripwire — two missed weeks means re-plan.
+2. ~~D5 encryption posture change rejected~~ — resolved: owner signed off on
+   OS-level encryption 2026-09-22.
 3. **iOS silent-push throttling makes sync feel stale** → measured in Phase 2
    gate; if bad, lean harder on foreground pull + user-visible pushes (which
    are not throttled the same way).
@@ -330,7 +346,12 @@ Top risks, with mitigations:
 
 ## Kickoff checklist (first multi-agent batch)
 
-- [ ] Owner: D5 encryption sign-off; start Apple Developer enrollment (0E 👤)
+- [x] Owner: D5 encryption sign-off (2026-09-22); Apple Developer account
+      already exists (personal)
+- [ ] Owner: merge or land the in-flight core-touching branches
+      (progression-jumps / deload, ad-hoc-workouts) before Phase 1 starts (D20)
+- [ ] Owner 👤: create bundle IDs, Firebase iOS app + APNs key, App Store
+      Connect API key (0E)
 - [ ] Agent 1: WS-0A contract fixtures (backend + Android)
 - [ ] Agent 2: WS-0B version negotiation
 - [ ] Agent 3: WS-0C day-key fix
