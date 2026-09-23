@@ -169,13 +169,28 @@ class WorkoutSessionService : Service() {
                 if (rest != null && endsAt != null) {
                     val remaining = Duration.between(Instant.now(), endsAt).toMillis()
                     if (remaining > 0) {
-                        // The delay is cancelled (no alert) when the user skips
-                        // rest, pauses, or logs the next set — flatMapLatest tears
-                        // down this inner flow — so the buzz only fires on a true
-                        // expiry. Only the between-sets rest gets the audible end
-                        // cue; the get-ready "go" is the hold timer's own whistle.
-                        delay(remaining)
-                        if (rest.kind == WorkoutSessionTimers.Kind.REST) onRestExpired()
+                        // Every delay below is cancelled (no alert) when the user
+                        // skips rest, pauses, resets, or logs the next set —
+                        // flatMapLatest tears down this inner flow — so cues only
+                        // fire on true progress. Pausing re-emits with endsAt=null
+                        // (this branch is skipped); resuming re-emits a fresh endsAt
+                        // and reschedules from the time then left.
+                        when (rest.kind) {
+                            // A live isometric hold: fire the halfway / ten-second /
+                            // finish cues off this wall-clock deadline so they sound
+                            // even while the app is backgrounded mid-plank (Compose
+                            // has stopped recomposing, so the on-screen count-up and
+                            // its old cues are frozen). This is now the ONLY source
+                            // of the hold's audible cues, so they can't double-fire.
+                            WorkoutSessionTimers.Kind.HOLD -> awaitHoldCues(rest, endsAt)
+                            // Only the between-sets rest gets the audible end cue;
+                            // the get-ready "go" is the hold timer's own whistle.
+                            WorkoutSessionTimers.Kind.REST -> {
+                                delay(remaining)
+                                onRestExpired()
+                            }
+                            WorkoutSessionTimers.Kind.GET_READY -> delay(remaining)
+                        }
                     }
                     emit(null)
                 }
@@ -183,25 +198,69 @@ class WorkoutSessionService : Service() {
         }
 
     /**
+     * Sound a live hold's cues off its wall-clock [endsAt]: a lighter beep as the
+     * count-up crosses the halfway and ten-seconds-left marks (only for holds long
+     * enough to warrant them — mirroring the coaching UI's thresholds), then the
+     * finish beep + buzz. Marks already behind us (a hold resumed with less time
+     * left) are skipped. Cancelled wholesale by flatMapLatest if the timer changes.
+     */
+    private suspend fun awaitHoldCues(hold: WorkoutSessionTimers.RestTimer, endsAt: Instant) {
+        val total = hold.totalSeconds
+        // Count-up elapsed = total − remaining, so the halfway/ten marks are these
+        // remaining-second thresholds. Descending: reach the earlier (higher
+        // remaining) mark first.
+        val interimMarks = buildList {
+            if (total >= HOLD_HALF_CUE_MIN_SECONDS) add(total / 2)
+            if (total >= HOLD_TEN_CUE_MIN_SECONDS) add(HOLD_TEN_CUE_REMAINING)
+        }.sortedDescending()
+        for (mark in interimMarks) {
+            if (delayUntilRemaining(endsAt, mark)) beep(ToneGenerator.TONE_PROP_BEEP)
+        }
+        if (delayUntilRemaining(endsAt, 0)) onHoldExpired()
+    }
+
+    /**
+     * Suspend until [remainingSeconds] are left before [endsAt]; returns false
+     * (without waiting) if that instant has already passed.
+     */
+    private suspend fun delayUntilRemaining(endsAt: Instant, remainingSeconds: Int): Boolean {
+        val ms = Duration.between(Instant.now(), endsAt).toMillis() - remainingSeconds * 1000L
+        if (ms <= 0) return false
+        delay(ms)
+        return true
+    }
+
+    /**
      * IMPL-COACH: a rest period ran to zero — beep + buzz. There is deliberately
      * no separate "rest complete" shade notification: the single ongoing workout
      * notification is enough, and a second heads-up on top of it was redundant.
      */
     private fun onRestExpired() {
-        if (restBeepEnabled) beep()
+        if (restBeepEnabled) beep(ToneGenerator.TONE_PROP_BEEP2)
         vibrate()
     }
 
     /**
-     * Short beep on the music stream so it plays over connected headphones
+     * A live hold reached its target: the bright finish beep + a buzz. The buzz
+     * matters most here — a plank often ends with the phone in a pocket, where the
+     * old Compose-driven cue never fired at all. Always sounds (independent of the
+     * rest-end beep setting), matching the hold's previous in-app behaviour.
+     */
+    private fun onHoldExpired() {
+        beep(ToneGenerator.TONE_PROP_ACK)
+        vibrate()
+    }
+
+    /**
+     * Short [tone] on the music stream so it plays over connected headphones
      * (PR2 audio cue). Best-effort: a failed/again-allocated ToneGenerator must
      * never take down the session, so the whole thing is wrapped defensively.
      */
-    private fun beep() {
+    private fun beep(tone: Int) {
         runCatching {
-            val tone = toneGenerator
+            val generator = toneGenerator
                 ?: ToneGenerator(AudioManager.STREAM_MUSIC, BEEP_VOLUME).also { toneGenerator = it }
-            tone.startTone(ToneGenerator.TONE_PROP_BEEP2, BEEP_DURATION_MILLIS)
+            generator.startTone(tone, BEEP_DURATION_MILLIS)
         }
     }
 
@@ -396,6 +455,15 @@ class WorkoutSessionService : Service() {
         /** Rest-end beep loudness (0–100) and length. */
         private const val BEEP_VOLUME = 80
         private const val BEEP_DURATION_MILLIS = 350
+
+        /**
+         * Hold-cue thresholds, kept in step with the coaching UI (HALF_CUE_MIN_TARGET
+         * / TEN_CUE_MIN_TARGET): only holds at least this long get a halfway / a
+         * ten-seconds-left beep; shorter ones just get the finish cue.
+         */
+        private const val HOLD_HALF_CUE_MIN_SECONDS = 30
+        private const val HOLD_TEN_CUE_MIN_SECONDS = 25
+        private const val HOLD_TEN_CUE_REMAINING = 10
 
         /** Start (or poke) the service. Safe to call repeatedly. */
         fun start(context: android.content.Context) {

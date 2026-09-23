@@ -29,8 +29,18 @@ import javax.inject.Singleton
 @Singleton
 class WorkoutSessionTimers @Inject constructor() {
 
-    /** What the running countdown is: a between-sets rest, or a pre-hold get-ready pre-roll. */
-    enum class Kind { REST, GET_READY }
+    /**
+     * What the running countdown is: a between-sets [REST], a pre-hold [GET_READY]
+     * pre-roll, or a live isometric [HOLD].
+     *
+     * A [HOLD] is modelled as a countdown of the hold's target seconds (its on-screen
+     * count-*up* is `totalSeconds - remaining`). Living here — not just in the Compose
+     * logger — is what lets [WorkoutSessionService] fire the halfway / ten-second /
+     * finish cues off a wall-clock deadline, so they still sound when the app is
+     * backgrounded mid-plank (Compose stops recomposing then, so the old UI-driven
+     * cues went silent) and can only ever fire from one place (no "shadow timer").
+     */
+    enum class Kind { REST, GET_READY, HOLD }
 
     /**
      * One countdown: [totalSeconds] long. While running it finishes at [endsAt];
@@ -69,6 +79,16 @@ class WorkoutSessionTimers @Inject constructor() {
     /** Start (or restart) the get-ready pre-roll before a timed hold. */
     fun startGetReady(totalSeconds: Int, now: Instant = Instant.now()) {
         _rest.value = RestTimer(totalSeconds, now.plusSeconds(totalSeconds.toLong()), kind = Kind.GET_READY)
+    }
+
+    /**
+     * Start a live isometric hold of [targetSeconds]: a wall-clock countdown the
+     * service watches to fire the halfway / ten-second / finish cues (see [Kind]).
+     * The Compose card still renders the count-up + drives logging; this is the
+     * single audible-cue + backgrounding-safe source of truth.
+     */
+    fun startHold(targetSeconds: Int, now: Instant = Instant.now()) {
+        _rest.value = RestTimer(targetSeconds, now.plusSeconds(targetSeconds.toLong()), kind = Kind.HOLD)
     }
 
     /** Freeze the current countdown (no-op if already paused or none running). */

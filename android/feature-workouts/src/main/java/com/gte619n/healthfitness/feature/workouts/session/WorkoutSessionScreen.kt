@@ -2,7 +2,6 @@ package com.gte619n.healthfitness.feature.workouts.session
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.ToneGenerator
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -206,6 +205,7 @@ fun WorkoutSessionRoute(
         onLogSet = viewModel::logSet,
         onDismissRest = viewModel::dismissRest,
         onStartGetReady = viewModel::startGetReady,
+        onStartHold = viewModel::startHold,
         onPauseTimer = viewModel::pauseTimer,
         onResumeTimer = viewModel::resumeTimer,
         onResetTimer = viewModel::resetTimer,
@@ -241,8 +241,9 @@ fun WorkoutSessionScreen(
     onLogTimed: (PrescriptionKey, Int, String?) -> Unit,
     onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
-    // Timed-hold get-ready pre-roll controls (routed through the shared countdown).
+    // Timed-hold get-ready pre-roll + live-hold controls (routed through the shared countdown).
     onStartGetReady: (Int) -> Unit = {},
+    onStartHold: (Int) -> Unit = {},
     onPauseTimer: () -> Unit = {},
     onResumeTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
@@ -290,40 +291,32 @@ fun WorkoutSessionScreen(
                 stringResource(R.string.workout_session_elapsed, elapsedLabel(elapsedSeconds))
             },
             onBack = onBack,
-            trailing = if (draft?.scheduled?.session?.blocks?.isNotEmpty() == true) {
-                {
-                    IconButton(onClick = { overview = !overview }) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.List,
-                            contentDescription = stringResource(R.string.workout_session_overview),
-                            tint = if (overview) Hf.colors.accent else Hf.colors.textSecondary,
-                            modifier = Modifier.size(22.dp),
-                        )
+            // IMPL-DELOAD-01 (P3): a scheduled deload week is named up front so the
+            // reduced targets read as intentional, not a regression. It rides as a
+            // compact chip in the header (tap for the "why") rather than a
+            // full-width band, so it names the week without crowding the screen.
+            trailing = run {
+                val hasOverview = draft?.scheduled?.session?.blocks?.isNotEmpty() == true
+                val isDeload = draft?.scheduled?.isDeload == true
+                if (hasOverview || isDeload) {
+                    {
+                        if (isDeload) DeloadChip()
+                        if (hasOverview) {
+                            IconButton(onClick = { overview = !overview }) {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.List,
+                                    contentDescription = stringResource(R.string.workout_session_overview),
+                                    tint = if (overview) Hf.colors.accent else Hf.colors.textSecondary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
                     }
+                } else {
+                    null
                 }
-            } else {
-                null
             },
         )
-        // IMPL-DELOAD-01 (P3): a scheduled deload week is named up front so the
-        // reduced targets read as intentional, not a regression.
-        if (draft?.scheduled?.isDeload == true) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Hf.colors.warnBg)
-                    .padding(horizontal = 18.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Pill(stringResource(R.string.workout_session_deload_pill), HfTone.Warn)
-                Text(
-                    stringResource(R.string.workout_session_deload_banner),
-                    style = Hf.type.bodySm,
-                    color = Hf.colors.textSecondary,
-                )
-            }
-        }
         when {
             draft == null && state.loading -> LoadingState(Modifier.fillMaxSize())
             draft == null && state.error != null -> ErrorState(
@@ -353,6 +346,7 @@ fun WorkoutSessionScreen(
                 onLogSet = onLogSet,
                 onDismissRest = onDismissRest,
                 onStartGetReady = onStartGetReady,
+                onStartHold = onStartHold,
                 onPauseTimer = onPauseTimer,
                 onResumeTimer = onResumeTimer,
                 onResetTimer = onResetTimer,
@@ -433,6 +427,7 @@ private fun SessionBody(
     onLogSet: (PrescriptionKey, LoggedSet) -> Unit,
     onDismissRest: () -> Unit,
     onStartGetReady: (Int) -> Unit,
+    onStartHold: (Int) -> Unit,
     onPauseTimer: () -> Unit,
     onResumeTimer: () -> Unit,
     onResetTimer: () -> Unit,
@@ -474,6 +469,10 @@ private fun SessionBody(
         // pre-roll and auto-starts (a hold into a lift just advances, no
         // auto-start). Consumed by the destination page once it picks it up.
         var autoStartStep by remember { mutableStateOf<Int?>(null) }
+
+        // #4: a one-shot request from the overflow (⋮) menu to open Swap / adjust for
+        // whichever exercise is current; the current page picks it up and resets it.
+        var swapRequested by remember { mutableStateOf(false) }
 
         // The very first action in a fresh session is "Start workout" rather than
         // a bare "Log set 1": tapping it announces the opening exercise (the coach
@@ -598,7 +597,10 @@ private fun SessionBody(
         var restRemaining by remember { mutableStateOf<Long?>(null) }
         LaunchedEffect(restTimer) {
             val timer = restTimer
-            if (timer == null) {
+            // A live HOLD also rides the shared countdown (so the service owns its
+            // cues), but it's shown as the count-UP on the hold card — never as the
+            // rest/get-ready count-DOWN overlay — so it drives no on-screen timer here.
+            if (timer == null || timer.kind == Kind.HOLD) {
                 restRemaining = null
                 return@LaunchedEffect
             }
@@ -692,6 +694,7 @@ private fun SessionBody(
                     onDismissRest = onDismissRest,
                     getReady = getReady,
                     onStartGetReady = onStartGetReady,
+                    onStartHold = onStartHold,
                     onPauseTimer = onPauseTimer,
                     onResumeTimer = onResumeTimer,
                     onResetTimer = onResetTimer,
@@ -699,6 +702,8 @@ private fun SessionBody(
                     onAutoStartConsumed = { if (autoStartStep == page) autoStartStep = null },
                     showStart = showStart,
                     onStarted = onMarkStarted,
+                    openSwap = swapRequested && page == pagerState.currentPage,
+                    onSwapConsumed = { swapRequested = false },
                 )
             }
             CoachActionsBar(
@@ -706,8 +711,43 @@ private fun SessionBody(
                 count = steps.size,
                 onPrevious = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) } },
                 onNext = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } },
+                onSwap = { swapRequested = true },
                 onFinish = onRequestFinish,
                 onAbandon = onRequestDiscard,
+            )
+        }
+    }
+}
+
+/**
+ * IMPL-DELOAD-01 (P3): the deload indicator, slimmed from a full-width band to a
+ * compact header chip. Tapping it reveals the "lighter on purpose" explanation in
+ * a small popup, so the week is still named up front without a band competing with
+ * the exercise, timer, and log card for attention.
+ */
+@Composable
+private fun DeloadChip() {
+    var showWhy by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(3.dp))
+                .clickable { showWhy = true },
+        ) {
+            Pill(stringResource(R.string.workout_session_deload_pill), HfTone.Warn)
+        }
+        DropdownMenu(
+            expanded = showWhy,
+            onDismissRequest = { showWhy = false },
+            containerColor = Hf.colors.surface,
+        ) {
+            Text(
+                stringResource(R.string.workout_session_deload_banner),
+                style = Hf.type.bodySm,
+                color = Hf.colors.textSecondary,
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
     }
@@ -810,6 +850,7 @@ private fun ExercisePage(
     // The get-ready pre-roll timer + its controls, driving the timed-hold card.
     getReady: RestTimer? = null,
     onStartGetReady: (Int) -> Unit = {},
+    onStartHold: (Int) -> Unit = {},
     onPauseTimer: () -> Unit = {},
     onResumeTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
@@ -819,9 +860,23 @@ private fun ExercisePage(
     // and, on tap, announces this exercise before falling back to "Log set N".
     showStart: Boolean = false,
     onStarted: () -> Unit = {},
+    // #4: the Swap / adjust action moved to the overflow (⋮) menu. When it's tapped
+    // for the current page this goes true; the page opens its own dialog and calls
+    // [onSwapConsumed] to reset the one-shot request.
+    openSwap: Boolean = false,
+    onSwapConsumed: () -> Unit = {},
 ) {
     val prescription = step.prescription
     var showSwap by remember(step.key) { mutableStateOf(false) }
+    // Open the swap dialog when the overflow menu requests it for this page, then
+    // consume the signal so returning here later can't re-open it.
+    LaunchedEffect(openSwap) {
+        if (openSwap) {
+            onLoadSubstitutes(prescription.exerciseId)
+            showSwap = true
+            onSwapConsumed()
+        }
+    }
     // On unfolded / tablet widths, keep the page (and its demo image) from
     // stretching edge-to-edge — a centered, narrower card reads better.
     val expanded = LocalConfiguration.current.screenWidthDp >= EXPANDED_WIDTH_DP
@@ -858,25 +913,9 @@ private fun ExercisePage(
             }
             // #4: swap this movement for a muscle-matched one the current gym can
             // do, and/or adjust its sets/reps — for just this workout or the whole
-            // program. Loads ranked options lazily when the picker opens.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Outlined.SwapHoriz,
-                    contentDescription = null,
-                    tint = Hf.colors.accent,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    stringResource(R.string.workout_session_swap),
-                    style = Hf.type.bodySm,
-                    color = Hf.colors.accent,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable { showSwap = true; onLoadSubstitutes(prescription.exerciseId) }
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                )
-            }
+            // program. Triggered from the overflow (⋮) menu now (it's a low-frequency
+            // action that was crowding the header); the dialog + lazy option load
+            // still live here so they stay scoped to this exercise.
             Spacer(Modifier.height(12.dp))
             // Demo hero; the rest countdown takes it over while resting so the
             // timer is unmissable without losing the exercise context.
@@ -907,6 +946,7 @@ private fun ExercisePage(
                     announce = announce,
                     getReady = getReady,
                     onStartGetReady = onStartGetReady,
+                    onStartHold = onStartHold,
                     onPauseTimer = onPauseTimer,
                     onResumeTimer = onResumeTimer,
                     onResetTimer = onResetTimer,
@@ -1789,6 +1829,7 @@ private fun TimedSetsSection(
     announce: (String) -> Unit,
     getReady: RestTimer?,
     onStartGetReady: (Int) -> Unit,
+    onStartHold: (Int) -> Unit,
     onPauseTimer: () -> Unit,
     onResumeTimer: () -> Unit,
     onResetTimer: () -> Unit,
@@ -1841,6 +1882,7 @@ private fun TimedSetsSection(
                         announce = announce,
                         getReady = getReady,
                         onStartGetReady = onStartGetReady,
+                        onStartHold = onStartHold,
                         onPauseTimer = onPauseTimer,
                         onResumeTimer = onResumeTimer,
                         onResetTimer = onResetTimer,
@@ -2007,11 +2049,13 @@ private fun timedEffortIcon(
 
 /**
  * A goal-aware hold timer for a timed set (stretch / mobility). It counts up to
- * the prescribed hold, beeping (and, with voice on, speaking) at the halfway
- * mark and at ten seconds to go, and — reaching the target — auto-logs the hold
- * and marks the set complete rather than waiting for a tap. The user can still
- * start a hold by hand and stop it early, but a finished hold no longer needs a
- * second tap.
+ * the prescribed hold, speaking (with voice on) at the halfway mark and at ten
+ * seconds to go, and — reaching the target — auto-logs the hold and marks the set
+ * complete rather than waiting for a tap. The user can still start a hold by hand
+ * and stop it early, but a finished hold no longer needs a second tap. The audible
+ * beeps for those marks are fired by [WorkoutSessionService] off the shared HOLD
+ * countdown, not here, so they keep sounding when the app is backgrounded mid-hold
+ * and can only ever fire from one place.
  *
  * Before the hold's clock runs there's a "get ready" pre-roll that counts down
  * the prescribed rest between sets ([Prescription.restSeconds], falling back to
@@ -2026,8 +2070,11 @@ private fun timedEffortIcon(
  * big [RestOverlay] over the demo and, crucially, keeps ticking in the foreground
  * notification when the app is backgrounded (the old Compose-local pre-roll just
  * vanished). Its Start now / Pause / Reset controls drive that shared timer via
- * the callbacks. The running hold stays Compose-local (accumulated-seconds base +
- * wall-clock anchor in `rememberSaveable`); its own Pause/Reset are unchanged.
+ * the callbacks. The running hold is likewise registered in the shared countdown
+ * (via [onStartHold]) so the service owns its cues; the Compose card keeps a local
+ * accumulated-seconds base + wall-clock anchor in `rememberSaveable` to render the
+ * count-up and drive logging, and its Pause / Reset / early-stop keep the two in
+ * step (pausing/clearing the shared HOLD alongside the local clock).
  */
 @Composable
 private fun HoldTimer(
@@ -2039,6 +2086,9 @@ private fun HoldTimer(
     // this pending set), plus the callbacks its controls drive.
     getReady: RestTimer?,
     onStartGetReady: (Int) -> Unit,
+    // Register the live hold in the shared countdown so the service owns its cues
+    // (backgrounding-safe + single-sourced); see [WorkoutSessionTimers.startHold].
+    onStartHold: (Int) -> Unit,
     onPauseTimer: () -> Unit,
     onResumeTimer: () -> Unit,
     onResetTimer: () -> Unit,
@@ -2084,18 +2134,23 @@ private fun HoldTimer(
     val holdRunning = holdArmed && holdAnchor != null
     val holdPaused = holdArmed && holdAnchor == null
 
-    // One-shot cue flags for the current hold; reset when a fresh hold starts.
+    // One-shot flags for this hold's spoken cues; reset when a fresh hold starts.
+    // The audible beeps are fired by the service off the shared HOLD timer (so they
+    // survive backgrounding and can't double-fire); only the voice lives here.
     var firedHalf by remember { mutableStateOf(false) }
     var firedTen by remember { mutableStateOf(false) }
     var firedDone by remember { mutableStateOf(false) }
-    val beep = rememberCoachBeep()
     val whistle = rememberWhistle()
 
     fun nowMillis() = Instant.now().toEpochMilli()
 
     fun startHold() {
-        // Skipping / finishing the pre-roll clears the shared get-ready timer.
+        // Skipping / finishing the pre-roll clears the shared get-ready timer; a
+        // bounded hold then registers itself in that same shared countdown so the
+        // service owns its halfway / ten-second / finish cues (open-ended holds have
+        // no target, so no cues — they just count up until tapped).
         onClearGetReady()
+        if (target > 0) onStartHold(target)
         firedHalf = false; firedTen = false; firedDone = false
         holdArmed = true
         holdBase = 0L
@@ -2120,38 +2175,38 @@ private fun HoldTimer(
         if (prerollRunning && prerollRemaining <= 0L) startHold()
     }
 
-    // If the user leaves this exercise while its get-ready is still counting (it
-    // never started the hold), clear the shared timer so it can't linger in the
-    // overlay/notification on the next page. `handedOff` keeps a completed hold's
-    // dispose from clobbering the next set's just-started pre-roll.
+    // If the user leaves this exercise while it still owns a live shared countdown —
+    // a get-ready pre-roll that never started, or a running/paused hold — clear it so
+    // it can't linger in the overlay/notification (and so the service doesn't beep a
+    // hold the user walked away from) on the next page. `handedOff` keeps a completed
+    // hold's dispose from clobbering the next set's just-started pre-roll.
     val armedNow by rememberUpdatedState(holdArmed)
     val handedOffNow by rememberUpdatedState(handedOff)
     val prerollActiveNow by rememberUpdatedState(prerollActive)
     DisposableEffect(Unit) {
         onDispose {
-            if (prerollActiveNow && !armedNow && !handedOffNow) onClearGetReady()
+            if (!handedOffNow && (armedNow || prerollActiveNow)) onClearGetReady()
         }
     }
 
-    // Fire the halfway / ten-seconds-left cues as the count-up crosses each mark,
-    // and auto-log the moment the target is reached. Runs each tick (elapsed
-    // changes every second) while the hold is running; the flags stop any cue
-    // repeating.
+    // Speak the halfway / ten-seconds-left cues as the count-up crosses each mark,
+    // and auto-log the moment the target is reached. Runs each tick (elapsed changes
+    // every second) while the hold is running; the flags stop any cue repeating. The
+    // matching *beeps* are the service's job (off the shared HOLD deadline) so they
+    // still sound when this screen is backgrounded and can never double up; the
+    // voice here is a foreground nicety that TTS de-dupes on its own (QUEUE_FLUSH).
     LaunchedEffect(elapsed, holdRunning) {
         if (!holdRunning || target <= 0) return@LaunchedEffect
         if (!firedHalf && target >= HALF_CUE_MIN_TARGET && elapsed >= target / 2 && elapsed < target - 10) {
             firedHalf = true
-            beep(ToneGenerator.TONE_PROP_BEEP)
             if (voiceEnabled) announce("Halfway")
         }
         if (!firedTen && target >= TEN_CUE_MIN_TARGET && elapsed >= target - 10 && elapsed < target) {
             firedTen = true
-            beep(ToneGenerator.TONE_PROP_BEEP)
             if (voiceEnabled) announce("10 seconds left")
         }
         if (!firedDone && elapsed >= target) {
             firedDone = true
-            beep(ToneGenerator.TONE_PROP_ACK)
             if (voiceEnabled) announce("Time's up")
             holdArmed = false
             holdAnchor = null
@@ -2190,7 +2245,10 @@ private fun HoldTimer(
                 prerollActive -> startHold()
                 // Tap while holding (or paused mid-hold) logs early with whatever
                 // time is on the clock; no hand-off to the next set's pre-roll.
+                // Clearing the shared HOLD cancels the service's pending finish cue
+                // so it can't beep after a manual early stop.
                 holdArmed -> {
+                    onClearGetReady()
                     firedHalf = false; firedTen = false; firedDone = false
                     holdArmed = false
                     holdAnchor = null
@@ -2244,11 +2302,13 @@ private fun HoldTimer(
                 modifier = Modifier.weight(1f),
                 onClick = {
                     when {
-                        // Pre-roll pause/resume drive the shared countdown.
+                        // Both the pre-roll and the live hold pause/resume the shared
+                        // countdown — for the hold that keeps the service's finish cue
+                        // aligned with the paused clock (no beep while paused).
                         prerollRunning -> onPauseTimer()
                         prerollPaused -> onResumeTimer()
-                        holdRunning -> { holdBase = elapsed; holdAnchor = null }
-                        holdPaused -> holdAnchor = nowMillis()
+                        holdRunning -> { holdBase = elapsed; holdAnchor = null; onPauseTimer() }
+                        holdPaused -> { holdAnchor = nowMillis(); onResumeTimer() }
                     }
                 },
             )
@@ -2261,7 +2321,9 @@ private fun HoldTimer(
                         // Restart the shared countdown from the top; keeps running/paused.
                         onResetTimer()
                     } else {
-                        // Reset the hold all the way back to idle ("not ready yet").
+                        // Reset the hold all the way back to idle ("not ready yet");
+                        // clearing the shared HOLD cancels the service's finish cue.
+                        onClearGetReady()
                         holdArmed = false
                         holdAnchor = null
                         holdBase = 0L
@@ -2555,6 +2617,7 @@ private fun CoachActionsBar(
     count: Int,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    onSwap: () -> Unit,
     onFinish: () -> Unit,
     onAbandon: () -> Unit,
 ) {
@@ -2591,7 +2654,7 @@ private fun CoachActionsBar(
             color = Hf.colors.textTertiary,
         )
         Spacer(Modifier.weight(1f))
-        CoachMoreMenu(onFinish = onFinish, onAbandon = onAbandon)
+        CoachMoreMenu(onSwap = onSwap, onFinish = onFinish, onAbandon = onAbandon)
         // Next auto-advances after the last set is logged, so this is the manual
         // skip-ahead; hidden on the last exercise (finish via the More menu).
         if (!last) {
@@ -2613,9 +2676,9 @@ private fun CoachActionsBar(
     }
 }
 
-/** The overflow menu holding the whole-workout actions: Finish and Abandon. */
+/** The overflow menu holding the per-exercise Swap / adjust and whole-workout Finish / Abandon actions. */
 @Composable
-private fun CoachMoreMenu(onFinish: () -> Unit, onAbandon: () -> Unit) {
+private fun CoachMoreMenu(onSwap: () -> Unit, onFinish: () -> Unit, onAbandon: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
@@ -2631,6 +2694,25 @@ private fun CoachMoreMenu(onFinish: () -> Unit, onAbandon: () -> Unit) {
             onDismissRequest = { expanded = false },
             containerColor = Hf.colors.surface,
         ) {
+            // #4: Swap / adjust the current exercise (moved off the header).
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.workout_session_swap),
+                        style = Hf.type.bodyMd,
+                        color = Hf.colors.textPrimary,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.SwapHoriz,
+                        contentDescription = null,
+                        tint = Hf.colors.accent,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                onClick = { expanded = false; onSwap() },
+            )
             DropdownMenuItem(
                 text = {
                     Text(

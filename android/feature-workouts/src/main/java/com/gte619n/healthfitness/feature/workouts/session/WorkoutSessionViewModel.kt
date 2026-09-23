@@ -398,6 +398,14 @@ class WorkoutSessionViewModel @Inject constructor(
      */
     fun startGetReady(seconds: Int) = timers.startGetReady(seconds, now())
 
+    /**
+     * Start a live isometric hold of [seconds], routed through the shared countdown
+     * so [WorkoutSessionService] owns its halfway / ten-second / finish cues — the
+     * single source that keeps them sounding when the app is backgrounded mid-hold
+     * (Compose stops recomposing then) and stops them ever double-firing.
+     */
+    fun startHold(seconds: Int) = timers.startHold(seconds, now())
+
     /** Freeze the get-ready pre-roll (its Pause control). */
     fun pauseTimer() = timers.pause(now())
 
