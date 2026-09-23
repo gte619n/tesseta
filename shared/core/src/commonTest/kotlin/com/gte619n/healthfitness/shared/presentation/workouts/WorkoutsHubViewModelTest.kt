@@ -1,5 +1,7 @@
 package com.gte619n.healthfitness.shared.presentation.workouts
 
+import com.gte619n.healthfitness.shared.domain.workouts.session.WorkoutSessionDraft
+
 import com.gte619n.healthfitness.shared.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledStatus
 import kotlinx.coroutines.Dispatchers

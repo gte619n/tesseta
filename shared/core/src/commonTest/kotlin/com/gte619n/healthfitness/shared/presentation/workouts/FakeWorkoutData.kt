@@ -25,6 +25,7 @@ import com.gte619n.healthfitness.shared.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.shared.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.shared.domain.workouts.session.WorkoutSessionDraft
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
@@ -193,6 +194,29 @@ class FakeWorkoutSessionRepository(
     override suspend fun reset(programId: String, scheduledId: String): Result<Unit> = resetResult
     override suspend fun restoreParked(programId: String, scheduledId: String): Result<Unit> = Result.success(Unit)
     override suspend fun discardParked(programId: String, scheduledId: String): Result<Unit> = Result.success(Unit)
+
+    // Live-session surface merged into WorkoutSessionRepository by the integrator.
+    // Not exercised by the hub tests — minimal conformance.
+    override suspend fun start(programId: String, scheduledId: String): Result<Unit> = Result.success(Unit)
+    override suspend fun peekDraft(programId: String, scheduledId: String): WorkoutSessionDraft? =
+        drafts.value.firstOrNull { it.programId == programId && it.scheduledId == scheduledId }
+    override fun observeDraft(programId: String, scheduledId: String): Flow<WorkoutSessionDraft?> =
+        drafts.map { list -> list.firstOrNull { it.programId == programId && it.scheduledId == scheduledId } }
+    override suspend fun updateSets(
+        programId: String,
+        scheduledId: String,
+        key: com.gte619n.healthfitness.shared.domain.workouts.session.PrescriptionKey,
+        sets: List<com.gte619n.healthfitness.shared.domain.workouts.program.LoggedSet>,
+    ): Result<Unit> = Result.success(Unit)
+    override suspend fun lastSets(
+        programId: String,
+        scheduledId: String,
+    ): Map<String, List<com.gte619n.healthfitness.shared.domain.workouts.program.LoggedSet>> = emptyMap()
+    override suspend fun markStarted(programId: String, scheduledId: String): Result<Unit> = Result.success(Unit)
+    override suspend fun finish(programId: String, scheduledId: String, feeling: Int?): Result<Unit> = Result.success(Unit)
+    override suspend fun fetchRecap(programId: String, scheduledId: String): String? = null
+    override suspend fun skip(programId: String, scheduledId: String): Result<Unit> = Result.success(Unit)
+    override suspend fun discard(programId: String, scheduledId: String): Result<Unit> = Result.success(Unit)
 }
 
 class FakeWorkoutSettingsRepository(

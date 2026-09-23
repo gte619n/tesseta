@@ -21,11 +21,18 @@ import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.shared.domain.workouts.session.DraftStatus
 import com.gte619n.healthfitness.shared.domain.workouts.session.WorkoutSessionDraft
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -37,7 +44,14 @@ import kotlin.test.assertTrue
  * iOS. Verifies the offline-first CardState composition, the reactive
  * draft-wins-over-resolved workout pick, and the initials/hidden-biometrics fold.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModelTest {
+
+    private val dispatcher = StandardTestDispatcher()
+
+    @BeforeTest fun setUp() = Dispatchers.setMain(dispatcher)
+
+    @AfterTest fun tearDown() = Dispatchers.resetMain()
 
     private val nutritionDay = NutritionDay(
         date = "2026-09-23",

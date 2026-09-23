@@ -14,10 +14,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -175,40 +177,11 @@ class WorkoutsHubViewModel(
 
     private fun load() {
         viewModelScope.launch {
-            val loads = combine(refreshToken, visibleMonth) { _, month -> month }
-                .flatMapLatest { navMonth ->
-                    val month = navMonth ?: YearMonth.of(today)
-                    _state.update {
-                        it.copy(loading = true, error = null, visibleMonth = month, today = today)
-                    }
-                    repository.observePrograms()
-                        .flatMapLatest { programs ->
-                            val resolved = resolveActiveProgram(programs)
-                            resolvedProgramId.value = resolved?.programId
-                            if (resolved == null) {
-                                flowOf(LandingLoad(null, programs.isNotEmpty(), emptyList(), month))
-                            } else {
-                                val monthStart = month.atStartOfMonth()
-                                val monthEnd = month.atEndOfMonth()
-                                val calFrom = minOf(resolved.startDate ?: monthStart, monthStart)
-                                val calTo = maxOf(today, monthEnd)
-                                // The streak counts completed sessions across every
-                                // program; a wide look-back covers any weekly run.
-                                val streakFrom = today.minus(2, DateTimeUnit.YEAR)
-                                combine(
-                                    repository.observeProgram(resolved.programId),
-                                    repository.observeCalendar(resolved.programId, calFrom, calTo)
-                                        .catch { emit(emptyList()) },
-                                    repository.observeAllCompleted(streakFrom, today)
-                                        .catch { emit(emptyList()) },
-                                ) { deep, cal, allCompleted ->
-                                    LandingLoad(deep ?: resolved, true, cal, month, allCompleted)
-                                }
-                            }
-                        }
-                        .map<LandingLoad, Result<LandingLoad>> { Result.success(it) }
-                        .catch { emit(Result.failure(it)) }
-                }
+            // Broken into explicitly-typed helper flows (loadForMonth/resolveLoad)
+            // so Kotlin's nested-combine/flatMapLatest inference doesn't cascade.
+            val loads: Flow<Result<LandingLoad>> =
+                combine(refreshToken, visibleMonth) { _, month -> month }
+                    .flatMapLatest { navMonth -> loadForMonth(navMonth ?: YearMonth.of(today)) }
             // Fold in the weekly target so the streak recomputes on a calendar
             // change AND on a settings change (local save or sync push).
             combine(loads, settingsRepository.weeklyStreakTarget) {
@@ -223,6 +196,44 @@ class WorkoutsHubViewModel(
                             }
                         }
                 }
+        }
+    }
+
+    /** The per-month load flow: programs → resolved active program → deep load. */
+    private fun loadForMonth(month: YearMonth): Flow<Result<LandingLoad>> {
+        _state.update {
+            it.copy(loading = true, error = null, visibleMonth = month, today = today)
+        }
+        val base: Flow<LandingLoad> = repository.observePrograms()
+            .flatMapLatest { programs -> resolveLoad(programs, month) }
+        return base
+            .map<LandingLoad, Result<LandingLoad>> { Result.success(it) }
+            .catch { emit(Result.failure(it)) }
+    }
+
+    /** Resolve the active program and build its deep/calendar/streak load. */
+    private fun resolveLoad(programs: List<WorkoutProgram>, month: YearMonth): Flow<LandingLoad> {
+        val resolved = resolveActiveProgram(programs)
+        resolvedProgramId.value = resolved?.programId
+        return if (resolved == null) {
+            flowOf(LandingLoad(null, programs.isNotEmpty(), emptyList(), month))
+        } else {
+            val monthStart = month.atStartOfMonth()
+            val monthEnd = month.atEndOfMonth()
+            val calFrom = minOf(resolved.startDate ?: monthStart, monthStart)
+            val calTo = maxOf(today, monthEnd)
+            // The streak counts completed sessions across every program; a wide
+            // look-back covers any weekly run.
+            val streakFrom = today.minus(2, DateTimeUnit.YEAR)
+            combine(
+                repository.observeProgram(resolved.programId),
+                repository.observeCalendar(resolved.programId, calFrom, calTo)
+                    .catch { emit(emptyList()) },
+                repository.observeAllCompleted(streakFrom, today)
+                    .catch { emit(emptyList()) },
+            ) { deep, cal, allCompleted ->
+                LandingLoad(deep ?: resolved, true, cal, month, allCompleted)
+            }
         }
     }
 
