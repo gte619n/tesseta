@@ -1,0 +1,13 @@
+{
+  "phaseId": "phase_base_01",
+  "goalId": "goal_3c9f21a0",
+  "status": "ACTIVE",
+  "title": "Aerobic Base",
+  "description": "Build weekly volume at conversational pace",
+  "orderIndex": 0,
+  "targetStartDate": "2026-01-01",
+  "targetEndDate": "2026-03-01",
+  "completedAt": null,
+  "stepOrder": ["step_weekly_volume_01", "step_long_run_02"],
+  "updatedAt": "2026-06-02T09:00:00.000Z"
+}

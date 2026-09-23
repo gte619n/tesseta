@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  HealthFitness Info.plist (IMPL-IOS-01 Phase 2A).
+  Capability keys are annotated with the decision that requires them.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>HealthFitness</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+
+    <!-- D7/D8: background execution. remote-notification = silent `sync` pushes
+         (content-available); fetch = BGAppRefreshTask periodic delta pull;
+         processing = BGProcessingTask outbox drain on connectivity. -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>remote-notification</string>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+
+    <!-- D8: BGTaskScheduler identifiers must be pre-declared. Refresh = periodic
+         delta pull; Processing = outbox drain. Registered in SyncBridge (2C). -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.gte619n.healthfitness.refresh</string>
+        <string>com.gte619n.healthfitness.processing</string>
+    </array>
+
+    <!-- D12: custom scheme deep links (dose-checklist, nutrition-adjust-review,
+         withings-callback). Universal links are deferred. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.gte619n.healthfitness.deeplink</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>healthfitness</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- D11: AVFoundation meal capture + Vision barcode/label OCR (Wave C). -->
+    <key>NSCameraUsageDescription</key>
+    <string>Take photos of meals to log nutrition, and scan barcodes or nutrition labels.</string>
+
+    <!-- Standard scene/launch config for a SwiftUI lifecycle app. -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <true/>
+    </dict>
+    <key>UILaunchScreen</key>
+    <dict/>
+</dict>
+</plist>

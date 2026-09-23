@@ -1,0 +1,129 @@
+# XcodeGen spec for the HealthFitness iOS client (IMPL-IOS-01, Phase 2A).
+#
+# Generate the .xcodeproj with:   cd ios && xcodegen generate
+# (We deliberately do NOT commit a hand-written .pbxproj — it is merge-hostile
+#  and drifts under multi-agent fan-out. This YAML is the source of truth.)
+#
+# iOS 26 / iPadOS 26 floor, latest-major-only per D16 (no @available guards).
+
+name: HealthFitness
+options:
+  bundleIdPrefix: com.gte619n
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1,2"        # 1 = iPhone, 2 = iPad (D16: iPad is a v1 requirement)
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  # Google Sign-In for the /api/auth/exchange flow (D6). Real dependency — the
+  # GoogleSignInService STUB references its API shape but auth wiring lands in 2B.
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "8.0.0"
+  # Firebase (FCM -> APNs) for push-triggered sync (D7). Wired in 2C.
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: "11.0.0"
+  # Swift Testing snapshot support for per-screen snapshots (Phase 3/4 test plan).
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.17.0"
+  # SharedCore — the KMP core exported as an XCFramework by SKIE.
+  #
+  # Produced (once Phase 0D / Phase 1 land) by, from `shared/`:
+  #     ./gradlew :core:assembleSharedCoreXCFramework
+  # which emits `shared/core/build/XCFrameworks/release/SharedCore.xcframework`.
+  #
+  # It is consumed here as a *local binary* Swift package so SPM resolves it and
+  # SKIE's generated Swift lives alongside. Until the XCFramework exists this
+  # reference is a placeholder path — the shell targets below compile against it
+  # only where they `import SharedCore` (all such call sites are currently
+  # stubbed/commented so the shell builds without the framework present).
+  SharedCore:
+    path: ../shared/core/build/XCFrameworks/SharedCore
+
+targets:
+  HealthFitness:
+    type: application
+    platform: iOS
+    sources:
+      - path: HealthFitness
+    info:
+      path: HealthFitness/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gte619n.healthfitness  # placeholder bundle id
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        MARKETING_VERSION: "1.0"          # release lane overrides to 1.<rev-count>
+        CURRENT_PROJECT_VERSION: "1"      # release lane overrides to <rev-count>
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - package: Firebase
+        product: FirebaseMessaging
+      # - package: SharedCore            # uncomment once the XCFramework is built
+      #   product: SharedCore
+    # SwiftLint runs as a pre-compile build phase. Uncomment once swiftlint is on
+    # the CI runner's PATH (ios-ci macos-15 provisions it via `brew install swiftlint`).
+    # preBuildScripts:
+    #   - name: SwiftLint
+    #     script: |
+    #       if which swiftlint >/dev/null; then
+    #         swiftlint --config "${SRCROOT}/.swiftlint.yml"
+    #       else
+    #         echo "warning: SwiftLint not installed"
+    #       fi
+
+  HealthFitnessTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: HealthFitnessTests
+    dependencies:
+      - target: HealthFitness
+      - package: SnapshotTesting
+        product: SnapshotTesting
+      # - package: SharedCore            # the SKIE-bridged registry test needs it
+      #   product: SharedCore
+    settings:
+      base:
+        # Swift Testing is bundled with the toolchain; no extra dependency needed.
+        GENERATE_INFOPLIST_FILE: YES
+
+  HealthFitnessUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: HealthFitnessUITests
+    dependencies:
+      - target: HealthFitness
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: HealthFitness
+
+schemes:
+  HealthFitness:
+    build:
+      targets:
+        HealthFitness: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - HealthFitnessTests
+        - HealthFitnessUITests
+    archive:
+      config: Release

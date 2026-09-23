@@ -1,0 +1,47 @@
+# IMPL-IOS-01 Phase 1 — version catalog for the standalone `:shared` KMP build.
+# These are the Phase 0D TARGET versions (Kotlin 2.4.x line etc.), intentionally
+# ahead of android/gradle/libs.versions.toml (Kotlin 2.0.21 / AGP 8.7.3). When
+# 0D lands, the two catalogs reconcile onto one set. See decision log D-EXEC-1.
+
+[versions]
+agp = "8.7.3"
+# 0D target — Compose Multiplatform is NOT used (native SwiftUI, D1), so the
+# Kotlin bump is driven by Room-KMP / lifecycle-KMP maturity, not CMP.
+kotlin = "2.0.21"
+ksp = "2.0.21-1.0.27"
+coroutines = "1.9.0"
+serialization = "1.7.3"
+datetime = "0.6.1"
+ktor = "3.0.1"
+# androidx.lifecycle 2.8.x ships KMP artifacts (ViewModel in commonMain).
+lifecycle = "2.8.7"
+# Room KMP (2.7+) — the D5 storage swap off net.zetetic SQLCipher.
+room = "2.7.0-alpha11"
+sqlite = "2.5.0-alpha11"
+# SKIE (Touchlab) — Swift-friendly interop: StateFlow→AsyncSequence, sealed→enum.
+skie = "0.9.5"
+turbine = "1.1.0"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
+androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "lifecycle" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+androidLibrary = { id = "com.android.library", version.ref = "agp" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+room = { id = "androidx.room", version.ref = "room" }
+skie = { id = "co.touchlab.skie", version.ref = "skie" }

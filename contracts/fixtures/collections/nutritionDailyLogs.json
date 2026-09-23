@@ -1,0 +1,12 @@
+{
+  "date": "2026-06-02",
+  "status": "ACTIVE",
+  "proteinGrams": 168.5,
+  "carbsGrams": 240.0,
+  "fatGrams": 72.3,
+  "fiberGrams": 31.0,
+  "sugarGrams": 44.2,
+  "caloriesKcal": 2284.0,
+  "createdAt": "2026-06-02T07:15:00.000Z",
+  "updatedAt": "2026-06-02T18:03:59.777Z"
+}

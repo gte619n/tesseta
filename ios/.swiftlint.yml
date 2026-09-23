@@ -1,0 +1,53 @@
+# SwiftLint baseline for the HealthFitness iOS client (IMPL-IOS-01).
+# Run manually: cd ios && swiftlint --config .swiftlint.yml
+# CI (ios-ci macos-15) installs swiftlint via brew and runs it as a build phase.
+
+included:
+  - HealthFitness
+  - HealthFitnessTests
+  - HealthFitnessUITests
+
+excluded:
+  - "**/build"
+  - "**/DerivedData"
+  - "**/.build"
+
+# Generated Xcode project — never lint it.
+disabled_rules:
+  - trailing_whitespace   # editors handle this; noisy in generated code
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - explicit_init
+  - first_where
+  - sorted_imports
+  - redundant_nil_coalescing
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 350
+  error: 500
+
+file_length:
+  warning: 500
+  error: 800
+
+function_body_length:
+  warning: 60
+  error: 100
+
+identifier_name:
+  min_length: 2
+  excluded:
+    - id
+    - r
+    - g
+    - b
+
+reporter: "xcode"

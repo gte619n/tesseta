@@ -1,0 +1,11 @@
+{
+  "recordId": "bc_5a1f9c30",
+  "status": "ACTIVE",
+  "metric": "BODY_FAT_PERCENT",
+  "value": 14.2,
+  "sampleTime": "2026-06-02T06:31:00.000Z",
+  "sourcePlatform": "withings",
+  "recordingMethod": "AUTOMATIC",
+  "createdAt": "2026-06-02T06:31:05.000Z",
+  "updatedAt": "2026-06-02T06:31:05.000Z"
+}

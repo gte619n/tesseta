@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "serverTime": "2026-06-02T18:04:11.482Z",
+  "changes": [
+    {
+      "collection": "medications",
+      "id": "med_7f3c9a21",
+      "status": "ACTIVE",
+      "lastUpdate": "2026-06-02T17:59:03.100Z",
+      "doc": {
+        "medicationId": "med_7f3c9a21",
+        "drugId": "drug_testosterone_cypionate",
+        "customName": "Test Cyp",
+        "status": "ACTIVE",
+        "dose": 100.0,
+        "unit": "mg",
+        "frequency": {
+          "type": "WEEKLY",
+          "timesPerPeriod": 2,
+          "specificDays": ["MONDAY", "THURSDAY"],
+          "cycle": null
+        },
+        "timeSlots": [
+          { "window": "MORNING", "dose": 100.0, "time": "08:00:00" }
+        ],
+        "protocolId": "proto_trt_stack",
+        "notes": "Rotate injection site",
+        "prescribedBy": "Dr. Alvarez",
+        "startDate": "2026-01-15",
+        "endDate": null,
+        "discontinueReason": null,
+        "discontinueNotes": null,
+        "correlatedMarkers": ["TESTOSTERONE_TOTAL", "ESTRADIOL"],
+        "dosagePeriods": [
+          { "dose": 100.0, "unit": "mg", "startDate": "2026-01-15", "endDate": null }
+        ],
+        "createdAt": "2026-01-15T14:22:00.000Z",
+        "updatedAt": "2026-06-02T17:59:03.100Z"
+      }
+    },
+    {
+      "collection": "bloodReadings",
+      "id": "bld_12ab34cd",
+      "status": "ARCHIVED",
+      "lastUpdate": "2026-06-02T18:02:44.501Z",
+      "doc": null
+    },
+    {
+      "collection": "nutritionDays/entries",
+      "id": "entry_9d81f0",
+      "status": "ACTIVE",
+      "lastUpdate": "2026-06-02T18:03:59.777Z",
+      "doc": {
+        "entryId": "entry_9d81f0",
+        "date": "2026-06-02",
+        "meal": "LUNCH",
+        "foodId": "food_grilled_chicken",
+        "foodName": "Grilled Chicken Breast",
+        "servingLabel": "1 breast",
+        "servingGrams": 174.0,
+        "quantity": 1.0,
+        "macros": {
+          "caloriesKcal": 284.0,
+          "proteinGrams": 53.4,
+          "carbsGrams": 0.0,
+          "fatGrams": 6.2,
+          "fiberGrams": 0.0,
+          "sugarGrams": 0.0
+        },
+        "source": "PHOTO",
+        "imageUrl": "https://storage.example.com/foods/food_grilled_chicken.jpg",
+        "imageStatus": "READY",
+        "analysisStatus": "READY",
+        "photoUrl": "/api/me/nutrition/entries/entry_9d81f0/photo",
+        "ingredients": null,
+        "createdAt": "2026-06-02T18:03:59.777Z",
+        "leftover": null,
+        "adjustment": null
+      }
+    }
+  ],
+  "nextCursor": "eyJ0cyI6MTc0ODg4NzQzOTc3NywiaWQiOiJlbnRyeV85ZDgxZjAifQ==",
+  "hasMore": true,
+  "killSwitch": false
+}

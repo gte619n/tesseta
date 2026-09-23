@@ -1,0 +1,201 @@
+name: ios-ci
+
+# CICD-001: this workflow mirrors android-ci.yml / backend-ci.yml. It ALWAYS
+# runs on pull_request to main (no top-level `paths:` gate on the trigger) so it
+# reports a conclusion on every PR and a branch ruleset can safely require the
+# `ios-ci` aggregate check. A first `changes` guard job (dorny/paths-filter)
+# detects whether ios/ or shared/ (or this workflow) was touched; the heavy jobs
+# `needs:` it and short-circuit to success when nothing relevant changed. Net
+# effect: a docs-only PR still gets a green ios-ci; a real iOS/shared change runs
+# the full matrix and can still fail.
+#
+# SCAFFOLDING PHASE (IMPL-IOS-01 Phase 0E): the iOS app project and the KMP
+# shared toolchain are not yet fully materialized. Several heavy jobs are marked
+# `continue-on-error: true` on purpose so this workflow can land and start
+# reporting a stable check name before the app sources / toolchain exist. As each
+# prerequisite lands (Phase 0D toolchain migration; the XcodeGen project from the
+# ios app-sources agent) the corresponding `continue-on-error` should be removed
+# so the job becomes a hard gate. See decision log D-EXEC-1.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A force-push to a PR obsoletes the in-flight run; cancel it instead of queueing
+# behind it. Main pushes never cancel each other (every merge must report a real
+# status).
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Early-exit guard. Reports quickly and always succeeds; its `changed` output
+  # tells the heavy jobs whether to run. On a push to main paths-filter compares
+  # against the previous commit; for PRs it diffs against the base ref. If the
+  # filter can't resolve a base (rare), it defaults to changed, which fails safe.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Detect iOS / shared changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            ios:
+              - 'ios/**'
+              - 'shared/**'
+              - '.github/workflows/ios-ci.yml'
+
+  # KMP shared module JVM tests. Cheap (ubuntu) and fast, so it runs on every
+  # relevant change. continue-on-error while the Phase 0D toolchain migration is
+  # in flight: the shared module's Gradle/KMP toolchain may not resolve until 0D
+  # lands (D-EXEC-1). Drop continue-on-error once 0D is merged.
+  shared-tests:
+    name: shared JVM tests
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true # TODO(D-EXEC-1): remove once Phase 0D toolchain migration lands
+    defaults:
+      run:
+        working-directory: shared
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Shared JVM tests
+        run: ./gradlew jvmTest
+
+      - name: Upload shared test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-shared-jvm-test-reports
+          path: shared/**/build/reports/tests/
+          if-no-files-found: warn
+
+  # KMP shared module iOS-simulator (Kotlin/Native) tests. Requires a macOS
+  # runner. continue-on-error while Phase 0D toolchain migration is in flight
+  # (D-EXEC-1): the iosSimulatorArm64 target may not be wired up until 0D lands.
+  # Drop continue-on-error once 0D is merged.
+  shared-ios:
+    name: shared iOS-sim tests
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
+    runs-on: macos-15
+    continue-on-error: true # TODO(D-EXEC-1): remove once Phase 0D toolchain migration lands
+    defaults:
+      run:
+        working-directory: shared
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Shared iOS-simulator tests
+        run: ./gradlew iosSimulatorArm64Test
+
+      - name: Upload shared iOS test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-shared-native-test-reports
+          path: shared/**/build/reports/tests/
+          if-no-files-found: warn
+
+  # App build + unit/UI tests on the iOS simulators. The Xcode project is
+  # generated by XcodeGen (project.yml is committed; the .xcodeproj is not), so we
+  # install xcodegen and regenerate the project before invoking xcodebuild.
+  # continue-on-error while the app is scaffold-stage (the app-sources agent owns
+  # ios/ and the project may not build/test end-to-end yet). Drop it once the app
+  # scaffold compiles and has tests.
+  build-test:
+    name: app build + test (sim)
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
+    runs-on: macos-15
+    continue-on-error: true # TODO: remove once the ios/ app scaffold builds + tests green
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # XcodeGen turns the committed project.yml into HealthFitness.xcodeproj. Keeping
+      # the .xcodeproj out of git avoids merge conflicts on the generated file.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Build + test against an iPhone and an iPad simulator so we catch
+      # size-class / idiom regressions. `xcodebuild` picks a matching installed
+      # simulator by name; the macos-15 image ships current iPhone/iPad runtimes.
+      - name: Build + test (iPhone 16 simulator)
+        run: >-
+          set -o pipefail &&
+          xcodebuild
+          -project HealthFitness.xcodeproj
+          -scheme HealthFitness
+          -destination 'platform=iOS Simulator,name=iPhone 16'
+          clean build test
+
+      - name: Build + test (iPad Pro 11-inch simulator)
+        run: >-
+          set -o pipefail &&
+          xcodebuild
+          -project HealthFitness.xcodeproj
+          -scheme HealthFitness
+          -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M4)'
+          build test
+
+  # Aggregate gate: one stable check name for the ruleset to require, regardless
+  # of how many heavy jobs exist or whether they were skipped. It succeeds when
+  # the component was unchanged (heavy jobs skipped) OR all heavy jobs passed, and
+  # fails if any heavy job failed. `if: always()` ensures it runs even when
+  # upstream jobs are skipped.
+  #
+  # NOTE: jobs above marked `continue-on-error: true` report `result == success`
+  # to `needs`, so they cannot fail this gate while scaffolding. As each job's
+  # continue-on-error is removed it starts genuinely gating here.
+  ios-ci:
+    name: ios-ci
+    needs: [changes, shared-tests, shared-ios, build-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on heavy job results
+        run: |
+          echo "shared-tests=${{ needs.shared-tests.result }} shared-ios=${{ needs.shared-ios.result }} build-test=${{ needs.build-test.result }}"
+          for r in "${{ needs.shared-tests.result }}" "${{ needs.shared-ios.result }}" "${{ needs.build-test.result }}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "A required iOS job did not pass"; exit 1 ;;
+            esac
+          done
+          echo "ios-ci gate passed"

@@ -1,0 +1,21 @@
+{
+  "stepId": "step_weekly_volume_01",
+  "phaseId": "phase_base_01",
+  "goalId": "goal_3c9f21a0",
+  "status": "ACTIVE",
+  "title": "Hit 25 miles/week",
+  "orderIndex": 0,
+  "kind": "SUSTAINED",
+  "done": false,
+  "doneAt": null,
+  "manualOverride": false,
+  "metric": {
+    "metricKey": "weekly_running_miles",
+    "comparator": "GTE",
+    "targetValue": 25.0,
+    "windowDays": 28,
+    "countFrom": null
+  },
+  "metricRegressed": null,
+  "updatedAt": "2026-06-02T09:00:00.000Z"
+}

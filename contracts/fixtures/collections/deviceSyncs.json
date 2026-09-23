@@ -1,0 +1,8 @@
+{
+  "id": "dev_withings_scale_01",
+  "status": "ACTIVE",
+  "name": "Withings Body+ Scale",
+  "platform": "withings",
+  "lastSyncedAt": "2026-06-02T06:31:05.000Z",
+  "updatedAt": "2026-06-02T06:31:05.000Z"
+}

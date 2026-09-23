@@ -1,0 +1,44 @@
+{
+  "medicationId": "med_7f3c9a21",
+  "status": "ACTIVE",
+  "drugId": "drug_testosterone_cypionate",
+  "drug": {
+    "drugId": "drug_testosterone_cypionate",
+    "name": "Testosterone Cypionate",
+    "aliases": ["Depo-Testosterone"],
+    "category": "PRESCRIPTION",
+    "form": "INJECTABLE_VIAL",
+    "defaultUnit": "mg",
+    "commonDoses": ["100", "200"],
+    "imageUrl": null,
+    "imageCandidates": [],
+    "imageFallback": null,
+    "suggestedMarkers": ["TESTOSTERONE_TOTAL", "ESTRADIOL"],
+    "description": "Injectable testosterone ester for TRT."
+  },
+  "customName": "Test Cyp",
+  "dose": 100.0,
+  "unit": "mg",
+  "frequency": {
+    "type": "WEEKLY",
+    "timesPerPeriod": 2,
+    "specificDays": ["MON", "THU"],
+    "cycle": null
+  },
+  "timeSlots": [
+    { "window": "MORNING", "dose": 100.0, "time": "08:00:00" }
+  ],
+  "protocolId": "proto_trt_stack",
+  "notes": "Rotate injection site",
+  "prescribedBy": "Dr. Alvarez",
+  "startDate": "2026-01-15",
+  "endDate": null,
+  "discontinueReason": null,
+  "discontinueNotes": null,
+  "correlatedMarkers": ["TESTOSTERONE_TOTAL", "ESTRADIOL"],
+  "dosagePeriods": [
+    { "dose": 100.0, "unit": "mg", "startDate": "2026-01-15", "endDate": null }
+  ],
+  "createdAt": "2026-01-15T14:22:00.000Z",
+  "updatedAt": "2026-06-02T17:59:03.100Z"
+}

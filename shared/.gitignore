@@ -1,0 +1,8 @@
+# IMPL-IOS-01 — standalone KMP build artifacts
+.gradle/
+build/
+*/build/
+local.properties
+# Kotlin/Native + XCFramework outputs
+*.klib
+SharedCore.xcframework/

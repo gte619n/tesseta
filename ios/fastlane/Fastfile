@@ -1,0 +1,105 @@
+# IMPL-IOS-01 fastlane lanes. Maps to the release plan:
+#   beta       -> release lane (release-ios-on-main.yml): build + ship to
+#                 TestFlight internal testers.
+#   sync_certs -> code-signing bootstrap/refresh via match (D15, GCS-backed).
+#   tests      -> local/CI test runner for the iPhone + iPad simulators
+#                 (mirrors the ios-ci.yml build-test job for local parity).
+#
+# Build number: taken from ENV["BUILD_NUMBER"] (set by CI to
+# `git rev-list --count HEAD`) and falls back to the same computation locally so
+# the two paths agree.
+
+default_platform(:ios)
+
+# App identifier is ENV-driven so the same Fastfile works across environments and
+# no bundle id is hard-coded. Appfile provides the default.
+APP_IDENTIFIER = ENV["APP_IDENTIFIER"] || CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+APP_SCHEME     = ENV["APP_SCHEME"] || "HealthFitness"
+
+def resolved_build_number
+  ENV["BUILD_NUMBER"] || `git rev-list --count HEAD`.strip
+end
+
+# App Store Connect API key, assembled from the CI secrets. The key material is a
+# base64-encoded .p8 (APP_STORE_CONNECT_API_KEY). Returns nil locally when the
+# env isn't set so interactive runs can fall back to Apple ID login.
+def load_asc_api_key
+  return nil unless ENV["APP_STORE_CONNECT_API_KEY_ID"] && ENV["APP_STORE_CONNECT_API_KEY"]
+  app_store_connect_api_key(
+    key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+    issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER_ID"],
+    key_content: ENV["APP_STORE_CONNECT_API_KEY"],
+    is_key_content_base64: true,
+    in_house: false
+  )
+end
+
+platform :ios do
+  # --- release lane -------------------------------------------------------
+  # Plan: build the signed app and push it to the TestFlight "internal-testers"
+  # group. Called by release-ios-on-main.yml on a push to main.
+  desc "Build and upload a beta to TestFlight (internal testers)"
+  lane :beta do
+    api_key = load_asc_api_key
+
+    # Fetch signing assets read-only in CI (never mint new certs on a runner).
+    sync_certs
+
+    increment_build_number(build_number: resolved_build_number) if File.exist?("../#{APP_SCHEME}.xcodeproj/project.pbxproj")
+
+    build_app(
+      scheme: APP_SCHEME,
+      export_method: "app-store",
+      # gym reads the generated project; the XcodeGen project.yml is the source
+      # of truth and CI regenerates the .xcodeproj before this lane runs.
+      output_directory: "build",
+      clean: true
+    )
+
+    # 5-attempt upload retry for CICD parity with the android release lane:
+    # App Store Connect / TestFlight processing is intermittently rate-limited,
+    # so a transient upload failure should not fail the deploy.
+    attempts = 0
+    begin
+      attempts += 1
+      upload_to_testflight(
+        api_key: api_key,
+        groups: ["internal-testers"],
+        skip_waiting_for_build_processing: true,
+        distribute_external: false
+      )
+    rescue => e
+      if attempts < 5
+        UI.important("TestFlight upload failed (attempt #{attempts}/5): #{e.message} — retrying")
+        sleep(30)
+        retry
+      end
+      raise
+    end
+  end
+
+  # --- code-signing lane --------------------------------------------------
+  # Plan: certificate/profile sync via match. GCS-backed store (D15). Readonly in
+  # CI so runners consume existing signing assets and never generate new ones;
+  # bootstrapping new certs is an owner-run step (readonly: false) done locally.
+  desc "Sync App Store code-signing assets via match"
+  lane :sync_certs do
+    match(
+      type: "appstore",
+      app_identifier: APP_IDENTIFIER,
+      readonly: is_ci
+    )
+  end
+
+  # --- tests lane ---------------------------------------------------------
+  # Plan: run the unit/UI suite on both an iPhone and an iPad simulator, mirroring
+  # the ios-ci.yml build-test destinations for local parity.
+  desc "Run tests on iPhone + iPad simulators"
+  lane :tests do
+    run_tests(
+      scheme: APP_SCHEME,
+      devices: ["iPhone 16", "iPad Pro 11-inch (M4)"],
+      clean: true
+    )
+  end
+end

@@ -1,0 +1,30 @@
+# IMPL-IOS-01 fastlane Matchfile (code-signing sync).
+#
+# Storage mode (D15): GCS-backed match was chosen so the certificate store lives
+# alongside the rest of the project's GCP infrastructure rather than in a
+# separate git repo. Set storage_mode to "google_cloud" and provide the bucket +
+# credentials via ENV in CI:
+#   MATCH_GOOGLE_CLOUD_BUCKET_NAME
+#   MATCH_GOOGLE_CLOUD_KEYS_FILE / GOOGLE_APPLICATION_CREDENTIALS
+#
+# A git-backed store is retained as a fallback (MATCH_GIT_URL); flip storage_mode
+# back to "git" and set git_url if the GCS bucket isn't available.
+
+storage_mode(ENV["MATCH_STORAGE_MODE"] || "google_cloud")
+
+# GCS-backed store (primary, D15).
+google_cloud_bucket_name(ENV["MATCH_GOOGLE_CLOUD_BUCKET_NAME"]) if ENV["MATCH_GOOGLE_CLOUD_BUCKET_NAME"]
+
+# git-backed store (fallback). Only consulted when storage_mode == "git".
+git_url(ENV["MATCH_GIT_URL"]) if ENV["MATCH_GIT_URL"]
+
+# App Store distribution assets for the release lane.
+type("appstore")
+
+app_identifier([ENV["APP_IDENTIFIER"]].compact)
+username(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
+
+# Readonly in CI: runners must never mint or revoke certificates. Bootstrapping
+# new signing assets is an owner-run local step (`fastlane match appstore`
+# without readonly). is_ci() is true on GitHub Actions.
+readonly(is_ci)

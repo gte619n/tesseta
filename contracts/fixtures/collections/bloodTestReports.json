@@ -1,0 +1,15 @@
+{
+  "reportId": "btr_a7c3e901",
+  "status": "ACTIVE",
+  "sampleDate": "2026-06-01",
+  "labSource": "Quest Diagnostics",
+  "pdfStoragePath": "users/102934494306972576684/bloodTestReports/btr_a7c3e901.pdf",
+  "contentHash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "markers": [
+    { "name": "HDL", "value": 58.0, "unit": "mg/dL", "refRangeLow": 40.0, "refRangeHigh": 60.0, "flag": null },
+    { "name": "LDL", "value": 132.0, "unit": "mg/dL", "refRangeLow": 0.0, "refRangeHigh": 100.0, "flag": "H" },
+    { "name": "HBA1C", "value": 5.2, "unit": "%", "refRangeLow": 4.0, "refRangeHigh": 5.6, "flag": null }
+  ],
+  "createdAt": "2026-06-01T15:12:00.000Z",
+  "updatedAt": "2026-06-01T15:12:00.000Z"
+}
