@@ -108,9 +108,13 @@ object WorkoutSessionNotificationContent {
         }
         return when {
             rest != null && rest.isRunning(now) -> {
-                // The get-ready pre-roll before a timed hold and the between-sets
-                // rest share the countdown; only the verb differs.
-                val verb = if (rest.kind == Kind.GET_READY) "Get ready" else "Resting"
+                // The get-ready pre-roll, a live hold, and the between-sets rest
+                // share the countdown; only the verb differs.
+                val verb = when (rest.kind) {
+                    Kind.GET_READY -> "Get ready"
+                    Kind.HOLD -> "Holding"
+                    else -> "Resting"
+                }
                 Content(
                     title = title,
                     text = if (current != null) "$verb — next: ${current.describe()}" else verb,

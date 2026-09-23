@@ -98,6 +98,46 @@ class WorkoutSessionTimersTest {
     }
 
     @Test
+    fun `startHold sets a hold countdown of the target, ending targetSeconds from now`() {
+        val timers = WorkoutSessionTimers()
+
+        timers.startHold(targetSeconds = 40, now = now)
+
+        val timer = requireNotNull(timers.rest.value)
+        assertEquals(WorkoutSessionTimers.Kind.HOLD, timer.kind)
+        assertEquals(40, timer.totalSeconds)
+        assertEquals(now.plusSeconds(40), timer.endsAt)
+        // The hold's on-screen count-UP is total − remaining: 10s elapsed at +10s.
+        assertEquals(30L, timer.remainingSeconds(now.plusSeconds(10)))
+    }
+
+    @Test
+    fun `a paused hold freezes so the service schedules no finish cue while paused`() {
+        val timers = WorkoutSessionTimers()
+        timers.startHold(targetSeconds = 40, now = now)
+
+        timers.pause(now = now.plusSeconds(15)) // 25s / 15s elapsed, frozen
+
+        val timer = requireNotNull(timers.rest.value)
+        assertTrue(timer.isPaused)
+        assertNull(timer.endsAt)
+        assertFalse(timer.isRunning(now.plusSeconds(15)))
+        assertEquals(25L, timer.remainingSeconds(now.plusSeconds(600)))
+    }
+
+    @Test
+    fun `startHold replaces a get-ready pre-roll (the pre-roll hands off to the hold)`() {
+        val timers = WorkoutSessionTimers()
+        timers.startGetReady(totalSeconds = 10, now = now)
+
+        timers.startHold(targetSeconds = 40, now = now.plusSeconds(10))
+
+        val timer = requireNotNull(timers.rest.value)
+        assertEquals(WorkoutSessionTimers.Kind.HOLD, timer.kind)
+        assertEquals(now.plusSeconds(50), timer.endsAt)
+    }
+
+    @Test
     fun `pause freezes the remaining time and stops the clock`() {
         val timers = WorkoutSessionTimers()
         timers.startGetReady(totalSeconds = 45, now = now)
