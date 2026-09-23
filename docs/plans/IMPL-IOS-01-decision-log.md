@@ -122,3 +122,82 @@ contention.
 - **Phase 3** feature waves (SwiftUI per `ios-parity-matrix.md`).
 - **Phase 4** parity audit loop, cross-client convergence harness, on-device +
   TestFlight verification, owner acceptance.
+
+---
+
+## Addendum — Phase 3 + Phase 4 execution (2026-09-23)
+
+Executed with the same multi-agent strategy as Phase 0–2: one implementer agent
+per feature vertical (a "reference vertical" — Medications VM + `ObservableBridge`
++ `MedicationsListView` — authored first to keep all agents consistent and
+anti-drift), then an integrator pass, then Phase 4 audit + convergence harness.
+
+### Phase 3 — all 8 feature verticals authored
+Today/Dashboard, Settings, Medications (+ D9 `LocalReminderScheduler`), Nutrition
+(+ AVFoundation/Vision capture + op-rail flows), Workouts (split 3 ways:
+hub/programs/history/library; live session + ActivityKit Live Activity; designer
+SSE/progression/gyms), Blood, Body Composition, Goals (+ SSE chat). Each vertical:
+shared `commonMain/presentation` ViewModel(s) ported 1:1 from Android
+(offline-first `StateFlow` pattern), repo interfaces, `commonTest` with fakes,
+native SwiftUI views observing via the bridge, Swift tests. ~74 shared VM/repo/test
+Kotlin files + ~88 Swift files.
+
+### Integrator reconciliations (the 3-way Workouts split)
+- **Session repository merge (D-EXEC-6):** D-ii authored `LiveWorkoutSessionRepository`
+  to avoid editing D-i's file; I merged its methods into the single
+  `WorkoutSessionRepository`, deleted the interim interface, and updated the VM +
+  test fake (added the banner-method conformance the merge requires).
+- **Route wiring (D-EXEC-7):** wired all `WorkoutsRoute` cases
+  (`session`/`designer`/`progressionConsole`/`gyms`/…) and their
+  `navigationDestination` arms in `WorkoutsHubView`, verified against each sibling
+  view's initializer.
+- **Live Activity (D-EXEC-8):** `NSSupportsLiveActivities` in Info.plist + a
+  documented (commented) widget-extension target in `project.yml` — the widget UI
+  must move to its own target at integration; noted, not silently half-wired.
+
+### Deviations / issues found and fixed
+7. **Same-package type collision (fixed).** Parallel agents both declared a
+   top-level `data class ProposalPhase` in package `…shared.data`
+   (`GoalsRepositories.kt` goal-proposal vs `WorkoutDesignerGymRepositories.kt`
+   program-proposal) — a duplicate-declaration compile error. Renamed the workout
+   one to `ProgramProposalPhase` (+ its one usage). A mechanical duplicate-decl
+   scan across all 447 shared top-level types confirmed this was the only
+   same-package hard collision (the many `Loading`/`Ready`/`Error`/`UiState`
+   "duplicates" are nested sealed-interface members, each scoped to its own VM).
+8. **Cross-package type duplication (follow-up, not blocking).** The Nutrition
+   agent redeclared `ServingSize` and `Food` in `data.NutritionRepositories`
+   though `ServingSize` already exists in `domain.nutrition`. Different packages,
+   so it compiles, but it is drift — the data layer should reuse the domain types.
+   Flagged for Phase 1C cleanup; kept as-is to avoid churning the agent's file
+   under a tight review.
+
+### Phase 4 — verification
+- **Parity audit** (`docs/plans/ios-parity-gap-report.md`, matrix updated): 74
+  rows audited, 51 → "In progress" (authored VM + view), 23 → "Not started";
+  nothing "Verified" (no on-device run). Gaps: **12 BLOCKER / ~35 SHOULD / ~7
+  NIT**. The dominant blocker (B-0) is the foundational one this log has named
+  throughout: no `iosMain`/XCFramework until Phase 0D, so every `import SharedCore`
+  is commented, every view runs a local `@State` mirror, every intent is a
+  `// Post-0D` stub. Other notable honest findings the audit surfaced:
+  **medication reminders (D9) are non-functional** (`plannedDoses()` returns `[]`,
+  scheduler never registered); **SSE transport unimplemented** (interface + fakes
+  only); **sign-out does not wipe the mirror DB/outbox** (a PHI-leak regression
+  risk vs Android's `SignOutSideEffects` — must be closed before any real sign-in
+  ships); **GoogleSignIn is an `assertionFailure` stub**; Drink Mode + the
+  PlanCoherence overlay + the Goals-roadmap "Update nutrition" action are unported.
+- **Convergence harness** (`shared/.../commonTest/.../sync/SyncConvergenceTest.kt`):
+  two clients over one in-memory server exercising the real `MergeConflictResolver`
+  + `CollectionRegistry` — pull-convergence, LWW conflict, tombstone, schemaVersion
+  wipe/resync, outbox idempotency, 404-on-DELETE-as-success, slash-form routing.
+- **Verification plan** (`docs/plans/IMPL-IOS-01-phase4-verification.md`): perf
+  budgets vs Android anchors, failure-mode drill checklist, on-device/TestFlight
+  acceptance checklist (owner steps), `/security-review` pointer.
+
+### Honest status after Phase 3+4
+The **entire client is authored** — shared logic + native UI + platform services
+for all 8 areas, with tests — but **none of it compiles or runs yet**. It is
+gated, in order, on: Phase 0D (toolchain → the shared module compiles + the
+XCFramework builds), Phase 1C (concrete Room/Ktor repo impls behind the
+interfaces), and Phase 2's on-device wiring (GoogleSignIn, SyncBridge, the D9
+scheduler registration, SSE reader). The gap report is the precise remaining-work
+list. `android/` remains untouched throughout.

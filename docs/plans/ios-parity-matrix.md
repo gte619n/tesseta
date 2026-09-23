@@ -57,102 +57,116 @@ extracted in Phase 1D (same class name as the Android `*ViewModel`).
 
 ## 1. Screen parity matrix
 
+> **Audit legend (Phase 4, 2026-09-23):** the `Audited` column marks rows a
+> parity auditor assessed this round. Gaps are itemized in
+> [`ios-parity-gap-report.md`](ios-parity-gap-report.md). Systemic caveat: **no
+> `iosMain` source set / XCFramework exists yet**, so every iOS view still runs
+> on a local `@State` mirror with `import SharedCore` commented out and all
+> shared-VM intents unwired (the `ObservableBridge.observe(...)` calls are
+> comments). "In progress" below means *authored* (shared VM + SwiftUI view
+> exist), NOT behavior-complete or runnable. Nothing is `Verified`.
+
 ### Dashboard / Today
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `dashboard/PhoneTodayScreen.kt` | Phone home: today's dashlets (doses, workout, nutrition, metrics) | `Features/Today/TodayView.swift` | `DashboardViewModel` | — | A1 | Scaffold |
-| `dashboard/FoldableDashboardScreen.kt` | Large-screen two-pane dashboard (foldable/tablet) | `Features/Today/TodaySplitView.swift` | `DashboardViewModel` | size-class adaptive | A1 / F | Not started |
-| `MoreScreen.kt` | Directory/overflow to non-tab destinations | `Features/More/MoreView.swift` | (nav only) | — | A1 | Scaffold |
-| _(dashlet: today's workout card)_ | Today's-workout summary dashlet on home | _(embedded in `TodayView`)_ | `TodayWorkoutViewModel` | — | A1 | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `dashboard/PhoneTodayScreen.kt` | Phone home: today's dashlets (doses, workout, nutrition, metrics) | `Features/Today/TodayView.swift` | `DashboardViewModel` | — | A1 | In progress | 2026-09-23 (recent-activity + doses dashlets have no iOS data path; per-card retry lost) |
+| `dashboard/FoldableDashboardScreen.kt` | Large-screen two-pane dashboard (foldable/tablet) | `Features/Today/TodaySplitView.swift` | `DashboardViewModel` | size-class adaptive | A1 / F | In progress | 2026-09-23 (split layout real; BloodPanel + BodyCompositionHero not rendered) |
+| `MoreScreen.kt` | Directory/overflow to non-tab destinations | `Features/More/MoreView.swift` | (nav only) | — | A1 | In progress | 2026-09-23 (real; verify Sync-log reachability) |
+| _(dashlet: today's workout card)_ | Today's-workout summary dashlet on home | _(embedded in `TodayView`, `TodayDashlets.swift`)_ | folded into `DashboardViewModel` (no standalone `TodayWorkoutViewModel`) | — | A1 | In progress | 2026-09-23 (`startedAt` live timer + tap-to-resume dropped) |
 
 ### Workouts
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `program/WorkoutsHubScreen.kt` | Tabbed hub shell (Programs / History / Library) | `Workouts/WorkoutsHubView.swift` | `WorkoutsLandingViewModel` | — | D(i) | Scaffold |
-| `program/WorkoutsLandingScreen.kt` | Landing content: next session, draft restore entry point | `Workouts/WorkoutsLandingView.swift` | `WorkoutsLandingViewModel` | — | D(i) | Not started |
-| `program/ProgramsListScreen.kt` | List of training programs | `Workouts/ProgramsListView.swift` | `ProgramsListViewModel` | — | D(i) | Not started |
-| `program/ProgramDetailScreen.kt` | Program overview / schedule / phases | `Workouts/ProgramDetailView.swift` | `ProgramDetailViewModel` | — | D(i) | Not started |
-| `program/WorkoutDetailScreen.kt` | Single planned workout detail (pre-session) | `Workouts/WorkoutDetailView.swift` | `WorkoutDetailViewModel` | — | D(i) | Not started |
-| `program/WorkoutHistoryScreen.kt` | Completed-session history | `Workouts/WorkoutHistoryView.swift` | `WorkoutHistoryViewModel` | — | D(i) | Not started |
-| `program/WorkoutLibraryScreen.kt` | Ad-hoc purpose-driven workout library (IMPL-ADHOC-01) | `Workouts/WorkoutLibraryView.swift` | `WorkoutLibraryViewModel` | — | D(i) | Not started |
-| `session/WorkoutSessionScreen.kt` | Live session: set logging, rest timer, RIR/effort, recap | `Workouts/WorkoutSessionView.swift` | `WorkoutSessionViewModel` | ActivityKit (Live Activity), AVAudioPlayer (rest beep), self-ticking timer | D(ii) | Not started |
-| `program/chat/WorkoutDesignerScreen.kt` | Conversational program designer (SSE chat) | `Workouts/WorkoutDesignerView.swift` | `WorkoutDesignerViewModel` | SSE client | D(iii) | Not started |
-| `progression/ProgressionConsoleScreen.kt` | Progression audit / target-vs-achieved console | `Workouts/ProgressionConsoleView.swift` | `ProgressionConsoleViewModel` | — | D(iii) | Not started |
-| `GymsListScreen.kt` | List of user gyms | `Workouts/GymsListView.swift` | `GymsListViewModel` | — | D(iii) | Not started |
-| `GymDetailScreen.kt` | Gym detail + equipment inventory | `Workouts/GymDetailView.swift` | `GymDetailViewModel` | — | D(iii) | Not started |
-| `NewGymScreen.kt` | Create a gym | `Workouts/NewGymView.swift` | `NewGymViewModel` | — | D(iii) | Not started |
-| `EditGymScreen.kt` | Edit gym details | `Workouts/EditGymView.swift` | `EditGymViewModel` | — | D(iii) | Not started |
-| `GymScanScreen.kt` | Scan gym equipment via camera (vision-assisted inventory) | `Workouts/GymScanView.swift` | `GymScanViewModel` | AVFoundation + Vision | D(iii) | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `program/WorkoutsHubScreen.kt` | Tabbed hub shell (Programs / History / Library) | `Workouts/WorkoutsHubView.swift` | `WorkoutsHubViewModel` | — | D(i) | In progress | 2026-09-23 (5-tab shell → drill-down nav; "Design new" sparkle dropped) |
+| `program/WorkoutsLandingScreen.kt` | Landing content: next session, draft restore entry point | `Workouts/WorkoutsLandingView.swift` | `WorkoutsHubViewModel` | — | D(i) | In progress | 2026-09-23 (VM 1:1; view drops month grid, parked-restore banner, past-session picker, deleteSession) |
+| `program/ProgramsListScreen.kt` | List of training programs | `Workouts/ProgramsListView.swift` | `ProgramsListViewModel` | — | D(i) | In progress | 2026-09-23 (VM exact; refresh/design not wired) |
+| `program/ProgramDetailScreen.kt` | Program overview / schedule / phases | `Workouts/ProgramDetailView.swift` | `ProgramDetailViewModel` | — | D(i) | In progress | 2026-09-23 (VM exact; view drops Activate, saveEdit, applyNutrition, parked-recovery) |
+| `program/WorkoutDetailScreen.kt` | Single planned workout detail (pre-session) | `Workouts/WorkoutDetailView.swift` | `WorkoutDetailViewModel` | — | D(i) | In progress | 2026-09-23 (VM superset; startToday not wired) |
+| `program/WorkoutHistoryScreen.kt` | Completed-session history | `Workouts/WorkoutHistoryView.swift` | `WorkoutHistoryViewModel` | — | D(i) | In progress | 2026-09-23 (deleteSession + loadMore pagination absent from view) |
+| `program/WorkoutLibraryScreen.kt` | Ad-hoc purpose-driven workout library (IMPL-ADHOC-01) | `Workouts/WorkoutLibraryView.swift` | `WorkoutLibraryViewModel` | — | D(i) | In progress | 2026-09-23 (archived filtered — SoT divergence) |
+| `session/WorkoutSessionScreen.kt` | Live session: set logging, rest timer, RIR/effort, recap | `Workouts/WorkoutSessionView.swift` | `WorkoutSessionViewModel` | ActivityKit (Live Activity), AVAudioPlayer (rest beep), self-ticking timer | D(ii) | In progress | 2026-09-23 (exercise swap #4, progression re-ground #3, owner demo-flag #9 dropped; TTS coach cues + whistle have NO iOS engine) |
+| `program/chat/WorkoutDesignerScreen.kt` | Conversational program designer (SSE chat) | `Workouts/WorkoutDesignerView.swift` | `WorkoutDesignerViewModel` | SSE client | D(iii) | In progress | 2026-09-23 (SSE transport = interface + test fakes only, no iosMain impl; proposal-edit tree + TrtLabsPanel + editMode dropped; view is static mock) |
+| `progression/ProgressionConsoleScreen.kt` | Progression audit / target-vs-achieved console | `Workouts/ProgressionConsoleView.swift` | `ProgressionConsoleViewModel` | — | D(iii) | In progress | 2026-09-23 (VM superset; updateMode not wired; format math re-impl in Swift = drift risk) |
+| `GymsListScreen.kt` | List of user gyms | `Workouts/Gyms/GymsListView.swift` | `GymsListViewModel` (in `GymViewModels.kt`) | — | D(iii) | In progress | 2026-09-23 (VM 1:1) |
+| `GymDetailScreen.kt` | Gym detail + equipment inventory | `Workouts/Gyms/GymDetailView.swift` | `GymDetailViewModel` (in `GymViewModels.kt`) | — | D(iii) | In progress | 2026-09-23 (no manual add-equipment or spec-override entry point; cover not rendered) |
+| `NewGymScreen.kt` | Create a gym | `Workouts/Gyms/NewGymView.swift` | `NewGymViewModel` (in `GymViewModels.kt`) | — | D(iii) | In progress | 2026-09-23 (`hours` field dropped from iOS form) |
+| `EditGymScreen.kt` | Edit gym details | `Workouts/Gyms/EditGymView.swift` | `EditGymViewModel` (in `GymViewModels.kt`) | — | D(iii) | In progress | 2026-09-23 (`hours` + `deleteCoverPhoto` dropped from iOS form) |
+| `GymScanScreen.kt` | Scan gym equipment (Android = gallery **video** picker + server-side CV; NOT on-device Vision) | `Workouts/Gyms/GymScanView.swift` | `GymScanViewModel` | PhotosPicker(.videos) → upload/poll | D(iii) | In progress | 2026-09-23 (video-picker parity correct; preview summary line + addable count dropped) |
+| _(dialog: `AddEquipmentViewModel`)_ | Manual add-equipment (catalog search + submit-new) dialog | **MISSING** | **MISSING** | — | D(iii) | Not started | 2026-09-23 (no shared VM, no iOS surface, no entry point) |
+| _(dialog: `EquipmentOverrideViewModel`)_ | Per-gym equipment spec override dialog | **MISSING** | **MISSING** | — | D(iii) | Not started | 2026-09-23 (no shared VM, no iOS surface) |
 
 ### Nutrition
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `NutritionTodayScreen.kt` | Today's food log + macro totals vs. targets | `Nutrition/NutritionTodayView.swift` | `NutritionTodayViewModel` | — | C | Scaffold |
-| `NutritionCaptureScreen.kt` | Meal capture: camera photo + barcode/label OCR | `Nutrition/NutritionCaptureView.swift` | `NutritionCaptureViewModel` | AVFoundation + Vision (barcode/OCR), photo upload op-rail | C | Not started |
-| `NutritionTargetScreen.kt` | View/edit macro & calorie targets | `Nutrition/NutritionTargetView.swift` | `NutritionTargetViewModel` | — | C | Not started |
-| _(entry edit / portion / add-food)_ | Edit a logged entry, portion scaling, add food | `Nutrition/AddFoodView.swift` | `AddFoodViewModel` | — | C | Not started |
-| _(drink mode / session — IMPL-DRINK-01)_ | Drink Mode local session logging | `Nutrition/DrinkSessionView.swift` | `DrinkSessionViewModel` | — | C | Not started |
-| _(adjust-with-AI / leftover / saved-meal re-log flows)_ | AI adjust, leftover subtract, saved-meal relog, serving hints | _(flows within Nutrition views)_ | `NutritionTodayViewModel` / `AddFoodViewModel` | notification deep links (adjust-review, leftover-review/retake), Apply notification actions | C | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `NutritionTodayScreen.kt` | Today's food log + macro totals vs. targets | `Nutrition/NutritionTodayView.swift` | `NutritionTodayViewModel` | — | C | In progress | 2026-09-23 (edit sheet placeholder → updateEntry/saveCompositeMeal/moveEntry/deleteEntry/regenerate/reanalyze unreachable; settle-poll + push-refetch dropped in shared VM) |
+| `NutritionCaptureScreen.kt` | Meal capture: camera photo + barcode/label OCR | `Nutrition/NutritionCaptureView.swift` | `NutritionCaptureViewModel` | AVFoundation + Vision (barcode/OCR), photo upload op-rail | C | In progress | 2026-09-23 (Vision barcode+OCR real; op-rail `NutritionOpQueue` has NO iOS impl → captured JPEG never enqueued; label-draft resume dropped) |
+| `NutritionTargetScreen.kt` | View/edit macro & calorie targets | `Nutrition/NutritionTargetView.swift` | `NutritionTargetViewModel` | — | C | In progress | 2026-09-23 (near-verbatim VM port) |
+| _(entry edit / portion / add-food)_ | Edit a logged entry, portion scaling, add food | `Nutrition/AddFoodView.swift` | `AddFoodViewModel` | — | C | In progress | 2026-09-23 (affordances exist, logic stubbed) |
+| _(drink mode / session — IMPL-DRINK-01)_ | Drink Mode local session logging | **MISSING** (`DrinkSessionView.swift` not authored) | **MISSING** (`DrinkSessionViewModel` not in shared) | — | C | Not started | 2026-09-23 (entire IMPL-DRINK-01 runtime absent: tally/back-date/reconcile/session all un-ported; Today Drink card entry point missing) |
+| _(adjust-with-AI / leftover / saved-meal re-log flows)_ | AI adjust, leftover subtract, saved-meal relog, serving hints | `Nutrition/MealAdjustReviewView.swift`, `LeftoverReviewView.swift`, `ServingHintView.swift` | `MealAdjustViewModel` / `LeftoverViewModel` / `AddFoodViewModel` | notification deep links (adjust-review, leftover-review/retake), Apply notification actions | C | In progress | 2026-09-23 (review views + shared VMs present; but NO nutrition push routing — NotificationDelegate handles meds only; cold-push cannot open review) |
 
 ### Medications
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `list/MedicationsListScreen.kt` | List of medications | `Medications/MedicationsListView.swift` | `MedicationsViewModel` | — | B | Scaffold |
-| `add/AddMedicationScreen.kt` | Add/create a medication | `Medications/AddMedicationView.swift` | `AddMedicationViewModel` | — | B | Not started |
-| `detail/MedicationDetailScreen.kt` | Medication detail + schedule | `Medications/MedicationDetailView.swift` | `MedicationDetailViewModel` | — | B | Not started |
-| `reminders/ReminderSettingsScreen.kt` | Per-med reminder configuration | `Medications/ReminderSettingsView.swift` | `ReminderSettingsViewModel` | UNUserNotificationCenter (D9 planner) | B | Not started |
-| `today/TodaysDosesScreen.kt` | Today's dose checklist (Take / Snooze / Dismiss) | `Medications/TodaysDosesView.swift` | `TodaysDosesViewModel` | UNNotificationCategory actions, dose-checklist deep link | B | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `list/MedicationsListScreen.kt` | List of medications | `Medications/MedicationsListView.swift` | `MedicationsViewModel` | — | B | In progress | 2026-09-23 (VM faithful; view stub) |
+| `add/AddMedicationScreen.kt` | Add/create a medication | `Medications/AddMedicationView.swift` | `AddMedicationViewModel` | — | B | In progress | 2026-09-23 (VM full parity incl. SSE drug-lookup; view stub) |
+| `detail/MedicationDetailScreen.kt` | Medication detail + schedule | `Medications/MedicationDetailView.swift` | `MedicationDetailViewModel` | — | B | In progress | 2026-09-23 (VM 8 intents match; view missing edit/resume/delete dialog states + adherence sparkline) |
+| `reminders/ReminderSettingsScreen.kt` | Per-med reminder configuration | `Medications/ReminderSettingsView.swift` | `ReminderSettingsViewModel` | UNUserNotificationCenter (D9 planner) | B | In progress | 2026-09-23 (VM 1:1; D9 planner input = `return []` stub, never scheduled — see cross-cutting) |
+| `today/TodaysDosesScreen.kt` | Today's dose checklist (Take / Snooze / Dismiss) | `Medications/TodaysDosesView.swift` | `TodaysDosesViewModel` | UNNotificationCategory actions, dose-checklist deep link | B | In progress | 2026-09-23 (VM matches; Take/Snooze/Dismiss + deep link all dead — delegate never registered; no ON_RESUME refresh) |
 
 ### Blood / Labs
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `BloodOverviewScreen.kt` | Blood markers overview / dashboard | `Blood/BloodOverviewView.swift` | `BloodOverviewViewModel` | — | E1 | Scaffold |
-| `AddReadingScreen.kt` | Add a blood reading manually | `Blood/AddReadingView.swift` | `AddReadingViewModel` | — | E1 | Not started |
-| `MarkerDetailScreen.kt` | Single marker trend detail | `Blood/MarkerDetailView.swift` | `MarkerDetailViewModel` | — | E1 | Not started |
-| `UploadLabReportScreen.kt` | Upload a lab report (document capture) | `Blood/UploadLabReportView.swift` | `UploadLabReportViewModel` | Document camera (VNDocumentCamera) | E1 | Not started |
-| `ReportDetailScreen.kt` | Parsed lab report detail | `Blood/ReportDetailView.swift` | `ReportDetailViewModel` | — | E1 | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `BloodOverviewScreen.kt` | Blood markers overview / dashboard | `Blood/BloodOverviewView.swift` | `BloodOverviewViewModel` | — | E1 | In progress | 2026-09-23 (VM faithful; no pull-to-refresh, no error-retry in view) |
+| `AddReadingScreen.kt` | Add a blood reading manually | `Blood/AddReadingView.swift` | `AddReadingViewModel` | — | E1 | In progress | 2026-09-23 (VM match; submit() stubbed) |
+| `MarkerDetailScreen.kt` | Single marker trend detail | `Blood/MarkerDetailView.swift` | `MarkerDetailViewModel` | — | E1 | In progress | 2026-09-23 (real Swift Charts trend; MarkerReferenceBar viz dropped) |
+| `UploadLabReportScreen.kt` | Upload a lab report (Android = PDF **file picker**, not camera) | `Blood/UploadLabReportView.swift` | `UploadLabReportViewModel` | UIDocumentPickerViewController (PDF) | E1 | In progress | 2026-09-23 (VM match; document picker STUBBED — presentDocumentPicker flips local phase only; cancel unwired) |
+| `ReportDetailScreen.kt` | Parsed lab report detail | `Blood/ReportDetailView.swift` | `ReportDetailViewModel` | QuickLook (QLPreviewController) | E1 | In progress | 2026-09-23 (VM match; View-PDF QuickLook + delete() stubbed) |
 
 ### Body Composition
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `overview/BodyCompositionScreen.kt` | Body-composition trends overview | `BodyComposition/BodyCompositionView.swift` | `BodyCompositionViewModel` | — | E2 | Scaffold |
-| `detail/DexaScanDetailScreen.kt` | DEXA scan detail | `BodyComposition/DexaScanDetailView.swift` | `DexaScanDetailViewModel` | — | E2 | Not started |
-| `upload/UploadDexaScreen.kt` | Upload a DEXA scan (PDF) | `BodyComposition/UploadDexaView.swift` | `UploadDexaViewModel` | PDF upload / document picker | E2 | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `overview/BodyCompositionScreen.kt` | Body-composition trends overview | `BodyComposition/BodyCompositionView.swift` | `BodyCompositionViewModel` | — | E2 | In progress | 2026-09-23 (real Swift Charts weight trend; no pull-to-refresh) |
+| `detail/DexaScanDetailScreen.kt` | DEXA scan detail | `BodyComposition/DexaScanDetailView.swift` | `DexaScanDetailViewModel` | QuickLook | E2 | In progress | 2026-09-23 (VM verbatim optimistic-patch port; patchField/delete/viewPdf stubbed) |
+| `upload/UploadDexaScreen.kt` | Upload a DEXA scan (PDF) | `BodyComposition/UploadDexaView.swift` | `UploadDexaViewModel` | PDF upload / UIDocumentPickerViewController | E2 | In progress | 2026-09-23 (VM match incl. 25MB guard; document picker STUBBED; no retry/route-to-detail) |
 
 ### Goals
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `GoalsListScreen.kt` | List of goals | `Goals/GoalsListView.swift` | `GoalsListViewModel` | — | E3 | Scaffold |
-| `GoalRoadmapScreen.kt` | Goal roadmap / plan timeline | `Goals/GoalRoadmapView.swift` | `GoalRoadmapViewModel` | — | E3 | Not started |
-| `GoalsChatScreen.kt` | Goal coaching chat (SSE + markdown) | `Goals/GoalsChatView.swift` | `GoalsChatViewModel` | SSE client (reuse from D(iii)), markdown render | E3 | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `GoalsListScreen.kt` | List of goals | `Goals/GoalsListView.swift` | `GoalsListViewModel` | — | E3 | In progress | 2026-09-23 (clean 1:1 port) |
+| `GoalRoadmapScreen.kt` | Goal roadmap / plan timeline | `Goals/GoalRoadmapView.swift` | `GoalRoadmapViewModel` | — | E3 | In progress | 2026-09-23 (**"Update nutrition" cross-domain action dropped from shared VM + iOS**; resetStepToAuto has no iOS UI; metric readout dropped) |
+| `GoalsChatScreen.kt` | Goal coaching chat (SSE + markdown) | `Goals/GoalsChatView.swift` | `GoalsChatViewModel` | SSE client (reuse from D(iii)), markdown render | E3 | In progress | 2026-09-23 (VM SSE logic real; ChatMarkdown real; but no concrete iosMain SSE transport; proposal card = dead placeholder; isOnline gate dropped) |
+| `plan/PlanCoherenceSection.kt` (+ `PlanCoherenceViewModel`) | Cross-domain plan reconciliation overlay (goals+program+nutrition+progression) | **MISSING** | **MISSING** | — | E3 | Not started | 2026-09-23 (entire feature un-ported; no shared VM, no iOS view) |
 
 ### Settings
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `SettingsScreen.kt` | Settings hub | `Settings/SettingsView.swift` | `SettingsViewModel` | — | A2 | Scaffold |
-| `profile/ProfileScreen.kt` | User profile / biometrics | `Settings/ProfileView.swift` | `ProfileViewModel` (+ `BiometricsSettingsViewModel`) | — | A2 | Not started |
-| `drinks/DrinkSettingsScreen.kt` | Drink Mode settings | `Settings/DrinkSettingsView.swift` | `DrinkSettingsViewModel` | — | A2 | Not started |
-| _(device connections: Google Health)_ | Google Health connection status | `Settings/GoogleHealthView.swift` | `GoogleHealthViewModel` | — | A2 | Not started |
-| _(device connections: Withings)_ | Withings OAuth connect / status | `Settings/WithingsView.swift` | `WithingsViewModel` | ASWebAuthenticationSession, `healthfitness://` withings-callback | A2 | Not started |
-| _(units settings)_ | Unit-system preferences | `Settings/UnitsView.swift` | `UnitsViewModel` | — | A2 | Not started |
-| _(coach audio settings)_ | Workout coach TTS/audio cue prefs | `Settings/CoachAudioSettingsView.swift` | `CoachAudioSettingsViewModel` | TTS/audio | A2 | Not started |
-| _(workout preferences / streak)_ | Workout prefs + streak settings | `Settings/WorkoutPreferencesView.swift` | `WorkoutPreferencesViewModel` (+ `WorkoutStreakSettingsViewModel`) | — | A2 | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `SettingsScreen.kt` | Settings hub | `Settings/SettingsView.swift` | `SettingsViewModel` | — | A2 | In progress | 2026-09-23 (VM match; version shows "—"; sign-out bypasses shared VM) |
+| `profile/ProfileScreen.kt` | User profile / biometrics | `Settings/ProfileView.swift` | `ProfileViewModel` | — | A2 | In progress | 2026-09-23 (VM exact; view is local-@State stub) |
+| `drinks/DrinkSettingsScreen.kt` | Drink Mode settings | `Settings/DrinkSettingsView.swift` | `DrinkSettingsViewModel` | — | A2 | In progress | 2026-09-23 (VM full API; verify Food/DrinkProposal imports compile) |
+| _(device connections: Google Health)_ | Google Health connection status | _(placeholder in `DeviceConnectionsView.swift`: "Managed on Android for now.")_ | **MISSING** (`GoogleHealthViewModel`) | — | A2 | Not started | 2026-09-23 (no shared VM, no real UI — entire consent flow absent) |
+| _(device connections: Withings)_ | Withings OAuth connect / status | _(folded into `DeviceConnectionsView.swift`)_ | `WithingsViewModel` | ASWebAuthenticationSession, `healthfitness://` withings-callback | A2 | In progress | 2026-09-23 (VM 1:1; ASWebAuthenticationSession referenced but startWebAuth() body EMPTY — connect does nothing) |
+| _(units settings)_ | Unit-system preferences | _(folded into `SettingsView.unitsCard`)_ | `UnitsViewModel` | — | A2 | In progress | 2026-09-23 (VM match; selection onChange not wired) |
+| _(coach audio settings)_ | Workout coach TTS/audio cue prefs | _(folded into `SettingsView.coachAudioCard`)_ | `CoachAudioSettingsViewModel` | TTS/audio | A2 | In progress | 2026-09-23 (VM match; toggle controls NO engine — no AVSpeechSynthesizer anywhere) |
+| _(workout preferences)_ | Workout prefs | _(folded into `SettingsView` WorkoutPreferencesEditor)_ | `WorkoutPreferencesViewModel` | — | A2 | In progress | 2026-09-23 (VM match; not wired) |
+| _(workout streak settings)_ | Weekly workout-streak target (3–7) | **MISSING** | **MISSING** (`WorkoutStreakSettingsViewModel`) | — | A2 | Not started | 2026-09-23 (dropped — no shared VM, no iOS surface) |
+| _(biometrics settings)_ | Biometric metric visibility toggles | **MISSING** | **MISSING** (`BiometricsSettingsViewModel`) | — | A2 | Not started | 2026-09-23 (dropped — no shared VM, no iOS surface) |
 
 ### Auth / Sync / Infra
 
-| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status |
-|---|---|---|---|---|---|---|
-| `auth/SignInScreen.kt` | Google sign-in entry | `Auth/SignInView.swift` | (AuthCoordinator bridge) | GoogleSignIn iOS SDK → `/exchange`, Keychain | 2B | Not started |
-| `sync/SettingUpScreen.kt` | First-sync gate ("Setting up") | `Sync/SettingUpView.swift` | `SyncStatusViewModel` | FirstSyncGate | 2C | Not started |
-| `sync/SyncLogScreen.kt` | Sync diagnostics / debug log | `Sync/SyncLogView.swift` | `SyncStatusViewModel` | — | A2 / 2C | Not started |
+| Android screen | Purpose | iOS view | Shared VM | Platform services | Wave | Status | Audited |
+|---|---|---|---|---|---|---|---|
+| `auth/SignInScreen.kt` | Google sign-in entry | `Auth/SignInView.swift` (+ `AuthState.swift`) | (local `AuthState` machine) | GoogleSignIn iOS SDK → `/exchange`, Keychain | 2B | Not started | 2026-09-23 (KeychainTokenStore real; `GoogleSignInService.signIn()` = assertionFailure stub → no one can sign in; sign-out does NOT wipe data + no account-switch guard) |
+| `sync/SettingUpScreen.kt` | First-sync gate ("Setting up") | `Sync/FirstSyncGateView.swift` | **MISSING** | FirstSyncGate | 2C | Not started | 2026-09-23 (`SyncBridge` fully stubbed — start/pull/push/token all TODO(2C); gate cannot clear from a real engine) |
+| `sync/SyncLogScreen.kt` | Sync diagnostics / debug log | `Settings/SyncDiagnosticsView.swift` | **MISSING** (`SyncStatusViewModel`) | — | A2 / 2C | Not started | 2026-09-23 (no shared VM; view is local-@State mirror; retry/refresh commented out) |
 
 > Notes on the inventory
 > - `android/wear/…/SignInRequiredScreen.kt` is **excluded** — watchOS is a
@@ -175,25 +189,26 @@ These are the shared mechanisms the screens depend on. They are delivered in
 Phase 1 (shared core) + Phase 2 (shell) but verified per-wave as screens light
 them up.
 
-| Item | Android mechanism | iOS mechanism (plan decision) | Wave | Status |
-|---|---|---|---|---|
-| Offline-first cached-session launch | DataStore token cache → render mirrors before network | Keychain (`kSecAttrAccessibleAfterFirstUnlock`) cached session, render mirrors first (D6) | 2B | Not started |
-| Delta sync engine | `GET /api/me/sync` cursor + LWW + tombstones + schemaVersion resync (core-data) | Same engine in `shared/data` (KMP), consumed unchanged (D1/1C) | 1C | Not started |
-| Outbox replay | WorkManager OutboxDrain, Idempotency-Key, client-minted IDs, `X-HF-Origin-Device` | Shared outbox client (KMP) + BGProcessingTask drain on connectivity (D8/1C) | 1C / 2C | Not started |
-| Push (FCM → APNs) | FCM data messages: `sync`, `gh-reconnect`, `leftover-review/retake`, `adjust-review/failed` | Firebase iOS SDK → APNs; `sync` as `content-available`; visible types carry own sync trigger (D7) | 2C | Not started |
-| Background refresh | PeriodicSync (~6h) + AlarmManager midnight | BGAppRefreshTask (periodic pull) + always-pull on foreground activation (D8) | 2C | Not started |
-| Medication local-notification planner | AlarmManager exact-alarm fire-time engine (ReminderPlan worker) | UNUserNotificationCenter pre-scheduled calendar triggers, ~48h ahead, re-planned on sync/foreground/midnight (D9) | B | Not started |
-| Active-workout Live Activity | WorkoutSessionService foreground-service chronometer notification | ActivityKit Live Activity (lock screen + Dynamic Island); rest beep via AVAudioPlayer (D10) | D(ii) | Not started |
-| Camera + barcode/OCR | CameraX + MLKit (barcode, text) | AVFoundation capture + Vision (`VNDetectBarcodesRequest`, `VNRecognizeTextRequest`) (D11) | C | Not started |
-| Document / PDF capture (labs, DEXA) | camera + file picker | VNDocumentCameraViewController + document picker | E1 / E2 | Not started |
-| Withings OAuth | Custom-tab OAuth with scheme callback | ASWebAuthenticationSession + `healthfitness://` withings-callback (D12) | A2 | Not started |
-| Deep links | `healthfitness://` scheme (dose-checklist, nutrition-adjust-review, withings-callback) | Same custom scheme; SwiftUI deep-link router; universal links deferred (D12) | A2 / B / C | Not started |
-| SSE chat client | OkHttp SSE (designer, goal chat) | Ktor/URLSession SSE client in `shared`/iOS; reused by workout designer + goal chat | D(iii) / E3 | Not started |
-| TTS / audio cues | Android TextToSpeech + coach audio | AVSpeechSynthesizer / AVAudioPlayer coach cues | D(ii) / A2 | Not started |
-| iPad adaptive layouts | 600dp breakpoint (foldable/tablet layouts) | `.regular` horizontal size class, NavigationSplitView, multitasking sizes (D16, built per-wave, polished in F) | F (all waves) | Not started |
-| Dynamic Type / VoiceOver | Android font scaling + TalkBack | Dynamic Type (incl. XL snapshot variants) + VoiceOver smoke (F) | F | Not started |
-| Version negotiation handshake | `X-Client` / min-version handshake (XPLAT-002, 0B) | Same handshake adopted before first TestFlight build (D17) | 2C | Not started |
-| Sign-out data wipe | SignOutSideEffects (account-switch leak fix) | AuthCoordinator sign-out wipe parity (2B) | 2B | Not started |
+| Item | Android mechanism | iOS mechanism (plan decision) | Wave | Status | Audited |
+|---|---|---|---|---|---|
+| **`iosMain` source set / XCFramework** | (n/a — Android is JVM) | KMP `iosMain` actuals + SKIE-generated `SharedCore.xcframework` consumed by every view | 1x | **Not started** | 2026-09-23 (**FOUNDATIONAL BLOCKER**: only `commonMain`/`commonTest` exist; no `iosMain`; every `import SharedCore` commented out; every view on local @State; all `expect`/interface transports have no iOS actual) |
+| Offline-first cached-session launch | DataStore token cache → render mirrors before network | Keychain (`kSecAttrAccessibleAfterFirstUnlock`) cached session, render mirrors first (D6) | 2B | In progress | 2026-09-23 (KeychainTokenStore + AuthState.restoreCachedSession real; but no mirror DB to render, no token exchange feeding it) |
+| Delta sync engine | `GET /api/me/sync` cursor + LWW + tombstones + schemaVersion resync (core-data) | Same engine in `shared/data` (KMP), consumed unchanged (D1/1C) | 1C | Not started | 2026-09-23 (`SyncBridge` fully stubbed — TODO(2C); no engine wired) |
+| Outbox replay | WorkManager OutboxDrain, Idempotency-Key, client-minted IDs, `X-HF-Origin-Device` | Shared outbox client (KMP) + BGProcessingTask drain on connectivity (D8/1C) | 1C / 2C | Not started | 2026-09-23 (no iOS outbox impl; nutrition `NutritionOpQueue` has no iOS actual → captured photos never enqueued) |
+| Push (FCM → APNs) | FCM data messages: `sync`, `gh-reconnect`, `leftover-review/retake`, `adjust-review/failed` | Firebase iOS SDK → APNs; `sync` as `content-available`; visible types carry own sync trigger (D7) | 2C | Not started | 2026-09-23 (no Firebase/APNs registration in Swift — only project.yml/Info.plist strings; no push handler beyond a meds-only NotificationDelegate) |
+| Background refresh | PeriodicSync (~6h) + AlarmManager midnight | BGAppRefreshTask (periodic pull) + always-pull on foreground activation (D8) | 2C | Not started | 2026-09-23 (BGTask only in Info.plist/comments; no BGTaskScheduler code, no foreground-pull) |
+| Medication local-notification planner | AlarmManager exact-alarm fire-time engine (ReminderPlan worker) | UNUserNotificationCenter pre-scheduled calendar triggers, ~48h ahead, re-planned on sync/foreground/midnight (D9) | B | Not started | 2026-09-23 (**BLOCKER**: planner input `plannedDoses()` = `return []`; scheduler+delegate never registered; Take/Snooze don't log; deep link no-op; no sync/foreground/midnight/boot replan triggers) |
+| Active-workout Live Activity | WorkoutSessionService foreground-service chronometer notification | ActivityKit Live Activity (lock screen + Dynamic Island); rest beep via AVAudioPlayer (D10) | D(ii) | In progress | 2026-09-23 (real ActivityKit controller+widget+attributes; rest beep real; good parity — but driven from an unwired session VM) |
+| Camera + barcode/OCR | CameraX + MLKit (barcode, text) | AVFoundation capture + Vision (`VNDetectBarcodesRequest`, `VNRecognizeTextRequest`) (D11) | C | In progress | 2026-09-23 (real: NutritionCameraController + NutritionVisionRecognizer cover barcode AND label OCR — faithful) |
+| Document / PDF capture (labs, DEXA) | file picker (`GetContent application/pdf`) — NOT camera | UIDocumentPickerViewController (PDF) + QuickLook preview | E1 / E2 | Not started | 2026-09-23 (all 4 pickers/previews STUBBED — presentDocumentPicker flips a local phase, no UIViewControllerRepresentable) |
+| Withings OAuth | Custom-tab OAuth with scheme callback | ASWebAuthenticationSession + `healthfitness://` withings-callback (D12) | A2 | Not started | 2026-09-23 (VM real; `startWebAuth()` body empty → connect does nothing) |
+| Deep links | `healthfitness://` scheme (dose-checklist, nutrition-adjust-review, withings-callback) | Same custom scheme; SwiftUI deep-link router; universal links deferred (D12) | A2 / B / C | Not started | 2026-09-23 (`AppState.handleDeepLink` = `_ = url` TODO; only meds category built and it's unregistered; no nutrition/withings routing) |
+| SSE chat client | OkHttp SSE (designer, goal chat) | Ktor/URLSession SSE client in `shared`/iOS; reused by workout designer + goal chat | D(iii) / E3 | Not started | 2026-09-23 (**BLOCKER**: `SseClient` is a commonMain interface with test fakes only; no concrete iosMain/Ktor transport → designer + goal chat cannot stream) |
+| TTS / audio cues | Android TextToSpeech + coach audio (+ referee whistle) | AVSpeechSynthesizer / AVAudioPlayer coach cues | D(ii) / A2 | Not started | 2026-09-23 (no AVSpeechSynthesizer anywhere; whistle cue dropped; live settings toggle controls nothing) |
+| iPad adaptive layouts | 600dp breakpoint (foldable/tablet layouts) | `.regular` horizontal size class, NavigationSplitView, multitasking sizes (D16, built per-wave, polished in F) | F (all waves) | In progress | 2026-09-23 (TodaySplitView real; but BloodPanel + BodyCompositionHero not rendered on large layout) |
+| Dynamic Type / VoiceOver | Android font scaling + TalkBack | Dynamic Type (incl. XL snapshot variants) + VoiceOver smoke (F) | F | Not started | 2026-09-23 (Phase F polish — not begun) |
+| Version negotiation handshake | `X-Client` / min-version handshake (XPLAT-002, 0B) | Same handshake adopted before first TestFlight build (D17) | 2C | Not started | 2026-09-23 (no HTTP layer wired) |
+| Sign-out data wipe | SignOutSideEffects (account-switch leak fix) | AuthCoordinator sign-out wipe parity (2B) | 2B | Not started | 2026-09-23 (**BLOCKER/PHI**: signOut only clears Keychain token; no DB/outbox/cache wipe, no LastAccountStore account-switch guard — reintroduces the multi-user leak class) |
 
 ---
 

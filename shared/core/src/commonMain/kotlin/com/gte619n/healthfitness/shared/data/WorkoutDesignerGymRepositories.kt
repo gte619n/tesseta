@@ -274,7 +274,7 @@ data class ProposalDay(
 )
 
 @Serializable
-data class ProposalPhase(
+data class ProgramProposalPhase(
     val title: String,
     val focus: String? = null,
     val weeks: Int? = null,
@@ -286,7 +286,7 @@ data class ProposalPhase(
 data class ProgramProposal(
     val title: String,
     val description: String? = null,
-    val phases: List<ProposalPhase> = emptyList(),
+    val phases: List<ProgramProposalPhase> = emptyList(),
 )
 
 /** The full `proposal` event payload: the program + soft advisories + issues. */
