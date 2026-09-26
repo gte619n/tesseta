@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.core.nutrition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gte619n.healthfitness.core.goals.eval.MetricKey;
@@ -240,6 +241,37 @@ class NutritionServiceTest {
         assertEquals(0.5, edited.quantity(), 1e-9);
         assertEquals(150.0, edited.macros().caloriesKcal(), 1e-9);
         assertEquals(150.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+    }
+
+    @Test
+    void deletingAnIngredient_resumsTheMealAndRejectsTheLastOne() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 20);
+
+        FoodEntry meal = svc.addCompositeMeal(
+            USER, date, MealType.LUNCH, "Salmon & Rice",
+            List.of(ingredient("Salmon", 100.0), ingredient("Rice", 100.0)),
+            EntrySource.PHOTO);
+        assertEquals(200.0, meal.macros().caloriesKcal(), 1e-9);
+
+        // Remove the Rice: only Salmon (100 kcal) remains, day rollup follows.
+        FoodEntry edited = svc.deleteIngredient(USER, date, meal.entryId(), 1, "Rice");
+        assertEquals(1, edited.ingredients().size());
+        assertEquals("Salmon", edited.ingredients().get(0).name());
+        assertEquals(100.0, edited.macros().caloriesKcal(), 1e-9);
+        assertEquals(100.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+
+        // Replay of the same delete: index 1 is gone and index 0 no longer matches
+        // "Rice" — the guard makes it a no-op instead of deleting Salmon.
+        FoodEntry replayed = svc.deleteIngredient(USER, date, meal.entryId(), 0, "Rice");
+        assertEquals(1, replayed.ingredients().size());
+        assertEquals("Salmon", replayed.ingredients().get(0).name());
+
+        // The last remaining ingredient can't be removed.
+        assertThrows(IllegalArgumentException.class,
+            () -> svc.deleteIngredient(USER, date, meal.entryId(), 0, "Salmon"));
     }
 
     /**

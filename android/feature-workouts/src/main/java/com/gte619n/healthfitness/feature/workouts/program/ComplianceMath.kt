@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 
 /**
@@ -44,15 +45,32 @@ fun weekStartOf(date: LocalDate): LocalDate =
     date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 
 /**
- * Completed workouts logged so far in the week that contains [today] (Monday
- * through today inclusive). Drives the "N of TARGET this week" progress hint and
- * feeds [computeWeeklyStreak]'s current-week check.
+ * The calendar day a session was actually performed: [ScheduledWorkout.completedAt]
+ * resolved to [zone], falling back to the scheduled [ScheduledWorkout.date] when no
+ * completion timestamp is present (still-planned rows, or imported history). Streak
+ * and compliance count by this day, so a session done a day late (missed Thursday,
+ * done Friday) lands on the day it actually happened — not its planned slot.
  */
-fun completedThisWeek(scheduled: List<ScheduledWorkout>, today: LocalDate): Int {
+fun performedDate(workout: ScheduledWorkout, zone: ZoneId = ZoneId.systemDefault()): LocalDate =
+    workout.completedAt?.atZone(zone)?.toLocalDate() ?: workout.date
+
+/**
+ * Completed workouts logged so far in the week that contains [today] (Monday
+ * through today inclusive), counted by the day each was actually performed. Drives
+ * the "N of TARGET this week" progress hint and feeds [computeWeeklyStreak]'s
+ * current-week check.
+ */
+fun completedThisWeek(
+    scheduled: List<ScheduledWorkout>,
+    today: LocalDate,
+    zone: ZoneId = ZoneId.systemDefault(),
+): Int {
     val weekStart = weekStartOf(today)
     return scheduled
-        .filter { it.status == ScheduledStatus.COMPLETED && it.date in weekStart..today }
-        .distinctBy { it.date }
+        .filter { it.status == ScheduledStatus.COMPLETED }
+        .map { performedDate(it, zone) }
+        .filter { it in weekStart..today }
+        .distinct()
         .size
 }
 
@@ -73,15 +91,18 @@ fun computeWeeklyStreak(
     scheduled: List<ScheduledWorkout>,
     today: LocalDate,
     weeklyTarget: Int,
+    zone: ZoneId = ZoneId.systemDefault(),
 ): Int {
     if (weeklyTarget < 1) return 0
-    // Completed workouts per Monday-start week. One outcome per date (defensive
-    // against duplicate rows from re-materialization); a date can only be
-    // completed once, so distinctBy(date) is safe here.
+    // Completed workouts per Monday-start week, grouped by the day each was actually
+    // performed. One outcome per performed date (defensive against duplicate rows
+    // from re-materialization, and against two same-day sessions inflating a week).
     val completedByWeek: Map<LocalDate, Int> = scheduled
-        .filter { it.status == ScheduledStatus.COMPLETED && it.date <= today }
-        .distinctBy { it.date }
-        .groupingBy { weekStartOf(it.date) }
+        .filter { it.status == ScheduledStatus.COMPLETED }
+        .map { performedDate(it, zone) }
+        .filter { it <= today }
+        .distinct()
+        .groupingBy { weekStartOf(it) }
         .eachCount()
 
     val currentWeek = weekStartOf(today)
@@ -110,3 +131,29 @@ fun cellKind(date: LocalDate, status: ScheduledStatus?, today: LocalDate): Compl
         ScheduledStatus.PLANNED, ScheduledStatus.SKIPPED ->
             if (date < today) ComplianceCellKind.MISSED else ComplianceCellKind.UPCOMING
     }
+
+/**
+ * Classify every relevant day for the compliance grid, keyed by the day it maps
+ * to on the calendar. A completed session lands on the day it was actually
+ * performed ([performedDate]) — so catching up a missed day lights up the day you
+ * did it. Every scheduled training slot that isn't itself a completed-performed
+ * day is a MISSED (past) or UPCOMING (today/future) cell, which correctly leaves
+ * the planned day of a late-completed session showing as missed. Days absent from
+ * the map are rest days (the caller renders them plainly).
+ */
+fun complianceGrid(
+    scheduled: List<ScheduledWorkout>,
+    today: LocalDate,
+    zone: ZoneId = ZoneId.systemDefault(),
+): Map<LocalDate, ComplianceCellKind> {
+    val kinds = mutableMapOf<LocalDate, ComplianceCellKind>()
+    // Completed sessions first: mark the day they were performed.
+    scheduled.filter { it.status == ScheduledStatus.COMPLETED }
+        .forEach { kinds[performedDate(it, zone)] = ComplianceCellKind.COMPLETED }
+    // Then every scheduled slot that isn't already a completed-performed day.
+    scheduled.forEach { s ->
+        if (kinds[s.date] == ComplianceCellKind.COMPLETED) return@forEach
+        kinds[s.date] = if (s.date < today) ComplianceCellKind.MISSED else ComplianceCellKind.UPCOMING
+    }
+    return kinds
+}

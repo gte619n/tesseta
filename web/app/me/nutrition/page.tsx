@@ -6,6 +6,7 @@ import {
   getTarget,
   getRecentMeals,
   updateIngredient,
+  deleteIngredient,
   regenerateEntryImage,
   servingHint,
   searchFoods,
@@ -147,6 +148,17 @@ export default async function NutritionPage(props: {
   ) {
     "use server";
     await updateIngredient(entryDate, entryId, index, body);
+    revalidatePath("/me/nutrition");
+  }
+
+  async function deleteIngredientAction(
+    entryDate: string,
+    entryId: string,
+    index: number,
+    name: string,
+  ) {
+    "use server";
+    await deleteIngredient(entryDate, entryId, index, name);
     revalidatePath("/me/nutrition");
   }
 
@@ -330,6 +342,7 @@ export default async function NutritionPage(props: {
           meals={day.meals}
           date={date}
           updateIngredient={updateIngredientAction}
+          deleteIngredient={deleteIngredientAction}
           regenerateImage={regenerateImageAction}
           servingHint={servingHintAction}
           searchFoods={searchFoodsAction}

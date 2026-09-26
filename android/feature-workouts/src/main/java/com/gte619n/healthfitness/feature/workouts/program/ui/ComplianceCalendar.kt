@@ -27,9 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.feature.workouts.program.ComplianceCellKind
-import com.gte619n.healthfitness.feature.workouts.program.cellKind
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.theme.Hf
 import com.gte619n.healthfitness.ui.theme.type
@@ -52,7 +50,7 @@ import java.util.Locale
 @Composable
 fun ComplianceCalendar(
     month: YearMonth,
-    scheduledByDate: Map<LocalDate, ScheduledStatus>,
+    kindByDate: Map<LocalDate, ComplianceCellKind>,
     today: LocalDate,
     onPrevMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -125,7 +123,8 @@ fun ComplianceCalendar(
                 week.forEach { date ->
                     DayCell(
                         date = date,
-                        kind = date?.let { cellKind(it, scheduledByDate[it], today) },
+                        // Absent from the map ⇒ a rest day (rendered plainly).
+                        kind = date?.let { kindByDate[it] ?: ComplianceCellKind.REST },
                         isToday = date == today,
                     )
                 }

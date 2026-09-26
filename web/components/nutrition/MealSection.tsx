@@ -51,6 +51,12 @@ type Props = {
     index: number,
     body: UpdateIngredientBody,
   ) => Promise<void>;
+  deleteIngredient: (
+    date: string,
+    entryId: string,
+    index: number,
+    name: string,
+  ) => Promise<void>;
   deleteEntry: (date: string, entryId: string) => Promise<void>;
   regenerateImage: (date: string, entryId: string) => Promise<void>;
   servingHint: (date: string, entryId: string) => Promise<string | null>;
@@ -91,6 +97,7 @@ export function MealSection({
   addEntry,
   updateEntry,
   updateIngredient,
+  deleteIngredient,
   deleteEntry,
   regenerateImage,
   servingHint,
@@ -270,6 +277,7 @@ export function MealSection({
           date={date}
           updateEntry={updateEntry}
           updateIngredient={updateIngredient}
+          deleteIngredient={deleteIngredient}
           servingHint={servingHint}
           adjustPreview={adjustPreview}
           adjustApply={adjustApply}

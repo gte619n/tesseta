@@ -237,11 +237,19 @@ class WorkoutProgramRepository @Inject internal constructor(
         }
         val prefix = "$programId/"
         launch {
-            // Cold-miss fill: only when nothing is cached for this program yet.
-            // Subsequent freshness comes from the background SyncEngine pull and
-            // local writes (activate/complete), which re-emit through the Flow.
-            if (scheduledDao.observeActive().first().none { it.id.startsWith(prefix) }) {
-                runCatching { fillScheduled(programId) }
+            // Populate the requested window from the server on every observe, mirroring
+            // the web calendar (which re-queries [from,to] for each visible range). The
+            // background SyncEngine pull only covers a recent window, so relying on a
+            // one-time cold-miss fill left older months blank when the user paged back;
+            // fetching the visible range guarantees its rows land in the mirror. Silent
+            // offline: Room still serves whatever is already cached. refreshInto upserts
+            // and skips locally-dirty rows, so this never clobbers an optimistic write.
+            runCatching {
+                val dtos = api.calendar(programId, from.toString(), to.toString())
+                support.refreshInto(
+                    MirrorTables.WORKOUT_SCHEDULED,
+                    dtos.map { it.toRefreshRow(programId) },
+                )
             }
         }
         scheduledDao.observeActive()

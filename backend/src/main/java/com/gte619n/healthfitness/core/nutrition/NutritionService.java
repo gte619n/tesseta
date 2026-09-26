@@ -627,6 +627,54 @@ public class NutritionService {
     }
 
     /**
+     * Remove one ingredient of a composite meal (by list index), then resum the
+     * entry total and the day rollup. The last remaining ingredient can't be
+     * removed — a composite meal with no ingredients has no macros to derive; the
+     * caller should delete the whole entry instead.
+     *
+     * <p>Replay-safe (write-contract IDEMPOTENT_DELETE): {@code expectedName} is
+     * the name the caller saw at {@code index}. Deleting shifts later indexes
+     * down, so a blind replay of the same request would remove a <em>different</em>
+     * ingredient — when the name no longer matches, the delete already happened
+     * and this returns the entry unchanged.
+     */
+    public FoodEntry deleteIngredient(
+        String userId, LocalDate date, String entryId, int index, String expectedName) {
+        requireUser(userId);
+        requireDate(date);
+        FoodEntry existing = entries.findById(userId, date, entryId)
+            .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        List<CompositeIngredient> current = existing.ingredients();
+        if (current == null || index < 0 || index >= current.size()) {
+            throw new IllegalArgumentException("invalid ingredient index: " + index);
+        }
+        if (expectedName != null && !expectedName.isBlank()
+            && !expectedName.equals(current.get(index).name())) {
+            return existing; // replay after a successful delete — nothing to do
+        }
+        if (current.size() <= 1) {
+            throw new IllegalArgumentException("cannot remove the last ingredient of a meal");
+        }
+        List<CompositeIngredient> updated = new ArrayList<>(current);
+        updated.remove(index);
+        updated = withDerivedCalories(updated);
+
+        // Preserve the entry's meal portion (entry.quantity) when resumming.
+        double portion = existing.quantity() != null ? existing.quantity() : 1.0;
+        Macros total = compositeTotal(updated, portion);
+        FoodEntry entry = new FoodEntry(
+            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            existing.foodId(), existing.foodName(), existing.servingLabel(),
+            existing.servingGrams(), existing.quantity(), total, existing.photoRef(),
+            existing.contentHash(), existing.source(), updated, existing.mealImageUrl(), existing.mealImageStatus(),
+            existing.analysisStatus(), existing.createdAt(), null, existing.leftover(),
+            existing.adjustment());
+        entries.save(entry);
+        recomputeDay(userId, date);
+        return entry;
+    }
+
+    /**
      * Partially update an existing entry. Null arguments leave the existing
      * value untouched. Recomputes the day rollup afterwards.
      */

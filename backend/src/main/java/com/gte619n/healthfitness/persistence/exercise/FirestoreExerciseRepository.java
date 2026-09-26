@@ -44,8 +44,23 @@ import org.springframework.stereotype.Repository;
 public class FirestoreExerciseRepository implements ExerciseRepository {
 
     private static final String COLLECTION = "exercises";
+    private static final String PUBLISHED_KEY = "published";
 
     private final Firestore firestore;
+
+    /**
+     * The published, alias-collapsed catalog — the base every {@link #findPublished}
+     * filter set derives from. Search-as-you-type hits this once per keystroke, and
+     * the underlying read is the whole published catalog (~1000-doc fetch), so a
+     * short-lived single-entry cache turns a keystroke burst into one Firestore
+     * read. Writes ({@link #save}/{@link #delete}) invalidate; the TTL backstops
+     * edits made by another instance.
+     */
+    private final com.github.benmanes.caffeine.cache.Cache<String, List<Exercise>> publishedCache =
+        com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+            .expireAfterWrite(java.time.Duration.ofSeconds(60))
+            .maximumSize(1)
+            .build();
 
     public FirestoreExerciseRepository(Firestore firestore) {
         this.firestore = firestore;
@@ -79,14 +94,16 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
         // Returns PUBLISHED exercises regardless of media status; the
         // media-approval gate (if any) is applied above this layer based on
         // the app.exercises.require-approved-media flag.
-        List<QueryDocumentSnapshot> docs = await(collection()
-            .whereEqualTo("status", ExerciseStatus.PUBLISHED.name())
-            .limit(1000)
-            .get()).getDocuments();
-        List<Exercise> all = docs.stream()
-            .map(this::toExercise)
-            .filter(e -> e.aliasOfExerciseId() == null)
-            .toList();
+        List<Exercise> all = publishedCache.get(PUBLISHED_KEY, k -> {
+            List<QueryDocumentSnapshot> docs = await(collection()
+                .whereEqualTo("status", ExerciseStatus.PUBLISHED.name())
+                .limit(1000)
+                .get()).getDocuments();
+            return docs.stream()
+                .map(this::toExercise)
+                .filter(e -> e.aliasOfExerciseId() == null)
+                .toList();
+        });
         String searchLower = search == null ? null : search.toLowerCase();
         return all.stream()
             .filter(e -> pattern == null || e.movementPattern() == pattern)
@@ -155,11 +172,13 @@ public class FirestoreExerciseRepository implements ExerciseRepository {
         DocumentReference ref = collection().document(exercise.exerciseId());
         boolean isNew = !await(ref.get()).exists();
         await(ref.set(toBody(exercise, isNew), SetOptions.merge()));
+        publishedCache.invalidateAll();
     }
 
     @Override
     public void delete(String exerciseId) {
         await(collection().document(exerciseId).delete());
+        publishedCache.invalidateAll();
     }
 
     private CollectionReference collection() {

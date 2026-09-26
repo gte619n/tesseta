@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.feature.workouts.R
+import com.gte619n.healthfitness.feature.workouts.program.performedDate
 import com.gte619n.healthfitness.feature.workouts.program.scheduledDateLabel
 import com.gte619n.healthfitness.ui.components.CapsLabel
 import com.gte619n.healthfitness.ui.theme.Hf
@@ -117,7 +118,14 @@ private fun ScheduledCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CapsLabel(scheduledDateLabel(session.date), color = Hf.colors.textSecondary)
+            // Completed sessions read as the day they were actually performed; a
+            // still-planned one keeps its scheduled slot.
+            val dateLabel = if (session.status == ScheduledStatus.COMPLETED) {
+                scheduledDateLabel(performedDate(session))
+            } else {
+                scheduledDateLabel(session.date)
+            }
+            CapsLabel(dateLabel, color = Hf.colors.textSecondary)
             StatusDot(session.status)
         }
         Spacer(Modifier.height(6.dp))

@@ -213,9 +213,21 @@ public class RecentActivityService {
 
     private List<RecentActivityResponse> food(String userId) {
         LocalDate today = LocalDate.now();
+        // Entries live in per-day subcollections, so the lookback is one read per
+        // day; fan them out concurrently (same idiom as the per-program calendars
+        // in workouts()) so the cost is the slowest day, not their sum.
+        List<List<FoodEntry>> days;
+        try (var scope = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<List<FoodEntry>>> futures = new ArrayList<>();
+            for (int i = 0; i < FOOD_LOOKBACK_DAYS; i++) {
+                LocalDate date = today.minusDays(i);
+                futures.add(scope.submit(() -> foodEntries.findByDate(userId, date)));
+            }
+            days = futures.stream().map(RecentActivityService::joinFood).toList();
+        }
         List<RecentActivityResponse> out = new ArrayList<>();
-        for (int i = 0; i < FOOD_LOOKBACK_DAYS; i++) {
-            for (FoodEntry e : foodEntries.findByDate(userId, today.minusDays(i))) {
+        for (List<FoodEntry> entries : days) {
+            for (FoodEntry e : entries) {
                 // Need a real log time to place it on the timeline; skip the
                 // in-flight photo placeholder that hasn't been persisted/filled.
                 if (e.createdAt() == null || e.isAnalyzing()) continue;
@@ -224,6 +236,18 @@ public class RecentActivityService {
             }
         }
         return out;
+    }
+
+    private static List<FoodEntry> joinFood(Future<List<FoodEntry>> f) {
+        try {
+            return f.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        } catch (ExecutionException e) {
+            log.warn("recent-activity food read failed", e.getCause());
+            return List.of();
+        }
     }
 
     private List<RecentActivityResponse> medications(String userId) {

@@ -20,6 +20,8 @@ import com.gte619n.healthfitness.core.workoutprogram.WorkoutSettingsService;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -96,18 +98,33 @@ public class WorkoutStatsService {
 
     /**
      * The full Overview stats bundle for {@code today} (the caller's local date)
-     * with a {@code weeks}-long volume series.
+     * with a {@code weeks}-long volume series, resolving each session to the day it
+     * was actually performed in UTC (see {@link #stats(String, LocalDate, int, ZoneId)}).
      */
     public WorkoutStats stats(String userId, LocalDate today, int weeks) {
+        return stats(userId, today, weeks, ZoneOffset.UTC);
+    }
+
+    /**
+     * The full Overview stats bundle for {@code today} (the caller's local date)
+     * with a {@code weeks}-long volume series.
+     *
+     * <p>Consistency surfaces (streak / weekly series / heatmap) group each session
+     * by the calendar day it was <em>actually performed</em> — {@code completedAt}
+     * converted to {@code zone} — not the day it was scheduled for. A session moved
+     * to a later day (missed Thursday, done Friday) therefore lands on the day it
+     * happened, so the streak/heatmap reflect what the user really did.
+     */
+    public WorkoutStats stats(String userId, LocalDate today, int weeks, ZoneId zone) {
         int series = Math.max(MIN_WEEKS, Math.min(MAX_WEEKS, weeks));
         Scan scan = scan(userId);
         int target = weeklyTarget(userId);
 
         Map<String, String> names = exerciseNames(scan.bestByExercise.keySet());
 
-        WorkoutStats.Streak streak = streak(scan.sessions, target, today);
-        List<WorkoutStats.WeekPoint> weekly = weeklySeries(scan.sessions, today, series);
-        List<WorkoutStats.HeatmapDay> heatmap = heatmap(scan.sessions, today);
+        WorkoutStats.Streak streak = streak(scan.sessions, target, today, zone);
+        List<WorkoutStats.WeekPoint> weekly = weeklySeries(scan.sessions, today, series, zone);
+        List<WorkoutStats.HeatmapDay> heatmap = heatmap(scan.sessions, today, zone);
         List<WorkoutStats.PrPoint> prs = recentPrs(scan.bestByExercise, names, scan.factorByExercise);
         List<WorkoutStats.LiftRef> defaults = chartDefaultLifts(userId);
         List<WorkoutStats.TrackedExercise> tracked = trackedExercises(scan.bestByExercise, names);
@@ -189,12 +206,13 @@ public class WorkoutStatsService {
 
     // ---- derivation: streak / series / heatmap ----
 
-    static WorkoutStats.Streak streak(List<CompletedSession> sessions, int target, LocalDate today) {
+    static WorkoutStats.Streak streak(
+        List<CompletedSession> sessions, int target, LocalDate today, ZoneId zone) {
         LocalDate currentMonday = monday(today);
         Map<LocalDate, Integer> countByWeek = new HashMap<>();
         LocalDate earliest = null;
         for (CompletedSession s : sessions) {
-            LocalDate wk = monday(s.date);
+            LocalDate wk = monday(performedDate(s, zone));
             countByWeek.merge(wk, 1, Integer::sum);
             if (earliest == null || wk.isBefore(earliest)) earliest = wk;
         }
@@ -225,12 +243,12 @@ public class WorkoutStatsService {
     }
 
     static List<WorkoutStats.WeekPoint> weeklySeries(
-        List<CompletedSession> sessions, LocalDate today, int weeks) {
+        List<CompletedSession> sessions, LocalDate today, int weeks, ZoneId zone) {
         LocalDate currentMonday = monday(today);
         Map<LocalDate, int[]> countByWeek = new HashMap<>();
         Map<LocalDate, double[]> tonnageByWeek = new HashMap<>();
         for (CompletedSession s : sessions) {
-            LocalDate wk = monday(s.date);
+            LocalDate wk = monday(performedDate(s, zone));
             countByWeek.computeIfAbsent(wk, k -> new int[1])[0]++;
             tonnageByWeek.computeIfAbsent(wk, k -> new double[1])[0] += s.tonnage;
         }
@@ -244,17 +262,19 @@ public class WorkoutStatsService {
         return out;
     }
 
-    static List<WorkoutStats.HeatmapDay> heatmap(List<CompletedSession> sessions, LocalDate today) {
+    static List<WorkoutStats.HeatmapDay> heatmap(
+        List<CompletedSession> sessions, LocalDate today, ZoneId zone) {
         LocalDate from = today.minusDays(HEATMAP_DAYS - 1L);
-        // date -> (count, best representative session)
+        // day-performed -> (count, best representative session)
         Map<LocalDate, int[]> counts = new HashMap<>();
         Map<LocalDate, CompletedSession> firstByDay = new LinkedHashMap<>();
         for (CompletedSession s : sessions) {
-            if (s.date.isBefore(from) || s.date.isAfter(today)) continue;
-            counts.computeIfAbsent(s.date, k -> new int[1])[0]++;
-            CompletedSession prev = firstByDay.get(s.date);
+            LocalDate day = performedDate(s, zone);
+            if (day.isBefore(from) || day.isAfter(today)) continue;
+            counts.computeIfAbsent(day, k -> new int[1])[0]++;
+            CompletedSession prev = firstByDay.get(day);
             if (prev == null || representativeBefore(s, prev)) {
-                firstByDay.put(s.date, s);
+                firstByDay.put(day, s);
             }
         }
         List<WorkoutStats.HeatmapDay> out = new ArrayList<>();
@@ -394,8 +414,12 @@ public class WorkoutStatsService {
         Set<String> exerciseIds = new java.util.LinkedHashSet<>();
         for (WorkoutProgram program : nullSafe(programs.findByUserIncludingArchived(userId))) {
             if (program == null || program.programId() == null) continue;
+            // Indexed status-equality read: fetches only COMPLETED docs (the only
+            // ones this scan keeps) instead of the whole calendar — an active
+            // program's materialized future PLANNED weeks would otherwise dominate
+            // the read for nothing.
             List<ScheduledWorkout> found =
-                scheduled.findByProgram(userId, program.programId(), LocalDate.MIN, LocalDate.MAX);
+                scheduled.findByStatus(userId, program.programId(), ScheduledStatus.COMPLETED);
             for (ScheduledWorkout sw : nullSafe(found)) {
                 if (sw == null || sw.status() != ScheduledStatus.COMPLETED || sw.session() == null) continue;
                 LocalDate date = sw.date();
@@ -516,6 +540,15 @@ public class WorkoutStatsService {
             byId.put(e.exerciseId(), e);
         }
         return byId;
+    }
+
+    /**
+     * The calendar day a session was actually performed: {@code completedAt}
+     * resolved to {@code zone}, falling back to the scheduled {@code date} for
+     * imported history that carries no completion timestamp.
+     */
+    private static LocalDate performedDate(CompletedSession s, ZoneId zone) {
+        return s.completedAt != null ? s.completedAt.atZone(zone).toLocalDate() : s.date;
     }
 
     private static LocalDate monday(LocalDate d) {

@@ -170,6 +170,23 @@ export function updateIngredient(
   );
 }
 
+/**
+ * Remove one ingredient from a composite meal (by index). `name` is the
+ * replay guard: the ingredient name shown at that index — the backend no-ops
+ * when it no longer matches (the delete already applied).
+ */
+export function deleteIngredient(
+  date: string,
+  entryId: string,
+  index: number,
+  name: string,
+): Promise<Entry> {
+  return send<Entry>(
+    `/api/me/nutrition/${date}/entries/${entryId}/ingredients/${index}?name=${encodeURIComponent(name)}`,
+    "DELETE",
+  );
+}
+
 /** Create a new catalog food (manual / AI-confirmed). */
 export function createFood(body: CreateFoodBody): Promise<Food> {
   return send<Food>("/api/foods", "POST", body);

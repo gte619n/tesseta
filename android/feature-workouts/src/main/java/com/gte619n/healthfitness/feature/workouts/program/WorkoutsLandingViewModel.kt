@@ -278,7 +278,14 @@ class WorkoutsLandingViewModel @Inject constructor(
                 hasAnyProgram = true,
                 visibleMonth = data.month,
                 thisWeek = cal.filter { s -> s.date in weekStart..weekEnd }.sortedBy { s -> s.date },
-                monthDays = cal.filter { s -> YearMonth.from(s.date) == data.month },
+                // Include sessions that either belong to the month by their scheduled
+                // slot or were actually performed in it (a session done a day late can
+                // cross a month boundary), so the compliance grid can place it on the
+                // day it happened while still marking its planned slot as missed.
+                monthDays = cal.filter { s ->
+                    YearMonth.from(s.date) == data.month ||
+                        YearMonth.from(performedDate(s)) == data.month
+                },
                 pastSessions = cal.filter { s -> s.date <= today }.sortedByDescending { s -> s.date },
                 weekStreak = computeWeeklyStreak(streakSource, today, weeklyTarget),
                 completedThisWeek = completedThisWeek(streakSource, today),

@@ -34,6 +34,10 @@ function todayIso(): string {
 export default async function WorkoutsOverviewPage() {
   const today = todayIso();
 
+  // getWeekReview is independent of everything below — start it in the first
+  // wave so it overlaps the program/e1rm fetches instead of adding a third
+  // sequential round-trip to the render.
+  const weekReviewPromise = getWeekReview().catch(() => []);
   const [stats, programs, history] = await Promise.all([
     getWorkoutStats(26).catch(() => null),
     listPrograms().catch(() => []),
@@ -69,7 +73,7 @@ export default async function WorkoutsOverviewPage() {
     null;
   const [initialHistory, weekReview] = await Promise.all([
     defaultLift ? getE1rmHistory(defaultLift.exerciseId).catch(() => null) : Promise.resolve(null),
-    getWeekReview().catch(() => []),
+    weekReviewPromise,
   ]);
 
   const latestSessions = history?.items ?? [];
