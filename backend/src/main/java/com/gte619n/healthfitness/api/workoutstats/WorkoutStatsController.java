@@ -39,8 +39,9 @@ public class WorkoutStatsController {
         @RequestHeader(value = RequestTimeZone.HEADER, required = false) String timezone
     ) {
         String userId = currentUser.get().userId();
-        LocalDate today = LocalDate.now(RequestTimeZone.resolve(timezone));
-        return stats.stats(userId, today, weeks);
+        java.time.ZoneId zone = RequestTimeZone.resolve(timezone);
+        LocalDate today = LocalDate.now(zone);
+        return stats.stats(userId, today, weeks, zone);
     }
 
     /**

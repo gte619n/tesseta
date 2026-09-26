@@ -63,10 +63,12 @@ public class CacheConfig {
             // Per-user exercise-performance scan (IMPL-18). Same brief TTL so a
             // freshly completed session surfaces within a minute.
             caffeineCache(EXERCISE_DIGEST, Duration.ofSeconds(60), 5_000),
-            // Per-user workout-stats scan (IMPL-WEB-WORKOUT-01). Same brief TTL as
-            // its exerciseDigest sibling; also evicted explicitly on session
-            // completion (WorkoutStatsCacheEvictor) so the common case is instant.
-            caffeineCache(WORKOUT_STATS, Duration.ofSeconds(60), 5_000)
+            // Per-user workout-stats scan (IMPL-WEB-WORKOUT-01). Longer TTL than
+            // its exerciseDigest sibling because eviction is complete: the
+            // WorkoutStatsCacheEvictor invalidates on every completion outcome
+            // (complete / skip / un-complete via the workout MetricChangedEvents),
+            // so expiry only backstops out-of-band writes (e.g. program deletion).
+            caffeineCache(WORKOUT_STATS, Duration.ofMinutes(10), 5_000)
         ));
         return manager;
     }

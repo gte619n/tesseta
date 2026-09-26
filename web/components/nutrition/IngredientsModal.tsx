@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import {
   QUANTITY_STEPS,
@@ -27,6 +28,12 @@ type Props = {
     entryId: string,
     index: number,
     body: UpdateIngredientBody,
+  ) => Promise<void>;
+  deleteIngredient: (
+    date: string,
+    entryId: string,
+    index: number,
+    name: string,
   ) => Promise<void>;
   // Lazy "typical serving" explanation for the meal, fetched when the modal opens.
   servingHint: (date: string, entryId: string) => Promise<string | null>;
@@ -68,11 +75,13 @@ export function IngredientsModal({
   date,
   updateEntry,
   updateIngredient,
+  deleteIngredient,
   servingHint,
   adjustPreview,
   adjustApply,
 }: Props) {
   const toast = useToast();
+  const router = useRouter();
   const ingredients = entry.ingredients ?? [];
 
   // Lazy, best-effort "typical serving" explanation of the whole meal — generated
@@ -137,10 +146,32 @@ export function IngredientsModal({
       if (Object.keys(body).length > 0) {
         await updateEntry(date, entry.entryId, body);
       }
+      // The ingredient PATCHes run through a server action whose revalidatePath
+      // does not, on its own, refresh the already-rendered client tree (it was
+      // invoked imperatively, not from a form/transition) — so the edited values
+      // never reappeared ("didn't stick"). Force a refresh to pull server truth.
+      router.refresh();
       toast.success("Meal updated");
       onClose();
     } catch {
       toast.error("Failed to save meal");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove(index: number) {
+    if (ingredients.length <= 1) return; // can't empty a composite meal
+    setSaving(true);
+    try {
+      // The name doubles as the backend's replay guard: a retry after a
+      // successful delete no-ops instead of removing the shifted-up ingredient.
+      await deleteIngredient(date, entry.entryId, index, ingredients[index]?.name ?? "");
+      router.refresh();
+      toast.success("Ingredient removed");
+      onClose();
+    } catch {
+      toast.error("Failed to remove ingredient");
     } finally {
       setSaving(false);
     }
@@ -241,6 +272,11 @@ export function IngredientsModal({
               onQuantityChange={(v) =>
                 setQtys((prev) => prev.map((q, i) => (i === index ? v : q)))
               }
+              // The last ingredient can't be removed (a meal needs at least one);
+              // delete the whole entry instead.
+              onRemove={
+                ingredients.length > 1 && !saving ? () => handleRemove(index) : undefined
+              }
             />
           ))}
 
@@ -281,10 +317,13 @@ function IngredientRow({
   ingredient,
   quantity,
   onQuantityChange,
+  onRemove,
 }: {
   ingredient: EntryIngredient;
   quantity: string;
   onQuantityChange: (v: string) => void;
+  // Undefined when removal isn't allowed (the last ingredient) or a save is in flight.
+  onRemove?: () => void;
 }) {
   const baseGrams = num(ingredient.servingGrams);
   const q = parseFloat(quantity) || 1;
@@ -311,6 +350,16 @@ function IngredientRow({
           className="w-20 rounded-md border-[0.5px] border-border-default bg-surface px-2.5 py-1.5 text-[13px] text-primary focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </label>
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${ingredient.name}`}
+          className="shrink-0 cursor-pointer rounded-md p-1.5 text-tertiary hover:text-alert"
+        >
+          <i className="ti ti-trash text-[15px]" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

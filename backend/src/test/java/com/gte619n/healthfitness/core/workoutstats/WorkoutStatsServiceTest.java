@@ -185,6 +185,41 @@ class WorkoutStatsServiceTest {
         assertEquals(0, mon.thisWeekCompleted());
     }
 
+    // ---- performed-date semantics: sessions count on the day actually done ----
+
+    @Test
+    void consistencySurfacesCountByDayActuallyPerformedNotScheduled() {
+        setTarget(1);
+        seedProgram("p1");
+        // Scheduled Thursday 2026-06-11 but actually performed Saturday 2026-06-13
+        // (same week 06-08). The heatmap must land on the day it was done.
+        LocalDate scheduled = LocalDate.of(2026, 6, 11);
+        LocalDate performed = LocalDate.of(2026, 6, 13);
+        saveSessionCompletedAt("p1", scheduled, performed, "bench",
+            List.of(new LoggedSet(100.0, 5, null, null, null)));
+
+        WorkoutStats s = service.stats(USER, TODAY, 26, ZoneOffset.UTC);
+        assertEquals(1, s.heatmap().size());
+        assertEquals(performed, s.heatmap().get(0).date());
+    }
+
+    @Test
+    void weekGroupingFollowsPerformedDateAcrossAWeekBoundary() {
+        setTarget(1);
+        seedProgram("p1");
+        // Scheduled Sunday 2026-06-14 (week 06-08) but performed the next day,
+        // Monday 2026-06-15 (week 06-15). It must count toward the NEW week.
+        LocalDate scheduled = LocalDate.of(2026, 6, 14);
+        LocalDate performed = LocalDate.of(2026, 6, 15);
+        saveSessionCompletedAt("p1", scheduled, performed, "bench",
+            List.of(new LoggedSet(100.0, 5, null, null, null)));
+
+        WorkoutStats.Streak streak = service.stats(USER, TODAY, 26, ZoneOffset.UTC).streak();
+        // The current week (06-15) owns it, not the prior scheduled week.
+        assertEquals(CURRENT_MONDAY, streak.weekStart());
+        assertEquals(1, streak.thisWeekCompleted());
+    }
+
     // ---- BT-7 ----
 
     @Test
@@ -451,6 +486,21 @@ class WorkoutStatsServiceTest {
             1, false, "gym-1", status, day,
             status == ScheduledStatus.COMPLETED ? instant(date) : null,
             status == ScheduledStatus.COMPLETED ? 3600 : null, null));
+    }
+
+    /** A COMPLETED session scheduled on one day but performed (completedAt) on another. */
+    private void saveSessionCompletedAt(
+        String programId, LocalDate scheduledDate, LocalDate performedDate,
+        String exerciseId, List<LoggedSet> sets) {
+        List<LoggedSet> logged = new ArrayList<>(sets);
+        WorkoutDay day = new WorkoutDay("d1", "Day", DayOfWeek.WED, "gym-1", 0, List.of(
+            new Block("b1", BlockType.MAIN, "Main", 0, List.of(
+                new Prescription(exerciseId, 0, 3, 5, 8, null, null, 120, null, null, null,
+                    logged.isEmpty() ? null : logged)))));
+        scheduled.save(new ScheduledWorkout(
+            USER, programId, scheduledId(scheduledDate), scheduledDate, "ph1", "d1", "Day",
+            1, false, "gym-1", ScheduledStatus.COMPLETED, day,
+            instant(performedDate), 3600, null));
     }
 
     private static String scheduledId(LocalDate date) {

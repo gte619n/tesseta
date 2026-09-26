@@ -319,7 +319,7 @@ private fun LandingBody(
                 Spacer(Modifier.height(10.dp))
                 ComplianceCalendar(
                     month = state.visibleMonth,
-                    scheduledByDate = state.monthDays.associate { it.date to it.status },
+                    kindByDate = complianceGrid(state.monthDays, state.today),
                     today = state.today,
                     onPrevMonth = onPrevMonth,
                     onNextMonth = onNextMonth,

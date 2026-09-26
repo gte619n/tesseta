@@ -1041,6 +1041,24 @@ public class NutritionController {
     }
 
     /**
+     * Remove one ingredient from a composite meal and recompute totals.
+     * {@code name} is the replay guard: the ingredient name the caller saw at
+     * this index — a mismatch means the delete already applied (no-op).
+     */
+    @DeleteMapping("/{date}/entries/{entryId}/ingredients/{index}")
+    public EntryResponse deleteIngredient(
+        @PathVariable LocalDate date,
+        @PathVariable String entryId,
+        @PathVariable int index,
+        @RequestParam(required = false) String name
+    ) {
+        String userId = currentUser.get().userId();
+        FoodEntry entry = nutrition.deleteIngredient(userId, date, entryId, index, name);
+        syncNotifier.changed(userId, syncWrite.originDeviceId(), "nutritionDays/entries");
+        return toResponse(entry);
+    }
+
+    /**
      * Distinct catalog foods backing a day's entries, keyed by foodId — both the
      * entry's own food and every composite-meal ingredient's food, so their
      * generated images can be joined without an N+1 lookup.

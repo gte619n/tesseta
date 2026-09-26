@@ -22,6 +22,22 @@ function formatDayDate(iso: string): string {
   });
 }
 
+// The day to show for a row: for a completed session, the day it was actually
+// performed (completedAt in the viewer's local zone) rather than the day it was
+// scheduled for — so a session done a day late reads as done that day, not on
+// its planned slot. Instants render in local time; the scheduled `date` is a
+// bare YYYY-MM-DD pinned to local midnight.
+function formatSessionDay(session: ScheduledWorkoutResponse): string {
+  if (session.status === "COMPLETED" && session.completedAt) {
+    return new Date(session.completedAt).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  }
+  return formatDayDate(session.date);
+}
+
 export function ProgramThisWeek({
   sessions,
   today,
@@ -140,7 +156,7 @@ function SessionRow({
           <div className="min-w-0">
             <span className="text-[14px] font-medium text-primary">{session.dayLabel}</span>
             <span className="caps-mono ml-2 text-[10px] tracking-[0.06em] text-tertiary">
-              {formatDayDate(session.date)} · {session.locationName}
+              {formatSessionDay(session)} · {session.locationName}
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">

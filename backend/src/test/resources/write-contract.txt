@@ -26,6 +26,9 @@ IDEMPOTENT_DELETE|DELETE /api/me/google-health/connect
 IDEMPOTENT_DELETE|DELETE /api/me/gyms/{locationId}
 IDEMPOTENT_DELETE|DELETE /api/me/gyms/{locationId}/photo
 IDEMPOTENT_DELETE|DELETE /api/me/nutrition/{date}/entries/{entryId}
+# ingredient delete is by index, but the ?name= guard makes a replay after a
+# successful delete a no-op (the shifted index no longer matches the name).
+IDEMPOTENT_DELETE|DELETE /api/me/nutrition/{date}/entries/{entryId}/ingredients/{index}
 IDEMPOTENT_DELETE|DELETE /api/me/withings/connect
 IDEMPOTENT_DELETE|DELETE /api/me/workout-programs/chat/threads/{threadId}
 IDEMPOTENT_DELETE|DELETE /api/me/workout-programs/{programId}

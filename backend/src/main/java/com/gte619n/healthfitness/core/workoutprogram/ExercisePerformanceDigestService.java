@@ -145,8 +145,10 @@ public class ExercisePerformanceDigestService {
         Map<String, List<PerformedSet>> byExercise = new LinkedHashMap<>();
         for (WorkoutProgram program : nullSafe(programs.findByUserIncludingArchived(userId))) {
             if (program == null || program.programId() == null) continue;
+            // Indexed status-equality read: only COMPLETED docs (all this scan
+            // keeps), skipping the potentially much larger PLANNED calendar.
             List<ScheduledWorkout> sessions =
-                scheduled.findByProgram(userId, program.programId(), LocalDate.MIN, LocalDate.MAX);
+                scheduled.findByStatus(userId, program.programId(), ScheduledStatus.COMPLETED);
             for (ScheduledWorkout sw : nullSafe(sessions)) {
                 if (sw == null || sw.status() != ScheduledStatus.COMPLETED || sw.session() == null) continue;
                 LocalDate date = sw.date();

@@ -196,6 +196,56 @@ class ComplianceMathTest {
         assertEquals(2, completedThisWeek(scheduled, today))
     }
 
+    // ---- performed-date semantics: count on the day actually done ----
+
+    private val utc = java.time.ZoneId.of("UTC")
+
+    /** A COMPLETED session scheduled on one day but performed (completedAt) on another. */
+    private fun done(scheduledDate: String, performedInstant: String): ScheduledWorkout =
+        sched(scheduledDate, ScheduledStatus.COMPLETED)
+            .copy(completedAt = Instant.parse(performedInstant))
+
+    @Test
+    fun `completedThisWeek counts a late-completed session in the week it was performed`() {
+        // Scheduled last Sunday (2026-06-07) but performed Monday this week (06-08):
+        // it belongs to THIS week, not last.
+        val scheduled = listOf(done("2026-06-07", "2026-06-08T12:00:00Z"))
+        assertEquals(1, completedThisWeek(scheduled, today, utc))
+    }
+
+    @Test
+    fun `computeWeeklyStreak groups by performed date across a week boundary`() {
+        // A single session scheduled last Sunday but performed this Monday counts for
+        // the current week only — so with target 1 the streak is the current week (1).
+        val scheduled = listOf(done("2026-06-07", "2026-06-08T12:00:00Z"))
+        assertEquals(1, computeWeeklyStreak(scheduled, today, weeklyTarget = 1, zone = utc))
+    }
+
+    // ---- complianceGrid ----
+
+    @Test
+    fun `complianceGrid places a late-completed session on the day performed and misses the planned slot`() {
+        // Scheduled Monday 06-08, actually performed Tuesday 06-09.
+        val grid = complianceGrid(
+            listOf(done("2026-06-08", "2026-06-09T12:00:00Z")),
+            today,
+            utc,
+        )
+        assertEquals(ComplianceCellKind.MISSED, grid[LocalDate.parse("2026-06-08")])
+        assertEquals(ComplianceCellKind.COMPLETED, grid[LocalDate.parse("2026-06-09")])
+    }
+
+    @Test
+    fun `complianceGrid marks future planned days upcoming and rest days absent`() {
+        val grid = complianceGrid(
+            listOf(sched("2026-06-15", ScheduledStatus.PLANNED)),
+            today,
+            utc,
+        )
+        assertEquals(ComplianceCellKind.UPCOMING, grid[LocalDate.parse("2026-06-15")])
+        assertNull(grid[LocalDate.parse("2026-06-14")]) // no session ⇒ rest (absent)
+    }
+
     // ---- cellKind ----
 
     @Test
