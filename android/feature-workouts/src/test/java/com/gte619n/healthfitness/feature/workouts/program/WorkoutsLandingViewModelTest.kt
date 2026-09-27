@@ -69,6 +69,10 @@ class WorkoutsLandingViewModelTest {
         programs: List<WorkoutProgram>,
         calendar: List<ScheduledWorkout> = emptyList(),
         weeklyTarget: Int = 4,
+        // Completed sessions across ALL programs (the streak + compliance-grid
+        // source). Defaults to the featured calendar, matching a single-program
+        // history; pass explicitly to model a previous program's sessions.
+        allCompleted: List<ScheduledWorkout>? = null,
     ): WorkoutsLandingViewModel {
         every { sessionRepo.observeDrafts() } returns drafts
         every { sessionRepo.observeParkedCompletions() } returns parked
@@ -78,9 +82,7 @@ class WorkoutsLandingViewModelTest {
             flowOf(programs.firstOrNull { it.programId == id })
         }
         every { repo.observeCalendar(any(), any(), any()) } returns flowOf(calendar)
-        // The streak now reads completed sessions across all programs; in these
-        // single-program fixtures that's the same calendar.
-        every { repo.observeAllCompleted(any(), any()) } returns flowOf(calendar)
+        every { repo.observeAllCompleted(any(), any()) } returns flowOf(allCompleted ?: calendar)
         every { settingsRepo.weeklyStreakTarget } returns flowOf(weeklyTarget)
         return WorkoutsLandingViewModel(repo, sessionRepo, settingsRepo).also { it.today = today }
     }
@@ -150,6 +152,42 @@ class WorkoutsLandingViewModelTest {
         assertEquals(2, state.completedThisWeek)
         assertEquals(2, state.weeklyStreakTarget)
         assertEquals(YearMonth.of(2026, 6), state.visibleMonth)
+    }
+
+    @Test
+    fun `paging back before the featured program shows the previous program's completions`() = runTest {
+        // Featured program only has June sessions; May's workouts belong to an
+        // earlier (archived) program and arrive via the cross-program completed
+        // read. Paging back to May must still light those days up.
+        val calendar = listOf(
+            sched("2026-06-08", ScheduledStatus.COMPLETED),
+            sched("2026-06-10", ScheduledStatus.PLANNED),
+        )
+        val oldProgram = listOf(
+            sched("2026-05-05", ScheduledStatus.COMPLETED).copy(scheduledId = "old-05-05", programId = "old"),
+            sched("2026-05-07", ScheduledStatus.COMPLETED).copy(scheduledId = "old-05-07", programId = "old"),
+        )
+        val programs = listOf(program("p1", ProgramStatus.ACTIVE, "2026-06-01T00:00:00Z"))
+        val vm = vm(
+            programs,
+            calendar,
+            allCompleted = oldProgram + calendar.filter { it.status == ScheduledStatus.COMPLETED },
+        )
+        advanceUntilIdle()
+
+        // Current month: featured sessions only, no duplicates from the union.
+        assertEquals(
+            listOf("2026-06-08", "2026-06-10"),
+            vm.state.value.monthDays.map { it.date.toString() }.sorted(),
+        )
+
+        vm.prevMonth()
+        advanceUntilIdle()
+        assertEquals(YearMonth.of(2026, 5), vm.state.value.visibleMonth)
+        assertEquals(
+            listOf("2026-05-05", "2026-05-07"),
+            vm.state.value.monthDays.map { it.date.toString() }.sorted(),
+        )
     }
 
     @Test
