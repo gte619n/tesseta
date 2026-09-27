@@ -14,6 +14,7 @@ import com.gte619n.healthfitness.domain.nutrition.MealGroup
 import com.gte619n.healthfitness.domain.nutrition.NutritionDay
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -143,6 +144,31 @@ class NutritionAdjustViewModelTest {
         coVerify { repo.discardAdjust(date.toString(), "e1") }
         assertNull(vm.state.value.reviewingAdjust)
     }
+
+    @Test
+    fun `openAdjustReviewFor force-refreshes before reading so a just-pushed proposal isn't stale`() =
+        runTest {
+            val repo = mockk<NutritionRepository>(relaxed = true) {
+                coEvery { day(date.toString()) } returns dayWith(reviewEntry())
+            }
+            val vm = viewModel(repo)
+
+            vm.openAdjustReviewFor(date.toString(), "e1")
+
+            // The FCM "proposal ready" push routinely beats the sync delta that
+            // carries the proposal into the mirror, so the mirror-gated day() would
+            // serve the stale pre-proposal row and the sheet would show "no longer
+            // available". We must re-pull from the network FIRST.
+            coVerifyOrder {
+                repo.refreshDay(date.toString())
+                repo.day(date.toString())
+            }
+            assertEquals("e1", vm.state.value.reviewingAdjust?.entryId)
+            assertEquals(
+                AdjustStatus.PENDING_REVIEW,
+                vm.state.value.reviewingAdjust?.adjustment?.status,
+            )
+        }
 
     // --- withPendingOps adjust decoration ---
 

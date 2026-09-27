@@ -237,7 +237,14 @@ public class ProgressionController {
         String pattern, String trend, double weeklySlopePct, double fatigueIndex,
         int currentTarget, int proposedTarget, boolean deload, String reasoning) {
         static WeekReviewDto of(WeekLoop.PatternReview r) {
-            return new WeekReviewDto(r.pattern().name(), r.trend().name(), r.weeklySlopeFraction() * 100,
+            // A NaN slope is the engine's "not enough data to fit a trend" sentinel
+            // (olsSlope needs ≥2 points with x-variance) — the trend field already
+            // carries UNKNOWN in that case. JSON has no NaN/Infinity literal and the
+            // Android Moshi reader rejects the bare token ("JSON forbids NaN and
+            // infinities"), so surface it as a finite 0.0 on the wire.
+            double slopePct = r.weeklySlopeFraction() * 100;
+            if (!Double.isFinite(slopePct)) slopePct = 0.0;
+            return new WeekReviewDto(r.pattern().name(), r.trend().name(), slopePct,
                 r.fatigueIndex(), r.currentTarget(), r.proposedTarget(), r.deload(), r.reasoning());
         }
     }
