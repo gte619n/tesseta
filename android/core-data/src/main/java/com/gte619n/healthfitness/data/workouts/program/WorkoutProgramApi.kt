@@ -44,6 +44,18 @@ interface WorkoutProgramApi {
     ): List<ScheduledWorkoutDto>
 
     /**
+     * Cross-program workout stats — the same read that backs the web Overview.
+     * Only the [WorkoutStatsDto.heatmap] is consumed here: unlike the per-program
+     * calendar and the workout-history read (both non-archived only), the stats
+     * scan includes archived programs, so its completed-day list is the one source
+     * that lets the compliance calendar show an earlier program's months. "Today"
+     * (hence the ~6-month window) is resolved from the X-Timezone header the
+     * TimeZoneInterceptor attaches.
+     */
+    @GET("api/me/workout-stats")
+    suspend fun workoutStats(): WorkoutStatsDto
+
+    /**
      * Activate a program: the backend materializes its phases into dated
      * sessions (forward-only) and marks it ACTIVE. Returns the materialized
      * sessions. Online-only, like the chat commit.

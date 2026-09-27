@@ -144,6 +144,11 @@ fun cellKind(date: LocalDate, status: ScheduledStatus?, today: LocalDate): Compl
 fun complianceGrid(
     scheduled: List<ScheduledWorkout>,
     today: LocalDate,
+    // Extra completed days the featured [scheduled] list can't know about — the
+    // cross-program (incl. archived) heatmap days from the server. They light up
+    // as COMPLETED, so a month owned entirely by an earlier program still shows
+    // the user's workouts (parity with the web heatmap). Empty offline.
+    extraCompletedDates: Set<LocalDate> = emptySet(),
     zone: ZoneId = ZoneId.systemDefault(),
 ): Map<LocalDate, ComplianceCellKind> {
     val kinds = mutableMapOf<LocalDate, ComplianceCellKind>()
@@ -155,5 +160,8 @@ fun complianceGrid(
         if (kinds[s.date] == ComplianceCellKind.COMPLETED) return@forEach
         kinds[s.date] = if (s.date < today) ComplianceCellKind.MISSED else ComplianceCellKind.UPCOMING
     }
+    // Cross-program completed days win over a MISSED slot (a session performed for
+    // another program that day) but never override an already-COMPLETED cell.
+    extraCompletedDates.forEach { kinds[it] = ComplianceCellKind.COMPLETED }
     return kinds
 }

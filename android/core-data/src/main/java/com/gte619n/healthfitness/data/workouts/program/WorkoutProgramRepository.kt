@@ -283,6 +283,23 @@ class WorkoutProgramRepository @Inject internal constructor(
                     .sortedBy { it.date }
             }
 
+    /**
+     * Days (cross-program, INCLUDING archived programs) the user completed a
+     * workout, over the server's ~6-month heatmap window, from the same
+     * `/api/me/workout-stats` read that backs the web consistency heatmap. This is
+     * the ONLY source that includes archived programs' sessions — the per-program
+     * calendar and the mirror-backed [observeAllCompleted] both miss them — so it's
+     * what lets the compliance calendar show an earlier program's months (parity
+     * with web). Online/best-effort: returns empty on failure or kill-switch, so
+     * the Room-backed grid still renders offline. Dates are already in the caller's
+     * zone (the TimeZoneInterceptor sends X-Timezone).
+     */
+    suspend fun completedWorkoutDays(): Set<LocalDate> = withContext(Dispatchers.IO) {
+        if (support.killSwitchOn()) return@withContext emptySet()
+        runCatching { api.workoutStats().heatmap.map { it.date }.toSet() }
+            .getOrDefault(emptySet())
+    }
+
     suspend fun activate(programId: String): Result<List<ScheduledWorkout>> =
         withContext(Dispatchers.IO) {
             runCatching {
