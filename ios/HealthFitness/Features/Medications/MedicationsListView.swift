@@ -44,6 +44,7 @@ struct MedicationsListView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink(value: MedicationsRoute.add) { Image(systemName: "plus") }
+                        .accessibilityIdentifier("meds-add-button")  // IMPL-E2E-01 shared id
                 }
             }
             .navigationDestination(for: MedicationsRoute.self) { route in
@@ -91,6 +92,7 @@ struct MedicationsListView: View {
                 }
             }
             .formMaxWidth()   // 600pt cap — iPad parity with Android's 600dp form width
+            .accessibilityIdentifier("meds-list")  // IMPL-E2E-01 shared id
         }
     }
 

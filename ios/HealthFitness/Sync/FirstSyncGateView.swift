@@ -25,6 +25,7 @@ struct FirstSyncGateView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.canvas)
+        .accessibilityIdentifier("first-sync-gate")  // IMPL-E2E-01 shared id
         .task { sync.start() }
     }
 }

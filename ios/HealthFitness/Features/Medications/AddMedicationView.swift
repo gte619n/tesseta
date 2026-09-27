@@ -48,6 +48,7 @@ struct AddMedicationView: View {
             .background(Theme.canvas)
             .navigationTitle(navTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .accessibilityIdentifier("med-add-screen")  // IMPL-E2E-01 shared id
         // Post-0D:
         // .task {
         //     let vm = ObservableViewModel(AddMedicationViewModel(...))

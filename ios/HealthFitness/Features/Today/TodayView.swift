@@ -34,6 +34,7 @@ struct TodayView: View {
         content
             .background(Theme.canvas)
             .navigationTitle("Today")
+            .accessibilityIdentifier("today-dashboard")  // IMPL-E2E-01 shared id
         // Post-0D:
         // .task {
         //     let vm = ObservableViewModel(DashboardViewModel(

@@ -30,6 +30,7 @@ struct SignInView: View {
             .buttonStyle(.borderedProminent)
             .tint(Theme.accent)
             .padding(.horizontal, 32)
+            .accessibilityIdentifier("signin-google-button")  // IMPL-E2E-01 shared id
 
             Spacer()
         }

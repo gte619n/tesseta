@@ -1,0 +1,19 @@
+# Journey J3 — Medications: navigate to the meds tab, open Add, and confirm the
+# list renders. Parity-matrix rows: MedicationsListView / AddMedicationView (Wave B).
+# A representative "feature" journey showing the pattern for the other 40+.
+appId: ${MAESTRO_APP_ID}
+tags:
+  - full
+  - medications
+---
+- runFlow: ../_shared/sign-in.yaml
+- tapOn: "Medications"          # bottom-nav / tab-bar item, by visible title
+- assertVisible:
+    id: "meds-list"
+- tapOn:
+    id: "meds-add-button"
+- assertVisible:
+    id: "med-add-screen"
+- back
+- assertVisible:
+    id: "meds-list"
