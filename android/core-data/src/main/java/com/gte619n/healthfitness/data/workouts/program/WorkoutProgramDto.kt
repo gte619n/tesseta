@@ -309,6 +309,21 @@ data class WorkoutHistoryPageDto(
     val hasMore: Boolean = false,
 )
 
+/**
+ * Cross-program workout stats (the web Overview read-model). Only [heatmap] is
+ * consumed on Android today — the completed-day list including archived programs
+ * — so the rest of the bundle (streak, series, PRs) is intentionally not modelled.
+ */
+data class WorkoutStatsDto(
+    val heatmap: List<HeatmapDayDto> = emptyList(),
+)
+
+/** One completed-workout day in the consistency heatmap. */
+data class HeatmapDayDto(
+    val date: LocalDate,
+    val sessionCount: Int = 0,
+)
+
 // ---- Enum parsing with safe fallback ----
 
 private inline fun <reified T : Enum<T>> parseEnum(raw: String?, fallback: T): T =

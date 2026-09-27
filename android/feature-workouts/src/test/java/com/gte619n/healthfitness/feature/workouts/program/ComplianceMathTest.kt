@@ -229,7 +229,7 @@ class ComplianceMathTest {
         val grid = complianceGrid(
             listOf(done("2026-06-08", "2026-06-09T12:00:00Z")),
             today,
-            utc,
+            zone = utc,
         )
         assertEquals(ComplianceCellKind.MISSED, grid[LocalDate.parse("2026-06-08")])
         assertEquals(ComplianceCellKind.COMPLETED, grid[LocalDate.parse("2026-06-09")])
@@ -240,10 +240,25 @@ class ComplianceMathTest {
         val grid = complianceGrid(
             listOf(sched("2026-06-15", ScheduledStatus.PLANNED)),
             today,
-            utc,
+            zone = utc,
         )
         assertEquals(ComplianceCellKind.UPCOMING, grid[LocalDate.parse("2026-06-15")])
         assertNull(grid[LocalDate.parse("2026-06-14")]) // no session ⇒ rest (absent)
+    }
+
+    @Test
+    fun `complianceGrid marks cross-program heatmap days completed`() {
+        // No featured sessions this range at all — the completed cells come purely
+        // from the cross-program (incl. archived) heatmap set.
+        val grid = complianceGrid(
+            emptyList(),
+            today,
+            extraCompletedDates = setOf(LocalDate.parse("2026-05-05"), LocalDate.parse("2026-05-07")),
+            zone = utc,
+        )
+        assertEquals(ComplianceCellKind.COMPLETED, grid[LocalDate.parse("2026-05-05")])
+        assertEquals(ComplianceCellKind.COMPLETED, grid[LocalDate.parse("2026-05-07")])
+        assertNull(grid[LocalDate.parse("2026-05-06")])
     }
 
     // ---- cellKind ----

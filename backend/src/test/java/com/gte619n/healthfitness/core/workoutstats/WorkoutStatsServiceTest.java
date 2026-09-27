@@ -220,6 +220,21 @@ class WorkoutStatsServiceTest {
         assertEquals(1, streak.thisWeekCompleted());
     }
 
+    @Test
+    void heatmapIncludesArchivedProgramsSessions() {
+        // The Android compliance calendar sources an earlier program's months from
+        // this heatmap, so it must survive the program being archived (soft-deleted).
+        seedProgram("old");
+        LocalDate day = CURRENT_MONDAY.minusWeeks(3);
+        saveSession("old", day, "bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(100.0, 5, null, null, instant(day))));
+        programs.delete(USER, "old"); // archive it
+
+        List<WorkoutStats.HeatmapDay> heatmap = service.stats(USER, TODAY, 26, ZoneOffset.UTC).heatmap();
+        assertEquals(1, heatmap.size());
+        assertEquals(day, heatmap.get(0).date());
+    }
+
     // ---- BT-7 ----
 
     @Test

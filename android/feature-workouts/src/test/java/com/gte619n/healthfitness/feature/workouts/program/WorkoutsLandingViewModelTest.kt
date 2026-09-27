@@ -83,6 +83,9 @@ class WorkoutsLandingViewModelTest {
         }
         every { repo.observeCalendar(any(), any(), any()) } returns flowOf(calendar)
         every { repo.observeAllCompleted(any(), any()) } returns flowOf(allCompleted ?: calendar)
+        // Cross-program heatmap (incl. archived) — default empty; the Room-backed
+        // paths cover these fixtures. Its own test stubs it explicitly.
+        coEvery { repo.completedWorkoutDays() } returns emptySet()
         every { settingsRepo.weeklyStreakTarget } returns flowOf(weeklyTarget)
         return WorkoutsLandingViewModel(repo, sessionRepo, settingsRepo).also { it.today = today }
     }
@@ -188,6 +191,43 @@ class WorkoutsLandingViewModelTest {
             listOf("2026-05-05", "2026-05-07"),
             vm.state.value.monthDays.map { it.date.toString() }.sorted(),
         )
+    }
+
+    @Test
+    fun `cross-program heatmap days light up a month the featured program never covered`() = runTest {
+        // Archived-program months aren't in the featured calendar or the mirror, so
+        // only the server heatmap (completedWorkoutDays) carries them. Paging to that
+        // month must still show those days as completed.
+        val calendar = listOf(sched("2026-06-08", ScheduledStatus.COMPLETED))
+        val programs = listOf(program("p1", ProgramStatus.ACTIVE, "2026-06-01T00:00:00Z"))
+        every { repo.observePrograms() } returns flowOf(programs)
+        every { repo.observeProgram(any()) } answers {
+            flowOf(programs.firstOrNull { it.programId == firstArg<String>() })
+        }
+        every { sessionRepo.observeDrafts() } returns drafts
+        every { sessionRepo.observeParkedCompletions() } returns parked
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(calendar)
+        every { repo.observeAllCompleted(any(), any()) } returns flowOf(calendar)
+        every { settingsRepo.weeklyStreakTarget } returns flowOf(4)
+        coEvery { repo.completedWorkoutDays() } returns setOf(
+            LocalDate.parse("2026-05-05"),
+            LocalDate.parse("2026-05-07"),
+        )
+        val vm = WorkoutsLandingViewModel(repo, sessionRepo, settingsRepo).also { it.today = today }
+        advanceUntilIdle()
+
+        vm.prevMonth()
+        advanceUntilIdle()
+        assertEquals(YearMonth.of(2026, 5), vm.state.value.visibleMonth)
+        // The grid derives from monthDays + completedDates; May's completed cells
+        // come purely from the heatmap set.
+        val grid = complianceGrid(
+            vm.state.value.monthDays,
+            vm.state.value.today,
+            extraCompletedDates = vm.state.value.completedDates,
+        )
+        assertEquals(ComplianceCellKind.COMPLETED, grid[LocalDate.parse("2026-05-05")])
+        assertEquals(ComplianceCellKind.COMPLETED, grid[LocalDate.parse("2026-05-07")])
     }
 
     @Test
