@@ -278,14 +278,22 @@ class WorkoutsLandingViewModel @Inject constructor(
                 hasAnyProgram = true,
                 visibleMonth = data.month,
                 thisWeek = cal.filter { s -> s.date in weekStart..weekEnd }.sortedBy { s -> s.date },
-                // Include sessions that either belong to the month by their scheduled
-                // slot or were actually performed in it (a session done a day late can
-                // cross a month boundary), so the compliance grid can place it on the
-                // day it happened while still marking its planned slot as missed.
-                monthDays = cal.filter { s ->
-                    YearMonth.from(s.date) == data.month ||
-                        YearMonth.from(performedDate(s)) == data.month
-                },
+                // The compliance grid shows the user's training, not just the featured
+                // program's: a month before this program started still holds the
+                // previous program's completed sessions (parity with the web heatmap,
+                // which is cross-program), so union the featured calendar with the
+                // cross-program completed set the streak already reads — deduped on
+                // scheduledId (which embeds the date, e.g. "2026-08-14_d1") because the
+                // featured program's own completions appear in both, cal first so the
+                // featured row wins. A session belongs to the month by its scheduled
+                // slot or the day it was actually performed (a late completion can
+                // cross a month boundary).
+                monthDays = (cal + data.allCompleted)
+                    .distinctBy { s -> s.scheduledId }
+                    .filter { s ->
+                        YearMonth.from(s.date) == data.month ||
+                            YearMonth.from(performedDate(s)) == data.month
+                    },
                 pastSessions = cal.filter { s -> s.date <= today }.sortedByDescending { s -> s.date },
                 weekStreak = computeWeeklyStreak(streakSource, today, weeklyTarget),
                 completedThisWeek = completedThisWeek(streakSource, today),
