@@ -420,8 +420,20 @@ class NutritionTodayViewModel @Inject constructor(
     fun openAdjustReviewFor(dateStr: String, entryId: String) {
         val target = runCatching { LocalDate.parse(dateStr) }.getOrNull() ?: _state.value.date
         if (_state.value.date != target) load(target)
+        val iso = target.format(ISO_DATE)
         viewModelScope.launch {
-            val day = runCatching { repository.day(target.format(ISO_DATE)) }.getOrNull()
+            // The push is a definitive "the server now holds a PENDING_REVIEW
+            // proposal for this entry" signal, and the FCM message routinely beats
+            // the sync delta that carries the proposal into the mirror. The
+            // mirror-gated day() would then serve the stale pre-proposal row (no
+            // adjustment yet, or still ADJUSTING with a null proposal) and the
+            // review sheet would render "no longer available" — the change looks
+            // lost even though the backend has it. Force a network re-pull first
+            // (like pull-to-refresh) so the proposal is present before we open the
+            // sheet. commit/discard already hit the backend directly, so they were
+            // never affected — only this read.
+            runCatching { repository.refreshDay(iso) }
+            val day = runCatching { repository.day(iso) }.getOrNull()
             val entry = day?.meals?.flatMap { it.entries }?.firstOrNull { it.entryId == entryId }
             if (entry != null) {
                 _state.update {
