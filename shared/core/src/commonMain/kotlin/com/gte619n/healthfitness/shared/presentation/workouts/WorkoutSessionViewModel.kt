@@ -48,8 +48,12 @@ import kotlinx.datetime.Instant
 /** Which confirmation the logger is showing (finish summary, skip, discard). */
 enum class SessionPrompt { FINISH_SUMMARY, SKIP, DISCARD }
 
-/** What the running countdown is: a between-sets rest, or a pre-hold get-ready pre-roll. */
-enum class RestKind { REST, GET_READY }
+/**
+ * What the running countdown is: a between-sets [REST], a pre-hold [GET_READY]
+ * pre-roll, or a live isometric [HOLD] (#275) — a countdown of the hold's target
+ * seconds whose on-screen count-*up* is `totalSeconds - remaining`.
+ */
+enum class RestKind { REST, GET_READY, HOLD }
 
 /**
  * ONE countdown state — the single source the overlay, the beep, and the Live
@@ -251,6 +255,14 @@ class WorkoutSessionViewModel(
 
     /** Start the get-ready pre-roll before a timed hold (same source as rest). */
     fun startGetReady(seconds: Int) = restHolder.startGetReady(seconds)
+
+    /**
+     * Start a live isometric hold of [seconds] (#275), routed through the single
+     * self-ticking [RestTimerHolder] so its halfway / ten-second / finish cues fire
+     * from one wall-clock source — surviving app backgrounding mid-hold and never
+     * double-firing. The SwiftUI card renders the count-up + drives logging.
+     */
+    fun startHold(seconds: Int) = restHolder.startHold(seconds)
 
     /** Freeze the countdown (the get-ready Pause control). */
     fun pauseTimer() = restHolder.pause()

@@ -57,6 +57,19 @@ interface WorkoutProgramRepository {
      */
     fun observeAllCompleted(from: LocalDate, to: LocalDate): Flow<List<ScheduledWorkout>>
 
+    /**
+     * Days (cross-program, INCLUDING archived programs) the user completed a
+     * workout, over the server's ~6-month heatmap window, from the same
+     * `/api/me/workout-stats` read that backs the web consistency heatmap. This is
+     * the ONLY source that includes archived programs' sessions — the per-program
+     * calendar and [observeAllCompleted] both miss them — so it lets the compliance
+     * calendar show an earlier program's months (parity with web). Online/
+     * best-effort: returns empty on failure/kill-switch so the Room-backed grid
+     * still renders offline. Dates are already in the caller's zone (X-Timezone).
+     * (Android WorkoutProgramRepository.completedWorkoutDays, #279/#280.)
+     */
+    suspend fun completedWorkoutDays(): Set<LocalDate>
+
     /** Best-effort revalidation; never flips a screen back to Loading. */
     suspend fun refresh()
 
@@ -93,6 +106,20 @@ interface WorkoutProgramRepository {
      */
     suspend fun lastSetsFor(programId: String, exerciseId: String): Result<List<LoggedSet>>
 }
+
+/**
+ * Cross-program workout stats (the web Overview read-model, `GET /api/me/workout-stats`).
+ * Only [heatmap] is consumed — the completed-day list including archived programs
+ * — so the rest of the bundle (streak/series/PRs) is intentionally not modelled.
+ * The concrete Ktor repo maps [heatmap] to the `Set<LocalDate>` its
+ * [WorkoutProgramRepository.completedWorkoutDays] returns. (Android WorkoutStatsDto.)
+ */
+@Serializable
+data class WorkoutStatsDto(val heatmap: List<HeatmapDayDto> = emptyList())
+
+/** One completed-workout day in the consistency heatmap. */
+@Serializable
+data class HeatmapDayDto(val date: LocalDate, val sessionCount: Int = 0)
 
 // ---------------------------------------------------------------------------
 // Ad-hoc workout library (IMPL-ADHOC-01) — this agent (list)

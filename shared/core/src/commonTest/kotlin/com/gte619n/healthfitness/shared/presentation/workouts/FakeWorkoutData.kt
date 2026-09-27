@@ -154,6 +154,8 @@ class FakeWorkoutProgramRepository(
     var lastSetsFails: Boolean = false,
     var historyPage: WorkoutHistoryPage? = null,
     var runDayResult: Result<String> = Result.success("sched-today"),
+    /** Cross-program (incl. archived) heatmap days the server would return (#279/#280). */
+    var completedDays: Set<LocalDate> = emptySet(),
 ) : WorkoutProgramRepository {
 
     fun setCalendar(items: List<ScheduledWorkout>) { calendar.value = items }
@@ -166,6 +168,7 @@ class FakeWorkoutProgramRepository(
     override fun observeCalendar(programId: String, from: LocalDate, to: LocalDate): Flow<List<ScheduledWorkout>> = calendar
     override fun observeAllCompleted(from: LocalDate, to: LocalDate): Flow<List<ScheduledWorkout>> = allCompleted
 
+    override suspend fun completedWorkoutDays(): Set<LocalDate> = completedDays
     override suspend fun refresh() {}
     override suspend fun activate(programId: String): Result<Unit> = Result.success(Unit)
     override suspend fun updateDetails(programId: String, title: String, description: String?): Result<WorkoutProgram> =

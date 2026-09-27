@@ -6,9 +6,12 @@ import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.shared.domain.workouts.program.WorkoutProgram
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * IMPL-IOS-01 Phase 3 Wave D — KMP port of the Android
@@ -55,15 +58,33 @@ fun weekStartOf(date: LocalDate): LocalDate {
 }
 
 /**
- * Completed workouts logged so far in the week that contains [today] (Monday
- * through today inclusive). Drives the "N of TARGET this week" hint and feeds
- * [computeWeeklyStreak]'s current-week check.
+ * The calendar day a session was actually performed: [ScheduledWorkout.completedAt]
+ * resolved to [zone], falling back to the scheduled [ScheduledWorkout.date] when no
+ * completion timestamp is present (still-planned rows, or imported history). Streak
+ * and compliance count by this day, so a session done a day late (missed Thursday,
+ * done Friday) lands on the day it actually happened — not its planned slot.
+ * (Android `performedDate`; `java.time.ZoneId` → kotlinx-datetime [TimeZone].)
  */
-fun completedThisWeek(scheduled: List<ScheduledWorkout>, today: LocalDate): Int {
+fun performedDate(workout: ScheduledWorkout, zone: TimeZone = TimeZone.currentSystemDefault()): LocalDate =
+    workout.completedAt?.toLocalDateTime(zone)?.date ?: workout.date
+
+/**
+ * Completed workouts logged so far in the week that contains [today] (Monday
+ * through today inclusive), counted by the day each was actually performed. Drives
+ * the "N of TARGET this week" hint and feeds [computeWeeklyStreak]'s current-week
+ * check.
+ */
+fun completedThisWeek(
+    scheduled: List<ScheduledWorkout>,
+    today: LocalDate,
+    zone: TimeZone = TimeZone.currentSystemDefault(),
+): Int {
     val weekStart = weekStartOf(today)
     return scheduled
-        .filter { it.status == ScheduledStatus.COMPLETED && it.date >= weekStart && it.date <= today }
-        .distinctBy { it.date }
+        .filter { it.status == ScheduledStatus.COMPLETED }
+        .map { performedDate(it, zone) }
+        .filter { it >= weekStart && it <= today }
+        .distinct()
         .size
 }
 
@@ -82,12 +103,18 @@ fun computeWeeklyStreak(
     scheduled: List<ScheduledWorkout>,
     today: LocalDate,
     weeklyTarget: Int,
+    zone: TimeZone = TimeZone.currentSystemDefault(),
 ): Int {
     if (weeklyTarget < 1) return 0
+    // Completed workouts per Monday-start week, grouped by the day each was actually
+    // performed. One outcome per performed date (defensive against duplicate rows
+    // from re-materialization, and against two same-day sessions inflating a week).
     val completedByWeek: Map<LocalDate, Int> = scheduled
-        .filter { it.status == ScheduledStatus.COMPLETED && it.date <= today }
-        .distinctBy { it.date }
-        .groupingBy { weekStartOf(it.date) }
+        .filter { it.status == ScheduledStatus.COMPLETED }
+        .map { performedDate(it, zone) }
+        .filter { it <= today }
+        .distinct()
+        .groupingBy { weekStartOf(it) }
         .eachCount()
 
     val currentWeek = weekStartOf(today)
@@ -115,6 +142,34 @@ fun cellKind(date: LocalDate, status: ScheduledStatus?, today: LocalDate): Compl
         ScheduledStatus.PLANNED, ScheduledStatus.SKIPPED ->
             if (date < today) ComplianceCellKind.MISSED else ComplianceCellKind.UPCOMING
     }
+
+/**
+ * Classify every relevant day for the compliance grid, keyed by the day it maps
+ * to on the calendar. A completed session lands on the day it was actually
+ * performed ([performedDate]) — so catching up a missed day lights up the day you
+ * did it. Every scheduled slot that isn't itself a completed-performed day is a
+ * MISSED (past) or UPCOMING (today/future) cell, correctly leaving the planned day
+ * of a late-completed session showing as missed. Days absent from the map are rest
+ * days. [extraCompletedDates] are cross-program (incl. archived) heatmap days the
+ * featured [scheduled] list can't know about; they light up COMPLETED so a month
+ * owned by an earlier program still shows workouts (parity with the web heatmap).
+ */
+fun complianceGrid(
+    scheduled: List<ScheduledWorkout>,
+    today: LocalDate,
+    extraCompletedDates: Set<LocalDate> = emptySet(),
+    zone: TimeZone = TimeZone.currentSystemDefault(),
+): Map<LocalDate, ComplianceCellKind> {
+    val kinds = mutableMapOf<LocalDate, ComplianceCellKind>()
+    scheduled.filter { it.status == ScheduledStatus.COMPLETED }
+        .forEach { kinds[performedDate(it, zone)] = ComplianceCellKind.COMPLETED }
+    scheduled.forEach { s ->
+        if (kinds[s.date] == ComplianceCellKind.COMPLETED) return@forEach
+        kinds[s.date] = if (s.date < today) ComplianceCellKind.MISSED else ComplianceCellKind.UPCOMING
+    }
+    extraCompletedDates.forEach { kinds[it] = ComplianceCellKind.COMPLETED }
+    return kinds
+}
 
 /** The 7 days (Mon–Sun) of the week containing [date], for a compliance strip. */
 fun weekDays(date: LocalDate): List<LocalDate> {

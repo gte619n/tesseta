@@ -49,6 +49,16 @@ internal class RestTimerHolder(
 
     fun startGetReady(totalSeconds: Int) = start(totalSeconds, RestKind.GET_READY)
 
+    /**
+     * Start a live isometric hold of [totalSeconds] (#275): a wall-clock countdown
+     * of the hold's target seconds, its on-screen count-*up* being
+     * `totalSeconds - remaining`. Routed through this single self-ticking source so
+     * the halfway / ten-second / finish cues fire from ONE place off the wall-clock
+     * deadline — they keep sounding when the app is backgrounded mid-plank (where a
+     * UI-driven timer would freeze) and can never double-fire ("shadow timer").
+     */
+    fun startHold(totalSeconds: Int) = start(totalSeconds, RestKind.HOLD)
+
     private fun start(totalSeconds: Int, kind: RestKind) {
         if (totalSeconds <= 0) { clear(); return }
         endsAt = now().plusSeconds(totalSeconds.toLong())

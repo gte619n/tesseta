@@ -6,6 +6,7 @@ import com.gte619n.healthfitness.shared.data.WorkoutProgramRepository
 import com.gte619n.healthfitness.shared.data.WorkoutSessionRepository
 import com.gte619n.healthfitness.shared.data.WorkoutStreakSettingsRepository
 import com.gte619n.healthfitness.shared.domain.workouts.program.ProgramActivationInvalidException
+import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.shared.domain.workouts.program.WorkoutProgram
 import com.gte619n.healthfitness.shared.domain.workouts.session.ParkedCompletion
@@ -47,6 +48,13 @@ data class WorkoutsHubUiState(
     val program: WorkoutProgram? = null,
     val thisWeek: List<ScheduledWorkout> = emptyList(),
     val monthDays: List<ScheduledWorkout> = emptyList(),
+    /**
+     * Cross-program (incl. archived) completed-workout days from the server
+     * heatmap — the compliance grid marks these COMPLETED so months owned by an
+     * earlier program still show workouts (parity with the web heatmap). Empty
+     * offline; the grid falls back to [monthDays] alone.
+     */
+    val completedDates: Set<LocalDate> = emptySet(),
     val visibleMonth: YearMonth,
     val weekStreak: Int = 0,
     val completedThisWeek: Int = 0,
@@ -82,6 +90,13 @@ class WorkoutsHubViewModel(
     /** The featured program's id, for filtering the session-recovery banners. */
     private val resolvedProgramId = MutableStateFlow<String?>(null)
 
+    /**
+     * Cross-program (incl. archived) completed-workout days from the server
+     * heatmap. Fetched once per [refreshToken] (best-effort, online); empty when
+     * offline or on failure so the Room-backed grid still renders.
+     */
+    private val crossProgramCompleted = MutableStateFlow<Set<LocalDate>>(emptySet())
+
     private val _state = MutableStateFlow(
         WorkoutsHubUiState(visibleMonth = YearMonth.of(today), today = today),
     )
@@ -90,6 +105,14 @@ class WorkoutsHubViewModel(
     init {
         load()
         viewModelScope.launch { runCatching { settingsRepository.refresh() } }
+        // Pull the cross-program (incl. archived) completed-day heatmap once per
+        // refresh; the load folds it in so the grid + streak reflect earlier
+        // programs' months. Best-effort — empty offline leaves Room-only behaviour.
+        viewModelScope.launch {
+            refreshToken.collect {
+                crossProgramCompleted.value = runCatching { repository.completedWorkoutDays() }.getOrDefault(emptySet())
+            }
+        }
         viewModelScope.launch {
             combine(sessionRepository.observeDrafts(), resolvedProgramId) { drafts, pid ->
                 drafts.firstOrNull { it.programId == pid }
@@ -182,14 +205,16 @@ class WorkoutsHubViewModel(
             val loads: Flow<Result<LandingLoad>> =
                 combine(refreshToken, visibleMonth) { _, month -> month }
                     .flatMapLatest { navMonth -> loadForMonth(navMonth ?: YearMonth.of(today)) }
-            // Fold in the weekly target so the streak recomputes on a calendar
-            // change AND on a settings change (local save or sync push).
-            combine(loads, settingsRepository.weeklyStreakTarget) {
-                result: Result<LandingLoad>, target: Int -> result to target
+            // Fold in the weekly target and the cross-program heatmap days so the
+            // streak + grid recompute on a calendar change, a settings change
+            // (local save or sync push), or when the heatmap lands.
+            combine(loads, settingsRepository.weeklyStreakTarget, crossProgramCompleted) {
+                result: Result<LandingLoad>, target: Int, completed: Set<LocalDate> ->
+                Triple(result, target, completed)
             }
-                .collect { (result, target) ->
+                .collect { (result, target, completed) ->
                     result
-                        .onSuccess { applyLoad(it, target) }
+                        .onSuccess { applyLoad(it, target, completed) }
                         .onFailure { e ->
                             _state.update {
                                 it.copy(loading = false, error = e.message ?: "Failed to load your training")
@@ -237,7 +262,7 @@ class WorkoutsHubViewModel(
         }
     }
 
-    private fun applyLoad(data: LandingLoad, weeklyTarget: Int) {
+    private fun applyLoad(data: LandingLoad, weeklyTarget: Int, completedDates: Set<LocalDate>) {
         val program = data.program
         if (program == null) {
             _state.update {
@@ -247,6 +272,7 @@ class WorkoutsHubViewModel(
                     hasAnyProgram = data.hasAnyProgram,
                     thisWeek = emptyList(),
                     monthDays = emptyList(),
+                    completedDates = emptySet(),
                     pastSessions = emptyList(),
                     weekStreak = 0,
                     completedThisWeek = 0,
@@ -262,17 +288,31 @@ class WorkoutsHubViewModel(
         val cal = data.calendar
         // The streak + weekly-progress count from completed sessions across ALL
         // programs; the grid, this-week list and history stay scoped to the
-        // featured program. Fall back to the per-program calendar if the
-        // cross-program read came back empty (kill-switch degradation).
-        val streakSource = data.allCompleted.ifEmpty { cal }
+        // featured program. Add the cross-program (incl. archived) heatmap days so a
+        // still-live streak spanning an archived program isn't under-counted vs web —
+        // synthesized COMPLETED stubs dedup by performed date inside the streak maths.
+        // Fall back to the per-program calendar only if BOTH cross-program sources
+        // came back empty (kill-switch / offline degradation).
+        val heatmapRows = completedDates.map { d -> completedStub(d) }
+        val streakSource = (data.allCompleted + heatmapRows).ifEmpty { cal }
         _state.update {
             it.copy(
                 loading = false,
                 program = program,
                 hasAnyProgram = true,
                 visibleMonth = data.month,
+                completedDates = completedDates,
                 thisWeek = cal.filter { s -> s.date >= weekStart && s.date <= weekEnd }.sortedBy { s -> s.date },
-                monthDays = cal.filter { s -> s.date.inMonth(data.month) },
+                // Cross-program compliance grid: a month before this program started
+                // still holds the previous program's completed sessions (parity with the
+                // web heatmap). Union the featured calendar with the cross-program set,
+                // deduped on scheduledId (which embeds the date), cal first so the
+                // featured row wins. A session belongs to the month by its scheduled slot
+                // OR the day it was actually performed (a late completion can cross a
+                // month boundary).
+                monthDays = (cal + data.allCompleted)
+                    .distinctBy { s -> s.scheduledId }
+                    .filter { s -> s.date.inMonth(data.month) || performedDate(s).inMonth(data.month) },
                 pastSessions = cal.filter { s -> s.date <= today }.sortedByDescending { s -> s.date },
                 weekStreak = computeWeeklyStreak(streakSource, today, weeklyTarget),
                 completedThisWeek = completedThisWeek(streakSource, today),
@@ -282,6 +322,25 @@ class WorkoutsHubViewModel(
         }
     }
 }
+
+/**
+ * A minimal COMPLETED [ScheduledWorkout] standing in for a heatmap day (which
+ * carries only a date). Only date/status are read by the streak maths — the date
+ * is already the performed day (server-resolved in the user's zone), so a null
+ * completedAt makes [performedDate] fall back to it. (Android completedStub.)
+ */
+private fun completedStub(date: LocalDate): ScheduledWorkout = ScheduledWorkout(
+    scheduledId = "heatmap-$date",
+    date = date,
+    phaseId = "",
+    dayId = "",
+    dayLabel = "",
+    weekIndexInPhase = 0,
+    isDeload = false,
+    locationId = "",
+    locationName = null,
+    status = ScheduledStatus.COMPLETED,
+)
 
 /** The reactive [WorkoutsHubViewModel] load payload for one (month) window. */
 private data class LandingLoad(

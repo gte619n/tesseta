@@ -420,7 +420,18 @@ class NutritionTodayViewModel(
     /** Deep-link target of the FCM "adjust-review" notification tap. */
     fun openAdjustReviewFor(dateStr: String, entryId: String) {
         if (_state.value.date != dateStr) load(dateStr)
-        _state.update { it.copy(reviewingAdjustId = entryId, adjustReviewBannerId = null) }
+        // #281 (adjust-review stale mirror): the FCM push is a definitive "the server
+        // now holds a PENDING_REVIEW proposal for this entry" signal, and it routinely
+        // beats the sync delta that carries the proposal into the mirror. The
+        // mirror-gated day would then lack the proposal (still ADJUSTING / null
+        // proposal) and the review sheet renders "no longer available" — the change
+        // looks lost though the backend has it. Force a network re-pull first (like
+        // pull-to-refresh) so the proposal is present before we open the sheet.
+        // commit/discard already hit the backend directly, so only this read needed it.
+        viewModelScope.launch {
+            runCatching { repository.refreshDay(dateStr) }
+            _state.update { it.copy(reviewingAdjustId = entryId, adjustReviewBannerId = null) }
+        }
     }
 
     // ---- Remove leftovers -------------------------------------------------
