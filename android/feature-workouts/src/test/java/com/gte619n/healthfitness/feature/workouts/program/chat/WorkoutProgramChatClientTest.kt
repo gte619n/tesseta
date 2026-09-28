@@ -27,7 +27,9 @@ class WorkoutProgramChatClientTest {
     private val sse: SseClient = mockk()
 
     private fun clientEmitting(vararg events: SseEvent): WorkoutProgramChatClient {
-        every { sse.streamJsonPost(any(), any()) } returns flowOf(*events)
+        // The client passes an idle timeout (3rd arg) to guard against a stalled
+        // stream — match any so the mapping assertions stay the focus.
+        every { sse.streamJsonPost(any(), any(), any()) } returns flowOf(*events)
         return WorkoutProgramChatClient(sse, moshi)
     }
 

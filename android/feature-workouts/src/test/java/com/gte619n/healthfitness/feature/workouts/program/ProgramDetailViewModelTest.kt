@@ -188,6 +188,42 @@ class ProgramDetailViewModelTest {
     }
 
     @Test
+    fun `continue picker opens, succeeds, and closes the picker`() = runTest {
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
+        coEvery { repo.continueProgram("p1", "WEEK") } returns Result.success(emptyList())
+
+        val vm = vm()
+        advanceUntilIdle()
+        vm.openContinuePicker()
+        assertEquals(true, vm.state.value.showContinuePicker)
+
+        vm.continueProgram("WEEK")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.state.value.showContinuePicker)
+        assertEquals(false, vm.state.value.continuing)
+        assertNull(vm.state.value.error)
+    }
+
+    @Test
+    fun `continue failure surfaces an error and closes the picker`() = runTest {
+        every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
+        every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)
+        coEvery { repo.continueProgram("p1", "CYCLE") } returns Result.failure(RuntimeException("offline"))
+
+        val vm = vm()
+        advanceUntilIdle()
+        vm.openContinuePicker()
+        vm.continueProgram("CYCLE")
+        advanceUntilIdle()
+
+        assertEquals("offline", vm.state.value.error)
+        assertEquals(false, vm.state.value.showContinuePicker)
+        assertEquals(false, vm.state.value.continuing)
+    }
+
+    @Test
     fun `saveEdit patches details and closes the sheet on success`() = runTest {
         every { repo.observeProgram("p1") } returns flowOf(ProgramFixtures.deepProgram)
         every { repo.observeCalendar(any(), any(), any()) } returns flowOf(ProgramFixtures.thisWeek)

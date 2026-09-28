@@ -64,6 +64,19 @@ interface WorkoutProgramApi {
     suspend fun activate(@Path("id") id: String): List<ScheduledWorkoutDto>
 
     /**
+     * Continue a finished program in place: append more weeks after its last
+     * session (resuming from the user's last logged loads/reps) and flip it back
+     * to ACTIVE. [ContinueProgramRequest.scope] picks one more week or a full
+     * repeat of the periodization. Online-only, like [activate]. Returns the
+     * newly appended sessions.
+     */
+    @POST("api/me/workout-programs/{id}/continue")
+    suspend fun continueProgram(
+        @Path("id") id: String,
+        @Body body: ContinueProgramRequest,
+    ): List<ScheduledWorkoutDto>
+
+    /**
      * IMPL-STAB G4 — metadata-only program edit (title/description). Null fields
      * are left unchanged by the backend; phases/schedule are not touched here
      * (structural edits go through the conversational designer). Returns the

@@ -64,6 +64,15 @@ data class LastSetsRequest(
 )
 
 /**
+ * Body of "continue this program" (POST .../continue). [scope] is `"WEEK"` (one
+ * more week of the last phase) or `"CYCLE"` (repeat the whole periodization);
+ * the backend defaults an absent/unknown value to a week.
+ */
+data class ContinueProgramRequest(
+    val scope: String,
+)
+
+/**
  * Body of the in-workout swap / rep-set edit (POST .../prescription, #4).
  * Identifies one prescription slot by ([blockId], [orderIndex]); any change
  * field left null is untouched. [applyToProgram] pushes the edit to the program

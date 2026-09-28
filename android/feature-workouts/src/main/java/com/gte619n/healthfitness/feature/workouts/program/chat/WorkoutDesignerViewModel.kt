@@ -22,6 +22,7 @@ import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramRepository
 import com.gte619n.healthfitness.domain.workouts.trt.TrtContext
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -244,13 +245,24 @@ class WorkoutDesignerViewModel @Inject constructor(
         val programId = if (threadId == null) editProgramId else null
 
         viewModelScope.launch {
-            chatClient.stream(threadId, message, schedule, goalId, programId)
-                .catch { e ->
-                    finishStream(assistantId)
-                    _state.update { it.copy(error = e.message ?: "Chat failed") }
-                }
-                .collect { event -> handleEvent(assistantId, event) }
-            finishStream(assistantId)
+            try {
+                chatClient.stream(threadId, message, schedule, goalId, programId)
+                    // .catch only sees UPSTREAM failures (the stream itself). A
+                    // throw from handleEvent runs downstream of it, so the outer
+                    // try/finally is what guarantees the "thinking" state clears.
+                    .catch { e -> _state.update { it.copy(error = e.message ?: "Chat failed") } }
+                    .collect { event -> handleEvent(assistantId, event) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Chat failed") }
+            } finally {
+                // Always reachable — normal completion, an upstream error the
+                // .catch handled, a downstream throw in handleEvent, an idle-timeout
+                // read failure, or cancellation. Without this a stalled stream left
+                // streaming=true forever (the endless "thinking" animation).
+                finishStream(assistantId)
+            }
         }
     }
 

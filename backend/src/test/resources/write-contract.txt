@@ -80,6 +80,7 @@ KEY_GUARDED|POST /api/me/workout-programs
 KEY_GUARDED|POST /api/me/workout-programs/chat/{threadId}/commit
 DETERMINISTIC_ID|POST /api/me/nutrition
 DETERMINISTIC_ID|POST /api/me/workout-programs/{programId}/activate
+DETERMINISTIC_ID|POST /api/me/workout-programs/{programId}/continue
 DETERMINISTIC_ID|POST /api/me/workout-programs/{programId}/sessions
 
 # ---- POST: set-semantics on an identified resource ----

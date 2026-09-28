@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.ExercisePerformanceDigestService;
 import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
+import com.gte619n.healthfitness.core.workoutprogram.ContinuationScope;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance;
@@ -184,6 +185,35 @@ public class WorkoutProgramController {
         List<ScheduledWorkout> scheduled = schedule.activate(userId, programId);
         syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
         return ResponseEntity.ok(assembler.scheduled(userId, scheduled));
+    }
+
+    /**
+     * Continue a finished program in place: append more weeks after its last
+     * session and flip it back to ACTIVE. The appended sessions resume from the
+     * user's last logged weights/reps (not the author's starting template), so
+     * progression picks up exactly where it left off. {@code scope} selects one
+     * more week ({@code "WEEK"}) or a full repeat of the periodization
+     * ({@code "CYCLE"}); it defaults to a week.
+     */
+    @PostMapping("/{programId}/continue")
+    public ResponseEntity<?> continueProgram(
+        @PathVariable String programId,
+        @RequestBody(required = false) ContinueProgramRequest body
+    ) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        ContinuationScope scope = ContinuationScope.parse(body == null ? null : body.scope());
+        List<ScheduledWorkout> created;
+        try {
+            created = schedule.continueProgram(userId, programId, scope);
+        } catch (IllegalStateException e) {
+            // Program has no phases to lay out — nothing to continue.
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+        }
+        syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
+        return ResponseEntity.ok(assembler.scheduled(userId, created));
     }
 
     /**
