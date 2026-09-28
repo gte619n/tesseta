@@ -5,7 +5,9 @@ import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Service;
@@ -117,6 +119,179 @@ public class WorkoutScheduleService {
         );
         scheduled.save(session);
         return session;
+    }
+
+    /**
+     * Continue a finished (or still-active) program in place: append more dated
+     * sessions after its last one and flip it back to ACTIVE. Unlike
+     * {@link #activate}, which re-lays the author's starting template, every
+     * appended prescription resumes from the user's <em>last logged</em>
+     * weight/reps/rationale for that exercise — so a continued block picks up
+     * exactly where progression left off instead of resetting to week-one loads.
+     *
+     * <p>{@code scope == WEEK} appends one week of the last phase's microcycle;
+     * {@code scope == CYCLE} repeats the whole periodization once more (each
+     * phase's weeks, honoring its deload week). Appended weeks start on the
+     * Monday after the last scheduled session (never in the past), and existing
+     * sessions on a given date+day are left untouched (idempotent re-runs).
+     *
+     * @return the newly appended sessions
+     * @throws IllegalArgumentException when the program is unknown
+     * @throws IllegalStateException when the program has no phases to continue
+     */
+    public List<ScheduledWorkout> continueProgram(
+        String userId, String programId, ContinuationScope scope
+    ) {
+        WorkoutProgram program = programs.findById(userId, programId)
+            .orElseThrow(() -> new IllegalArgumentException("Program not found: " + programId));
+        List<ProgramPhase> phases = program.phases();
+        if (phases == null || phases.isEmpty()) {
+            throw new IllegalStateException("Program has no phases to continue: " + programId);
+        }
+
+        LocalDate today = LocalDate.now();
+        // Anchor off the last COMPLETED session, not the last scheduled one, so a
+        // replay is idempotent: the appended sessions carry deterministic
+        // "{date}_{dayId}" ids and are skipped below when they already exist, and
+        // anchoring off completed work means a blindly re-delivered request lands
+        // on the SAME dates rather than stacking another week past the first
+        // append (write-contract DETERMINISTIC_ID).
+        LocalDate lastCompleted = scheduled
+            .latestDateByStatus(userId, programId, ScheduledStatus.COMPLETED)
+            .orElse(today);
+        // Start the Monday after the last completed week, but never before this
+        // week — a program finished weeks ago should resume now, not back-fill.
+        LocalDate startMonday = lastCompleted
+            .with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .plusWeeks(1);
+        LocalDate thisMonday = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+        if (startMonday.isBefore(thisMonday)) {
+            startMonday = thisMonday;
+        }
+        // Mid-week continuation: if the block would start this week but we're past
+        // Monday, some day slots are already behind us — push it to next Monday so
+        // the whole continued week lands ahead and nothing is dated in the past.
+        if (startMonday.isEqual(thisMonday) && today.isAfter(thisMonday)) {
+            startMonday = thisMonday.plusWeeks(1);
+        }
+
+        Map<String, Prescription> resumeByExercise = latestCompletedPrescriptions(userId, programId);
+
+        // The (phase, isDeload) weeks to lay out, in order.
+        List<PhaseWeek> weeks = new ArrayList<>();
+        if (scope == ContinuationScope.CYCLE) {
+            for (ProgramPhase phase : phases) {
+                int count = Math.max(1, phase.weeks());
+                for (int week = 1; week <= count; week++) {
+                    boolean isDeload = phase.deloadWeekIndex() != null && phase.deloadWeekIndex() == week;
+                    weeks.add(new PhaseWeek(phase, week, isDeload));
+                }
+            }
+        } else {
+            // One more normal training week of the last phase.
+            ProgramPhase last = phases.get(phases.size() - 1);
+            weeks.add(new PhaseWeek(last, Math.max(1, last.weeks()) + 1, false));
+        }
+
+        List<ScheduledWorkout> sessions = new ArrayList<>();
+        LocalDate weekMonday = startMonday;
+        for (PhaseWeek pw : weeks) {
+            for (WorkoutDay day : pw.phase.days()) {
+                LocalDate date = weekMonday.plusDays(day.dayOfWeek().ordinal());
+                String scheduledId = date + "_" + day.dayId();
+                if (scheduled.findById(userId, programId, scheduledId).isPresent()) {
+                    continue; // never rewrite an existing session
+                }
+                WorkoutDay resumed = resumeDay(day, resumeByExercise);
+                WorkoutDay snapshot = pw.isDeload ? withDeloadSets(resumed) : resumed;
+                sessions.add(new ScheduledWorkout(
+                    userId, programId, scheduledId,
+                    date, pw.phase.phaseId(), day.dayId(), day.label(),
+                    pw.weekIndex, pw.isDeload, day.locationId(),
+                    ScheduledStatus.PLANNED, snapshot,
+                    null, null, null
+                ));
+            }
+            weekMonday = weekMonday.plusWeeks(1);
+        }
+        scheduled.saveAll(sessions);
+        // setStatus (not update) intentionally bypasses the sticky-COMPLETED
+        // guard so a finished program can resume training.
+        programService.setStatus(userId, programId, ProgramStatus.ACTIVE);
+        return sessions;
+    }
+
+    /** One week to lay out during a continuation: which phase, its 1-based index, deload flag. */
+    private record PhaseWeek(ProgramPhase phase, int weekIndex, boolean isDeload) {}
+
+    /**
+     * The most recent COMPLETED prescription per exercise across the program —
+     * the load/reps/rationale the engine had settled on by the final session.
+     * Used to seed a continuation so it resumes from real numbers, not the
+     * author's starting template.
+     */
+    private Map<String, Prescription> latestCompletedPrescriptions(String userId, String programId) {
+        Map<String, Prescription> latest = new HashMap<>();
+        // findByStatus returns newest scheduled-date first, so the first time we
+        // see an exercise is its most recent prescription.
+        for (ScheduledWorkout sw : scheduled.findByStatus(userId, programId, ScheduledStatus.COMPLETED)) {
+            WorkoutDay snapshot = sw.session();
+            if (snapshot == null || snapshot.blocks() == null) {
+                continue;
+            }
+            for (Block b : snapshot.blocks()) {
+                if (b.prescriptions() == null) {
+                    continue;
+                }
+                for (Prescription rx : b.prescriptions()) {
+                    if (rx.exerciseId() != null) {
+                        latest.putIfAbsent(rx.exerciseId(), rx);
+                    }
+                }
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * Rebuild a day's prescriptions so each one resumes from the user's last
+     * logged prescription for that exercise (weight, rep band, set count,
+     * load-basis, and the engine rationale), while keeping the template's
+     * structure (order, rest, tempo, intensity, deload modifier). Logged sets
+     * are deliberately dropped — the appended session is PLANNED, not performed.
+     * Exercises with no history keep their template prescription untouched.
+     */
+    private static WorkoutDay resumeDay(WorkoutDay day, Map<String, Prescription> resumeByExercise) {
+        if (day.blocks() == null || resumeByExercise.isEmpty()) {
+            return day;
+        }
+        List<Block> blocks = new ArrayList<>();
+        for (Block b : day.blocks()) {
+            if (b.prescriptions() == null) {
+                blocks.add(b);
+                continue;
+            }
+            List<Prescription> rxs = new ArrayList<>();
+            for (Prescription rx : b.prescriptions()) {
+                Prescription prev = resumeByExercise.get(rx.exerciseId());
+                if (prev == null) {
+                    rxs.add(rx);
+                    continue;
+                }
+                rxs.add(new Prescription(
+                    rx.exerciseId(), rx.orderIndex(),
+                    prev.sets() != null ? prev.sets() : rx.sets(),
+                    prev.repsMin() != null ? prev.repsMin() : rx.repsMin(),
+                    prev.repsMax() != null ? prev.repsMax() : rx.repsMax(),
+                    rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(),
+                    rx.notes(), rx.deloadModifier(),
+                    null, // PLANNED session — no logged sets carried forward
+                    prev.targetWeightLbs(), prev.loadBasis(), prev.rationale()));
+            }
+            blocks.add(new Block(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
+        }
+        return new WorkoutDay(day.dayId(), day.label(), day.dayOfWeek(), day.locationId(),
+            day.orderIndex(), blocks);
     }
 
     /** Working-set block types whose set counts a deload week reduces (mirrors the engine's D21 set). */

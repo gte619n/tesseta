@@ -97,6 +97,9 @@ fun ProgramDetailRoute(
         onOpenSession = onOpenSession,
         onRefineWithAi = onRefineWithAi,
         onActivate = viewModel::activate,
+        onOpenContinuePicker = viewModel::openContinuePicker,
+        onDismissContinuePicker = viewModel::dismissContinuePicker,
+        onContinue = viewModel::continueProgram,
         onRetry = viewModel::refresh,
         onRestoreParked = viewModel::restoreParked,
         onDiscardParked = viewModel::discardParked,
@@ -120,6 +123,9 @@ fun ProgramDetailScreen(
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRefineWithAi: (programId: String) -> Unit = {},
     onActivate: () -> Unit = {},
+    onOpenContinuePicker: () -> Unit = {},
+    onDismissContinuePicker: () -> Unit = {},
+    onContinue: (scope: String) -> Unit = {},
     onRetry: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit = {},
     onDiscardParked: (ParkedCompletion) -> Unit = {},
@@ -186,6 +192,7 @@ fun ProgramDetailScreen(
                 onOpenSession = onOpenSession,
                 onRefineWithAi = { onRefineWithAi(state.program.programId) },
                 onActivate = onActivate,
+                onContinue = onOpenContinuePicker,
                 onLogPastSession = onOpenPastSessions,
                 onRestoreParked = onRestoreParked,
                 onDiscardParked = onDiscardParked,
@@ -201,6 +208,14 @@ fun ProgramDetailScreen(
             error = state.error,
             onSave = onSaveEdit,
             onDismiss = onCancelEdit,
+        )
+    }
+
+    if (state.showContinuePicker) {
+        ContinueProgramDialog(
+            continuing = state.continuing,
+            onPick = onContinue,
+            onDismiss = onDismissContinuePicker,
         )
     }
 
@@ -327,6 +342,53 @@ private fun NutritionGuidanceCard(
     }
 }
 
+/**
+ * "Continue program" length picker: one more week of the last phase, or a full
+ * repeat of the periodization. Either way the appended weeks resume from the
+ * user's last logged loads/reps (D-decision: choose each time).
+ */
+@Composable
+private fun ContinueProgramDialog(
+    continuing: Boolean,
+    onPick: (scope: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { if (!continuing) onDismiss() },
+        title = {
+            Text("Continue this program?", style = Hf.type.headingMd, color = Hf.colors.textPrimary)
+        },
+        text = {
+            Text(
+                if (continuing) {
+                    "Adding your new sessions…"
+                } else {
+                    "Pick up right where you left off — the new weeks resume from your last " +
+                        "logged weights and reps, not the starting plan."
+                },
+                style = Hf.type.bodyMd,
+                color = Hf.colors.textSecondary,
+            )
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(enabled = !continuing, onClick = { onPick("WEEK") }) {
+                    Text("One more week", color = Hf.colors.accent)
+                }
+                TextButton(enabled = !continuing, onClick = { onPick("CYCLE") }) {
+                    Text("Full program", color = Hf.colors.accent)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !continuing, onClick = onDismiss) {
+                Text("Cancel", color = Hf.colors.textTertiary)
+            }
+        },
+        containerColor = Hf.colors.surface,
+    )
+}
+
 @Composable
 private fun ProgramBody(
     program: WorkoutProgram,
@@ -345,6 +407,7 @@ private fun ProgramBody(
     onOpenSession: (programId: String, scheduledId: String) -> Unit,
     onRefineWithAi: () -> Unit,
     onActivate: () -> Unit,
+    onContinue: () -> Unit,
     onLogPastSession: () -> Unit,
     onRestoreParked: (ParkedCompletion) -> Unit,
     onDiscardParked: (ParkedCompletion) -> Unit,
@@ -429,6 +492,12 @@ private fun ProgramBody(
                     // re-materialize (e.g. after an edit) to refill the schedule.
                     Spacer(Modifier.height(12.dp))
                     ActivateButton(label = "Re-materialize sessions", onClick = onActivate)
+                } else if (program.status == ProgramStatus.COMPLETED) {
+                    // A finished program can be extended in place: appended weeks
+                    // resume from the last logged loads/reps (picker chooses one
+                    // more week or a full repeat), and the program goes ACTIVE again.
+                    Spacer(Modifier.height(12.dp))
+                    ActivateButton(label = "Continue program", onClick = onContinue)
                 }
                 // IMPL-STAB G1: a 422 activation carries the actionable issue list
                 // — surface it inline instead of a generic failure.

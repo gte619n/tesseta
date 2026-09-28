@@ -327,6 +327,28 @@ class WorkoutProgramRepository @Inject internal constructor(
         }
 
     /**
+     * Continue a finished program in place ([scope] = "WEEK" or "CYCLE"): append
+     * more weeks after its last session — resuming from the user's last logged
+     * loads/reps, not the starting template — and flip it back to ACTIVE. Online
+     * only, like [activate]; refreshes the mirror so the detail/"this week" strip
+     * reflect the new sessions without waiting for a sync.
+     */
+    suspend fun continueProgram(programId: String, scope: String): Result<List<ScheduledWorkout>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val sessions = api.continueProgram(programId, ContinueProgramRequest(scope))
+                runCatching { refreshDeep(programId) }
+                runCatching {
+                    support.refreshInto(
+                        MirrorTables.WORKOUT_SCHEDULED,
+                        sessions.map { it.toRefreshRow(programId) },
+                    )
+                }
+                sessions.map { it.toDomain() }
+            }
+        }
+
+    /**
      * Materialize (or reuse) an ad-hoc session for one program day on today's
      * date and return its scheduledId, so any workout can be run "as today" even
      * after the program's scheduled window has elapsed or a day was missed.

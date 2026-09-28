@@ -59,7 +59,17 @@ class WorkoutProgramChatClient @Inject constructor(
             programId = if (threadId == null) programId else null,
         )
         val json = requestAdapter.toJson(body)
-        return sse.streamJsonPost("api/me/workout-programs/chat", json).map { dispatch(it) }
+        // The backend caps the whole turn at 180s (SSE_TIMEOUT_MS) and closes the
+        // emitter on timeout. Guard the one failure mode that outlives it — a
+        // half-open connection that never emits and never closes — with a
+        // client-side idle timeout above realistic first-token latency (model
+        // warm-up + tool calls) but below the server cap, so a stuck stream
+        // surfaces as an error instead of an endless "thinking" state.
+        return sse.streamJsonPost(
+            "api/me/workout-programs/chat",
+            json,
+            idleTimeoutSeconds = CHAT_IDLE_TIMEOUT_SECONDS,
+        ).map { dispatch(it) }
     }
 
     private fun dispatch(event: SseEvent): ChatStreamEvent = when (event.event) {
@@ -76,5 +86,10 @@ class WorkoutProgramChatClient @Inject constructor(
         // Unknown / heartbeat frames carry no chat meaning; surface as an empty
         // token (filtered to "" so it appends nothing).
         else -> ChatStreamEvent.Token("")
+    }
+
+    private companion object {
+        // Below the backend's 180s SSE cap; above worst-case first-token latency.
+        const val CHAT_IDLE_TIMEOUT_SECONDS = 120L
     }
 }

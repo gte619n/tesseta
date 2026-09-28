@@ -48,19 +48,38 @@ class SseClient @Inject constructor(
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
-    /** POST [path] (relative to the backend base URL) with [jsonBody]. */
-    fun streamJsonPost(path: String, jsonBody: String): Flow<SseEvent> {
+    /**
+     * POST [path] (relative to the backend base URL) with [jsonBody].
+     *
+     * [idleTimeoutSeconds] caps how long a read may block with NO bytes arriving
+     * (0 == no cap, the default, for callers whose server-side work is genuinely
+     * silent for long stretches). A positive value guards against a half-open
+     * connection where the backend never emits and never closes: the read then
+     * fails with a timeout, the flow surfaces it, and the caller can unstick its
+     * UI instead of waiting forever. SSE frames (incl. `:` heartbeats) reset the
+     * timer, so a busy stream never trips it.
+     */
+    fun streamJsonPost(
+        path: String,
+        jsonBody: String,
+        idleTimeoutSeconds: Long = 0,
+    ): Flow<SseEvent> {
         val url = baseUrl.ensureTrailingSlash() + path.trimStart('/')
         val request = Request.Builder()
             .url(url)
             .header("Accept", "text/event-stream")
             .post(jsonBody.toRequestBody(jsonMedia))
             .build()
-        return stream(request)
+        return stream(request, idleTimeoutSeconds)
     }
 
-    fun stream(request: Request): Flow<SseEvent> = flow {
-        val response = client.newCall(request).execute()
+    fun stream(request: Request, idleTimeoutSeconds: Long = 0): Flow<SseEvent> = flow {
+        val callClient = if (idleTimeoutSeconds > 0) {
+            client.newBuilder().readTimeout(idleTimeoutSeconds, TimeUnit.SECONDS).build()
+        } else {
+            client
+        }
+        val response = callClient.newCall(request).execute()
         try {
             if (!response.isSuccessful) {
                 throw IOException("HTTP ${response.code}: ${response.message}")

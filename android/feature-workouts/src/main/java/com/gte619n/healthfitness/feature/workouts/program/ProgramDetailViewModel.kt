@@ -46,6 +46,10 @@ data class ProgramDetailUiState(
     val activationIssues: List<String> = emptyList(),
     /** Whether the past-session picker sheet is open (G3). */
     val showPastSessions: Boolean = false,
+    /** Whether the "continue program" length picker (1 week / full cycle) is open. */
+    val showContinuePicker: Boolean = false,
+    /** In-flight continue call (extend the finished program). */
+    val continuing: Boolean = false,
     /** Whether the edit-details (title/description) sheet is open (G4). */
     val editing: Boolean = false,
     /** In-flight save of the edit sheet (G4). */
@@ -148,6 +152,38 @@ class ProgramDetailViewModel @Inject constructor(
     }
 
     fun dismissActivationIssues() = _state.update { it.copy(activationIssues = emptyList()) }
+
+    // --- Continue a finished program (extend in place) ---
+
+    fun openContinuePicker() = _state.update { it.copy(showContinuePicker = true, error = null) }
+
+    fun dismissContinuePicker() = _state.update { it.copy(showContinuePicker = false) }
+
+    /**
+     * Continue this program ([scope] = "WEEK" or "CYCLE"): the backend appends
+     * more weeks — resuming from the last logged loads/reps — and flips it back
+     * to ACTIVE. The reactive [load] stream re-emits the new status + schedule
+     * from the mirror (the repository refreshes it), so we just close the picker.
+     */
+    fun continueProgram(scope: String) {
+        if (_state.value.continuing) return
+        viewModelScope.launch {
+            _state.update { it.copy(continuing = true, error = null) }
+            repository.continueProgram(programId, scope)
+                .onSuccess {
+                    _state.update { it.copy(continuing = false, showContinuePicker = false) }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(
+                            continuing = false,
+                            showContinuePicker = false,
+                            error = e.message ?: "Couldn't continue the program",
+                        )
+                    }
+                }
+        }
+    }
 
     // --- IMPL-STAB G4: edit title/description ---
 

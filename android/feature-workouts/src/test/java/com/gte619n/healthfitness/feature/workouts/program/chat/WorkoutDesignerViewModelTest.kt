@@ -24,6 +24,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -228,6 +229,42 @@ class WorkoutDesignerViewModelTest {
         assertNull(vm.state.value.committedProgramIds[messageId])
         assertEquals(listOf("Bench load exceeds estimated 1RM."), vm.issuesFor(messageId))
         assertNotNull(vm.state.value.error)
+    }
+
+    @Test
+    fun `a stream failure clears the thinking state and surfaces an error`() = runTest {
+        // The hang the fix targets: the stream errors (e.g. an idle-timeout read on
+        // a stalled backend) instead of finishing with a done event. The "thinking"
+        // state must still clear so the composer isn't stuck forever.
+        every { chatClient.stream(any(), any(), any(), any()) } returns flow {
+            emit(ChatStreamEvent.Token("thinking"))
+            throw java.io.IOException("timeout")
+        }
+
+        val vm = newViewModel()
+        advanceUntilIdle()
+        vm.toggleTrainingDay(DayOfWeek.MON)
+        advanceUntilIdle()
+        vm.send("design it")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.state.value.streaming)
+        assertNotNull(vm.state.value.error)
+    }
+
+    @Test
+    fun `a stream that ends without a done event still clears the thinking state`() = runTest {
+        every { chatClient.stream(any(), any(), any(), any()) } returns
+            flowOf(ChatStreamEvent.Token("partial"))
+
+        val vm = newViewModel()
+        advanceUntilIdle()
+        vm.toggleTrainingDay(DayOfWeek.MON)
+        advanceUntilIdle()
+        vm.send("design it")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.state.value.streaming)
     }
 
     private fun fakeLocation(id: String, name: String) = Location(
