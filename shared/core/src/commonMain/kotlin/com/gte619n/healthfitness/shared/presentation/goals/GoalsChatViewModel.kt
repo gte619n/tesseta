@@ -11,6 +11,7 @@ import com.gte619n.healthfitness.shared.data.SseClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -119,15 +120,23 @@ class GoalsChatViewModel(
         }
 
         viewModelScope.launch {
-            sseClient.stream(GoalChatScope.BASE_PATH, _state.value.threadId, message)
-                .catch { e ->
-                    finishStream(assistantId)
-                    _state.update { it.copy(error = e.message ?: "Chat failed") }
-                }
-                .collect { event -> handleEvent(assistantId, event) }
-            // Flow completed without a terminal Done (e.g. server closed the
-            // stream): make sure the streaming flag clears.
-            finishStream(assistantId)
+            try {
+                sseClient.stream(GoalChatScope.BASE_PATH, _state.value.threadId, message)
+                    // .catch only sees UPSTREAM failures; a throw from handleEvent runs
+                    // downstream of it, so the outer try/finally is what guarantees the
+                    // streaming flag clears (same fix as the workout designer, #282).
+                    .catch { e -> _state.update { it.copy(error = e.message ?: "Chat failed") } }
+                    .collect { event -> handleEvent(assistantId, event) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Chat failed") }
+            } finally {
+                // Always reachable — normal completion, an upstream error, a downstream
+                // handleEvent throw, an idle-timeout read failure, or cancellation —
+                // so a stalled stream never leaves the typing indicator on forever.
+                finishStream(assistantId)
+            }
         }
     }
 

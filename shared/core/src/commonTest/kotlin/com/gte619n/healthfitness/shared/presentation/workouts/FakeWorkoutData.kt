@@ -171,6 +171,9 @@ class FakeWorkoutProgramRepository(
     override suspend fun completedWorkoutDays(): Set<LocalDate> = completedDays
     override suspend fun refresh() {}
     override suspend fun activate(programId: String): Result<Unit> = Result.success(Unit)
+    /** Cross-program continue (#282); tests override via [continueResult]. */
+    var continueResult: Result<List<ScheduledWorkout>> = Result.success(emptyList())
+    override suspend fun continueProgram(programId: String, scope: String): Result<List<ScheduledWorkout>> = continueResult
     override suspend fun updateDetails(programId: String, title: String, description: String?): Result<WorkoutProgram> =
         Result.success(sampleProgram(programId = programId, title = title))
     override suspend fun nutritionGuidance(programId: String): Result<NutritionGuidance?> = Result.success(null)

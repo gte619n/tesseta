@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.shared.data
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.headers
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -38,6 +39,16 @@ class KtorSseClient(
     private val http: HttpClient,
     private val baseUrl: String,
     private val json: Json = Json { ignoreUnknownKeys = true },
+    /**
+     * Caps how long a read may block with NO bytes arriving (Ktor's
+     * `socketTimeoutMillis`, the equivalent of the Android OkHttp reader's
+     * `readTimeout`, #282). Guards a half-open connection where the backend never
+     * emits and never closes — the read fails, the flow surfaces it, and the VM's
+     * try/finally clears the "thinking" state instead of hanging forever. SSE
+     * frames (incl. `:` heartbeats) reset the timer, so a busy stream never trips
+     * it. Requires the client's `HttpTimeout` plugin to be installed (app DI).
+     */
+    private val idleTimeoutSeconds: Long = 120,
 ) : SseClient {
 
     override fun stream(basePath: String, threadId: String?, message: String): Flow<ChatStreamEvent> = flow {
@@ -45,6 +56,9 @@ class KtorSseClient(
             contentType(ContentType.Application.Json)
             headers { append(HttpHeaders.Accept, "text/event-stream") }
             setBody(ChatSendBody(message = message, threadId = threadId))
+            if (idleTimeoutSeconds > 0) {
+                timeout { socketTimeoutMillis = idleTimeoutSeconds * 1000 }
+            }
         }
         val channel = response.bodyAsChannel()
 

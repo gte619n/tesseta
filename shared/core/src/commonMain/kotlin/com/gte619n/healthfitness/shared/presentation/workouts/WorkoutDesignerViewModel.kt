@@ -16,6 +16,7 @@ import com.gte619n.healthfitness.shared.domain.common.DayOfWeek
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -204,13 +205,24 @@ class WorkoutDesignerViewModel(
         }
 
         viewModelScope.launch {
-            sseClient.stream(WorkoutDesignerScope.BASE_PATH, threadId, wireMessage)
-                .catch { e ->
-                    finishStream(assistantId)
-                    _state.update { it.copy(error = e.message ?: "Chat failed") }
-                }
-                .collect { event -> handleEvent(assistantId, event) }
-            finishStream(assistantId)
+            try {
+                sseClient.stream(WorkoutDesignerScope.BASE_PATH, threadId, wireMessage)
+                    // .catch only sees UPSTREAM failures (the stream itself). A throw
+                    // from handleEvent runs downstream of it, so the outer try/finally
+                    // is what guarantees the "thinking" state clears (#282).
+                    .catch { e -> _state.update { it.copy(error = e.message ?: "Chat failed") } }
+                    .collect { event -> handleEvent(assistantId, event) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = e.message ?: "Chat failed") }
+            } finally {
+                // Always reachable — normal completion, an upstream error the .catch
+                // handled, a downstream throw in handleEvent, an idle-timeout read
+                // failure, or cancellation. Without this a stalled stream left
+                // streaming=true forever (the endless "thinking" animation).
+                finishStream(assistantId)
+            }
         }
     }
 

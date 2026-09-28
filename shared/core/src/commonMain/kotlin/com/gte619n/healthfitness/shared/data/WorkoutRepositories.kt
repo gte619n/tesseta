@@ -76,6 +76,17 @@ interface WorkoutProgramRepository {
     /** Activate (materialize sessions + mark ACTIVE). 422 → ProgramActivationInvalidException. */
     suspend fun activate(programId: String): Result<Unit>
 
+    /**
+     * Continue a finished program in place ([scope] = "WEEK" or "CYCLE"): the
+     * backend appends more weeks after its last session — resuming from the
+     * user's last logged loads/reps, not the starting template — and flips it
+     * back to ACTIVE. Online-only, like [activate]; the concrete impl refreshes
+     * the mirror so the detail / "this week" strip reflect the new sessions
+     * without waiting for a sync. Returns the newly appended sessions.
+     * (Android WorkoutProgramRepository.continueProgram, #282.)
+     */
+    suspend fun continueProgram(programId: String, scope: String): Result<List<ScheduledWorkout>>
+
     /** PATCH title/description (designer agent may extend); returns the updated program. */
     suspend fun updateDetails(programId: String, title: String, description: String?): Result<WorkoutProgram>
 
