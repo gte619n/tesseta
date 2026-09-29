@@ -239,6 +239,58 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
+    fun `runDayToday resumes last completed load and rationale but keeps template volume`() = runBlocking {
+        // Fully cached template: squat 3 sets, no concrete target weight.
+        coEvery { programDao.getById("p1") } returns entity("p1", deepAdapter.toJson(assembledDeep()))
+        coEvery { scheduledDao.getById(any()) } returns null
+        // A prior COMPLETED session for the same exercise: 185 lb with an engine
+        // rationale, compressed to 2×8 (a deload week).
+        val completed = ScheduledWorkoutDto(
+            scheduledId = "2026-04-20_d1",
+            date = java.time.LocalDate.parse("2026-04-20"),
+            phaseId = "ph1", dayId = "d1", status = "COMPLETED",
+            session = WorkoutDayDto(
+                dayId = "d1", dayOfWeek = DayOfWeek.MON,
+                blocks = listOf(
+                    BlockDto(
+                        blockId = "b1", type = "MAIN",
+                        prescriptions = listOf(
+                            PrescriptionDto(
+                                exerciseId = "ex1", sets = 2, repsMin = 8, repsMax = 8,
+                                targetWeightLbs = 185.0, loadBasis = "double progression",
+                                rationale = PrescriptionRationaleDto(direction = "UP"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        coEvery { scheduledDao.listActive() } returns listOf(
+            WorkoutScheduledEntity(
+                "p1/2026-04-20_d1", scheduledAdapter.toJson(completed),
+                now.toEpochMilli(), "COMPLETED", false, "SYNCED",
+            ),
+        )
+        val rows = slot<List<MirrorRepositorySupport.RefreshRow>>()
+        coEvery { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, capture(rows)) } returns Unit
+
+        repo.runDayToday("p1", "ph1", "d1").getOrThrow()
+
+        val minted = scheduledAdapter.fromJson(rows.captured.single().payloadJson)!!
+        val rx = minted.session!!.blocks.single().prescriptions.single()
+        // Load + basis + rationale resume from the completed session (so the redo
+        // shows real weights, not the author template / the 95 lb dumbbell seed,
+        // and the coach leads with the engine rep target instead of a stale carry)...
+        assertEquals(185.0, rx.targetWeightLbs)
+        assertEquals("double progression", rx.loadBasis)
+        assertEquals("UP", rx.rationale?.direction)
+        // ...but the set count stays the template's 3, not the deload's compressed 2,
+        // and the redo is never flagged deload.
+        assertEquals(3, rx.sets)
+        assertEquals(false, minted.isDeload)
+    }
+
+    @Test
     fun `runDayToday reuses an already-mirrored session for the same day`() = runBlocking {
         val today = java.time.LocalDate.now()
         val existing = ScheduledWorkoutDto(
