@@ -99,8 +99,10 @@ fun BlockSection(
 /**
  * A single prescription row: a small START-frame demo thumbnail, the exercise
  * name, a compact "3 × 8–10 @ RPE 8 · rest 90s" prescription line, the logged
- * sets (weights) when the session was performed, optional notes, and a deload
- * chip when a modifier is present. Tapping opens the exercise detail sheet.
+ * sets (weights) when the session was performed, and optional notes. Tapping
+ * opens the exercise detail sheet. (Deload is a whole-session/week state, shown
+ * on the session header and week strip — not per prescription, since the
+ * deload modifier is config the author stamps on every exercise.)
  */
 @Composable
 fun PrescriptionRow(
@@ -160,17 +162,15 @@ fun PrescriptionRow(
                 )
             }
         }
-        if (prescription.deloadModifier != null) {
-            DeloadBadge()
-        }
     }
 }
 
 /**
  * A tile rendering of a single prescription, for the tablet workout-detail grid
  * (≈3 per row). Shows a wide demo frame, the exercise name, the prescription
- * line, logged weights when present, and a deload chip. Tapping opens the
- * exercise detail sheet.
+ * line, and logged weights when present. Tapping opens the exercise detail
+ * sheet. (Deload is a whole-session/week state shown elsewhere, not per
+ * prescription — see PrescriptionRow.)
  */
 @Composable
 fun ExerciseTile(
@@ -231,10 +231,6 @@ fun ExerciseTile(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-        if (prescription.deloadModifier != null) {
-            Spacer(Modifier.height(6.dp))
-            DeloadBadge()
         }
     }
 }

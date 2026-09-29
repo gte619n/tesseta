@@ -110,11 +110,21 @@ public class WorkoutScheduleService {
         if (existing.isPresent()) {
             return existing.get();
         }
+        // Resume each exercise's last progressed LOAD (weight, load-basis, engine
+        // rationale) so a re-run picks up where training left off instead of
+        // resetting to the author's week-one template. Rep/set targets stay the
+        // template's — a redo outside a periodized deload must show the author's
+        // normal volume, not whatever a prior deload week compressed reps to (see
+        // resumeDayLoads). Carrying the rationale is also what keeps the coach's
+        // rep-target lead intact — without it the logger falls back to the stale
+        // last-session rep carry (the "announces 15, snaps to 8" bug).
+        Map<String, Prescription> resumeByExercise = latestCompletedPrescriptions(userId, programId);
+        WorkoutDay resumed = resumeDayLoads(day, resumeByExercise);
         ScheduledWorkout session = new ScheduledWorkout(
             userId, programId, scheduledId,
             date, phaseId, dayId, day.label(),
             1, false, day.locationId(),
-            ScheduledStatus.PLANNED, day,
+            ScheduledStatus.PLANNED, resumed,
             null, null, null
         );
         scheduled.save(session);
@@ -287,6 +297,51 @@ public class WorkoutScheduleService {
                     rx.notes(), rx.deloadModifier(),
                     null, // PLANNED session — no logged sets carried forward
                     prev.targetWeightLbs(), prev.loadBasis(), prev.rationale()));
+            }
+            blocks.add(new Block(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
+        }
+        return new WorkoutDay(day.dayId(), day.label(), day.dayOfWeek(), day.locationId(),
+            day.orderIndex(), blocks);
+    }
+
+    /**
+     * Rebuild a day's prescriptions for an ad-hoc re-run ({@link #materializeOne})
+     * so each carries the user's last progressed LOAD (weight, load-basis, engine
+     * rationale) while keeping the template's rep band, set count, and structure.
+     *
+     * <p>Unlike {@link #resumeDay} (used by {@link #continueProgram}, which resumes
+     * the whole last-completed prescription including its reps/sets), a redo run
+     * outside a periodized week must show the author's NORMAL volume — not whatever
+     * a prior deload week compressed the reps/sets to. So only the load travels;
+     * the rep/set targets stay the template's. An exercise with no completed
+     * history — or whose last completed prescription carried no target (a
+     * bodyweight/timed movement) — keeps its template prescription untouched, so
+     * the seed-weight fallback in the response assembler still applies.
+     */
+    private static WorkoutDay resumeDayLoads(WorkoutDay day, Map<String, Prescription> resumeByExercise) {
+        if (day.blocks() == null || resumeByExercise.isEmpty()) {
+            return day;
+        }
+        List<Block> blocks = new ArrayList<>();
+        for (Block b : day.blocks()) {
+            if (b.prescriptions() == null) {
+                blocks.add(b);
+                continue;
+            }
+            List<Prescription> rxs = new ArrayList<>();
+            for (Prescription rx : b.prescriptions()) {
+                Prescription prev = resumeByExercise.get(rx.exerciseId());
+                if (prev == null || prev.targetWeightLbs() == null) {
+                    rxs.add(rx);
+                    continue;
+                }
+                rxs.add(new Prescription(
+                    rx.exerciseId(), rx.orderIndex(),
+                    rx.sets(), rx.repsMin(), rx.repsMax(),   // template volume — normal, not a deload's
+                    rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(),
+                    rx.notes(), rx.deloadModifier(),
+                    null, // PLANNED session — no logged sets carried forward
+                    prev.targetWeightLbs(), prev.loadBasis(), prev.rationale())); // resumed load + rationale
             }
             blocks.add(new Block(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
         }

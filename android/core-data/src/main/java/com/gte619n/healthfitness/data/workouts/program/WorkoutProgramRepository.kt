@@ -419,7 +419,14 @@ class WorkoutProgramRepository @Inject internal constructor(
                     locationId = day.locationId,
                     locationName = day.locationName,
                     status = ScheduledStatus.PLANNED.name,
-                    session = day,
+                    // Resume each exercise's last progressed load (weight/basis/
+                    // rationale) from the mirrored completed sessions, keeping the
+                    // template's rep/set targets — the offline-mint mirror of the
+                    // backend's materializeOne/resumeDayLoads. Without this a redo
+                    // shows the author's week-one weights (and the seed's 95 lb
+                    // dumbbell), and — with no rationale — the logger falls back to
+                    // the stale last-session rep carry ("announces 15, snaps to 8").
+                    session = resumeDayLoads(programId, day),
                 )
                 // Mirrored clean+SYNCED, exactly like the server-returned row the
                 // online path used to store: the eventual completion upload owns
@@ -552,6 +559,60 @@ class WorkoutProgramRepository @Inject internal constructor(
 
     private fun decodeScheduled(json: String): ScheduledWorkoutDto? =
         runCatching { scheduledAdapter.fromJson(json) }.getOrNull()
+
+    /**
+     * Rebuild a template [day] for an offline redo so each prescription carries the
+     * user's last progressed LOAD (weight, load-basis, engine rationale) drawn from
+     * this program's mirrored COMPLETED sessions — while keeping the template's rep
+     * band and set count. The client-side mirror of the backend's
+     * [com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService] resumeDayLoads:
+     * a redo run outside a periodized deload must show normal volume with real
+     * weights, not the author's week-one template (or the seed's 95 lb dumbbell).
+     *
+     * Only the load travels: an exercise with no completed history — or whose last
+     * completed prescription carried no target (bodyweight/timed) — keeps its
+     * template prescription untouched.
+     */
+    private suspend fun resumeDayLoads(programId: String, day: WorkoutDayDto): WorkoutDayDto {
+        val prefix = "$programId/"
+        // Newest completed prescription per exercise that carried a real target.
+        val completed = scheduledDao.listActive()
+            .filter { it.id.startsWith(prefix) }
+            .mapNotNull { decodeScheduled(it.payloadJson) }
+            .filter { it.status == ScheduledStatus.COMPLETED.name }
+            .sortedByDescending { it.date }
+        if (completed.isEmpty()) return day
+        val resumeByExercise = HashMap<String, PrescriptionDto>()
+        for (sw in completed) {
+            val session = sw.session ?: continue
+            for (block in session.blocks) {
+                for (rx in block.prescriptions) {
+                    if (rx.targetWeightLbs != null && !resumeByExercise.containsKey(rx.exerciseId)) {
+                        resumeByExercise[rx.exerciseId] = rx
+                    }
+                }
+            }
+        }
+        if (resumeByExercise.isEmpty()) return day
+        return day.copy(
+            blocks = day.blocks.map { block ->
+                block.copy(
+                    prescriptions = block.prescriptions.map { rx ->
+                        val prev = resumeByExercise[rx.exerciseId]
+                        if (prev == null) {
+                            rx
+                        } else {
+                            rx.copy(
+                                targetWeightLbs = prev.targetWeightLbs,
+                                loadBasis = prev.loadBasis,
+                                rationale = prev.rationale,
+                            )
+                        }
+                    },
+                )
+            },
+        )
+    }
 
     private fun WorkoutProgramDto.toRefreshRow() = MirrorRepositorySupport.RefreshRow(
         id = programId,

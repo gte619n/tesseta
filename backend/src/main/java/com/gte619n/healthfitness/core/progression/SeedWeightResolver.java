@@ -42,7 +42,24 @@ public final class SeedWeightResolver {
         if (ex.mechanic() == Mechanic.ISOLATION) {
             base = Math.min(base, 40.0);
         }
+        // Per-hand (dumbbell) movements are LOGGED per hand, so the seed — the
+        // number the athlete enters — must be a per-hand load, not the two-hand /
+        // barbell figure baseForPattern returns. Without this a first-time dumbbell
+        // hinge seeds a 95 lb "deadlift" that reads as absurd. Name-based, mirroring
+        // LoadConventionResolver's PER_HAND signal (this util has no equipment access).
+        if (isPerHand(n)) {
+            base = base / 2.0;
+        }
         return Math.max(FLOOR_LBS, base);
+    }
+
+    /**
+     * Whether the movement is logged per hand (a bilateral dumbbell lift), detected
+     * by name — the same fallback signal {@code LoadConventionResolver.derive} uses
+     * when the equipment binding is sparse.
+     */
+    private static boolean isPerHand(String nameLower) {
+        return nameLower.contains("dumbbell") || nameLower.contains("db ");
     }
 
     private static double baseForPattern(Exercise ex) {

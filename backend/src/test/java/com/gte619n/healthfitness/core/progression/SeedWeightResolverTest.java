@@ -35,6 +35,20 @@ class SeedWeightResolverTest {
     }
 
     @Test
+    void dumbbellHingeSeedsPerHandNotBarbellScale() {
+        // The barbell figure baseForPattern returns for a HINGE is a two-hand load.
+        double barbell = SeedWeightResolver.seedWeightLbs(
+            ex("Barbell Deadlift", MovementPattern.HINGE, Mechanic.COMPOUND));
+        double dumbbell = SeedWeightResolver.seedWeightLbs(
+            ex("Dumbbell Deadlift", MovementPattern.HINGE, Mechanic.COMPOUND));
+        // The dumbbell variant is logged per hand, so its seed must be lighter —
+        // roughly half — rather than the absurd 95 lb "deadlift" the old table gave.
+        assertThat(dumbbell).isLessThan(barbell);
+        assertThat(dumbbell).isEqualTo(barbell / 2.0);
+        assertThat(dumbbell).isGreaterThanOrEqualTo(SeedWeightResolver.FLOOR_LBS);
+    }
+
+    @Test
     void neverBelowFloor() {
         double core = SeedWeightResolver.seedWeightLbs(
             ex("Weighted Crunch", MovementPattern.CORE, Mechanic.ISOLATION));

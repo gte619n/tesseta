@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.gte619n.healthfitness.core.exercise.BlockType;
 import com.gte619n.healthfitness.core.location.DayOfWeek;
+import com.gte619n.healthfitness.core.progression.Confidence;
+import com.gte619n.healthfitness.core.progression.Direction;
+import com.gte619n.healthfitness.core.progression.PrescriptionRationale;
+import com.gte619n.healthfitness.core.progression.ProgressionPath;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -200,6 +204,65 @@ class WorkoutScheduleServiceTest {
 
         ScheduledWorkout reused = scheduleService.materializeOne("u1", pid, phaseId, dayId, today);
         assertEquals(ScheduledStatus.COMPLETED, reused.status());
+    }
+
+    @Test
+    void materializeOneResumesLastCompletedLoadButKeepsTemplateVolume() {
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        // Author template: dumbbell deadlift 4×12–15, no concrete load (null target).
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(
+                new Prescription("dbdl", 0, 4, 12, 15, null, null, 120, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Accumulation", null, 0, null,
+            4, 4, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(6), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = tday.dayId();
+
+        // The last performed session was the DELOAD week: compressed to 2×8–9 at
+        // 65 lb, carrying an engine rationale (direction UP).
+        PrescriptionRationale rationale = new PrescriptionRationale(
+            ProgressionPath.WARMUP, Direction.UP, 5.0, null, null, Confidence.HIGH,
+            List.of("last: 60x12", "hit 12 → +5 lb"));
+        Prescription doneRx = new Prescription("dbdl", 0, 2, 8, 9, null, null, 120, null, null, null,
+            List.of(new LoggedSet(65.0, 8, 1.0, null, java.time.Instant.now())),
+            65.0, "double progression", rationale);
+        WorkoutDay doneSnapshot = new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(),
+            tday.locationId(), tday.orderIndex(),
+            List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(doneRx))));
+        LocalDate doneDate = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .minusWeeks(1);
+        scheduled.save(new ScheduledWorkout("u1", pid, doneDate + "_" + dayId, doneDate,
+            phaseId, dayId, "Lower", 4, true, "home",
+            ScheduledStatus.COMPLETED, doneSnapshot, java.time.Instant.now(), 3600, null));
+
+        // Redo the day "as today".
+        ScheduledWorkout s = scheduleService.materializeOne("u1", pid, phaseId, dayId, LocalDate.now());
+        Prescription rx = s.session().blocks().get(0).prescriptions().get(0);
+
+        // Load + basis + rationale resume from the last completed session — NOT the
+        // author's null template target (which would otherwise seed a bogus load).
+        assertEquals(65.0, rx.targetWeightLbs());
+        assertEquals("double progression", rx.loadBasis());
+        assertTrue(rx.rationale() != null && rx.rationale().direction() == Direction.UP,
+            "the engine rationale rides along so the coach leads with the rep target");
+        // ...but rep band + set count stay the TEMPLATE's normal volume, not the
+        // deload week's compressed 2×8–9, so a redo never masquerades as a deload.
+        assertEquals(4, rx.sets());
+        assertEquals(12, rx.repsMin());
+        assertEquals(15, rx.repsMax());
+        assertTrue(!s.isDeload(), "the redo session itself is never flagged deload");
+        // The PLANNED redo carries no logged sets forward.
+        assertTrue(rx.loggedSets() == null || rx.loggedSets().isEmpty());
     }
 
     @Test
