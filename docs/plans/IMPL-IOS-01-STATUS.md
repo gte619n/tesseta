@@ -49,12 +49,18 @@ Sync history on this branch: foundation → Phase 3 (8 verticals) → Phase 4
 
 ## What's NOT done (and why)
 
-1. **Phase 0D — toolchain migration → XCFramework.** The shared module is
-   authored against Kotlin 2.2.x and compiles for JVM, but producing the
-   **iOS XCFramework** (Kotlin/Native `iosArm64`/`iosSimulatorArm64` targets +
-   SKIE) is deferred behind the `build.gradle.kts` commented targets. **This is
-   THE gate**: until it lands, no `import SharedCore`, the SwiftUI views run on
-   local `@State` mirrors, and nothing executes on a device.
+1. **Phase 0D — iOS XCFramework → BLOCKED ON A FULL XCODE INSTALL.** The shared
+   module's build is now **wired for iOS** (`shared/core/build.gradle.kts` enables
+   `iosArm64`/`iosSimulatorArm64` + the `SharedCore` XCFramework; JVM still green,
+   verified). The remaining step — actually compiling the iOS targets + assembling
+   the XCFramework — needs the **iPhoneOS/iPhoneSimulator SDK**, which ships only
+   with **full Xcode**. This machine has **Command Line Tools only** (no Xcode,
+   no iOS SDK), so Kotlin/Native can't build the iOS slice and `xcodebuild` can't
+   build the app. Installing Xcode (~40 GB, Apple ID + sudo) is a human/admin
+   step. Turn-key finish once installed: **[`IMPL-IOS-01-0D-RUNBOOK.md`](IMPL-IOS-01-0D-RUNBOOK.md)**
+   (`./gradlew :core:assembleSharedCoreXCFramework`). **This is THE gate**: until
+   it lands, no `import SharedCore`, views run on local `@State` mirrors, nothing
+   executes on a device.
 2. **iOS UI parity** — views are scaffolds; per-feature binding to the shared VMs
    + screen-by-screen parity is tracked in `ios-parity-matrix.md` /
    `ios-parity-gap-report.md` (12 BLOCKER / ~35 SHOULD at last audit).
