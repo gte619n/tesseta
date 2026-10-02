@@ -1,6 +1,6 @@
 # IMPL-IOS-01 — Status & Next Steps
 
-> Living snapshot · Updated 2026-09-28 · Branch `iphone-client` (based on
+> Living snapshot · Updated 2026-10-02 · Branch `iphone-client` (based on
 > `origin/main`). Companion to the spec
 > [`IMPL-IOS-01-ios-client-parity.md`](IMPL-IOS-01-ios-client-parity.md),
 > [`IMPL-IOS-01-decision-log.md`](IMPL-IOS-01-decision-log.md),
@@ -8,12 +8,66 @@
 > [`ios-parity-gap-report.md`](ios-parity-gap-report.md), and
 > [`IMPL-E2E-01-synthetic-user-testing.md`](IMPL-E2E-01-synthetic-user-testing.md).
 
-## TL;DR
+## TL;DR (2026-10-02)
 
-The **shared brain is built, compiling, and at logic-parity with Android `main`
-through #283.** The **native iOS skin is authored as scaffolds but does not build
-or run yet** — it is gated on one toolchain step (Phase 0D → the XCFramework).
-That single gate is the critical path to a runnable iPhone/iPad app.
+**The app builds, runs on device/simulator, and a login build is on TestFlight.**
+Phase 0D is cleared and the first feature screens run on the shared KMP
+ViewModels against the real backend. Headlines:
+
+- **Login works** — real Google sign-in → `POST /api/auth/exchange` → Keychain
+  session. First TestFlight build uploaded (App Store Connect app `Tesseta`,
+  id 6818555160); signing fully bootstrapped (match + ASC API key, all creds in
+  GCP Secret Manager). The iOS OAuth client id is live in
+  `oauth-allowed-audiences` (v2) and the serving backend revision accepts it, so
+  real Google sign-in works on a device build.
+- **SKIE is a dead end under Xcode 26** (0.10.4 is the latest; its Swift
+  `.swiftmodule` overlay isn't consumable by Xcode 26 / Swift 6.3.3's build-system
+  module graph — proven: standalone `swiftc` loads it, Xcode never does). So we
+  ship a **plain Kotlin/Native framework** (ObjC-bridged clang module) and bridge
+  Flows to Swift by hand (`IosComposition.collectFlow`).
+- **Networked shared data layer built** — one authenticated Ktor client
+  (`ApiClient` + `SessionTokenProvider`/`KeychainTokenProvider`) reusing the
+  EXISTING backend endpoints. Each screen = a thin `Http<Feature>Repository` + an
+  `IosComposition` factory + a SwiftUI view.
+- **5 screens on shared state**: Units, Coach audio (on-device); Profile,
+  Medications, Goals (networked — Profile verified hitting the real `/api/me`).
+
+### Build & run (current reality)
+
+```sh
+# 1. Build the KMP framework FIRST (plain static, no SKIE). Clean build avoids
+#    stale SKIE apinotes/swiftmodule artifacts.
+cd shared && ./gradlew :core:clean :core:assembleSharedCoreXCFramework
+# 2. Generate + build the app (Apple-silicon simulator; EXCLUDED_ARCHS drops x86_64).
+cd ../ios && xcodegen generate
+xcodebuild -scheme HealthFitness -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
+  CODE_SIGNING_ALLOWED=NO ARCHS=arm64 build
+```
+
+Requires **full Xcode 26** (not just CLI tools) + the iOS 26 simulator runtime
+(`xcodebuild -downloadPlatform iOS`), and the JDK via sdkman for the Gradle build.
+
+### What's NOT done
+
+- **Offline mirror / outbox / SyncEngine** — the shared `SyncEngine`/`MirrorStore`/
+  `OutboxStore` are still interfaces; screens are **online-first** (no offline
+  cache, no write queue). This is the one genuinely large remaining piece.
+- **~40 more feature screens.** The clean direct-DTO ones are done (Profile,
+  Medications, Goals). The rest (Body Composition, Workouts, Nutrition, Blood)
+  have a separate Android DTO + `toDomain()` mapping, so their shared models may
+  not deserialize the backend JSON 1:1 — the online-first repo compiles but a
+  mismatch surfaces at runtime as the graceful Error state. **Unverified until a
+  signed-in session exists on the sim** (real data shows only once logged in;
+  until then networked screens show the 401/Error state by design).
+- CocoaPods/SKIE revisit if/when SKIE supports Xcode 26 (would restore
+  StateFlow→AsyncSequence sugar).
+
+### Original Phase-0D TL;DR (historical — now cleared)
+
+The shared brain was built and at logic-parity with Android `main` through #283;
+the native skin was authored but didn't build, gated on the Phase 0D XCFramework.
+That gate is now cleared (full Xcode installed; plain K/N framework shipped).
 
 ## Architecture (as built)
 
