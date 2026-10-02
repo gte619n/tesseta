@@ -53,14 +53,16 @@ packages:
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     from: "1.17.0"
-  # SharedCore — the KMP core (+ SKIE Swift interop) exported as an XCFramework.
-  # Build it BEFORE `xcodegen generate` (CI runs this first), from `shared/`:
+  # SharedCore — the KMP core (+ SKIE Swift interop). Build the XCFramework BEFORE
+  # `xcodegen generate` (CI runs this first), from `shared/`:
   #     ./gradlew :core:assembleSharedCoreXCFramework
   # → shared/core/build/XCFrameworks/release/SharedCore.xcframework
-  # It is a static framework carrying a SKIE-generated `SharedCore.swiftmodule`,
-  # so it's consumed as a `framework:` dependency on the app target below (NOT a
-  # Swift `package:`). If the framework is missing, that build step must run
-  # first — `xcodegen generate` references the path.
+  # It's consumed through a local Swift package (Packages/SharedCore) that wraps
+  # the XCFramework as a `binaryTarget` — the reliable way to surface SKIE's Swift
+  # `.swiftmodule` overlay (a plain `-F` framework dep only exposes the ObjC
+  # clang module). The package's binaryTarget path points at the built framework.
+  SharedCore:
+    path: Packages/SharedCore
 
 targets:
   HealthFitness:
@@ -68,6 +70,13 @@ targets:
     platform: iOS
     sources:
       - path: HealthFitness
+        # UnitsView.swift is the first shared-ViewModel screen (Phase 1C), but it
+        # references SKIE's Swift overlay types which the Xcode build doesn't yet
+        # surface from the XCFramework (overlay proven functional via standalone
+        # swiftc). Excluded so the app builds; drop this once the SKIE
+        # overlay-consumption issue is resolved.
+        excludes:
+          - "Features/Settings/UnitsView.swift"
     # The Info.plist is hand-maintained (capability keys in D7/D8/D10/D11/D12 +
     # the D6 auth config/URL-scheme keys), so it is referenced via INFOPLIST_FILE
     # — NOT the `info:` block, which would make XcodeGen *generate* (and thereby
@@ -92,10 +101,10 @@ targets:
         product: GoogleSignIn
       - package: Firebase
         product: FirebaseMessaging
-      # SharedCore KMP core (static framework + SKIE Swift layer). Must be built
-      # first (see packages note). embed:false — a static framework links in.
-      - framework: ../shared/core/build/XCFrameworks/release/SharedCore.xcframework
-        embed: false
+      # SharedCore KMP core via the local SPM wrapper (binaryTarget → the SKIE
+      # XCFramework). SPM handles slice resolution + the Swift module path.
+      - package: SharedCore
+        product: SharedCore
     # SwiftLint runs as a pre-compile build phase. Uncomment once swiftlint is on
     # the CI runner's PATH (ios-ci macos-15 provisions it via `brew install swiftlint`).
     # preBuildScripts:

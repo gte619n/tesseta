@@ -45,7 +45,12 @@ kotlin {
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "SharedCore"
-            isStatic = true
+            // DYNAMIC (not static): the SKIE-generated Swift API (StateFlow ->
+            // AsyncSequence, sealed -> enum) only surfaces to the consuming app
+            // when the framework carries a loadable `.swiftmodule` overlay, which
+            // Xcode reads from a dynamic framework but not a static one. The app
+            // embeds + signs it on copy (project.yml `embed: true`).
+            isStatic = false
             xcf.add(this)
         }
     }

@@ -69,25 +69,27 @@ struct SettingsView: View {
     // MARK: Units (UnitsViewModel)
 
     private var unitsCard: some View {
+        // TODO(Phase 1C): route to UnitsView (shared UnitsViewModel). The screen +
+        // its NSUserDefaults-backed repo are written (UnitsView.swift, iosMain), but
+        // consuming SKIE's Swift `.swiftmodule` overlay from the XCFramework in the
+        // Xcode build is unresolved (the overlay is proven functional via a
+        // standalone `swiftc` compile; Xcode doesn't surface it). Inline placeholder
+        // until that's fixed.
         SettingsCard(title: "Units", description: "How measurements are shown") {
             labeledChoice("Height") {
                 SegmentedChoice(
                     options: HeightUnitChoice.allCases.map { ($0, $0.label) },
-                    selection: Binding($heightUnit)
-                )
-                // .onChange → units.wrapped.setHeight(.from($0))  (post-0D)
+                    selection: Binding($heightUnit))
             }
             labeledChoice("Weight") {
                 SegmentedChoice(
                     options: WeightUnitChoice.allCases.map { ($0, $0.label) },
-                    selection: Binding($weightUnit)
-                )
+                    selection: Binding($weightUnit))
             }
             labeledChoice("Temperature") {
                 SegmentedChoice(
                     options: TemperatureUnitChoice.allCases.map { ($0, $0.label) },
-                    selection: Binding($temperatureUnit)
-                )
+                    selection: Binding($temperatureUnit))
             }
         }
     }
