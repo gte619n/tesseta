@@ -36,9 +36,10 @@ import com.gte619n.healthfitness.ui.theme.type
 
 /**
  * Phone-only "More" hub. Surfaces the parity features that don't have a
- * dedicated bottom-nav tab (workouts, blood, body, nutrition, medications,
- * goals, settings) as a simple list of navigable rows. Sits directly on the
- * canvas — no white form fill — per the android UI conventions.
+ * dedicated bottom-nav tab (goals, body, blood, workouts, meds, nutrition,
+ * settings) as a simple list of navigable rows, in the same order as the web
+ * sidebar. Sits directly on the canvas — no white form fill — per the android
+ * UI conventions.
  */
 @Composable
 fun MoreScreen(
@@ -106,13 +107,16 @@ fun MoreScreen(
 
 private data class MoreItem(val label: String, val icon: ImageVector, val route: String)
 
+// Order and labels mirror the web sidebar (web/lib/nav.ts): Goals, Body, Blood,
+// Workouts, Meds, Nutrition — minus Dashboard (the Today tab) and Insights
+// (no Android screen yet) — with Settings pinned last as on web.
 private val MoreRows = listOf(
-    MoreItem("Workouts", DashboardIcons.Barbell, Routes.WORKOUTS),
-    MoreItem("Blood", DashboardIcons.Droplet, Routes.BLOOD),
-    MoreItem("Body", DashboardIcons.BodyScan, Routes.BODY),
-    MoreItem("Nutrition", DashboardIcons.Bowl, Routes.NUTRITION),
-    MoreItem("Medications", DashboardIcons.Pill, Routes.MEDICATIONS),
     MoreItem("Goals", DashboardIcons.Route, Routes.GOALS_LIST),
+    MoreItem("Body", DashboardIcons.BodyScan, Routes.BODY),
+    MoreItem("Blood", DashboardIcons.Droplet, Routes.BLOOD),
+    MoreItem("Workouts", DashboardIcons.Barbell, Routes.WORKOUTS),
+    MoreItem("Meds", DashboardIcons.Pill, Routes.MEDICATIONS),
+    MoreItem("Nutrition", DashboardIcons.Bowl, Routes.NUTRITION),
     MoreItem("Settings", DashboardIcons.Settings, Routes.SETTINGS),
 )
 

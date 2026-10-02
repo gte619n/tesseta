@@ -3,7 +3,7 @@ package com.gte619n.healthfitness.mobile.dashboard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
-import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Battery6Bar
@@ -54,7 +54,9 @@ object DashboardIcons {
     val Search: ImageVector = Icons.Outlined.Search
     val Bell: ImageVector = Icons.Outlined.NotificationsNone
     val Sparkles: ImageVector = Icons.Outlined.AutoAwesome
-    val BodyScan: ImageVector = Icons.Outlined.AccountTree
+    // Web uses Tabler `body-scan` (a human figure); AccessibilityNew is the
+    // closest Material Outlined human-silhouette glyph.
+    val BodyScan: ImageVector = Icons.Outlined.AccessibilityNew
     val Droplet: ImageVector = Icons.Outlined.WaterDrop
     val Dashboard: ImageVector = Icons.Outlined.Dashboard
     val Settings: ImageVector = Icons.Outlined.Settings
@@ -201,17 +203,17 @@ object DashboardFallbacks {
 
     data class NavDest(val label: String, val icon: ImageVector, val active: Boolean = false, val alert: Boolean = false)
 
+    // Order mirrors the web sidebar (web/lib/nav.ts): Dashboard, Goals, Body,
+    // Blood, Workouts, Meds, Nutrition. Web's Insights item is omitted — there
+    // is no Android Insights screen yet.
     val foldableNav = listOf(
         NavDest("Dashboard", DashboardIcons.Dashboard, active = true),
+        NavDest("Goals", DashboardIcons.Route),
         NavDest("Body", DashboardIcons.BodyScan),
         NavDest("Blood", DashboardIcons.Droplet, alert = true),
         NavDest("Workouts", DashboardIcons.Barbell),
-        NavDest("Nutrition", DashboardIcons.Bowl),
         NavDest("Meds", DashboardIcons.Pill),
-        // IMPL-12: Goals is a top-level rail destination on foldable, placed
-        // after Meds to mirror the web nav.
-        NavDest("Goals", DashboardIcons.Route),
-        NavDest("Insights", DashboardIcons.Sparkles),
+        NavDest("Nutrition", DashboardIcons.Bowl),
     )
 
     data class BottomDest(val label: String, val icon: ImageVector, val active: Boolean = false)
