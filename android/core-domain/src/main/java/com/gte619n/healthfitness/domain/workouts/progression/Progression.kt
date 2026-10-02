@@ -47,10 +47,15 @@ data class ExerciseStrength(
     val name: String,
     /** Movement-pattern enum name, e.g. "SQUAT"; null if the exercise is gone. */
     val movementPattern: String?,
+    /** Per-hand belief (logged space); for dumbbell/dual-cable this is per hand. */
     val e1rmLbs: Double,
     /** "LOW" | "MEDIUM" | "HIGH" — from the belief's relative uncertainty. */
     val confidence: String,
     val observationCount: Int,
+    /** 1 for total-load lifts, 2 for per-hand (dumbbell/dual-cable). */
+    val loadFactor: Int = 1,
+    /** [e1rmLbs] × [loadFactor] — the TOTAL display load (matches web). */
+    val e1rmTotalLbs: Double = e1rmLbs,
 )
 
 /**

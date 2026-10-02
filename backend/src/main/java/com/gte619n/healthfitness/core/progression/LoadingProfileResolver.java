@@ -33,11 +33,13 @@ import org.springframework.stereotype.Service;
  * equipment match, or a usable spec is missing, it falls back to the name-based
  * defaults (D12): dumbbell 5 / machine·cable 10 / barbell 5 / default 5.
  *
- * <p>Load convention (decision L2): this app logs the TOTAL external weight, so
- * barbell/dumbbell/machine offset is 0. Only bodyweight-loaded movements
+ * <p>Load OFFSET (decision L2): the logged number is the external weight moved,
+ * so barbell/dumbbell/machine offset is 0. Only bodyweight-loaded movements
  * (pull-ups, dips, push-ups) carry an offset = current bodyweight, sourced from
  * the body-composition module (§4.4) so bodyweight changes shift effective load
- * automatically.
+ * automatically. (This is distinct from per-hand vs total: the in-app logger
+ * records dumbbell/dual-cable loads PER HAND; the ×2 to a TOTAL display lives in
+ * the reporting layer via {@link LoadConventionResolver}, not here.)
  */
 @Service
 public class LoadingProfileResolver {

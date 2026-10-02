@@ -238,11 +238,22 @@ private fun StrengthCard(strength: List<ExerciseStrength>) {
                             CapsLabel(humanize(pattern), size = 9)
                         }
                     }
-                    Text(
-                        "${s.e1rmLbs.roundToInt()} lb",
-                        style = Hf.type.monoLg.copy(fontSize = 15.sp),
-                        color = Hf.colors.textPrimary,
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        // Show the TOTAL load to match the web dashboard; per-hand
+                        // lifts carry a "· N/hand" secondary (IMPL-PROG-LOAD-01).
+                        Text(
+                            "${s.e1rmTotalLbs.roundToInt()} lb",
+                            style = Hf.type.monoLg.copy(fontSize = 15.sp),
+                            color = Hf.colors.textPrimary,
+                        )
+                        if (s.loadFactor == 2) {
+                            Text(
+                                "${(s.e1rmTotalLbs / 2).roundToInt()}/hand",
+                                style = Hf.type.bodySm,
+                                color = Hf.colors.textTertiary,
+                            )
+                        }
+                    }
                     Pill(text = s.confidence, tone = confidenceTone(s.confidence))
                 }
             }

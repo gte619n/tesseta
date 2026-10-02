@@ -10,6 +10,7 @@ import com.gte619n.healthfitness.core.progression.ProgressionStateRepository;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
+import com.gte619n.healthfitness.core.workoutprogram.ProgramSource;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository;
@@ -141,9 +142,11 @@ public class WorkoutStatsService {
         List<SessionBest> bests = scan.bestByExercise.getOrDefault(exerciseId, List.of());
         List<E1rmHistory.Point> points = new ArrayList<>();
         for (SessionBest b : bests) {
-            Double weightTotal = b.weightLbs == null ? null : b.weightLbs * factor;
+            // Imported/weight-only points are already TOTAL — don't double them.
+            int f = b.weightsAreTotal ? 1 : factor;
+            Double weightTotal = b.weightLbs == null ? null : b.weightLbs * f;
             points.add(new E1rmHistory.Point(
-                b.date, b.e1rm, b.weightLbs, b.reps, b.lowConfidence, b.e1rm * factor, weightTotal));
+                b.date, b.e1rm, b.weightLbs, b.reps, b.lowConfidence, b.e1rm * f, weightTotal));
         }
         E1rmHistory.Belief belief = states.find(userId, exerciseId)
             .filter(s -> s.e1rmLbs() > 0)
@@ -306,9 +309,11 @@ public class WorkoutStatsService {
         for (Map.Entry<String, List<SessionBest>> e : bestByExercise.entrySet()) {
             String id = e.getKey();
             String name = names.getOrDefault(id, id);
-            int factor = factors.getOrDefault(id, 1);
+            int exerciseFactor = factors.getOrDefault(id, 1);
             for (SessionBest pr : personalRecords(e.getValue())) {
                 double weight = pr.weightLbs == null ? 0.0 : pr.weightLbs;
+                // Imported/weight-only PR rows are already TOTAL — don't double them.
+                int factor = pr.weightsAreTotal ? 1 : exerciseFactor;
                 all.add(new WorkoutStats.PrPoint(
                     id, name, pr.e1rm, weight, pr.reps, pr.date, pr.programId, pr.scheduledId,
                     factor, pr.e1rm * factor, weight * factor));
@@ -420,11 +425,14 @@ public class WorkoutStatsService {
             // the read for nothing.
             List<ScheduledWorkout> found =
                 scheduled.findByStatus(userId, program.programId(), ScheduledStatus.COMPLETED);
+            // Imported programs carry external (TOTAL-convention) dumbbell weights;
+            // their sets must not be doubled again at the per-hand→total boundary.
+            boolean imported = program.source() == ProgramSource.IMPORTED;
             for (ScheduledWorkout sw : nullSafe(found)) {
                 if (sw == null || sw.status() != ScheduledStatus.COMPLETED || sw.session() == null) continue;
                 LocalDate date = sw.date();
                 if (date == null) continue;
-                rows.add(new Row(program.programId(), sw, date));
+                rows.add(new Row(program.programId(), sw, date, imported));
                 for (Block block : nullSafe(sw.session().blocks())) {
                     if (block == null) continue;
                     for (Prescription rx : nullSafe(block.prescriptions())) {
@@ -438,7 +446,7 @@ public class WorkoutStatsService {
         List<CompletedSession> sessions = new ArrayList<>();
         Map<String, List<SessionBest>> bestByExercise = new LinkedHashMap<>();
         for (Row row : rows) {
-            indexSession(sessions, bestByExercise, row.programId, row.sw, row.date, factors);
+            indexSession(sessions, bestByExercise, row.programId, row.sw, row.date, factors, row.imported);
         }
         // Order each exercise's bests chronologically for the PR walk and curve.
         for (List<SessionBest> list : bestByExercise.values()) {
@@ -452,7 +460,8 @@ public class WorkoutStatsService {
     private static void indexSession(
         List<CompletedSession> sessions,
         Map<String, List<SessionBest>> bestByExercise,
-        String programId, ScheduledWorkout sw, LocalDate date, Map<String, Integer> factors) {
+        String programId, ScheduledWorkout sw, LocalDate date, Map<String, Integer> factors,
+        boolean imported) {
 
         double tonnage = 0.0;
         int loggedSetCount = 0;
@@ -463,18 +472,25 @@ public class WorkoutStatsService {
             if (block == null) continue;
             for (Prescription rx : nullSafe(block.prescriptions())) {
                 if (rx == null || rx.exerciseId() == null) continue;
-                int factor = factors.getOrDefault(rx.exerciseId(), 1);
+                int exerciseFactor = factors.getOrDefault(rx.exerciseId(), 1);
                 List<LoggedSet> logged = nullSafe(rx.loggedSets());
                 for (int i = 0; i < logged.size(); i++) {
                     LoggedSet set = logged.get(i);
                     if (set == null) continue;
                     loggedSetCount++;
+                    // A set whose weight is already a TOTAL load — imported external
+                    // history, or a weight-only row (reps null) that predates per-hand
+                    // logging — must not be doubled. Everything else uses the
+                    // exercise's per-hand→total factor.
+                    boolean alreadyTotal = imported || set.reps() == null;
+                    int factor = alreadyTotal ? 1 : exerciseFactor;
                     if (set.weightLbs() != null && set.reps() != null) {
                         // Total-load tonnage: per-hand lifts count double (D10).
                         tonnage += set.weightLbs() * factor * set.reps();
                     }
                     SessionBest candidate = candidate(
-                        rx.exerciseId(), date, sw, programId, set, block.blockId(), rx.orderIndex(), i);
+                        rx.exerciseId(), date, sw, programId, set, block.blockId(), rx.orderIndex(), i,
+                        alreadyTotal);
                     if (candidate == null) continue;
                     SessionBest prev = bestInSession.get(rx.exerciseId());
                     if (prev == null || candidate.e1rm > prev.e1rm) {
@@ -499,7 +515,7 @@ public class WorkoutStatsService {
      */
     private static SessionBest candidate(
         String exerciseId, LocalDate date, ScheduledWorkout sw, String programId,
-        LoggedSet set, String blockId, int orderIndex, int setIndex) {
+        LoggedSet set, String blockId, int orderIndex, int setIndex, boolean weightsAreTotal) {
         Double weight = set.weightLbs();
         if (weight == null) return null;
         Integer reps = set.reps();
@@ -514,7 +530,7 @@ public class WorkoutStatsService {
         }
         return new SessionBest(
             date, sw.completedAt(), programId, sw.scheduledId(),
-            weight, reps, e1rm, lowConfidence, blockId, orderIndex, setIndex);
+            weight, reps, e1rm, lowConfidence, blockId, orderIndex, setIndex, weightsAreTotal);
     }
 
     // ---- helpers ----
@@ -571,11 +587,15 @@ public class WorkoutStatsService {
         Instant completedAt, Integer durationSeconds, Integer feeling,
         int loggedSetCount, double tonnage, boolean isDeload) {}
 
-    /** The best set of one exercise in one session, with its render-tree location. */
+    /**
+     * The best set of one exercise in one session, with its render-tree location.
+     * {@code weightsAreTotal} marks a set whose weight is already a TOTAL load
+     * (imported/weight-only history) so the per-hand→total ×2 is skipped for it.
+     */
     record SessionBest(
         LocalDate date, Instant completedAt, String programId, String scheduledId,
         Double weightLbs, Integer reps, double e1rm, boolean lowConfidence,
-        String blockId, int orderIndex, int setIndex) {}
+        String blockId, int orderIndex, int setIndex, boolean weightsAreTotal) {}
 
     /**
      * The cached raw scan: per-session summaries + per-exercise chronological
@@ -587,5 +607,5 @@ public class WorkoutStatsService {
         Map<String, Integer> factorByExercise) {}
 
     /** A completed session paired with its program id, for the two-pass scan. */
-    private record Row(String programId, ScheduledWorkout sw, LocalDate date) {}
+    private record Row(String programId, ScheduledWorkout sw, LocalDate date, boolean imported) {}
 }

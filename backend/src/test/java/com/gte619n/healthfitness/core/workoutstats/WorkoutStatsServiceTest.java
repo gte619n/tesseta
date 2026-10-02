@@ -362,6 +362,59 @@ class WorkoutStatsServiceTest {
         assertEquals(120.0, p0.weightTotalLbs(), 1e-9); // 60 per hand → 120 total
     }
 
+    @Test
+    void importedDumbbellHistoryIsNotDoubledWhileInAppStaysPerHand() {
+        // A dumbbell lift (factor 2) with both imported TOTAL-convention history
+        // and in-app PER_HAND sessions. Imported rows already carry the total load,
+        // so they must NOT be doubled; in-app rows still double.
+        setTarget(1);
+        seedImportedProgram("imported");
+        seedProgram("live");
+        seedDumbbellExercise("db-bench");
+        LocalDate wk = CURRENT_MONDAY.minusWeeks(1);
+
+        // Imported: 120 total (= two 60s), WITH reps so it mints a curve point.
+        saveSession("imported", wk, "db-bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(120.0, 10, null, null, instant(wk))));
+        // In-app: logged 60/hand the next day.
+        saveSession("live", wk.plusDays(1), "db-bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(60.0, 10, null, null, instant(wk.plusDays(1)))));
+
+        // Tonnage: imported 120×10 (factor 1) + in-app 60×10×2 = 1200 + 1200 = 2400.
+        WorkoutStats stats = service.stats(USER, TODAY, 26);
+        assertEquals(2400.0, stats.weeklySeries().get(24).tonnageLbs(), 1e-9);
+
+        // e1RM history: imported point un-doubled (120), in-app point doubled (120).
+        E1rmHistory h = service.e1rmHistory(USER, "db-bench");
+        assertEquals(2, h.loadFactor());
+        assertEquals(120.0, h.points().get(0).weightTotalLbs(), 1e-9); // imported, NOT 240
+        assertEquals(120.0, h.points().get(1).weightTotalLbs(), 1e-9); // in-app 60/hand → 120
+    }
+
+    @Test
+    void weightOnlyImportedRowIsNotDoubled() {
+        // A weight-only row (reps null) is legacy imported total-convention; its
+        // tonnage must use factor 1 even on a PER_HAND exercise.
+        setTarget(1);
+        seedProgram("p1");
+        seedDumbbellExercise("db-bench");
+        LocalDate wk = CURRENT_MONDAY.minusWeeks(1);
+        // reps null → weight-only. Pair with a reps'd set so tonnage is non-zero.
+        saveSession("p1", wk, "db-bench", ScheduledStatus.COMPLETED,
+            List.of(new LoggedSet(100.0, null, null, null, instant(wk)),
+                    new LoggedSet(50.0, 10, null, null, instant(wk))));
+
+        // Weight-only 100 adds 0 tonnage (no reps); reps'd 50/hand ×10 ×2 = 1000.
+        WorkoutStats stats = service.stats(USER, TODAY, 26);
+        assertEquals(1000.0, stats.weeklySeries().get(24).tonnageLbs(), 1e-9);
+
+        // e1RM history: the weight-only point reports 100 (factor 1), not 200.
+        E1rmHistory h = service.e1rmHistory(USER, "db-bench");
+        double weightOnly = h.points().stream()
+            .filter(p -> p.reps() == null).findFirst().orElseThrow().weightTotalLbs();
+        assertEquals(100.0, weightOnly, 1e-9);
+    }
+
     // ---- BT-11 ----
 
     @Test
@@ -473,6 +526,11 @@ class WorkoutStatsServiceTest {
     private void seedProgram(String programId) {
         programs.save(new WorkoutProgram(USER, programId, programId, null, null,
             ProgramStatus.ACTIVE, ProgramSource.MANUAL, null, null, null, List.of(), null, null, null));
+    }
+
+    private void seedImportedProgram(String programId) {
+        programs.save(new WorkoutProgram(USER, programId, programId, null, null,
+            ProgramStatus.COMPLETED, ProgramSource.IMPORTED, null, null, null, List.of(), null, null, null));
     }
 
     /** Create {@code count} completed sessions on consecutive days from the Monday. */
