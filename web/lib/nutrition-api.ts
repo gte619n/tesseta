@@ -51,9 +51,16 @@ export function getHistory(from: string, to: string): Promise<DailyRollup[]> {
 
 // ── Food catalog reads ───────────────────────────────────────────────
 
-/** Name-prefix search over the shared food catalog. */
-export function searchFoods(q: string): Promise<Food[]> {
-  return apiJson<Food[]>(`/api/foods/search?q=${encodeURIComponent(q)}`);
+/**
+ * Name/token search over the shared food catalog. When {@link meal} is given
+ * (the meal the user is about to log), results are biased so the foods they
+ * usually eat at that time of day lead the list.
+ */
+export function searchFoods(q: string, meal?: Meal): Promise<Food[]> {
+  const mealParam = meal ? `&meal=${meal}` : "";
+  return apiJson<Food[]>(
+    `/api/foods/search?q=${encodeURIComponent(q)}${mealParam}`,
+  );
 }
 
 /** Fetch a single catalog food by id. */

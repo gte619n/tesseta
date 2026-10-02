@@ -116,7 +116,9 @@ class AddFoodViewModel @Inject constructor(
                         runCatching { nutrition.searchMeals(query) }
                             .onSuccess { meals -> _state.update { it.copy(mealResults = meals) } }
                     }
-                    val net = foods.search(query)
+                    // Bias catalog results toward the meal being logged now
+                    // (parity with the recents list + web search).
+                    val net = foods.search(query, Meal.forHour(LocalTime.now().hour).wire)
                     _state.update { it.copy(results = net, error = null) }
                     mealsJob.join()
                     _state.update { it.copy(searching = false) }

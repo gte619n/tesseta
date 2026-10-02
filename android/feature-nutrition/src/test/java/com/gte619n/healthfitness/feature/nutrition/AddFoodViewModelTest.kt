@@ -72,7 +72,7 @@ class AddFoodViewModelTest {
         val net = sampleFood("net")
         val foods = mockk<FoodRepository> {
             coEvery { localSearch(any(), any()) } returns listOf(local)
-            coEvery { search(any()) } returns listOf(net)
+            coEvery { search(any(), any()) } returns listOf(net)
         }
         val vm = viewModel(foods, nutritionRepo())
 
@@ -97,7 +97,7 @@ class AddFoodViewModelTest {
     @Test
     fun foodSearchFailureSurfacesErrorInsteadOfCrashing() = runTest {
         val foods = mockk<FoodRepository> {
-            coEvery { search(any()) } throws RuntimeException("network down")
+            coEvery { search(any(), any()) } throws RuntimeException("network down")
         }
         val vm = viewModel(foods, nutritionRepo())
 
@@ -115,7 +115,7 @@ class AddFoodViewModelTest {
     @Test
     fun mealSearchFailureStillReturnsCatalogFoods() = runTest {
         val foods = mockk<FoodRepository> {
-            coEvery { search(any()) } returns listOf(sampleFood("f1"))
+            coEvery { search(any(), any()) } returns listOf(sampleFood("f1"))
         }
         val nutrition = nutritionRepo(searchMeals = { throw RuntimeException("meals down") })
         val vm = viewModel(foods, nutrition)

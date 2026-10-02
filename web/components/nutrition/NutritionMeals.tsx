@@ -65,7 +65,7 @@ type Props = {
   ) => Promise<void>;
   regenerateImage: (date: string, entryId: string) => Promise<void>;
   servingHint: (date: string, entryId: string) => Promise<string | null>;
-  searchFoods: (q: string) => Promise<
+  searchFoods: (q: string, meal?: Meal) => Promise<
     {
       foodId: string;
       name: string;
