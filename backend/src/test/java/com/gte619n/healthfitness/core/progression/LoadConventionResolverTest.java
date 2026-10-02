@@ -90,15 +90,31 @@ class LoadConventionResolverTest {
         InMemoryProgressionRepositories.Profiles profiles = new InMemoryProgressionRepositories.Profiles();
         LoadConventionResolver resolver = new LoadConventionResolver(exercises, equipment, profiles);
 
-        // Goblet squat is the known D6 edge: BILATERAL + one dumbbell → derivation
-        // wrongly says PER_HAND; the override corrects it to TOTAL.
-        Exercise goblet = ex("Goblet Squat", Laterality.BILATERAL, req("db"));
-        exercises.save(goblet);
+        // A plain bilateral dumbbell lift derives PER_HAND; an explicit override
+        // still wins and pins it to TOTAL.
+        Exercise press = ex("Dumbbell Bench Press", Laterality.BILATERAL, req("db"));
+        exercises.save(press);
         equipment.save(dumbbell("db"));
 
-        assertEquals(LoadConvention.PER_HAND, resolver.resolve("u", "Goblet Squat")); // derivation edge
-        profiles.save(new ExerciseLoadingProfile("u", "Goblet Squat", 5.0, 0.0, true, LoadConvention.TOTAL));
-        assertEquals(LoadConvention.TOTAL, resolver.resolve("u", "Goblet Squat")); // override wins
+        assertEquals(LoadConvention.PER_HAND, resolver.resolve("u", "Dumbbell Bench Press")); // derived
+        profiles.save(new ExerciseLoadingProfile("u", "Dumbbell Bench Press", 5.0, 0.0, true, LoadConvention.TOTAL));
+        assertEquals(LoadConvention.TOTAL, resolver.resolve("u", "Dumbbell Bench Press")); // override wins
+    }
+
+    @Test
+    void singleDumbbellHeldInBothHandsIsTotalNotPerHand() {
+        // The D6 goblet edge: a bilateral lift cradling ONE dumbbell in both hands
+        // logs the single weight as the total, so derivation must say TOTAL even
+        // though it's a bilateral dumbbell movement — no per-user override needed.
+        Exercise goblet = ex("Dumbbell Goblet Squat", Laterality.BILATERAL, List.of());
+        assertEquals(LoadConvention.TOTAL, LoadConventionResolver.derive(goblet, List.of()));
+
+        Exercise pullover = ex("Dumbbell Pullover", Laterality.BILATERAL, List.of());
+        assertEquals(LoadConvention.TOTAL, LoadConventionResolver.derive(pullover, List.of()));
+
+        // Sanity: an ordinary two-dumbbell bilateral lift is still PER_HAND.
+        Exercise bench = ex("Dumbbell Bench Press", Laterality.BILATERAL, List.of());
+        assertEquals(LoadConvention.PER_HAND, LoadConventionResolver.derive(bench, List.of()));
     }
 
     @Test

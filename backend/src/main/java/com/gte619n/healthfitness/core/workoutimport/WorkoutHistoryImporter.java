@@ -244,7 +244,7 @@ public class WorkoutHistoryImporter {
         programs.save(new WorkoutProgram(
             userId, PROGRAM_ID, "Imported Training History",
             "Imported from future_workouts.json (IMPL-15, ADR-0008).",
-            null, ProgramStatus.COMPLETED, ProgramSource.MANUAL,
+            null, ProgramStatus.COMPLETED, ProgramSource.IMPORTED,
             programStart, null, phaseOrder, phases, now, now, endOfDay(programEnd)));
         return phases.size();
     }

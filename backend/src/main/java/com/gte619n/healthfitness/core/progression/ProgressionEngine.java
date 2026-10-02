@@ -46,7 +46,19 @@ public class ProgressionEngine {
         this.clock = clock;
     }
 
-    /** Entry point from the completion listener (D22). */
+    /**
+     * Entry point from the completion listener (D22).
+     *
+     * <p>Load-convention invariant: the engine keeps its belief in the LOGGED
+     * (per-hand) space and never applies the ×2 reporting factor (IL-3). That only
+     * holds because every session reaching here is an in-app completion — the sole
+     * publisher of {@code SessionCompletedEvent} is
+     * {@code WorkoutSessionCompletionService}. Bulk-imported TOTAL-convention
+     * history ({@code ProgramSource.IMPORTED}) is saved directly and never routed
+     * here, so a total load can't silently anchor the belief 2× high. Weight-only
+     * rows (reps null) are additionally ignored by
+     * {@code SessionAnalysis.observedE1rm}. Do NOT feed imported sessions here.
+     */
     public void onSessionCompleted(String userId, ScheduledWorkout session) {
         refreshEnvelopeIfStale(userId);
         sessionLoop.onSessionCompleted(userId, session);

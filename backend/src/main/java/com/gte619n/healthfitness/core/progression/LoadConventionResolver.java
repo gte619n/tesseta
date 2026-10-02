@@ -151,8 +151,23 @@ public class LoadConventionResolver {
         }
 
         if (dualCable) return LoadConvention.PER_HAND;                 // IL-4
-        if (dumbbell && bilateral) return LoadConvention.PER_HAND;     // IL-5
+        // A bilateral dumbbell lift is logged per hand ONLY when a dumbbell is held
+        // in each hand. Movements that cradle a SINGLE dumbbell in both hands
+        // (goblet squat, dumbbell pullover, single-dumbbell variants) are logged as
+        // the one weight on the bar — that IS the total — so doubling them is wrong
+        // (the "D6 goblet edge"). Treat them as TOTAL here instead of relying on a
+        // per-user override that is almost never set.
+        if (dumbbell && bilateral && !heldAsSingleDumbbell(ex)) return LoadConvention.PER_HAND; // IL-5
         return LoadConvention.TOTAL;
+    }
+
+    /**
+     * A bilateral dumbbell movement that loads a single dumbbell held in both hands
+     * (so the logged number is already the total, not a per-hand load).
+     */
+    private static boolean heldAsSingleDumbbell(Exercise ex) {
+        return nameHas(ex, "goblet", "single dumbbell", "single-dumbbell",
+            "one dumbbell", "dumbbell pullover");
     }
 
     private static boolean isDumbbell(Equipment eq) {

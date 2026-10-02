@@ -64,6 +64,10 @@ data class ExerciseStrengthDto(
     val e1rmLbs: Double,
     val confidence: String,
     val observationCount: Int,
+    // IMPL-PROG-LOAD-01 (D3/D8): 1 for total-load lifts, 2 for per-hand (dumbbell /
+    // dual-cable), and the pre-doubled total. Defaulted for older cached payloads.
+    val loadFactor: Int = 1,
+    val e1rmTotalLbs: Double = 0.0,
 ) {
     fun toDomain() = ExerciseStrength(
         exerciseId = exerciseId,
@@ -72,6 +76,9 @@ data class ExerciseStrengthDto(
         e1rmLbs = e1rmLbs,
         confidence = confidence,
         observationCount = observationCount,
+        loadFactor = loadFactor,
+        // Fall back to e1rmLbs × factor when a legacy payload omits the total.
+        e1rmTotalLbs = if (e1rmTotalLbs > 0.0) e1rmTotalLbs else e1rmLbs * loadFactor,
     )
 }
 

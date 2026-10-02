@@ -15,6 +15,7 @@ import com.gte619n.healthfitness.core.progression.WeekLoop;
 import com.gte619n.healthfitness.core.workoutprogram.Block;
 import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
+import com.gte619n.healthfitness.core.workoutprogram.ProgramSource;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkoutRepository;
@@ -152,6 +153,8 @@ public class ProgressionController {
         List<ProgressionLogRowDto> rows = new ArrayList<>();
         for (WorkoutProgram program : programs.findByUserIncludingArchived(userId)) {
             if (program == null || program.programId() == null) continue;
+            // Imported history is already TOTAL-convention; don't re-double it.
+            int rowFactor = program.source() == ProgramSource.IMPORTED ? 1 : loadFactor;
             for (ScheduledWorkout sw : scheduled.findByProgram(
                     userId, program.programId(), LocalDate.MIN, LocalDate.MAX)) {
                 if (sw == null || sw.status() != ScheduledStatus.COMPLETED
@@ -165,7 +168,7 @@ public class ProgressionController {
                             || rx.durationSeconds() != null) {
                             continue;
                         }
-                        rows.add(logRow(sw, program.programId(), rx, loadFactor));
+                        rows.add(logRow(sw, program.programId(), rx, rowFactor));
                     }
                 }
             }
