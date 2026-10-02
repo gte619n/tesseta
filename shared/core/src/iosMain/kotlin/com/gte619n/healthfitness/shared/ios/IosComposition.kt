@@ -1,9 +1,13 @@
 package com.gte619n.healthfitness.shared.ios
 
+import com.gte619n.healthfitness.shared.data.HttpMedicationRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
+import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsCoachAudioPreferences
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsUnitPreferencesRepository
 import com.gte619n.healthfitness.shared.net.ApiClient
 import com.gte619n.healthfitness.shared.net.SessionTokenProvider
+import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
+import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
 import io.ktor.client.HttpClient
@@ -39,12 +43,22 @@ object IosComposition {
 
     // MARK: - Screen factories
 
+    private val coachAudioPrefs by lazy { NSUserDefaultsCoachAudioPreferences() }
+
     /** Settings › Units — on-device unit preferences (no network). */
     fun unitsViewModel(): UnitsViewModel = UnitsViewModel(unitPrefs)
+
+    /** Settings › Coach audio — on-device toggles (no network). */
+    fun coachAudioViewModel(): CoachAudioSettingsViewModel =
+        CoachAudioSettingsViewModel(coachAudioPrefs)
 
     /** Settings › Profile — networked (GET/PATCH /api/me). */
     fun profileViewModel(): ProfileViewModel =
         ProfileViewModel(HttpProfileRepository(client()), unitPrefs)
+
+    /** Medications list — networked (GET /api/me/medications). */
+    fun medicationsViewModel(): MedicationsViewModel =
+        MedicationsViewModel(HttpMedicationRepository(client()))
 
     // MARK: - Flow bridge
 

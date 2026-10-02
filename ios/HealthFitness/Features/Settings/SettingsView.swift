@@ -52,6 +52,7 @@ struct SettingsView: View {
             switch route {
             case .profile: ProfileView()
             case .units: UnitsView()
+            case .coachAudio: CoachAudioView()
             case .connections: DeviceConnectionsView()
             case .drinks: DrinkSettingsView()
             case .diagnostics: SyncDiagnosticsView()
@@ -81,13 +82,9 @@ struct SettingsView: View {
     // MARK: Coach audio (CoachAudioSettingsViewModel)
 
     private var coachAudioCard: some View {
+        // Wired to the shared CoachAudioSettingsViewModel via CoachAudioView.
         SettingsCard(title: "Coach audio", description: "Hands-free cues during a workout") {
-            ToggleRow(label: "Rest beep",
-                      description: "Beep when a rest period ends",
-                      isOn: $restBeep)          // .onChange → coach.setRestBeep($0)
-            ToggleRow(label: "Voice announcements",
-                      description: "Speak the exercise, weight, and reps at each set",
-                      isOn: $voiceAnnouncements) // .onChange → coach.setVoiceAnnouncements($0)
+            settingsNavRow("Audio cues", subtitle: "Rest beep, voice announcements", to: .coachAudio)
         }
     }
 
@@ -191,6 +188,7 @@ struct SettingsView: View {
 enum SettingsRoute: Hashable {
     case profile
     case units
+    case coachAudio
     case connections
     case drinks
     case diagnostics

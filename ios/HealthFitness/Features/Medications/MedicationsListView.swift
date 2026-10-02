@@ -1,107 +1,97 @@
 import SwiftUI
-// import SharedCore  // MedicationsViewModel, MedicationsUiState, Medication — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave B — REFERENCE feature view (the worked example every
-/// Phase 3 vertical replicates). Parity target: Android
-/// `feature-medical/.../list/MedicationsScreen.kt` + `MedicationsViewModel`.
-/// Observes the SHARED `MedicationsViewModel`
-/// (shared/.../presentation/medications/MedicationsViewModel.kt) through the
-/// `ObservableViewModel` bridge — the view is a pure function of the shared
-/// UI state, no business logic duplicated on iOS.
+/// Medications list (IMPL-IOS-01 Phase 1C — networked shared screen).
 ///
-/// The pattern:
-///   1. `@State var vm = ObservableViewModel(SharedVM(repo))`
-///   2. a local `@State` mirror of the shared sealed UiState (replaced by the
-///      SKIE-bridged enum once the XCFramework is built)
-///   3. `.task { await vm.observe(vm.wrapped.state) { state = map($0) } }`
-///   4. `switch` on the state → Loading / Ready / Error
+/// Backed by the shared `MedicationsViewModel` over the existing
+/// `GET /api/me/medications` endpoint (the same the Android app uses). Renders
+/// the sealed `MedicationsUiState` from `collectFlow`: active meds in the main
+/// list, discontinued under a History section.
 struct MedicationsListView: View {
+    private let vm: MedicationsViewModel
+    @State private var state: MedicationsUiState
+    @State private var subscription: FlowSubscription?
 
-    /// Local mirror of the shared `MedicationsUiState`. Post-0D this is deleted
-    /// and the view switches directly on the SKIE-bridged `MedicationsUiState`
-    /// (SKIE renders a Kotlin sealed interface as a Swift enum).
-    enum ScreenState {
-        case loading
-        case ready(active: [MedicationRow], discontinued: [MedicationRow])
-        case error(String)
+    init() {
+        let model = IosComposition.shared.medicationsViewModel()
+        self.vm = model
+        _state = State(initialValue: model.state.value as! MedicationsUiState)
     }
-
-    struct MedicationRow: Identifiable {
-        let id: String
-        let name: String
-        let doseSummary: String
-    }
-
-    @State private var state: ScreenState = .loading
-    @State private var tab: Tab = .current
-
-    enum Tab: String, CaseIterable { case current = "Current", history = "History" }
 
     var body: some View {
         content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.canvas)
             .navigationTitle("Medications")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    NavigationLink(value: MedicationsRoute.add) { Image(systemName: "plus") }
-                        .accessibilityIdentifier("meds-add-button")  // IMPL-E2E-01 shared id
+            .accessibilityIdentifier("medications-list")  // IMPL-E2E-01 shared id
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? MedicationsUiState { state = s }
                 }
             }
-            .navigationDestination(for: MedicationsRoute.self) { route in
-                switch route {
-                case .add: AddMedicationView()                       // Wave B
-                case .detail(let id): MedicationDetailView(medicationId: id) // Wave B
-                case .reminderSettings: ReminderSettingsView()       // Wave B
-                case .todaysDoses: TodaysDosesView()                 // Wave B (D9 deep-link target)
-                }
-            }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(MedicationsViewModel(repo: DI.medicationRepository))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .onDisappear { subscription?.cancel() }
     }
 
-    @ViewBuilder
-    private var content: some View {
+    @ViewBuilder private var content: some View {
         switch state {
-        case .loading:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .error(let message):
-            ContentUnavailableView("Couldn’t load medications", systemImage: "pills",
-                                   description: Text(message))
-        case .ready(let active, let discontinued):
-            List {
-                Picker("View", selection: $tab) {
-                    ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .listRowSeparator(.hidden)
-
-                let rows = tab == .current ? active : discontinued
-                Section(tab == .current ? "Current" : "History") {
-                    ForEach(rows) { med in
-                        NavigationLink(value: MedicationsRoute.detail(med.id)) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(med.name).font(.hfBodyMd)
-                                Text(med.doseSummary).font(.hfBodySm)
-                                    .foregroundStyle(Theme.textSecondary)
-                            }
-                        }
-                    }
-                }
-            }
-            .formMaxWidth()   // 600pt cap — iPad parity with Android's 600dp form width
-            .accessibilityIdentifier("meds-list")  // IMPL-E2E-01 shared id
+        case let ready as MedicationsUiStateReady:
+            list(active: ready.active, discontinued: ready.discontinued)
+        case let error as MedicationsUiStateError:
+            message("Couldn't load medications", error.message, retry: true)
+        default:  // Loading
+            ProgressView().controlSize(.large).tint(Theme.accent)
         }
     }
 
-    // static func map(_ s: MedicationsUiState) -> ScreenState { ... }  // Phase 0D
-}
+    @ViewBuilder
+    private func list(active: [Medication], discontinued: [Medication]) -> some View {
+        if active.isEmpty && discontinued.isEmpty {
+            message("No medications", "Add a medication to start tracking it.", retry: false)
+        } else {
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !active.isEmpty {
+                        SettingsCard(title: "Current") {
+                            ForEach(active, id: \.medicationId) { row($0) }
+                        }
+                    }
+                    if !discontinued.isEmpty {
+                        SettingsCard(title: "History") {
+                            ForEach(discontinued, id: \.medicationId) { row($0) }
+                        }
+                    }
+                }
+                .formMaxWidth()
+                .padding(.vertical, 16)
+            }
+        }
+    }
 
-enum MedicationsRoute: Hashable {
-    case add
-    case detail(String)
-    case reminderSettings         // Wave B — ReminderSettingsView
-    case todaysDoses              // Wave B — TodaysDosesView (D9 dose-checklist deep-link target)
+    private func row(_ med: Medication) -> some View {
+        HStack {
+            Text(med.customName ?? med.drug?.name ?? "Medication")
+                .font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
+            Spacer()
+            Text("\(doseText(med.dose)) \(med.unit)")
+                .font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func doseText(_ dose: Double) -> String {
+        dose == dose.rounded() ? String(Int(dose)) : String(format: "%g", dose)
+    }
+
+    private func message(_ title: String, _ body: String, retry: Bool) -> some View {
+        VStack(spacing: 16) {
+            Text(title).font(.hfHeadingSm).foregroundStyle(Theme.textPrimary)
+            Text(body).font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+            if retry {
+                Button("Retry") { vm.refresh() }
+                    .buttonStyle(.borderedProminent).tint(Theme.accent)
+            }
+        }
+        .padding(32)
+    }
 }
