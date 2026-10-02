@@ -9,6 +9,10 @@
 - **No JPA, no SQL.** Cloud Firestore is the source of truth.
 - Run locally: `./gradlew bootRun`
 - Test: `./gradlew test`
+- **Java isn't on `PATH` in a non-login shell.** The JDK is managed by sdkman, so
+  an agent/non-interactive shell hits "Unable to locate a Java Runtime" on any
+  `./gradlew` command. Source it first:
+  `source "$HOME/.sdkman/bin/sdkman-init.sh"` (JDK 21).
 
 ## Layering (packages, by convention)
 This was a five-module Gradle build whose only payoff was compile-time
