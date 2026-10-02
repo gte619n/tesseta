@@ -1,0 +1,8 @@
+source "https://rubygems.org"
+
+# IMPL-IOS-01 — fastlane drives the TestFlight release (beta lane), code-signing
+# (match, GCS-backed, D15), and the simulator test lane. The CI workflow
+# (release-ios-on-main.yml / ios-ci.yml) runs `bundle exec fastlane`, so this
+# Gemfile pins the toolchain. Run `bundle install` to generate Gemfile.lock and
+# commit it for reproducible CI.
+gem "fastlane", ">= 2.220"
