@@ -150,3 +150,11 @@ Then exercise Google sign-in → first sync → a nutrition barcode/label scan.
   animation; without it the gesture works only on full release and reads as
   "back does nothing." Navigation-Compose handles the `OnBackInvokedCallback`
   path — don't add custom `BackHandler`s that swallow it.
+- **Nav menus mirror the web sidebar.** `web/lib/nav.ts` is the source-of-truth
+  order and label set for primary navigation. The foldable rail
+  (`DashboardFallbacks.foldableNav` in `dashboard/Fallbacks.kt`) and the phone
+  "More" hub (`MoreRows` in `MoreScreen.kt`) must keep the same item order and
+  labels (e.g. "Meds", not "Medications"); omit web items that have no Android
+  screen yet rather than adding non-navigating rows. Nav icons mirror web's
+  Tabler glyphs with the closest Material Outlined equivalent, centralized in
+  `DashboardIcons` — reuse those constants rather than `Icons.Outlined.*` ad hoc.
