@@ -10,6 +10,7 @@ import com.google.genai.types.Part;
 import com.google.genai.types.Schema;
 import com.google.genai.types.Tool;
 import com.google.genai.types.Type;
+import com.gte619n.healthfitness.core.nutrition.DrinkMath;
 import com.gte619n.healthfitness.core.nutrition.Macros;
 import com.gte619n.healthfitness.core.nutrition.MealDescriptionAnalyzer;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer;
@@ -78,12 +79,18 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
             default portion),
           - give its macros PER 100 GRAMS of that food (not per portion):
             caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams,
-            and alcoholGrams,
+            abvPercent and alcoholGrams,
           - give a confidence in [0,1] for how sure you are of the identification.
 
         Rules:
         - Macros are ALWAYS per 100 g of the food itself, independent of portion.
         - Use realistic reference values for common foods.
+        - abvPercent is the item's alcohol by volume as a percent of the drink as
+          served (a gin & tonic ~10-12%, a neat spirit ~40%, wine ~13%, beer ~5%).
+          Set it for ANY alcoholic item — beer, wine, spirits, cocktails — and 0
+          for every non-alcoholic food or drink. This is the most important
+          alcohol signal: the server converts it to grams of alcohol and its
+          ~7 kcal/g, so a spirit with no mixer still gets its calories.
         - alcoholGrams is grams of PURE ETHANOL per 100 g, for alcoholic drinks
           ONLY (beer, wine, spirits, cocktails). Alcohol carries ~7 kcal/g that
           is NOT counted in carbs/fat, so set it whenever the item contains
@@ -261,8 +268,28 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
             dbl(m.get("fatGrams")),
             dbl(m.get("fiberGrams")),
             dbl(m.get("sugarGrams")),
-            dbl(m.get("alcoholGrams"))
+            alcoholGrams(m)
         ).withDerivedCalories();
+    }
+
+    /**
+     * Resolve grams of pure ethanol per 100 g. The model reliably estimates a
+     * drink's ABV% but is unreliable at reporting grams-of-ethanol directly, so we
+     * trust its explicit {@code alcoholGrams} when it gives one but otherwise
+     * derive it from {@code abvPercent} ({@link DrinkMath#alcoholGramsPer100g}).
+     * This is what makes a neat spirit (0 protein/carbs/fat) report its alcohol
+     * calories AND auto-route to the Drinks meal instead of logging as 0 kcal.
+     */
+    private static Double alcoholGrams(Map<String, Object> m) {
+        Double explicit = dbl(m.get("alcoholGrams"));
+        if (explicit != null && explicit > 0.0) {
+            return explicit;
+        }
+        Double abv = dbl(m.get("abvPercent"));
+        if (abv != null && abv > 0.0) {
+            return DrinkMath.alcoholGramsPer100g(abv);
+        }
+        return explicit;
     }
 
     private static String str(Object o) {
@@ -297,6 +324,10 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
                 "fatGrams", Schema.builder().type(Type.Known.NUMBER).build(),
                 "fiberGrams", Schema.builder().type(Type.Known.NUMBER).build(),
                 "sugarGrams", Schema.builder().type(Type.Known.NUMBER).build(),
+                "abvPercent", Schema.builder().type(Type.Known.NUMBER)
+                    .description("Alcohol by volume as a percent of the drink as "
+                        + "served (neat spirit ~40, wine ~13, beer ~5, cocktail "
+                        + "~10-28); 0 for everything non-alcoholic.").build(),
                 "alcoholGrams", Schema.builder().type(Type.Known.NUMBER)
                     .description("Grams of PURE ALCOHOL (ethanol) per 100 g, for "
                         + "alcoholic drinks only; 0 for everything non-alcoholic.").build()

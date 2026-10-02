@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.integrations.nutrition;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealAnalysis;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealItem;
@@ -76,6 +77,67 @@ class MealDescriptionExtractorTest {
         assertThat(analysis.packagedProduct()).isTrue();
         assertThat(analysis.mealName()).isNull();
         assertThat(analysis.items()).hasSize(1);
+    }
+
+    @Test
+    void toItems_derivesAlcoholFromAbv_whenGramsOmitted() {
+        // A neat spirit: the model gives ABV% but omits alcoholGrams (common), and
+        // has no mixer macros. Without the ABV fallback this logs as 0 kcal and
+        // never routes to Drinks — the exact bug. 40% ABV → 40×0.789 = 31.56 g/100g,
+        // ×7 = 220.9 kcal/100g.
+        Map<String, Object> gin = orderedMap(
+            "name", "Gin",
+            "estimatedPortionGrams", 44.0,
+            "macrosPer100g", orderedMap(
+                "caloriesKcal", 0.0,
+                "proteinGrams", 0.0,
+                "carbsGrams", 0.0,
+                "fatGrams", 0.0,
+                "abvPercent", 40.0));
+
+        List<MealItem> items = MealDescriptionExtractor.toItems(orderedMap("items", List.of(gin)));
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).macrosPer100g().alcoholGrams()).isCloseTo(31.56, within(0.01));
+        assertThat(items.get(0).macrosPer100g().caloriesKcal()).isCloseTo(220.92, within(0.1));
+    }
+
+    @Test
+    void toItems_prefersExplicitAlcoholGrams_overAbv() {
+        // When the model does report grams of ethanol directly, trust it rather
+        // than re-deriving from ABV.
+        Map<String, Object> wine = orderedMap(
+            "name", "Red wine",
+            "estimatedPortionGrams", 150.0,
+            "macrosPer100g", orderedMap(
+                "proteinGrams", 0.0,
+                "carbsGrams", 2.6,
+                "fatGrams", 0.0,
+                "abvPercent", 13.0,
+                "alcoholGrams", 10.0));
+
+        List<MealItem> items = MealDescriptionExtractor.toItems(orderedMap("items", List.of(wine)));
+
+        assertThat(items.get(0).macrosPer100g().alcoholGrams()).isEqualTo(10.0);
+        assertThat(items.get(0).macrosPer100g().caloriesKcal()).isCloseTo(80.4, within(0.1));
+    }
+
+    @Test
+    void toItems_noAlcoholSignal_leavesAlcoholUnset() {
+        // A non-alcoholic food (no abvPercent, no alcoholGrams) must not be tagged
+        // alcoholic — otherwise it would wrongly auto-route to the Drinks meal.
+        Map<String, Object> soda = orderedMap(
+            "name", "Club soda",
+            "estimatedPortionGrams", 350.0,
+            "macrosPer100g", orderedMap(
+                "caloriesKcal", 0.0,
+                "proteinGrams", 0.0,
+                "carbsGrams", 0.0,
+                "fatGrams", 0.0));
+
+        List<MealItem> items = MealDescriptionExtractor.toItems(orderedMap("items", List.of(soda)));
+
+        assertThat(items.get(0).macrosPer100g().alcoholGrams()).isNull();
     }
 
     @Test

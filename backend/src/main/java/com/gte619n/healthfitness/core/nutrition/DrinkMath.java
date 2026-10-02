@@ -36,6 +36,17 @@ public final class DrinkMath {
         return ml * (abv / 100.0) * ETHANOL_DENSITY_G_PER_ML;
     }
 
+    /**
+     * Grams of pure alcohol per 100 g (≈100 ml) of a drink of the given ABV%.
+     * This is the per-100 g basis the AI meal extractors work in, so they can
+     * derive {@code alcoholGrams} deterministically from an ABV estimate instead
+     * of asking the model for grams-of-ethanol directly (which it estimates
+     * unreliably). Returns 0 when {@code abvPercent} is missing or ≤ 0.
+     */
+    public static double alcoholGramsPer100g(Double abvPercent) {
+        return alcoholGrams(abvPercent, 100.0);
+    }
+
     /** US standard drinks for a given alcohol-gram amount. */
     public static double standardDrinks(double alcoholGrams) {
         return alcoholGrams / GRAMS_PER_STANDARD_DRINK;
