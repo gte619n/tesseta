@@ -22,6 +22,18 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "5WX3DS8SZQ"        # Apple Developer Team ID (fastlane/Appfile mirrors this)
+
+# D6 auth/backend config lives in an xcconfig so secrets stay out of this
+# committed spec. Config/Auth.xcconfig declares EMPTY defaults for the HF_* keys
+# (substituted into Info.plist + read by AppConfig) and ends with an optional
+# `#include? "Secrets.xcconfig"` — copy Config/Secrets.example.xcconfig to
+# Config/Secrets.xcconfig (gitignored) and fill in the real client ids. An empty
+# base URL falls back to the deployed Cloud Run service (parity with Android).
+# CI can instead export the HF_* values on the xcodebuild command line.
+configFiles:
+  Debug: Config/Auth.xcconfig
+  Release: Config/Auth.xcconfig
 
 packages:
   # Google Sign-In for the /api/auth/exchange flow (D6). Real dependency — the
@@ -37,19 +49,22 @@ packages:
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     from: "1.17.0"
-  # SharedCore — the KMP core exported as an XCFramework by SKIE.
+  # SharedCore — the KMP core exported as an XCFramework.
   #
-  # Produced (once Phase 0D / Phase 1 land) by, from `shared/`:
+  # Produced (Phase 0D/1) by, from `shared/`:
   #     ./gradlew :core:assembleSharedCoreXCFramework
   # which emits `shared/core/build/XCFrameworks/release/SharedCore.xcframework`.
   #
-  # It is consumed here as a *local binary* Swift package so SPM resolves it and
-  # SKIE's generated Swift lives alongside. Until the XCFramework exists this
-  # reference is a placeholder path — the shell targets below compile against it
-  # only where they `import SharedCore` (all such call sites are currently
-  # stubbed/commented so the shell builds without the framework present).
-  SharedCore:
-    path: ../shared/core/build/XCFrameworks/SharedCore
+  # DISABLED until that XCFramework is built: XcodeGen validates local package
+  # paths even when unused, so a dangling reference fails `xcodegen generate`.
+  # Every `import SharedCore` call site in the app is currently commented out, so
+  # the app (incl. the native login flow) builds WITHOUT this — leaving it off
+  # unblocks generate + build + TestFlight today. Re-enable together with the
+  # `dependencies:` entries below once the framework exists. NOTE: a plain
+  # (non-SKIE) XCFramework is consumed as a `framework:` dependency, not a Swift
+  # `package:` — see the Phase 0D wiring notes before re-enabling.
+  # SharedCore:
+  #   path: ../shared/core/build/XCFrameworks/SharedCore
 
 targets:
   HealthFitness:
@@ -57,10 +72,13 @@ targets:
     platform: iOS
     sources:
       - path: HealthFitness
-    info:
-      path: HealthFitness/Info.plist
+    # The Info.plist is hand-maintained (capability keys in D7/D8/D10/D11/D12 +
+    # the D6 auth config/URL-scheme keys), so it is referenced via INFOPLIST_FILE
+    # — NOT the `info:` block, which would make XcodeGen *generate* (and thereby
+    # overwrite) it on every `xcodegen generate`.
     settings:
       base:
+        INFOPLIST_FILE: HealthFitness/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.gte619n.healthfitness  # placeholder bundle id
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         MARKETING_VERSION: "1.0"          # release lane overrides to 1.<rev-count>

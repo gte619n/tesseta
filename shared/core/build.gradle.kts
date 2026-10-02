@@ -28,6 +28,14 @@ plugins {
 kotlin {
     jvm()
 
+    // Native canary: macosArm64 compiles with Kotlin/Native using the macOS SDK
+    // that Command Line Tools already ship (unlike the iOS SDK, which needs full
+    // Xcode). Running `:core:macosArm64Test` proves the shared commonMain is
+    // Kotlin/Native-clean + its tests pass on native — the hardest part of the iOS
+    // compile — WITHOUT Xcode. Keep it: the self-hosted M4 can gate native-compat
+    // regressions this way even before Xcode lands.
+    macosArm64()
+
     // The XCFramework bundles both the device + Apple-silicon-simulator slices so
     // the Xcode app can link one artifact. Build it with:
     //   ./gradlew :core:assembleSharedCoreXCFramework
