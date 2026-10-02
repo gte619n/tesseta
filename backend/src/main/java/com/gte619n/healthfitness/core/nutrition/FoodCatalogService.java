@@ -173,23 +173,46 @@ public class FoodCatalogService {
 
     /**
      * An existing, non-archived catalog food to reuse instead of minting a
-     * duplicate: exact (case-insensitive) name, matching brand when one is given,
-     * and matching category when one is given. When several match, the "best" one
-     * ({@link #KEEP_PREFERENCE}: verified &gt; imaged &gt; confirmed &gt; oldest)
-     * is chosen so reuse is stable. Archived foods are skipped so a food the user
-     * deleted is never resurrected by the next capture.
+     * duplicate: {@link #normalizeName normalized}-name match (case-, whitespace-
+     * and trailing-punctuation-insensitive, so "Grilled Chicken Breast",
+     * "grilled chicken  breast" and "Grilled chicken breast." all collapse),
+     * matching brand when one is given, and matching category when one is given.
+     * When several match, the "best" one ({@link #KEEP_PREFERENCE}: verified &gt;
+     * imaged &gt; confirmed &gt; oldest) is chosen so reuse is stable. Archived
+     * foods are skipped so a food the user deleted is never resurrected by the
+     * next capture.
      */
     Optional<CatalogFood> findReusable(String name, String brand, String category) {
         if (name == null || name.isBlank()) {
             return Optional.empty();
         }
-        return repository.searchByNamePrefix(name.toLowerCase(), SEARCH_LIMIT).stream()
+        String target = normalizeName(name);
+        // Prefix-query on the normalized name so a leading/casing/whitespace
+        // difference can't hide an otherwise-identical food from the candidate set.
+        return repository.searchByNamePrefix(target, SEARCH_LIMIT).stream()
             .filter(f -> !f.isArchived() && !f.isDrink())
-            .filter(f -> f.name() != null && f.name().equalsIgnoreCase(name))
+            .filter(f -> normalizeName(f.name()).equals(target))
             .filter(f -> category == null || category.equalsIgnoreCase(f.category()))
             .filter(f -> brand == null
                 || (f.brand() != null && f.brand().equalsIgnoreCase(brand)))
             .max(KEEP_PREFERENCE);
+    }
+
+    /**
+     * Canonical form for reuse matching: lower-cased, trimmed, inner whitespace
+     * collapsed to a single space, and trailing punctuation dropped. Two capture-
+     * minted foods whose names differ only in those incidental ways are the same
+     * food for reuse purposes — this is what lets {@link #findReusable} catch the
+     * near-duplicates the old exact-match guard let through.
+     */
+    static String normalizeName(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.strip()
+            .toLowerCase()
+            .replaceAll("\\s+", " ")
+            .replaceAll("[\\s.,;:!?]+$", "");
     }
 
     /**

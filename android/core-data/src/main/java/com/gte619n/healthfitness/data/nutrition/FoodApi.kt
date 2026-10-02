@@ -15,8 +15,14 @@ import retrofit2.http.Query
 // across all users — one chicken-breast definition serves everyone.
 interface FoodApi {
 
+    // [meal] (BREAKFAST/LUNCH/DINNER/SNACK) is the meal the user is about to log;
+    // when sent, the backend floats the foods they usually eat at that time of day
+    // to the top of the results. Null ⇒ plain relevance order.
     @GET("api/foods/search")
-    suspend fun search(@Query("q") query: String): List<Food>
+    suspend fun search(
+        @Query("q") query: String,
+        @Query("meal") meal: String? = null,
+    ): List<Food>
 
     @GET("api/foods/{foodId}")
     suspend fun getFood(@Path("foodId") foodId: String): Food

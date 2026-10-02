@@ -26,14 +26,16 @@ class FoodRepository @Inject constructor(
 ) {
     private val foodAdapter = moshi.adapter(Food::class.java)
 
-    suspend fun search(query: String): List<Food> =
+    // [meal] (optional) biases results toward the foods the user usually logs at
+    // that meal — breakfast foods lead at breakfast, etc.
+    suspend fun search(query: String, meal: String? = null): List<Food> =
         // IMPL-DRINK-01 (IL-13): drinks belong only on the Drink card, never the
         // normal add-food search. The backend now excludes `category="drink"` from
         // its search, but we filter client-side too — dropping drinks before both
         // the cache write and the returned list — so a stale backend (or a drink
         // that leaked into the food path) can never surface here or seed the
         // "food" cache that [localSearch] reads.
-        api.search(query).filterNot { it.isDrink }.also { cache(it) }
+        api.search(query, meal).filterNot { it.isDrink }.also { cache(it) }
 
     /**
      * food-search-local-first: name search over the catalog foods already cached on

@@ -53,7 +53,7 @@ type Props = {
       source: "MANUAL" | "CATALOG";
     },
   ) => Promise<void>;
-  searchFoods: (q: string) => Promise<FoodResult[]>;
+  searchFoods: (q: string, meal?: Meal) => Promise<FoodResult[]>;
   deleteFood: (foodId: string) => Promise<void>;
   searchMeals: (q: string) => Promise<MealSearchResult[]>;
   describeMealAsync: (date: string, body: LogDescribedMealBody) => Promise<void>;
@@ -246,7 +246,9 @@ function SearchPane({
         // either leaves that group empty rather than failing the whole search.
         const [meals, foods] = await Promise.all([
           searchMeals(q.trim()).catch(() => [] as MealSearchResult[]),
-          searchFoods(q.trim()).catch(() => {
+          // Bias catalog results toward the meal being logged (breakfast
+          // foods lead at breakfast, etc.) — parity with the recents list.
+          searchFoods(q.trim(), meal).catch(() => {
             toast.error("Search failed");
             return [] as FoodResult[];
           }),
@@ -256,7 +258,7 @@ function SearchPane({
         setSearching(false);
       }, 220);
     },
-    [searchFoods, searchMeals, toast],
+    [searchFoods, searchMeals, meal, toast],
   );
 
   // Log a saved meal by id (reuses its ingredients + photo); closes immediately.

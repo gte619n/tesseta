@@ -20,6 +20,7 @@ import {
 } from "@/lib/nutrition-api";
 import type {
   Macros,
+  Meal,
   NutritionDay,
   UpdateIngredientBody,
   LogDescribedMealBody,
@@ -193,9 +194,9 @@ export default async function NutritionPage(props: {
     revalidatePath("/me/nutrition");
   }
 
-  async function searchFoodsAction(q: string) {
+  async function searchFoodsAction(q: string, meal?: Meal) {
     "use server";
-    return searchFoods(q);
+    return searchFoods(q, meal);
   }
 
   async function deleteFoodAction(foodId: string) {
