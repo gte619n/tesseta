@@ -1,11 +1,13 @@
 package com.gte619n.healthfitness.shared.ios
 
+import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpMedicationRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsCoachAudioPreferences
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsUnitPreferencesRepository
 import com.gte619n.healthfitness.shared.net.ApiClient
 import com.gte619n.healthfitness.shared.net.SessionTokenProvider
+import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
@@ -59,6 +61,10 @@ object IosComposition {
     /** Medications list — networked (GET /api/me/medications). */
     fun medicationsViewModel(): MedicationsViewModel =
         MedicationsViewModel(HttpMedicationRepository(client()))
+
+    /** Goals list — networked (GET /api/me/goals). */
+    fun goalsListViewModel(): GoalsListViewModel =
+        GoalsListViewModel(HttpGoalsRepository(client()))
 
     // MARK: - Flow bridge
 

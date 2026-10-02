@@ -1,137 +1,88 @@
 import SwiftUI
-// import SharedCore  // GoalsListViewModel, GoalsListUiState, Goal, GoalsFilter — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave E3 (Goals). Parity target: Android
-/// `feature-goals/.../GoalsListScreen` + `GoalsListViewModel`. Observes the
-/// SHARED `GoalsListViewModel` (shared/.../presentation/goals/GoalsListViewModel.kt)
-/// through the `ObservableViewModel` bridge — filter chips + list are a pure
-/// function of the shared UI state.
+/// Goals list (IMPL-IOS-01 Phase 1C — networked shared screen).
 ///
-/// The pattern is the medications reference vertical (MedicationsListView):
-///   1. `@State var vm = ObservableViewModel(GoalsListViewModel(repo))`
-///   2. a local `@State` mirror of the shared `GoalsListUiState`
-///   3. `.task { await vm.observe(vm.wrapped.state) { state = map($0) } }`
+/// Backed by the shared `GoalsListViewModel` over `GET /api/me/goals`. The
+/// filter (Active/Completed/Archived) and the goal list are a pure function of
+/// the shared `GoalsListUiState`, surfaced via `collectFlow`.
 struct GoalsListView: View {
+    private let vm: GoalsListViewModel
+    @State private var state: GoalsListUiState
+    @State private var subscription: FlowSubscription?
 
-    // MARK: Local mirrors (deleted post-0D; the view switches on the SKIE-
-    // bridged shared types directly).
-
-    enum Filter: String, CaseIterable, Identifiable {
-        case active = "Active", completed = "Completed", archived = "Archived"
-        var id: String { rawValue }
+    init() {
+        let model = IosComposition.shared.goalsListViewModel()
+        self.vm = model
+        _state = State(initialValue: model.state.value as! GoalsListUiState)
     }
-
-    struct GoalRow: Identifiable, Hashable {
-        let id: String
-        let title: String
-        let domainLabel: String
-        let subtitle: String?
-    }
-
-    struct ScreenState {
-        var loading: Bool = true
-        var goals: [GoalRow] = []
-        var error: String?
-    }
-
-    @State private var state = ScreenState()
-    @State private var filter: Filter = .active
 
     var body: some View {
-        content
-            .background(Theme.canvas)
-            .navigationTitle("Goals")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    NavigationLink(value: GoalsRoute.chat) {
-                        Image(systemName: "sparkles")
-                    }
-                    .accessibilityLabel("Plan a goal")
-                }
-            }
-            .navigationDestination(for: GoalsRoute.self) { route in
-                switch route {
-                case .roadmap(let id): GoalRoadmapView(goalId: id)
-                case .chat: GoalsChatView()
-                }
-            }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(GoalsListViewModel(repo: DI.goalsRepository))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
-    }
+        ScrollView {
+            VStack(spacing: 16) {
+                SegmentedChoice(
+                    options: [(GoalsFilter.active, "Active"),
+                              (GoalsFilter.completed, "Completed"),
+                              (GoalsFilter.archived, "Archived")],
+                    selection: Binding(
+                        get: { state.filter },
+                        set: { if let f = $0 { vm.setFilter(filter: f) } }))
 
-    @ViewBuilder
-    private var content: some View {
-        if state.loading {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error = state.error {
-            ContentUnavailableView("Couldn’t load goals", systemImage: "target",
-                                   description: Text(error))
-        } else {
-            List {
-                Picker("Filter", selection: $filter) {
-                    ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .listRowSeparator(.hidden)
-                // Post-0D: .onChange(of: filter) { vm.wrapped.setFilter(map(filter)) }
-
-                if state.goals.isEmpty {
-                    Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("No \(filter.rawValue.lowercased()) goals yet")
-                                .font(.hfHeadingSm)
-                                .foregroundStyle(Theme.textPrimary)
-                            Text("Tap ✦ to plan a phased roadmap with the AI coach.")
-                                .font(.hfBodySm)
-                                .foregroundStyle(Theme.textSecondary)
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    .listRowBackground(Color.clear)
-                } else {
-                    Section {
-                        ForEach(state.goals) { goal in
-                            NavigationLink(value: GoalsRoute.roadmap(goal.id)) {
-                                GoalCard(goal: goal)
-                            }
-                        }
-                    }
-                }
+                content
             }
             .formMaxWidth()
+            .padding(16)
         }
-    }
-
-    // static func map(_ s: GoalsListUiState) -> ScreenState { ... }  // Phase 0D
-}
-
-/// A single goal row — domain caps-label over the title + optional subtitle.
-private struct GoalCard: View {
-    let goal: GoalsListView.GoalRow
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(goal.domainLabel.uppercased())
-                .font(.hfCapsSm)
-                .foregroundStyle(Theme.textTertiary)
-            Text(goal.title)
-                .font(.hfBodyLg)
-                .foregroundStyle(Theme.textPrimary)
-            if let subtitle = goal.subtitle {
-                Text(subtitle)
-                    .font(.hfBodySm)
-                    .foregroundStyle(Theme.textSecondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.canvas)
+        .navigationTitle("Goals")
+        .accessibilityIdentifier("goals-list")  // IMPL-E2E-01 shared id
+        .onAppear {
+            subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                if let s = value as? GoalsListUiState { state = s }
             }
         }
-        .padding(.vertical, 2)
+        .onDisappear { subscription?.cancel() }
     }
-}
 
-/// Navigation destinations under the Goals tab.
-enum GoalsRoute: Hashable {
-    case roadmap(String)   // GoalRoadmapView — deep goal (phases + steps)
-    case chat              // GoalsChatView — SSE + markdown proposal chat
+    @ViewBuilder private var content: some View {
+        if let error = state.error {
+            message("Couldn't load goals", error, retry: true)
+        } else if state.goals.isEmpty {
+            if state.loading {
+                ProgressView().controlSize(.large).tint(Theme.accent).padding(.top, 40)
+            } else {
+                message("No \(state.filter.label.lowercased()) goals", "", retry: false)
+            }
+        } else {
+            SettingsCard(title: state.filter.label) {
+                ForEach(state.goals, id: \.goalId) { goal in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(goal.title).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
+                        if let desc = goal.description_, !desc.isEmpty {
+                            Text(desc).font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    private func message(_ title: String, _ body: String, retry: Bool) -> some View {
+        VStack(spacing: 16) {
+            Text(title).font(.hfHeadingSm).foregroundStyle(Theme.textPrimary)
+            if !body.isEmpty {
+                Text(body).font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            if retry {
+                Button("Retry") { vm.refresh() }
+                    .buttonStyle(.borderedProminent).tint(Theme.accent)
+            }
+        }
+        .padding(32)
+    }
 }
