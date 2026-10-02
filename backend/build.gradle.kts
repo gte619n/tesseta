@@ -15,7 +15,13 @@ version = "0.0.2-SNAPSHOT"
 // Override two BOM-managed transitive versions whose CVE fixes land ahead of the
 // Spring Boot 3.5.x line (the image scan gate blocks HIGH/CRITICAL with a fix
 // available). Spring Boot's dependency management reads these `ext` properties.
-//   jackson 2.21.4 — CVE-2026-54512 (databind RCE); Boot 3.5.x ships 2.19.
+//   jackson 2.21.7 — CVE-2026-54512 (databind RCE); Boot 3.5.x ships 2.19.
+//     Bumped 2.21.4 -> 2.21.7: the Trivy image-scan gate now flags four further
+//     DoS CVEs on 2.21.4 — CVE-2026-68497 (databind, unbounded numeric parsing),
+//     CVE-2026-89425 (core, unbounded StringBuilder growth), CVE-2026-91776
+//     (databind, unbounded TypeDeserializerBase cache growth) and CVE-2026-91777
+//     (databind, @JsonIdentityInfo forward-reference). 2.21.7 is the earliest
+//     2.21.x release that fixes all four.
 //   netty 4.1.138.Final — CVE-2026-42583 / -33870 / -44249 (codec) + CVE-2026-59901
 //     / -55831 / -55833 / -56745 (codec-http DoS); Boot 3.5.x ships 4.1.12x.
 //     Bumped 4.1.136 -> 4.1.137 for CVE-2026-75595 (CRITICAL, netty-handler),
@@ -33,7 +39,7 @@ version = "0.0.2-SNAPSHOT"
 //     Boot 3.5.x ships 1.15.11. Patch bump on the same minor line.
 //   httpcore5 5.4.3 — CVE-2026-54399 (httpcore5) + CVE-2026-54428 (httpcore5-h2),
 //     both HIGH; Boot 3.5.x pins 5.3.6. The property versions both core5 artifacts.
-extra["jackson-bom.version"] = "2.21.4"
+extra["jackson-bom.version"] = "2.21.7"
 extra["netty.version"] = "4.1.138.Final"
 extra["tomcat.version"] = "10.1.59"
 extra["spring-framework.version"] = "6.2.19"
