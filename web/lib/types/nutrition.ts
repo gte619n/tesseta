@@ -8,6 +8,10 @@ export type Macros = {
   fatGrams: number | null;
   fiberGrams: number | null;
   sugarGrams: number | null;
+  // Grams of pure ethanol — sits outside the 4/4/9 split and adds 7 kcal/g.
+  // Optional: absent for the vast majority of (non-alcoholic) foods, so older
+  // payloads and object literals that omit it stay valid.
+  alcoholGrams?: number | null;
 };
 
 export type Meal = "BREAKFAST" | "LUNCH" | "DINNER" | "SNACK" | "DRINKS";
@@ -447,15 +451,28 @@ export function mealForHour(hour: number): Meal {
 }
 
 /**
- * Calories derived from macros under Atwater 4/4/9 — the invariant the backend
- * enforces on every write, so forms can show the value live as the user types.
- * Null when no macro is present at all (calories-only entries stay enterable).
+ * Calories derived from macros under Atwater 4/4/9 plus 7 kcal/g alcohol — the
+ * invariant the backend enforces on every write, so forms can show the value
+ * live as the user types. Null when no macro (including alcohol) is present at
+ * all (calories-only entries stay enterable).
  */
 export function derivedCaloriesKcal(
   proteinGrams: number | null,
   carbsGrams: number | null,
   fatGrams: number | null,
+  alcoholGrams: number | null = null,
 ): number | null {
-  if (proteinGrams === null && carbsGrams === null && fatGrams === null) return null;
-  return (proteinGrams ?? 0) * 4 + (carbsGrams ?? 0) * 4 + (fatGrams ?? 0) * 9;
+  if (
+    proteinGrams === null &&
+    carbsGrams === null &&
+    fatGrams === null &&
+    alcoholGrams === null
+  )
+    return null;
+  return (
+    (proteinGrams ?? 0) * 4 +
+    (carbsGrams ?? 0) * 4 +
+    (fatGrams ?? 0) * 9 +
+    (alcoholGrams ?? 0) * ALCOHOL_KCAL_PER_GRAM
+  );
 }

@@ -49,11 +49,18 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
             if grams are not printed; null if you cannot determine it),
           - servingsPerContainer if printed,
           - macrosPerServing: the values printed FOR ONE SERVING —
-            caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams.
+            caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams,
+            and alcoholGrams.
 
         Rules:
         - Report macros PER SERVING exactly as printed; do NOT convert to per-100 g.
         - If a nutrient is absent from the panel, return null for it.
+        - alcoholGrams: for an ALCOHOLIC product (beer, wine, spirits, hard
+          seltzer), labels almost never print ethanol grams, so ESTIMATE grams
+          of pure alcohol per serving from the ABV% and serving volume
+          (grams ≈ volumeMl × ABV/100 × 0.789). Alcohol is ~7 kcal/g and is not
+          in carbs/fat, so this keeps the printed calories correct. Return 0 (or
+          null) for any non-alcoholic product.
         - Call the extract_nutrition_label tool; do not reply in prose.
         """;
 
@@ -127,14 +134,18 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
         if (raw instanceof Map<?, ?> mm) {
             Map<String, Object> m = (Map<String, Object>) mm;
             // Printed labels round, so the panel's kcal rarely matches its own
-            // macros exactly; derive calories (4/4/9) for internal consistency.
+            // macros exactly; derive calories (4/4/9 + 7·alcohol) for internal
+            // consistency. Alcohol panels omit ethanol grams, so the model
+            // estimates alcoholGrams from the ABV/volume — without it a beer's
+            // printed calories would collapse to just its carbs.
             perServing = new Macros(
                 dbl(m.get("caloriesKcal")),
                 dbl(m.get("proteinGrams")),
                 dbl(m.get("carbsGrams")),
                 dbl(m.get("fatGrams")),
                 dbl(m.get("fiberGrams")),
-                dbl(m.get("sugarGrams"))
+                dbl(m.get("sugarGrams")),
+                dbl(m.get("alcoholGrams"))
             ).withDerivedCalories();
         }
         return new LabelExtraction(
@@ -188,7 +199,11 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
                 "carbsGrams", Schema.builder().type(Type.Known.NUMBER).build(),
                 "fatGrams", Schema.builder().type(Type.Known.NUMBER).build(),
                 "fiberGrams", Schema.builder().type(Type.Known.NUMBER).build(),
-                "sugarGrams", Schema.builder().type(Type.Known.NUMBER).build()
+                "sugarGrams", Schema.builder().type(Type.Known.NUMBER).build(),
+                "alcoholGrams", Schema.builder().type(Type.Known.NUMBER)
+                    .description("Grams of PURE ALCOHOL (ethanol) per serving for an "
+                        + "alcoholic product, estimated from the ABV and serving size "
+                        + "(panels rarely print it); 0 for non-alcoholic products.").build()
             ))
             .required("caloriesKcal")
             .build();

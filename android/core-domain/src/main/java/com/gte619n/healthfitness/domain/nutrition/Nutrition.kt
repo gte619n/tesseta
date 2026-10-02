@@ -7,7 +7,14 @@ package com.gte619n.healthfitness.domain.nutrition
 // kept as ISO-8601 strings (yyyy-MM-dd) and parsed in the UI layer, mirroring
 // the Goals module.
 
-/** The six tracked macros. Every field is nullable per the contract. */
+/**
+ * The tracked macros. Every field is nullable per the contract.
+ *
+ * `alcoholGrams` is grams of pure ethanol — it sits outside the 4/4/9 split and
+ * contributes 7 kcal/g. It is null for the vast majority of foods; carrying it
+ * here lets alcoholic items keep their calories (a spirit or beer would read as
+ * 0 kcal once calories are re-derived from protein/carbs/fat alone).
+ */
 data class Macros(
     val caloriesKcal: Double? = null,
     val proteinGrams: Double? = null,
@@ -15,6 +22,7 @@ data class Macros(
     val fatGrams: Double? = null,
     val fiberGrams: Double? = null,
     val sugarGrams: Double? = null,
+    val alcoholGrams: Double? = null,
 ) {
     companion object {
         val EMPTY = Macros()
@@ -597,18 +605,20 @@ enum class Meal(val wire: String, val label: String) {
 }
 
 /**
- * Calories derived from macros under Atwater 4/4/9 — the same invariant the
- * backend enforces on every write, so the UI can show the value live as the
- * user types. Null when no macro is present at all (a calories-only entry
- * stays manually enterable).
+ * Calories derived from macros under Atwater 4/4/9 plus 7 kcal/g alcohol — the
+ * same invariant the backend enforces on every write, so the UI can show the
+ * value live as the user types. Null when no macro (including alcohol) is
+ * present at all (a calories-only entry stays manually enterable).
  */
 fun derivedCaloriesKcal(
     proteinGrams: Double?,
     carbsGrams: Double?,
     fatGrams: Double?,
+    alcoholGrams: Double? = null,
 ): Double? =
-    if (proteinGrams == null && carbsGrams == null && fatGrams == null) null
-    else (proteinGrams ?: 0.0) * 4 + (carbsGrams ?: 0.0) * 4 + (fatGrams ?: 0.0) * 9
+    if (proteinGrams == null && carbsGrams == null && fatGrams == null && alcoholGrams == null) null
+    else (proteinGrams ?: 0.0) * 4 + (carbsGrams ?: 0.0) * 4 +
+        (fatGrams ?: 0.0) * 9 + (alcoholGrams ?: 0.0) * 7
 
 /**
  * Compute the macro snapshot for a portion:
@@ -625,5 +635,6 @@ fun Macros.forPortion(servingGrams: Double, quantity: Double): Macros {
         fatGrams = scale(fatGrams),
         fiberGrams = scale(fiberGrams),
         sugarGrams = scale(sugarGrams),
+        alcoholGrams = scale(alcoholGrams),
     )
 }

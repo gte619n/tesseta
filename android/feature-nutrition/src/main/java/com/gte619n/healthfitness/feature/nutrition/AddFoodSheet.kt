@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,13 +72,17 @@ fun AddFoodSheet(
     onDescribeAsync: (Meal, String) -> Unit,
     onRelogRecent: (Meal, Entry) -> Unit,
     onLogMeal: (Meal, MealSearchResult) -> Unit,
+    // When the sheet is opened from a specific meal section's "+ Add" button we
+    // pre-select that meal; opened from the top bar it falls back to the
+    // time-of-day inference (breakfast in the morning, etc.).
+    initialMeal: Meal? = null,
     viewModel: AddFoodViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var picked by remember { mutableStateOf<Food?>(null) }
-    var meal by remember { mutableStateOf(Meal.forHour(LocalTime.now().hour)) }
+    var meal by remember { mutableStateOf(initialMeal ?: Meal.forHour(LocalTime.now().hour)) }
     var mealPickerOpen by remember { mutableStateOf(false) }
     var quickMode by remember { mutableStateOf(false) }
 
@@ -87,6 +94,12 @@ fun AddFoodSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Scroll + IME padding so the content (notably the quick-add
+                // "Add to log" button) lifts above the soft keyboard instead of
+                // being hidden behind it. The inner result/recent lists are
+                // height-bounded, so a scrolling parent is safe here.
+                .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 24.dp),
         ) {
@@ -507,16 +520,19 @@ private fun QuickAddForm(onCancel: () -> Unit, onSave: (String, Macros) -> Unit)
     var protein by remember { mutableStateOf("") }
     var carbs by remember { mutableStateOf("") }
     var fat by remember { mutableStateOf("") }
+    var alcohol by remember { mutableStateOf("") }
 
-    // Calories are derived from the macros (4/4/9, matching the backend) the
-    // moment any macro is typed; with no macros at all the user may enter
-    // calories directly (a calories-only quick add stays possible).
+    // Calories are derived from the macros (4/4/9 + 7·alcohol, matching the
+    // backend) the moment any macro is typed; with no macros at all the user may
+    // enter calories directly (a calories-only quick add stays possible).
     val derived = derivedCaloriesKcal(
         protein.toDoubleOrNull(),
         carbs.toDoubleOrNull(),
         fat.toDoubleOrNull(),
+        alcohol.toDoubleOrNull(),
     )
-    val hasMacros = protein.isNotBlank() || carbs.isNotBlank() || fat.isNotBlank()
+    val hasMacros = protein.isNotBlank() || carbs.isNotBlank() ||
+        fat.isNotBlank() || alcohol.isNotBlank()
 
     Column {
         OutlinedTextField(
@@ -530,6 +546,7 @@ private fun QuickAddForm(onCancel: () -> Unit, onSave: (String, Macros) -> Unit)
         NumberField("Protein (g)", protein) { protein = it }
         NumberField("Carbs (g)", carbs) { carbs = it }
         NumberField("Fat (g)", fat) { fat = it }
+        NumberField("Alcohol (g) — for drinks", alcohol) { alcohol = it }
         if (hasMacros) {
             Spacer(Modifier.height(10.dp))
             Text(
@@ -551,6 +568,7 @@ private fun QuickAddForm(onCancel: () -> Unit, onSave: (String, Macros) -> Unit)
                         proteinGrams = protein.toDoubleOrNull(),
                         carbsGrams = carbs.toDoubleOrNull(),
                         fatGrams = fat.toDoubleOrNull(),
+                        alcoholGrams = alcohol.toDoubleOrNull(),
                     ),
                 )
             }

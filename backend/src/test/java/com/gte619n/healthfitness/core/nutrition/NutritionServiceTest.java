@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.core.nutrition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -274,6 +275,93 @@ class NutritionServiceTest {
             () -> svc.deleteIngredient(USER, date, meal.entryId(), 0, "Salmon"));
     }
 
+    @Test
+    void finalizeCompositeMeal_autoRoutesAlcoholicDrinkToDrinks() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 25);
+
+        // A described/snapped item is first logged under the time-inferred meal…
+        svc.beginAnalyzingEntry(
+            USER, date, MealType.DINNER, null, null, "gin and soda", EntrySource.MANUAL, "a1");
+        // …then resolves to an alcoholic drink → auto-routed into DRINKS.
+        FoodEntry done = svc.finalizeCompositeMeal(
+            USER, date, "a1", "Gin and soda", List.of(alcoholIngredient("Gin", 14.0)));
+        assertEquals(MealType.DRINKS, done.meal());
+    }
+
+    @Test
+    void finalizeCompositeMeal_leavesNonAlcoholicMealWhereItWas() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 25);
+
+        svc.beginAnalyzingEntry(
+            USER, date, MealType.DINNER, null, null, "salmon and rice", EntrySource.MANUAL, "b1");
+        FoodEntry done = svc.finalizeCompositeMeal(
+            USER, date, "b1", "Salmon & Rice",
+            List.of(ingredient("Salmon", 100.0), ingredient("Rice", 100.0)));
+        assertEquals(MealType.DINNER, done.meal(), "a food with no alcohol keeps its meal");
+    }
+
+    @Test
+    void finalizeCompositeMeal_splitsMixedFoodAndDrinkIntoSeparateEntries() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 26);
+
+        svc.beginAnalyzingEntry(
+            USER, date, MealType.DINNER, null, null, "burger and a beer", EntrySource.MANUAL, "m1");
+        FoodEntry food = svc.finalizeCompositeMeal(
+            USER, date, "m1", "Burger and a beer",
+            List.of(ingredient("Burger", 500.0), alcoholIngredient("Beer", 18.0)));
+
+        // The placeholder keeps ONLY the food, under its original meal + id.
+        assertEquals("m1", food.entryId());
+        assertEquals(MealType.DINNER, food.meal());
+        assertEquals(1, food.ingredients().size());
+        assertEquals("Burger", food.ingredients().get(0).name());
+        assertEquals(500.0, food.macros().caloriesKcal(), 1e-9);
+
+        // A separate DRINKS entry was minted for the beer (18 g × 7 = 126 kcal).
+        List<FoodEntry> dayEntries = svc.listEntries(USER, date);
+        assertEquals(2, dayEntries.size(), "the mixed item became two entries");
+        FoodEntry drink = dayEntries.stream()
+            .filter(e -> e.meal() == MealType.DRINKS).findFirst().orElseThrow();
+        assertNotEquals("m1", drink.entryId(), "the drink is its own entry");
+        assertEquals("Beer", drink.foodName());
+        assertEquals(126.0, drink.macros().caloriesKcal(), 1e-9);
+
+        // The day rollup still counts everything: 500 (food) + 126 (alcohol).
+        assertEquals(626.0, svc.findByDate(USER, date).orElseThrow().caloriesKcal(), 1e-9);
+
+        // Re-running the split (as a re-analysis of the same photo would) reuses
+        // the deterministic drink id — it overwrites rather than duplicating.
+        svc.finalizeCompositeMeal(
+            USER, date, "m1", "Burger and a beer",
+            List.of(ingredient("Burger", 500.0), alcoholIngredient("Beer", 18.0)));
+        assertEquals(2, svc.listEntries(USER, date).size(), "re-split does not duplicate the drink");
+    }
+
+    @Test
+    void finalizeSingleFood_autoRoutesAlcoholicProductToDrinks() {
+        InMemNutrition rollups = new InMemNutrition();
+        InMemEntries entries = new InMemEntries();
+        NutritionService svc = new NutritionService(rollups, entries, capturingPublisher(new ArrayList<>()));
+        LocalDate date = LocalDate.of(2026, 5, 25);
+
+        // A photographed beer can (packaged product) finalizes as a single food.
+        svc.beginAnalyzingEntry(
+            USER, date, MealType.LUNCH, "photoRef", null, "analyzing…", EntrySource.PHOTO, "c1");
+        FoodEntry done = svc.finalizeSingleFood(
+            USER, date, "c1", "beer-1", "IPA 16 oz", "1 can", 473.0, 1.0,
+            new Macros(null, 0.0, 19.0, 0.0, 0.0, 0.0, 18.0));
+        assertEquals(MealType.DRINKS, done.meal());
+    }
+
     /**
      * A composite ingredient of {@code 100 g × 1} contributing {@code kcal}
      * calories — expressed as protein ({@code kcal/4} g) so the macros are
@@ -282,6 +370,12 @@ class NutritionServiceTest {
     private static CompositeIngredient ingredient(String name, double kcal) {
         Macros per100g = new Macros(kcal, kcal / 4.0, 0.0, 0.0, 0.0, 0.0);
         return new CompositeIngredient(name, null, per100g, 100.0, "100 g", 1.0, per100g);
+    }
+
+    /** An alcoholic ingredient (grams of pure ethanol, no other macros). */
+    private static CompositeIngredient alcoholIngredient(String name, double alcoholGrams) {
+        Macros m = new Macros(null, null, null, null, null, null, alcoholGrams);
+        return new CompositeIngredient(name, null, m, 100.0, "100 g", 1.0, m);
     }
 
     private static MetricChangedPublisher capturingPublisher(List<MetricChangedEvent> sink) {

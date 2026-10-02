@@ -111,11 +111,17 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer, MealAdjustmentAnal
           - estimate its portion weight in GRAMS as actually served/contained,
           - give its macros PER 100 GRAMS of that food (not per portion):
             caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams,
+            and alcoholGrams,
           - give a confidence in [0,1] for how sure you are of the identification.
 
         Rules:
         - Macros are ALWAYS per 100 g of the food itself, independent of portion.
         - Use realistic reference values for common foods.
+        - alcoholGrams is grams of PURE ETHANOL per 100 g, for alcoholic drinks
+          ONLY (beer, wine, spirits, cocktails). Alcohol carries ~7 kcal/g that
+          is NOT counted in carbs/fat, so set it whenever the item contains
+          alcohol (e.g. a 5% ABV beer ≈ 4 g per 100 g; a spirit is much higher).
+          Set 0 for any non-alcoholic food or drink.
         - If you cannot identify any food, return an empty items array.
         - Always provide mealName and isPackagedProduct.
         - Call the extract_meal_items tool; do not reply in prose.
@@ -299,14 +305,15 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer, MealAdjustmentAnal
         if (!(raw instanceof Map<?, ?> mm)) return null;
         Map<String, Object> m = (Map<String, Object>) mm;
         // The model's kcal estimate can drift from its own macro estimates;
-        // derive calories so they are always consistent (4/4/9).
+        // derive calories so they are always consistent (4/4/9 + 7·alcohol).
         return new Macros(
             dbl(m.get("caloriesKcal")),
             dbl(m.get("proteinGrams")),
             dbl(m.get("carbsGrams")),
             dbl(m.get("fatGrams")),
             dbl(m.get("fiberGrams")),
-            dbl(m.get("sugarGrams"))
+            dbl(m.get("sugarGrams")),
+            dbl(m.get("alcoholGrams"))
         ).withDerivedCalories();
     }
 
@@ -341,7 +348,10 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer, MealAdjustmentAnal
                 "carbsGrams", Schema.builder().type(Type.Known.NUMBER).build(),
                 "fatGrams", Schema.builder().type(Type.Known.NUMBER).build(),
                 "fiberGrams", Schema.builder().type(Type.Known.NUMBER).build(),
-                "sugarGrams", Schema.builder().type(Type.Known.NUMBER).build()
+                "sugarGrams", Schema.builder().type(Type.Known.NUMBER).build(),
+                "alcoholGrams", Schema.builder().type(Type.Known.NUMBER)
+                    .description("Grams of PURE ALCOHOL (ethanol) per 100 g, for "
+                        + "alcoholic drinks only; 0 for everything non-alcoholic.").build()
             ))
             .required("caloriesKcal", "proteinGrams", "carbsGrams", "fatGrams")
             .build();

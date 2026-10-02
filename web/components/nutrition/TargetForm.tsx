@@ -32,6 +32,9 @@ function macrosToStrings(m: Macros | null): Record<keyof Macros, string> {
     fatGrams: m?.fatGrams != null ? String(m.fatGrams) : "",
     fiberGrams: m?.fiberGrams != null ? String(m.fiberGrams) : "",
     sugarGrams: m?.sugarGrams != null ? String(m.sugarGrams) : "",
+    // Alcohol is not a daily target (it has no field in MACRO_FIELDS); the key
+    // exists only to satisfy Record<keyof Macros> and is never rendered or sent.
+    alcoholGrams: "",
   };
 }
 

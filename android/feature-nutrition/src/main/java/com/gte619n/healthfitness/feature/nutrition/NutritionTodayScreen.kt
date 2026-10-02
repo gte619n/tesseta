@@ -115,7 +115,8 @@ fun NutritionTodayRoute(
         onApplyLeftovers = viewModel::applyLeftovers,
         onDiscardLeftovers = viewModel::discardLeftovers,
         onRestoreFullPortion = viewModel::restoreFullPortion,
-        onOpenAddSheet = viewModel::openAddSheet,
+        onOpenAddSheet = { viewModel.openAddSheet() },
+        onAddToMeal = { meal -> viewModel.openAddSheet(meal) },
         onCloseAddSheet = viewModel::closeAddSheet,
         onAddCatalog = viewModel::addCatalogEntry,
         onAddQuick = viewModel::addQuickEntry,
@@ -164,6 +165,8 @@ fun NutritionTodayScreen(
     onDiscardLeftovers: (String) -> Unit = {},
     onRestoreFullPortion: (String) -> Unit = {},
     onOpenAddSheet: () -> Unit,
+    // Opens the add-food sheet pre-targeted at a specific meal section.
+    onAddToMeal: (Meal) -> Unit = {},
     onCloseAddSheet: () -> Unit,
     onAddCatalog: (Meal, Food, Int, Double) -> Unit,
     onAddQuick: (Meal, String, Macros) -> Unit,
@@ -214,6 +217,7 @@ fun NutritionTodayScreen(
                 onReanalyze = onReanalyze,
                 onMoveEntry = onMoveEntry,
                 onOpenEditSheet = onOpenEditSheet,
+                onAddToMeal = onAddToMeal,
             )
         }
     }
@@ -226,6 +230,7 @@ fun NutritionTodayScreen(
             onDescribeAsync = onDescribeAsync,
             onRelogRecent = onRelogRecent,
             onLogMeal = onLogMeal,
+            initialMeal = state.addSheetMeal,
         )
     }
 
@@ -350,6 +355,7 @@ private fun DayContent(
     onReanalyze: (String) -> Unit,
     onMoveEntry: (String, String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
+    onAddToMeal: (Meal) -> Unit,
 ) {
     val mealsByName = day?.meals?.associateBy { it.meal } ?: emptyMap()
     val density = LocalDensity.current
@@ -398,6 +404,7 @@ private fun DayContent(
                         onRetryImage = onRetryImage,
                         onReanalyze = onReanalyze,
                         onOpenEditSheet = onOpenEditSheet,
+                        onAddToMeal = { onAddToMeal(meal) },
                         onDragStart = { entry, pointer -> drag = MealDragState(entry, pointer) },
                         onDrag = { pointer -> drag = drag?.copy(pointerWindow = pointer) },
                         onDragEnd = {

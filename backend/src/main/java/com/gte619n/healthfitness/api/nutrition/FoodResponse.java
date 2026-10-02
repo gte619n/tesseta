@@ -74,7 +74,8 @@ public record FoodResponse(
             round1(serving.carbsGrams()),
             round1(serving.fatGrams()),
             round1(serving.fiberGrams()),
-            round1(serving.sugarGrams()));
+            round1(serving.sugarGrams()),
+            round1(serving.alcoholGrams()));
     }
 
     private static Double round1(Double v) {

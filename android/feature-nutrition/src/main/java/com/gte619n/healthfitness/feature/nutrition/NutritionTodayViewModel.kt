@@ -61,6 +61,11 @@ data class NutritionTodayUiState(
     val pendingEntryIds: Set<String> = emptySet(),
     /** true while the add-food sheet is open. */
     val addSheetOpen: Boolean = false,
+    /**
+     * The meal to pre-select in the add-food sheet (set when opened from a
+     * meal section's "+ Add" button); null falls back to time-of-day inference.
+     */
+    val addSheetMeal: Meal? = null,
     /** the entry being edited, or null when the edit sheet is closed. */
     val editingEntry: Entry? = null,
     /** true while an entry edit is being saved. */
@@ -225,9 +230,10 @@ class NutritionTodayViewModel @Inject constructor(
         }
     }
 
-    fun openAddSheet() = _state.update { it.copy(addSheetOpen = true) }
+    fun openAddSheet(meal: Meal? = null) =
+        _state.update { it.copy(addSheetOpen = true, addSheetMeal = meal) }
 
-    fun closeAddSheet() = _state.update { it.copy(addSheetOpen = false) }
+    fun closeAddSheet() = _state.update { it.copy(addSheetOpen = false, addSheetMeal = null) }
 
     // A composite (photo-logged) meal opens the ingredients sheet; everything
     // else opens the single-food edit sheet. Synthetic uploading rows have no

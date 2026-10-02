@@ -49,6 +49,7 @@ const MACRO_FIELDS: { key: keyof Macros; label: string }[] = [
   { key: "fatGrams", label: "Fat (g)" },
   { key: "fiberGrams", label: "Fiber (g)" },
   { key: "sugarGrams", label: "Sugar (g)" },
+  { key: "alcoholGrams", label: "Alcohol (g)" },
 ];
 
 function numOr(s: string): number | null {
@@ -74,6 +75,7 @@ function derivedPer100g(entry: Entry): Macros {
     fatGrams: back(entry.macros.fatGrams),
     fiberGrams: back(entry.macros.fiberGrams),
     sugarGrams: back(entry.macros.sugarGrams),
+    alcoholGrams: back(entry.macros.alcoholGrams ?? null),
   };
 }
 
@@ -87,6 +89,7 @@ function scale(per100g: Macros, grams: number, quantity: number): Macros {
     fatGrams: s(per100g.fatGrams),
     fiberGrams: s(per100g.fiberGrams),
     sugarGrams: s(per100g.sugarGrams),
+    alcoholGrams: s(per100g.alcoholGrams ?? null),
   };
 }
 
@@ -134,6 +137,7 @@ export function EditEntryModal({
     fatGrams: macroToStr(entry.macros.fatGrams),
     fiberGrams: macroToStr(entry.macros.fiberGrams),
     sugarGrams: macroToStr(entry.macros.sugarGrams),
+    alcoholGrams: macroToStr(entry.macros.alcoholGrams ?? null),
   });
   const [saving, setSaving] = useState(false);
 
@@ -148,6 +152,7 @@ export function EditEntryModal({
       fatGrams: macroToStr(next.fatGrams),
       fiberGrams: macroToStr(next.fiberGrams),
       sugarGrams: macroToStr(next.sugarGrams),
+      alcoholGrams: macroToStr(next.alcoholGrams ?? null),
     });
   }
 
@@ -184,11 +189,13 @@ export function EditEntryModal({
   const hasMacros =
     macros.proteinGrams.trim() !== "" ||
     macros.carbsGrams.trim() !== "" ||
-    macros.fatGrams.trim() !== "";
+    macros.fatGrams.trim() !== "" ||
+    macros.alcoholGrams.trim() !== "";
   const derivedKcal = derivedCaloriesKcal(
     numOr(macros.proteinGrams),
     numOr(macros.carbsGrams),
     numOr(macros.fatGrams),
+    numOr(macros.alcoholGrams),
   );
   const effectiveKcal = hasMacros ? derivedKcal : numOr(macros.caloriesKcal);
 
@@ -213,6 +220,7 @@ export function EditEntryModal({
         fatGrams: numOr(macros.fatGrams),
         fiberGrams: numOr(macros.fiberGrams),
         sugarGrams: numOr(macros.sugarGrams),
+        alcoholGrams: numOr(macros.alcoholGrams),
       },
     };
     setSaving(true);

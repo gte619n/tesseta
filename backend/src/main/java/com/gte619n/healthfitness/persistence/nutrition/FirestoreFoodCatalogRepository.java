@@ -262,6 +262,7 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
         map.put("fatGrams", m.fatGrams());
         map.put("fiberGrams", m.fiberGrams());
         map.put("sugarGrams", m.sugarGrams());
+        map.put("alcoholGrams", m.alcoholGrams());
         return map;
     }
 
@@ -273,7 +274,8 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
             asDouble(map.get("carbsGrams")),
             asDouble(map.get("fatGrams")),
             asDouble(map.get("fiberGrams")),
-            asDouble(map.get("sugarGrams"))
+            asDouble(map.get("sugarGrams")),
+            asDouble(map.get("alcoholGrams"))
         );
     }
 
