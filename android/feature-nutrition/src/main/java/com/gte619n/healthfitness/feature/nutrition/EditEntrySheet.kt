@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -77,15 +78,18 @@ fun EditEntrySheet(
     var fat by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.fatGrams)) }
     var fiber by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.fiberGrams)) }
     var sugar by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.sugarGrams)) }
+    var alcohol by remember(entry.entryId) { mutableStateOf(macroStr(entry.macros.alcoholGrams)) }
 
-    // Calories follow the macros (4/4/9, the backend's invariant) whenever any
-    // macro is present; only a macro-less (calories-only) entry keeps a manually
-    // editable calories field.
-    val hasMacros = protein.isNotBlank() || carbs.isNotBlank() || fat.isNotBlank()
+    // Calories follow the macros (4/4/9 + 7·alcohol, the backend's invariant)
+    // whenever any macro is present; only a macro-less (calories-only) entry
+    // keeps a manually editable calories field.
+    val hasMacros = protein.isNotBlank() || carbs.isNotBlank() ||
+        fat.isNotBlank() || alcohol.isNotBlank()
     val derivedKcal = derivedCaloriesKcal(
         protein.toDoubleOrNull(),
         carbs.toDoubleOrNull(),
         fat.toDoubleOrNull(),
+        alcohol.toDoubleOrNull(),
     )
     val kcal = if (hasMacros) macroStr(derivedKcal) else manualKcal
 
@@ -99,6 +103,7 @@ fun EditEntrySheet(
         fat = macroStr(scaled.fatGrams)
         fiber = macroStr(scaled.fiberGrams)
         sugar = macroStr(scaled.sugarGrams)
+        alcohol = macroStr(scaled.alcoholGrams)
     }
 
     ModalBottomSheet(
@@ -110,6 +115,9 @@ fun EditEntrySheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
+                // Lift the Save button above the soft keyboard when a macro
+                // field is focused, rather than hiding it behind the IME.
+                .imePadding()
                 .padding(horizontal = 18.dp)
                 .padding(bottom = 24.dp),
         ) {
@@ -221,7 +229,7 @@ fun EditEntrySheet(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     EditNumberField("Fiber (g)", fiber, Modifier.weight(1f)) { fiber = it }
-                    Spacer(Modifier.weight(1f))
+                    EditNumberField("Alcohol (g)", alcohol, Modifier.weight(1f)) { alcohol = it }
                 }
             }
 
@@ -257,6 +265,7 @@ fun EditEntrySheet(
                                 fatGrams = fat.toDoubleOrNull(),
                                 fiberGrams = fiber.toDoubleOrNull(),
                                 sugarGrams = sugar.toDoubleOrNull(),
+                                alcoholGrams = alcohol.toDoubleOrNull(),
                             ),
                         ),
                     )
@@ -295,6 +304,7 @@ private fun Entry.derivedPer100g(): Macros {
         fatGrams = back(macros.fatGrams),
         fiberGrams = back(macros.fiberGrams),
         sugarGrams = back(macros.sugarGrams),
+        alcoholGrams = back(macros.alcoholGrams),
     )
 }
 

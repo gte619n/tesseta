@@ -465,6 +465,47 @@ public class NutritionService {
         FoodEntry existing = entries.findById(userId, date, entryId)
             .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
         ingredients = withDerivedCalories(ingredients);
+
+        // Mixed-item split (e.g. "burger and a beer"): peel the alcoholic
+        // ingredients off into their own DRINKS entry and keep the food in this
+        // entry under its original meal. If everything is alcoholic (or nothing
+        // is), there's nothing to split and the whole entry is routed as a unit
+        // below.
+        List<CompositeIngredient> drinkIngredients = ingredients.stream()
+            .filter(NutritionService::isAlcoholic).toList();
+        boolean split = !drinkIngredients.isEmpty()
+            && drinkIngredients.size() < ingredients.size();
+        if (split) {
+            List<CompositeIngredient> foodIngredients = ingredients.stream()
+                .filter(ing -> !isAlcoholic(ing)).toList();
+            // The drink becomes a separate entry in the Drinks section. Its id is
+            // derived from the placeholder's so a re-analysis (which reopens the
+            // food entry to ANALYZING and re-runs this) overwrites that same drink
+            // entry instead of minting a duplicate.
+            addCompositeMeal(
+                userId, date, MealType.DRINKS, compositeName(drinkIngredients, "Drink"),
+                drinkIngredients, existing.source(), existing.entryId() + ":drink");
+            // The placeholder keeps the food (and the photo/image that was
+            // enqueued against its id) under whatever meal it was logged into.
+            String foodName = foodIngredients.size() == 1
+                ? foodIngredients.get(0).name() : mealName;
+            return saveComposite(existing, foodName, foodIngredients, existing.meal());
+        }
+
+        Macros total = Macros.zero();
+        for (CompositeIngredient ing : ingredients) {
+            total = total.plus(ing.macros());
+        }
+        return saveComposite(existing, mealName, ingredients, mealForAlcohol(existing.meal(), total));
+    }
+
+    /**
+     * Fill the {@code existing} placeholder in as a READY composite of
+     * {@code ingredients} under {@code meal}, summing their macros + grams, and
+     * recompute the day rollup.
+     */
+    private FoodEntry saveComposite(
+        FoodEntry existing, String mealName, List<CompositeIngredient> ingredients, MealType meal) {
         Macros total = Macros.zero();
         double grams = 0.0;
         for (CompositeIngredient ing : ingredients) {
@@ -474,15 +515,34 @@ public class NutritionService {
             }
         }
         FoodEntry updated = new FoodEntry(
-            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            existing.userId(), existing.date(), existing.entryId(), meal,
             null, mealName, ingredients.size() + " ingredients", grams, 1.0, total,
             existing.photoRef(), existing.contentHash(), existing.source(), List.copyOf(ingredients),
             existing.mealImageUrl(), existing.mealImageStatus(),
             EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover(),
             existing.adjustment());
         entries.save(updated);
-        recomputeDay(userId, date);
+        recomputeDay(existing.userId(), existing.date());
         return updated;
+    }
+
+    /** True when an ingredient carries alcohol (grams of ethanol &gt; 0). */
+    private static boolean isAlcoholic(CompositeIngredient ing) {
+        Double a = ing.macros() == null ? null : ing.macros().alcoholGrams();
+        return a != null && a > 0.0;
+    }
+
+    /** A name for a split-off group: the sole ingredient's name, else a joined list. */
+    private static String compositeName(List<CompositeIngredient> ingredients, String fallback) {
+        if (ingredients.size() == 1) {
+            String only = ingredients.get(0).name();
+            return only == null || only.isBlank() ? fallback : only;
+        }
+        List<String> names = ingredients.stream()
+            .map(CompositeIngredient::name)
+            .filter(n -> n != null && !n.isBlank())
+            .toList();
+        return names.isEmpty() ? fallback : String.join(", ", names);
     }
 
     /**
@@ -501,17 +561,37 @@ public class NutritionService {
         }
         FoodEntry existing = entries.findById(userId, date, entryId)
             .orElseThrow(() -> new IllegalArgumentException("entry not found: " + entryId));
+        Macros finalMacros = macros != null ? macros.withDerivedCalories() : null;
+        MealType meal = mealForAlcohol(existing.meal(), finalMacros);
         FoodEntry updated = new FoodEntry(
-            existing.userId(), existing.date(), existing.entryId(), existing.meal(),
+            existing.userId(), existing.date(), existing.entryId(), meal,
             foodId, foodName, servingLabel, servingGrams,
             quantity != null ? quantity : 1.0,
-            macros != null ? macros.withDerivedCalories() : null, existing.photoRef(),
+            finalMacros, existing.photoRef(),
             existing.contentHash(), existing.source(), null, null, FoodImageStatus.NONE,
             EntryAnalysisStatus.READY, existing.createdAt(), null, existing.leftover(),
             existing.adjustment());
         entries.save(updated);
         recomputeDay(userId, date);
         return updated;
+    }
+
+    /**
+     * Auto-route an AI-analyzed entry (photo or description) into the DRINKS
+     * bucket when it turns out to be alcoholic, so an alcoholic drink the user
+     * snapped or described lands in the Drinks section without them having to
+     * pick it. Only alcoholic content moves: a non-alcoholic food keeps whatever
+     * meal it was logged under, and an entry already in DRINKS stays there. This
+     * is the ONLY automatic DRINKS routing — manual adds, re-logs and catalog
+     * picks still honour the caller's chosen meal.
+     */
+    private static MealType mealForAlcohol(MealType current, Macros totals) {
+        if (current == MealType.DRINKS) {
+            return current;
+        }
+        double alcohol = totals == null || totals.alcoholGrams() == null
+            ? 0.0 : totals.alcoholGrams();
+        return alcohol > 0.0 ? MealType.DRINKS : current;
     }
 
     /**

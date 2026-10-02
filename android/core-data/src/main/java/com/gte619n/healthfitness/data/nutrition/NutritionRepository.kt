@@ -1102,6 +1102,7 @@ class NutritionRepository @Inject constructor(
             fatGrams = acc.fatGrams plusN m.fatGrams,
             fiberGrams = acc.fiberGrams plusN m.fiberGrams,
             sugarGrams = acc.sugarGrams plusN m.sugarGrams,
+            alcoholGrams = acc.alcoholGrams plusN m.alcoholGrams,
         )
     }
 
@@ -1124,6 +1125,7 @@ class NutritionRepository @Inject constructor(
         fatGrams = fatGrams?.let { it * factor },
         fiberGrams = fiberGrams?.let { it * factor },
         sugarGrams = sugarGrams?.let { it * factor },
+        alcoholGrams = alcoholGrams?.let { it * factor },
     )
 
     private fun composite(date: String, entryId: String) = "$date/$entryId"

@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -161,6 +162,7 @@ internal fun MealSection(
     onRetryImage: (String) -> Unit,
     onReanalyze: (String) -> Unit,
     onOpenEditSheet: (Entry) -> Unit,
+    onAddToMeal: () -> Unit,
     onDragStart: (Entry, Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
@@ -218,6 +220,24 @@ internal fun MealSection(
                         onDragCancel = onDragCancel,
                     )
                 }
+            }
+            // Per-section add: opens the add-food sheet already targeted at this
+            // meal, so the user doesn't have to re-pick it (mirrors the web UI).
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onAddToMeal() }
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "+ Add to ${meal.label.lowercase()}",
+                    style = Hf.type.capsSm,
+                    color = Hf.colors.accentDim,
+                )
             }
         }
     }

@@ -63,6 +63,7 @@ type Props = {
 
 function computeMacros(macrosPer100g: Macros, servingGrams: number, quantity: number): Macros {
   const scale = (servingGrams * quantity) / 100;
+  const alcohol = macrosPer100g.alcoholGrams ?? null;
   return {
     caloriesKcal: macrosPer100g.caloriesKcal !== null ? macrosPer100g.caloriesKcal * scale : null,
     proteinGrams: macrosPer100g.proteinGrams !== null ? macrosPer100g.proteinGrams * scale : null,
@@ -70,6 +71,7 @@ function computeMacros(macrosPer100g: Macros, servingGrams: number, quantity: nu
     fatGrams: macrosPer100g.fatGrams !== null ? macrosPer100g.fatGrams * scale : null,
     fiberGrams: macrosPer100g.fiberGrams !== null ? macrosPer100g.fiberGrams * scale : null,
     sugarGrams: macrosPer100g.sugarGrams !== null ? macrosPer100g.sugarGrams * scale : null,
+    alcoholGrams: alcohol !== null ? alcohol * scale : null,
   };
 }
 
@@ -731,6 +733,7 @@ const EMPTY_QUICK = {
   fatGrams: "",
   fiberGrams: "",
   sugarGrams: "",
+  alcoholGrams: "",
 };
 
 function QuickAddPane({
@@ -765,11 +768,13 @@ function QuickAddPane({
   const hasMacros =
     fields.proteinGrams.trim() !== "" ||
     fields.carbsGrams.trim() !== "" ||
-    fields.fatGrams.trim() !== "";
+    fields.fatGrams.trim() !== "" ||
+    fields.alcoholGrams.trim() !== "";
   const derived = derivedCaloriesKcal(
     numOr(fields.proteinGrams),
     numOr(fields.carbsGrams),
     numOr(fields.fatGrams),
+    numOr(fields.alcoholGrams),
   );
 
   async function handleSave() {
@@ -784,6 +789,7 @@ function QuickAddPane({
       fatGrams: numOr(fields.fatGrams),
       fiberGrams: numOr(fields.fiberGrams),
       sugarGrams: numOr(fields.sugarGrams),
+      alcoholGrams: numOr(fields.alcoholGrams),
     };
     setSaving(true);
     try {
@@ -855,6 +861,11 @@ function QuickAddPane({
           label="Sugar (g)"
           value={fields.sugarGrams}
           onChange={(v) => set("sugarGrams", v)}
+        />
+        <MacroField
+          label="Alcohol (g)"
+          value={fields.alcoholGrams}
+          onChange={(v) => set("alcoholGrams", v)}
         />
         {!hasMacros && (
           <MacroField

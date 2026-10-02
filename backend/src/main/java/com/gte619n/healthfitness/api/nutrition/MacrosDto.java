@@ -9,7 +9,10 @@ public record MacrosDto(
     Double carbsGrams,
     Double fatGrams,
     Double fiberGrams,
-    Double sugarGrams
+    Double sugarGrams,
+    // Grams of pure ethanol (null for non-alcoholic foods); carries the
+    // alcohol calories that would otherwise be dropped by 4/4/9 re-derivation.
+    Double alcoholGrams
 ) {
     public static MacrosDto from(Macros m) {
         if (m == null) return null;
@@ -19,11 +22,13 @@ public record MacrosDto(
             m.carbsGrams(),
             m.fatGrams(),
             m.fiberGrams(),
-            m.sugarGrams()
+            m.sugarGrams(),
+            m.alcoholGrams()
         );
     }
 
     public Macros toMacros() {
-        return new Macros(caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams);
+        return new Macros(
+            caloriesKcal, proteinGrams, carbsGrams, fatGrams, fiberGrams, sugarGrams, alcoholGrams);
     }
 }
