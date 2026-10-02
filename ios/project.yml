@@ -70,11 +70,12 @@ targets:
     platform: iOS
     sources:
       - path: HealthFitness
-        # UnitsView.swift is the first shared-ViewModel screen (Phase 1C), but it
-        # references SKIE's Swift overlay types which the Xcode build doesn't yet
-        # surface from the XCFramework (overlay proven functional via standalone
-        # swiftc). Excluded so the app builds; drop this once the SKIE
-        # overlay-consumption issue is resolved.
+        # UnitsView.swift (first shared-ViewModel screen) references SKIE's Swift
+        # overlay types. Xcode 26's build-system module graph does NOT surface the
+        # overlay from the XCFramework (SKIE 0.10.4 predates Xcode 26 / Swift
+        # 6.3.3). The overlay is proven functional via standalone `swiftc` — this
+        # is a SKIE↔Xcode-26 version gap, not a config issue. Excluded so the app
+        # builds; drop this once SKIE supports Xcode 26 (or switch to CocoaPods).
         excludes:
           - "Features/Settings/UnitsView.swift"
     # The Info.plist is hand-maintained (capability keys in D7/D8/D10/D11/D12 +
