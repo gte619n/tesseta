@@ -1,0 +1,177 @@
+# XcodeGen spec for the HealthFitness iOS client (IMPL-IOS-01, Phase 2A).
+#
+# Generate the .xcodeproj with:   cd ios && xcodegen generate
+# (We deliberately do NOT commit a hand-written .pbxproj — it is merge-hostile
+#  and drifts under multi-agent fan-out. This YAML is the source of truth.)
+#
+# iOS 26 / iPadOS 26 floor, latest-major-only per D16 (no @available guards).
+
+name: HealthFitness
+options:
+  bundleIdPrefix: com.gte619n
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1,2"        # 1 = iPhone, 2 = iPad (D16: iPad is a v1 requirement)
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # The SharedCore KMP framework ships device (iosArm64) + Apple-silicon-sim
+    # (iosSimulatorArm64) slices only — no Intel (iosX64). Dev + CI are Apple
+    # Silicon, so exclude x86_64 from simulator builds to match (add iosX64 to
+    # shared/core/build.gradle.kts if an Intel simulator is ever needed).
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+    DEVELOPMENT_TEAM: "5WX3DS8SZQ"        # Apple Developer Team ID (fastlane/Appfile mirrors this)
+    VERSIONING_SYSTEM: apple-generic      # lets fastlane increment_build_number (agvtool) work
+    # CODE_SIGN_STYLE is set per-target: the app uses MANUAL signing with the
+    # match-managed App Store profile (D15). It must NOT be a project-wide build
+    # setting — on the command line it leaks onto the SPM package targets
+    # (Firebase/GoogleUtilities/…), which can't take a provisioning profile.
+
+# D6 auth/backend config lives in an xcconfig so secrets stay out of this
+# committed spec. Config/Auth.xcconfig declares EMPTY defaults for the HF_* keys
+# (substituted into Info.plist + read by AppConfig) and ends with an optional
+# `#include? "Secrets.xcconfig"` — copy Config/Secrets.example.xcconfig to
+# Config/Secrets.xcconfig (gitignored) and fill in the real client ids. An empty
+# base URL falls back to the deployed Cloud Run service (parity with Android).
+# CI can instead export the HF_* values on the xcodebuild command line.
+configFiles:
+  Debug: Config/Auth.xcconfig
+  Release: Config/Auth.xcconfig
+
+packages:
+  # Google Sign-In for the /api/auth/exchange flow (D6). Real dependency — the
+  # GoogleSignInService STUB references its API shape but auth wiring lands in 2B.
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "8.0.0"
+  # Firebase (FCM -> APNs) for push-triggered sync (D7). Wired in 2C.
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: "11.0.0"
+  # Swift Testing snapshot support for per-screen snapshots (Phase 3/4 test plan).
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.17.0"
+  # SharedCore — the KMP core. Build the XCFramework BEFORE `xcodegen generate`
+  # (CI runs this first), from `shared/`:
+  #     ./gradlew :core:assembleSharedCoreXCFramework
+  # → shared/core/build/XCFrameworks/release/SharedCore.xcframework
+  # It's a plain (no-SKIE) static Kotlin/Native framework, so everything is in its
+  # ObjC-bridged clang module and loads via a direct `framework:` dependency on
+  # the app target below (no SPM wrapper / Swift overlay needed).
+
+targets:
+  HealthFitness:
+    type: application
+    platform: iOS
+    sources:
+      - path: HealthFitness
+    # The Info.plist is hand-maintained (capability keys in D7/D8/D10/D11/D12 +
+    # the D6 auth config/URL-scheme keys), so it is referenced via INFOPLIST_FILE
+    # — NOT the `info:` block, which would make XcodeGen *generate* (and thereby
+    # overwrite) it on every `xcodegen generate`.
+    settings:
+      base:
+        INFOPLIST_FILE: HealthFitness/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.gte619n.healthfitness  # placeholder bundle id
+        # Manual signing with the match-managed App Store profile (D15). Scoped to
+        # the app target so it never reaches the SPM package targets. Simulator
+        # builds pass CODE_SIGNING_ALLOWED=NO, so this only bites device/archive.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
+        PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.gte619n.healthfitness"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon   # HealthFitness/Assets.xcassets/AppIcon
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        MARKETING_VERSION: "1.0"          # release lane overrides to 1.<rev-count>
+        CURRENT_PROJECT_VERSION: "1"      # release lane overrides to <rev-count>
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - package: Firebase
+        product: FirebaseMessaging
+      # SharedCore KMP core (plain static framework, ObjC-bridged clang module).
+      - framework: ../shared/core/build/XCFrameworks/release/SharedCore.xcframework
+        embed: false
+    # SwiftLint runs as a pre-compile build phase. Uncomment once swiftlint is on
+    # the CI runner's PATH (ios-ci macos-15 provisions it via `brew install swiftlint`).
+    # preBuildScripts:
+    #   - name: SwiftLint
+    #     script: |
+    #       if which swiftlint >/dev/null; then
+    #         swiftlint --config "${SRCROOT}/.swiftlint.yml"
+    #       else
+    #         echo "warning: SwiftLint not installed"
+    #       fi
+
+  # D10 Live Activity widget extension. The ActivityKit ATTRIBUTES + controller
+  # (ios/HealthFitness/LiveActivity/WorkoutActivityAttributes.swift,
+  # WorkoutActivityController.swift) compile into the app target above. The
+  # WIDGET UI (WorkoutLiveActivityWidget + its WidgetBundle entry point) must
+  # live in this extension; at integration, move those two files under
+  # ios/WorkoutWidget/ and add WorkoutActivityAttributes.swift to BOTH targets
+  # (shared source). Left declared-but-commented until that move so `xcodegen
+  # generate` on the current tree doesn't reference an empty sources path.
+  # WorkoutWidgetExtension:
+  #   type: app-extension
+  #   platform: iOS
+  #   sources:
+  #     - path: WorkoutWidget
+  #     - path: HealthFitness/LiveActivity/WorkoutActivityAttributes.swift  # shared
+  #   settings:
+  #     base:
+  #       PRODUCT_BUNDLE_IDENTIFIER: com.gte619n.healthfitness.WorkoutWidget
+  #       INFOPLIST_KEY_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  #   dependencies:
+  #     - sdk: WidgetKit.framework
+  #     - sdk: SwiftUI.framework
+
+  HealthFitnessTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: HealthFitnessTests
+    dependencies:
+      - target: HealthFitness
+      - package: SnapshotTesting
+        product: SnapshotTesting
+      # - package: SharedCore            # the SKIE-bridged registry test needs it
+      #   product: SharedCore
+    settings:
+      base:
+        # Swift Testing is bundled with the toolchain; no extra dependency needed.
+        GENERATE_INFOPLIST_FILE: YES
+
+  HealthFitnessUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: HealthFitnessUITests
+    dependencies:
+      - target: HealthFitness
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: HealthFitness
+
+schemes:
+  HealthFitness:
+    build:
+      targets:
+        HealthFitness: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - HealthFitnessTests
+        - HealthFitnessUITests
+    archive:
+      config: Release

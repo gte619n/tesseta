@@ -1,0 +1,15 @@
+{
+  "targetId": "mt_1c4b7a90",
+  "status": "ACTIVE",
+  "macros": {
+    "caloriesKcal": 2300.0,
+    "proteinGrams": 180.0,
+    "carbsGrams": 230.0,
+    "fatGrams": 70.0,
+    "fiberGrams": 35.0,
+    "sugarGrams": 50.0
+  },
+  "effectiveFrom": "2026-05-01",
+  "createdAt": "2026-05-01T00:00:00.000Z",
+  "updatedAt": "2026-05-01T00:00:00.000Z"
+}

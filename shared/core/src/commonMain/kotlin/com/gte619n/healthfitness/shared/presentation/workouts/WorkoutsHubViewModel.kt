@@ -1,0 +1,352 @@
+package com.gte619n.healthfitness.shared.presentation.workouts
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.gte619n.healthfitness.shared.data.WorkoutProgramRepository
+import com.gte619n.healthfitness.shared.data.WorkoutSessionRepository
+import com.gte619n.healthfitness.shared.data.WorkoutStreakSettingsRepository
+import com.gte619n.healthfitness.shared.domain.workouts.program.ProgramActivationInvalidException
+import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledStatus
+import com.gte619n.healthfitness.shared.domain.workouts.program.ScheduledWorkout
+import com.gte619n.healthfitness.shared.domain.workouts.program.WorkoutProgram
+import com.gte619n.healthfitness.shared.domain.workouts.session.ParkedCompletion
+import com.gte619n.healthfitness.shared.domain.workouts.session.WorkoutSessionDraft
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
+
+/**
+ * IMPL-IOS-01 Phase 3 Wave D — KMP port of the Android `WorkoutsLandingViewModel`
+ * (the workouts hub's "This Week" landing). Resolves the *featured* program
+ * reactively — the ACTIVE one, else the most recently touched
+ * ([resolveActiveProgram]) — then observes its deep tree + calendar. Compliance
+ * ([monthDays]) and [weekStreak] are derived client-side ([ComplianceMath], the
+ * single-sourced streak logic); session-recovery banners are folded in.
+ *
+ * The visible month uses the local [YearMonth] (kotlinx-datetime has no
+ * java.time.YearMonth). `java.time` → kotlinx-datetime throughout.
+ */
+data class WorkoutsHubUiState(
+    val loading: Boolean = true,
+    /** The featured program (deep). Null → no program to show ([hasAnyProgram] disambiguates). */
+    val program: WorkoutProgram? = null,
+    val thisWeek: List<ScheduledWorkout> = emptyList(),
+    val monthDays: List<ScheduledWorkout> = emptyList(),
+    /**
+     * Cross-program (incl. archived) completed-workout days from the server
+     * heatmap — the compliance grid marks these COMPLETED so months owned by an
+     * earlier program still show workouts (parity with the web heatmap). Empty
+     * offline; the grid falls back to [monthDays] alone.
+     */
+    val completedDates: Set<LocalDate> = emptySet(),
+    val visibleMonth: YearMonth,
+    val weekStreak: Int = 0,
+    val completedThisWeek: Int = 0,
+    val weeklyStreakTarget: Int = WorkoutStreakSettings.DEFAULT_WEEKLY_TARGET,
+    /** Materialized sessions on/before today, newest first — the past-workouts pool. */
+    val pastSessions: List<ScheduledWorkout> = emptyList(),
+    val showPastSessions: Boolean = false,
+    /** False only when the user has no programs at all (drives the two empty states). */
+    val hasAnyProgram: Boolean = true,
+    val activeDraft: WorkoutSessionDraft? = null,
+    val parkedCompletion: ParkedCompletion? = null,
+    val parkedError: String? = null,
+    val restoredSession: ParkedCompletion? = null,
+    val activationIssues: List<String> = emptyList(),
+    val today: LocalDate,
+    val error: String? = null,
+)
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class WorkoutsHubViewModel(
+    private val repository: WorkoutProgramRepository,
+    private val sessionRepository: WorkoutSessionRepository,
+    private val settingsRepository: WorkoutStreakSettingsRepository,
+    /** Overridable in tests so the "this week" range and streak are deterministic. */
+    var today: LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault()),
+) : ViewModel() {
+
+    private val refreshToken = MutableStateFlow(0)
+
+    /** Null until the user navigates months; the load defaults it to [today]'s month. */
+    private val visibleMonth = MutableStateFlow<YearMonth?>(null)
+
+    /** The featured program's id, for filtering the session-recovery banners. */
+    private val resolvedProgramId = MutableStateFlow<String?>(null)
+
+    /**
+     * Cross-program (incl. archived) completed-workout days from the server
+     * heatmap. Fetched once per [refreshToken] (best-effort, online); empty when
+     * offline or on failure so the Room-backed grid still renders.
+     */
+    private val crossProgramCompleted = MutableStateFlow<Set<LocalDate>>(emptySet())
+
+    private val _state = MutableStateFlow(
+        WorkoutsHubUiState(visibleMonth = YearMonth.of(today), today = today),
+    )
+    val state: StateFlow<WorkoutsHubUiState> = _state.asStateFlow()
+
+    init {
+        load()
+        viewModelScope.launch { runCatching { settingsRepository.refresh() } }
+        // Pull the cross-program (incl. archived) completed-day heatmap once per
+        // refresh; the load folds it in so the grid + streak reflect earlier
+        // programs' months. Best-effort — empty offline leaves Room-only behaviour.
+        viewModelScope.launch {
+            refreshToken.collect {
+                crossProgramCompleted.value = runCatching { repository.completedWorkoutDays() }.getOrDefault(emptySet())
+            }
+        }
+        viewModelScope.launch {
+            combine(sessionRepository.observeDrafts(), resolvedProgramId) { drafts, pid ->
+                drafts.firstOrNull { it.programId == pid }
+            }.collect { draft -> _state.update { it.copy(activeDraft = draft) } }
+        }
+        viewModelScope.launch {
+            combine(sessionRepository.observeParkedCompletions(), resolvedProgramId) { parked, pid ->
+                parked.firstOrNull { it.programId == pid }
+            }.collect { p -> _state.update { it.copy(parkedCompletion = p) } }
+        }
+    }
+
+    fun refresh() = refreshToken.update { it + 1 }
+
+    fun prevMonth() = visibleMonth.update { (it ?: YearMonth.of(today)).minusMonths(1) }
+
+    fun nextMonth() = visibleMonth.update { (it ?: YearMonth.of(today)).plusMonths(1) }
+
+    fun openPastSessions() = _state.update { it.copy(showPastSessions = true) }
+
+    fun dismissPastSessions() = _state.update { it.copy(showPastSessions = false) }
+
+    /** Activate (or re-materialize) the featured program; the reactive load re-emits. */
+    fun activate() {
+        val programId = _state.value.program?.programId ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null, activationIssues = emptyList()) }
+            repository.activate(programId)
+                .onSuccess {
+                    _state.update { it.copy(loading = false, activationIssues = emptyList(), error = null) }
+                }
+                .onFailure { e ->
+                    if (e is ProgramActivationInvalidException) {
+                        _state.update { it.copy(loading = false, error = null, activationIssues = e.issues) }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                loading = false,
+                                error = e.message ?: "Couldn't activate the program",
+                                activationIssues = emptyList(),
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    fun dismissActivationIssues() = _state.update { it.copy(activationIssues = emptyList()) }
+
+    /** Delete a logged session: revert it to PLANNED and refresh the past-workouts picker. */
+    fun deleteSession(scheduledId: String) {
+        val programId = _state.value.program?.programId ?: return
+        viewModelScope.launch {
+            sessionRepository.reset(programId, scheduledId)
+                .onSuccess { refresh() }
+                .onFailure { e ->
+                    _state.update { it.copy(error = e.message ?: "Couldn't delete the workout") }
+                }
+        }
+    }
+
+    fun restoreParked(parked: ParkedCompletion) {
+        viewModelScope.launch {
+            sessionRepository.restoreParked(parked.programId, parked.scheduledId)
+                .onSuccess {
+                    _state.update { it.copy(parkedError = null, restoredSession = parked) }
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(parkedError = e.message ?: "Couldn't restore the workout") }
+                }
+        }
+    }
+
+    fun discardParked(parked: ParkedCompletion) {
+        viewModelScope.launch {
+            sessionRepository.discardParked(parked.programId, parked.scheduledId)
+                .onSuccess { _state.update { it.copy(parkedError = null) } }
+                .onFailure { e ->
+                    _state.update { it.copy(parkedError = e.message ?: "Couldn't discard the workout") }
+                }
+        }
+    }
+
+    fun consumeRestoredSession() = _state.update { it.copy(restoredSession = null) }
+
+    private fun load() {
+        viewModelScope.launch {
+            // Broken into explicitly-typed helper flows (loadForMonth/resolveLoad)
+            // so Kotlin's nested-combine/flatMapLatest inference doesn't cascade.
+            val loads: Flow<Result<LandingLoad>> =
+                combine(refreshToken, visibleMonth) { _, month -> month }
+                    .flatMapLatest { navMonth -> loadForMonth(navMonth ?: YearMonth.of(today)) }
+            // Fold in the weekly target and the cross-program heatmap days so the
+            // streak + grid recompute on a calendar change, a settings change
+            // (local save or sync push), or when the heatmap lands.
+            combine(loads, settingsRepository.weeklyStreakTarget, crossProgramCompleted) {
+                result: Result<LandingLoad>, target: Int, completed: Set<LocalDate> ->
+                Triple(result, target, completed)
+            }
+                .collect { (result, target, completed) ->
+                    result
+                        .onSuccess { applyLoad(it, target, completed) }
+                        .onFailure { e ->
+                            _state.update {
+                                it.copy(loading = false, error = e.message ?: "Failed to load your training")
+                            }
+                        }
+                }
+        }
+    }
+
+    /** The per-month load flow: programs → resolved active program → deep load. */
+    private fun loadForMonth(month: YearMonth): Flow<Result<LandingLoad>> {
+        _state.update {
+            it.copy(loading = true, error = null, visibleMonth = month, today = today)
+        }
+        val base: Flow<LandingLoad> = repository.observePrograms()
+            .flatMapLatest { programs -> resolveLoad(programs, month) }
+        return base
+            .map<LandingLoad, Result<LandingLoad>> { Result.success(it) }
+            .catch { emit(Result.failure(it)) }
+    }
+
+    /** Resolve the active program and build its deep/calendar/streak load. */
+    private fun resolveLoad(programs: List<WorkoutProgram>, month: YearMonth): Flow<LandingLoad> {
+        val resolved = resolveActiveProgram(programs)
+        resolvedProgramId.value = resolved?.programId
+        return if (resolved == null) {
+            flowOf(LandingLoad(null, programs.isNotEmpty(), emptyList(), month))
+        } else {
+            val monthStart = month.atStartOfMonth()
+            val monthEnd = month.atEndOfMonth()
+            val calFrom = minOf(resolved.startDate ?: monthStart, monthStart)
+            val calTo = maxOf(today, monthEnd)
+            // The streak counts completed sessions across every program; a wide
+            // look-back covers any weekly run.
+            val streakFrom = today.minus(2, DateTimeUnit.YEAR)
+            combine(
+                repository.observeProgram(resolved.programId),
+                repository.observeCalendar(resolved.programId, calFrom, calTo)
+                    .catch { emit(emptyList()) },
+                repository.observeAllCompleted(streakFrom, today)
+                    .catch { emit(emptyList()) },
+            ) { deep, cal, allCompleted ->
+                LandingLoad(deep ?: resolved, true, cal, month, allCompleted)
+            }
+        }
+    }
+
+    private fun applyLoad(data: LandingLoad, weeklyTarget: Int, completedDates: Set<LocalDate>) {
+        val program = data.program
+        if (program == null) {
+            _state.update {
+                it.copy(
+                    loading = false,
+                    program = null,
+                    hasAnyProgram = data.hasAnyProgram,
+                    thisWeek = emptyList(),
+                    monthDays = emptyList(),
+                    completedDates = emptySet(),
+                    pastSessions = emptyList(),
+                    weekStreak = 0,
+                    completedThisWeek = 0,
+                    weeklyStreakTarget = weeklyTarget,
+                    visibleMonth = data.month,
+                    error = null,
+                )
+            }
+            return
+        }
+        val weekStart = weekStartOf(today)
+        val weekEnd = weekStart.plus(6, DateTimeUnit.DAY)
+        val cal = data.calendar
+        // The streak + weekly-progress count from completed sessions across ALL
+        // programs; the grid, this-week list and history stay scoped to the
+        // featured program. Add the cross-program (incl. archived) heatmap days so a
+        // still-live streak spanning an archived program isn't under-counted vs web —
+        // synthesized COMPLETED stubs dedup by performed date inside the streak maths.
+        // Fall back to the per-program calendar only if BOTH cross-program sources
+        // came back empty (kill-switch / offline degradation).
+        val heatmapRows = completedDates.map { d -> completedStub(d) }
+        val streakSource = (data.allCompleted + heatmapRows).ifEmpty { cal }
+        _state.update {
+            it.copy(
+                loading = false,
+                program = program,
+                hasAnyProgram = true,
+                visibleMonth = data.month,
+                completedDates = completedDates,
+                thisWeek = cal.filter { s -> s.date >= weekStart && s.date <= weekEnd }.sortedBy { s -> s.date },
+                // Cross-program compliance grid: a month before this program started
+                // still holds the previous program's completed sessions (parity with the
+                // web heatmap). Union the featured calendar with the cross-program set,
+                // deduped on scheduledId (which embeds the date), cal first so the
+                // featured row wins. A session belongs to the month by its scheduled slot
+                // OR the day it was actually performed (a late completion can cross a
+                // month boundary).
+                monthDays = (cal + data.allCompleted)
+                    .distinctBy { s -> s.scheduledId }
+                    .filter { s -> s.date.inMonth(data.month) || performedDate(s).inMonth(data.month) },
+                pastSessions = cal.filter { s -> s.date <= today }.sortedByDescending { s -> s.date },
+                weekStreak = computeWeeklyStreak(streakSource, today, weeklyTarget),
+                completedThisWeek = completedThisWeek(streakSource, today),
+                weeklyStreakTarget = weeklyTarget,
+                error = null,
+            )
+        }
+    }
+}
+
+/**
+ * A minimal COMPLETED [ScheduledWorkout] standing in for a heatmap day (which
+ * carries only a date). Only date/status are read by the streak maths — the date
+ * is already the performed day (server-resolved in the user's zone), so a null
+ * completedAt makes [performedDate] fall back to it. (Android completedStub.)
+ */
+private fun completedStub(date: LocalDate): ScheduledWorkout = ScheduledWorkout(
+    scheduledId = "heatmap-$date",
+    date = date,
+    phaseId = "",
+    dayId = "",
+    dayLabel = "",
+    weekIndexInPhase = 0,
+    isDeload = false,
+    locationId = "",
+    locationName = null,
+    status = ScheduledStatus.COMPLETED,
+)
+
+/** The reactive [WorkoutsHubViewModel] load payload for one (month) window. */
+private data class LandingLoad(
+    val program: WorkoutProgram?,
+    val hasAnyProgram: Boolean,
+    val calendar: List<ScheduledWorkout>,
+    val month: YearMonth,
+    val allCompleted: List<ScheduledWorkout> = emptyList(),
+)

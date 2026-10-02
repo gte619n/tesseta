@@ -1,0 +1,65 @@
+name: e2e-local
+
+# IMPL-E2E-01 — synthetic-user E2E on the self-hosted M4 Mac (near-$0: no cloud
+# device/minute fees; runs on hardware you own). Register the mini as a
+# self-hosted runner labelled [self-hosted, macOS, ARM64, e2e] — see
+# docs/plans/IMPL-E2E-01-synthetic-user-testing.md § Self-hosted runner.
+#
+# PR  → the fast "smoke" spine (--subset), gates merges.
+# main/nightly → the full journey suite.
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 8 * * *"   # 08:00 UTC nightly full run
+  workflow_dispatch:
+    inputs:
+      subset: { description: "smoke subset only", type: boolean, default: false }
+
+concurrency:
+  group: e2e-local-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e:
+    runs-on: [self-hosted, macOS, ARM64, e2e]   # the M4 mini
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # PRs run the smoke subset; scheduled/dispatch run the full suite.
+      - name: Resolve scope
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ inputs.subset }}" = "true" ]; then
+            echo "flag=--subset" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Web always runs (cheapest, self-contained: route-mocked, boots next dev).
+      - name: Web (Playwright)
+        run: scripts/e2e/run-local.sh --platform web ${{ steps.scope.outputs.flag }}
+
+      # Android: the runner script boots the arm64 emulator + expects the debug APK
+      # installed. It self-skips (green) if no device is attached, so the workflow
+      # is usable before the emulator/APK step is wired on this runner.
+      - name: Android (Maestro)
+        run: |
+          scripts/e2e/boot-android.sh || true
+          scripts/e2e/run-local.sh --platform android ${{ steps.scope.outputs.flag }}
+
+      # iOS: self-skips until the SwiftUI app builds (IMPL-IOS-01 Phase 0D →
+      # XCFramework) and is installed on a booted simulator.
+      - name: iOS (Maestro)
+        run: scripts/e2e/run-local.sh --platform ios ${{ steps.scope.outputs.flag }}
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-reports
+          path: |
+            ~/.maestro/tests/**
+            web/playwright-report/**
+          if-no-files-found: warn

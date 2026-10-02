@@ -1,0 +1,20 @@
+# IMPL-IOS-01 fastlane Appfile. All values are ENV-driven placeholders so no
+# Apple account details are committed. The owner sets these (0E human steps) via
+# GitHub Actions secrets / repo variables in CI, or a local .env for interactive
+# runs. Fill in the fallbacks below only once the canonical bundle id / team are
+# decided.
+
+# The app's bundle identifier. ENV override wins; falls back to the registered id.
+app_identifier(ENV["APP_IDENTIFIER"] || "com.gte619n.healthfitness")
+
+# The Apple ID (email) used for App Store Connect. Optional when authenticating
+# with an App Store Connect API key (the preferred CI path); kept for local
+# interactive login.
+apple_id(ENV["APPLE_ID"])
+
+# Developer Portal team id (the 10-char team identifier). ENV override wins.
+team_id(ENV["APPLE_TEAM_ID"] || "5WX3DS8SZQ")
+
+# App Store Connect team id (only needed if the Apple ID belongs to multiple
+# App Store Connect teams).
+itc_team_id(ENV["ITC_TEAM_ID"]) if ENV["ITC_TEAM_ID"]

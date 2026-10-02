@@ -1,0 +1,9 @@
+{
+  "protocolId": "proto_trt_stack",
+  "status": "ACTIVE",
+  "name": "TRT Stack",
+  "description": "Testosterone + AI + hCG maintenance protocol",
+  "medicationIds": ["med_7f3c9a21", "med_anastrozole_01", "med_hcg_01"],
+  "createdAt": "2026-01-15T14:20:00.000Z",
+  "updatedAt": "2026-06-02T17:59:03.100Z"
+}

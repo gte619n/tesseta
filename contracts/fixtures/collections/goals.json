@@ -1,0 +1,14 @@
+{
+  "goalId": "goal_3c9f21a0",
+  "status": "ACTIVE",
+  "title": "Sub-6:00 mile",
+  "description": "Improve VO2max and running economy to break a 6-minute mile",
+  "domain": "CARDIOVASCULAR",
+  "startDate": "2026-01-01",
+  "targetDate": "2026-09-01",
+  "completedAt": null,
+  "phaseOrder": ["phase_base_01", "phase_build_02", "phase_peak_03"],
+  "source": "AI_ASSISTED",
+  "createdAt": "2026-01-01T12:00:00.000Z",
+  "updatedAt": "2026-06-02T09:00:00.000Z"
+}

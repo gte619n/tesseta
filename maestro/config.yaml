@@ -1,0 +1,15 @@
+# IMPL-E2E-01 — Maestro workspace config. `maestro test maestro/` runs every flow
+# under flows/. Tags let CI run a subset: `--include-tags=smoke` for the per-PR
+# verification spine, everything for the nightly full suite.
+#
+# Cross-platform: each flow's appId is ${MAESTRO_APP_ID}, set per-platform by
+# scripts/e2e/run-local.sh (iOS bundle id vs Android package). The SAME flow file
+# drives both native apps because it targets shared accessibility identifiers
+# (iOS .accessibilityIdentifier == Android Modifier.testTag == web data-testid) —
+# see docs/plans/IMPL-E2E-01-synthetic-user-testing.md for the id vocabulary.
+flows:
+  - "flows/**"
+
+# Fail fast in CI but keep going locally so one broken journey doesn't hide others.
+executionOrder:
+  continueOnFailure: true

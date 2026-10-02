@@ -1,0 +1,10 @@
+{
+  "messageId": "gcm_0f13a9c4",
+  "threadId": "gct_8a20f9c1",
+  "status": "ACTIVE",
+  "role": "ASSISTANT",
+  "content": "I've drafted a 3-phase plan starting with an aerobic base block. Want me to apply it?",
+  "proposalJson": "{\"goalId\":\"goal_3c9f21a0\",\"phases\":[\"phase_base_01\",\"phase_build_02\",\"phase_peak_03\"]}",
+  "createdAt": "2026-01-01T11:46:12.000Z",
+  "updatedAt": "2026-01-01T11:46:12.000Z"
+}

@@ -1,0 +1,20 @@
+{
+  "scheduledId": "2026-06-02_upper_a",
+  "status": "PLANNED",
+  "date": "2026-06-02",
+  "phaseId": "pphase_accum_01",
+  "dayId": "upper_a",
+  "dayLabel": "Upper A",
+  "weekIndexInPhase": 1,
+  "isDeload": false,
+  "locationId": "loc_home_gym_01",
+  "session": {
+    "dayId": "upper_a",
+    "label": "Upper A",
+    "blocks": []
+  },
+  "completedAt": null,
+  "durationSeconds": null,
+  "feeling": null,
+  "updatedAt": "2026-06-02T09:30:00.000Z"
+}

@@ -1,0 +1,27 @@
+# Reusable sub-flow: launch the app and land signed-in on the Today dashboard.
+# Uses dev-login (the backend's non-prod test-user mint) so journeys start from a
+# deterministic seeded account — the linchpin of reliable synthetic testing.
+# Invoked via `runFlow: ../_shared/sign-in.yaml`.
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: true          # deterministic: every journey starts cold
+- runFlow:
+    when:
+      visible:
+        id: "signin-google-button"
+    commands:
+      - tapOn:
+          id: "signin-google-button"
+      # dev-login path: the sign-in screen exposes a hidden dev affordance in
+      # non-release builds so E2E can authenticate without the real Google flow.
+      - tapOn:
+          id: "signin-devlogin-button"
+          optional: true
+# First launch shows the "Setting up" first-sync gate; wait it out.
+- extendedWaitUntil:
+    visible:
+      id: "today-dashboard"
+    timeout: 60000
+- assertVisible:
+    id: "today-dashboard"

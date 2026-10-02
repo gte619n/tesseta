@@ -1,0 +1,33 @@
+{
+  "programId": "prog_2f8a1c90",
+  "status": "ACTIVE",
+  "syncStatus": "ACTIVE",
+  "title": "Hypertrophy Block A",
+  "description": "4-day upper/lower split, 8-week progression",
+  "goalId": "goal_3c9f21a0",
+  "source": "AI_GENERATED",
+  "startDate": "2026-06-01",
+  "schedule": {
+    "trainingDays": ["MONDAY", "TUESDAY", "THURSDAY", "FRIDAY"],
+    "dayLocations": { "MONDAY": "loc_home_gym_01", "TUESDAY": "loc_home_gym_01" }
+  },
+  "phaseOrder": ["pphase_accum_01"],
+  "phases": [
+    {
+      "phaseId": "pphase_accum_01",
+      "title": "Accumulation",
+      "weeks": 4,
+      "days": []
+    }
+  ],
+  "nutritionGuidance": {
+    "kcal": 2600,
+    "proteinG": 190,
+    "carbsG": 280,
+    "fatG": 75,
+    "note": "Slight surplus on training days"
+  },
+  "completedAt": null,
+  "createdAt": "2026-05-28T14:00:00.000Z",
+  "updatedAt": "2026-06-02T09:30:00.000Z"
+}

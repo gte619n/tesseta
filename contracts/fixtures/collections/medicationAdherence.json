@@ -1,0 +1,10 @@
+{
+  "medicationId": "med_7f3c9a21",
+  "date": "2026-06-02",
+  "status": "ACTIVE",
+  "doses": [
+    { "window": "MORNING", "takenAt": "2026-06-02T08:04:11.000Z", "dose": 100.0, "missed": false }
+  ],
+  "notes": null,
+  "updatedAt": "2026-06-02T08:04:11.000Z"
+}

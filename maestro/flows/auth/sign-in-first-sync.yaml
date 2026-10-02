@@ -1,0 +1,34 @@
+# Journey J1 — Auth + first-sync gate + dashboard render.
+# Parity-matrix rows: SignInScreen, SettingUpScreen (first-sync gate), Today.
+# The foundational smoke journey: proves offline-first launch, dev-login, the
+# first-sync gate clearing, and the tab bar mounting on both iOS and Android.
+appId: ${MAESTRO_APP_ID}
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: "signin-google-button"
+- tapOn:
+    id: "signin-devlogin-button"
+    optional: true
+- tapOn:
+    id: "signin-google-button"
+# The "Setting up" gate blocks the UI until the initial delta pull completes.
+- assertVisible:
+    id: "first-sync-gate"
+    optional: true          # a warm mirror can skip straight to the dashboard
+- extendedWaitUntil:
+    visible:
+      id: "today-dashboard"
+    timeout: 60000
+# Tab bar mounted — tabs are targeted by their visible title (robust across iOS's
+# Tab API + Android's bottom nav; the tab button isn't reliably id-able).
+- assertVisible: "Today"
+- assertVisible: "Medications"
+# Relaunch WITHOUT clearing state → offline-first cached session, no sign-in.
+- launchApp:
+    clearState: false
+- assertVisible:
+    id: "today-dashboard"

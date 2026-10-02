@@ -1,0 +1,11 @@
+{
+  "historyId": "medh_4b81c220",
+  "medicationId": "med_7f3c9a21",
+  "status": "ACTIVE",
+  "changeType": "DOSE_CHANGE",
+  "previousValue": "{\"dose\":80.0,\"unit\":\"mg\"}",
+  "newValue": "{\"dose\":100.0,\"unit\":\"mg\"}",
+  "changedAt": "2026-06-02T17:59:03.100Z",
+  "notes": "Bumped after trough labs",
+  "updatedAt": "2026-06-02T17:59:03.100Z"
+}

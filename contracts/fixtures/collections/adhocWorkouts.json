@@ -1,0 +1,28 @@
+{
+  "adhocId": "aw_000000000042",
+  "status": "ACTIVE",
+  "syncStatus": "ACTIVE",
+  "title": "20-Minute Hotel Room Pump",
+  "summary": "Bodyweight upper-body circuit, no equipment needed",
+  "source": "AI_GENERATED",
+  "prompt": "Quick upper body workout I can do in a hotel room with no equipment",
+  "equipmentContext": {
+    "presetId": "bodyweight_only",
+    "label": "Bodyweight Only",
+    "equipmentIds": [],
+    "freeText": null
+  },
+  "targetDurationMinutes": 20,
+  "estimatedDurationSeconds": 1140,
+  "tags": ["travel", "bodyweight"],
+  "pinned": false,
+  "day": {
+    "dayId": "adhoc_day",
+    "label": "20-Minute Hotel Room Pump",
+    "blocks": []
+  },
+  "runCount": 3,
+  "lastPerformedAt": "2026-05-30T07:12:00.000Z",
+  "createdAt": "2026-05-15T18:00:00.000Z",
+  "updatedAt": "2026-05-30T07:12:00.000Z"
+}

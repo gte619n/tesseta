@@ -21,6 +21,8 @@ bin/
 !.env.local.example
 *.pem
 *.key
+*.p8
+AuthKey_*.p8
 service-account*.json
 credentials*.json
 # Android signing — release keystore lives only in Secret Manager.
@@ -62,3 +64,21 @@ docs/test_reports/workout_logs/impl19_preview/
 
 # Background-agent worktrees (Agent tool isolation)
 .claude/worktrees/
+
+# iOS (IMPL-IOS-01)
+# The .xcodeproj is generated from ios/project.yml by XcodeGen, never committed.
+ios/*.xcodeproj
+ios/*.xcworkspace
+ios/DerivedData/
+ios/.swiftpm/
+**/xcuserdata/
+# Local auth secrets — real client ids live here, out of git.
+# Config/Auth.xcconfig and Config/Secrets.example.xcconfig ARE tracked.
+ios/Config/Secrets.xcconfig
+
+# JVM heap dumps (e.g. Kotlin/Native OOM)
+*.hprof
+
+# fastlane run artifacts
+ios/fastlane/report.xml
+**/fastlane/report.xml

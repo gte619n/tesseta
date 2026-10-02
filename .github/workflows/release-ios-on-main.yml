@@ -1,0 +1,84 @@
+name: release-ios-on-main
+
+# IMPL-IOS-01 iOS release lane. Per decision D14 this is the ONE deploy that runs
+# on GitHub Actions rather than Cloud Build: Cloud Build has no macOS pool, and
+# building/signing an iOS app + uploading to TestFlight requires a mac. Every
+# other deploy in this repo goes through Cloud Build on a merge to main; this
+# lane is the deliberate exception.
+#
+# Trigger: a push to main that touches the app or the shared KMP module. Mirrors
+# the deploy-*-on-main convention (path-scoped, main-only).
+#
+# SECRETS (D15): the canonical copies live in GCP Secret Manager and MUST be
+# mirrored into GitHub Actions repository secrets for this lane to authenticate —
+# there is no gcloud/Secret Manager access from a macOS Actions runner. Required:
+#   APP_STORE_CONNECT_API_KEY_ID     — App Store Connect API key id
+#   APP_STORE_CONNECT_API_ISSUER_ID  — App Store Connect API issuer id
+#   APP_STORE_CONNECT_API_KEY        — the .p8 private key, base64-encoded
+#   MATCH_PASSWORD                   — passphrase for the match certificate repo
+#   MATCH_GIT_URL                    — git-backed match store URL (or use GCS)
+# GCS-backed match is the chosen storage mode (D15); MATCH_GIT_URL is kept as a
+# fallback. When using GCS, fastlane reads GOOGLE_APPLICATION_CREDENTIALS /
+# MATCH_GOOGLE_CLOUD_* instead.
+#
+# 0E HUMAN STEPS: the actual TestFlight upload is gated on the owner completing
+# Apple provisioning (Apple Developer Program enrollment, App Store Connect app
+# record, API key issuance, and seeding the match certificate store). Until those
+# are done the "Upload to TestFlight" step below cannot succeed; it is called out
+# explicitly so it is not mistaken for a code bug.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'shared/**'
+
+concurrency:
+  group: release-ios-on-main
+  cancel-in-progress: false
+
+jobs:
+  beta:
+    name: build + upload to TestFlight
+    runs-on: macos-15
+    steps:
+      # fetch-depth: 0 — the build number is derived from the full commit count
+      # (git rev-list --count HEAD), which needs the whole history, not a shallow
+      # clone.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      # Monotonic build number == total commit count on main. Matches the
+      # versionCode convention used on the android side.
+      - name: Compute build number
+        id: buildnum
+        run: echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Ruby + fastlane (bundler)
+        uses: ruby/setup-ruby@354a1ad156761f5ee2b7b13fa8e09943a5e8d252 # v1.229.0
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: ios
+
+      # fastlane `beta` lane: syncs certs (match, readonly), builds the app with
+      # gym, then uploads to the internal-testers TestFlight group. The upload has
+      # a 5-attempt retry inside the Fastfile for CICD parity with the android
+      # release lane's flaky-upload retry (App Store Connect / TestFlight
+      # processing is intermittently rate-limited).
+      #
+      # 0E HUMAN-STEP GATE: this step performs the real TestFlight upload and can
+      # only succeed once the owner has finished Apple provisioning (see the
+      # header). Until then it is expected to fail at the App Store Connect auth /
+      # signing boundary, not in our code.
+      - name: Build + upload to TestFlight (fastlane beta)
+        working-directory: ios
+        env:
+          BUILD_NUMBER: ${{ steps.buildnum.outputs.build }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+        run: bundle exec fastlane beta
