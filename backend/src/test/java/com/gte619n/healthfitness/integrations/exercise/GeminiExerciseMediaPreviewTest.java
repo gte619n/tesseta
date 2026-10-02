@@ -54,7 +54,7 @@ class GeminiExerciseMediaPreviewTest {
         GeminiExerciseMediaService media = new GeminiExerciseMediaService(
             null, null, new GroundingImageResolver(null, "test-exercise-media", false),
             Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(),
-            "gemini-3.1-flash-image-preview", false);
+            "gemini-3.1-flash-image-preview", false, null);
 
         Path outDir = locate("docs/test_reports/workout_logs").resolve("media_preview");
         Files.createDirectories(outDir);

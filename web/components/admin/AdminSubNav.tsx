@@ -6,6 +6,9 @@ import { usePathname } from 'next/navigation';
 
 const SECTIONS: { href: Route; label: string; icon: string }[] = [
   { href: '/admin' as Route, label: 'Overview', icon: 'layout-dashboard' },
+  { href: '/admin/users' as Route, label: 'Users', icon: 'users' },
+  { href: '/admin/curation' as Route, label: 'Curation', icon: 'checklist' },
+  { href: '/admin/ai-usage' as Route, label: 'AI usage', icon: 'chart-dots' },
   { href: '/admin/equipment' as Route, label: 'Equipment', icon: 'barbell' },
   { href: '/admin/exercises' as Route, label: 'Exercises', icon: 'stretching' },
   { href: '/admin/drugs' as Route, label: 'Drugs', icon: 'pill' },

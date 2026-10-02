@@ -116,6 +116,9 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         Map<String, Object> body = new HashMap<>();
         body.put("email", user.email());
         body.put("displayName", user.displayName());
+        // Lowercased email for the admin console's prefix search (IMPL-MULTIUSER-01
+        // P1.5). Safe to re-merge on every save since it's derived from email.
+        body.put("emailLower", user.email() == null ? null : user.email().toLowerCase(java.util.Locale.ROOT));
         // Sync lifecycle status (IMPL-AND-20 D2). User profiles are never
         // soft-deleted via this app, but the sync set includes users/{uid},
         // so stamp ACTIVE for delta-read consistency.
@@ -123,6 +126,12 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         body.put("updatedAt", serverTimestamp());
         if (!existing.exists()) {
             body.put("createdAt", serverTimestamp());
+            // Access-control fields are written ONLY at creation (IMPL-MULTIUSER-01
+            // P1.1), mirroring createdAt — a routine upsert must never clobber an
+            // admin's role or a suspension. Admin mutations use updateRoles/updateStatus.
+            body.put("roles", user.roles().stream()
+                .map(com.gte619n.healthfitness.core.user.UserRole::name).toList());
+            body.put("status", user.status().name());
         }
         await(docRef.set(body, SetOptions.merge()));
     }
@@ -273,6 +282,111 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
         return ids;
     }
 
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void updateStatus(String userId, com.gte619n.healthfitness.core.user.UserStatus status) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", status == null ? null : status.name());
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void updateRoles(String userId, Set<com.gte619n.healthfitness.core.user.UserRole> roles) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        List<String> names = (roles == null || roles.isEmpty())
+            ? List.of(com.gte619n.healthfitness.core.user.UserRole.USER.name())
+            : roles.stream().map(com.gte619n.healthfitness.core.user.UserRole::name).toList();
+        body.put("roles", names);
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void updateDeletionSchedule(
+        String userId,
+        com.gte619n.healthfitness.core.user.UserStatus status,
+        java.time.Instant scheduledAt) {
+        var docRef = firestore.collection(COLLECTION).document(userId);
+        Map<String, Object> body = new HashMap<>();
+        if (status != null) {
+            body.put("status", status.name());
+        }
+        // A null schedule clears the field (reactivation); non-null stamps it.
+        body.put("deletionScheduledAt",
+            scheduledAt == null
+                ? com.google.cloud.firestore.FieldValue.delete()
+                : java.util.Date.from(scheduledAt));
+        body.put("updatedAt", serverTimestamp());
+        await(docRef.set(body, SetOptions.merge()));
+    }
+
+    @Override
+    public List<User> findDeletionDue(java.time.Instant cutoff) {
+        List<User> out = new ArrayList<>();
+        for (QueryDocumentSnapshot doc : await(firestore.collection(COLLECTION)
+            .whereLessThanOrEqualTo("deletionScheduledAt", java.util.Date.from(cutoff))
+            .get()).getDocuments()) {
+            out.add(toUser(doc.getId(), doc));
+        }
+        return out;
+    }
+
+    @Override
+    @CacheEvict(cacheNames = "userById", key = "#userId")
+    public void deleteById(String userId) {
+        // Hard-delete the top-level user doc. Subcollection recursive delete is
+        // NOT performed here (a known limitation — see decision log); the Firestore
+        // Admin bulk-delete / recursiveDelete API would be used for a full cascade.
+        await(firestore.collection(COLLECTION).document(userId).delete());
+    }
+
+    @Override
+    public List<User> search(
+        String query,
+        com.gte619n.healthfitness.core.user.UserStatus status,
+        int limit) {
+        com.google.cloud.firestore.Query q = firestore.collection(COLLECTION);
+        if (query != null && !query.isBlank()) {
+            // Case-insensitive prefix match on emailLower via the standard
+            // Firestore range trick ([prefix, prefix+]).
+            String prefix = query.trim().toLowerCase(java.util.Locale.ROOT);
+            q = q.orderBy("emailLower")
+                .startAt(prefix)
+                .endAt(prefix + "");
+        } else if (status != null) {
+            q = q.whereEqualTo("status", status.name());
+        }
+        q = q.limit(Math.max(1, limit));
+        List<User> out = new ArrayList<>();
+        for (QueryDocumentSnapshot doc : await(q.get()).getDocuments()) {
+            User u = toUser(doc.getId(), doc);
+            // When both a query and a status filter are supplied, the prefix
+            // query already constrained the result; apply status in-memory.
+            if (query != null && !query.isBlank() && status != null && u.status() != status) {
+                continue;
+            }
+            out.add(u);
+        }
+        return out;
+    }
+
+    @Override
+    public List<User> findAdmins() {
+        List<User> out = new ArrayList<>();
+        for (QueryDocumentSnapshot doc : await(firestore.collection(COLLECTION)
+            .whereArrayContains("roles",
+                com.gte619n.healthfitness.core.user.UserRole.ADMIN.name())
+            .get()).getDocuments()) {
+            out.add(toUser(doc.getId(), doc));
+        }
+        return out;
+    }
+
     private static User toUser(String userId, DocumentSnapshot snapshot) {
         Long heightLong = snapshot.getLong("heightCm");
         Integer heightCm = heightLong == null ? null : heightLong.intValue();
@@ -289,8 +403,41 @@ public class UserRepository implements com.gte619n.healthfitness.core.user.UserR
             sexStr == null ? null : com.gte619n.healthfitness.core.user.BiologicalSex.valueOf(sexStr),
             dobStr == null ? null : java.time.LocalDate.parse(dobStr),
             toWithings(snapshot),
-            toHiddenBiometrics(snapshot)
+            toHiddenBiometrics(snapshot),
+            // Backfill-on-read: legacy docs with no roles/status normalize to
+            // {USER}/ACTIVE via the User compact constructor (IMPL-MULTIUSER-01 P1.1).
+            toRoles(snapshot),
+            toStatus(snapshot),
+            // Backfill-on-read: legacy docs have no deletionScheduledAt → null
+            // (not scheduled) (IMPL-MULTIUSER-01 P1.7).
+            toInstant(snapshot.get("deletionScheduledAt"))
         );
+    }
+
+    private static java.util.Set<com.gte619n.healthfitness.core.user.UserRole> toRoles(
+        DocumentSnapshot snapshot) {
+        Object raw = snapshot.get("roles");
+        if (!(raw instanceof List<?> list) || list.isEmpty()) return null; // → default {USER}
+        java.util.Set<com.gte619n.healthfitness.core.user.UserRole> out =
+            java.util.EnumSet.noneOf(com.gte619n.healthfitness.core.user.UserRole.class);
+        for (Object o : list) {
+            try {
+                out.add(com.gte619n.healthfitness.core.user.UserRole.valueOf(String.valueOf(o)));
+            } catch (IllegalArgumentException ignored) {
+                // unknown role name in storage — skip, never fail a read
+            }
+        }
+        return out.isEmpty() ? null : out;
+    }
+
+    private static com.gte619n.healthfitness.core.user.UserStatus toStatus(DocumentSnapshot snapshot) {
+        String raw = snapshot.getString("status");
+        if (raw == null) return null; // → default ACTIVE
+        try {
+            return com.gte619n.healthfitness.core.user.UserStatus.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static List<String> toHiddenBiometrics(DocumentSnapshot snapshot) {

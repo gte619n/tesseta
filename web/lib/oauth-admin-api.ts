@@ -2,7 +2,11 @@ import { apiFetch, apiJson } from './api';
 import type {
   OAuthClientSummary,
   OAuthClientRegistration,
+  RegisterOAuthClientRequest,
 } from './types/oauth';
+
+// Re-export the request type so existing server-side importers keep working.
+export type { RegisterOAuthClientRequest } from './types/oauth';
 
 // Admin-only third-party OAuth client APIs (ADR-0020). Server-only (uses
 // apiFetch). Backed by AdminOAuthClientController:
@@ -12,14 +16,6 @@ import type {
 export async function listOAuthClients(): Promise<OAuthClientSummary[]> {
   return apiJson<OAuthClientSummary[]>('/api/admin/oauth-clients');
 }
-
-export type RegisterOAuthClientRequest = {
-  name: string;
-  logoUrl?: string | null;
-  redirectUris: string[];
-  scopes: string[];
-  confidential: boolean;
-};
 
 export async function registerOAuthClient(
   data: RegisterOAuthClientRequest,

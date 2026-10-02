@@ -4,6 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gte619n.healthfitness.core.auth.CurrentUser;
 import com.gte619n.healthfitness.core.auth.CurrentUserProvider;
+import com.gte619n.healthfitness.core.user.AdminBootstrap;
+import com.gte619n.healthfitness.core.user.User;
+import com.gte619n.healthfitness.core.user.UserRole;
+import com.gte619n.healthfitness.core.user.UserStatus;
+import com.gte619n.healthfitness.testsupport.InMemoryUserRepository;
+import java.time.Instant;
+import java.util.EnumSet;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,7 +37,9 @@ class AdminAuthorizerTest {
         }
         return new CurrentUser("sub", null, null, null);
     };
-    private final AdminAuthorizer authorizer = new AdminAuthorizer(provider, ADMIN);
+    private final InMemoryUserRepository users = new InMemoryUserRepository();
+    private final AdminAuthorizer authorizer =
+        new AdminAuthorizer(provider, users, new AdminBootstrap(ADMIN));
 
     @AfterEach
     void clearContext() {
@@ -69,6 +79,26 @@ class AdminAuthorizerTest {
     @Test
     void nonAllowlistedEmailIsNeverAdmin() {
         authenticate("stranger@example.com", true);
+        assertThat(authorizer.isAdmin()).isFalse();
+    }
+
+    @Test
+    void userWithAdminRoleIsAdminEvenWhenNotInEnvAllowlist() {
+        // IMPL-MULTIUSER-01 P1.2: admin is now data-driven. A user whose record
+        // carries the ADMIN role is admin regardless of ADMIN_EMAILS.
+        users.save(new User("sub-1", "role-admin@example.com", "Role Admin", null, null,
+            Instant.now(), Instant.now(), null, null, null, List.of(),
+            EnumSet.of(UserRole.USER, UserRole.ADMIN), UserStatus.ACTIVE));
+        authenticate("role-admin@example.com", true);
+        assertThat(authorizer.isAdmin()).isTrue();
+    }
+
+    @Test
+    void plainUserRecordIsNotAdmin() {
+        users.save(new User("sub-1", "plain@example.com", "Plain", null, null,
+            Instant.now(), Instant.now(), null, null, null, List.of(),
+            EnumSet.of(UserRole.USER), UserStatus.ACTIVE));
+        authenticate("plain@example.com", true);
         assertThat(authorizer.isAdmin()).isFalse();
     }
 }

@@ -56,13 +56,17 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
     private final Client client;
     private final String model;
     private final Tool tool;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public GeminiWorkoutProgramChatClient(
         Client client,
-        @Value("${app.workout-programs.gemini-model:gemini-3.1-pro-preview}") String model
+        @Value("${app.workout-programs.gemini-model:gemini-3.1-pro-preview}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
         this.tool = Tool.builder()
             .functionDeclarations(List.of(proposeTool(), exerciseHistoryTool(), labHistoryTool()))
             .build();
@@ -91,6 +95,14 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
         StringBuilder text = new StringBuilder();
         WorkoutProgram proposal = null;
 
+        // IMPL-MULTIUSER-01 P2.2: this is an agentic multi-round STREAMING client.
+        // Streaming usage lands on each round's terminal chunk; sum the per-round
+        // terminal usage across the whole conversation and record ONE event after
+        // the loop (streaming=true, WORKOUT_PROGRAM_CHAT).
+        java.time.Instant startedAt = java.time.Instant.now();
+        long inTokens = 0;
+        long outTokens = 0;
+        try {
         // Agentic loop: the model may call read-only data tools (exercise/lab
         // history) and use the results before it calls propose_workout_program.
         // Each round streams text to the user; on a data-tool call we feed the
@@ -98,9 +110,15 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
         // terminal (its args become the proposal — no function response needed).
         for (int round = 0; round < MAX_TOOL_ROUNDS && proposal == null; round++) {
             List<FunctionCall> dataCalls = new ArrayList<>();
+            com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.Usage roundUsage =
+                com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.Usage.EMPTY;
             try (ResponseStream<GenerateContentResponse> stream =
                      client.models.generateContentStream(model, contents, config)) {
                 for (GenerateContentResponse chunk : stream) {
+                    var u = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(chunk);
+                    if (u.totalTokens() > 0 || u.inputTokens() > 0 || u.outputTokens() > 0) {
+                        roundUsage = u;
+                    }
                     String delta = chunk.text();
                     if (delta != null && !delta.isEmpty()) {
                         text.append(delta);
@@ -118,6 +136,8 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
                     }
                 }
             }
+            inTokens += roundUsage.inputTokens();
+            outTokens += roundUsage.outputTokens();
             if (proposal != null || dataCalls.isEmpty()) break;
             // Append the model's tool-call turn + our function responses, then loop.
             for (FunctionCall call : dataCalls) {
@@ -136,6 +156,14 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
                     .parts(List.of(Part.fromFunctionResponse(name, result))).build());
             }
         }
+        } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.WORKOUT_PROGRAM_CHAT, model, true, startedAt);
+            throw e;
+        }
+        recorder.recordSuccess(
+            com.gte619n.healthfitness.core.ai.AiFeature.WORKOUT_PROGRAM_CHAT, model,
+            inTokens, outTokens, 0, true, startedAt);
         return new StreamResult(text.toString(), proposal);
     }
 

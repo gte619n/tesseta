@@ -50,13 +50,17 @@ public class ServingHintExtractor implements ServingHintAnalyzer {
 
     private final Client client;
     private final String model;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public ServingHintExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.5-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.5-flash}}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
     }
 
     @Override
@@ -77,15 +81,21 @@ public class ServingHintExtractor implements ServingHintAnalyzer {
             facts.append("\nCOMPONENTS: ").append(String.join(", ", components));
         }
         Content content = Content.fromParts(Part.fromText(PROMPT), Part.fromText(facts.toString()));
+        java.time.Instant startedAt = java.time.Instant.now();
         try {
             GenerateContentResponse response =
                 client.models.generateContent(model, content, GenerateContentConfig.builder().build());
+            var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+            recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.SERVING_HINT, model,
+                usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
             String text = response.text();
             if (text == null || text.isBlank()) {
                 return Optional.empty();
             }
             return Optional.of(text.strip());
         } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.SERVING_HINT, model, false, startedAt);
             log.warn("Serving-hint generation failed for {}: {}", name, e.getMessage());
             return Optional.empty();
         }

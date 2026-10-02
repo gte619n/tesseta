@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.core.auth.RefreshTokenStore;
 import com.gte619n.healthfitness.core.auth.RefreshTokenStore.StoredRefreshToken;
 import com.gte619n.healthfitness.core.user.User;
 import com.gte619n.healthfitness.core.user.UserRepository;
+import com.gte619n.healthfitness.core.user.UserStatus;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -75,9 +76,14 @@ public class SessionTokenService {
     }
 
     // First leg: a freshly-validated Google identity is exchanged for a session.
+    // IMPL-MULTIUSER-01 P1.4: a non-ACTIVE account (pending/suspended/disabled)
+    // can never mint a session — the exchange 403s and the client routes the
+    // lockout. A brand-new dev-login identity with no user doc is treated ACTIVE.
     public TokenPair issueFor(CurrentUser user) {
         Instant now = Instant.now();
-        String access = mintAccessToken(user.userId(), user.email(), user.displayName(), now);
+        UserStatus status = statusOf(user.userId());
+        requireActive(status);
+        String access = mintAccessToken(user.userId(), user.email(), user.displayName(), status, now);
         return new TokenPair(
             access,
             now.plus(props.getAccessTtl()).getEpochSecond(),
@@ -203,7 +209,22 @@ public class SessionTokenService {
     private String mintAccessTokenForUser(String userId, Instant now) {
         User user = users.findById(userId)
             .orElseThrow(() -> new InvalidRefreshTokenException("user no longer exists"));
-        return mintAccessToken(user.userId(), user.email(), user.displayName(), now);
+        // P1.4: refreshing a non-ACTIVE account is denied at the boundary, so a
+        // suspension bites within the short access-token TTL even on the silent
+        // refresh path. 403 (not 401) so the client doesn't loop on sign-in.
+        requireActive(user.status());
+        return mintAccessToken(user.userId(), user.email(), user.displayName(), user.status(), now);
+    }
+
+    /** Status of an existing user, or ACTIVE when no doc exists (e.g. dev-login). */
+    private UserStatus statusOf(String userId) {
+        return users.findById(userId).map(User::status).orElse(UserStatus.ACTIVE);
+    }
+
+    private void requireActive(UserStatus status) {
+        if (status != null && !status.isActive()) {
+            throw new AccountNotActiveException(status);
+        }
     }
 
     // Sign-out. Best-effort: an unparseable/unknown token is a no-op so logout
@@ -219,7 +240,8 @@ public class SessionTokenService {
         }
     }
 
-    private String mintAccessToken(String userId, String email, String displayName, Instant now) {
+    private String mintAccessToken(
+        String userId, String email, String displayName, UserStatus status, Instant now) {
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
             .issuer(props.getIssuer())
             .subject(userId)
@@ -230,6 +252,12 @@ public class SessionTokenService {
         }
         if (displayName != null) {
             claims.claim("name", displayName);
+        }
+        // P1.4 (decision D14): stamp the account status so a future claim-only
+        // fast path can enforce lockout without a read. Enforcement today is
+        // read-through via the cached user doc; this claim is forward-looking.
+        if (status != null) {
+            claims.claim("status", status.name());
         }
         try {
             SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims.build());

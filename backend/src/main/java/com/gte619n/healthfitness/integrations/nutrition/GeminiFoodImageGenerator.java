@@ -215,13 +215,17 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
 
     private final Client client;
     private final String model;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public GeminiFoodImageGenerator(
         Client client,
-        @Value("${app.nutrition.images.model:gemini-3.1-flash-image}") String model
+        @Value("${app.nutrition.images.model:gemini-3.1-flash-image}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
     }
 
     @Override
@@ -317,9 +321,16 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();
 
+            java.time.Instant startedAt = java.time.Instant.now();
             GenerateContentResponse response = client.models.generateContent(model, content, config);
+            var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+            recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.FOOD_IMAGE_GEN, model,
+                usage.inputTokens(), usage.outputTokens(), 1, false, startedAt);
             return extractImage(response, foodName);
         } catch (Exception e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.FOOD_IMAGE_GEN, model, false,
+                java.time.Instant.now());
             log.warn("Food image generation with reference failed for {}: {}", foodName, e.getMessage());
             // Fall back to text-only generation.
             return execute(
@@ -339,9 +350,16 @@ public class GeminiFoodImageGenerator implements FoodImageGenerator {
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();
 
+            java.time.Instant startedAt = java.time.Instant.now();
             GenerateContentResponse response = client.models.generateContent(model, content, config);
+            var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+            recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.FOOD_IMAGE_GEN, model,
+                usage.inputTokens(), usage.outputTokens(), 1, false, startedAt);
             return extractImage(response, foodName);
         } catch (Exception e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.FOOD_IMAGE_GEN, model, false,
+                java.time.Instant.now());
             log.warn("Food image generation failed for {}: {}", foodName, e.getMessage());
             return Optional.empty();
         }

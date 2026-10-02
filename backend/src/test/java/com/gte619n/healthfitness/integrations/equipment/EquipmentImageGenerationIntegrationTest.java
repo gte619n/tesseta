@@ -54,7 +54,7 @@ class EquipmentImageGenerationIntegrationTest {
         // Mock the storage + repository — this test exercises the Gemini call only.
         EquipmentImageStorage storage = Mockito.mock(EquipmentImageStorage.class);
         EquipmentRepository repository = Mockito.mock(EquipmentRepository.class);
-        return new EquipmentImageService(storage, repository, apiKey, "gemini-3.1-flash-image-preview");
+        return new EquipmentImageService(storage, repository, apiKey, "gemini-3.1-flash-image-preview", null);
     }
 
     // ==================== TEST METHODS — ONE PER SPEC SCHEMA ====================

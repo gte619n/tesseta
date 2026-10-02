@@ -93,10 +93,15 @@ public class EquipmentParserService implements EquipmentParser {
     private final Client client;
     private final String model;
     private final ObjectMapper json;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink. This service
+    // builds its OWN Client, but the recorder is still injected so its calls
+    // are metered like every other Gemini service (D6).
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public EquipmentParserService(
         @Value("${app.equipment.parser-api-key:}") String apiKey,
-        @Value("${app.equipment.parser-model:gemini-3.8-flash}") String model
+        @Value("${app.equipment.parser-model:gemini-3.8-flash}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException(
@@ -105,6 +110,7 @@ public class EquipmentParserService implements EquipmentParser {
         this.client = Client.builder().apiKey(apiKey).build();
         this.model = model;
         this.json = JsonSupport.LENIENT;
+        this.recorder = recorder;
     }
 
     /**
@@ -131,11 +137,17 @@ public class EquipmentParserService implements EquipmentParser {
         GenerateContentConfig config = GenerateContentConfig.builder().build();
 
         String text;
+        java.time.Instant startedAt = java.time.Instant.now();
         try {
             GenerateContentResponse response =
                 client.models.generateContent(model, content, config);
+            var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+            recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.EQUIPMENT_PARSE, model,
+                usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
             text = response.text();
         } catch (Exception e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.EQUIPMENT_PARSE, model, false, startedAt);
             log.error("Gemini equipment parser call failed", e);
             throw new EquipmentParserException(
                 "Gemini call failed: " + e.getMessage(), e);

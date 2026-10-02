@@ -28,6 +28,12 @@ data class ProfileDto(
     val dateOfBirth: String? = null,
     // Metric keys hidden from the dashboard (empty/absent = all shown).
     val hiddenBiometrics: List<String>? = null,
+    // IMPL-MULTIUSER-01 P1.8 — true when the backend considers this user an admin
+    // (role ADMIN or a bootstrap admin email). The single source of truth for the
+    // owner-gated affordances that used to key off a hardcoded OWNER_EMAILS set.
+    // Nullable/defaulted so pre-field payloads (and the mirror rows written before
+    // this build) still decode; absent => treated as non-admin.
+    val isAdmin: Boolean? = null,
 )
 
 // Partial update body. Omitted fields are left unchanged by the backend; a null

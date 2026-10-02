@@ -43,16 +43,21 @@ public class EquipmentImageService implements EquipmentImageGenerator, Equipment
     private final EquipmentRepository equipmentRepository;
     private final Client client;
     private final String model;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink. This service
+    // builds its OWN Client, but the recorder is still injected (D6).
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public EquipmentImageService(
         EquipmentImageStorage storage,
         EquipmentRepository equipmentRepository,
         @Value("${app.equipment.gemini-api-key:${GEMINI_API_KEY:}}") String apiKey,
-        @Value("${app.equipment.gemini-model:gemini-3.1-flash-image}") String model
+        @Value("${app.equipment.gemini-model:gemini-3.1-flash-image}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.storage = storage;
         this.equipmentRepository = equipmentRepository;
         this.model = model;
+        this.recorder = recorder;
         if (apiKey == null || apiKey.isBlank()) {
             // Allow startup without a key so non-image-gen flows still work;
             // an actual generation attempt will fail loudly and mark the
@@ -262,10 +267,19 @@ public class EquipmentImageService implements EquipmentImageGenerator, Equipment
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();
 
+            java.time.Instant startedAt = java.time.Instant.now();
             GenerateContentResponse response = client.models.generateContent(model, content, config);
-
+            if (recorder != null) {
+                var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+                recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.EQUIPMENT_IMAGE, model,
+                    usage.inputTokens(), usage.outputTokens(), 1, false, startedAt);
+            }
             return extractImageBytes(response, equipmentId);
         } catch (Exception e) {
+            if (recorder != null) {
+                recorder.recordError(com.gte619n.healthfitness.core.ai.AiFeature.EQUIPMENT_IMAGE, model,
+                    false, java.time.Instant.now());
+            }
             log.error("Gemini image generation call failed for equipment {}: {}",
                 equipmentId, e.getMessage(), e);
             return null;

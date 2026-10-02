@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.mobile.auth
 
+import com.gte619n.healthfitness.data.auth.AccountStatusSignal
 import com.gte619n.healthfitness.data.auth.AuthState
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
@@ -30,6 +31,9 @@ class AuthCoordinator @Inject constructor(
     // different account signs in (see wipeIfAccountSwitched).
     private val lastAccount: LastAccountStore,
     private val signOutSideEffects: SignOutSideEffects,
+    // IMPL-MULTIUSER-01 P1.4: the HTTP layer reports a `403 + X-Account-Status` here;
+    // we collect it and flip into the locked-out state (+ wipe PHI on suspend/disable).
+    private val accountStatusSignal: AccountStatusSignal,
 ) {
     private val _state = MutableStateFlow<AuthState>(AuthState.Loading)
     val state: StateFlow<AuthState> = _state
@@ -37,6 +41,49 @@ class AuthCoordinator @Inject constructor(
     // Application-scoped: owns the background token refresh kicked off at launch.
     // Survives MainActivity recreation (this is a @Singleton).
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        // P1.4 lockout: observe non-active account statuses surfaced by any API
+        // call (or exchange/refresh) for the whole app lifetime. Application-scoped
+        // (@Singleton), so this single collector survives Activity recreation.
+        scope.launch {
+            accountStatusSignal.events.collect { status -> onAccountStatus(status) }
+        }
+    }
+
+    /**
+     * P1.4 — turn a backend `X-Account-Status` into the locked-out [AuthState].
+     *
+     * - PENDING: awaiting approval → [AuthState.Pending]; no local wipe (an
+     *   un-approved account has no PHI to protect, and the tokens are left so a
+     *   later approval + relaunch resolves normally).
+     * - SUSPENDED / DISABLED: access revoked → [AuthState.Suspended]; wipe local
+     *   PHI (D15) via [SignOutSideEffects.wipeLocalData]. The backend has already
+     *   revoked the session (DISABLED burns the refresh-token family), so we drop
+     *   the dead tokens too; `LastAccountStore` is deliberately left intact so a
+     *   future sign-in by a different account still trips the account-switch wipe.
+     *
+     * Idempotent: a storm of 403s (many in-flight requests) collapses to one
+     * transition — once we're already in the terminal state we do nothing.
+     */
+    private suspend fun onAccountStatus(status: AccountStatusSignal.Status) {
+        when (status) {
+            AccountStatusSignal.Status.PENDING -> {
+                if (_state.value !is AuthState.Pending) _state.value = AuthState.Pending
+            }
+            AccountStatusSignal.Status.SUSPENDED,
+            AccountStatusSignal.Status.DISABLED -> {
+                val disabled = status == AccountStatusSignal.Status.DISABLED
+                val already = _state.value as? AuthState.Suspended
+                if (already != null && already.disabled == disabled) return
+                // Wipe PHI first, then drop the dead tokens, before publishing the
+                // state so the locked-out screen never renders over live data.
+                runCatching { signOutSideEffects.wipeLocalData() }
+                runCatching { cache.clear() }
+                _state.value = AuthState.Suspended(disabled = disabled)
+            }
+        }
+    }
 
     // offline-fix: guards the launch-path bootstrap so it runs exactly once even
     // though it's kicked from HealthFitnessApp.onCreate (earliest) and the Activity

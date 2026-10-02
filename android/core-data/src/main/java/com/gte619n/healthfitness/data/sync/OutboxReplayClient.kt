@@ -57,9 +57,24 @@ class OutboxReplayHttpException(
     /** The server's error body (best-effort), so the failure reason can be
      *  surfaced to the user instead of swallowed. Null/blank when absent. */
     val serverMessage: String? = null,
+    /**
+     * IMPL-MULTIUSER-01 D16 — the `X-Account-Status` header value when the replay
+     * 403'd on a non-active account (`account-pending|suspended|disabled`), else
+     * null. A 403 carrying this is an *account-state* rejection, not a payload
+     * rejection: the write itself is perfectly valid and must be PRESERVED (not
+     * dropped as terminal) so it replays if the account is reactivated. See
+     * [isTerminal].
+     */
+    val accountStatus: String? = null,
 ) : RuntimeException(message) {
+    /**
+     * A deterministic payload rejection that can only ever re-fail identically, so
+     * the drain parks/self-heals it rather than retrying forever. A 403 carrying
+     * [accountStatus] is explicitly NOT terminal: the row is valid and locking the
+     * account must not discard the user's queued writes (D16).
+     */
     val isTerminal: Boolean
-        get() = code in 400..499 && code !in RETRYABLE_CLIENT_CODES
+        get() = accountStatus == null && code in 400..499 && code !in RETRYABLE_CLIENT_CODES
 
     companion object {
         // 401 can recover after a token refresh / re-login, 408/425 are
@@ -129,6 +144,9 @@ class RestOutboxReplayClient @Inject constructor(
                     code = resp.code,
                     message = "Outbox replay failed: HTTP ${resp.code} for $method $url",
                     serverMessage = serverErrorMessage(text),
+                    // D16: a 403 account-status rejection must not look terminal — the
+                    // queued write is valid; the account is just locked. Preserve it.
+                    accountStatus = resp.header("X-Account-Status"),
                 )
             }
             return extractLastUpdate(text)

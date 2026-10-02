@@ -130,13 +130,17 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer, MealAdjustmentAnal
     private final Client client;
     private final String model;
     private final Tool tool;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public MealPhotoExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
         this.tool = Tool.builder()
             .functionDeclarations(List.of(extractMealItemsTool()))
             .build();
@@ -162,13 +166,19 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer, MealAdjustmentAnal
             .tools(List.of(tool))
             .build();
 
+        java.time.Instant startedAt = java.time.Instant.now();
         GenerateContentResponse response;
         try {
             response = client.models.generateContent(model, content, config);
         } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.MEAL_PHOTO, model, false, startedAt);
             log.warn("Meal photo extraction call failed: {}", e.getMessage());
             throw new NutritionExtractionException("meal photo extraction failed", e);
         }
+        var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+        recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.MEAL_PHOTO, model,
+            usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
 
         Map<String, Object> args = toolArgs(response);
         if (args == null) {
@@ -199,13 +209,19 @@ public class MealPhotoExtractor implements MealPhotoAnalyzer, MealAdjustmentAnal
             .tools(List.of(tool))
             .build();
 
+        java.time.Instant startedAt = java.time.Instant.now();
         GenerateContentResponse response;
         try {
             response = client.models.generateContent(model, content, config);
         } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.MEAL_PHOTO, model, false, startedAt);
             log.warn("Meal adjustment call failed: {}", e.getMessage());
             throw new NutritionExtractionException("meal adjustment failed", e);
         }
+        var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+        recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.MEAL_PHOTO, model,
+            usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
 
         Map<String, Object> args = toolArgs(response);
         if (args == null) {

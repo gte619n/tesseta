@@ -68,13 +68,17 @@ public class DrinkExtractor implements DrinkAnalyzer {
     private final Client client;
     private final String model;
     private final Tool extractTool;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public DrinkExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
         this.extractTool = Tool.builder()
             .functionDeclarations(List.of(extractDrinkTool()))
             .build();
@@ -93,13 +97,19 @@ public class DrinkExtractor implements DrinkAnalyzer {
             .tools(List.of(extractTool))
             .build();
 
+        java.time.Instant startedAt = java.time.Instant.now();
         GenerateContentResponse response;
         try {
             response = client.models.generateContent(model, content, config);
         } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.DRINK, model, false, startedAt);
             log.warn("Drink extraction call failed: {}", e.getMessage());
             throw new NutritionExtractionException("drink extraction failed", e);
         }
+        var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+        recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.DRINK, model,
+            usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
         Map<String, Object> args = toolArgs(response, EXTRACT_TOOL);
         if (args == null) {
             throw new NutritionExtractionException("Gemini did not return an extract_drink tool call");

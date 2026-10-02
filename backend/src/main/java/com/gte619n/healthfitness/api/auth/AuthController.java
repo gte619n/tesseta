@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.api.auth;
 
+import com.gte619n.healthfitness.auth.AccountNotActiveException;
 import com.gte619n.healthfitness.auth.AppAuthProperties;
 import com.gte619n.healthfitness.auth.SessionTokenService;
 import com.gte619n.healthfitness.auth.SessionTokenService.InvalidRefreshTokenException;
@@ -134,6 +135,16 @@ public class AuthController {
             sessions.revoke(body.refreshToken());
         }
         return ResponseEntity.noContent().build();
+    }
+
+    // IMPL-MULTIUSER-01 P1.4: a pending/suspended/disabled account mapped to 403
+    // with the stable problem type as the reason, so web/Android route the
+    // lockout (pending-approval screen vs. suspended page) instead of retrying.
+    @org.springframework.web.bind.annotation.ExceptionHandler(AccountNotActiveException.class)
+    ResponseEntity<Void> handleAccountNotActive(AccountNotActiveException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .header("X-Account-Status", e.problemType())
+            .build();
     }
 
     private void requireEnabled() {

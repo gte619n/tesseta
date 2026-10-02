@@ -83,6 +83,83 @@ public class TestPersistenceConfig {
         return new InMemoryUserRepository();
     }
 
+    // IMPL-MULTIUSER-01 Pillar 2: in-memory AI usage store so GeminiCallRecorder
+    // wires in the full context (Firestore store is off in tests). Records events
+    // in a list; rollup reads return empty (no full-context test reads them).
+    @Bean
+    com.gte619n.healthfitness.core.ai.AiUsageStore aiUsageStore() {
+        return new com.gte619n.healthfitness.core.ai.AiUsageStore() {
+            final java.util.List<com.gte619n.healthfitness.core.ai.AiUsageEvent> events =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+            @Override public void recordEvent(com.gte619n.healthfitness.core.ai.AiUsageEvent event) {
+                events.add(event);
+            }
+            @Override public java.util.Optional<com.gte619n.healthfitness.core.ai.AiUsageSummary>
+                monthlyForUser(String userId, String yearMonth) { return java.util.Optional.empty(); }
+            @Override public java.util.Optional<com.gte619n.healthfitness.core.ai.AiUsageSummary>
+                monthlyGlobal(String yearMonth) { return java.util.Optional.empty(); }
+            @Override public List<com.gte619n.healthfitness.core.ai.AiUsageSummary>
+                topSpenders(String yearMonth, int limit) { return List.of(); }
+        };
+    }
+
+    // IMPL-MULTIUSER-01 P1.6: in-memory audit log so ImpersonationService wires in
+    // the full context (Firestore audit repo is off in tests). Append + recent.
+    @Bean
+    com.gte619n.healthfitness.core.audit.AuditLogRepository auditLogRepository() {
+        return new com.gte619n.healthfitness.core.audit.AuditLogRepository() {
+            final java.util.List<com.gte619n.healthfitness.core.audit.AuditEntry> rows =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+            @Override public void append(com.gte619n.healthfitness.core.audit.AuditEntry entry) {
+                rows.add(entry);
+            }
+            @Override public List<com.gte619n.healthfitness.core.audit.AuditEntry> recent(int limit) {
+                java.util.List<com.gte619n.healthfitness.core.audit.AuditEntry> copy =
+                    new java.util.ArrayList<>(rows);
+                java.util.Collections.reverse(copy);
+                return copy.stream().limit(Math.max(1, limit)).toList();
+            }
+        };
+    }
+
+    // IMPL-MULTIUSER-01 Pillar 3: in-memory catalog repos so ProgramCatalogService
+    // / AdHocCatalogService wire in the full context (Firestore repos off in tests).
+    @Bean
+    com.gte619n.healthfitness.core.workoutprogram.catalog.CatalogWorkoutProgramRepository
+        catalogWorkoutProgramRepository() {
+        return new com.gte619n.healthfitness.testsupport.catalog.InMemoryCatalogWorkoutProgramRepository();
+    }
+
+    @Bean
+    com.gte619n.healthfitness.core.adhoc.catalog.CatalogAdHocWorkoutRepository
+        catalogAdHocWorkoutRepository() {
+        return new com.gte619n.healthfitness.testsupport.catalog.InMemoryCatalogAdHocWorkoutRepository();
+    }
+
+    // IMPL-MULTIUSER-01 P1.3: in-memory invite allowlist (Firestore off in tests).
+    @Bean
+    com.gte619n.healthfitness.core.access.EmailAllowlistRepository emailAllowlistRepository() {
+        return new com.gte619n.healthfitness.core.access.EmailAllowlistRepository() {
+            private final java.util.Set<String> allowed =
+                java.util.concurrent.ConcurrentHashMap.newKeySet();
+            private final java.util.Map<String,
+                com.gte619n.healthfitness.core.access.EmailAllowlistEntry> rows =
+                new java.util.concurrent.ConcurrentHashMap<>();
+            @Override public boolean contains(String emailLower) { return allowed.contains(emailLower); }
+            @Override public void add(com.gte619n.healthfitness.core.access.EmailAllowlistEntry entry) {
+                allowed.add(entry.emailLower());
+                rows.put(entry.emailLower(), entry);
+            }
+            @Override public void remove(String emailLower) {
+                allowed.remove(emailLower);
+                rows.remove(emailLower);
+            }
+            @Override public List<com.gte619n.healthfitness.core.access.EmailAllowlistEntry> list() {
+                return new java.util.ArrayList<>(rows.values());
+            }
+        };
+    }
+
     // ADR-0010: in-memory refresh-token store (Firestore is off in tests).
     @Bean
     com.gte619n.healthfitness.core.auth.RefreshTokenStore refreshTokenStore() {
@@ -354,6 +431,30 @@ public class TestPersistenceConfig {
                 com.gte619n.healthfitness.core.nutrition.FoodImageStatus status, int limit) {
                 return store.values().stream()
                     .filter(f -> f.imageStatus() == status)
+                    .limit(limit)
+                    .toList();
+            }
+
+            @Override public List<CatalogFood> findByCreatedByAndCategory(
+                String userId, String category) {
+                return store.values().stream()
+                    .filter(f -> userId != null && userId.equals(f.createdBy()))
+                    .filter(f -> category != null && category.equalsIgnoreCase(f.category()))
+                    .toList();
+            }
+
+            @Override public List<CatalogFood> findAll() {
+                return new java.util.ArrayList<>(store.values());
+            }
+
+            @Override public List<CatalogFood> findPendingVerification(int limit) {
+                // IMPL-MULTIUSER-01 P3.4: UNVERIFIED + user-sourced, non-archived,
+                // non-drink. Mirrors the Firestore repo's filter.
+                return store.values().stream()
+                    .filter(f -> f.status()
+                        == com.gte619n.healthfitness.core.nutrition.FoodStatus.UNVERIFIED)
+                    .filter(f -> f.createdBy() != null && !f.createdBy().isBlank())
+                    .filter(f -> !f.isArchived() && !f.isDrink())
                     .limit(limit)
                     .toList();
             }

@@ -48,6 +48,17 @@ export type OAuthClientRegistration = OAuthClientSummary & {
   clientSecret: string | null;
 };
 
+// Request body for POST /api/admin/oauth-clients. Lives here (client-safe) so
+// the admin client component can type the register server-action prop without
+// importing the server-only oauth-admin-api module.
+export type RegisterOAuthClientRequest = {
+  name: string;
+  logoUrl?: string | null;
+  redirectUris: string[];
+  scopes: string[];
+  confidential: boolean;
+};
+
 // The read-only scopes a third-party app can request. Mirrors the backend
 // PlatformScope enum — keep in sync with
 // backend/.../platform/PlatformScope.java (there is no catalog endpoint).

@@ -248,6 +248,8 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
     private final String model;
     private final boolean groundingEnabled;
     private final Client client;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public GeminiExerciseMediaService(
         ExerciseMediaStorage storage,
@@ -255,7 +257,8 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         GroundingImageResolver grounding,
         Client client,
         @Value("${app.exercises.media.model:gemini-3.1-flash-image}") String model,
-        @Value("${app.exercises.media.grounding-enabled:true}") boolean groundingEnabled
+        @Value("${app.exercises.media.grounding-enabled:true}") boolean groundingEnabled,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.storage = storage;
         this.exerciseService = exerciseService;
@@ -263,6 +266,7 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
         this.model = model;
         this.groundingEnabled = groundingEnabled;
         this.client = client;
+        this.recorder = recorder;
     }
 
     @Override
@@ -745,9 +749,19 @@ public class GeminiExerciseMediaService implements ExerciseMediaGenerator, Exerc
             GenerateContentConfig config = GenerateContentConfig.builder()
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();
+            java.time.Instant startedAt = java.time.Instant.now();
             GenerateContentResponse response = client.models.generateContent(model, content, config);
+            if (recorder != null) {
+                var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+                recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.EXERCISE_MEDIA, model,
+                    usage.inputTokens(), usage.outputTokens(), 1, false, startedAt);
+            }
             return extractImageBytes(response, exerciseId);
         } catch (Exception e) {
+            if (recorder != null) {
+                recorder.recordError(com.gte619n.healthfitness.core.ai.AiFeature.EXERCISE_MEDIA, model,
+                    false, java.time.Instant.now());
+            }
             log.error("Gemini image call failed for exercise {}: {}", exerciseId, e.getMessage(), e);
             return null;
         }

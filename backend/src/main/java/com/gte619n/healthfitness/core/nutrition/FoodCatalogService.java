@@ -668,6 +668,57 @@ public class FoodCatalogService {
     }
 
     /**
+     * IMPL-MULTIUSER-01 P3.4 (D7) — user-sourced foods awaiting admin promotion
+     * to the trusted/app-wide {@code VERIFIED} tier (still instantly usable by
+     * their creator while UNVERIFIED). Newest first, bounded.
+     */
+    public List<CatalogFood> listPendingVerification() {
+        return repository.findPendingVerification(SEARCH_LIMIT).stream()
+            .sorted(Comparator.comparing(
+                CatalogFood::createdAt,
+                Comparator.nullsLast(Comparator.reverseOrder())))
+            .toList();
+    }
+
+    /**
+     * IMPL-MULTIUSER-01 P3.4 (D7) — admin promotion of a user-sourced food to
+     * the trusted/app-wide {@code VERIFIED} tier. Idempotent: an already-VERIFIED
+     * food is returned unchanged. Stamps {@code verifiedAt} when it flips.
+     * Raises {@link NoSuchElementException} for an unknown id.
+     */
+    public CatalogFood promoteToVerified(String foodId) {
+        CatalogFood food = get(foodId);
+        if (food.status() == FoodStatus.VERIFIED) {
+            return food;
+        }
+        CatalogFood updated = new CatalogFood(
+            food.foodId(),
+            food.name(),
+            food.nameLower(),
+            food.brand(),
+            food.barcode(),
+            food.category(),
+            food.macrosPer100g(),
+            food.servingSizes(),
+            food.defaultServingIndex(),
+            food.source(),
+            food.sourceRef(),
+            FoodStatus.VERIFIED,
+            food.confirmationCount(),
+            Instant.now(),
+            food.imageUrl(),
+            food.imageStatus(),
+            food.createdBy(),
+            food.createdAt(),
+            null,
+            food.alcohol(),
+            food.archivedAt()
+        );
+        repository.save(updated);
+        return updated;
+    }
+
+    /**
      * Record one distinct user's confirmation. Recomputes the denormalized
      * count and promotes the food to {@code VERIFIED} once it reaches the
      * configured threshold.

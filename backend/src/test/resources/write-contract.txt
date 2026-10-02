@@ -178,3 +178,36 @@ IDEMPOTENT_DELETE|POST /api/admin/exercises/{exerciseId}/grounding/remove
 SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/publish
 SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/reviewed
 SET_SEMANTICS|POST /api/admin/exercises/{exerciseId}/select-frame
+
+# ---- IMPL-MULTIUSER-01 P1.5: admin user console (admin config, not offline-outbox) ----
+SET_SEMANTICS|POST /api/admin/users/{userId}/status
+SET_SEMANTICS|POST /api/admin/users/{userId}/approve
+SET_SEMANTICS|POST /api/admin/users/{userId}/role
+SET_SEMANTICS|POST /api/admin/users/allowlist
+IDEMPOTENT_DELETE|DELETE /api/admin/users/allowlist/{email}
+# IMPL-MULTIUSER-01 P1.7: export-then-delete offboarding (D13). export is a
+# read-shaped POST (assembles a bundle, no mutation); schedule-deletion converges.
+NON_PERSISTING_POST|POST /api/admin/users/{userId}/export
+SET_SEMANTICS|POST /api/admin/users/{userId}/schedule-deletion
+# IMPL-MULTIUSER-01 P1.6: read-only impersonation (D17). start mints an ephemeral
+# in-memory grant (durable audit row is append-only, not offline-outbox data);
+# write-probe always rejects — neither persists user/outbox data.
+NON_PERSISTING_POST|POST /api/admin/impersonation/start
+NON_PERSISTING_POST|POST /api/admin/impersonation/write-probe
+
+# ---- IMPL-MULTIUSER-01 P3.5: catalog curation (admin approve/reject, converges) ----
+SET_SEMANTICS|POST /api/admin/curation/programs/{id}/approve
+SET_SEMANTICS|POST /api/admin/curation/programs/{id}/reject
+SET_SEMANTICS|POST /api/admin/curation/adhoc/{id}/approve
+SET_SEMANTICS|POST /api/admin/curation/adhoc/{id}/reject
+# IMPL-MULTIUSER-01 P3.4: food promote-to-VERIFIED (D7); converges to VERIFIED.
+SET_SEMANTICS|POST /api/admin/curation/foods/{id}/verify
+
+# ---- IMPL-MULTIUSER-01 P3.2/P3.3/P3.6: online-only catalog graduation actions ----
+# submit/adopt require the network to reach the shared catalog, so they are not
+# queued by the offline outbox; a duplicate pending submission is harmless (admin
+# dedupes in the curation queue). See decision log DL-P3-adopt.
+EXEMPT|POST /api/me/workout-programs/{id}/submit-for-promotion
+EXEMPT|POST /api/me/adhoc-workouts/{id}/submit-for-promotion
+EXEMPT|POST /api/programs/{id}/adopt
+EXEMPT|POST /api/adhoc-catalog/{id}/adopt

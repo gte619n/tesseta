@@ -52,7 +52,7 @@ class Impl19FramePreviewTest {
 
         // Null repo/storage: we never call any method that writes to Firestore/GCS.
         GeminiExerciseMediaService media = new GeminiExerciseMediaService(
-            null, null, grounding, client, "gemini-3.1-flash-image-preview", true);
+            null, null, grounding, client, "gemini-3.1-flash-image-preview", true, null);
 
         Path baseDir = locate("docs/test_reports/workout_logs").resolve("impl19_preview");
         Files.createDirectories(baseDir);

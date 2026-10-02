@@ -32,6 +32,8 @@ class WhoAmIControllerTest {
     @Autowired MockMvc mvc;
     @MockitoBean CurrentUserProvider currentUser;
     @MockitoBean UserRepository users;
+    // IMPL-MULTIUSER-01 P1.8: WhoAmIController folds in isAdmin via AdminAuthorizer.
+    @MockitoBean com.gte619n.healthfitness.api.security.AdminAuthorizer adminAuthorizer;
 
     private static final CurrentUser CALLER =
         new CurrentUser("sub-123", "ada@example.com", "Ada Lovelace", "https://photo.example/ada");

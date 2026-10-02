@@ -6,8 +6,8 @@ import {
   OAUTH_SCOPE_CATALOG,
   type OAuthClientSummary,
   type OAuthClientRegistration,
+  type RegisterOAuthClientRequest,
 } from "@/lib/types/oauth";
-import type { RegisterOAuthClientRequest } from "@/lib/oauth-admin-api";
 
 interface Props {
   clients: OAuthClientSummary[];

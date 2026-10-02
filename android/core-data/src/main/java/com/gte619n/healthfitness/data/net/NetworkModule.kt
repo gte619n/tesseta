@@ -75,6 +75,16 @@ object NetworkModule {
         repo: GoogleAuthRepository,
     ): TokenAuthenticator = TokenAuthenticator(repo)
 
+    // IMPL-MULTIUSER-01 P1.4 — detects `403 + X-Account-Status` on any response
+    // and reports it onto the app-scoped signal AuthCoordinator collects. Wired on
+    // both the main and the auth clients (exchange/refresh also 403 a non-active
+    // account). Shared singleton interceptor so both clients publish to the one signal.
+    @Provides
+    @Singleton
+    fun provideAccountStatusInterceptor(
+        signal: com.gte619n.healthfitness.data.auth.AccountStatusSignal,
+    ): AccountStatusInterceptor = AccountStatusInterceptor(signal)
+
     @Provides
     @Singleton
     @Named("logging")
@@ -96,6 +106,7 @@ object NetworkModule {
         auth: AuthInterceptor,
         timeZone: TimeZoneInterceptor,
         tokenAuthenticator: TokenAuthenticator,
+        accountStatus: AccountStatusInterceptor,
         @Named("logging") logging: HttpLoggingInterceptor,
         cache: Cache,
     ): OkHttpClient =
@@ -103,6 +114,9 @@ object NetworkModule {
             .cache(cache)
             .addInterceptor(auth)
             .addInterceptor(timeZone)
+            // After auth/timezone so it observes the final response; before logging
+            // is irrelevant (it only reads, never alters). P1.4 lockout detection.
+            .addInterceptor(accountStatus)
             .addInterceptor(logging)
             .authenticator(tokenAuthenticator)
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -155,8 +169,13 @@ object NetworkModule {
     @Named("auth")
     fun provideAuthOkHttpClient(
         @Named("logging") logging: HttpLoggingInterceptor,
+        // P1.4: /api/auth/exchange + /refresh also return 403 + X-Account-Status for
+        // a non-active account, so the auth client must observe it too. It keeps no
+        // authenticator (a refresh must never recurse), so there is no loop risk.
+        accountStatus: AccountStatusInterceptor,
     ): OkHttpClient =
         OkHttpClient.Builder()
+            .addInterceptor(accountStatus)
             .addInterceptor(logging)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

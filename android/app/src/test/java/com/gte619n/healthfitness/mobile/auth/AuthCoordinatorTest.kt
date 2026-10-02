@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.mobile.auth
 
 import android.content.Context
+import com.gte619n.healthfitness.data.auth.AccountStatusSignal
 import com.gte619n.healthfitness.data.auth.AuthState
 import com.gte619n.healthfitness.data.auth.GoogleAuthRepository
 import com.gte619n.healthfitness.data.auth.IdTokenCache
@@ -9,6 +10,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,11 +30,15 @@ import org.junit.Test
 class AuthCoordinatorTest {
 
     private val repo = mockk<GoogleAuthRepository>(relaxed = true)
-    private val cache = mockk<IdTokenCache>()
+    private val cache = mockk<IdTokenCache>(relaxed = true)
     private val lastAccount = mockk<LastAccountStore>(relaxed = true)
     private val signOutSideEffects = mockk<SignOutSideEffects>(relaxed = true)
+    // P1.4 — the real signal (a plain @Singleton SharedFlow holder) so the
+    // coordinator's launch-time collector observes reported statuses.
+    private val accountStatusSignal = AccountStatusSignal()
 
-    private fun coordinator() = AuthCoordinator(repo, cache, lastAccount, signOutSideEffects)
+    private fun coordinator() =
+        AuthCoordinator(repo, cache, lastAccount, signOutSideEffects, accountStatusSignal)
 
     private fun snapshot(
         idToken: String?,
@@ -190,5 +197,66 @@ class AuthCoordinatorTest {
 
         coVerify(exactly = 0) { signOutSideEffects.wipeLocalData() }
         verify(exactly = 0) { lastAccount.write(any()) }
+    }
+
+    // --- P1.4 account-status lockout routing -------------------------------
+    //
+    // The coordinator's status collector runs on its own application scope
+    // (Dispatchers.Default), not the test dispatcher, so [awaitState] polls the
+    // StateFlow briefly rather than advancing virtual time.
+
+    @Test
+    fun `account-pending routes to Pending without wiping local data`() = runTest {
+        val coordinator = coordinator()
+
+        accountStatusSignal.report(AccountStatusSignal.Status.PENDING)
+
+        assertTrue(awaitState(coordinator) { it is AuthState.Pending })
+        // Pending is pre-approval: no local PHI to protect, so no wipe.
+        coVerify(exactly = 0) { signOutSideEffects.wipeLocalData() }
+    }
+
+    @Test
+    fun `account-suspended routes to Suspended and wipes local data`() = runTest {
+        val coordinator = coordinator()
+
+        accountStatusSignal.report(AccountStatusSignal.Status.SUSPENDED)
+
+        assertTrue(
+            awaitState(coordinator) { it is AuthState.Suspended && !it.disabled },
+        )
+        coVerify(exactly = 1) { signOutSideEffects.wipeLocalData() }
+        coVerify(exactly = 1) { cache.clear() }
+    }
+
+    @Test
+    fun `account-disabled routes to Suspended(disabled) and wipes local data`() = runTest {
+        val coordinator = coordinator()
+
+        accountStatusSignal.report(AccountStatusSignal.Status.DISABLED)
+
+        assertTrue(
+            awaitState(coordinator) { it is AuthState.Suspended && it.disabled },
+        )
+        coVerify(exactly = 1) { signOutSideEffects.wipeLocalData() }
+    }
+
+    /**
+     * Poll the coordinator's StateFlow on a REAL dispatcher. The status collector
+     * runs on the coordinator's own Dispatchers.Default scope (real threads), so
+     * `runTest`'s virtual clock can't drive it — a virtual `delay` would spin
+     * without yielding wall-clock time. Hop to Dispatchers.IO and sleep for real.
+     */
+    private suspend fun awaitState(
+        coordinator: AuthCoordinator,
+        timeoutMillis: Long = 2_000,
+        predicate: (AuthState) -> Boolean,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (System.currentTimeMillis() < deadline) {
+            if (predicate(coordinator.state.value)) return@withContext true
+            Thread.sleep(10)
+        }
+        predicate(coordinator.state.value)
     }
 }

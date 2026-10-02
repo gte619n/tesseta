@@ -109,13 +109,17 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
     private final String model;
     private final Tool extractTool;
     private final Tool matchTool;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public MealDescriptionExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
         this.extractTool = Tool.builder()
             .functionDeclarations(List.of(extractMealItemsTool()))
             .build();
@@ -137,13 +141,19 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
             .tools(List.of(extractTool))
             .build();
 
+        java.time.Instant startedAt = java.time.Instant.now();
         GenerateContentResponse response;
         try {
             response = client.models.generateContent(model, content, config);
         } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.MEAL_DESCRIBE, model, false, startedAt);
             log.warn("Meal description extraction call failed: {}", e.getMessage());
             throw new NutritionExtractionException("meal description extraction failed", e);
         }
+        var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+        recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.MEAL_DESCRIBE, model,
+            usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
         Map<String, Object> args = toolArgs(response, EXTRACT_TOOL);
         if (args == null) {
             throw new NutritionExtractionException(
@@ -166,8 +176,12 @@ public class MealDescriptionExtractor implements MealDescriptionAnalyzer {
         GenerateContentConfig config = GenerateContentConfig.builder()
             .tools(List.of(matchTool))
             .build();
+        java.time.Instant startedAt = java.time.Instant.now();
         try {
             GenerateContentResponse response = client.models.generateContent(model, content, config);
+            var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+            recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.MEAL_DESCRIBE, model,
+                usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
             Map<String, Object> args = toolArgs(response, MATCH_TOOL);
             if (args == null) {
                 return Optional.empty();
