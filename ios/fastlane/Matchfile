@@ -26,5 +26,7 @@ username(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
 
 # Readonly in CI: runners must never mint or revoke certificates. Bootstrapping
 # new signing assets is an owner-run local step (`fastlane match appstore`
-# without readonly). is_ci() is true on GitHub Actions.
-readonly(is_ci)
+# without readonly). The `CI` env var is true on GitHub Actions. (Deliberately
+# NOT the `is_ci` helper — it isn't in scope when match runs nested inside the
+# beta lane, so the config-file parser rejects it as an unknown option.)
+readonly(ENV["CI"] == "true")
