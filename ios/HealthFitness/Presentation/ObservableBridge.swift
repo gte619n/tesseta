@@ -1,5 +1,5 @@
 import Foundation
-// import SharedCore  // uncommented once the XCFramework is built (Phase 0D)
+import SharedCore  // KMP core via SKIE (StateFlow -> AsyncSequence, sealed -> enum)
 
 /// IMPL-IOS-01 Phase 3 — the ONE bridge from a shared KMP `StateFlow<T>` to
 /// SwiftUI. SKIE (Touchlab) exposes a `StateFlow<T>` to Swift as an

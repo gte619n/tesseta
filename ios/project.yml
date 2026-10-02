@@ -53,22 +53,14 @@ packages:
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     from: "1.17.0"
-  # SharedCore — the KMP core exported as an XCFramework.
-  #
-  # Produced (Phase 0D/1) by, from `shared/`:
+  # SharedCore — the KMP core (+ SKIE Swift interop) exported as an XCFramework.
+  # Build it BEFORE `xcodegen generate` (CI runs this first), from `shared/`:
   #     ./gradlew :core:assembleSharedCoreXCFramework
-  # which emits `shared/core/build/XCFrameworks/release/SharedCore.xcframework`.
-  #
-  # DISABLED until that XCFramework is built: XcodeGen validates local package
-  # paths even when unused, so a dangling reference fails `xcodegen generate`.
-  # Every `import SharedCore` call site in the app is currently commented out, so
-  # the app (incl. the native login flow) builds WITHOUT this — leaving it off
-  # unblocks generate + build + TestFlight today. Re-enable together with the
-  # `dependencies:` entries below once the framework exists. NOTE: a plain
-  # (non-SKIE) XCFramework is consumed as a `framework:` dependency, not a Swift
-  # `package:` — see the Phase 0D wiring notes before re-enabling.
-  # SharedCore:
-  #   path: ../shared/core/build/XCFrameworks/SharedCore
+  # → shared/core/build/XCFrameworks/release/SharedCore.xcframework
+  # It is a static framework carrying a SKIE-generated `SharedCore.swiftmodule`,
+  # so it's consumed as a `framework:` dependency on the app target below (NOT a
+  # Swift `package:`). If the framework is missing, that build step must run
+  # first — `xcodegen generate` references the path.
 
 targets:
   HealthFitness:
@@ -100,8 +92,10 @@ targets:
         product: GoogleSignIn
       - package: Firebase
         product: FirebaseMessaging
-      # - package: SharedCore            # uncomment once the XCFramework is built
-      #   product: SharedCore
+      # SharedCore KMP core (static framework + SKIE Swift layer). Must be built
+      # first (see packages note). embed:false — a static framework links in.
+      - framework: ../shared/core/build/XCFrameworks/release/SharedCore.xcframework
+        embed: false
     # SwiftLint runs as a pre-compile build phase. Uncomment once swiftlint is on
     # the CI runner's PATH (ios-ci macos-15 provisions it via `brew install swiftlint`).
     # preBuildScripts:

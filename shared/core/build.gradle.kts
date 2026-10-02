@@ -19,8 +19,9 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
-    // Step 2 (after a plain native compile is green on a real Xcode host):
-    // alias(libs.plugins.skie)
+    // Step 2 (native compile proven): SKIE for Swift-friendly interop
+    // (StateFlow -> AsyncSequence, sealed -> enum).
+    alias(libs.plugins.skie)
     // Deferred (the android/-consumes-shared step, D19/D20):
     // alias(libs.plugins.androidLibrary)
 }

@@ -5,7 +5,7 @@
 # yet applied by build.gradle.kts (JVM-logic-first).
 
 [versions]
-kotlin = "2.2.20"
+kotlin = "2.2.0"
 agp = "8.7.3"
 ksp = "2.2.20-2.0.2"
 coroutines = "1.9.0"
@@ -15,7 +15,7 @@ ktor = "3.0.1"
 lifecycle = "2.8.4"
 room = "2.7.0-alpha11"
 sqlite = "2.5.0-alpha11"
-skie = "0.10.1"
+skie = "0.10.4"
 turbine = "1.1.0"
 
 [libraries]
