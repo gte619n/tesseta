@@ -1,0 +1,22 @@
+// D6 auth / backend configuration (IMPL-IOS-01 Phase 2B).
+//
+// These are the committed, EMPTY defaults. They are substituted into
+// Info.plist (HF_* keys + the GoogleSignIn reversed-client-id URL scheme) and
+// read by AppConfig.swift. Leaving them empty is safe:
+//   - an empty HF_BACKEND_BASE_URL falls back to the deployed Cloud Run service
+//     (parity with Android's BuildConfig default), and
+//   - an empty HF_GOOGLE_IOS_CLIENT_ID disables Google sign-in with a clear
+//     in-app message (DEBUG builds can still use dev sign-in).
+//
+// To enable real Google sign-in locally, copy Secrets.example.xcconfig to
+// Secrets.xcconfig (gitignored) and fill in the ids — the optional include at
+// the bottom of this file picks them up and overrides these blanks. CI can
+// instead pass HF_* on the xcodebuild command line.
+
+HF_BACKEND_BASE_URL =
+HF_GOOGLE_IOS_CLIENT_ID =
+HF_GOOGLE_SERVER_CLIENT_ID =
+HF_GOOGLE_REVERSED_CLIENT_ID =
+
+// Optional, gitignored local override. Missing file is fine (note the `?`).
+#include? "Secrets.xcconfig"

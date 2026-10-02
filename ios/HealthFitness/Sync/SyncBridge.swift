@@ -41,6 +41,17 @@ final class SyncBridge {
     /// ```
     func start() {
         // TODO(2C): collect engine.state + engine.firstSyncComplete via SKIE.
+        //
+        // Pre-2C there is no shared SyncEngine, so there is nothing to pull —
+        // holding the user on the "Setting up" gate forever would make a
+        // successful sign-in look broken. Complete the gate immediately (and
+        // persist it) so the authenticated shell is reachable and login can be
+        // verified end-to-end. The 2C wiring replaces this with real
+        // first-sync-complete observation.
+        if !firstSyncComplete {
+            firstSyncComplete = true
+            UserDefaults.standard.set(true, forKey: "firstSyncComplete")
+        }
     }
 
     /// Foreground-activation pull (D8). Call from `.onChange(of: scenePhase)`.

@@ -8,6 +8,12 @@
 <dict>
     <key>CFBundleDisplayName</key>
     <string>HealthFitness</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleShortVersionString</key>
@@ -36,7 +42,10 @@
     </array>
 
     <!-- D12: custom scheme deep links (dose-checklist, nutrition-adjust-review,
-         withings-callback). Universal links are deferred. -->
+         withings-callback). Universal links are deferred.
+         D6: the Google Sign-In OAuth redirect returns via the reversed iOS
+         client id scheme (HF_GOOGLE_REVERSED_CLIENT_ID, injected from a build
+         setting / xcconfig — see project.yml and ios/README.md). -->
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -47,7 +56,27 @@
                 <string>healthfitness</string>
             </array>
         </dict>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.gte619n.healthfitness.googlesignin</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>$(HF_GOOGLE_REVERSED_CLIENT_ID)</string>
+            </array>
+        </dict>
     </array>
+
+    <!-- D6: auth + backend config, injected from build settings (project.yml /
+         local xcconfig / CI env). AppConfig + GoogleSignInService read these;
+         GIDClientID also lets the SDK self-configure as a fallback. -->
+    <key>HF_BACKEND_BASE_URL</key>
+    <string>$(HF_BACKEND_BASE_URL)</string>
+    <key>HF_GOOGLE_IOS_CLIENT_ID</key>
+    <string>$(HF_GOOGLE_IOS_CLIENT_ID)</string>
+    <key>HF_GOOGLE_SERVER_CLIENT_ID</key>
+    <string>$(HF_GOOGLE_SERVER_CLIENT_ID)</string>
+    <key>GIDClientID</key>
+    <string>$(HF_GOOGLE_IOS_CLIENT_ID)</string>
 
     <!-- D11: AVFoundation meal capture + Vision barcode/label OCR (Wave C). -->
     <key>NSCameraUsageDescription</key>

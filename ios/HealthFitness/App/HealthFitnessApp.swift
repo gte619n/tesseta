@@ -1,4 +1,5 @@
 import SwiftUI
+import GoogleSignIn
 
 /// App entry point (IMPL-IOS-01 Phase 2A shell).
 ///
@@ -16,16 +17,24 @@ struct HealthFitnessApp: App {
     /// Root DI/state container, owned for the app's lifetime.
     @State private var appState = AppState()
 
+    init() {
+        // Configure the GoogleSignIn SDK once (D6). Safe no-op if the client ID
+        // is unset — SignInView reports that condition to the user.
+        GoogleSignInService.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(appState)
                 .environment(appState.auth)
                 .environment(appState.sync)
-                // healthfitness:// deep links (D12) — dose-checklist,
-                // nutrition-adjust-review, withings-callback. Routing to a
-                // concrete destination lands with the feature waves (Phase 3).
                 .onOpenURL { url in
+                    // The Google OAuth redirect (reversed-client-id scheme) comes
+                    // back through here first; hand it to the SDK before our own
+                    // healthfitness:// deep-link routing (D12 — dose-checklist,
+                    // nutrition-adjust-review, withings-callback).
+                    if GIDSignIn.sharedInstance.handle(url) { return }
                     appState.handleDeepLink(url)
                 }
         }
