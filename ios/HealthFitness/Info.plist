@@ -89,6 +89,22 @@
     <key>NSSupportsLiveActivitiesFrequentUpdates</key>
     <true/>
 
+    <!-- Interface orientations. iPad (TARGETED_DEVICE_FAMILY includes 2) +
+         multitasking requires ALL FOUR on iPad; iPhone omits upside-down. -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
     <!-- Standard scene/launch config for a SwiftUI lifecycle app. -->
     <key>UIApplicationSceneManifest</key>
     <dict>

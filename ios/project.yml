@@ -21,9 +21,12 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"        # 1 = iPhone, 2 = iPad (D16: iPad is a v1 requirement)
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: "5WX3DS8SZQ"        # Apple Developer Team ID (fastlane/Appfile mirrors this)
     VERSIONING_SYSTEM: apple-generic      # lets fastlane increment_build_number (agvtool) work
+    # CODE_SIGN_STYLE is set per-target: the app uses MANUAL signing with the
+    # match-managed App Store profile (D15). It must NOT be a project-wide build
+    # setting — on the command line it leaks onto the SPM package targets
+    # (Firebase/GoogleUtilities/…), which can't take a provisioning profile.
 
 # D6 auth/backend config lives in an xcconfig so secrets stay out of this
 # committed spec. Config/Auth.xcconfig declares EMPTY defaults for the HF_* keys
@@ -81,6 +84,13 @@ targets:
       base:
         INFOPLIST_FILE: HealthFitness/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.gte619n.healthfitness  # placeholder bundle id
+        # Manual signing with the match-managed App Store profile (D15). Scoped to
+        # the app target so it never reaches the SPM package targets. Simulator
+        # builds pass CODE_SIGNING_ALLOWED=NO, so this only bites device/archive.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
+        PROVISIONING_PROFILE_SPECIFIER: "match AppStore com.gte619n.healthfitness"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon   # HealthFitness/Assets.xcassets/AppIcon
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         MARKETING_VERSION: "1.0"          # release lane overrides to 1.<rev-count>
         CURRENT_PROJECT_VERSION: "1"      # release lane overrides to <rev-count>
