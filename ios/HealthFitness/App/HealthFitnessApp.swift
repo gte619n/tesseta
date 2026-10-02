@@ -1,5 +1,6 @@
 import SwiftUI
 import GoogleSignIn
+import SharedCore
 
 /// App entry point (IMPL-IOS-01 Phase 2A shell).
 ///
@@ -55,6 +56,12 @@ final class AppState {
         let tokenStore = KeychainTokenStore()
         self.auth = AuthState(tokenStore: tokenStore)
         self.sync = SyncBridge()
+        // Wire the shared KMP REST client once (Phase 1C): networked screens reuse
+        // the existing backend endpoints with the Keychain session token login
+        // established. On-device screens (units) don't need it.
+        IosComposition.shared.configure(
+            baseUrl: AppConfig.backendBaseURL.absoluteString,
+            tokenProvider: KeychainTokenProvider(store: tokenStore))
         // Offline-first cached-session launch (parity with Android
         // AuthCoordinator): resolve auth state from the Keychain synchronously,
         // no network on the launch path.
