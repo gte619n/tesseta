@@ -21,6 +21,11 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"        # 1 = iPhone, 2 = iPad (D16: iPad is a v1 requirement)
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # The SharedCore KMP framework ships device (iosArm64) + Apple-silicon-sim
+    # (iosSimulatorArm64) slices only — no Intel (iosX64). Dev + CI are Apple
+    # Silicon, so exclude x86_64 from simulator builds to match (add iosX64 to
+    # shared/core/build.gradle.kts if an Intel simulator is ever needed).
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     DEVELOPMENT_TEAM: "5WX3DS8SZQ"        # Apple Developer Team ID (fastlane/Appfile mirrors this)
     VERSIONING_SYSTEM: apple-generic      # lets fastlane increment_build_number (agvtool) work
     # CODE_SIGN_STYLE is set per-target: the app uses MANUAL signing with the
@@ -53,16 +58,13 @@ packages:
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     from: "1.17.0"
-  # SharedCore — the KMP core (+ SKIE Swift interop). Build the XCFramework BEFORE
-  # `xcodegen generate` (CI runs this first), from `shared/`:
+  # SharedCore — the KMP core. Build the XCFramework BEFORE `xcodegen generate`
+  # (CI runs this first), from `shared/`:
   #     ./gradlew :core:assembleSharedCoreXCFramework
   # → shared/core/build/XCFrameworks/release/SharedCore.xcframework
-  # It's consumed through a local Swift package (Packages/SharedCore) that wraps
-  # the XCFramework as a `binaryTarget` — the reliable way to surface SKIE's Swift
-  # `.swiftmodule` overlay (a plain `-F` framework dep only exposes the ObjC
-  # clang module). The package's binaryTarget path points at the built framework.
-  SharedCore:
-    path: Packages/SharedCore
+  # It's a plain (no-SKIE) static Kotlin/Native framework, so everything is in its
+  # ObjC-bridged clang module and loads via a direct `framework:` dependency on
+  # the app target below (no SPM wrapper / Swift overlay needed).
 
 targets:
   HealthFitness:
@@ -70,14 +72,6 @@ targets:
     platform: iOS
     sources:
       - path: HealthFitness
-        # UnitsView.swift (first shared-ViewModel screen) references SKIE's Swift
-        # overlay types. Xcode 26's build-system module graph does NOT surface the
-        # overlay from the XCFramework (SKIE 0.10.4 predates Xcode 26 / Swift
-        # 6.3.3). The overlay is proven functional via standalone `swiftc` — this
-        # is a SKIE↔Xcode-26 version gap, not a config issue. Excluded so the app
-        # builds; drop this once SKIE supports Xcode 26 (or switch to CocoaPods).
-        excludes:
-          - "Features/Settings/UnitsView.swift"
     # The Info.plist is hand-maintained (capability keys in D7/D8/D10/D11/D12 +
     # the D6 auth config/URL-scheme keys), so it is referenced via INFOPLIST_FILE
     # — NOT the `info:` block, which would make XcodeGen *generate* (and thereby
@@ -102,10 +96,9 @@ targets:
         product: GoogleSignIn
       - package: Firebase
         product: FirebaseMessaging
-      # SharedCore KMP core via the local SPM wrapper (binaryTarget → the SKIE
-      # XCFramework). SPM handles slice resolution + the Swift module path.
-      - package: SharedCore
-        product: SharedCore
+      # SharedCore KMP core (plain static framework, ObjC-bridged clang module).
+      - framework: ../shared/core/build/XCFrameworks/release/SharedCore.xcframework
+        embed: false
     # SwiftLint runs as a pre-compile build phase. Uncomment once swiftlint is on
     # the CI runner's PATH (ios-ci macos-15 provisions it via `brew install swiftlint`).
     # preBuildScripts:

@@ -51,6 +51,7 @@ struct SettingsView: View {
         .navigationDestination(for: SettingsRoute.self) { route in
             switch route {
             case .profile: ProfileView()
+            case .units: UnitsView()
             case .connections: DeviceConnectionsView()
             case .drinks: DrinkSettingsView()
             case .diagnostics: SyncDiagnosticsView()
@@ -69,28 +70,11 @@ struct SettingsView: View {
     // MARK: Units (UnitsViewModel)
 
     private var unitsCard: some View {
-        // TODO(Phase 1C): route to UnitsView (shared UnitsViewModel). The screen +
-        // its NSUserDefaults-backed repo are written (UnitsView.swift, iosMain), but
-        // consuming SKIE's Swift `.swiftmodule` overlay from the XCFramework in the
-        // Xcode build is unresolved (the overlay is proven functional via a
-        // standalone `swiftc` compile; Xcode doesn't surface it). Inline placeholder
-        // until that's fixed.
+        // Routes to UnitsView, the first screen on real shared KMP state
+        // (UnitsViewModel, NSUserDefaults-backed). Raw Kotlin/Native interop
+        // (SKIE disabled for Xcode-26 compatibility).
         SettingsCard(title: "Units", description: "How measurements are shown") {
-            labeledChoice("Height") {
-                SegmentedChoice(
-                    options: HeightUnitChoice.allCases.map { ($0, $0.label) },
-                    selection: Binding($heightUnit))
-            }
-            labeledChoice("Weight") {
-                SegmentedChoice(
-                    options: WeightUnitChoice.allCases.map { ($0, $0.label) },
-                    selection: Binding($weightUnit))
-            }
-            labeledChoice("Temperature") {
-                SegmentedChoice(
-                    options: TemperatureUnitChoice.allCases.map { ($0, $0.label) },
-                    selection: Binding($temperatureUnit))
-            }
+            settingsNavRow("Measurement units", subtitle: "Height, weight, temperature", to: .units)
         }
     }
 
@@ -206,6 +190,7 @@ struct SettingsView: View {
 
 enum SettingsRoute: Hashable {
     case profile
+    case units
     case connections
     case drinks
     case diagnostics

@@ -1,49 +1,53 @@
 import SwiftUI
 import SharedCore
 
-// Pin the shared types for readability. `WeightUnit` is NOT aliased here because
-// an app-local `enum WeightUnit` (BodyCompositionModels) already owns that name
-// at module scope — it's referenced as `SharedCore.WeightUnit` inline instead.
-private typealias HeightUnit = SharedCore.HeightUnit
-private typealias TemperatureUnit = SharedCore.TemperatureUnit
-private typealias UnitPreferences = SharedCore.UnitPreferences
-
 /// Settings › Units (IMPL-IOS-01 Phase 1C — first shared-ViewModel-backed screen).
 ///
-/// This is the proven end-to-end pattern every other feature screen follows:
-///   shared `UnitsViewModel` (KMP) ──SKIE──▶ `ObservableViewModel` bridge ──▶ SwiftUI.
-/// The ViewModel's `preferences` StateFlow surfaces as a Swift `AsyncSequence`
-/// (SKIE); we collect it in `.task` and republish into `@State`, and the three
-/// `set*` calls write through to the NSUserDefaults-backed repository — so a
-/// change persists and the row re-renders immediately.
+/// The proven end-to-end pattern every other feature screen follows, SKIE-free:
+///   shared `UnitsViewModel` (KMP) ──ObjC bridge──▶ SwiftUI.
+/// `preferences` is a Kotlin `StateFlow`; we read its current `.value` to seed
+/// state and subscribe via `IosComposition.collectFlow` for live updates (the
+/// hand-rolled replacement for SKIE's AsyncSequence). The three `set*` calls
+/// write through to the NSUserDefaults-backed repository, so a change persists
+/// and the row re-renders immediately.
+///
+/// `WeightUnit` is referenced as `SharedCore.WeightUnit` because an app-local
+/// `enum WeightUnit` (BodyCompositionModels) already owns that bare name.
 struct UnitsView: View {
-    @State private var vm = ObservableViewModel(IosComposition.shared.unitsViewModel())
-    @State private var prefs = UnitPreferences(
-        height: .feetInches, weight: .pounds, temperature: .fahrenheit)
+    private let vm: UnitsViewModel
+    @State private var prefs: UnitPreferences
+    @State private var subscription: FlowSubscription?
+
+    init() {
+        // Seed from the StateFlow's current value (ObjC-bridged, cast from Any).
+        let model = IosComposition.shared.unitsViewModel()
+        self.vm = model
+        _prefs = State(initialValue: model.preferences.value as! UnitPreferences)
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 SettingsCard(title: "Height") {
                     SegmentedChoice(
-                        options: [(HeightUnit.feetInches, "ft / in"), (.centimeters, "cm")],
+                        options: [(HeightUnit.feetInches, "ft / in"), (HeightUnit.centimeters, "cm")],
                         selection: Binding(
                             get: { prefs.height },
-                            set: { if let v = $0 { vm.wrapped.setHeight(unit: v) } }))
+                            set: { if let v = $0 { vm.setHeight(unit: v) } }))
                 }
                 SettingsCard(title: "Weight") {
                     SegmentedChoice(
-                        options: [(SharedCore.WeightUnit.pounds, "lb"), (.kilograms, "kg")],
+                        options: [(SharedCore.WeightUnit.pounds, "lb"), (SharedCore.WeightUnit.kilograms, "kg")],
                         selection: Binding(
                             get: { prefs.weight },
-                            set: { if let v = $0 { vm.wrapped.setWeight(unit: v) } }))
+                            set: { if let v = $0 { vm.setWeight(unit: v) } }))
                 }
                 SettingsCard(title: "Temperature") {
                     SegmentedChoice(
-                        options: [(TemperatureUnit.fahrenheit, "°F"), (.celsius, "°C")],
+                        options: [(TemperatureUnit.fahrenheit, "°F"), (TemperatureUnit.celsius, "°C")],
                         selection: Binding(
                             get: { prefs.temperature },
-                            set: { if let v = $0 { vm.wrapped.setTemperature(unit: v) } }))
+                            set: { if let v = $0 { vm.setTemperature(unit: v) } }))
                 }
             }
             .formMaxWidth()
@@ -52,12 +56,11 @@ struct UnitsView: View {
         .background(Theme.canvas)
         .navigationTitle("Units")
         .accessibilityIdentifier("settings-units")  // IMPL-E2E-01 shared id
-        .task {
-            // SKIE exposes the property as the ObjC-bridgeable SkieKotlinStateFlow;
-            // annotating the type bridges it to SkieSwiftStateFlow, which conforms
-            // to AsyncSequence. Then republish each emission into @State.
-            let flow: SharedCore.SkieSwiftStateFlow<UnitPreferences> = vm.wrapped.preferences
-            await vm.observe(flow) { prefs = $0 }
+        .onAppear {
+            subscription = IosComposition.shared.collectFlow(flow: vm.preferences) { value in
+                if let p = value as? UnitPreferences { prefs = p }
+            }
         }
+        .onDisappear { subscription?.cancel() }
     }
 }

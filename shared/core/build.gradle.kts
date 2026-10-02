@@ -19,9 +19,13 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
-    // Step 2 (native compile proven): SKIE for Swift-friendly interop
-    // (StateFlow -> AsyncSequence, sealed -> enum).
-    alias(libs.plugins.skie)
+    // SKIE is DISABLED: SKIE 0.10.4 (latest) predates Xcode 26 / Swift 6.3.3, and
+    // the Swift overlay it emits isn't consumable by Xcode 26's build-system
+    // module graph (proven: standalone swiftc loads it, Xcode never does). So we
+    // ship a plain Kotlin/Native framework (ObjC-bridged clang module) and bridge
+    // Flows to Swift by hand (IosComposition.collectFlow). Re-enable SKIE once it
+    // supports Xcode 26.
+    // alias(libs.plugins.skie)
     // Deferred (the android/-consumes-shared step, D19/D20):
     // alias(libs.plugins.androidLibrary)
 }
@@ -45,12 +49,11 @@ kotlin {
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "SharedCore"
-            // DYNAMIC (not static): the SKIE-generated Swift API (StateFlow ->
-            // AsyncSequence, sealed -> enum) only surfaces to the consuming app
-            // when the framework carries a loadable `.swiftmodule` overlay, which
-            // Xcode reads from a dynamic framework but not a static one. The app
-            // embeds + signs it on copy (project.yml `embed: true`).
-            isStatic = false
+            // Static: a plain Kotlin/Native framework exposes everything through
+            // its ObjC-bridged clang module (no Swift overlay), which the app's
+            // `import SharedCore` loads directly — so static links in cleanly with
+            // no embedding.
+            isStatic = true
             xcf.add(this)
         }
     }
