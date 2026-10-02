@@ -33,33 +33,49 @@ public final class SeedWeightResolver {
         if (ex == null) return FLOOR_LBS;
         String n = ex.nameLower() == null ? "" : ex.nameLower();
         double base = baseForPattern(ex);
+        double floor = FLOOR_LBS;
 
-        // Cables/machines/isolation accessories start lighter than free-weight compounds.
-        if (containsAny(n, "cable", "pushdown", "pulldown", "pec deck", "kickback",
-            "lateral raise", "reverse fly", "rear delt", "curl", "extension", "raise")) {
+        // Shoulder-isolation raises (lateral/front/rear-delt, reverse fly) are
+        // logged with very small dumbbells — a few pounds a hand. The generic
+        // 40 lb accessory ceiling below AND the 20 lb compound floor both read as
+        // absurd for these (the "40 lb rear delt raise" bug), so give the raise
+        // family its own light ceiling and floor before the accessory rules run.
+        boolean shoulderRaise = containsAny(n, "lateral raise", "side raise",
+            "front raise", "rear delt", "reverse fly", "rear fly", "delt fly");
+        if (shoulderRaise) {
+            base = Math.min(base, 15.0);
+            floor = 10.0;
+        } else if (containsAny(n, "cable", "pushdown", "pulldown", "pec deck",
+            "kickback", "curl", "extension", "raise")) {
+            // Other cable/machine isolation accessories start lighter than
+            // free-weight compounds (pushdowns, curls, calf raises, etc.).
             base = Math.min(base, 40.0);
         }
         if (ex.mechanic() == Mechanic.ISOLATION) {
             base = Math.min(base, 40.0);
         }
-        // Per-hand (dumbbell) movements are LOGGED per hand, so the seed — the
-        // number the athlete enters — must be a per-hand load, not the two-hand /
-        // barbell figure baseForPattern returns. Without this a first-time dumbbell
-        // hinge seeds a 95 lb "deadlift" that reads as absurd. Name-based, mirroring
-        // LoadConventionResolver's PER_HAND signal (this util has no equipment access).
+        // Per-hand movements are LOGGED per hand, so the seed — the number the
+        // athlete enters — must be a per-hand load, not the two-hand / barbell
+        // figure baseForPattern returns. Without this a first-time dumbbell hinge
+        // seeds a 95 lb "deadlift" that reads as absurd. Name-based, mirroring the
+        // signals LoadConventionResolver.derive falls back to when the equipment
+        // binding is sparse (this util has no equipment access).
         if (isPerHand(n)) {
             base = base / 2.0;
         }
-        return Math.max(FLOOR_LBS, base);
+        return Math.max(floor, base);
     }
 
     /**
-     * Whether the movement is logged per hand (a bilateral dumbbell lift), detected
-     * by name — the same fallback signal {@code LoadConventionResolver.derive} uses
-     * when the equipment binding is sparse.
+     * Whether the movement is logged per hand (a bilateral dumbbell lift or a
+     * dual/functional cable trainer), detected by name — the same fallback signals
+     * {@code LoadConventionResolver.derive} uses when the equipment binding is
+     * sparse, so the seed lands in the same (per-hand) space the display expects.
      */
     private static boolean isPerHand(String nameLower) {
-        return nameLower.contains("dumbbell") || nameLower.contains("db ");
+        return nameLower.contains("dumbbell") || nameLower.contains("db ")
+            || nameLower.contains("dual cable") || nameLower.contains("dual-cable")
+            || nameLower.contains("functional trainer") || nameLower.contains("cable crossover");
     }
 
     private static double baseForPattern(Exercise ex) {

@@ -4,6 +4,7 @@ import com.gte619n.healthfitness.core.exercise.BlockType;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -235,32 +236,45 @@ public class WorkoutScheduleService {
     private record PhaseWeek(ProgramPhase phase, int weekIndex, boolean isDeload) {}
 
     /**
-     * The most recent COMPLETED prescription per exercise across the program —
-     * the load/reps/rationale the engine had settled on by the final session.
-     * Used to seed a continuation so it resumes from real numbers, not the
-     * author's starting template.
+     * The most recent <em>working</em> (non-deload) COMPLETED prescription per
+     * exercise across the program — the load/reps/rationale the engine had settled
+     * on by the last real training session. Used to seed a redo ({@link
+     * #materializeOne}) or a continuation ({@link #continueProgram}) so it resumes
+     * from real numbers, not the author's starting template.
+     *
+     * <p>Deload weeks are skipped: their loads are artificially suppressed
+     * (observe-only — the engine never corrects its belief on a deload, so a
+     * deload session doesn't represent progress). Seeding a "start today" or a
+     * continued block from a deload would hand the athlete a reduced weight at full
+     * volume. A deload prescription is used only as a last-resort fallback for an
+     * exercise that has no non-deload history at all.
      */
     private Map<String, Prescription> latestCompletedPrescriptions(String userId, String programId) {
-        Map<String, Prescription> latest = new HashMap<>();
+        Map<String, Prescription> working = new HashMap<>();   // from real training weeks
+        Map<String, Prescription> deloadOnly = new HashMap<>(); // fallback when that's all there is
         // findByStatus returns newest scheduled-date first, so the first time we
-        // see an exercise is its most recent prescription.
+        // see an exercise is its most recent prescription (in each bucket).
         for (ScheduledWorkout sw : scheduled.findByStatus(userId, programId, ScheduledStatus.COMPLETED)) {
             WorkoutDay snapshot = sw.session();
             if (snapshot == null || snapshot.blocks() == null) {
                 continue;
             }
+            Map<String, Prescription> target = sw.isDeload() ? deloadOnly : working;
             for (Block b : snapshot.blocks()) {
                 if (b.prescriptions() == null) {
                     continue;
                 }
                 for (Prescription rx : b.prescriptions()) {
                     if (rx.exerciseId() != null) {
-                        latest.putIfAbsent(rx.exerciseId(), rx);
+                        target.putIfAbsent(rx.exerciseId(), rx);
                     }
                 }
             }
         }
-        return latest;
+        for (Map.Entry<String, Prescription> e : deloadOnly.entrySet()) {
+            working.putIfAbsent(e.getKey(), e.getValue());
+        }
+        return working;
     }
 
     /**
@@ -392,6 +406,45 @@ public class WorkoutScheduleService {
 
     public List<ScheduledWorkout> calendar(String userId, String programId, LocalDate from, LocalDate to) {
         return scheduled.findByProgram(userId, programId, from, to);
+    }
+
+    /**
+     * Lazy auto-continuation — never leave the athlete at a dead end. If an
+     * eligible program has no upcoming PLANNED session on or after {@code today},
+     * append the next full cycle in place ({@link #continueProgram} with CYCLE,
+     * resuming from the last working loads) so there is always a next workout
+     * queued. A program with future work, or an ARCHIVED one (deliberately shelved),
+     * is left untouched. Idempotent: {@code continueProgram} uses deterministic
+     * session ids and anchors off the last completed week, so calling this on every
+     * workouts-screen open never stacks duplicate weeks.
+     *
+     * @return the program's upcoming PLANNED sessions after any continuation,
+     *         soonest first (empty only for an ARCHIVED/empty program)
+     */
+    public List<ScheduledWorkout> ensureUpcoming(String userId, String programId, LocalDate today) {
+        WorkoutProgram program = programs.findById(userId, programId)
+            .orElseThrow(() -> new IllegalArgumentException("Program not found: " + programId));
+        List<ScheduledWorkout> upcoming = upcomingPlanned(userId, programId, today);
+        if (!upcoming.isEmpty() || program.status() == ProgramStatus.ARCHIVED) {
+            return upcoming;
+        }
+        // Out of scheduled work on a program the athlete is still following —
+        // extend it one more cycle and return the freshly appended upcoming set.
+        continueProgram(userId, programId, ContinuationScope.CYCLE);
+        return upcomingPlanned(userId, programId, today);
+    }
+
+    /** Upcoming PLANNED sessions on or after {@code today}, soonest first. */
+    private List<ScheduledWorkout> upcomingPlanned(String userId, String programId, LocalDate today) {
+        List<ScheduledWorkout> out = new ArrayList<>();
+        for (ScheduledWorkout sw : scheduled.findByProgram(userId, programId, today, LocalDate.MAX)) {
+            if (sw.status() == ScheduledStatus.PLANNED && sw.date() != null && !sw.date().isBefore(today)) {
+                out.add(sw);
+            }
+        }
+        out.sort(Comparator.comparing(
+            ScheduledWorkout::date, Comparator.nullsLast(Comparator.naturalOrder())));
+        return out;
     }
 
     /** One scheduled session by id, if it exists. */

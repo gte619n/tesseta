@@ -372,6 +372,138 @@ class WorkoutScheduleServiceTest {
         assertEquals(2, deload.session().blocks().get(0).prescriptions().get(0).sets());
     }
 
+    @Test
+    void materializeOneSkipsDeloadLoadAndResumesLastWorkingLoad() {
+        // #2: "Start this workout today" must use the progression values from the
+        // last WORKING day — never the deload week's suppressed load — when a later
+        // deload session exists on top of an earlier real training week.
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(
+                new Prescription("dbdl", 0, 4, 12, 15, null, null, 120, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Accumulation", null, 0, null,
+            4, 4, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(6), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = tday.dayId();
+        LocalDate thisMonday = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+
+        // Working week (2 weeks ago): engine settled on 85 lb at full 4×12–15.
+        Prescription workingRx = new Prescription("dbdl", 0, 4, 12, 15, null, null, 120, null, null, null,
+            List.of(new LoggedSet(85.0, 13, 1.0, null, java.time.Instant.now())), 85.0, "double progression", null);
+        LocalDate workingDate = thisMonday.minusWeeks(2);
+        scheduled.save(new ScheduledWorkout("u1", pid, workingDate + "_" + dayId, workingDate,
+            phaseId, dayId, "Lower", 3, false, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(workingRx)))),
+            java.time.Instant.now(), 3600, null));
+
+        // Deload week (last week, the MOST RECENT completed session): suppressed to 65 lb.
+        Prescription deloadRx = new Prescription("dbdl", 0, 2, 8, 9, null, null, 120, null, null, null,
+            List.of(new LoggedSet(65.0, 8, 1.0, null, java.time.Instant.now())), 65.0, "deload", null);
+        LocalDate deloadDate = thisMonday.minusWeeks(1);
+        scheduled.save(new ScheduledWorkout("u1", pid, deloadDate + "_" + dayId, deloadDate,
+            phaseId, dayId, "Lower", 4, true, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(deloadRx)))),
+            java.time.Instant.now(), 3600, null));
+
+        ScheduledWorkout s = scheduleService.materializeOne("u1", pid, phaseId, dayId, LocalDate.now());
+        Prescription rx = s.session().blocks().get(0).prescriptions().get(0);
+
+        assertEquals(85.0, rx.targetWeightLbs(), "resumes the last working load, not the deload's 65");
+        assertEquals("double progression", rx.loadBasis());
+        assertEquals(4, rx.sets());
+    }
+
+    @Test
+    void ensureUpcomingAppendsNextCycleWhenProgramRanOut() {
+        // #1: a still-followed program with no remaining future sessions is extended
+        // in place so the athlete always has a next workout (lazy auto-continue).
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Squat", 0, List.of(
+                new Prescription("squat", 0, 4, 5, 5, null, null, 120, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Block", null, 0, null, 3, 3, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(5), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+        programService.setStatus("u1", pid, ProgramStatus.ACTIVE);
+
+        Prescription doneRx = new Prescription("squat", 0, 4, 5, 5, null, null, 120, null, null, null,
+            List.of(new LoggedSet(150.0, 5, 1.0, null, java.time.Instant.now())), 150.0, "e1RM", null);
+        LocalDate doneDate = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)).minusWeeks(1);
+        scheduled.save(new ScheduledWorkout("u1", pid, doneDate + "_" + tday.dayId(), doneDate,
+            phaseId, tday.dayId(), tday.label(), 3, false, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Squat", 0, List.of(doneRx)))),
+            java.time.Instant.now(), 3600, null));
+
+        List<ScheduledWorkout> upcoming = scheduleService.ensureUpcoming("u1", pid, LocalDate.now());
+
+        assertEquals(3, upcoming.size(), "CYCLE append = 3 weeks × 1 day of future PLANNED work");
+        assertTrue(upcoming.stream().allMatch(s -> s.status() == ScheduledStatus.PLANNED));
+        assertTrue(upcoming.stream().allMatch(s -> !s.date().isBefore(LocalDate.now())));
+        assertEquals(150.0, upcoming.get(0).session().blocks().get(0).prescriptions().get(0).targetWeightLbs(),
+            "resumes the last working load, not the author's week-one template");
+        assertEquals(ProgramStatus.ACTIVE, programs.findById("u1", pid).orElseThrow().status());
+    }
+
+    @Test
+    void ensureUpcomingLeavesFutureWorkAndArchivedProgramsUntouched() {
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Squat", 0, List.of(
+                new Prescription("squat", 0, 4, 5, 5, null, null, 120, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Block", null, 0, null, 3, null, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(5), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+
+        // A future PLANNED session already exists → ensureUpcoming is a no-op.
+        LocalDate future = LocalDate.now().plusDays(3);
+        scheduled.save(new ScheduledWorkout("u1", pid, future + "_" + tday.dayId(), future,
+            phaseId, tday.dayId(), tday.label(), 1, false, "home", ScheduledStatus.PLANNED,
+            tday, null, null, null));
+        programService.setStatus("u1", pid, ProgramStatus.ACTIVE);
+
+        List<ScheduledWorkout> upcoming = scheduleService.ensureUpcoming("u1", pid, LocalDate.now());
+        assertEquals(1, upcoming.size());
+        assertEquals(1, scheduleService.calendar("u1", pid, LocalDate.MIN, LocalDate.MAX).size(),
+            "no new sessions appended when future work already exists");
+
+        // Archived with no future work → still left untouched (deliberately shelved).
+        scheduled.deletePlannedFrom("u1", pid, LocalDate.MIN);
+        programService.setStatus("u1", pid, ProgramStatus.ARCHIVED);
+        List<ScheduledWorkout> archived = scheduleService.ensureUpcoming("u1", pid, LocalDate.now());
+        assertTrue(archived.isEmpty(), "an archived program is not auto-resurrected");
+        assertEquals(ProgramStatus.ARCHIVED, programs.findById("u1", pid).orElseThrow().status());
+    }
+
     static class FakeProgramRepo implements WorkoutProgramRepository {
         final Map<String, WorkoutProgram> store = new ConcurrentHashMap<>();
         @Override public Optional<WorkoutProgram> findById(String userId, String programId) {

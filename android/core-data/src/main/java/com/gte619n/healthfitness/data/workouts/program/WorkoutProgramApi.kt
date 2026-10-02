@@ -77,6 +77,15 @@ interface WorkoutProgramApi {
     ): List<ScheduledWorkoutDto>
 
     /**
+     * Lazy auto-continuation: if the program has no upcoming sessions, the backend
+     * appends the next cycle in place (resuming from the last working loads) so the
+     * user always has a next workout; otherwise it's a no-op. Returns the upcoming
+     * PLANNED sessions. Idempotent — safe to call on every workouts-screen open.
+     */
+    @POST("api/me/workout-programs/{id}/ensure-upcoming")
+    suspend fun ensureUpcoming(@Path("id") id: String): List<ScheduledWorkoutDto>
+
+    /**
      * IMPL-STAB G4 — metadata-only program edit (title/description). Null fields
      * are left unchanged by the backend; phases/schedule are not touched here
      * (structural edits go through the conversational designer). Returns the
