@@ -31,7 +31,7 @@ class EquipmentImageServiceTest {
     void setUp() {
         // Empty API key — fine for buildPrompt tests; we never invoke
         // generateImageAsync here so the missing client never matters.
-        service = new EquipmentImageService(storage, equipmentRepository, "", "gemini-3.1-flash-image-preview");
+        service = new EquipmentImageService(storage, equipmentRepository, "", "gemini-3.1-flash-image-preview", null);
     }
 
     @Test

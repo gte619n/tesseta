@@ -42,7 +42,7 @@ class DrugImageGenerationIntegrationTest {
             throw new IllegalStateException("GEMINI_API_KEY environment variable is required for image generation tests");
         }
         return new DrugImageGenerator(
-            Client.builder().apiKey(apiKey).build(), "gemini-3.1-flash-image-preview");
+            Client.builder().apiKey(apiKey).build(), "gemini-3.1-flash-image-preview", null);
     }
 
     // ==================== VISUAL LOOKUP TESTS (NO API KEY NEEDED) ====================

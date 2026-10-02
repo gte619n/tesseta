@@ -67,13 +67,17 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
     private final Client client;
     private final String model;
     private final Tool tool;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public NutritionLabelExtractor(
         Client client,
-        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model
+        @Value("${app.nutrition.gemini-model:${GEMINI_MODEL:gemini-3.8-flash}}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
         this.tool = Tool.builder()
             .functionDeclarations(List.of(extractLabelTool()))
             .build();
@@ -94,13 +98,19 @@ public class NutritionLabelExtractor implements NutritionLabelAnalyzer {
             .tools(List.of(tool))
             .build();
 
+        java.time.Instant startedAt = java.time.Instant.now();
         GenerateContentResponse response;
         try {
             response = client.models.generateContent(model, content, config);
         } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.NUTRITION_LABEL, model, false, startedAt);
             log.warn("Nutrition label extraction call failed: {}", e.getMessage());
             throw new NutritionExtractionException("nutrition label extraction failed", e);
         }
+        var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+        recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.NUTRITION_LABEL, model,
+            usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
 
         Map<String, Object> args = toolArgs(response);
         if (args == null) {

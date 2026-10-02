@@ -122,13 +122,17 @@ public class DrugImageGenerator {
     private final Client client;
     private final String model;
     private final HttpClient httpClient;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public DrugImageGenerator(
         Client client,
-        @Value("${app.medications.imagen-model}") String model
+        @Value("${app.medications.imagen-model}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(FETCH_TIMEOUT)
             .build();
@@ -335,11 +339,20 @@ public class DrugImageGenerator {
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();
 
+            java.time.Instant startedAt = java.time.Instant.now();
             GenerateContentResponse response = client.models.generateContent(model, content, config);
-
+            if (recorder != null) {
+                var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+                recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.DRUG_IMAGE, model,
+                    usage.inputTokens(), usage.outputTokens(), 1, false, startedAt);
+            }
             return extractImageFromResponse(response, drugName);
 
         } catch (Exception e) {
+            if (recorder != null) {
+                recorder.recordError(com.gte619n.healthfitness.core.ai.AiFeature.DRUG_IMAGE, model,
+                    false, java.time.Instant.now());
+            }
             System.err.println("Image generation with reference failed for " + drugName + ": " + e.getMessage());
             // Fall back to text-only generation
             return executeGeneration(prompt.replace("The attached image is a reference", "Based on the subject description"), drugName);
@@ -357,11 +370,20 @@ public class DrugImageGenerator {
                 .responseModalities(List.of("IMAGE", "TEXT"))
                 .build();
 
+            java.time.Instant startedAt = java.time.Instant.now();
             GenerateContentResponse response = client.models.generateContent(model, content, config);
-
+            if (recorder != null) {
+                var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+                recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.DRUG_IMAGE, model,
+                    usage.inputTokens(), usage.outputTokens(), 1, false, startedAt);
+            }
             return extractImageFromResponse(response, drugName);
 
         } catch (Exception e) {
+            if (recorder != null) {
+                recorder.recordError(com.gte619n.healthfitness.core.ai.AiFeature.DRUG_IMAGE, model,
+                    false, java.time.Instant.now());
+            }
             System.err.println("Image generation failed for " + drugName + ": " + e.getMessage());
             return Optional.empty();
         }

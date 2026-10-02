@@ -141,14 +141,17 @@ class WorkoutSessionViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { repository.ensureServerSession(programId, scheduledId) }
         }
-        // #9 — owner gating for the demo-image flag affordance. Best-effort:
-        // read the cached profile first (instant), then refresh; any failure
-        // just leaves the flag hidden.
+        // #9 / IMPL-MULTIUSER-01 P1.8 — owner gating for the demo-image flag
+        // affordance now derives from the backend's `isAdmin` on the profile
+        // (/api/me), the single source of truth, instead of a hardcoded email
+        // allowlist. Best-effort: read the cached profile first (instant), then
+        // refresh; any failure just leaves the flag hidden.
         viewModelScope.launch {
-            val cachedEmail = runCatching { profileRepository.cached()?.email }.getOrNull()
-            val email = cachedEmail
-                ?: runCatching { profileRepository.get().getOrNull()?.email }.getOrNull()
-            if (email != null && OWNER_EMAILS.any { it.equals(email, ignoreCase = true) }) {
+            val cachedAdmin = runCatching { profileRepository.cached()?.isAdmin }.getOrNull()
+            val isAdmin = cachedAdmin
+                ?: runCatching { profileRepository.get().getOrNull()?.isAdmin }.getOrNull()
+                ?: false
+            if (isAdmin) {
                 _state.update { it.copy(isOwner = true) }
             }
         }
@@ -526,8 +529,5 @@ class WorkoutSessionViewModel @Inject constructor(
     companion object {
         /** A gap longer than this is a break, not a rest between sets. */
         const val MAX_TRACKED_REST_SECONDS: Long = 30L * 60
-
-        /** #9 — the app owner accounts; the only ones shown the demo-image flag control. */
-        val OWNER_EMAILS: Set<String> = setOf("evan.ruff@gmail.com", "evan.ruff@oxos.com")
     }
 }

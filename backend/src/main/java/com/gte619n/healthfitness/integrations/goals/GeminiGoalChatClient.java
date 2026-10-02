@@ -41,16 +41,20 @@ public class GeminiGoalChatClient implements GoalChatClient {
     private final Client client;
     private final String model;
     private final Tool tool;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public GeminiGoalChatClient(
         Client client,
         // Default aligned with application.yml (app.goals.gemini-model) so the
         // fallback matches the real model if the property is ever renamed.
         // ADR-0005: Goals chat runs on Gemini Pro, an exception to the flash rule.
-        @Value("${app.goals.gemini-model:gemini-3.1-pro-preview}") String model
+        @Value("${app.goals.gemini-model:gemini-3.1-pro-preview}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
+        this.recorder = recorder;
 
         this.tool = Tool.builder()
             .functionDeclarations(List.of(proposeGoalStructureTool()))
@@ -90,29 +94,47 @@ public class GeminiGoalChatClient implements GoalChatClient {
         StringBuilder text = new StringBuilder();
         RawProposal proposal = null;
 
-        try (ResponseStream<GenerateContentResponse> stream =
-                 client.models.generateContentStream(model, contents, config)) {
-            for (GenerateContentResponse chunk : stream) {
-                String delta = chunk.text();
-                if (delta != null && !delta.isEmpty()) {
-                    text.append(delta);
-                    if (onToken != null) {
-                        onToken.accept(delta);
+        // IMPL-MULTIUSER-01 P2.2: streaming usage metadata lands on the TERMINAL
+        // chunk, so keep the last non-null usage seen across the stream loop and
+        // record it after the stream drains.
+        java.time.Instant startedAt = java.time.Instant.now();
+        com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.Usage lastUsage =
+            com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.Usage.EMPTY;
+        try {
+            try (ResponseStream<GenerateContentResponse> stream =
+                     client.models.generateContentStream(model, contents, config)) {
+                for (GenerateContentResponse chunk : stream) {
+                    var u = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(chunk);
+                    if (u.totalTokens() > 0 || u.inputTokens() > 0 || u.outputTokens() > 0) {
+                        lastUsage = u;
                     }
-                }
-                if (proposal == null) {
-                    List<FunctionCall> calls = chunk.functionCalls();
-                    if (calls != null) {
-                        for (FunctionCall call : calls) {
-                            if (TOOL_NAME.equals(call.name().orElse(null))) {
-                                proposal = toRawProposal(call.args().orElse(Map.of()));
-                                break;
+                    String delta = chunk.text();
+                    if (delta != null && !delta.isEmpty()) {
+                        text.append(delta);
+                        if (onToken != null) {
+                            onToken.accept(delta);
+                        }
+                    }
+                    if (proposal == null) {
+                        List<FunctionCall> calls = chunk.functionCalls();
+                        if (calls != null) {
+                            for (FunctionCall call : calls) {
+                                if (TOOL_NAME.equals(call.name().orElse(null))) {
+                                    proposal = toRawProposal(call.args().orElse(Map.of()));
+                                    break;
+                                }
                             }
                         }
                     }
                 }
             }
+        } catch (RuntimeException e) {
+            recorder.recordError(
+                com.gte619n.healthfitness.core.ai.AiFeature.GOAL_CHAT, model, true, startedAt);
+            throw e;
         }
+        recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.GOAL_CHAT, model,
+            lastUsage.inputTokens(), lastUsage.outputTokens(), 0, true, startedAt);
 
         return new StreamResult(text.toString(), proposal);
     }

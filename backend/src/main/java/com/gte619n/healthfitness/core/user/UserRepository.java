@@ -87,4 +87,58 @@ public interface UserRepository {
      * not rely on it.
      */
     List<String> findAllUserIds();
+
+    // IMPL-MULTIUSER-01 P1.1/P1.5 — access-control administration. Defaulted so
+    // the many existing test fakes compile unchanged; the Firestore impl and the
+    // in-memory fake override them.
+
+    /** Replace the account status (field-scoped merge). */
+    default void updateStatus(String userId, UserStatus status) {
+        throw new UnsupportedOperationException("updateStatus not supported");
+    }
+
+    /** Replace the role set (field-scoped merge). */
+    default void updateRoles(String userId, java.util.Set<UserRole> roles) {
+        throw new UnsupportedOperationException("updateRoles not supported");
+    }
+
+    /**
+     * Admin list/search. When {@code query} is non-blank, prefix-matches on the
+     * lowercased email. When {@code status} is non-null, filters to that status.
+     * Returns at most {@code limit} users. Intended for the admin console only.
+     */
+    default List<User> search(String query, UserStatus status, int limit) {
+        return List.of();
+    }
+
+    /** Users holding the ADMIN role (for last-admin protection). */
+    default List<User> findAdmins() {
+        return List.of();
+    }
+
+    // IMPL-MULTIUSER-01 P1.7 (D13) — export-then-delete offboarding. Defaulted so
+    // the existing test fakes compile unchanged; the Firestore impl + in-memory
+    // fake override them.
+
+    /**
+     * Schedule the account for hard deletion: set {@code status = DISABLED} and
+     * stamp {@code deletionScheduledAt} (field-scoped merge). A null
+     * {@code scheduledAt} clears the schedule (used on reactivation).
+     */
+    default void updateDeletionSchedule(String userId, UserStatus status, java.time.Instant scheduledAt) {
+        throw new UnsupportedOperationException("updateDeletionSchedule not supported");
+    }
+
+    /**
+     * Users whose {@code deletionScheduledAt} is at or before {@code cutoff} — the
+     * purge job's work list (grace window elapsed). Default empty for stubs.
+     */
+    default List<User> findDeletionDue(java.time.Instant cutoff) {
+        return List.of();
+    }
+
+    /** Hard-delete the {@code users/{uid}} document. Subcollection cascade is a limitation. */
+    default void deleteById(String userId) {
+        throw new UnsupportedOperationException("deleteById not supported");
+    }
 }

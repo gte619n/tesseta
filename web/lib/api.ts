@@ -1,5 +1,7 @@
+import type { Route } from "next";
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
@@ -30,6 +32,45 @@ export class BackendError extends Error {
   constructor(message: string, public status: number) {
     super(message);
   }
+}
+
+// IMPL-MULTIUSER-01 P1.3/P1.4 — account lockout. The backend answers a
+// pending/suspended/disabled user's API calls with HTTP 403 plus the
+// `X-Account-Status` header (`account-pending|account-suspended|account-disabled`).
+// apiFetch surfaces this as a typed error AND, when running inside a server
+// render (the common path), redirects straight to the matching lock screen so
+// the page never crashes with a raw 403.
+export type AccountStatusReason =
+  | "account-pending"
+  | "account-suspended"
+  | "account-disabled";
+
+export class AccountLockedError extends Error {
+  constructor(public reason: AccountStatusReason) {
+    super(`account locked: ${reason}`);
+  }
+}
+
+// Map the backend's X-Account-Status header to the lock screen route. Suspended
+// and disabled both land on /auth/suspended (the user cannot self-recover); a
+// pending signup gets the distinct "request received" screen.
+const ACCOUNT_STATUS_ROUTE: Record<AccountStatusReason, Route> = {
+  "account-pending": "/auth/pending",
+  "account-suspended": "/auth/suspended",
+  "account-disabled": "/auth/suspended",
+};
+
+function readAccountStatus(res: Response): AccountStatusReason | null {
+  if (res.status !== 403) return null;
+  const raw = res.headers.get("X-Account-Status");
+  if (
+    raw === "account-pending" ||
+    raw === "account-suspended" ||
+    raw === "account-disabled"
+  ) {
+    return raw;
+  }
+  return null;
 }
 
 export async function apiFetch(
@@ -76,7 +117,7 @@ export async function apiFetch(
   } catch {
     tz = undefined;
   }
-  return fetch(url, {
+  const res = await fetch(url, {
     ...init,
     headers: {
       ...init.headers,
@@ -85,6 +126,18 @@ export async function apiFetch(
     },
     cache: cacheMode,
   });
+  // Account lockout (P1.3/P1.4): a 403 carrying X-Account-Status means the
+  // session is valid but the account is pending/suspended/disabled. Route to
+  // the matching lock screen. redirect() throws NEXT_REDIRECT, which Next
+  // propagates out of the server render — the page is replaced by the lock
+  // screen instead of crashing on a raw 403. `AccountLockedError` is exported
+  // for any caller (e.g. a route handler that swallows redirects) that prefers
+  // to branch on the typed error rather than the thrown redirect.
+  const lockReason = readAccountStatus(res);
+  if (lockReason) {
+    redirect(ACCOUNT_STATUS_ROUTE[lockReason]);
+  }
+  return res;
 }
 
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {

@@ -52,6 +52,28 @@ class OutboxRepository @Inject constructor(
     private val drainMutex = Mutex()
 
     /**
+     * IMPL-MULTIUSER-01 DL-AND-5 — block until no [drain] is in flight.
+     *
+     * The suspend/disable lockout wipe ([com.gte619n.healthfitness.data.db.DbWipe])
+     * deletes the whole encrypted DB *including the outbox table*. If it fired while
+     * a drain was iterating its snapshotted chain, it could delete rows out from
+     * under the drain — violating the D16 "flush queued writes THEN lock out"
+     * guarantee in the narrow in-flight-drain window. The wipe path calls this first
+     * so it serializes AFTER any in-flight drain: the final attempt completes (its
+     * writes land, or the D16 account-status-403 preservation keeps the rows) and
+     * only then does the wipe proceed.
+     *
+     * Acquiring and immediately releasing [drainMutex] is the barrier — it cannot be
+     * acquired until the current `drain()` finishes, and it never holds the lock
+     * across the wipe itself, so there is no lock-ordering/deadlock risk (a drain
+     * kicked off by the 403 is free to re-acquire and complete; the wipe just can't
+     * interleave with an *in-flight* one). Idempotent and cheap when idle.
+     */
+    suspend fun awaitDrainIdle() {
+        drainMutex.withLock { /* barrier: returns once any in-flight drain is done */ }
+    }
+
+    /**
      * Parked mutations already surfaced to diagnostics for aging past the
      * [PARKED_AGING_THRESHOLD_MILLIS] window. Process-scoped (like [SyncDiagnostics]
      * itself) so we nudge once per row per session instead of re-recording on every

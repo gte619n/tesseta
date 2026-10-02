@@ -160,10 +160,18 @@ public class SecurityConfig {
         com.gte619n.healthfitness.ratelimit.AppGeminiRateLimitProperties geminiRateLimit,
         UserService userService,
         CurrentUserProvider currentUserProvider,
+        com.gte619n.healthfitness.core.user.UserRepository userRepository,
+        com.gte619n.healthfitness.core.user.AdminBootstrap adminBootstrap,
         UrlBasedCorsConfigurationSource corsSource
     ) throws Exception {
         UserProvisioningFilter provisioning =
             new UserProvisioningFilter(userService, currentUserProvider);
+        // IMPL-MULTIUSER-01 P1.4: lock out non-ACTIVE accounts right after
+        // provisioning (so the user doc exists), before the AI rate limiter so a
+        // suspended user doesn't consume its budget.
+        com.gte619n.healthfitness.auth.AccountStatusFilter accountStatus =
+            new com.gte619n.healthfitness.auth.AccountStatusFilter(
+                currentUserProvider, userRepository, adminBootstrap);
         PlatformAudienceFilter platformAudience =
             new PlatformAudienceFilter(platformProps.getIssuer());
         V1AuditFilter v1Audit = new V1AuditFilter(auditLogger);
@@ -225,6 +233,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/equipment/**").authenticated()
                 // Exercise catalog endpoints - authenticated users can browse
                 .requestMatchers("/api/exercises/**", "/api/exercises").authenticated()
+                // IMPL-MULTIUSER-01 P3.6: shared program / ad-hoc catalogs —
+                // authenticated users browse (PUBLISHED-only enforced in-service).
+                .requestMatchers("/api/programs/**", "/api/programs").authenticated()
+                .requestMatchers("/api/adhoc-catalog/**", "/api/adhoc-catalog").authenticated()
                 // Admin endpoints require authentication; the admin check itself
                 // is enforced by @AdminOnly (method security) on the controllers.
                 .requestMatchers("/api/admin/**").authenticated()

@@ -90,27 +90,19 @@ public class ExerciseController {
     }
 
     /**
-     * Flag a demo frame as bad (#9). Owner-only: this is the app's owner tooling
-     * for pulling anatomically-wrong demo media out of the served pool and back
-     * into review — not something ordinary users should reach, so it is gated to
-     * {@link #OWNER_EMAIL} (a 403 otherwise), in addition to the client hiding it.
+     * Flag a demo frame as bad (#9). Admin-only: this is curation tooling for
+     * pulling anatomically-wrong demo media out of the served pool and back into
+     * review. Gated via {@link com.gte619n.healthfitness.api.security.AdminOnly}
+     * (role-driven, IMPL-MULTIUSER-01 P1.8) rather than a hardcoded owner email
+     * list; a non-admin gets 403 from method security.
      */
+    @com.gte619n.healthfitness.api.security.AdminOnly
     @PostMapping("/{exerciseId}/flag-frame")
     public ResponseEntity<Void> flagFrame(
         @PathVariable String exerciseId,
         @RequestBody FlagFrameRequest body
     ) {
-        CurrentUser user = currentUser.get();
-        boolean owner = user.email() != null
-            && OWNER_EMAILS.stream().anyMatch(user.email()::equalsIgnoreCase);
-        if (!owner) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not permitted.");
-        }
         service.flagFrame(exerciseId, body.frameKey(), body.note());
         return ResponseEntity.noContent().build();
     }
-
-    /** The app owner accounts — the only ones allowed to flag demo media (#9). */
-    private static final List<String> OWNER_EMAILS =
-        List.of("evan.ruff@gmail.com", "evan.ruff@oxos.com");
 }

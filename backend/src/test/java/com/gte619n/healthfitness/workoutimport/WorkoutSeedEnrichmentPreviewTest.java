@@ -48,7 +48,19 @@ class WorkoutSeedEnrichmentPreviewTest {
     @Test
     void previewRealEnrichment() throws Exception {
         ExerciseMetadataEnricher enricher = new GeminiExerciseMetadataEnricher(
-            Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(), "gemini-3.8-flash");
+            Client.builder().apiKey(System.getenv("GEMINI_API_KEY")).build(), "gemini-3.8-flash",
+            new com.gte619n.healthfitness.core.ai.GeminiCallRecorder(
+                new com.gte619n.healthfitness.core.ai.AiUsageStore() {
+                    @Override public void recordEvent(com.gte619n.healthfitness.core.ai.AiUsageEvent e) {}
+                    @Override public java.util.Optional<com.gte619n.healthfitness.core.ai.AiUsageSummary>
+                        monthlyForUser(String u, String ym) { return java.util.Optional.empty(); }
+                    @Override public java.util.Optional<com.gte619n.healthfitness.core.ai.AiUsageSummary>
+                        monthlyGlobal(String ym) { return java.util.Optional.empty(); }
+                    @Override public java.util.List<com.gte619n.healthfitness.core.ai.AiUsageSummary>
+                        topSpenders(String ym, int n) { return java.util.List.of(); }
+                },
+                new com.gte619n.healthfitness.core.ai.AiModelPricing(),
+                () -> { throw new IllegalStateException("no user"); }));
 
         Map<String, Object> preview = new LinkedHashMap<>();
         preview.put("model", "gemini-3.8-flash");

@@ -510,8 +510,11 @@ class WorkoutSessionViewModelTest {
 
     @Test
     fun `owner can flag a demo frame as bad`() = runTest {
+        // IMPL-MULTIUSER-01 P1.8 — isOwner now derives from the backend `isAdmin`
+        // on /api/me, not a hardcoded email allowlist.
         coEvery { profileRepo.cached() } returns com.gte619n.healthfitness.domain.profile.Profile(
-            userId = "u", email = WorkoutSessionViewModel.OWNER_EMAILS.first(), displayName = null, heightCm = null,
+            userId = "u", email = "admin@example.com", displayName = null, heightCm = null,
+            isAdmin = true,
         )
         coEvery { repo.flagFrame("ex-squat", "start") } returns Result.success(Unit)
         val vm = vm()

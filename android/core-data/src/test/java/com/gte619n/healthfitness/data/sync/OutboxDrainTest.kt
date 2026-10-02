@@ -2,7 +2,12 @@ package com.gte619n.healthfitness.data.sync
 
 import com.gte619n.healthfitness.data.db.entity.MirrorTables
 import com.gte619n.healthfitness.data.db.entity.OutboxOp
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -147,6 +152,46 @@ class OutboxDrainTest {
         // First-attempt backoff = base (30s) added to the drain clock. With the
         // jitter random pinned to 0.5 the jitter factor is exactly 1.0, so this
         // still equals the plain ladder value.
+        assertEquals(now + OutboxRepository.BASE_BACKOFF_MILLIS, queued.nextAttemptAt)
+    }
+
+    @Test
+    fun `account-status 403 preserves the queued write instead of dropping it (D16)`() = runTest {
+        // IMPL-MULTIUSER-01 D16: a suspended/pending account's write 403s with
+        // X-Account-Status. A plain 403 would self-heal (drop) on a non-
+        // WORKOUT_SCHEDULED table; an account-status 403 must NOT be terminal — the
+        // write is valid, so keep the row + optimistic mirror so it can replay if
+        // the account is reactivated. (The lockout/wipe path is separate, in
+        // AuthCoordinator via AccountStatusInterceptor.)
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("med-susp", """{"id":"med-susp"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        val mutationId =
+            repo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "med-susp", """{"id":"med-susp"}""")
+
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("X-Account-Status", "account-suspended")
+                .setBody("""{"message":"account suspended"}"""),
+        )
+
+        val result = repo.drain()
+
+        // Not terminal: counted as a transient failure, not a drop/reconcile.
+        assertEquals(0, result.sent)
+        assertEquals(1, result.failed)
+        assertEquals(0, result.collapsed)
+
+        // The optimistic mirror row survives (not deleted, not reset to server truth).
+        val row = mirror.getRow(MirrorTables.MEDICATIONS, "med-susp")!!
+        assertEquals("FAILED", row.syncState)
+
+        // The outbox row is kept + backed off (NOT parked as terminal / dropped).
+        val queued = outboxDao.listByEntity("med-susp").single()
+        assertEquals(mutationId, queued.mutationId)
+        assertEquals(1, queued.attempts)
         assertEquals(now + OutboxRepository.BASE_BACKOFF_MILLIS, queued.nextAttemptAt)
     }
 
@@ -506,6 +551,82 @@ class OutboxDrainTest {
         val remaining = outboxDao.listByEntity("m")
         assertEquals("the mid-drain write survives", 1, remaining.size)
         assertEquals(midWrite, remaining.single().mutationId)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `awaitDrainIdle blocks until an in-flight drain finishes (DL-AND-5 lockout barrier)`() = runTest {
+        // IMPL-MULTIUSER-01 DL-AND-5: the suspend/disable lockout wipe deletes the
+        // whole encrypted DB (outbox table included). If it fired mid-drain it could
+        // delete rows the drain is still iterating. The wipe path calls
+        // awaitDrainIdle() first, which must NOT return until the in-flight drain has
+        // fully completed — proving the wipe serializes strictly after the drain and
+        // the mid-drain row isn't swept out from under it.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val replayGate = CompletableDeferred<Unit>()
+        var replayStarted = false
+        var replayFinished = false
+        val gatedReplay = object : OutboxReplayClient {
+            override suspend fun replay(
+                table: String, op: OutboxOp, entityId: String,
+                payloadJson: String?, mutationId: String, originDeviceId: String,
+            ): Long {
+                replayStarted = true
+                replayGate.await() // hold the drain open mid-replay
+                replayFinished = true
+                return 222L
+            }
+        }
+        val gatedRepo = OutboxRepository(
+            outboxDao = outboxDao, mirror = mirror, replay = gatedReplay,
+            deviceIdProvider = fakeDeviceIdProvider("device-A"), diagnostics = diagnostics,
+            io = dispatcher, clock = { now },
+        )
+        mirror.upsert(
+            MirrorTables.MEDICATIONS,
+            MirrorRowData("locked", """{"id":"locked"}""", now, "ACTIVE", dirty = true, "PENDING"),
+        )
+        gatedRepo.enqueue(OutboxOp.CREATE, MirrorTables.MEDICATIONS, "locked", """{"id":"locked"}""")
+
+        // Start the drain; let it run up to the gated replay (mid-flight).
+        val drainJob = launch(dispatcher) { gatedRepo.drain() }
+        advanceUntilIdle()
+        assertTrue("drain reached the replay (it is in flight)", replayStarted)
+        assertTrue("drain is parked at the gate, not finished", !replayFinished)
+
+        // The lockout barrier: it must block while the drain is in flight. The row
+        // the drain owns must still be in the outbox (not wiped out from under it).
+        var barrierReturned = false
+        val barrierJob = launch(dispatcher) {
+            gatedRepo.awaitDrainIdle()
+            barrierReturned = true
+        }
+        advanceUntilIdle()
+        assertTrue("barrier blocks while the drain holds the mutex", !barrierReturned)
+        assertTrue(
+            "the mid-drain row is NOT deleted while the barrier waits",
+            outboxDao.listByEntity("locked").isNotEmpty(),
+        )
+
+        // Let the in-flight drain complete; only now may the barrier (= the wipe) proceed.
+        replayGate.complete(Unit)
+        advanceUntilIdle()
+        drainJob.join()
+        barrierJob.join()
+
+        assertTrue("the in-flight drain completed its replay", replayFinished)
+        assertTrue("barrier returned only after the drain finished", barrierReturned)
+        // The drain succeeded, so its row is cleared — by the drain itself, in order,
+        // not yanked away mid-iteration by a concurrent wipe.
+        assertTrue(outboxDao.listByEntity("locked").isEmpty())
+    }
+
+    @Test
+    fun `awaitDrainIdle returns immediately when no drain is running`() = runTest {
+        // The common case: no in-flight drain, so the lockout wipe barrier is a
+        // cheap no-op and the wipe proceeds without delay. (Completing is the
+        // assertion — a broken barrier would suspend forever and time the test out.)
+        repo.awaitDrainIdle()
     }
 
     @Test

@@ -106,7 +106,7 @@ public class InMemoryUserRepository implements UserRepository {
             existing.userId(), existing.email(), existing.displayName(), existing.googleHealth(),
             heightCm, existing.createdAt(), Instant.now(),
             existing.biologicalSex(), existing.dateOfBirth(), existing.withings(),
-            existing.hiddenBiometrics()));
+            existing.hiddenBiometrics(), existing.roles(), existing.status()));
     }
 
     @Override
@@ -119,7 +119,8 @@ public class InMemoryUserRepository implements UserRepository {
         store.put(userId, new User(
             existing.userId(), existing.email(), existing.displayName(), existing.googleHealth(),
             existing.heightCm(), existing.createdAt(), Instant.now(),
-            biologicalSex, dateOfBirth, existing.withings(), existing.hiddenBiometrics()));
+            biologicalSex, dateOfBirth, existing.withings(), existing.hiddenBiometrics(),
+            existing.roles(), existing.status()));
     }
 
     @Override
@@ -130,12 +131,73 @@ public class InMemoryUserRepository implements UserRepository {
             existing.userId(), existing.email(), existing.displayName(), existing.googleHealth(),
             existing.heightCm(), existing.createdAt(), Instant.now(),
             existing.biologicalSex(), existing.dateOfBirth(), existing.withings(),
-            hiddenBiometrics));
+            hiddenBiometrics, existing.roles(), existing.status()));
     }
 
     @Override
     public List<String> findAllUserIds() {
         return new ArrayList<>(store.keySet());
+    }
+
+    @Override
+    public void updateStatus(String userId, com.gte619n.healthfitness.core.user.UserStatus status) {
+        User u = store.get(userId);
+        if (u == null) return;
+        store.put(userId, new User(u.userId(), u.email(), u.displayName(), u.googleHealth(),
+            u.heightCm(), u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(),
+            u.withings(), u.hiddenBiometrics(), u.roles(), status, u.deletionScheduledAt()));
+    }
+
+    @Override
+    public void updateDeletionSchedule(String userId,
+            com.gte619n.healthfitness.core.user.UserStatus status, Instant scheduledAt) {
+        User u = store.get(userId);
+        if (u == null) return;
+        store.put(userId, new User(u.userId(), u.email(), u.displayName(), u.googleHealth(),
+            u.heightCm(), u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(),
+            u.withings(), u.hiddenBiometrics(), u.roles(),
+            status != null ? status : u.status(), scheduledAt));
+    }
+
+    @Override
+    public List<User> findDeletionDue(Instant cutoff) {
+        return store.values().stream()
+            .filter(u -> u.deletionScheduledAt() != null
+                && !u.deletionScheduledAt().isAfter(cutoff))
+            .toList();
+    }
+
+    @Override
+    public void deleteById(String userId) {
+        store.remove(userId);
+    }
+
+    @Override
+    public void updateRoles(String userId,
+            java.util.Set<com.gte619n.healthfitness.core.user.UserRole> roles) {
+        User u = store.get(userId);
+        if (u == null) return;
+        store.put(userId, new User(u.userId(), u.email(), u.displayName(), u.googleHealth(),
+            u.heightCm(), u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(),
+            u.withings(), u.hiddenBiometrics(), roles, u.status()));
+    }
+
+    @Override
+    public List<User> search(String query,
+            com.gte619n.healthfitness.core.user.UserStatus status, int limit) {
+        return store.values().stream()
+            .filter(u -> query == null || query.isBlank()
+                || (u.email() != null
+                    && u.email().toLowerCase(java.util.Locale.ROOT)
+                        .startsWith(query.trim().toLowerCase(java.util.Locale.ROOT))))
+            .filter(u -> status == null || u.status() == status)
+            .limit(Math.max(1, limit))
+            .toList();
+    }
+
+    @Override
+    public List<User> findAdmins() {
+        return store.values().stream().filter(User::isAdmin).toList();
     }
 
     private User require(String userId) {
@@ -150,13 +212,13 @@ public class InMemoryUserRepository implements UserRepository {
     private static User withGoogleHealth(User u, GoogleHealthConnection gh) {
         return new User(u.userId(), u.email(), u.displayName(), gh, u.heightCm(),
             u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(), u.withings(),
-            u.hiddenBiometrics());
+            u.hiddenBiometrics(), u.roles(), u.status());
     }
 
     // Rebuild preserving every field except the Withings connection.
     private static User withWithings(User u, WithingsConnection w) {
         return new User(u.userId(), u.email(), u.displayName(), u.googleHealth(), u.heightCm(),
             u.createdAt(), Instant.now(), u.biologicalSex(), u.dateOfBirth(), w,
-            u.hiddenBiometrics());
+            u.hiddenBiometrics(), u.roles(), u.status());
     }
 }

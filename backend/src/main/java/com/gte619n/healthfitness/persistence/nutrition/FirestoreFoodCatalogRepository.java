@@ -125,6 +125,29 @@ public class FirestoreFoodCatalogRepository implements FoodCatalogRepository {
     }
 
     @Override
+    public List<CatalogFood> findPendingVerification(int limit) {
+        // UNVERIFIED + user-sourced. Fetch a page by status and filter the rest
+        // (createdBy present, not archived, not a drink) in memory so we avoid a
+        // composite index for this admin-only, modest-volume query.
+        List<QueryDocumentSnapshot> docs = await(collection()
+            .whereEqualTo("status", FoodStatus.UNVERIFIED.name())
+            .limit(Math.max(limit * 4, 40))
+            .get()).getDocuments();
+        List<CatalogFood> out = new ArrayList<>();
+        for (QueryDocumentSnapshot doc : docs) {
+            CatalogFood f = toFood(doc);
+            if (f.createdBy() != null && !f.createdBy().isBlank()
+                && !f.isArchived() && !f.isDrink()) {
+                out.add(f);
+                if (out.size() >= limit) {
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    @Override
     public List<CatalogFood> findAll() {
         return await(collection().get()).getDocuments().stream()
             .map(FirestoreFoodCatalogRepository::toFood).toList();

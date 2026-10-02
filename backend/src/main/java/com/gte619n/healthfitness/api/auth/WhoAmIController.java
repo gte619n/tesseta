@@ -15,16 +15,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class WhoAmIController {
     private final CurrentUserProvider currentUser;
     private final UserRepository users;
+    private final com.gte619n.healthfitness.api.security.AdminAuthorizer adminAuthorizer;
 
-    public WhoAmIController(CurrentUserProvider currentUser, UserRepository users) {
+    public WhoAmIController(
+        CurrentUserProvider currentUser,
+        UserRepository users,
+        com.gte619n.healthfitness.api.security.AdminAuthorizer adminAuthorizer
+    ) {
         this.currentUser = currentUser;
         this.users = users;
+        this.adminAuthorizer = adminAuthorizer;
     }
 
     @GetMapping
     public WhoAmIResponse whoAmI() {
         CurrentUser cu = currentUser.get();
-        return response(cu, users.findById(cu.userId()).orElse(null));
+        return response(cu, users.findById(cu.userId()).orElse(null), adminAuthorizer.isAdmin());
     }
 
     // Partial profile update: heightCm plus the M3 Mifflin demographics
@@ -54,15 +60,16 @@ public class WhoAmIController {
         // A profile PATCH never touches biometric visibility — carry it through.
         return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(),
             heightCm, sex == null ? null : sex.name(), dob == null ? null : dob.toString(),
-            existing == null ? java.util.List.of() : existing.hiddenBiometrics());
+            existing == null ? java.util.List.of() : existing.hiddenBiometrics(),
+            adminAuthorizer.isAdmin());
     }
 
-    private static WhoAmIResponse response(CurrentUser cu, User user) {
+    private static WhoAmIResponse response(CurrentUser cu, User user, boolean isAdmin) {
         Integer heightCm = user == null ? null : user.heightCm();
         String sex = user == null || user.biologicalSex() == null ? null : user.biologicalSex().name();
         String dob = user == null || user.dateOfBirth() == null ? null : user.dateOfBirth().toString();
         return new WhoAmIResponse(cu.userId(), cu.email(), cu.displayName(), cu.photoUrl(), heightCm, sex, dob,
-            user == null ? java.util.List.of() : user.hiddenBiometrics());
+            user == null ? java.util.List.of() : user.hiddenBiometrics(), isAdmin);
     }
 
     public record UpdateProfileRequest(Integer heightCm, String biologicalSex, String dateOfBirth) {}

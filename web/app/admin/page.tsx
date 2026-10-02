@@ -3,6 +3,8 @@ import { getPendingEquipment, getAdminCatalog } from '@/lib/gym-api';
 import { listAdminDrugs } from '@/lib/drug-admin-api';
 import { getAdminExerciseCatalog, getAdminExerciseReview } from '@/lib/exercise-admin-api';
 import { listOAuthClients } from '@/lib/oauth-admin-api';
+import { listPendingUsers } from '@/lib/user-admin-api';
+import { getCurationQueue } from '@/lib/curation-admin-api';
 import { pageMetadata } from '@/lib/page-metadata';
 
 export const metadata = pageMetadata('Admin');
@@ -14,15 +16,25 @@ export const revalidate = 60;
 
 export default async function AdminOverviewPage() {
   // Admin gating handled by app/admin/layout.tsx
-  const [pending, catalog, drugs, exercises, exerciseReview, oauthClients] =
-    await Promise.all([
-      getPendingEquipment().catch(() => []),
-      getAdminCatalog().catch(() => []),
-      listAdminDrugs().catch(() => []),
-      getAdminExerciseCatalog().catch(() => []),
-      getAdminExerciseReview().catch(() => []),
-      listOAuthClients().catch(() => []),
-    ]);
+  const [
+    pending,
+    catalog,
+    drugs,
+    exercises,
+    exerciseReview,
+    oauthClients,
+    pendingUsers,
+    curationQueue,
+  ] = await Promise.all([
+    getPendingEquipment().catch(() => []),
+    getAdminCatalog().catch(() => []),
+    listAdminDrugs().catch(() => []),
+    getAdminExerciseCatalog().catch(() => []),
+    getAdminExerciseReview().catch(() => []),
+    listOAuthClients().catch(() => []),
+    listPendingUsers().catch(() => []),
+    getCurationQueue().catch(() => []),
+  ]);
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -32,6 +44,27 @@ export default async function AdminOverviewPage() {
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SectionCard
+          href="/admin/users"
+          icon="users"
+          title="Users"
+          line1={`${pendingUsers.length} pending approval`}
+          line2="Roles, status, allowlist"
+        />
+        <SectionCard
+          href="/admin/curation"
+          icon="checklist"
+          title="Curation"
+          line1={`${curationQueue.length} pending review`}
+          line2="Approve shared catalog submissions"
+        />
+        <SectionCard
+          href="/admin/ai-usage"
+          icon="chart-dots"
+          title="AI usage"
+          line1="This month's cost & calls"
+          line2="Per-feature + top spenders"
+        />
         <SectionCard
           href="/admin/equipment"
           icon="barbell"

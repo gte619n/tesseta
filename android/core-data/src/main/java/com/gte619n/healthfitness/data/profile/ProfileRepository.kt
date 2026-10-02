@@ -121,4 +121,5 @@ private fun ProfileDto.toDomain() = Profile(
     dateOfBirth = dateOfBirth,
     photoUrl = photoUrl,
     hiddenBiometrics = hiddenBiometrics ?: emptyList(),
+    isAdmin = isAdmin ?: false,
 )

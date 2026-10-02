@@ -38,7 +38,7 @@ class GeminiExerciseMediaGroundingTest {
     void setUp() {
         storage = Mockito.mock(ExerciseMediaStorage.class);
         exerciseService = Mockito.mock(ExerciseService.class);
-        media = new GeminiExerciseMediaService(storage, exerciseService, null, null, "", false);
+        media = new GeminiExerciseMediaService(storage, exerciseService, null, null, "", false, null);
         when(exerciseService.setGroundingImageUrls(anyString(), any())).thenReturn(exerciseWith(List.of()));
     }
 

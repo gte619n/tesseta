@@ -8,6 +8,7 @@ import com.gte619n.healthfitness.data.db.DbWipe
 import com.gte619n.healthfitness.data.medications.TodaysDosesCache
 import com.gte619n.healthfitness.data.net.HttpCacheWipe
 import com.gte619n.healthfitness.data.prefs.UnitPreferencesRepository
+import com.gte619n.healthfitness.data.sync.OutboxRepository
 import com.gte619n.healthfitness.mobile.push.TokenRegistration
 import com.gte619n.healthfitness.mobile.wear.PhoneTokenPublisher
 import dagger.Lazy
@@ -49,6 +50,12 @@ class SignOutSideEffects @Inject constructor(
     // (sign-out time) breaks that Hilt dependency cycle. It also means we never
     // build the network stack just to register the hook.
     private val tokenRegistration: Lazy<TokenRegistration>,
+    // IMPL-MULTIUSER-01 DL-AND-5 — Lazy for the SAME reason as tokenRegistration:
+    // OutboxRepository pulls in the network stack (OkHttp → TokenAuthenticator →
+    // GoogleAuthRepository → this SignOutSideEffects via onSignOut), so an eager
+    // inject would form a Hilt cycle. Deferring to first use (wipe time) breaks it.
+    // We use it only to await an in-flight drain before the DB wipe (see wipeLocalData).
+    private val outbox: Lazy<OutboxRepository>,
     private val dbWipe: DbWipe,
     private val recentActivityCache: RecentActivityCache,
     // offline-fix: the full Today's Doses screen's own DataStore cache (not the Room DB).
@@ -74,6 +81,13 @@ class SignOutSideEffects @Inject constructor(
      */
     @OptIn(ExperimentalCoilApi::class)
     suspend fun wipeLocalData() {
+        // IMPL-MULTIUSER-01 DL-AND-5 — close the residual lockout race: the wipe
+        // deletes the whole encrypted DB, outbox table included, so it must not run
+        // while a drain is mid-flight (it could delete rows the drain is iterating,
+        // breaking the D16 "flush queued writes THEN lock out" guarantee). Block
+        // until any in-flight drain finishes so the wipe serializes strictly after
+        // it. Best-effort: a failure here must never block the PHI wipe itself.
+        runCatching { outbox.get().awaitDrainIdle() }
         // The hard guarantee: drop the encrypted Room mirror (PHI).
         dbWipe.wipe()
         // Side caches living outside the Room DB, each their own DataStore.

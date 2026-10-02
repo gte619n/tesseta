@@ -71,14 +71,18 @@ public class GeminiExerciseMetadataEnricher implements ExerciseMetadataEnricher 
     private final Client client;
     private final String model;
     private final ObjectMapper json;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public GeminiExerciseMetadataEnricher(
         Client client,
-        @Value("${app.exercises.enrich-model:gemini-3.8-flash}") String model
+        @Value("${app.exercises.enrich-model:gemini-3.8-flash}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.model = model;
         this.json = JsonSupport.LENIENT;
+        this.recorder = recorder;
     }
 
     @Override
@@ -98,8 +102,19 @@ public class GeminiExerciseMetadataEnricher implements ExerciseMetadataEnricher 
             }
             parts.add(Part.fromText("Exercise name: " + exerciseName));
             Content content = Content.fromParts(parts.toArray(new Part[0]));
-            GenerateContentResponse response =
-                client.models.generateContent(model, content, GenerateContentConfig.builder().build());
+            java.time.Instant startedAt = java.time.Instant.now();
+            GenerateContentResponse response;
+            try {
+                response = client.models.generateContent(
+                    model, content, GenerateContentConfig.builder().build());
+            } catch (RuntimeException ge) {
+                recorder.recordError(
+                    com.gte619n.healthfitness.core.ai.AiFeature.EXERCISE_ENRICH, model, false, startedAt);
+                throw ge;
+            }
+            var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+            recorder.recordSuccess(com.gte619n.healthfitness.core.ai.AiFeature.EXERCISE_ENRICH, model,
+                usage.inputTokens(), usage.outputTokens(), 0, false, startedAt);
             String text = stripFences(response.text());
             if (text == null || !text.startsWith("{")) {
                 log.warn("Enricher returned non-JSON for '{}': {}", exerciseName, preview(text));

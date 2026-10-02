@@ -53,17 +53,21 @@ public class GeminiAdHocWorkoutGenerator implements AdHocWorkoutGenerator {
     private final ExerciseService exercises;
     private final ExerciseAvailabilityService availability;
     private final Tool tool;
+    // IMPL-MULTIUSER-01 P2.2: per-call token/cost metering sink.
+    private final com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder;
 
     public GeminiAdHocWorkoutGenerator(
         Client client,
         ExerciseService exercises,
         ExerciseAvailabilityService availability,
-        @Value("${app.adhoc-workouts.gemini-model:gemini-3.1-pro-preview}") String model
+        @Value("${app.adhoc-workouts.gemini-model:gemini-3.1-pro-preview}") String model,
+        com.gte619n.healthfitness.core.ai.GeminiCallRecorder recorder
     ) {
         this.client = client;
         this.exercises = exercises;
         this.availability = availability;
         this.model = model;
+        this.recorder = recorder;
         this.tool = Tool.builder().functionDeclarations(List.of(proposeTool())).build();
     }
 
@@ -85,7 +89,19 @@ public class GeminiAdHocWorkoutGenerator implements AdHocWorkoutGenerator {
         List<Content> contents = List.of(
             Content.builder().role("user").parts(List.of(Part.fromText(prompt))).build());
 
-        GenerateContentResponse response = client.models.generateContent(model, contents, config);
+        java.time.Instant startedAt = java.time.Instant.now();
+        GenerateContentResponse response;
+        try {
+            response = client.models.generateContent(model, contents, config);
+        } catch (RuntimeException e) {
+            recorder.record(com.gte619n.healthfitness.core.ai.AiFeature.ADHOC_GEN, model, 0, 0, 0,
+                com.gte619n.healthfitness.core.ai.AiUsageEvent.Status.ERROR, false, startedAt, userId);
+            throw e;
+        }
+        var usage = com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.from(response);
+        recorder.record(com.gte619n.healthfitness.core.ai.AiFeature.ADHOC_GEN, model,
+            usage.inputTokens(), usage.outputTokens(), 0,
+            com.gte619n.healthfitness.core.ai.AiUsageEvent.Status.SUCCESS, false, startedAt, userId);
         List<FunctionCall> calls = response.functionCalls();
         if (calls != null) {
             for (FunctionCall call : calls) {

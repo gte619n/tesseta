@@ -37,7 +37,9 @@ import com.gte619n.healthfitness.data.withings.WithingsOAuthCoordinator
 import com.gte619n.healthfitness.mobile.push.HfMessagingService
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionBootstrap
 import com.gte619n.healthfitness.mobile.auth.AuthCoordinator
+import com.gte619n.healthfitness.mobile.auth.PendingApprovalScreen
 import com.gte619n.healthfitness.mobile.auth.SignInScreen
+import com.gte619n.healthfitness.mobile.auth.SuspendedScreen
 import com.gte619n.healthfitness.mobile.dashboard.FoldableDashboardScreen
 import com.gte619n.healthfitness.mobile.dashboard.PhoneTodayScreen
 import com.gte619n.healthfitness.mobile.nav.AppNavHost
@@ -220,6 +222,16 @@ private fun AppRoot(
         // so a returning user never sees a sign-in flash. The Surface canvas shows
         // through in the rare case the splash has already timed out.
         AuthState.Loading -> Unit
+        // IMPL-MULTIUSER-01 P1.3/P1.4 — the backend reported a non-active account
+        // via `403 + X-Account-Status`. Terminal locked-out screens; the only exit
+        // is signing out (re-authenticating would just 403 again).
+        AuthState.Pending -> PendingApprovalScreen(
+            onSignOut = { scope.launch { coordinator.signOut() } },
+        )
+        is AuthState.Suspended -> SuspendedScreen(
+            disabled = (state as AuthState.Suspended).disabled,
+            onSignOut = { scope.launch { coordinator.signOut() } },
+        )
         else -> SignInScreen(
             state = state,
             onSignIn = { scope.launch { coordinator.interactiveSignIn(context) } },

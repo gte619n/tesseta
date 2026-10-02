@@ -38,6 +38,17 @@ public interface FoodCatalogRepository {
         return List.of();
     }
 
+    /**
+     * IMPL-MULTIUSER-01 P3.4 — user-sourced foods still awaiting admin
+     * promotion to the trusted/app-wide {@code VERIFIED} tier: {@code status ==
+     * UNVERIFIED}, created by a user (non-null {@code createdBy}), not archived,
+     * not a drink (drinks never graduate into the normal food catalog). Backs the
+     * admin pending-verification queue. Default empty for non-persistent stubs.
+     */
+    default List<CatalogFood> findPendingVerification(int limit) {
+        return List.of();
+    }
+
     void save(CatalogFood food);
 
     /**
