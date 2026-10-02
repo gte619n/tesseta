@@ -78,3 +78,7 @@ ios/Config/Secrets.xcconfig
 
 # JVM heap dumps (e.g. Kotlin/Native OOM)
 *.hprof
+
+# fastlane run artifacts
+ios/fastlane/report.xml
+**/fastlane/report.xml
