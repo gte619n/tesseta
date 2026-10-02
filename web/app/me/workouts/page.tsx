@@ -1,4 +1,4 @@
-import { listPrograms, getProgramDeep, getProgramCalendar, getWorkoutHistory } from "@/lib/workout-program-api";
+import { listPrograms, getProgramDeep, getProgramCalendar, getWorkoutHistory, ensureUpcoming } from "@/lib/workout-program-api";
 import { getWorkoutStats } from "@/lib/workout-stats-api";
 import { buildCurrentProgramView } from "@/lib/workout-overview";
 import { addDays } from "@/lib/workout-stats-format";
@@ -56,6 +56,16 @@ export default async function WorkoutsOverviewPage() {
     ]);
     if (deep) {
       currentProgram = buildCurrentProgramView(deep, calendar, today);
+      // Never leave a finished-but-active program at a dead end: if there's no
+      // next session, lazily extend it in place (resuming from the last working
+      // loads) and rebuild from the fresh schedule. Best-effort and idempotent —
+      // a no-op on the backend when future work already exists.
+      if (!currentProgram.nextSession) {
+        const appended = await ensureUpcoming(activeProgram.programId).catch(() => null);
+        if (appended && appended.length > 0) {
+          currentProgram = buildCurrentProgramView(deep, [...calendar, ...appended], today);
+        }
+      }
     }
   }
 

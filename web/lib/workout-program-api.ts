@@ -46,6 +46,20 @@ export function getProgramCalendar(
   );
 }
 
+// Lazy auto-continuation (called on opening the workouts dashboard): if the
+// program has run out of upcoming sessions, the backend appends its next cycle
+// in place — resuming from the last working loads — so the athlete is never
+// stranded without a next workout; otherwise it's a no-op. Returns the upcoming
+// PLANNED sessions. Idempotent and safe to call on every page load.
+export function ensureUpcoming(
+  programId: string,
+): Promise<ScheduledWorkoutResponse[]> {
+  return send<ScheduledWorkoutResponse[]>(
+    `/api/me/workout-programs/${programId}/ensure-upcoming`,
+    "POST",
+  );
+}
+
 // Performed sessions across every program, newest first (Workout History),
 // paged 25 at a time. Each row carries its program/phase titles for delineation.
 export function getWorkoutHistory(

@@ -291,6 +291,59 @@ class WorkoutProgramRepositoryTest {
     }
 
     @Test
+    fun `runDayToday skips a deload week and resumes the last working load`() = runBlocking {
+        // #2: a redo must use the last WORKING day's load, never the deload week's
+        // suppressed load, even when the deload is the most recent completed session.
+        coEvery { programDao.getById("p1") } returns entity("p1", deepAdapter.toJson(assembledDeep()))
+        coEvery { scheduledDao.getById(any()) } returns null
+
+        fun session(weight: Double, basis: String) = WorkoutDayDto(
+            dayId = "d1", dayOfWeek = DayOfWeek.MON,
+            blocks = listOf(
+                BlockDto(
+                    blockId = "b1", type = "MAIN",
+                    prescriptions = listOf(
+                        PrescriptionDto(
+                            exerciseId = "ex1", sets = 3, repsMin = 5, repsMax = 5,
+                            targetWeightLbs = weight, loadBasis = basis,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        // Working week (older): 185 lb. Deload week (newer, flagged): 135 lb.
+        val working = ScheduledWorkoutDto(
+            scheduledId = "2026-04-13_d1", date = java.time.LocalDate.parse("2026-04-13"),
+            phaseId = "ph1", dayId = "d1", status = "COMPLETED", isDeload = false,
+            session = session(185.0, "double progression"),
+        )
+        val deload = ScheduledWorkoutDto(
+            scheduledId = "2026-04-20_d1", date = java.time.LocalDate.parse("2026-04-20"),
+            phaseId = "ph1", dayId = "d1", status = "COMPLETED", isDeload = true,
+            session = session(135.0, "deload"),
+        )
+        coEvery { scheduledDao.listActive() } returns listOf(
+            WorkoutScheduledEntity(
+                "p1/2026-04-20_d1", scheduledAdapter.toJson(deload),
+                now.toEpochMilli(), "COMPLETED", true, "SYNCED",
+            ),
+            WorkoutScheduledEntity(
+                "p1/2026-04-13_d1", scheduledAdapter.toJson(working),
+                now.toEpochMilli(), "COMPLETED", false, "SYNCED",
+            ),
+        )
+        val rows = slot<List<MirrorRepositorySupport.RefreshRow>>()
+        coEvery { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, capture(rows)) } returns Unit
+
+        repo.runDayToday("p1", "ph1", "d1").getOrThrow()
+
+        val minted = scheduledAdapter.fromJson(rows.captured.single().payloadJson)!!
+        val rx = minted.session!!.blocks.single().prescriptions.single()
+        assertEquals(185.0, rx.targetWeightLbs)
+        assertEquals("double progression", rx.loadBasis)
+    }
+
+    @Test
     fun `runDayToday reuses an already-mirrored session for the same day`() = runBlocking {
         val today = java.time.LocalDate.now()
         val existing = ScheduledWorkoutDto(

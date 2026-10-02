@@ -7,6 +7,7 @@ import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionRepository
 import com.gte619n.healthfitness.data.workouts.settings.WorkoutSettingsRepository
 import com.gte619n.healthfitness.domain.workouts.WorkoutStreakSettings
 import com.gte619n.healthfitness.domain.workouts.program.ProgramActivationInvalidException
+import com.gte619n.healthfitness.domain.workouts.program.ProgramStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledWorkout
 import com.gte619n.healthfitness.domain.workouts.program.WorkoutProgram
@@ -103,6 +104,9 @@ class WorkoutsLandingViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(WorkoutsLandingUiState())
     val state: StateFlow<WorkoutsLandingUiState> = _state.asStateFlow()
+
+    /** Programs we've already asked the backend to auto-continue (once per VM). */
+    private val autoContinueAttempted = mutableSetOf<String>()
 
     init {
         load()
@@ -338,6 +342,30 @@ class WorkoutsLandingViewModel @Inject constructor(
                 weeklyStreakTarget = weeklyTarget,
                 error = null,
             )
+        }
+        maybeAutoContinue(program, cal)
+    }
+
+    /**
+     * Never strand the athlete at a dead end: when the featured program is still
+     * ACTIVE but has no upcoming PLANNED session, ask the backend to extend it in
+     * place (resuming from the last working loads). The call is server-side
+     * idempotent (a no-op when future work exists), and we additionally guard to
+     * one attempt per program per ViewModel so a wrongly-scoped calendar window
+     * can't spam it. Best-effort and online-only — offline simply leaves the
+     * existing state until connectivity returns.
+     */
+    private fun maybeAutoContinue(program: WorkoutProgram, calendar: List<ScheduledWorkout>) {
+        if (program.status != ProgramStatus.ACTIVE) return
+        val programId = program.programId
+        val hasUpcoming = calendar.any {
+            it.status == ScheduledStatus.PLANNED && !it.date.isBefore(today)
+        }
+        if (hasUpcoming) return
+        if (!autoContinueAttempted.add(programId)) return
+        viewModelScope.launch {
+            repository.ensureUpcoming(programId)
+                .onSuccess { appended -> if (appended.isNotEmpty()) refresh() }
         }
     }
 }

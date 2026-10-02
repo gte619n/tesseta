@@ -49,6 +49,30 @@ class SeedWeightResolverTest {
     }
 
     @Test
+    void rearDeltRaiseSeedsLightNotFortyPounds() {
+        // Regression: a rear-delt raise used to hit the generic 40 lb accessory
+        // ceiling (the "40 lb rear delt raise" bug). It must now seed with a small,
+        // realistic dumbbell load — well under the cable-pushdown tier.
+        double raise = SeedWeightResolver.seedWeightLbs(
+            ex("Rear Delt Raise", MovementPattern.PUSH_VERTICAL, Mechanic.ISOLATION));
+        assertThat(raise).isLessThanOrEqualTo(15.0);
+        assertThat(raise).isGreaterThan(0.0);
+
+        double pushdown = SeedWeightResolver.seedWeightLbs(
+            ex("Cable Push-down", MovementPattern.PUSH_HORIZONTAL, Mechanic.ISOLATION));
+        assertThat(raise).isLessThan(pushdown);
+    }
+
+    @Test
+    void lateralRaiseFamilySeedsLight() {
+        for (String name : List.of("Lateral Raise", "Dumbbell Front Raise", "Reverse Fly")) {
+            double seed = SeedWeightResolver.seedWeightLbs(
+                ex(name, MovementPattern.PUSH_VERTICAL, Mechanic.ISOLATION));
+            assertThat(seed).as(name).isLessThanOrEqualTo(15.0).isGreaterThan(0.0);
+        }
+    }
+
+    @Test
     void neverBelowFloor() {
         double core = SeedWeightResolver.seedWeightLbs(
             ex("Weighted Crunch", MovementPattern.CORE, Mechanic.ISOLATION));

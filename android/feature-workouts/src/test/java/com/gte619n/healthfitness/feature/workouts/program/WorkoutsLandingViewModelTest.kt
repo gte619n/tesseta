@@ -11,6 +11,7 @@ import com.gte619n.healthfitness.domain.workouts.session.ParkedCompletion
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.MainDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import java.time.Instant
@@ -86,6 +87,9 @@ class WorkoutsLandingViewModelTest {
         // Cross-program heatmap (incl. archived) — default empty; the Room-backed
         // paths cover these fixtures. Its own test stubs it explicitly.
         coEvery { repo.completedWorkoutDays() } returns emptySet()
+        // Lazy auto-continue hook — default to a no-op (no sessions appended) so
+        // the existing fixtures are unaffected; the auto-continue tests override it.
+        coEvery { repo.ensureUpcoming(any()) } returns Result.success(emptyList())
         every { settingsRepo.weeklyStreakTarget } returns flowOf(weeklyTarget)
         return WorkoutsLandingViewModel(repo, sessionRepo, settingsRepo).also { it.today = today }
     }
@@ -213,6 +217,7 @@ class WorkoutsLandingViewModelTest {
             LocalDate.parse("2026-05-05"),
             LocalDate.parse("2026-05-07"),
         )
+        coEvery { repo.ensureUpcoming(any()) } returns Result.success(emptyList())
         val vm = WorkoutsLandingViewModel(repo, sessionRepo, settingsRepo).also { it.today = today }
         advanceUntilIdle()
 
@@ -292,5 +297,44 @@ class WorkoutsLandingViewModelTest {
 
         vm.consumeRestoredSession()
         assertNull(vm.state.value.restoredSession)
+    }
+
+    @Test
+    fun `auto-continues an ACTIVE program that has run out of upcoming sessions`() = runTest {
+        val programs = listOf(program("p1", ProgramStatus.ACTIVE, "2026-05-01T00:00:00Z"))
+        // Only a past completed session — nothing upcoming.
+        val calendar = listOf(sched("2026-06-03", ScheduledStatus.COMPLETED))
+        val vm = vm(programs, calendar)
+        coEvery { repo.ensureUpcoming("p1") } returns Result.success(
+            listOf(sched("2026-06-15", ScheduledStatus.PLANNED)),
+        )
+        advanceUntilIdle()
+
+        // Fired once (guarded) to extend the program in place.
+        coVerify(exactly = 1) { repo.ensureUpcoming("p1") }
+    }
+
+    @Test
+    fun `does not auto-continue when a future session already exists`() = runTest {
+        val programs = listOf(program("p1", ProgramStatus.ACTIVE, "2026-05-01T00:00:00Z"))
+        val calendar = listOf(
+            sched("2026-06-03", ScheduledStatus.COMPLETED),
+            sched("2026-06-15", ScheduledStatus.PLANNED), // upcoming — no dead end
+        )
+        val vm = vm(programs, calendar)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.ensureUpcoming(any()) }
+    }
+
+    @Test
+    fun `does not auto-continue a non-active featured program`() = runTest {
+        // A COMPLETED program surfaced as the fallback featured one must not be
+        // silently resurrected — only the program the user is actively following.
+        val programs = listOf(program("done", ProgramStatus.COMPLETED, "2026-05-01T00:00:00Z"))
+        val vm = vm(programs)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.ensureUpcoming(any()) }
     }
 }

@@ -349,6 +349,30 @@ class WorkoutProgramRepository @Inject internal constructor(
         }
 
     /**
+     * Lazy auto-continuation hook for the workouts landing (called on open): if the
+     * program has run out of upcoming sessions, the backend appends the next cycle
+     * in place and returns the fresh upcoming set; otherwise it's a server-side
+     * no-op. Online only; refreshes the mirror on a non-empty result so the "this
+     * week"/calendar reflect any appended sessions without waiting for a sync.
+     */
+    suspend fun ensureUpcoming(programId: String): Result<List<ScheduledWorkout>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val sessions = api.ensureUpcoming(programId)
+                if (sessions.isNotEmpty()) {
+                    runCatching { refreshDeep(programId) }
+                    runCatching {
+                        support.refreshInto(
+                            MirrorTables.WORKOUT_SCHEDULED,
+                            sessions.map { it.toRefreshRow(programId) },
+                        )
+                    }
+                }
+                sessions.map { it.toDomain() }
+            }
+        }
+
+    /**
      * Materialize (or reuse) an ad-hoc session for one program day on today's
      * date and return its scheduledId, so any workout can be run "as today" even
      * after the program's scheduled window has elapsed or a day was missed.
@@ -582,16 +606,25 @@ class WorkoutProgramRepository @Inject internal constructor(
             .filter { it.status == ScheduledStatus.COMPLETED.name }
             .sortedByDescending { it.date }
         if (completed.isEmpty()) return day
+        // Prefer the last WORKING (non-deload) prescription per exercise: a deload
+        // week's load is artificially suppressed and must never seed a redo at full
+        // volume. A deload prescription is kept only as a fallback for an exercise
+        // with no non-deload history. Mirrors the backend's latestCompletedPrescriptions.
         val resumeByExercise = HashMap<String, PrescriptionDto>()
+        val deloadFallback = HashMap<String, PrescriptionDto>()
         for (sw in completed) {
             val session = sw.session ?: continue
+            val target = if (sw.isDeload) deloadFallback else resumeByExercise
             for (block in session.blocks) {
                 for (rx in block.prescriptions) {
-                    if (rx.targetWeightLbs != null && !resumeByExercise.containsKey(rx.exerciseId)) {
-                        resumeByExercise[rx.exerciseId] = rx
+                    if (rx.targetWeightLbs != null && !target.containsKey(rx.exerciseId)) {
+                        target[rx.exerciseId] = rx
                     }
                 }
             }
+        }
+        for ((exerciseId, rx) in deloadFallback) {
+            resumeByExercise.putIfAbsent(exerciseId, rx)
         }
         if (resumeByExercise.isEmpty()) return day
         return day.copy(

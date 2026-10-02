@@ -12,6 +12,7 @@ import com.gte619n.healthfitness.core.workoutprogram.LoggedSet;
 import com.gte619n.healthfitness.core.workoutprogram.Prescription;
 import com.gte619n.healthfitness.core.workoutprogram.ContinuationScope;
 import com.gte619n.healthfitness.core.workoutprogram.ProgramStatus;
+import com.gte619n.healthfitness.core.workoutprogram.ScheduledStatus;
 import com.gte619n.healthfitness.core.workoutprogram.ScheduledWorkout;
 import com.gte619n.healthfitness.core.workoutprogram.NutritionGuidance;
 import com.gte619n.healthfitness.core.workoutprogram.WorkoutProgram;
@@ -214,6 +215,38 @@ public class WorkoutProgramController {
         }
         syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
         return ResponseEntity.ok(assembler.scheduled(userId, created));
+    }
+
+    /**
+     * Lazy auto-continuation hook for the workouts dashboard (called on open): if
+     * this program has run out of upcoming PLANNED sessions, append the next cycle
+     * in place so the athlete is never stranded without a next workout. Idempotent
+     * and cheap when there's already future work (no write, just returns it).
+     *
+     * <p>"Today" is the caller's local day (from {@code X-Timezone}), matching
+     * {@link #runDay} — the server clock is UTC in prod, so a UTC "today" would
+     * wrongly treat tonight's remaining session as past for users behind UTC.
+     */
+    @PostMapping("/{programId}/ensure-upcoming")
+    public List<ScheduledWorkoutResponse> ensureUpcoming(
+        @PathVariable String programId,
+        @RequestHeader(value = RequestTimeZone.HEADER, required = false) String timezone
+    ) {
+        String userId = currentUser.get().userId();
+        if (service.findById(userId, programId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        LocalDate today = LocalDate.now(RequestTimeZone.resolve(timezone));
+        long plannedBefore = schedule.calendar(userId, programId, today, LocalDate.MAX).stream()
+            .filter(sw -> sw.status() == ScheduledStatus.PLANNED)
+            .count();
+        List<ScheduledWorkout> upcoming = schedule.ensureUpcoming(userId, programId, today);
+        // Only wake sync if we actually appended work; the common no-op path
+        // (future sessions already exist, or program archived) writes nothing.
+        if (upcoming.size() > plannedBefore) {
+            syncNotifier.changed(userId, null, "workoutPrograms", "workoutPrograms/scheduled");
+        }
+        return assembler.scheduled(userId, upcoming);
     }
 
     /**
