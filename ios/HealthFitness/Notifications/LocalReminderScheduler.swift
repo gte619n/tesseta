@@ -221,7 +221,11 @@ final class LocalReminderScheduler {
 }
 
 private extension ISO8601DateFormatter {
-    static let dayOnly: ISO8601DateFormatter = {
+    // Configured once and only ever used read-only for formatting, which
+    // ISO8601DateFormatter supports concurrently. `nonisolated(unsafe)` opts it
+    // out of Swift 6's Sendable check (the type isn't marked Sendable, but this
+    // shared, immutable-after-setup instance is safe to read from any thread).
+    nonisolated(unsafe) static let dayOnly: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withFullDate]
         return f

@@ -31,6 +31,13 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     /// then `LocalReminderScheduler.shared.replan(...)`.
     var onTake: ((_ medicationId: String, _ window: String) -> Void)?
 
+    // These two delegate callbacks are invoked by the system on a nonisolated
+    // context with non-Sendable `UN*` arguments. Under Swift 6 those objects must
+    // NOT cross into the main actor, so the methods stay `nonisolated`: we pull
+    // the Sendable values (plain Strings) out of them here, do the thread-safe
+    // UNUserNotificationCenter work inline, and hop to the main actor carrying
+    // only Strings for the `@MainActor` UI callbacks.
+
     /// Show a foreground reminder as a banner+sound too (don't silently swallow it).
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -46,48 +53,50 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let userInfo = response.notification.request.content.userInfo
-        let medicationId = userInfo[LocalReminderScheduler.Identifiers.userInfoMedicationId] as? String ?? ""
+        let request = response.notification.request
+        let medicationId = request.content.userInfo[
+            LocalReminderScheduler.Identifiers.userInfoMedicationId] as? String ?? ""
 
-        MainActor.assumeIsolated {
-            switch response.actionIdentifier {
-            case LocalReminderScheduler.Identifiers.actionTake:
-                handleTake(medicationId: medicationId, request: response.notification.request)
-            case LocalReminderScheduler.Identifiers.actionSnooze:
-                snooze(request: response.notification.request, center: center)
-            case LocalReminderScheduler.Identifiers.actionDismiss:
-                // Nothing to persist — the pending request already fired; the next
-                // replan won't re-add a taken/edited dose. (Deliberately no "remember
-                // dismissed keys" state: unlike Android there is no rolling engine to
-                // resurrect it, so the dismissal is inherently honored.)
-                break
-            case UNNotificationDefaultActionIdentifier:
-                // Body tap → deep link.
-                if let url = Self.deepLink(medicationId: medicationId) {
-                    onDeepLink?(url)
-                }
-            default:
-                break
+        switch response.actionIdentifier {
+        case LocalReminderScheduler.Identifiers.actionTake:
+            let window = Self.window(from: request)   // Sendable String
+            Task { @MainActor in self.handleTake(medicationId: medicationId, window: window) }
+        case LocalReminderScheduler.Identifiers.actionSnooze:
+            Self.addSnooze(request: request, center: center)   // thread-safe, nonisolated
+        case LocalReminderScheduler.Identifiers.actionDismiss:
+            // Nothing to persist — the pending request already fired; the next
+            // replan won't re-add a taken/edited dose. (Deliberately no "remember
+            // dismissed keys" state: unlike Android there is no rolling engine to
+            // resurrect it, so the dismissal is inherently honored.)
+            break
+        case UNNotificationDefaultActionIdentifier:
+            // Body tap → deep link.
+            Task { @MainActor in
+                if let url = Self.deepLink(medicationId: medicationId) { self.onDeepLink?(url) }
             }
-            completionHandler()
+        default:
+            break
         }
+        completionHandler()
     }
 
     // MARK: Actions
 
-    private func handleTake(medicationId: String, request: UNNotificationRequest) {
+    private func handleTake(medicationId: String, window: String) {
         guard !medicationId.isEmpty else {
             // A multi-dose "outstanding" post has no single med — open the checklist.
             if let url = Self.deepLink(medicationId: "") { onDeepLink?(url) }
             return
         }
-        let window = Self.window(from: request)
         onTake?(medicationId, window)
         // Re-plan so this dose's future notification (and the outstanding post) drop.
         // Post-0D: LocalReminderScheduler.shared.replan(plan: scheduler.plannedDoses())
     }
 
-    private func snooze(request: UNNotificationRequest, center: UNUserNotificationCenter) {
+    /// Re-schedule this dose 15 min out. `nonisolated` + `static`: it only touches
+    /// the (thread-safe) notification center, so it runs straight off the delegate
+    /// callback without an actor hop.
+    nonisolated static func addSnooze(request: UNNotificationRequest, center: UNUserNotificationCenter) {
         let content = request.content.mutableCopy() as! UNMutableNotificationContent
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 15 * 60, repeats: false)
         let snoozed = UNNotificationRequest(
@@ -101,7 +110,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     // MARK: Helpers
 
     /// `healthfitness://dose-checklist/{medicationId}` (empty path ⇒ full checklist).
-    static func deepLink(medicationId: String) -> URL? {
+    nonisolated static func deepLink(medicationId: String) -> URL? {
         var comps = URLComponents()
         comps.scheme = LocalReminderScheduler.Identifiers.deepLinkScheme
         comps.host = LocalReminderScheduler.Identifiers.deepLinkHost
@@ -111,7 +120,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 
     /// The window label is the middle segment of our request id
     /// ("med-reminder.{medId}:{window}:{day}").
-    static func window(from request: UNNotificationRequest) -> String {
+    nonisolated static func window(from request: UNNotificationRequest) -> String {
         let id = request.identifier.replacingOccurrences(
             of: LocalReminderScheduler.Identifiers.requestPrefix, with: "")
         let parts = id.split(separator: ":")

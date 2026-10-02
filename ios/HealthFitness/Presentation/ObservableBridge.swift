@@ -21,7 +21,6 @@ import Foundation
 @Observable
 final class ObservableViewModel<VM: AnyObject> {
     let wrapped: VM
-    private var task: Task<Void, Never>?
 
     init(_ wrapped: VM) {
         self.wrapped = wrapped
@@ -45,6 +44,6 @@ final class ObservableViewModel<VM: AnyObject> {
             // StateFlow never completes/throws in practice; swallow cancellation.
         }
     }
-
-    deinit { task?.cancel() }
+    // Subscriptions are owned by the caller's SwiftUI `.task { }`, which cancels
+    // them with the view's lifetime — so this wrapper holds no Task to tear down.
 }

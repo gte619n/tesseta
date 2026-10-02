@@ -144,7 +144,7 @@ struct WorkoutDesignerView: View {
 
             if selected && setup.gyms.count > 1 {
                 SegmentedChoice(
-                    options: setup.gyms.map { (value: Optional($0.id), label: $0.name) },
+                    options: setup.gyms.map { (value: $0.id, label: $0.name) },
                     selection: Binding(
                         get: { setup.dayLocations[day] },
                         set: { setup.dayLocations[day] = $0 }

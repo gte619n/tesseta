@@ -75,15 +75,19 @@ final class WorkoutActivityController {
         // Skip pushes that don't change anything the widget can't self-tick.
         guard content != lastState else { return }
         lastState = content
+        // ActivityKit's `Activity` isn't marked Sendable, but its async methods are
+        // designed to be called across concurrency domains; bind it unsafely so the
+        // fire-and-forget Task can carry it off the main actor.
+        nonisolated(unsafe) let act = activity
         Task {
-            await activity.update(.init(state: content, staleDate: nil))
+            await act.update(.init(state: content, staleDate: nil))
         }
     }
 
     /// End the activity (session finished / skipped / discarded).
     func end() {
         guard let activity else { return }
-        let ending = activity
+        nonisolated(unsafe) let ending = activity   // see `update` — Activity is cross-domain safe
         self.activity = nil
         self.lastState = nil
         Task {

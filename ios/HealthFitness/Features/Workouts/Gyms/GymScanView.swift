@@ -106,9 +106,9 @@ struct GymScanView: View {
                         SettingsCard(title: item.matchName ?? item.parsedName) {
                             SegmentedChoice(
                                 options: [
-                                    (Optional("USE_MATCH"), "Match"),
-                                    (Optional("CREATE_NEW"), "New"),
-                                    (Optional("SKIP"), "Skip"),
+                                    ("USE_MATCH", "Match"),
+                                    ("CREATE_NEW", "New"),
+                                    ("SKIP", "Skip"),
                                 ],
                                 selection: Binding(get: { Optional(item.action) },
                                                    set: { item.action = $0 ?? item.action }),

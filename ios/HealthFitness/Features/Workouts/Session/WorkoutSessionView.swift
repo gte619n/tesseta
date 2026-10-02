@@ -247,7 +247,9 @@ struct WorkoutSessionView: View {
             .padding()
             Spacer()
         }
-        .background(.black.opacity(0.4).ignoresSafeArea())
+        .background {
+            Color.black.opacity(0.4).ignoresSafeArea()
+        }
     }
 
     // MARK: Prompts
