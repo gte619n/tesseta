@@ -2,13 +2,16 @@ package com.gte619n.healthfitness.shared.ios
 
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpMedicationRepository
+import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
+import com.gte619n.healthfitness.shared.data.NoopNutritionOpQueue
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsCoachAudioPreferences
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsUnitPreferencesRepository
 import com.gte619n.healthfitness.shared.net.ApiClient
 import com.gte619n.healthfitness.shared.net.SessionTokenProvider
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
+import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
@@ -65,6 +68,19 @@ object IosComposition {
     /** Goals list — networked (GET /api/me/goals). */
     fun goalsListViewModel(): GoalsListViewModel =
         GoalsListViewModel(HttpGoalsRepository(client()))
+
+    /**
+     * Nutrition Today — networked (GET/POST/PATCH/DELETE api/me/nutrition/…).
+     * Online-first: the op rail is inert ([NoopNutritionOpQueue]) until the durable
+     * capture/outbox layer lands, so the screen is read + direct entry logging.
+     * [initialDate] is today's ISO date, minted by the Swift caller in device tz.
+     */
+    fun nutritionTodayViewModel(initialDate: String): NutritionTodayViewModel =
+        NutritionTodayViewModel(
+            repository = HttpNutritionDayRepository(client()),
+            ops = NoopNutritionOpQueue(),
+            initialDate = initialDate,
+        )
 
     // MARK: - Flow bridge
 
