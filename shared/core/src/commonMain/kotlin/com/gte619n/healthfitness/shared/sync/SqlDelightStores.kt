@@ -159,23 +159,38 @@ class SqlDelightOutboxStore(
     }
 
     override suspend fun pending(): List<OutboxOp> =
-        ops.listDue(now()).executeAsList().map { row ->
-            OutboxOp(
-                id = row.id,
-                collection = row.collection,
-                entityId = row.entityId,
-                docJson = row.docCipher?.let { cipher.decrypt(it) },
-                operation = OutboxOp.Operation.valueOf(row.operation),
-                idempotencyKey = row.idempotencyKey,
-                enqueuedAt = row.enqueuedAt,
-                retries = row.retries.toInt(),
-                lastError = row.lastError,
-            )
-        }
+        ops.listDue(now()).executeAsList().map(::toOp)
 
     override suspend fun markPushed(id: String, serverLastUpdate: String?) {
         ops.deleteById(id)
     }
+
+    override suspend fun markParked(id: String, error: String?) {
+        ops.markParked(error, id)
+    }
+
+    override suspend fun parked(): List<OutboxOp> =
+        ops.listParked().executeAsList().map(::toOp)
+
+    override fun observeParked(): Flow<List<OutboxOp>> =
+        ops.listParked().asFlow().mapToList(dispatcher).map { list -> list.map(::toOp) }
+
+    override suspend fun discard(id: String) {
+        ops.deleteById(id)
+    }
+
+    private fun toOp(row: com.gte619n.healthfitness.shared.db.OutboxOp): OutboxOp =
+        OutboxOp(
+            id = row.id,
+            collection = row.collection,
+            entityId = row.entityId,
+            docJson = row.docCipher?.let { cipher.decrypt(it) },
+            operation = OutboxOp.Operation.valueOf(row.operation),
+            idempotencyKey = row.idempotencyKey,
+            enqueuedAt = row.enqueuedAt,
+            retries = row.retries.toInt(),
+            lastError = row.lastError,
+        )
 
     override suspend fun markFailed(id: String, error: String) {
         val row = ops.selectById(id).executeAsOneOrNull() ?: return

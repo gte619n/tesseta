@@ -20,7 +20,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -219,9 +218,40 @@ class MirrorWorkoutSessionRepository(
         }.getOrNull()?.trim()?.takeIf { it.isNotBlank() }
     }
 
-    // ---- parked-completion recovery (minimal — see KDoc / decisions doc) ---
+    // ---- parked-completion recovery -----------------------------------------
+    //
+    // A completion the server terminally rejected (e.g. the plan was rewritten under
+    // the upload) is PARKED in the outbox (SyncEngine.drainOutbox) rather than dropped.
+    // We surface those for WORKOUT_SCHEDULED so the user can restore (re-open a draft to
+    // re-finish) or discard them.
 
-    override fun observeParkedCompletions(): Flow<List<ParkedCompletion>> = flowOf(emptyList())
+    override fun observeParkedCompletions(): Flow<List<ParkedCompletion>> =
+        outbox.observeParked().map { ops ->
+            ops.filter { it.collection == MirrorTables.WORKOUT_SCHEDULED }
+                .mapNotNull { toParkedCompletion(it) }
+        }
+
+    private fun toParkedCompletion(op: OutboxOp): ParkedCompletion? {
+        val (programId, scheduledId) = splitMirrorId(op.entityId)
+        val req = op.docJson
+            ?.let { runCatching { json.decodeFromString(CompleteSessionRequest.serializer(), it) }.getOrNull() }
+            ?: return null
+        val scheduled = mirror.record(MirrorTables.WORKOUT_SCHEDULED, op.entityId)
+            ?.takeIf { !it.dirty }
+            ?.let { decodeScheduled(it.payloadJson) }
+        return ParkedCompletion(
+            programId = programId,
+            scheduledId = scheduledId,
+            status = runCatching { ScheduledStatus.valueOf(req.status) }.getOrDefault(ScheduledStatus.COMPLETED),
+            completedAt = req.completedAt,
+            loggedSetCount = req.logged.sumOf { it.sets.size },
+            // Full orphan detection (keys removed from the current plan) is a follow-up;
+            // 0 here means "restore everything the payload carried".
+            orphanedSetCount = 0,
+            sessionAvailable = scheduled != null,
+            dayLabel = scheduled?.dayLabel,
+        )
+    }
 
     override suspend fun reset(programId: String, scheduledId: String): Result<Unit> = runCatching {
         // Un-log: PLANNED clears actuals — same idempotent upsert path as skip.
@@ -236,11 +266,41 @@ class MirrorWorkoutSessionRepository(
         deleteDraftLocal(programId, scheduledId)
     }
 
-    override suspend fun restoreParked(programId: String, scheduledId: String): Result<Unit> =
-        Result.failure(UnsupportedOperationException("Parked-completion recovery not wired on iOS yet (Phase G)"))
+    override suspend fun restoreParked(programId: String, scheduledId: String): Result<Unit> = runCatching {
+        val id = mirrorId(programId, scheduledId)
+        val op = outbox.parked().firstOrNull { it.collection == MirrorTables.WORKOUT_SCHEDULED && it.entityId == id }
+            ?: error("No parked completion for $id")
+        val req = op.docJson
+            ?.let { json.decodeFromString(CompleteSessionRequest.serializer(), it) }
+            ?: error("Parked completion has no payload")
+        val scheduled = mirror.record(MirrorTables.WORKOUT_SCHEDULED, id)
+            ?.takeIf { !it.dirty }
+            ?.let { decodeScheduled(it.payloadJson) }
+            ?: error("This session is no longer available to restore")
+        // Re-materialize a live draft from the rejected payload's sets so the user can
+        // re-finish, then drop the parked op.
+        val logged = req.logged.associate { PrescriptionKey(it.blockId, it.orderIndex) to it.sets }
+        val at = now()
+        writeDraftLocal(
+            WorkoutSessionDraft(
+                programId = programId,
+                scheduledId = scheduledId,
+                startedAt = at,
+                lastActivityAt = at,
+                status = DraftStatus.ACTIVE,
+                scheduled = scheduled,
+                logged = logged,
+            ),
+        )
+        outbox.discard(op.id)
+    }
 
-    override suspend fun discardParked(programId: String, scheduledId: String): Result<Unit> =
-        Result.success(Unit)
+    override suspend fun discardParked(programId: String, scheduledId: String): Result<Unit> = runCatching {
+        val id = mirrorId(programId, scheduledId)
+        outbox.parked()
+            .filter { it.collection == MirrorTables.WORKOUT_SCHEDULED && it.entityId == id }
+            .forEach { outbox.discard(it.id) }
+    }
 
     // ---- internals --------------------------------------------------------
 
@@ -353,6 +413,12 @@ class MirrorWorkoutSessionRepository(
     private companion object {
         /** The sync id of one scheduled session's mirror row (parity with Android). */
         fun mirrorId(programId: String, scheduledId: String): String = "$programId/$scheduledId"
+
+        /** Inverse of [mirrorId]: "<programId>/<scheduledId>" → the pair (tolerant of a plain id). */
+        fun splitMirrorId(id: String): Pair<String, String> {
+            val i = id.indexOf('/')
+            return if (i < 0) id to id else id.substring(0, i) to id.substring(i + 1)
+        }
 
         /** Lenient JSON matching the wire + mirror payloads (unknown keys / absent nulls). */
         val DRAFT_JSON = Json {

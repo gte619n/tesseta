@@ -14,7 +14,11 @@ CREATE TABLE outboxOp (
     retries        INTEGER NOT NULL DEFAULT 0,
     enqueuedAt     TEXT NOT NULL,
     nextAttemptAt  TEXT NOT NULL,
-    lastError      TEXT
+    lastError      TEXT,
+    -- 1 once the server terminally rejected this op (a 4xx the drain can't retry).
+    -- Parked ops are held OUT of the drain so the queue can't wedge, but kept for
+    -- user-driven recovery (e.g. a rejected workout completion → restore/discard).
+    parked         INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX outboxOp_seq ON outboxOp(seq);
@@ -24,10 +28,13 @@ INSERT OR REPLACE INTO outboxOp(id, collection, entityId, operation, docCipher, 
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 listDue:
-SELECT * FROM outboxOp WHERE nextAttemptAt <= ? ORDER BY seq ASC;
+SELECT * FROM outboxOp WHERE nextAttemptAt <= ? AND parked = 0 ORDER BY seq ASC;
 
 listAll:
 SELECT * FROM outboxOp ORDER BY seq ASC;
+
+listParked:
+SELECT * FROM outboxOp WHERE parked = 1 ORDER BY seq ASC;
 
 selectById:
 SELECT * FROM outboxOp WHERE id = ?;
@@ -40,6 +47,9 @@ SELECT MAX(seq) FROM outboxOp;
 
 recordFailure:
 UPDATE outboxOp SET retries = ?, nextAttemptAt = ?, lastError = ? WHERE id = ?;
+
+markParked:
+UPDATE outboxOp SET parked = 1, lastError = ? WHERE id = ?;
 
 deleteById:
 DELETE FROM outboxOp WHERE id = ?;

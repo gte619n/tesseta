@@ -54,7 +54,7 @@ class SyncEngineImplTest {
     }
 
     @Test
-    fun drain_pushes_success_drops_terminal_keeps_retryable() = runTest {
+    fun drain_pushes_success_parks_terminal_keeps_retryable() = runTest {
         val db = db()
         val mirror = SqlDelightMirrorStore(db, NoopPayloadCipher)
         val outbox = SqlDelightOutboxStore(db, NoopPayloadCipher)
@@ -78,10 +78,11 @@ class SyncEngineImplTest {
 
         val result = engine.drainOutbox()
 
-        assertEquals(2, result.pushed)  // ok1 cleared + terminal self-healed (dropped)
-        assertEquals(1, result.failed)  // retry backed off
-        val remaining = outbox.pending().map { it.id }
-        assertEquals(listOf("retry"), remaining)
+        assertEquals(1, result.pushed)  // ok1 cleared
+        assertEquals(2, result.failed)  // terminal parked + retry backed off
+        // Parked ops are held OUT of the drain, retryable ones stay due.
+        assertEquals(listOf("retry"), outbox.pending().map { it.id })
+        assertEquals(listOf("terminal"), outbox.parked().map { it.id })
     }
 
     @Test

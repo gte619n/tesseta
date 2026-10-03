@@ -187,6 +187,17 @@ review.
   NOT yet implemented — full backfill for now (heavier but correct); revisit if
   first sync is slow.
 <!-- Sub-agents: append your decisions below this line. -->
+- **(Follow-up #3 — DONE) Parked outbox state.** The Phase-C drain no longer DROPS a
+  terminal 4xx — it PARKS the op (new `outboxOp.parked` column; held out of `listDue`,
+  kept for recovery). `OutboxStore` gains `markParked/parked/observeParked/discard`;
+  `SyncEngineImpl.drainOutbox` parks terminal failures (counts as `failed`).
+  `MirrorWorkoutSessionRepository` now implements the parked-completion recovery for
+  real: `observeParkedCompletions` maps parked WORKOUT_SCHEDULED ops → `ParkedCompletion`
+  (programId/scheduledId from entityId; status/completedAt/loggedSetCount from the
+  payload; sessionAvailable/dayLabel from the clean mirror snapshot; orphanedSetCount=0
+  — full orphan detection vs the live plan is a follow-up), `restoreParked`
+  re-materializes a draft from the rejected payload then drops the op, `discardParked`
+  drops it. Tests + assemble + app build green.
 - **(Phase F+DI)** `PayloadCipher.decrypt` is non-throwing in the Kotlin interface,
   so the iOS `KeychainPayloadCipher` **fails closed by returning an empty string**
   on an undecryptable token (wrong key / tampered / truncated). Empty is not valid

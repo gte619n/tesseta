@@ -79,10 +79,12 @@ class SyncEngineImpl(
                     failed++
                 }
                 else -> {
-                    // Terminal 4xx — the server will never accept this write; drop it so
-                    // it can't wedge the queue. (Mirror-row self-heal is the repo's job.)
-                    outbox.markPushed(op.id, null)
-                    pushed++
+                    // Terminal 4xx — the server will never accept this write as-is. PARK it
+                    // (held out of the drain so it can't wedge the queue) rather than drop
+                    // it, so a rejected write — e.g. a workout completion whose plan was
+                    // rewritten under it — can be surfaced for user restore/discard.
+                    outbox.markParked(op.id, result.error)
+                    failed++
                 }
             }
         }

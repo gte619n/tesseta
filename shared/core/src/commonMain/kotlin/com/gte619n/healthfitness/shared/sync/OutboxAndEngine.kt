@@ -50,6 +50,16 @@ interface OutboxStore {
     suspend fun markPushed(id: String, serverLastUpdate: String?)
     suspend fun markFailed(id: String, error: String)
     fun pendingCount(): Flow<Int>
+
+    /** Hold an op OUT of the drain after a terminal (non-retryable) rejection, keeping
+     *  it for user-driven recovery instead of silently dropping it. */
+    suspend fun markParked(id: String, error: String?)
+    /** The currently parked ops (terminally rejected, awaiting restore/discard). */
+    suspend fun parked(): List<OutboxOp>
+    /** Reactive view of the parked ops (drives recovery banners, e.g. workout completion). */
+    fun observeParked(): Flow<List<OutboxOp>>
+    /** Drop a parked op (user discarded it, or it was restored to a fresh draft). */
+    suspend fun discard(id: String)
 }
 
 /** The HTTP surface both platforms hit (Ktor engine differs per target). */

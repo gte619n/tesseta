@@ -215,7 +215,17 @@ class SyncConvergenceTest {
             ops[id] = ops.getValue(id).let { it.copy(retries = it.retries + 1, lastError = error) }
         }
         override fun pendingCount(): Flow<Int> = count
-        private fun pendingIds() = ops.keys.filter { it !in pushed }
+        private val parkedIds = mutableSetOf<String>()
+        override suspend fun markParked(id: String, error: String?) {
+            parkedIds += id; count.value = pendingIds().size
+        }
+        override suspend fun parked(): List<OutboxOp> = parkedIds.mapNotNull { ops[it] }
+        override fun observeParked(): Flow<List<OutboxOp>> =
+            MutableStateFlow(parkedIds.mapNotNull { ops[it] })
+        override suspend fun discard(id: String) {
+            ops.remove(id); parkedIds -= id; pushed -= id; count.value = pendingIds().size
+        }
+        private fun pendingIds() = ops.keys.filter { it !in pushed && it !in parkedIds }
     }
 
     // ---------------------------------------------------------------------------
