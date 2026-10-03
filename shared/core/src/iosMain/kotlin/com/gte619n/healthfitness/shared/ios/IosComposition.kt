@@ -3,7 +3,9 @@ package com.gte619n.healthfitness.shared.ios
 import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
+import com.gte619n.healthfitness.shared.data.MirrorGoalsRepository
 import com.gte619n.healthfitness.shared.data.MirrorMedicationRepository
+import com.gte619n.healthfitness.shared.data.MirrorNutritionDayRepository
 import com.gte619n.healthfitness.shared.data.MirrorProfileRepository
 import com.gte619n.healthfitness.shared.data.MirrorWorkoutSessionRepository
 import com.gte619n.healthfitness.shared.data.NoopNutritionOpQueue
@@ -165,9 +167,10 @@ object IosComposition {
     fun medicationsViewModel(): MedicationsViewModel =
         MedicationsViewModel(MirrorMedicationRepository(mirrorStore(), syncEngine()))
 
-    /** Goals list — networked (GET /api/me/goals). */
+    /** Goals list — mirror-read (offline/instant); deep goal assembled from the
+     *  mirror. Mutations delegate to the networked impl. */
     fun goalsListViewModel(): GoalsListViewModel =
-        GoalsListViewModel(HttpGoalsRepository(client()))
+        GoalsListViewModel(MirrorGoalsRepository(HttpGoalsRepository(client()), mirrorStore(), syncEngine()))
 
     /**
      * Nutrition Today — networked (GET/POST/PATCH/DELETE api/me/nutrition/…).
@@ -177,7 +180,9 @@ object IosComposition {
      */
     fun nutritionTodayViewModel(initialDate: String): NutritionTodayViewModel =
         NutritionTodayViewModel(
-            repository = HttpNutritionDayRepository(client()),
+            // Networked day + an offline read-through cache (cachedDay served from the
+            // mirror; day() seeds it). observeDay/mutations stay on the network impl.
+            repository = MirrorNutritionDayRepository(HttpNutritionDayRepository(client()), mirrorStore()),
             ops = NoopNutritionOpQueue(),
             initialDate = initialDate,
         )

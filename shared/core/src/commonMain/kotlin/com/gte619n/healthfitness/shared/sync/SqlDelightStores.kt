@@ -53,6 +53,13 @@ class SqlDelightMirrorStore(
         rows.observeActive(collection).executeAsList().firstOrNull()
             ?.let { Record(it.id, cipher.decrypt(it.payloadCipher), it.lastUpdate, it.dirty != 0L) }
 
+    /** All ACTIVE rows of a collection, decrypted — a non-reactive snapshot for
+     *  repositories that assemble a view (e.g. a nutrition day, a deep goal) from
+     *  per-collection rows. */
+    fun activeRecords(collection: String): List<Record> =
+        rows.observeActive(collection).executeAsList()
+            .map { Record(it.id, cipher.decrypt(it.payloadCipher), it.lastUpdate, it.dirty != 0L) }
+
     /** Optimistic local upsert (dirty, PENDING) — a local write awaiting push. */
     fun writeLocal(collection: String, id: String, payloadJson: String, lastUpdate: String) {
         rows.upsert(collection, id, cipher.encrypt(payloadJson), lastUpdate, SyncStatus.ACTIVE.name, 1L, "PENDING", now())
