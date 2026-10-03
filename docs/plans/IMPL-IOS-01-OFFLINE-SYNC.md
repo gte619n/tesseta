@@ -673,3 +673,36 @@ review.
   `collectFlow` hands the closure `Any` (cast first); `uploading` Flow value is `KotlinBoolean`
   (`.boolValue`). Verified: compileKotlinJvm + assembleSharedCoreXCFramework + iOS app
   BUILD SUCCEEDED.
+- **(DrinkRepository BUILT + Settings › Drinks WIRED, 2026-10-03)** Closed the last
+  secondary-detail SKIP. Built the previously interface-only `DrinkRepository` as a thin
+  online-first `HttpDrinkRepository` (new `HttpDrinkRepository.kt`) over the EXISTING backend,
+  matched 1:1 to Android's `DrinkApi`: `listMyDrinks` (`GET api/me/drinks`), `analyze`
+  (`POST …/drinks/analyze`), `createDrink`/`updateDrink` (`POST`/`PUT …/drinks[/{id}]`),
+  `regenerateImage` (`POST …/{id}/image/regenerate`), `reorder` (`PUT …/drinks/order`),
+  `archiveDrink` (`DELETE …/{id}`). New `IosComposition.drinkSettingsViewModel()`; wired
+  `DrinkSettingsView` + its editor sheet to the shared `DrinkSettingsViewModel` via the
+  SKIE-free `collectFlow` + static `map(...)` pattern. The editor-sheet field edits route
+  THROUGH the VM (`updateEditor { doCopy(...) }`) so the shared VM stays the single source of
+  truth (raw strings, parsed on `save`); per-field `with*` copy helpers wrap the 14-arg
+  `doCopy`. The sheet is driven off `UiState.editor != nil` (a Binding that calls
+  `closeEditor()` on dismiss). **AI flows are all plain (non-SSE):** `analyze` is one JSON
+  round-trip and image-regeneration is fire-and-poll (the VM already polls the list while any
+  image is PENDING) — nothing degraded, no SSE needed. **Decisions:** the `analyze` 422
+  "AI unavailable" path is split by catching `ClientRequestException` and testing
+  `status == UnprocessableEntity` (under `expectSuccess = true` a non-2xx throws), mapping to
+  `AnalyzeResult.Unavailable`; any other throwable → `AnalyzeResult.Error`. The request/response
+  DTOs reuse the shared 6-field `Macros` (no `alcoholGrams` field — the mixer macros are
+  carbs/sugar only, and the backend's extra `alcoholGrams` macro key on reads is dropped by the
+  shared Json's `ignoreUnknownKeys`). This is the Drink SETTINGS/management surface only — the
+  Drink-Mode SESSION feature has no shared VM and stays out of scope. **Swift gotchas hit:**
+  the nested data-class states export DOTTED — `DrinkSettingsViewModel.UiState` /
+  `DrinkSettingsViewModel.EditorState` (NOT the flattened `DrinkSettingsViewModelUiState` the
+  sealed-case medications states used — grep the header's swift_name before guessing); TWO
+  `Food` data classes in shared commonMain collide, so the Settings `presentation.settings.Food`
+  exports as plain `Food` (qualify `SharedCore.Food`) while the catalog
+  `data.NutritionRepositories.Food` loses the name and exports as `Food_` (likewise
+  `ServingSize`→`ServingSize_`); `updateEditor` takes a Kotlin `(EditorState)->EditorState`
+  block; `Double?` readouts are `KotlinDouble?` → `.doubleValue`; the VM intents bridge as
+  `archive(drink:)`/`moveUp(drink:)`/`regenerateImage(drink:)`/`openEdit(drink:)` taking the
+  shared `Food`. Verified: compileKotlinJvm + assembleSharedCoreXCFramework + iOS app
+  BUILD SUCCEEDED.

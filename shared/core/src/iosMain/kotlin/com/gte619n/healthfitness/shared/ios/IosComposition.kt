@@ -11,6 +11,7 @@ import com.gte619n.healthfitness.shared.data.HttpDashboardProfileRepository
 import com.gte619n.healthfitness.shared.data.HttpDashboardRecentActivityRepository
 import com.gte619n.healthfitness.shared.data.HttpDashboardWorkoutRepository
 import com.gte619n.healthfitness.shared.data.HttpDexaScanRepository
+import com.gte619n.healthfitness.shared.data.HttpDrinkRepository
 import com.gte619n.healthfitness.shared.data.HttpEquipmentRepository
 import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGymScanRepository
@@ -64,6 +65,7 @@ import com.gte619n.healthfitness.shared.presentation.medications.TodaysDosesView
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTargetViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
+import com.gte619n.healthfitness.shared.presentation.settings.DrinkSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.WorkoutPreferencesViewModel
@@ -270,6 +272,17 @@ object IosComposition {
             settingsRepo = HttpReminderSettingsRepository(client()),
             medications = HttpMedicationCrudRepository(client()),
         )
+
+    /**
+     * Settings › Drinks — the phone-side drink MANAGEMENT surface (IMPL-DRINK-01):
+     * list my drinks, add one (AI analyze → review → save), edit, regenerate the
+     * glass image, reorder, archive. Online-first over the existing drink endpoints
+     * ([HttpDrinkRepository], == Android's `DrinkApi`). The shared VM owns the
+     * PENDING-image poll + optimistic reorder. NOT the Drink-Mode session feature
+     * (which has no shared VM).
+     */
+    fun drinkSettingsViewModel(): DrinkSettingsViewModel =
+        DrinkSettingsViewModel(HttpDrinkRepository(client()))
 
     /** Goals list — mirror-read (offline/instant); deep goal assembled from the
      *  mirror. Mutations delegate to the networked impl. */

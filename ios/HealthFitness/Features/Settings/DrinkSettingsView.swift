@@ -1,66 +1,89 @@
 import SwiftUI
-// import SharedCore  // DrinkSettingsViewModel, DrinkSettingsViewModel.UiState,
-//                       DrinkSettingsViewModel.EditorState, Food — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave A2 — Settings › Drinks (IMPL-DRINK-01 phone-side
-/// drink management). Parity target (Android):
-/// `feature-settings/.../drinks/DrinkSettingsScreen.kt` + the shared
-/// `DrinkSettingsViewModel`. List my drinks, add one at a time (AI analyze →
-/// review → save), edit, regenerate the image, reorder (move up/down), archive.
-/// The shared VM polls while any image is PENDING so a generated glass photo
-/// resolves in place; the view just renders its UiState.
+/// IMPL-IOS-01 — Settings › Drinks (IMPL-DRINK-01 phone-side drink MANAGEMENT).
+/// Parity target (Android): `feature-settings/.../drinks/DrinkSettingsScreen.kt`
+/// + the shared `DrinkSettingsViewModel`. List my drinks, add one at a time
+/// (AI analyze → review → save), edit, regenerate the image, reorder (move up/
+/// down), archive.
+///
+/// Backed by the SHARED `DrinkSettingsViewModel` over `HttpDrinkRepository`
+/// (`api/me/drinks` + analyze / image-regenerate / order), observed via
+/// `collectFlow` + a static `map(...)` to a local `ScreenState` — the same
+/// SKIE-free pattern as the other wired settings screens. The shared VM owns the
+/// PENDING-image poll + optimistic reorder; this view just renders + dispatches
+/// intents. NOT the Drink-Mode session feature (which has no shared VM).
 struct DrinkSettingsView: View {
 
+    /// Local mirror of one row (shared `Food`, qualified `SharedCore.Food` since
+    /// the bare name collides with the catalog `Food_`).
     struct DrinkRow: Identifiable {
         let id: String            // Food.foodId
         let name: String
         let servingSummary: String  // e.g. "1.4 std · 145 kcal"
-        let imageStatus: String     // "READY" | "PENDING" | "NONE" | …
+        let imageStatus: String
         let imageUrl: String?
+        let food: SharedCore.Food   // the shared element the VM intents take
     }
 
-    @State private var drinks: [DrinkRow] = []
-    @State private var loading = true
-    @State private var errorMessage: String?
-    @State private var message: String?        // transient toast
-    @State private var editorPresented = false // editor != nil
+    /// Local mirror of the shared `DrinkSettingsViewModel.UiState`.
+    struct ScreenState {
+        var loading = true
+        var drinks: [DrinkRow] = []
+        var error: String?
+        var message: String?
+        var editorOpen = false
+    }
+
+    private let vm: DrinkSettingsViewModel
+    @State private var state: ScreenState
+    @State private var subscription: FlowSubscription?
+
+    init() {
+        let model = IosComposition.shared.drinkSettingsViewModel()
+        self.vm = model
+        _state = State(initialValue: Self.map(model.state.value as! DrinkSettingsViewModel.UiState))
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Drinks")
+            .accessibilityIdentifier("settings-drinks")  // IMPL-E2E-01 shared id
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        // vm.wrapped.openAdd(); editorPresented = true
-                        editorPresented = true
-                    } label: { Image(systemName: "plus") }
+                    Button { vm.openAdd() } label: { Image(systemName: "plus") }
                 }
             }
-            .sheet(isPresented: $editorPresented) {
-                DrinkEditorSheet()   // binds vm.wrapped.editor / analyze / save
+            .sheet(isPresented: Binding(
+                get: { state.editorOpen },
+                set: { if !$0 { vm.closeEditor() } }
+            )) {
+                DrinkEditorSheet(vm: vm)
             }
             .overlay(alignment: .bottom) { toast }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(DrinkSettingsViewModel(repo: DI.drinkRepository))
-        //     await vm.observe(vm.wrapped.state) { self.apply($0) }
-        // }
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    guard let s = value as? DrinkSettingsViewModel.UiState else { return }
+                    state = Self.map(s)
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
     private var content: some View {
-        if loading && drinks.isEmpty {
+        if state.loading && state.drinks.isEmpty {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let errorMessage, drinks.isEmpty {
+        } else if let errorMessage = state.error, state.drinks.isEmpty {
             ContentUnavailableView("Couldn’t load drinks", systemImage: "wineglass",
                                    description: Text(errorMessage))
-        } else if drinks.isEmpty {
+        } else if state.drinks.isEmpty {
             ContentUnavailableView("No drinks yet", systemImage: "wineglass",
                                    description: Text("Tap + to add your first drink."))
         } else {
             List {
-                ForEach(Array(drinks.enumerated()), id: \.element.id) { index, drink in
+                ForEach(Array(state.drinks.enumerated()), id: \.element.id) { index, drink in
                     drinkRow(drink, index: index)
                 }
             }
@@ -79,20 +102,20 @@ struct DrinkSettingsView: View {
             Spacer()
         }
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { /* vm.wrapped.archive(drink) */ } label: {
+            Button(role: .destructive) { vm.archive(drink: drink.food) } label: {
                 Label("Archive", systemImage: "archivebox")
             }
         }
         .contextMenu {
-            Button { /* vm.wrapped.openEdit(drink) */ } label: { Label("Edit", systemImage: "pencil") }
-            Button { /* vm.wrapped.regenerateImage(drink) */ } label: {
+            Button { vm.openEdit(drink: drink.food) } label: { Label("Edit", systemImage: "pencil") }
+            Button { vm.regenerateImage(drink: drink.food) } label: {
                 Label("Regenerate image", systemImage: "arrow.clockwise")
             }
             if index > 0 {
-                Button { /* vm.wrapped.moveUp(drink) */ } label: { Label("Move up", systemImage: "arrow.up") }
+                Button { vm.moveUp(drink: drink.food) } label: { Label("Move up", systemImage: "arrow.up") }
             }
-            if index < drinks.count - 1 {
-                Button { /* vm.wrapped.moveDown(drink) */ } label: {
+            if index < state.drinks.count - 1 {
+                Button { vm.moveDown(drink: drink.food) } label: {
                     Label("Move down", systemImage: "arrow.down")
                 }
             }
@@ -117,94 +140,173 @@ struct DrinkSettingsView: View {
 
     @ViewBuilder
     private var toast: some View {
-        if let message {
+        if let message = state.message {
             Text(message)
                 .font(.hfBodySm)
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(Theme.textPrimary, in: Capsule())
                 .foregroundStyle(Theme.textInverse)
                 .padding(.bottom, 16)
-                .task { try? await Task.sleep(for: .seconds(2)); /* vm.wrapped.consumeMessage() */ }
+                .task { try? await Task.sleep(for: .seconds(2)); vm.consumeMessage() }
         }
+    }
+
+    // MARK: Map shared UiState → local mirror
+
+    static func map(_ s: DrinkSettingsViewModel.UiState) -> ScreenState {
+        ScreenState(
+            loading: s.loading,
+            drinks: s.drinks.map { row($0) },
+            error: s.error,
+            message: s.message,
+            editorOpen: s.editor != nil
+        )
+    }
+
+    private static func row(_ food: SharedCore.Food) -> DrinkRow {
+        DrinkRow(
+            id: food.foodId,
+            name: food.name,
+            servingSummary: servingSummary(food),
+            imageStatus: food.imageStatus,
+            imageUrl: food.imageUrl,
+            food: food
+        )
+    }
+
+    /// "1.4 std · 145 kcal" — standard-drink count (from the alcohol block) plus
+    /// per-serving calories (from `servingMacros`, which already folds in the
+    /// alcohol calories). Either half is dropped when absent.
+    private static func servingSummary(_ food: SharedCore.Food) -> String {
+        var parts: [String] = []
+        if let std = food.alcohol?.standardDrinks?.doubleValue {
+            parts.append("\(DrinkFormat.trimmed(std)) std")
+        }
+        if let kcal = food.servingMacros?.caloriesKcal?.doubleValue {
+            parts.append("\(DrinkFormat.trimmed(kcal)) kcal")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
-/// The add / edit form (DrinkSettingsViewModel.EditorState). ABV% + serving
-/// volume are required to save (`EditorState.canSave`); "Analyze with AI" fills
-/// the form from a proposal, or drops to manual entry on a 422 (analyzeUnavailable).
+/// The add / edit form, bound to the shared `DrinkSettingsViewModel.EditorState`
+/// via `vm.updateEditor { ... }` (the VM is the single source of truth; raw
+/// strings so the user types freely, parsed on `save`). ABV% + serving volume are
+/// required to save (`EditorState.canSave`); "Analyze with AI" fills the form from
+/// a proposal, or drops to manual entry on a 422 (`analyzeUnavailable`).
 struct DrinkEditorSheet: View {
+    let vm: DrinkSettingsViewModel
     @Environment(\.dismiss) private var dismiss
-
-    // Mirror of EditorState (raw strings so the user types freely; the shared VM
-    // parses on save).
-    @State private var name = ""
-    @State private var abvPercent = ""
-    @State private var servingVolumeMl = ""
-    @State private var servingLabel = ""
-    @State private var carbsGrams = ""
-    @State private var sugarGrams = ""
-    @State private var analyzing = false
-    @State private var saving = false
-    @State private var analyzeUnavailable = false
-    @State private var error: String?
-    // Read-only derived readouts from the last analyze/edit.
-    @State private var derivedAlcoholGrams: Double?
-    @State private var derivedStandardDrinks: Double?
-    @State private var derivedCaloriesKcal: Double?
-
-    private var canSave: Bool {
-        !saving && !name.isEmpty
-            && Double(abvPercent) != nil && Double(servingVolumeMl) != nil
-    }
+    @State private var editor: DrinkSettingsViewModel.EditorState?
+    @State private var subscription: FlowSubscription?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Drink") {
-                    TextField("Name (e.g. IPA, Old Fashioned)", text: $name)
-                    Button {
-                        // vm.wrapped.analyze()
-                    } label: {
-                        if analyzing { ProgressView() } else { Text("Analyze with AI") }
-                    }
-                    .disabled(name.isEmpty || analyzing)
-                    if analyzeUnavailable {
-                        Text("AI is unavailable — enter the details manually.")
-                            .font(.hfBodySm).foregroundStyle(Theme.warn)
-                    }
-                }
-                Section("Alcohol") {
-                    numberField("ABV %", text: $abvPercent)
-                    numberField("Serving volume (ml)", text: $servingVolumeMl)
-                    TextField("Serving label (optional)", text: $servingLabel)
-                }
-                Section("Mixer macros (optional)") {
-                    numberField("Carbs (g)", text: $carbsGrams)
-                    numberField("Sugar (g)", text: $sugarGrams)
-                }
-                if derivedStandardDrinks != nil || derivedCaloriesKcal != nil {
-                    Section("Per serving") {
-                        derivedRow("Standard drinks", derivedStandardDrinks)
-                        derivedRow("Alcohol (g)", derivedAlcoholGrams)
-                        derivedRow("Calories", derivedCaloriesKcal)
-                    }
-                }
-                if let error {
-                    Text(error).font(.hfBodySm).foregroundStyle(Theme.alert)
+            Group {
+                if let editor {
+                    form(editor)
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationTitle("Add drink")
+            .navigationTitle(editor?.drinkId == nil ? "Add drink" : "Edit drink")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { /* vm.wrapped.closeEditor() */ dismiss() }
+                    Button("Cancel") { vm.closeEditor() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { /* vm.wrapped.save() */ }
-                        .disabled(!canSave)
+                    Button("Save") { vm.save() }
+                        .disabled(!(editor?.canSave ?? false))
                 }
             }
         }
+        .onAppear {
+            subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                guard let s = value as? DrinkSettingsViewModel.UiState else { return }
+                editor = s.editor
+                if s.editor == nil { dismiss() }
+            }
+        }
+        .onDisappear { subscription?.cancel() }
+    }
+
+    @ViewBuilder
+    private func form(_ e: DrinkSettingsViewModel.EditorState) -> some View {
+        Form {
+            Section("Drink") {
+                TextField("Name (e.g. IPA, Old Fashioned)",
+                          text: field(e.name) { withName($0, $1) })
+                Button {
+                    vm.analyze()
+                } label: {
+                    if e.analyzing { ProgressView() } else { Text("Analyze with AI") }
+                }
+                .disabled(e.name.isEmpty || e.analyzing)
+                if e.analyzeUnavailable {
+                    Text("AI is unavailable — enter the details manually.")
+                        .font(.hfBodySm).foregroundStyle(Theme.warn)
+                }
+            }
+            Section("Alcohol") {
+                numberField("ABV %", text: field(e.abvPercent) { withAbv($0, $1) })
+                numberField("Serving volume (ml)", text: field(e.servingVolumeMl) { withVolume($0, $1) })
+                TextField("Serving label (optional)", text: field(e.servingLabel) { withLabel($0, $1) })
+            }
+            Section("Mixer macros (optional)") {
+                numberField("Carbs (g)", text: field(e.carbsGrams) { withCarbs($0, $1) })
+                numberField("Sugar (g)", text: field(e.sugarGrams) { withSugar($0, $1) })
+            }
+            if e.derivedStandardDrinks != nil || e.derivedCaloriesKcal != nil {
+                Section("Per serving") {
+                    derivedRow("Standard drinks", e.derivedStandardDrinks?.doubleValue)
+                    derivedRow("Alcohol (g)", e.derivedAlcoholGrams?.doubleValue)
+                    derivedRow("Calories", e.derivedCaloriesKcal?.doubleValue)
+                }
+            }
+            if let error = e.error {
+                Text(error).font(.hfBodySm).foregroundStyle(Theme.alert)
+            }
+        }
+    }
+
+    /// A String binding whose setter routes the new value through the shared VM's
+    /// `updateEditor` transform (builds a fresh `EditorState` via `doCopy`), so the
+    /// VM stays the single source of truth for the form.
+    private func field(
+        _ current: String,
+        _ transform: @escaping (DrinkSettingsViewModel.EditorState, String) -> DrinkSettingsViewModel.EditorState
+    ) -> Binding<String> {
+        Binding(
+            get: { current },
+            set: { newValue in
+                vm.updateEditor { e in transform(e, newValue) }
+            }
+        )
+    }
+
+    // Per-field copy helpers: set ONE editable string field on the shared
+    // EditorState via `doCopy`, preserving everything else. (The other fields are
+    // VM-managed — analyzing/saving/derived readouts — and left untouched here.)
+    private typealias Editor = DrinkSettingsViewModel.EditorState
+
+    private func withName(_ e: Editor, _ v: String) -> Editor {
+        e.doCopy(drinkId: e.drinkId, name: v, abvPercent: e.abvPercent, servingVolumeMl: e.servingVolumeMl, servingLabel: e.servingLabel, carbsGrams: e.carbsGrams, sugarGrams: e.sugarGrams, analyzing: e.analyzing, saving: e.saving, analyzeUnavailable: e.analyzeUnavailable, error: e.error, derivedAlcoholGrams: e.derivedAlcoholGrams, derivedStandardDrinks: e.derivedStandardDrinks, derivedCaloriesKcal: e.derivedCaloriesKcal)
+    }
+    private func withAbv(_ e: Editor, _ v: String) -> Editor {
+        e.doCopy(drinkId: e.drinkId, name: e.name, abvPercent: v, servingVolumeMl: e.servingVolumeMl, servingLabel: e.servingLabel, carbsGrams: e.carbsGrams, sugarGrams: e.sugarGrams, analyzing: e.analyzing, saving: e.saving, analyzeUnavailable: e.analyzeUnavailable, error: e.error, derivedAlcoholGrams: e.derivedAlcoholGrams, derivedStandardDrinks: e.derivedStandardDrinks, derivedCaloriesKcal: e.derivedCaloriesKcal)
+    }
+    private func withVolume(_ e: Editor, _ v: String) -> Editor {
+        e.doCopy(drinkId: e.drinkId, name: e.name, abvPercent: e.abvPercent, servingVolumeMl: v, servingLabel: e.servingLabel, carbsGrams: e.carbsGrams, sugarGrams: e.sugarGrams, analyzing: e.analyzing, saving: e.saving, analyzeUnavailable: e.analyzeUnavailable, error: e.error, derivedAlcoholGrams: e.derivedAlcoholGrams, derivedStandardDrinks: e.derivedStandardDrinks, derivedCaloriesKcal: e.derivedCaloriesKcal)
+    }
+    private func withLabel(_ e: Editor, _ v: String) -> Editor {
+        e.doCopy(drinkId: e.drinkId, name: e.name, abvPercent: e.abvPercent, servingVolumeMl: e.servingVolumeMl, servingLabel: v, carbsGrams: e.carbsGrams, sugarGrams: e.sugarGrams, analyzing: e.analyzing, saving: e.saving, analyzeUnavailable: e.analyzeUnavailable, error: e.error, derivedAlcoholGrams: e.derivedAlcoholGrams, derivedStandardDrinks: e.derivedStandardDrinks, derivedCaloriesKcal: e.derivedCaloriesKcal)
+    }
+    private func withCarbs(_ e: Editor, _ v: String) -> Editor {
+        e.doCopy(drinkId: e.drinkId, name: e.name, abvPercent: e.abvPercent, servingVolumeMl: e.servingVolumeMl, servingLabel: e.servingLabel, carbsGrams: v, sugarGrams: e.sugarGrams, analyzing: e.analyzing, saving: e.saving, analyzeUnavailable: e.analyzeUnavailable, error: e.error, derivedAlcoholGrams: e.derivedAlcoholGrams, derivedStandardDrinks: e.derivedStandardDrinks, derivedCaloriesKcal: e.derivedCaloriesKcal)
+    }
+    private func withSugar(_ e: Editor, _ v: String) -> Editor {
+        e.doCopy(drinkId: e.drinkId, name: e.name, abvPercent: e.abvPercent, servingVolumeMl: e.servingVolumeMl, servingLabel: e.servingLabel, carbsGrams: e.carbsGrams, sugarGrams: v, analyzing: e.analyzing, saving: e.saving, analyzeUnavailable: e.analyzeUnavailable, error: e.error, derivedAlcoholGrams: e.derivedAlcoholGrams, derivedStandardDrinks: e.derivedStandardDrinks, derivedCaloriesKcal: e.derivedCaloriesKcal)
     }
 
     private func numberField(_ label: String, text: Binding<String>) -> some View {
@@ -218,13 +320,16 @@ struct DrinkEditorSheet: View {
             HStack {
                 Text(label).foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Text(trimmedNumber(value)).font(.hfMonoSm)
+                Text(DrinkFormat.trimmed(value)).font(.hfMonoSm)
             }
         }
     }
+}
 
-    /// Format a Double without a trailing ".0" (mirror of the shared `trimNumber`).
-    private func trimmedNumber(_ value: Double) -> String {
+/// Small shared formatter — a Double without a trailing ".0" (mirror of the shared
+/// Kotlin `trimNumber`).
+enum DrinkFormat {
+    static func trimmed(_ value: Double) -> String {
         value == value.rounded() ? String(Int(value)) : String(value)
     }
 }
