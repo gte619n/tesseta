@@ -239,15 +239,20 @@ class MirrorWorkoutSessionRepository(
         val scheduled = mirror.record(MirrorTables.WORKOUT_SCHEDULED, op.entityId)
             ?.takeIf { !it.dirty }
             ?.let { decodeScheduled(it.payloadJson) }
+        // Orphans = logged sets whose (blockId, orderIndex) no longer exists in the
+        // CURRENT plan snapshot (the plan was rewritten under the upload). With no
+        // snapshot (sessionAvailable=false) everything is orphaned — only discard applies.
+        val valid = scheduled?.let(::validPrescriptionKeys) ?: emptySet()
+        val orphaned = req.logged
+            .filter { PrescriptionKey(it.blockId, it.orderIndex) !in valid }
+            .sumOf { it.sets.size }
         return ParkedCompletion(
             programId = programId,
             scheduledId = scheduledId,
             status = runCatching { ScheduledStatus.valueOf(req.status) }.getOrDefault(ScheduledStatus.COMPLETED),
             completedAt = req.completedAt,
             loggedSetCount = req.logged.sumOf { it.sets.size },
-            // Full orphan detection (keys removed from the current plan) is a follow-up;
-            // 0 here means "restore everything the payload carried".
-            orphanedSetCount = 0,
+            orphanedSetCount = orphaned,
             sessionAvailable = scheduled != null,
             dayLabel = scheduled?.dayLabel,
         )
@@ -278,8 +283,13 @@ class MirrorWorkoutSessionRepository(
             ?.let { decodeScheduled(it.payloadJson) }
             ?: error("This session is no longer available to restore")
         // Re-materialize a live draft from the rejected payload's sets so the user can
-        // re-finish, then drop the parked op.
-        val logged = req.logged.associate { PrescriptionKey(it.blockId, it.orderIndex) to it.sets }
+        // re-finish, then drop the parked op. Orphaned sets (keys no longer in the
+        // current plan) are dropped — the ParkedCompletion.orphanedSetCount already
+        // surfaced the count so nothing vanishes silently.
+        val valid = validPrescriptionKeys(scheduled)
+        val logged = req.logged
+            .filter { PrescriptionKey(it.blockId, it.orderIndex) in valid }
+            .associate { PrescriptionKey(it.blockId, it.orderIndex) to it.sets }
         val at = now()
         writeDraftLocal(
             WorkoutSessionDraft(
@@ -419,6 +429,13 @@ class MirrorWorkoutSessionRepository(
             val i = id.indexOf('/')
             return if (i < 0) id to id else id.substring(0, i) to id.substring(i + 1)
         }
+
+        /** The (blockId, orderIndex) keys the current plan snapshot still defines — a
+         *  logged set keyed outside this set is "orphaned" (its prescription was removed). */
+        fun validPrescriptionKeys(scheduled: ScheduledWorkout): Set<PrescriptionKey> =
+            scheduled.session?.blocks.orEmpty().flatMap { block ->
+                block.prescriptions.map { PrescriptionKey(block.blockId, it.orderIndex) }
+            }.toSet()
 
         /** Lenient JSON matching the wire + mirror payloads (unknown keys / absent nulls). */
         val DRAFT_JSON = Json {
