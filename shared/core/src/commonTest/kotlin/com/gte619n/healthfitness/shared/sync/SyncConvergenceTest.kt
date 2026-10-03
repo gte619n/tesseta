@@ -272,6 +272,7 @@ class SyncConvergenceTest {
                     // row by this. Uniqueness across clients lives on idempotencyKey.
                     id = id,
                     collection = table,
+                    entityId = id,
                     docJson = value,
                     operation = op,
                     idempotencyKey = "$name-$id-${op.name}-$value",
@@ -416,6 +417,7 @@ class SyncConvergenceTest {
         val op = OutboxOp(
             id = "op-1",
             collection = MirrorTables.NUTRITION_ENTRIES,
+            entityId = "entry-1",
             docJson = "eggs",
             operation = OutboxOp.Operation.CREATE,
             idempotencyKey = "idem-eggs-1",

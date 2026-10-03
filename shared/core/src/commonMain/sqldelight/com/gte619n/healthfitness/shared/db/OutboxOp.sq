@@ -29,6 +29,9 @@ SELECT * FROM outboxOp WHERE nextAttemptAt <= ? ORDER BY seq ASC;
 listAll:
 SELECT * FROM outboxOp ORDER BY seq ASC;
 
+selectById:
+SELECT * FROM outboxOp WHERE id = ?;
+
 pendingCount:
 SELECT COUNT(*) FROM outboxOp;
 

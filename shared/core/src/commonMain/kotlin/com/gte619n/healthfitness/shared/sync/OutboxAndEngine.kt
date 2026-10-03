@@ -15,9 +15,13 @@ import kotlinx.coroutines.flow.Flow
 
 /** A local write awaiting replay. Mirrors the Android `OutboxEntity`. */
 data class OutboxOp(
+    /** Mutation id (PK); also the default Idempotency-Key for non-deterministic tables. */
     val id: String,
     val collection: String,
-    val docJson: String,
+    /** The document id the op targets — drives the replay URL (OutboxEndpointRegistry). */
+    val entityId: String,
+    /** Request payload (plaintext here; the store encrypts it at rest). Null for DELETE. */
+    val docJson: String?,
     val operation: Operation,
     val idempotencyKey: String,
     val enqueuedAt: String,

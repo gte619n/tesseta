@@ -86,12 +86,16 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.sqldelight.sqlite.driver)
         }
+        // SQLDelight's native driver opens the on-device SQLite mirror on ALL Apple
+        // targets (iosArm64 + iosSimulatorArm64 + the macosArm64 canary), so it lives
+        // in appleMain alongside the shared MirrorDatabaseFactory actual.
+        appleMain.dependencies {
+            implementation(libs.sqldelight.native.driver)
+        }
         // Ktor's Darwin engine backs the concrete KtorSseClient (+ the Phase-1C
-        // network layer) on iOS; Android/JVM use the OkHttp engine. SQLDelight's
-        // native driver opens the on-device SQLite mirror.
+        // network layer) on iOS; Android/JVM use the OkHttp engine.
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
-            implementation(libs.sqldelight.native.driver)
         }
     }
 }
