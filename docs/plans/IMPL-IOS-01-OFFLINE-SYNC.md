@@ -497,3 +497,58 @@ review.
   has no live `.navigationDestination` consumer), signature unchanged. Verified:
   compileKotlinJvm (UP-TO-DATE — factory is in iosMain) + assembleSharedCoreXCFramework
   + iOS app BUILD SUCCEEDED.
+- **(Secondary detail screens pass, 2026-10-03)** Swept the eight SECONDARY-screen
+  candidates (Medications detail/doses/add/reminder-settings, Nutrition target +
+  edit/adjust-review/leftover-review sheets, Settings sync-diagnostics/workout-prefs/
+  drinks) against the "wire-only-if-the-shared-VM-exists-AND-its-repo-deps-are-built"
+  rule. **Wired exactly ONE:**
+  - **`NutritionTargetView`** → shared `NutritionTargetViewModel` over
+    `HttpNutritionDayRepository` (`GET/PUT api/me/nutrition/target`; the repo's
+    `target()`/`setTarget()` already exist). New `IosComposition.nutritionTargetViewModel()`;
+    the view now binds via `collectFlow` + a static `map(...)` to a local `ScreenState`
+    and re-seeds the editable `Draft` from the server target on each emission EXCEPT
+    while a save is in flight (so in-progress edits aren't stomped). `save` hands a
+    shared `Macros` straight to the VM. Online form only — no mirror/outbox, same as
+    Android. Swift gotcha: `m?.kotlinDoubleProp?.doubleValue` reads as a non-optional
+    `Double` in a `?.map { … }` chain ("value of type 'Double' has no member 'map'") →
+    hoist the unwrap into a tiny `func str(_ k: KotlinDouble?) -> String` guard. The
+    shared `Macros` ObjC init is the 6-arg compat ctor
+    (`caloriesKcal:proteinGrams:carbsGrams:fatGrams:fiberGrams:sugarGrams:`, each
+    `KotlinDouble?` — no alcohol arg exported); `NutritionTargetUiState`/`Macros`
+    export FLAT (no underscore). Verified: compileKotlinJvm UP-TO-DATE (factory is
+    iosMain) + assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED.
+  - **SKIPPED — Medications `MedicationDetailView` / `TodaysDosesView` /
+    `AddMedicationView` / `ReminderSettingsView`.** Their VMs exist
+    (`MedicationDetailViewModel` / `TodaysDosesViewModel` / `AddMedicationViewModel` /
+    `ReminderSettingsViewModel`) but depend on `MedicationCrudRepository`,
+    `AdherenceRepository`, `DrugRepository`, `ReminderSettingsRepository` — ALL still
+    INTERFACE-ONLY (declared in `MedicationRepositories.kt`; its own KDoc says "The
+    CONCRETE implementations … are the remaining Phase 1C body"). The wired meds LIST
+    uses `MirrorMedicationRepository`, which implements the read-only
+    `MedicationRepository`, NOT the CRUD surface these need. `AddMedicationView` also
+    needs the SSE drug-lookup transport. Build-not-wire; left on local-mock, compiles.
+  - **SKIPPED — Settings `DrinkSettingsView`.** `DrinkSettingsViewModel` exists but
+    needs a concrete `DrinkRepository` (interface-only in `SettingsRepositories.kt`),
+    plus the AI analyze + image-regen flows. Build-not-wire; left on local-mock.
+  - **SKIPPED — Settings `WorkoutPreferencesEditor`.** `WorkoutPreferencesViewModel`
+    exists but needs a concrete `WorkoutSettingsRepository` (interface-only — the only
+    references are the VM itself). Build-not-wire; left on local-mock.
+  - **SKIPPED — Settings `SyncDiagnosticsView`.** There is NO shared sync-status VM
+    (grep of `presentation/` finds none); its parity target `SyncStatusViewModel` was
+    never ported. Surfacing the engine/outbox state is a `SyncBridge`-style platform
+    task (derive a `SyncUiState` off `SyncEngine`/`OutboxStore`), not a "wire to an
+    existing VM" job. Left on local-mock.
+  - **SKIPPED — Nutrition `MealAdjustReviewView` / `LeftoverReviewView` (+ the
+    EditEntry sheet).** `MealAdjustViewModel` / `LeftoverViewModel` exist and depend
+    only on the built `NutritionDayRepository`, BUT they are CONSTRUCTED with the
+    `MealAdjustment` / `Leftover` PROPOSAL passed in — and that proposal is NOT
+    retrievable from the current repo/VM surface: there is no `adjustmentFor(entryId)`
+    repo method, the shared `Entry` domain carries no `adjustment`/`leftover` field,
+    and `NutritionTodayUiState` exposes only the open/close `reviewingAdjustId`/
+    `reviewingLeftoverId` (not the diff). On Android the proposal arrives via the FCM
+    adjust-review / leftover-review notification PAYLOAD (the deep-link path), which is
+    not wired on iOS yet (same transport gap as the capture op-rail / GoalsChat SSE).
+    Wiring the sheets today would only reproduce the current nil-proposal placeholder,
+    so they stay on local-mock. **Recommendation:** wire these together with the FCM
+    deep-link handler that mints the `MealAdjustViewModel`/`LeftoverViewModel` from the
+    notification payload (a notifications task), not the plain repo rail.

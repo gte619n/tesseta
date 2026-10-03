@@ -46,6 +46,7 @@ import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewMode
 import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
+import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTargetViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
@@ -245,6 +246,16 @@ object IosComposition {
             ops = NoopNutritionOpQueue(),
             initialDate = initialDate,
         )
+
+    /**
+     * Nutrition daily macro-target editor (Settings/Nutrition › Daily targets) —
+     * networked over `GET/PUT api/me/nutrition/target` via [HttpNutritionDayRepository].
+     * The shared [NutritionTargetViewModel] loads the current target and saves an
+     * edited one (`saved` drives the one-shot confirmation). Read + save only; no
+     * mirror/outbox (a plain online form, same as Android).
+     */
+    fun nutritionTargetViewModel(): NutritionTargetViewModel =
+        NutritionTargetViewModel(repository = HttpNutritionDayRepository(client()))
 
     /**
      * Add-food sheet — networked catalog + saved-meal search (GET api/foods/search,
