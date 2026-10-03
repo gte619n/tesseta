@@ -47,6 +47,12 @@ class SqlDelightMirrorStore(
         rows.getById(collection, id).executeAsOneOrNull()
             ?.let { Record(it.id, cipher.decrypt(it.payloadCipher), it.lastUpdate, it.dirty != 0L) }
 
+    /** The newest ACTIVE row of a collection, decrypted — for singleton collections
+     *  (e.g. userProfile) whose id the caller doesn't know. */
+    fun firstActiveRecord(collection: String): Record? =
+        rows.observeActive(collection).executeAsList().firstOrNull()
+            ?.let { Record(it.id, cipher.decrypt(it.payloadCipher), it.lastUpdate, it.dirty != 0L) }
+
     /** Optimistic local upsert (dirty, PENDING) — a local write awaiting push. */
     fun writeLocal(collection: String, id: String, payloadJson: String, lastUpdate: String) {
         rows.upsert(collection, id, cipher.encrypt(payloadJson), lastUpdate, SyncStatus.ACTIVE.name, 1L, "PENDING", now())

@@ -277,3 +277,14 @@ review.
   with `==` (RestKind.getReady / SessionPrompt.finishSummary). **drafts-survive-death
   is now end-to-end in the UI.** Verified: assemble + app BUILD SUCCEEDED. (No unit test
   added for sessionRows — jvmTest wedges here; logic is simple + compile-verified.)
+- **(Follow-up #2 — PARTIAL: clean CRUD repos retrofitted, intricate assemblies deferred)**
+  `MirrorMedicationRepository` (observe MEDICATIONS mirror rows -> decode Medication;
+  onStart + refresh = engine.pull) and `MirrorProfileRepository` (cached/get serve the
+  USER_PROFILE mirror row first, network fallback; writes stay online PATCH) now back the
+  meds list + profile screens: offline-read + instant cold start. Verified the sync-doc
+  shapes decode 1:1 into the domain (medications.json fixture). Wired in IosComposition
+  (Http* repos retired there). Deferred (regression risk, needs device verification):
+  Nutrition-day + Goals (list+deep) mirror-read need client-side day/list ASSEMBLY from
+  per-collection rows (Android's assembleDay / deep-goal join); those screens stay
+  online-first (they work today). Follow the MirrorMedication pattern + a shared
+  assembleDay/assembleGoalDeep helper, then device-verify.

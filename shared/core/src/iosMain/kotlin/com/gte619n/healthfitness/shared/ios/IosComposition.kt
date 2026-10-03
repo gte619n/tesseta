@@ -2,9 +2,9 @@ package com.gte619n.healthfitness.shared.ios
 
 import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
-import com.gte619n.healthfitness.shared.data.HttpMedicationRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
-import com.gte619n.healthfitness.shared.data.HttpProfileRepository
+import com.gte619n.healthfitness.shared.data.MirrorMedicationRepository
+import com.gte619n.healthfitness.shared.data.MirrorProfileRepository
 import com.gte619n.healthfitness.shared.data.MirrorWorkoutSessionRepository
 import com.gte619n.healthfitness.shared.data.NoopNutritionOpQueue
 import com.gte619n.healthfitness.shared.domain.nutrition.Meal
@@ -139,13 +139,13 @@ object IosComposition {
     fun coachAudioViewModel(): CoachAudioSettingsViewModel =
         CoachAudioSettingsViewModel(coachAudioPrefs)
 
-    /** Settings › Profile — networked (GET/PATCH /api/me). */
+    /** Settings › Profile — mirror-read (offline/instant) + online PATCH /api/me. */
     fun profileViewModel(): ProfileViewModel =
-        ProfileViewModel(HttpProfileRepository(client()), unitPrefs)
+        ProfileViewModel(MirrorProfileRepository(mirrorStore(), client()), unitPrefs)
 
-    /** Medications list — networked (GET /api/me/medications). */
+    /** Medications list — mirror-read (offline/instant), delta-pull refreshed. */
     fun medicationsViewModel(): MedicationsViewModel =
-        MedicationsViewModel(HttpMedicationRepository(client()))
+        MedicationsViewModel(MirrorMedicationRepository(mirrorStore(), syncEngine()))
 
     /** Goals list — networked (GET /api/me/goals). */
     fun goalsListViewModel(): GoalsListViewModel =
