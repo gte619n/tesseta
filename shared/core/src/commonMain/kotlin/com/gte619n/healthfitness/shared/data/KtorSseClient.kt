@@ -10,11 +10,16 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.utils.io.readUTF8Line
+import com.gte619n.healthfitness.shared.presentation.workouts.FirstTurnEnvelope
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutDesignerViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * IMPL-IOS-01 — concrete [SseClient] (closes the Phase-4 audit gap "SSE transport
@@ -52,10 +57,18 @@ class KtorSseClient(
 ) : SseClient {
 
     override fun stream(basePath: String, threadId: String?, message: String): Flow<ChatStreamEvent> = flow {
+        // Two wire shapes share ONE [SseClient] contract (goals + the workout
+        // designer). The goals chat body is the plain `{message, threadId}`. The
+        // designer's FIRST turn packs the setup (schedule + goalId) into the
+        // message as a `DESIGNER_SETUP{…json…}` envelope (the shared VM can't add
+        // params to this interface); here we split that envelope off and build the
+        // richer `{threadId, message, schedule, goalId}` body the designer
+        // controller expects. Follow-up designer turns + all goals turns are plain.
+        val body: JsonElement = buildBody(threadId, message)
         val response = http.post("$baseUrl$basePath") {
             contentType(ContentType.Application.Json)
             headers { append(HttpHeaders.Accept, "text/event-stream") }
-            setBody(ChatSendBody(message = message, threadId = threadId))
+            setBody(body)
             if (idleTimeoutSeconds > 0) {
                 timeout { socketTimeoutMillis = idleTimeoutSeconds * 1000 }
             }
@@ -94,6 +107,37 @@ class KtorSseClient(
         dispatch() // flush a trailing event with no terminating blank line
     }
 
+    /**
+     * Build the POST body for [stream]. A designer first turn arrives as
+     * `DESIGNER_SETUP{json}` (see [WorkoutDesignerViewModel.FIRST_TURN_ENVELOPE_PREFIX]);
+     * everything else is a plain `{message, threadId}`.
+     */
+    private fun buildBody(threadId: String?, message: String): JsonElement {
+        val prefix = WorkoutDesignerViewModel.FIRST_TURN_ENVELOPE_PREFIX
+        if (message.startsWith(prefix)) {
+            val envelopeJson = message.removePrefix(prefix)
+            val envelope = runCatching {
+                json.decodeFromString(FirstTurnEnvelope.serializer(), envelopeJson)
+            }.getOrNull()
+            if (envelope != null) {
+                return buildJsonObject {
+                    // First-turn: no threadId yet (the controller mints one).
+                    put("message", envelope.message)
+                    envelope.goalId?.let { put("goalId", it) }
+                    // `schedule` is the ProgramSchedule the controller requires to
+                    // open a thread; ScheduleDto is wire-compatible (trainingDays +
+                    // dayLocations keyed by DayOfWeek, which the backend's key
+                    // deserializer accepts case-insensitively).
+                    put("schedule", json.encodeToJsonElement(com.gte619n.healthfitness.shared.data.ScheduleDto.serializer(), envelope.schedule))
+                }
+            }
+        }
+        return buildJsonObject {
+            put("message", message)
+            threadId?.let { put("threadId", it) }
+        }
+    }
+
     /** `done` data may be a bare id, or `{"threadId": "..."}`. Tolerate both. */
     private fun threadIdFrom(payload: String): String? {
         val trimmed = payload.trim()
@@ -108,6 +152,3 @@ class KtorSseClient(
         }
     }
 }
-
-@kotlinx.serialization.Serializable
-private data class ChatSendBody(val message: String, val threadId: String?)

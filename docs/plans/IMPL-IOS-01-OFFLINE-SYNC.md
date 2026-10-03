@@ -706,3 +706,75 @@ review.
   `archive(drink:)`/`moveUp(drink:)`/`regenerateImage(drink:)`/`openEdit(drink:)` taking the
   shared `Food`. Verified: compileKotlinJvm + assembleSharedCoreXCFramework + iOS app
   BUILD SUCCEEDED.
+- **(Goals Chat + Workout Designer — SSE STREAMING wired, 2026-10-03)** The two
+  SSE-streaming screens are now live on their shared VMs. Closed the long-standing
+  "SSE transport is the dominant un-wired gap" item. **SSE transport:** the existing
+  `KtorSseClient` was a complete concrete `SseClient` reader EXCEPT for two gaps I
+  closed: (1) it needed the client's `HttpTimeout` plugin for its per-request idle-cap
+  `timeout { socketTimeoutMillis }` — added `install(HttpTimeout)` to `ApiClient` (no
+  default timeouts; only the SSE stream opts in per-request, so REST is unaffected);
+  (2) its body was always the plain `{message, threadId}`, which the DESIGNER controller
+  rejects on the first turn (it requires a structured `schedule`). The shared
+  `WorkoutDesignerViewModel` packs the first-turn setup as a `DESIGNER_SETUP{json}`
+  envelope prefixed onto the message (it can't add params to the one-interface
+  `SseClient`); `KtorSseClient.buildBody` now splits that envelope off and POSTs the real
+  `{message, schedule, goalId}` the controller wants (verified: the backend `ChatRequest`
+  record + `ProgramSchedule{trainingDays, dayLocations}` == the shared `ScheduleDto`; the
+  `dayLocations` DayOfWeek key deserializer is case-insensitive so the kotlinx UPPERCASE
+  `MON` keys are accepted). `KtorSseClient` is constructed with an EMPTY baseUrl so it
+  resolves relative paths against the authed client's `defaultRequest { url(baseUrl) }`
+  like every REST repo (Bearer token reused). **Repos:** new `HttpChatRepositories.kt` —
+  `HttpChatRepository` (goals commit `…/chat/{threadId}/commit` → `{goalId}`, 400→flagged
+  `GoalProposal`; thread list/delete) + `HttpWorkoutProgramChatRepository` (designer commit,
+  thread list/messages/delete). Both decode into private `@Serializable` wire DTOs (the shared
+  `ChatThreadResponse`/`ProgramChatThreadResponse`/`ProgramChatMessage` are plain data classes,
+  not `@Serializable`) and read the error body on a thrown `ClientRequestException` (client is
+  `expectSuccess=true`) to recover the goals-400 / designer-422 re-flagged structures. **Factories:**
+  `IosComposition.goalsChatViewModel()` + `workoutDesignerViewModel(programId:)`, sharing one
+  `KtorSseClient` + NSUUID `IdGenerator`s (goals + designer `IdGenerator` are distinct types —
+  the 2nd exports as `IdGenerator_`); the designer reuses the existing `locationRepo`/`workoutGoalsRepo`.
+  **Views wired (collectFlow + static map):** `GoalsChatView` — message thread, streaming
+  assistant bubble (markdown), the editable goal-proposal card (title/domain/target + phases/steps
+  with inline `validationError` flags) + Save/Discard, send, the committed-collapse state, and the
+  streaming composer gate; thread list/delete are VM-backed (no side-panel UI this pass — the view
+  has no thread drawer). `WorkoutDesignerView` — the setup form routes through the VM
+  (`toggleTrainingDay`/`setDayGym`/`setGoal`, DayOfWeek bridged MON..SUN), send, the streamed
+  program proposal folded + displayed (phases → days → "Squat · 3×5" prescription lines) with
+  issues/warnings, Save (commit)/Discard, committed-collapse.
+  **DEFERRED (recorded, by design of the shared layer — NOT a shortcut):**
+  - **Designer in-card PROGRAM-EDIT tree + TRT labs safety panel.** The brief described a
+    `ProgramProposalEdit/Phase/Day/Block/PrescriptionEdit` tree and a TRT/ADR-0015 panel — those
+    exist ONLY in Android (`program/chat/ProgramProposalEditState.kt` + `TrtLabsPanel.kt`). The
+    SHARED `WorkoutDesignerViewModel` does NOT port them: it has no `trt` field (grep-confirmed),
+    and its `commit(messageId, edited: ProgramProposal)` takes the flat display proposal as-is
+    (no edit intermediate). So there is nothing on the shared VM to render a TRT banner from or to
+    drive a deep editor. Wired display + accept/discard per the brief's fallback; a real editor/TRT
+    panel needs the shared VM to grow those surfaces first (a VM-port task).
+  - **Designer COMMIT fidelity.** The backend commit endpoint deserializes the FULL deep
+    `CreateProgramRequest` (exerciseId / orderIndex / block type per prescription) and its
+    validator REJECTS unknown/absent exercises. The shared `ProgramProposal` is the display-only
+    SUBSET streamed on the `proposal` event (`exerciseName`, no `exerciseId`) — it cannot
+    reconstruct a committable program. `HttpWorkoutProgramChatRepository.commit` sends the
+    best-effort shape (synthesizing orderIndex/dayOfWeek/block type, emitting `exerciseName`); a
+    prescription that can't resolve surfaces the backend's actionable 422 issues ON THE CARD
+    (not a silent failure). Faithful commit needs the shared proposal types to carry the deep
+    program (or the raw proposal JSON round-tripped opaquely) — a shared-type change deferred to
+    avoid touching the nine-sibling VM/type contract.
+  - **Goals per-field proposal EDITING.** The card commits the streamed `GoalProposal` as-is;
+    the server re-validates and re-flags fields on a 400 (which re-seed the card). Inline editing
+    of title/phase/step/metric before commit is a follow-up (the shared VM's `commit` already
+    accepts an edited proposal, so it's a Swift form-state task, no VM change).
+  - **No live navigation consumer.** `GoalsRoute.chat` still has no `.navigationDestination`
+    (same as `GoalRoadmapView`); `WorkoutDesignerView()` IS reachable via `WorkoutsHubView`. Both
+    views compile + work when reached.
+  **Gotchas hit:** `ChatMessage`/`DesignerMessage` sealed cases export FLAT
+  (`ChatMessageUser`/`ChatMessageAssistant`, `DesignerMessageUser`/`DesignerMessageAssistant`);
+  `GoalsChatUiState`/`WorkoutDesignerUiState` export FLAT; `GoalProposal.description`/
+  `ProgramProposal.description` collide → `description_`; `DayOfWeek` enum compares with `==`
+  (`SharedCore.DayOfWeek.mon`); `trainingDays` is an `NSSet<DayOfWeek>` + `dayLocations` an
+  `NSDictionary<DayOfWeek,String>` (cast elements `as? SharedCore.DayOfWeek`/`as? String`);
+  `proposalIssues`/`proposalWarnings` maps hand `NSArray` values (cast `as? [String]`);
+  `Int?`→`KotlinInt?` via `.intValue`, `Double?`→`.doubleValue`; `GoalDomain`/`StepKind`/
+  `Comparator` enums compare `==` (`cmp.symbol` for the readout); the designer VM's `idGenerator`
+  param type is `IdGenerator_` (2nd collision) — handled in Kotlin (fully-qualified) not Swift.
+  Verified: compileKotlinJvm + assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED.

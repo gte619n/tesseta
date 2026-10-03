@@ -1,6 +1,9 @@
 package com.gte619n.healthfitness.shared.ios
 
 import com.gte619n.healthfitness.shared.data.HttpBloodReadingRepository
+import com.gte619n.healthfitness.shared.data.HttpChatRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramChatRepository
+import com.gte619n.healthfitness.shared.data.KtorSseClient
 import com.gte619n.healthfitness.shared.data.HttpBloodTestReportRepository
 import com.gte619n.healthfitness.shared.data.HttpBodyCompositionRepository
 import com.gte619n.healthfitness.shared.data.HttpDashboardBloodMarkerRepository
@@ -56,7 +59,9 @@ import com.gte619n.healthfitness.shared.presentation.blood.BloodOverviewViewMode
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
 import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
+import com.gte619n.healthfitness.shared.presentation.goals.GoalsChatViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutDesignerViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.AddMedicationViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
@@ -296,6 +301,64 @@ object IosComposition {
         GoalRoadmapViewModel(
             goalId = goalId,
             repository = MirrorGoalsRepository(HttpGoalsRepository(client()), mirrorStore(), syncEngine()),
+        )
+
+    /**
+     * The concrete shared SSE transport ([KtorSseClient]) over the authed Ktor
+     * client. Constructed with an EMPTY baseUrl so it resolves relative paths
+     * (`api/me/…`) against the client's `defaultRequest { url(baseUrl) }` exactly
+     * like every REST repo — the client already carries the Bearer token + the
+     * `HttpTimeout` plugin the stream's idle-cap needs. One instance serves both
+     * chat consumers (goals + the workout designer).
+     */
+    private fun sseClient(): KtorSseClient = KtorSseClient(http = client(), baseUrl = "")
+
+    /** Monotonic id source for the chat VMs — a fresh NSUUID per message/bubble. */
+    private val goalsIdGenerator =
+        com.gte619n.healthfitness.shared.presentation.goals.IdGenerator {
+            platform.Foundation.NSUUID().UUIDString()
+        }
+    private val designerIdGenerator =
+        com.gte619n.healthfitness.shared.presentation.workouts.IdGenerator {
+            platform.Foundation.NSUUID().UUIDString()
+        }
+
+    /**
+     * Goals coach CHAT (SSE). The shared VM owns the message stream + `send`
+     * intent: it opens [KtorSseClient] against `api/me/goals/chat`, folds assistant
+     * tokens into a growing markdown bubble, attaches the editable [GoalProposal]
+     * card, and commits it through [HttpChatRepository] (`…/commit`, thread
+     * list/delete). Faithful end-to-end — the goal proposal round-trips fully.
+     */
+    fun goalsChatViewModel(): GoalsChatViewModel =
+        GoalsChatViewModel(
+            sseClient = sseClient(),
+            chatRepository = HttpChatRepository(client()),
+            idGenerator = goalsIdGenerator,
+        )
+
+    /**
+     * Workout program DESIGNER chat (SSE). The shared VM loads the setup form
+     * (training days + a gym per day + an optional goal) from [HttpLocationRepository]
+     * + [HttpWorkoutGoalsRepository], then streams an AI program proposal over
+     * `api/me/workout-programs/chat` via [KtorSseClient] — the first turn packs the
+     * schedule/goal envelope the [KtorSseClient] splits back into the POST body.
+     * Commit/threads go through [HttpWorkoutProgramChatRepository].
+     *
+     * STREAMING + DISPLAY + discard are faithful. COMMIT is best-effort: the shared
+     * [ProgramProposal] is the display-only SUBSET of the streamed deep program
+     * (exerciseName, no exerciseId), so a commit that can't resolve an exercise
+     * surfaces the backend's 422 issues on the card (see the designer deferral in
+     * IMPL-IOS-01-OFFLINE-SYNC §"Decisions for review"). [programId] is reserved for
+     * the edit-in-place flow (IMPL-18b), not yet surfaced by the shared VM.
+     */
+    fun workoutDesignerViewModel(programId: String? = null): WorkoutDesignerViewModel =
+        WorkoutDesignerViewModel(
+            sseClient = sseClient(),
+            chatRepository = HttpWorkoutProgramChatRepository(client()),
+            locationRepository = locationRepo,
+            goalsRepository = workoutGoalsRepo,
+            idGenerator = designerIdGenerator,
         )
 
     /**
