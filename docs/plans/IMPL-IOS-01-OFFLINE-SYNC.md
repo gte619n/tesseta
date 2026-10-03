@@ -288,3 +288,17 @@ review.
   per-collection rows (Android's assembleDay / deep-goal join); those screens stay
   online-first (they work today). Follow the MirrorMedication pattern + a shared
   assembleDay/assembleGoalDeep helper, then device-verify.
+- **(Follow-up #4 — DONE for what's not deployment-gated) BGTask + push.** New
+  `AppDelegate` (@UIApplicationDelegateAdaptor) registers the two Info.plist BGTask
+  ids — `…refresh` (BGAppRefreshTask → engine.pull) + `…processing` (BGProcessingTask
+  → drainOutbox) — handlers resolve the engine inside the Task (Swift-6 Sendable) and
+  chain the next request; `HealthFitnessApp` schedules them on scenePhase .background.
+  `IosComposition.registerPushToken` does the real `PUT /api/me/devices/fcm {token,
+  deviceId}`. Firebase/FCM is wired but GUARDED on a bundled `GoogleService-Info.plist`
+  (absent in this repo): when present → FirebaseApp.configure + Messaging delegate →
+  registerPushToken + APNs auth request; silent `content-available` push → pull+drain.
+  **Deployment-gated remainder (NOT code):** ship `GoogleService-Info.plist`, add an
+  APNs auth key to Firebase, and test on a real device — until then push is dormant
+  while BGTask + foreground pull run. Gotcha: `MessagingDelegate` callback must be
+  `nonisolated` (the class is @MainActor via UIApplicationDelegate). Verified: assemble
+  + app BUILD SUCCEEDED (first Firebase SPM compile).

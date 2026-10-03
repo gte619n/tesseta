@@ -18,6 +18,8 @@ struct HealthFitnessApp: App {
     /// Root DI/state container, owned for the app's lifetime.
     @State private var appState = AppState()
     @Environment(\.scenePhase) private var scenePhase
+    /// Background execution + push (BGTask + FCM), driven via the shared sync graph (D7/D8).
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
         // Configure the GoogleSignIn SDK once (D6). Safe no-op if the client ID
@@ -40,10 +42,16 @@ struct HealthFitnessApp: App {
                     appState.handleDeepLink(url)
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    // Foreground-activation delta pull (D8) — the mitigation for iOS
-                    // silent-push throttling. Only once signed in + wired.
-                    if phase == .active, appState.auth.status == .signedIn {
-                        appState.sync.pullOnForeground()
+                    switch phase {
+                    case .active:
+                        // Foreground-activation delta pull (D8) — mitigates iOS
+                        // silent-push throttling. Only once signed in + wired.
+                        if appState.auth.status == .signedIn { appState.sync.pullOnForeground() }
+                    case .background:
+                        // (Re)schedule the background refresh + outbox-drain tasks (D8).
+                        appDelegate.scheduleBackgroundWork()
+                    default:
+                        break
                     }
                 }
         }

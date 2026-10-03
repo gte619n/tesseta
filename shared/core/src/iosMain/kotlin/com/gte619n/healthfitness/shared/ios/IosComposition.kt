@@ -13,6 +13,9 @@ import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsCoachAudioPrefere
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsUnitPreferencesRepository
 import com.gte619n.healthfitness.shared.net.ApiClient
 import com.gte619n.healthfitness.shared.net.SessionTokenProvider
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
+import kotlinx.serialization.Serializable
 import com.gte619n.healthfitness.shared.sync.KtorSyncApi
 import com.gte619n.healthfitness.shared.sync.MirrorDatabaseFactory
 import com.gte619n.healthfitness.shared.sync.PayloadCipher
@@ -61,6 +64,7 @@ object IosComposition {
     private var mirrorStoreRef: SqlDelightMirrorStore? = null
     private var outboxStoreRef: SqlDelightOutboxStore? = null
     private var syncEngineRef: SyncEngine? = null
+    private var deviceIdRef: String = ""
 
     /**
      * Wire the shared REST client AND the offline-sync graph. Called once at
@@ -93,7 +97,21 @@ object IosComposition {
         mirrorStoreRef = mirror
         outboxStoreRef = outbox
         syncEngineRef = SyncEngineImpl(api, mirror, outbox)
+        deviceIdRef = deviceId
     }
+
+    /**
+     * Register (or refresh) this device's push token with the backend (D7):
+     * `PUT /api/me/devices/fcm {token, deviceId}`. Called from the Swift push layer
+     * when FCM hands up a token. No-op before [configure] / when signed out.
+     */
+    suspend fun registerPushToken(token: String) {
+        val http = httpClient ?: return
+        runCatching { http.put("api/me/devices/fcm") { setBody(FcmRegistration(token, deviceIdRef)) } }
+    }
+
+    @Serializable
+    private data class FcmRegistration(val token: String, val deviceId: String)
 
     private fun client(): HttpClient =
         httpClient ?: error("IosComposition.configure(...) must be called at launch")

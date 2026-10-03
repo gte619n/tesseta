@@ -59,8 +59,11 @@ final class SyncBridge {
     }
 
     /// Register FCM token with the backend (D7): `PUT /api/me/devices/fcm`.
+    /// (The push layer — `AppDelegate` — normally registers directly off the FCM
+    /// callback; this is here for any in-app trigger.)
     func registerPushToken(_ token: String) {
-        // TODO(E-rest): shared repository call to PUT /api/me/devices/fcm.
+        guard IosComposition.shared.isConfigured() else { return }
+        Task { try? await IosComposition.shared.registerPushToken(token: token) }
     }
 
     /// Reset the gate + stop observing on sign-out so the next account re-syncs from
