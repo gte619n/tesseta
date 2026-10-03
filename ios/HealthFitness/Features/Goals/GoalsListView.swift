@@ -37,6 +37,19 @@ struct GoalsListView: View {
         .background(Theme.canvas)
         .navigationTitle("Goals")
         .accessibilityIdentifier("goals-list")  // IMPL-E2E-01 shared id
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                NavigationLink(value: GoalsRoute.chat) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                }
+            }
+        }
+        .navigationDestination(for: GoalsRoute.self) { route in
+            switch route {
+            case .roadmap(let goalId): GoalRoadmapView(goalId: goalId)
+            case .chat: GoalsChatView()
+            }
+        }
         .onAppear {
             subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
                 if let s = value as? GoalsListUiState { state = s }
@@ -57,15 +70,23 @@ struct GoalsListView: View {
         } else {
             SettingsCard(title: state.filter.label) {
                 ForEach(state.goals, id: \.goalId) { goal in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(goal.title).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
-                        if let desc = goal.description_, !desc.isEmpty {
-                            Text(desc).font(.hfBodySm).foregroundStyle(Theme.textSecondary)
-                                .lineLimit(2)
+                    NavigationLink(value: GoalsRoute.roadmap(goal.goalId)) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(goal.title).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
+                                if let desc = goal.description_, !desc.isEmpty {
+                                    Text(desc).font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right").font(.hfCapsSm).foregroundStyle(Theme.textTertiary)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, 6)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 6)
+                    .buttonStyle(.plain)
                 }
             }
         }
