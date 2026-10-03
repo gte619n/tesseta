@@ -17,6 +17,7 @@ import SharedCore
 struct HealthFitnessApp: App {
     /// Root DI/state container, owned for the app's lifetime.
     @State private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Configure the GoogleSignIn SDK once (D6). Safe no-op if the client ID
@@ -37,6 +38,13 @@ struct HealthFitnessApp: App {
                     // nutrition-adjust-review, withings-callback).
                     if GIDSignIn.sharedInstance.handle(url) { return }
                     appState.handleDeepLink(url)
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Foreground-activation delta pull (D8) — the mitigation for iOS
+                    // silent-push throttling. Only once signed in + wired.
+                    if phase == .active, appState.auth.status == .signedIn {
+                        appState.sync.pullOnForeground()
+                    }
                 }
         }
     }

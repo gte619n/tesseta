@@ -202,3 +202,18 @@ review.
   contention) even with `--no-daemon`; verify shared changes with
   `:core:assembleSharedCoreXCFramework` + the app build. Agents: don't block on
   jvmTest — if it hangs >2min, kill + skip it for iOS-only phases.
+- **(Phase E — reordered BEFORE D)** Wired `SyncBridge` to the real engine first so
+  the engine actually runs (populating the mirror) before the repos read from it,
+  and to land the sign-out PHI-leak fix early. `SyncBridge` calls `engine.pull()` +
+  `drainOutbox()` (Kotlin suspend → Swift `async`, no SKIE) on first-gate + scenePhase
+  `.active`; observes `firstSyncComplete()` Flow via `collectFlow` (KotlinBoolean). On
+  any failure (incl. signed-out 401) it goes `.failed` but the gate still clears when
+  a pull later succeeds. **Sign-out wipe (B-6):** `AuthState.signOut` →
+  `IosComposition.wipeLocalData()` (mirror rows+cursor + outbox, non-suspend blocking
+  SQLDelight clears) + `KeychainPayloadCipher().wipeKey()` (so residual ciphertext is
+  unreadable + next user re-keyed); `SettingsView` also calls `sync.reset()` to flip
+  the in-memory gate for same-session account switches. Swift gotchas fixed: `@Observable`
+  stored-property init can't reference `Self.staticKey` (covariant-Self) → use a
+  file-level `let`; a non-Sendable `any SyncEngine` can't be captured into a `Task` →
+  resolve it inside the task. Foreground pull wired via `scenePhase`; FCM token
+  registration + BGTask still TODO (not blocking).

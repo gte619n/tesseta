@@ -68,6 +68,13 @@ class SqlDelightMirrorStore(
         rows.clearAll()
         state.clearAll()
     }
+
+    /** Non-suspend full wipe (mirror rows + cursor) for the sign-out teardown, which
+     *  runs synchronously off the Swift auth path. SQLDelight queries are blocking. */
+    fun wipeAllBlocking() {
+        rows.clearAll()
+        state.clearAll()
+    }
 }
 
 /**
@@ -128,4 +135,9 @@ class SqlDelightOutboxStore(
 
     override fun pendingCount(): Flow<Int> =
         ops.pendingCount().asFlow().mapToOne(dispatcher).map { it.toInt() }
+
+    /** Non-suspend outbox clear for the sign-out teardown (see mirror wipeAllBlocking). */
+    fun clearAllBlocking() {
+        ops.clearAll()
+    }
 }

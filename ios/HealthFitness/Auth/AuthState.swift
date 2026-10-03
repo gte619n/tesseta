@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import SharedCore
 
 /// Observable auth coordinator (IMPL-IOS-01 Phase 2A shell → 2B wiring).
 ///
@@ -78,18 +79,20 @@ final class AuthState {
         status = .signedIn
     }
 
-    /// Sign-out wipe. Parity trap (known on Android as the account-switch data
-    /// leak class, `SignOutSideEffects`): clearing tokens is NOT enough — the
-    /// full wipe must also clear the local mirror DB and the outbox before the
-    /// next account signs in. That teardown lands with the shared core in 2C;
-    /// tracked here so the shell doesn't ship a half-wipe.
+    /// Sign-out wipe (B-6 PHI-leak fix; Android parity: `SignOutSideEffects`).
+    /// Clearing tokens is NOT enough — the full teardown also wipes the on-device
+    /// mirror + outbox and drops the Keychain data key so a subsequent account
+    /// cannot read the previous user's cached PHI. The caller (`SettingsView`) also
+    /// resets the `SyncBridge` gate so the next sign-in re-syncs from scratch.
     func signOut() {
         tokenStore.clear()
         displayName = nil
         email = nil
-        // TODO(2C): SignOutSideEffects parity — wipe mirror DB + outbox via the
-        // shared core so a subsequent account cannot read the previous user's
-        // cached data.
+        // Wipe local data: mirror rows + cursor + outbox (shared core) …
+        IosComposition.shared.wipeLocalData()
+        // … and drop the mirror encryption key, so any residual ciphertext on disk
+        // is unreadable and the next user's mirror is freshly re-keyed.
+        KeychainPayloadCipher().wipeKey()
         status = .signedOut
     }
 

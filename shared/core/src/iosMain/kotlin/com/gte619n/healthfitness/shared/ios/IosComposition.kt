@@ -110,6 +110,22 @@ object IosComposition {
     fun syncEngine(): SyncEngine =
         syncEngineRef ?: error("IosComposition.configure(...) must be called at launch")
 
+    /** True once [configure] has built the sync graph (defensive guard for callers
+     *  that might fire before launch wiring, e.g. a scenePhase pull). */
+    fun isConfigured(): Boolean = syncEngineRef != null
+
+    /**
+     * Sign-out teardown (B-6 PHI-leak fix): wipe the on-device mirror rows + cursor
+     * and the outbox so a subsequent account can't read the previous user's cached
+     * data. The Keychain data key is dropped separately by the Swift auth layer
+     * ([KeychainPayloadCipher.wipeKey]), so any residual ciphertext is unreadable
+     * even before the rows clear. Safe to call before configure (no-op).
+     */
+    fun wipeLocalData() {
+        mirrorStoreRef?.wipeAllBlocking()
+        outboxStoreRef?.clearAllBlocking()
+    }
+
     // MARK: - Screen factories
 
     private val coachAudioPrefs by lazy { NSUserDefaultsCoachAudioPreferences() }

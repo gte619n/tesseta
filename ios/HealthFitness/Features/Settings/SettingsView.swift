@@ -17,6 +17,7 @@ import SwiftUI
 /// and this file switches on their StateFlows via `.task { await …observe(…) }`.
 struct SettingsView: View {
     @Environment(AuthState.self) private var auth
+    @Environment(SyncBridge.self) private var sync
 
     // Local mirrors of the shared preference state (replaced by the SKIE-bridged
     // flows once the XCFramework is built — see ObservableBridge.swift).
@@ -139,9 +140,10 @@ struct SettingsView: View {
     private var accountCard: some View {
         SettingsCard(title: "Account") {
             Button("Sign out", role: .destructive) {
-                // Post-0D: vm.wrapped.signOut { auth.signOut() }. The shared VM
-                // clears the session; AuthState flips the root gate.
+                // Full teardown: AuthState wipes the session + mirror/outbox + key;
+                // SyncBridge resets the first-sync gate so the next account re-syncs.
                 auth.signOut()
+                sync.reset()
             }
             .font(.hfBodyMd)
         }
