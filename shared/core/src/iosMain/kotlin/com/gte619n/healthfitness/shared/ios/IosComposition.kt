@@ -1,10 +1,13 @@
 package com.gte619n.healthfitness.shared.ios
 
+import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpMedicationRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
 import com.gte619n.healthfitness.shared.data.NoopNutritionOpQueue
+import com.gte619n.healthfitness.shared.domain.nutrition.Meal
+import com.gte619n.healthfitness.shared.presentation.nutrition.AddFoodViewModel
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsCoachAudioPreferences
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsUnitPreferencesRepository
 import com.gte619n.healthfitness.shared.net.ApiClient
@@ -80,6 +83,20 @@ object IosComposition {
             repository = HttpNutritionDayRepository(client()),
             ops = NoopNutritionOpQueue(),
             initialDate = initialDate,
+        )
+
+    /**
+     * Add-food sheet — networked catalog + saved-meal search (GET api/foods/search,
+     * api/me/nutrition/meals/search) + the one-tap recent-meals list. [mealWire] is
+     * the wire name of the meal being logged ("BREAKFAST"…); an unknown value falls
+     * back to SNACK. The actual logging goes through the shared Today VM the Swift
+     * caller already holds, so a logged entry refreshes the open day.
+     */
+    fun addFoodViewModel(mealWire: String): AddFoodViewModel =
+        AddFoodViewModel(
+            foods = HttpFoodRepository(client()),
+            nutrition = HttpNutritionDayRepository(client()),
+            currentMeal = Meal.entries.firstOrNull { it.wire == mealWire } ?: Meal.SNACK,
         )
 
     // MARK: - Flow bridge

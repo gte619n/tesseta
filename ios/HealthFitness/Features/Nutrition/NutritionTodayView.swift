@@ -74,7 +74,8 @@ struct NutritionTodayView: View {
             }
             .sheet(item: Binding(get: { state.addSheetOpen ? AddSheetToken() : nil },
                                  set: { if $0 == nil { state.addSheetOpen = false } })) { _ in
-                AddFoodView(meal: Meal.forHour(Calendar.current.component(.hour, from: Date())))
+                AddFoodView(meal: Meal.forHour(Calendar.current.component(.hour, from: Date())),
+                            todayVM: vm)
             }
             .sheet(item: $state.editingEntry) { entry in
                 // A composite opens the ingredients editor; a single food the edit sheet.
@@ -111,7 +112,8 @@ struct NutritionTodayView: View {
                         MealSection(group: group,
                                     onTapEntry: { state.editingEntry = $0 },
                                     onReviewAdjust: { state.reviewingAdjustId = $0.entryId },
-                                    onReviewLeftover: { state.reviewingLeftoverId = $0.entryId })
+                                    onReviewLeftover: { state.reviewingLeftoverId = $0.entryId },
+                                    onDelete: { vm.deleteEntry(entryId: $0.entryId) })
                     }
                     Button {
                         state.addSheetOpen = true

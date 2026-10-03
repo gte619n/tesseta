@@ -1,18 +1,19 @@
 import SwiftUI
-// import SharedCore  // NutritionTodayViewModel.addCatalogEntry / servingHint, Food, Macros — Phase 0D
 
-/// IMPL-IOS-01 Phase 3 Wave C — the serving picker + lazy "typical serving" hint
+/// IMPL-IOS-01 (logging spine) — the serving picker + lazy "typical serving" hint
 /// shown when logging a catalog food. Parity target (Android): `ServingPicker.kt`
 /// + the lazy `servingHint` fetch in the edit sheet.
 ///
 /// The live macro preview recomputes from `Food.macrosPer100g.forPortion(...)` on
 /// every serving/quantity change — the SAME shared portion math the backend and
 /// Android use (XPLAT single source), so the preview matches what gets logged.
+/// The log action is a closure the parent supplies: it carries the chosen serving
+/// index + quantity back to the shared Today VM's `addCatalogEntry`.
 struct ServingHintView: View {
 
     let food: Food
     let meal: Meal
-    let onLogged: () -> Void
+    let onLog: (Int, Double) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var servingIndex = 0
@@ -50,8 +51,7 @@ struct ServingHintView: View {
                 }
             }
             Button("Log to \(meal.label)") {
-                // Post-0D: todayVM.addCatalogEntry(meal, food, servingIndex, quantity)
-                onLogged()
+                onLog(servingIndex, quantity)
             }
         }
         .navigationTitle("Log food")
