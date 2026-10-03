@@ -359,3 +359,56 @@ review.
   to the pre-existing local mirror structs; qualify shared types `SharedCore.X` and
   check the generated header for nested/underscored exported names before writing Swift.
   Verified: compileKotlinJvm + assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED.
+- **(Workouts BROWSE screens wired, 2026-10-03)** Bound `WorkoutsLandingView` (hub),
+  `ProgramsListView`, `ProgramDetailView`, `WorkoutDetailView`, `WorkoutHistoryView` to
+  their shared VMs (same SKIE-free `collectFlow` + static `map(...)` → local-mirror
+  pattern). New online-first repos in commonMain over the EXISTING backend (matched to
+  Android's `WorkoutProgramApi` / `WorkoutSettingsApi`): `HttpWorkoutProgramRepository`
+  (the full ~15-method `WorkoutProgramRepository` — observePrograms/observeProgram(deep)/
+  observeCalendar/observeAllCompleted/completedWorkoutDays(workout-stats heatmap)/activate/
+  continue/updateDetails/nutrition-guidance+target/runDayToday/workoutHistoryPage+cache/
+  lastSetsFor) and `HttpWorkoutStreakSettingsRepository` (weeklyStreakTarget off
+  `GET api/me/workout-programs/settings`). All `MutableStateFlow + onStart` like
+  `HttpMedicationRepository`. The domain types are already `@Serializable` and wire-
+  compatible 1:1 (verified against the backend: `trainingDays`/`dayOfWeek` + status/source
+  enums all serialize UPPERCASE = the KMP enum names, so a direct `.body<WorkoutProgram>()`
+  decode is safe — NO DTO shim), so only request bodies are private shims. New
+  `IosComposition.workouts{Hub,ProgramsList,ProgramDetail,WorkoutDetail,WorkoutHistory}…`
+  factories sharing ONE `HttpWorkoutProgramRepository` (warm shallow+deep caches across
+  screens) and rebuilding `MirrorWorkoutSessionRepository` per factory exactly as the
+  existing `workoutSessionViewModel` does (mirror+outbox+engine+client) — the browse
+  screens only READ drafts/parked completions from it. Wired intents: activate, saveEdit
+  (sheet), applyNutrition, startToday→push `.session`, resume-banner→push `.session`,
+  history loadMore/pull-to-refresh. **Design calls:**
+  - `observeCalendar`/`observeAllCompleted` are modelled as one-shot fetch flows
+    (MutableStateFlow+onStart emitting a single fetch). `observeAllCompleted` has NO
+    dedicated endpoint (Android reads its local mirror) — ported as a best-effort
+    newest-first workout-history scan over the window (stops once a page predates
+    `from`). Correct for the streak maths; heavier than a mirror read. Mirror-read
+    assembly for the whole workouts vertical is deferred (same rationale as the
+    nutrition/goals pass): online-first is right, just not cold-start/offline polished.
+  - Programmatic nav (startToday/resume → logger) uses a local `navigationDestination(item:)`
+    because the tab's `NavigationStack` is path-LESS (`NavigationLink(value:)` +
+    `.navigationDestination`); there's no shared bound `NavigationPath` to append to.
+  - `completedThisWeek`/`weekStreak`/the compliance grid are the shared `WorkoutsHubViewModel`/
+    `ComplianceMath`'s — the view never recomputes. `WorkoutFormat.swift` gained Swift
+    mirrors (statusLabel/trainingDaysSummary/dateLabel) alongside the existing set-format
+    helpers; shared `ProgramFormat.kt` stays the SSOT (parity pinned by `WorkoutFormatTests`).
+  **Skipped (out of scope — their backing repos aren't built yet, owned by the
+  DESIGNER/PROGRESSION + GYMS agent):** `ProgressionConsoleView` (`ProgressionConsoleViewModel`
+  needs `ProgressionRepository` + `WorkoutGoalsRepository` — INTERFACE-only in
+  `WorkoutDesignerGymRepositories.kt`, no Http impl), `WorkoutLibraryView`
+  (`AdHocLibraryRepository` — interface-only), and the Designer/Gyms views. These still
+  compile on their local-mock state. The lab-PDF-style SSE Designer chat is a separate
+  non-wire task. **Gotchas hit:** the `*/`-in-KDoc trap bit again (`api/me/*` inside a
+  block comment silently closed it — "Unclosed comment" 230 lines later); a
+  `response.bodyAsText()` in a non-suspend helper (`parseActivationIssues`) needed
+  `suspend`; nullable Kotlin `Int?`→`KotlinInt?` bridges with `.intValue` (NOT
+  `int32Value` — matches `ProfileView`), and the optional-chain needs parens before
+  `.map` (`(x?.intValue).map{…}`); `WorkoutHistoryViewModel.State` exports DOTTED
+  (`swift_name("WorkoutHistoryViewModel.State")`) while the top-level UiStates export flat
+  (`WorkoutsHubUiState` etc.); `WorkoutProgram.description` collides → `description_`;
+  `phaseProgress` is a `KotlinPair<KotlinInt,KotlinInt>` (`.first`/`.second` → cast
+  `as? KotlinInt`); Kotlin enums compare with `==` (`ScheduledStatus.completed`,
+  `ProgressionDirection.up`). Verified: compileKotlinJvm + assembleSharedCoreXCFramework
+  + iOS app BUILD SUCCEEDED.

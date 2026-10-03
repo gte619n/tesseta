@@ -1,12 +1,14 @@
 import SwiftUI
-// import SharedCore  // WorkoutHistoryViewModel, WorkoutHistoryViewModel.State — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave D — read-only workout history (every COMPLETED
-/// session, newest first). Parity target: Android `WorkoutHistoryScreen` +
-/// `WorkoutHistoryViewModel` (ported to shared). Paged: the shared VM fetches the
-/// first page and appends the next as the list scrolls (`loadMore` on the last
-/// row's `onAppear`). ADR-0018: a cached first page shows instantly on re-entry.
-/// Rows are grouped by program/phase using the resolved history titles.
+/// session, newest first), bound to the SHARED `WorkoutHistoryViewModel`
+/// (`GET api/me/workout-history`, paged). Parity target: Android
+/// `WorkoutHistoryScreen` + `WorkoutHistoryViewModel`.
+///
+/// Paged: the shared VM fetches the first page and appends the next as the list
+/// scrolls (`loadMore()` on the last row's `onAppear`). ADR-0018: a cached first
+/// page shows instantly on re-entry. Rows carry the resolved program/phase titles.
 struct WorkoutHistoryView: View {
 
     struct ScreenState {
@@ -25,19 +27,25 @@ struct WorkoutHistoryView: View {
         let setsSummary: String?  // "12 sets · 48 min"
     }
 
+    private let vm: WorkoutHistoryViewModel
     @State private var state = ScreenState()
+    @State private var subscription: FlowSubscription?
+
+    init() {
+        self.vm = IosComposition.shared.workoutHistoryViewModel()
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("History")
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(WorkoutHistoryViewModel(
-        //         repository: DI.workoutProgramRepository,
-        //         sessionRepository: DI.workoutSessionRepository))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .accessibilityIdentifier("workout-history")
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? WorkoutHistoryViewModel.State { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
@@ -65,7 +73,7 @@ struct WorkoutHistoryView: View {
                     }
                     .onAppear {
                         if row.id == state.sessions.last?.id && state.hasMore {
-                            // vm.loadMore()  // Post-0D: append the next page.
+                            vm.loadMore()
                         }
                     }
                 }
@@ -74,8 +82,48 @@ struct WorkoutHistoryView: View {
                 }
             }
             .formMaxWidth()
+            .refreshable { vm.load() }
         }
     }
 
-    // static func map(_ s: WorkoutHistoryViewModel.State) -> ScreenState { ... }  // Phase 0D
+    // MARK: - Mapping
+
+    private static func map(_ s: WorkoutHistoryViewModel.State) -> ScreenState {
+        var out = ScreenState()
+        out.loading = s.loading
+        out.error = s.error
+        out.loadingMore = s.loadingMore
+        out.hasMore = s.hasMore
+        out.sessions = s.sessions.map(mapRow)
+        return out
+    }
+
+    private static func mapRow(_ sw: SharedCore.ScheduledWorkout) -> HistoryRow {
+        HistoryRow(
+            id: sw.scheduledId,
+            dateLabel: WorkoutFormat.dateLabel(localDateToDate(sw.date)),
+            dayLabel: sw.dayLabel,
+            programTitle: sw.programTitle,
+            setsSummary: setsSummary(sw),
+        )
+    }
+
+    /// "12 sets · 48 min" from the completed session's logged sets + duration.
+    private static func setsSummary(_ sw: SharedCore.ScheduledWorkout) -> String? {
+        var parts: [String] = []
+        if let session = sw.session {
+            let setCount = session.blocks.reduce(0) { acc, block in
+                acc + block.prescriptions.reduce(0) { $0 + $1.loggedSets.count }
+            }
+            if setCount > 0 { parts.append(setCount == 1 ? "1 set" : "\(setCount) sets") }
+        }
+        if let secs = sw.durationSeconds?.intValue, secs > 0 {
+            parts.append(WorkoutFormat.durationLabel(Int(secs)))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private static func localDateToDate(_ d: Kotlinx_datetimeLocalDate) -> Date {
+        Date(timeIntervalSince1970: Double(d.toEpochDays()) * 86_400)
+    }
 }

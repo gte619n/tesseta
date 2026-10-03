@@ -7,6 +7,8 @@ import com.gte619n.healthfitness.shared.data.HttpDexaScanRepository
 import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutStreakSettingsRepository
 import com.gte619n.healthfitness.shared.data.MirrorGoalsRepository
 import com.gte619n.healthfitness.shared.data.MirrorMedicationRepository
 import com.gte619n.healthfitness.shared.data.MirrorNutritionDayRepository
@@ -38,7 +40,12 @@ import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayVie
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.ProgramDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.ProgramsListViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutHistoryViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutSessionViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutsHubViewModel
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -251,6 +258,77 @@ object IosComposition {
             ),
             programId = programId,
             scheduledId = scheduledId,
+        )
+
+    // MARK: - Workouts browse (Phase 3 Wave D — iOS wiring)
+    //
+    // One shared [HttpWorkoutProgramRepository] so the shallow-programs +
+    // deep-program caches stay warm across the hub / list / detail screens within a
+    // session (each ViewModel is still its own instance; they share the read-through
+    // cache). The live-session repo is rebuilt per factory, exactly as
+    // [workoutSessionViewModel] constructs it (mirror + outbox + engine + client) —
+    // the browse screens only READ drafts/parked completions from it.
+
+    private val workoutProgramRepo by lazy { HttpWorkoutProgramRepository(client()) }
+    private val workoutStreakRepo by lazy { HttpWorkoutStreakSettingsRepository(client()) }
+
+    private fun workoutSessionRepository(): MirrorWorkoutSessionRepository =
+        MirrorWorkoutSessionRepository(
+            mirror = mirrorStore(),
+            outbox = outboxStore(),
+            engine = syncEngine(),
+            client = client(),
+        )
+
+    /**
+     * Workouts hub — the read-first "This Week" landing (featured program +
+     * compliance grid + streak + resume/parked banners). KMP port of Android's
+     * `WorkoutsLandingViewModel`. Networked programs/calendar/stats reads; the
+     * compliance + streak maths are derived in the shared VM (ComplianceMath).
+     */
+    fun workoutsHubViewModel(): WorkoutsHubViewModel =
+        WorkoutsHubViewModel(
+            repository = workoutProgramRepo,
+            sessionRepository = workoutSessionRepository(),
+            settingsRepository = workoutStreakRepo,
+        )
+
+    /** Programs list — reactive shallow programs list (online-first). */
+    fun programsListViewModel(): ProgramsListViewModel =
+        ProgramsListViewModel(repository = workoutProgramRepo)
+
+    /**
+     * One program's detail (deep tree + this-week/past strips + activate / edit /
+     * continue / apply-nutrition / delete-session / restore-parked). Keyed by id.
+     */
+    fun programDetailViewModel(programId: String): ProgramDetailViewModel =
+        ProgramDetailViewModel(
+            repository = workoutProgramRepo,
+            sessionRepository = workoutSessionRepository(),
+            programId = programId,
+        )
+
+    /**
+     * A single workout day, read-only viewer + prior-performance last-sets hint +
+     * "run this workout today" (materializes a session dated today).
+     */
+    fun workoutDetailViewModel(
+        programId: String,
+        phaseId: String,
+        dayId: String,
+    ): WorkoutDetailViewModel =
+        WorkoutDetailViewModel(
+            repository = workoutProgramRepo,
+            programId = programId,
+            phaseId = phaseId,
+            dayId = dayId,
+        )
+
+    /** Read-only, paged Workout History (COMPLETED sessions, newest first). */
+    fun workoutHistoryViewModel(): WorkoutHistoryViewModel =
+        WorkoutHistoryViewModel(
+            repository = workoutProgramRepo,
+            sessionRepository = workoutSessionRepository(),
         )
 
     // MARK: - Flow bridge
