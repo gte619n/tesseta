@@ -35,6 +35,16 @@ class DrinkMathTest {
     }
 
     @Test
+    void alcoholGramsPer100gDerivesFromAbv() {
+        // Per-100 g (≈100 ml) basis the AI extractors use: grams ethanol = abv × 0.789.
+        assertEquals(31.56, DrinkMath.alcoholGramsPer100g(40.0), EPS); // neat spirit
+        assertEquals(10.26, DrinkMath.alcoholGramsPer100g(13.0), EPS); // wine
+        assertEquals(3.95, DrinkMath.alcoholGramsPer100g(5.0), EPS);   // beer
+        assertEquals(0.0, DrinkMath.alcoholGramsPer100g(null));
+        assertEquals(0.0, DrinkMath.alcoholGramsPer100g(0.0));
+    }
+
+    @Test
     void zeroOrMissingInputsYieldZero() {
         assertEquals(0.0, DrinkMath.alcoholGrams(null, 100.0));
         assertEquals(0.0, DrinkMath.alcoholGrams(12.0, null));
