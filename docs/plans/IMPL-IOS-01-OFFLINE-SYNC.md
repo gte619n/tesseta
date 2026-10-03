@@ -217,3 +217,18 @@ review.
   file-level `let`; a non-Sendable `any SyncEngine` can't be captured into a `Task` →
   resolve it inside the task. Foreground pull wired via `scenePhase`; FCM token
   registration + BGTask still TODO (not blocking).
+- **(Phase D — scoped to the rail; full repo read-conversion deferred)** Built the
+  reusable `MirrorRepositorySupport` (observe decrypted ACTIVE rows; createLocal/
+  updateLocal/deleteLocal = optimistic dirty mirror row + outbox op + drain-kick,
+  with a far-future `9999-local-…` provisional stamp so the local edit wins LWW) on
+  new `SqlDelightMirrorStore` methods (observeActiveRecords/record/writeLocal/
+  archiveLocal). jvmTest green. **Decision:** did NOT retrofit the already-working
+  online-first repos (nutrition/meds/goals/profile) to mirror-read this pass —
+  mirror-read needs client-side day/list ASSEMBLY from per-collection rows (Android's
+  `assembleDay`) and carries real regression risk to working screens for mostly
+  cold-start/offline-read polish. Instead the rail's FIRST consumer is Phase G
+  (workout session), which is NEW (no regression surface) and is the headline goal
+  (drafts survive process death). Retrofitting the CRUD repos onto the rail is tracked
+  as follow-up polish. **Recommendation for review:** accept the rail + workout-session
+  as the offline proof; schedule the nutrition/meds read-assembly conversion as a
+  separate pass with device verification.

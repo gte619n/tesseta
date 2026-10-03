@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.shared.sync
 
 import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
 import com.gte619n.healthfitness.shared.db.MirrorDatabase
 import kotlinx.coroutines.CoroutineDispatcher
@@ -22,11 +23,39 @@ class SqlDelightMirrorStore(
     db: MirrorDatabase,
     private val cipher: PayloadCipher,
     private val json: Json = Json,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val now: () -> String = { Clock.System.now().toString() },
 ) : MirrorStore {
 
     private val rows = db.mirrorRowQueries
     private val state = db.syncStateQueries
+
+    // MARK: - Repository-facing read/write rail (Phase D)
+    //
+    // A decrypted mirror row the repositories consume (the db type + cipher stay
+    // inside the store).
+    data class Record(val id: String, val payloadJson: String, val lastUpdate: String, val dirty: Boolean)
+
+    /** Reactive ACTIVE rows for a collection, decrypted (newest first). */
+    fun observeActiveRecords(collection: String): Flow<List<Record>> =
+        rows.observeActive(collection).asFlow().mapToList(dispatcher).map { list ->
+            list.map { Record(it.id, cipher.decrypt(it.payloadCipher), it.lastUpdate, it.dirty != 0L) }
+        }
+
+    /** One decrypted row, or null. */
+    fun record(collection: String, id: String): Record? =
+        rows.getById(collection, id).executeAsOneOrNull()
+            ?.let { Record(it.id, cipher.decrypt(it.payloadCipher), it.lastUpdate, it.dirty != 0L) }
+
+    /** Optimistic local upsert (dirty, PENDING) — a local write awaiting push. */
+    fun writeLocal(collection: String, id: String, payloadJson: String, lastUpdate: String) {
+        rows.upsert(collection, id, cipher.encrypt(payloadJson), lastUpdate, SyncStatus.ACTIVE.name, 1L, "PENDING", now())
+    }
+
+    /** Optimistic local tombstone (dirty, PENDING) — a local delete awaiting push. */
+    fun archiveLocal(collection: String, id: String, lastUpdate: String) {
+        rows.markArchived(lastUpdate, 1L, "PENDING", now(), collection, id)
+    }
 
     override suspend fun applyServerChange(change: ChangeDto) {
         val table = CollectionRegistry.tableFor(change.collection) ?: return
