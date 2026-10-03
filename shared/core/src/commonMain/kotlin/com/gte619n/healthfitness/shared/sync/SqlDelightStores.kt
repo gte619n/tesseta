@@ -57,6 +57,26 @@ class SqlDelightMirrorStore(
         rows.markArchived(lastUpdate, 1L, "PENDING", now(), collection, id)
     }
 
+    /**
+     * Hard-delete one mirror row locally, no outbox op (Phase G: clearing a live
+     * workout draft after a terminal action — the next delta pull re-populates the
+     * server-authoritative scheduled row). Distinct from [archiveLocal], which
+     * tombstones a row AND marks it a pending DELETE to push.
+     */
+    fun deleteRowLocal(collection: String, id: String) {
+        rows.deleteRow(collection, id)
+    }
+
+    /**
+     * Write a clean, SYNCED row from a local best-effort network read (NOT a server
+     * delta) — e.g. Phase G's cold-miss calendar fetch that mirrors the schedule so
+     * [start] can snapshot it. Clean (dirty = 0) so it is NOT mistaken for a local
+     * draft and the next real delta can supersede it by LWW.
+     */
+    fun applyLocalSynced(collection: String, id: String, payloadJson: String, lastUpdate: String) {
+        rows.upsert(collection, id, cipher.encrypt(payloadJson), lastUpdate, SyncStatus.ACTIVE.name, 0L, "SYNCED", now())
+    }
+
     override suspend fun applyServerChange(change: ChangeDto) {
         val table = CollectionRegistry.tableFor(change.collection) ?: return
         val local = rows.getById(table, change.id).executeAsOneOrNull()

@@ -232,3 +232,22 @@ review.
   as follow-up polish. **Recommendation for review:** accept the rail + workout-session
   as the offline proof; schedule the nutrition/meds read-assembly conversion as a
   separate pass with device verification.
+- **(Phase G — workout session data layer; view wiring deferred)** `MirrorWorkoutSessionRepository`
+  stores the live draft in the `workoutScheduled` mirror row (id `"<programId>/<scheduledId>"`),
+  REUSING the same id as the synced `ScheduledWorkout` and telling them apart by the
+  `dirty` flag + payload shape (clean row = server `ScheduledWorkout` JSON; dirty row =
+  `WorkoutSessionDraft` JSON). **Per-set edits are local-only** via the non-enqueueing
+  `SqlDelightMirrorStore.writeLocal` (NOT the rail's createLocal/updateLocal, which
+  enqueue per call) — only `finish`/`skip` enqueue the ONE idempotent completion op
+  (routed to PUT …/sessions/{id}); `discard` clears the draft with no op. New store
+  helpers: `deleteRowLocal` (hard clear after a terminal action) + `applyLocalSynced`
+  (mirror a cold-miss calendar fetch as a CLEAN row so a later delta supersedes it).
+  `start` sources prescriptions from the clean mirror row (or a best-effort calendar
+  fetch) and returns `Result.failure` if offline + never synced — never invents plan
+  data. **Known limitation (recorded):** parked-completion recovery
+  (observeParkedCompletions/restoreParked/discardParked/reset) returns empty/no-op —
+  the shared `OutboxStore` has no "parked" surface yet (Phase C drains DROP terminal
+  4xx rather than parking). Add a parked/terminal-retained outbox state when that
+  recovery UX is needed. **Follow-up:** wire `WorkoutSessionView` to the shared
+  `WorkoutSessionViewModel` via the new `IosComposition.workoutSessionViewModel(programId:scheduledId:)`
+  factory (the only remaining step for drafts-survive-death end-to-end).

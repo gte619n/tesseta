@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpMedicationRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
+import com.gte619n.healthfitness.shared.data.MirrorWorkoutSessionRepository
 import com.gte619n.healthfitness.shared.data.NoopNutritionOpQueue
 import com.gte619n.healthfitness.shared.domain.nutrition.Meal
 import com.gte619n.healthfitness.shared.presentation.nutrition.AddFoodViewModel
@@ -26,6 +27,7 @@ import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayVie
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutSessionViewModel
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -174,6 +176,25 @@ object IosComposition {
             foods = HttpFoodRepository(client()),
             nutrition = HttpNutritionDayRepository(client()),
             currentMeal = Meal.entries.firstOrNull { it.wire == mealWire } ?: Meal.SNACK,
+        )
+
+    /**
+     * Workout session logger — the offline-first live session (ADR-0012 / Phase G).
+     * Backed by [MirrorWorkoutSessionRepository] on the shared mirror + outbox rail:
+     * every set edit is a LOCAL-ONLY dirty draft write (survives process death /
+     * offline), and finish/skip enqueue ONE idempotent completion PUT through the
+     * outbox. [programId]/[scheduledId] are the nav args the SwiftUI logger opens on.
+     */
+    fun workoutSessionViewModel(programId: String, scheduledId: String): WorkoutSessionViewModel =
+        WorkoutSessionViewModel(
+            repository = MirrorWorkoutSessionRepository(
+                mirror = mirrorStore(),
+                outbox = outboxStore(),
+                engine = syncEngine(),
+                client = client(),
+            ),
+            programId = programId,
+            scheduledId = scheduledId,
         )
 
     // MARK: - Flow bridge
