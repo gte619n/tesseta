@@ -612,3 +612,10 @@ review.
   Designer chat, lab/DEXA PDF) is now the dominant un-wired gap across the app — building ONE
   shared KMP SSE client would unblock all of them at once. Verified: compileKotlinJvm +
   assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED.
+- **(Screen-wiring batch: workout settings/progression/adhoc)** Built
+  `HttpWorkoutSettingsRepository`, `HttpProgressionRepository`, `HttpWorkoutGoalsRepository`,
+  `HttpAdHocLibraryRepository` (online-first) + factories; wired `WorkoutPreferencesEditor`,
+  `ProgressionConsoleView`, `WorkoutLibraryView`. (Sub-agent authored the code; I fixed 3
+  flattened nested-type names it guessed — the exports are DOTTED:
+  `WorkoutPreferencesViewModel.SaveState`, `ProgressionConsoleViewModel.State/.Companion` —
+  always grep the generated header's swift_name before referencing a nested Kotlin type.)

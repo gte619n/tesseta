@@ -19,7 +19,11 @@ import com.gte619n.healthfitness.shared.data.HttpAdherenceRepository
 import com.gte619n.healthfitness.shared.data.HttpDrugRepository
 import com.gte619n.healthfitness.shared.data.HttpMedicationCrudRepository
 import com.gte619n.healthfitness.shared.data.HttpReminderSettingsRepository
+import com.gte619n.healthfitness.shared.data.HttpAdHocLibraryRepository
+import com.gte619n.healthfitness.shared.data.HttpProgressionRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutSettingsRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutStreakSettingsRepository
 import com.gte619n.healthfitness.shared.data.MirrorGoalsRepository
 import com.gte619n.healthfitness.shared.data.MirrorMedicationRepository
@@ -59,8 +63,11 @@ import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayVie
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
+import com.gte619n.healthfitness.shared.presentation.settings.WorkoutPreferencesViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.ProgramDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.ProgressionConsoleViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.ProgramsListViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutLibraryViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutHistoryViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutSessionViewModel
@@ -425,6 +432,43 @@ object IosComposition {
             repository = workoutProgramRepo,
             sessionRepository = workoutSessionRepository(),
         )
+
+    // MARK: - Workout preferences / progression console / ad-hoc library
+    //
+    // Three previously interface-only contracts, now online-first Http impls over
+    // the EXISTING backend (WorkoutSettingsApi / ProgressionApi / AdHocWorkoutController).
+
+    private val workoutSettingsRepo by lazy { HttpWorkoutSettingsRepository(client()) }
+    private val progressionRepo by lazy { HttpProgressionRepository(client()) }
+    private val workoutGoalsRepo by lazy { HttpWorkoutGoalsRepository(client()) }
+    private val adHocLibraryRepo by lazy { HttpAdHocLibraryRepository(client()) }
+
+    /**
+     * Workout preferences — free-text standing instructions the designer honors
+     * (synced via `GET/PUT api/me/workout-programs/settings`). Reactive cache read
+     * + capped save-through (parity with Android's WorkoutPreferencesViewModel).
+     */
+    fun workoutPreferencesViewModel(): WorkoutPreferencesViewModel =
+        WorkoutPreferencesViewModel(repository = workoutSettingsRepo)
+
+    /**
+     * Progression console — read-only engine outputs (week review / block params /
+     * strength / energy balance + active goal) with the mode pin. The progression
+     * MATH is the backend engine's; the VM only single-sources the presentation.
+     */
+    fun progressionConsoleViewModel(): ProgressionConsoleViewModel =
+        ProgressionConsoleViewModel(
+            repository = progressionRepo,
+            goals = workoutGoalsRepo,
+        )
+
+    /**
+     * Ad-hoc workout library — read-only list (IMPL-ADHOC-01). Online-first over
+     * `GET api/me/adhoc-workouts` (Android reads the mirror; iOS has no mirror read
+     * for it yet). Generate / run / archive are NOT in the shared VM/interface.
+     */
+    fun workoutLibraryViewModel(): WorkoutLibraryViewModel =
+        WorkoutLibraryViewModel(repository = adHocLibraryRepo)
 
     // MARK: - Today dashboard (Phase 3 Wave A1 — iOS wiring)
     //

@@ -1,7 +1,6 @@
 import Charts
 import SwiftUI
-// import SharedCore  // ProgressionConsoleViewModel, its State / PatternReviewRow /
-//                    // StrengthRow / ActiveGoal, BlockParameters, EnergyBalance — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave D(iii) — the progression console.
 /// Parity target (Android): `feature-workouts/.../progression/ProgressionConsoleScreen.kt`
@@ -56,18 +55,27 @@ struct ProgressionConsoleView: View {
 
     static let modes = ["GAINING", "RECOMP", "MAINTENANCE", "RECOVERY"]
 
+    private let vm: ProgressionConsoleViewModel
     @State private var state: ScreenState = .loading
+    @State private var subscription: FlowSubscription?
+
+    init() {
+        self.vm = IosComposition.shared.progressionConsoleViewModel()
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Progression Engine")
             .navigationBarTitleDisplayMode(.inline)
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(ProgressionConsoleViewModel(...))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .accessibilityIdentifier("progression-console")  // IMPL-E2E-01 shared id
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    guard let s = value as? ProgressionConsoleViewModel.State else { return }
+                    state = Self.map(s)
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
@@ -219,7 +227,7 @@ struct ProgressionConsoleView: View {
         .padding(.vertical, 12)
         .background(selected ? Theme.accent : .clear, in: RoundedRectangle(cornerRadius: 7))
         .contentShape(Rectangle())
-        .onTapGesture { if enabled { /* vm.updateMode(mode) */ } }
+        .onTapGesture { if enabled { vm.updateMode(mode: mode) } }
         .opacity(enabled ? 1 : 0.6)
     }
 
@@ -263,6 +271,77 @@ struct ProgressionConsoleView: View {
         return raw.split(separator: "_").map { word -> String in
             acronyms.contains(word.uppercased()) ? word.uppercased() : word.capitalized
         }.joined(separator: " ")
+    }
+
+    // MARK: Map shared State → local mirror
+
+    static func map(_ s: ProgressionConsoleViewModel.State) -> ScreenState {
+        if s.loading { return .loading }
+        if let error = s.error { return .error(error) }
+
+        let week = s.weekReview.map { r in
+            PatternReviewRow(
+                id: r.pattern,
+                patternLabel: r.patternLabel,
+                trend: r.trend,
+                setTargetChange: r.setTargetChange,
+                deload: r.deload,
+                reasoning: r.reasoning
+            )
+        }
+        // The VM prebakes displayLoad / perHandCaption / perHand; the only piece it
+        // doesn't expose is the numeric lbs the chart plots, so derive it (same
+        // per-hand ×2 rule as ProgressionFormat / the shared VM).
+        let strength = s.strength.map { r -> StrengthRow in
+            let lbs = parseLbs(r.displayLoad)
+            return StrengthRow(
+                id: r.exerciseId,
+                name: r.name,
+                movementPattern: r.movementPattern,
+                perHand: r.perHand,
+                displayLoad: r.displayLoad,
+                displayLbs: lbs,
+                perHandCaption: r.perHandCaption,
+                confidence: r.confidence
+            )
+        }
+
+        let block: Block? = s.block.map { b in
+            Block(
+                mode: b.mode,
+                successCriterion: b.successCriterion,
+                loadTrend: ProgressionConsoleViewModel.Companion.shared.formatLoadTrend(driftPerDay: b.expectedDriftPerDay),
+                manualOverride: b.manualOverride,
+                repRanges: b.repRanges
+                    .sorted { $0.key < $1.key }
+                    .map { (key, range) in
+                        let min = (range.first as? KotlinInt)?.intValue ?? 0
+                        let max = (range.second as? KotlinInt)?.intValue ?? min
+                        return (key, "\(min)–\(max)")
+                    },
+                weeklyCeiling: b.weeklyCeiling
+                    .sorted { $0.key < $1.key }
+                    .map { (key, value) in (key, "\((value as? KotlinInt)?.intValue ?? 0)") }
+            )
+        }
+
+        let goal: ActiveGoal? = s.goal.map { ActiveGoal(title: $0.title, domain: $0.domain) }
+
+        return .ready(
+            week: week,
+            strength: strength,
+            block: block,
+            goal: goal,
+            measuredMode: s.measuredMode,
+            pinnedDivergence: s.pinnedDivergence,
+            updatingMode: s.updatingMode
+        )
+    }
+
+    /// Pull the numeric lbs out of a prebaked "90 lb" display string for the chart.
+    private static func parseLbs(_ display: String) -> Double {
+        let digits = display.prefix { $0.isNumber }
+        return Double(digits) ?? 0
     }
 }
 
