@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // WorkoutSessionViewModel, WorkoutSessionUiState, RestTimerState — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave D(ii) — the LIVE active-workout logger. Parity target:
 /// Android `feature-workouts/.../session/WorkoutSessionScreen.kt` +
@@ -41,6 +41,7 @@ struct WorkoutSessionView: View {
         var totalSets = 0
         var prompt: Prompt?
         var completed = false
+        var closed = false
         var recap: String?
         var recapLoading = false
         var error: String?
@@ -51,6 +52,8 @@ struct WorkoutSessionView: View {
 
     struct ExerciseRow: Identifiable {
         let id: String           // blockId#orderIndex
+        let blockId: String      // carried so the row can rebuild its PrescriptionKey
+        let orderIndex: Int
         let name: String
         let blockTitle: String
         let targetSummary: String   // "3 × 5–8 · 135 lb"
@@ -70,11 +73,23 @@ struct WorkoutSessionView: View {
         var isFinished: Bool { remainingSeconds <= 0 }
     }
 
+    private let vm: WorkoutSessionViewModel
     @State private var state = ScreenState()
     @State private var rest: RestState?
+    @State private var stateSub: FlowSubscription?
+    @State private var restSub: FlowSubscription?
     /// Guards the one-shot beep: we only chime on the finished-EDGE of the single source.
     @State private var didChimeForCurrentRest = false
     @State private var feeling: Int?
+    @Environment(\.dismiss) private var dismiss
+
+    init(programId: String, scheduledId: String) {
+        self.programId = programId
+        self.scheduledId = scheduledId
+        // The shared VM self-loads (start → observeDraft) in its init; it resumes an
+        // existing on-device draft, so a workout survives process death end-to-end.
+        self.vm = IosComposition.shared.workoutSessionViewModel(programId: programId, scheduledId: scheduledId)
+    }
 
     var body: some View {
         content
@@ -84,24 +99,24 @@ struct WorkoutSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("Finish workout") { state.prompt = .finishSummary }
-                        Button("Skip session", role: .destructive) { state.prompt = .skip }
-                        Button("Discard draft", role: .destructive) { state.prompt = .discard }
+                        Button("Finish workout") { vm.requestFinish() }
+                        Button("Skip session", role: .destructive) { vm.requestSkip() }
+                        Button("Discard draft", role: .destructive) { vm.requestDiscard() }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
             }
-            // Post-0D wiring (see ObservableBridge + MedicationsListView):
-            // .task {
-            //     let vm = ObservableViewModel(WorkoutSessionViewModel(
-            //         repository: DI.workoutSessionRepository,
-            //         programId: programId, scheduledId: scheduledId))
-            //     async let a: Void = vm.observe(vm.wrapped.state) { self.apply($0) }
-            //     async let b: Void = vm.observe(vm.wrapped.restTimer) { self.applyRest($0) }
-            //     _ = await (a, b)
-            // }
+            .onAppear {
+                stateSub = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? WorkoutSessionUiState { state = Self.map(s) }
+                }
+                restSub = IosComposition.shared.collectFlow(flow: vm.restTimer) { value in
+                    rest = Self.mapRest(value as? RestTimerState)
+                }
+            }
+            .onChange(of: state.closed) { _, closed in if closed { dismiss() } }
             .overlay { if let rest { restOverlay(rest) } }
             .sheet(item: promptBinding) { prompt in promptSheet(prompt) }
-            .fullScreenCover(isPresented: $state.completed) {
+            .fullScreenCover(isPresented: Binding(get: { state.completed }, set: { _ in })) {
                 WorkoutRecapView(
                     dayLabel: state.dayLabel,
                     completedSets: state.completedSets,
@@ -109,7 +124,7 @@ struct WorkoutSessionView: View {
                     elapsed: Date().timeIntervalSince(state.startedAt),
                     recap: state.recap,
                     recapLoading: state.recapLoading,
-                    onDone: { /* vm.dismissCompleted() → pop */ }
+                    onDone: { vm.dismissCompleted() }   // → state.closed → pop
                 )
             }
             // The SINGLE rest source drives the Live Activity + the beep. React to
@@ -128,7 +143,11 @@ struct WorkoutSessionView: View {
             }
             .onChange(of: state.started) { _, _ in syncLiveActivity() }
             .onChange(of: state.completedSets) { _, _ in syncLiveActivity() }
-            .onDisappear { WorkoutActivityController.shared.end() }
+            .onDisappear {
+                stateSub?.cancel()
+                restSub?.cancel()
+                WorkoutActivityController.shared.end()
+            }
     }
 
     // MARK: Content
@@ -157,8 +176,7 @@ struct WorkoutSessionView: View {
                 .font(.hfBodySm).foregroundStyle(Theme.textSecondary)
             Spacer()
             Button {
-                // vm.markStarted()
-                state.started = true
+                vm.markStarted()
             } label: {
                 Text("Start workout").font(.hfHeadingSm)
                     .frame(maxWidth: .infinity).padding()
@@ -179,7 +197,7 @@ struct WorkoutSessionView: View {
                                  onUndoSet: { undoSet(row) })
                 }
                 Button {
-                    state.prompt = .finishSummary
+                    vm.requestFinish()
                 } label: {
                     Text(state.isComplete ? "Finish workout" : "Finish early")
                         .frame(maxWidth: .infinity).padding()
@@ -233,12 +251,11 @@ struct WorkoutSessionView: View {
                 HStack(spacing: 16) {
                     if rest.isGetReady {
                         Button(rest.isPaused ? "Resume" : "Pause") {
-                            // rest.isPaused ? vm.resumeTimer() : vm.pauseTimer()
+                            if rest.isPaused { vm.resumeTimer() } else { vm.pauseTimer() }
                         }
                     }
                     Button("Skip rest") {
-                        // vm.dismissRest()  → clears the single source for ALL consumers
-                        self.rest = nil
+                        vm.dismissRest()  // clears the single source for ALL consumers
                     }.buttonStyle(.borderedProminent).tint(Theme.accent)
                 }
             }
@@ -255,7 +272,7 @@ struct WorkoutSessionView: View {
     // MARK: Prompts
 
     private var promptBinding: Binding<Prompt?> {
-        Binding(get: { state.prompt }, set: { state.prompt = $0 })
+        Binding(get: { state.prompt }, set: { if $0 == nil { vm.dismissPrompt() } })
     }
 
     @ViewBuilder
@@ -267,27 +284,24 @@ struct WorkoutSessionView: View {
                 totalSets: state.totalSets,
                 feeling: $feeling,
                 onConfirm: {
-                    state.prompt = nil
-                    // vm.confirmFinish(feeling: feeling)
-                    state.completed = true
-                    WorkoutActivityController.shared.end()
+                    vm.confirmFinish(feeling: feeling.map { KotlinInt(int: Int32($0)) })
                 },
-                onCancel: { state.prompt = nil }
+                onCancel: { vm.dismissPrompt() }
             )
             .presentationDetents([.medium])
         case .skip:
             ConfirmSheet(title: "Skip this session?",
                          message: "Your logged sets are cleared and the session is marked skipped.",
                          confirmLabel: "Skip",
-                         onConfirm: { state.prompt = nil; WorkoutActivityController.shared.end() },
-                         onCancel: { state.prompt = nil })
+                         onConfirm: { vm.confirmSkip() },
+                         onCancel: { vm.dismissPrompt() })
             .presentationDetents([.height(220)])
         case .discard:
             ConfirmSheet(title: "Discard this draft?",
                          message: "Nothing is uploaded — this in-progress workout is thrown away.",
                          confirmLabel: "Discard",
-                         onConfirm: { state.prompt = nil; WorkoutActivityController.shared.end() },
-                         onCancel: { state.prompt = nil })
+                         onConfirm: { vm.confirmDiscard() },
+                         onCancel: { vm.dismissPrompt() })
             .presentationDetents([.height(220)])
         }
     }
@@ -295,10 +309,69 @@ struct WorkoutSessionView: View {
     // MARK: Intents (post-0D these call the shared VM)
 
     private func logSet(_ row: ExerciseRow) {
-        // vm.logSet(key, edited) — the shared VM starts the single rest source.
+        // Check off the next set: the shared VM appends a defaulted set + starts the
+        // single rest source (and auto-opens finish on the last set).
+        vm.toggleSet(key: key(row), setIndex: Int32(row.setsDone))
     }
     private func undoSet(_ row: ExerciseRow) {
-        // vm.toggleSet(key, setIndex) to un-check the last logged set.
+        guard row.setsDone > 0 else { return }
+        vm.toggleSet(key: key(row), setIndex: Int32(row.setsDone - 1))
+    }
+    private func key(_ row: ExerciseRow) -> PrescriptionKey {
+        PrescriptionKey(blockId: row.blockId, orderIndex: Int32(row.orderIndex))
+    }
+
+    // MARK: - Mapping (SKIE-bridged shared state → local mirror)
+
+    static func map(_ s: WorkoutSessionUiState) -> ScreenState {
+        var out = ScreenState()
+        out.loading = s.loading
+        out.started = s.started
+        out.completed = s.completed
+        out.closed = s.closed
+        out.recap = s.recap
+        out.recapLoading = s.recapLoading
+        out.error = s.error
+        out.prompt = mapPrompt(s.prompt)
+        if let draft = s.draft {
+            out.dayLabel = draft.scheduled.dayLabel
+            out.startedAt = Date(timeIntervalSince1970: Double(draft.startedAt.toEpochMilliseconds()) / 1000.0)
+            out.completedSets = Int(draft.totalLoggedSets)
+            out.totalSets = Int(draft.totalPrescribedSets())
+            out.exercises = draft.sessionRows().map { r in
+                ExerciseRow(
+                    id: "\(r.blockId)#\(r.orderIndex)",
+                    blockId: r.blockId,
+                    orderIndex: Int(r.orderIndex),
+                    name: r.name,
+                    blockTitle: r.blockTitle,
+                    targetSummary: r.targetSummary,
+                    setsDone: Int(r.setsDone),
+                    setsTotal: Int(r.setsTotal),
+                    isTimed: r.isTimed,
+                    isCurrent: r.isCurrent
+                )
+            }
+        }
+        return out
+    }
+
+    static func mapRest(_ r: RestTimerState?) -> RestState? {
+        guard let r else { return nil }
+        return RestState(
+            totalSeconds: Int(r.totalSeconds),
+            remainingSeconds: Int(r.remainingSeconds),
+            isGetReady: r.kind == RestKind.getReady,
+            isPaused: r.isPaused
+        )
+    }
+
+    static func mapPrompt(_ p: SessionPrompt?) -> Prompt? {
+        guard let p else { return nil }
+        if p == SessionPrompt.finishSummary { return .finishSummary }
+        if p == SessionPrompt.skip { return .skip }
+        if p == SessionPrompt.discard { return .discard }
+        return nil
     }
 
     /// Build the Live Activity snapshot from the CURRENT shared state + the ONE

@@ -39,6 +39,65 @@ fun WorkoutSessionDraft.sessionSteps(): List<SessionStep> {
 }
 
 /**
+ * IMPL-IOS-01 Phase G (view wiring) — a fully-computed, primitives-only display row
+ * per exercise, so the SwiftUI logger renders without reaching into the Kotlin draft
+ * `Map`/`Instant`/`Prescription` across the ObjC bridge (and the target-summary
+ * formatting stays single-sourced + testable). The view rebuilds its `PrescriptionKey`
+ * from [blockId] + [orderIndex] to call `toggleSet`.
+ */
+data class SessionRow(
+    val blockId: String,
+    val orderIndex: Int,
+    val name: String,
+    val blockTitle: String,
+    val targetSummary: String,
+    val setsDone: Int,
+    val setsTotal: Int,
+    val isTimed: Boolean,
+    val isCurrent: Boolean,
+)
+
+/** The session's exercises as display rows (order + current-step + logged counts resolved). */
+fun WorkoutSessionDraft.sessionRows(): List<SessionRow> {
+    val current = resumeStepIndex()
+    return sessionSteps().mapIndexed { i, step ->
+        val rx = step.prescription
+        SessionRow(
+            blockId = step.key.blockId,
+            orderIndex = step.key.orderIndex,
+            name = rx.exercise?.name ?: "Exercise",
+            blockTitle = step.block.title,
+            targetSummary = sessionTargetSummary(rx),
+            setsDone = logged[step.key]?.size ?: 0,
+            setsTotal = rx.sets ?: 1,
+            isTimed = rx.isTimed,
+            isCurrent = i == current,
+        )
+    }
+}
+
+/** "3 × 5–8 · 135 lb" / "3 × 30s" / "3 × 8 · body weight" — the row's one-line target. */
+private fun sessionTargetSummary(rx: Prescription): String {
+    val sets = rx.sets ?: 1
+    if (rx.isTimed) return "$sets × ${rx.durationSeconds ?: 0}s"
+    val reps = when {
+        rx.repsMin != null && rx.repsMax != null && rx.repsMin != rx.repsMax -> "${rx.repsMin}–${rx.repsMax}"
+        rx.repsMax != null -> "${rx.repsMax}"
+        rx.repsMin != null -> "${rx.repsMin}"
+        else -> "—"
+    }
+    val load = when {
+        rx.isBodyweight -> " · body weight"
+        rx.targetWeightLbs != null -> " · ${formatLbs(rx.targetWeightLbs)} lb"
+        else -> ""
+    }
+    return "$sets × $reps$load"
+}
+
+private fun formatLbs(w: Double): String =
+    if (w == w.toLong().toDouble()) w.toLong().toString() else ((w * 10).toLong() / 10.0).toString()
+
+/**
  * Where the coach should (re)open — the pager's initial page on resume. Never
  * jumps backward past exercises already worked: resumes at the first exercise
  * with sets still to do, searching from the furthest exercise anything was logged

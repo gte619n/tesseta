@@ -251,3 +251,18 @@ review.
   recovery UX is needed. **Follow-up:** wire `WorkoutSessionView` to the shared
   `WorkoutSessionViewModel` via the new `IosComposition.workoutSessionViewModel(programId:scheduledId:)`
   factory (the only remaining step for drafts-survive-death end-to-end).
+- **(Phase G follow-up #1 — DONE) WorkoutSessionView wired to the shared VM.** The
+  logger now observes `vm.state` + `vm.restTimer` via `collectFlow` and maps to its
+  local mirror; all intents route to the VM (markStarted, toggleSet for log/undo via a
+  rebuilt `PrescriptionKey(blockId,orderIndex)`, requestFinish/Skip/Discard +
+  confirm*, dismissRest, pause/resumeTimer, confirmFinish(feeling), dismissCompleted →
+  `closed` → pop). Added a shared `WorkoutSessionDraft.sessionRows(): List<SessionRow>`
+  (primitives-only display rows + target-summary formatting) so the view never bridges
+  the Kotlin `Map`/`Prescription` — keeps formatting single-sourced + testable.
+  Reachable via the pre-existing `WorkoutsRoute.session` (WorkoutsHubView destination).
+  Gotchas: Kotlin extension funcs on `WorkoutSessionDraft` export as INSTANCE methods
+  (`draft.sessionRows()`), not statics on `SessionFormatKt`; Kotlin `Int?` param =
+  Swift `KotlinInt?` (`confirmFinish(feeling: KotlinInt(int:))`); Kotlin enums compare
+  with `==` (RestKind.getReady / SessionPrompt.finishSummary). **drafts-survive-death
+  is now end-to-end in the UI.** Verified: assemble + app BUILD SUCCEEDED. (No unit test
+  added for sessionRows — jvmTest wedges here; logic is simple + compile-verified.)
