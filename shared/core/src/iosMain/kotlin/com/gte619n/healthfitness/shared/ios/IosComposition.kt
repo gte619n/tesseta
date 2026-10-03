@@ -3,10 +3,18 @@ package com.gte619n.healthfitness.shared.ios
 import com.gte619n.healthfitness.shared.data.HttpBloodReadingRepository
 import com.gte619n.healthfitness.shared.data.HttpBloodTestReportRepository
 import com.gte619n.healthfitness.shared.data.HttpBodyCompositionRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardBloodMarkerRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardBodyCompositionRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardDailyMetricsRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardNutritionRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardProfileRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardRecentActivityRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardWorkoutRepository
 import com.gte619n.healthfitness.shared.data.HttpDexaScanRepository
 import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
+import com.gte619n.healthfitness.shared.data.HttpProfileRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutStreakSettingsRepository
 import com.gte619n.healthfitness.shared.data.MirrorGoalsRepository
@@ -34,6 +42,7 @@ import com.gte619n.healthfitness.shared.sync.SyncEngineImpl
 import com.gte619n.healthfitness.shared.db.MirrorDatabase
 import com.gte619n.healthfitness.shared.presentation.blood.BloodOverviewViewModel
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
+import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
@@ -330,6 +339,35 @@ object IosComposition {
             repository = workoutProgramRepo,
             sessionRepository = workoutSessionRepository(),
         )
+
+    // MARK: - Today dashboard (Phase 3 Wave A1 — iOS wiring)
+    //
+    // The shared [DashboardViewModel] takes SEVEN dashboard-scoped repositories,
+    // each a thin online-first Http impl over the EXISTING backend endpoints the
+    // feature screens already use (ports of Android's data.dashboard.*). The
+    // workout repo reuses the warm program cache ([workoutProgramRepo]) + a
+    // mirror-backed session repo for the reactive draft resume, and the
+    // body-composition repo for the completed-session recap bodyweight. No
+    // on-device mirror read yet — the `cached*` methods return null/empty and the
+    // VM falls through to the network `load*` (deferred mirror-read pass).
+
+    /** Today dashboard — the home screen, bound to the shared [DashboardViewModel]. */
+    fun dashboardViewModel(): DashboardViewModel {
+        val bodyComp = HttpDashboardBodyCompositionRepository(client())
+        return DashboardViewModel(
+            bodyComp = bodyComp,
+            dailyMetrics = HttpDashboardDailyMetricsRepository(client()),
+            blood = HttpDashboardBloodMarkerRepository(client()),
+            nutrition = HttpDashboardNutritionRepository(HttpNutritionDayRepository(client())),
+            recent = HttpDashboardRecentActivityRepository(client()),
+            workouts = HttpDashboardWorkoutRepository(
+                programs = workoutProgramRepo,
+                sessions = workoutSessionRepository(),
+                bodyComp = bodyComp,
+            ),
+            profile = HttpDashboardProfileRepository(HttpProfileRepository(client())),
+        )
+    }
 
     // MARK: - Flow bridge
 

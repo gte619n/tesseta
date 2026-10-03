@@ -22,6 +22,26 @@ struct DashboardModel {
     var nutrition: NutritionModel?         // nil → em-dash placeholders (Android TodayCard)
     var todayWorkout: WorkoutModel?        // nil == TodayWorkout.Hidden (render nothing)
     var doses: [DoseRowModel]
+    var blood: [BloodMarkerModel]          // empty → dashlet hidden
+    var recentActivity: [RecentActivityModel]  // empty → dashlet hidden
+}
+
+/// Mirror of the loaded `BloodMarkerSummary` (dashboard-scoped) — just the fields
+/// the compact Today blood dashlet renders.
+struct BloodMarkerModel: Identifiable {
+    var id: String { key }
+    let key: String
+    let name: String
+    let value: Double
+    let unit: String
+    let isGood: Bool
+}
+
+/// Mirror of a `RecentActivityEntry` row (title + optional subtitle).
+struct RecentActivityModel: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String?
 }
 
 struct DashboardUserModel {
@@ -323,6 +343,60 @@ struct CaloriesDonut: View {
                 .foregroundStyle(Theme.textPrimary)
         }
         .frame(width: 42, height: 42)
+    }
+}
+
+// MARK: - BloodDashlet (Android BloodPanel, compact)
+
+/// The latest tracked blood markers (testosterone / LDL / ApoB / HbA1c) with a
+/// good/warn tint. Rendered only when the VM's blood card is Loaded & non-empty.
+struct BloodDashlet: View {
+    let markers: [BloodMarkerModel]
+
+    var body: some View {
+        SettingsCard(title: "Blood markers") {
+            ForEach(markers) { marker in
+                HStack {
+                    Text(marker.name).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
+                    Spacer(minLength: 12)
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(valueLabel(marker.value)).font(.hfMonoSm)
+                            .foregroundStyle(marker.isGood ? Theme.good : Theme.warn)
+                        Text(marker.unit).font(.hfBodySm).foregroundStyle(Theme.textTertiary)
+                    }
+                }
+                .padding(.vertical, 5)
+            }
+        }
+    }
+
+    private func valueLabel(_ v: Double) -> String {
+        v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
+    }
+}
+
+// MARK: - RecentActivityDashlet (Android RecentFeed)
+
+/// The recent cross-source activity feed (workouts / weigh-ins / sleep / food /
+/// meds). Rendered only when the VM's recent-activity card is Loaded & non-empty.
+struct RecentActivityDashlet: View {
+    let entries: [RecentActivityModel]
+
+    var body: some View {
+        SettingsCard(title: "Recent") {
+            ForEach(entries) { entry in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.title).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
+                        if let subtitle = entry.subtitle, !subtitle.isEmpty {
+                            Text(subtitle).font(.hfBodySm).foregroundStyle(Theme.textTertiary)
+                        }
+                    }
+                    Spacer(minLength: 12)
+                }
+                .padding(.vertical, 5)
+            }
+        }
     }
 }
 

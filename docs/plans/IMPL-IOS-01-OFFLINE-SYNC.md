@@ -412,3 +412,52 @@ review.
   `as? KotlinInt`); Kotlin enums compare with `==` (`ScheduledStatus.completed`,
   `ProgressionDirection.up`). Verified: compileKotlinJvm + assembleSharedCoreXCFramework
   + iOS app BUILD SUCCEEDED.
+- **(Today DASHBOARD wired, 2026-10-03)** Bound `TodayView` (+ the shared-card
+  `TodaySplitView`) to the shared `DashboardViewModel` (same SKIE-free `collectFlow`
+  + static `map(...)` → local-mirror pattern). New `HttpDashboardRepositories.kt`
+  implements ALL SEVEN `Dashboard*Repository` interfaces as thin online-first Http
+  impls over the EXISTING endpoints Android's `data/dashboard/DashboardData.kt` uses
+  (`GET api/me/body-composition`, `…/daily-metrics?from&to`, `…/blood`,
+  `…/recent-activity?limit`, `GET api/me` for profile; nutrition reuses the shared
+  `NutritionDayRepository.day`; today-workout reuses the warm
+  `HttpWorkoutProgramRepository` calendar + the mirror-backed session drafts). The
+  DERIVATION mappers (weight-summary 7/90-day deltas + downsample; blood-marker
+  tone/fill/history; MET calorie recap) are VERBATIM ports of Android's
+  `BodyCompositionMapper`/`BloodMarkerSummaryMapper`/`TodayWorkoutViewModel` (java.time
+  → kotlinx-datetime), so the three clients render identical cards. New
+  `IosComposition.dashboardViewModel()` wires all seven (sharing the body-comp repo
+  so the completed-session recap reads the same latest bodyweight). **CardState
+  mapping:** `DashboardUiState` is NOT a whole-screen sealed state — each card is its
+  own `CardState<T>`, exported FLAT (not nested): `CardStateLoaded<AnyObject>` (read
+  `.data` as `Any?`, cast to the element type), `CardStateError` (`.message`),
+  `CardStateLoading`. `map(...)` folds every card's `.Loaded.data` into the local
+  `DashboardModel`; a Loading/Error card maps to the dashlet's nil/empty placeholder
+  (never a fabricated number), so one failed card never blanks the dashboard and the
+  screen is always `.ready` after the first emission. Rendered the previously-orphaned
+  blood + recent-activity dashlets (new `BloodDashlet`/`RecentActivityDashlet` +
+  `BloodMarkerModel`/`RecentActivityModel` mirrors), gated on non-empty. **Cards left
+  degraded (recorded):**
+  - **Doses** — the shared `DashboardViewModel` exposes NO doses source (its UiState
+    has no doses card; Android composes today's-doses in a separate feature VM), so the
+    `DoseDashlet` is fed `[]` (reads "You're all caught up."). Wiring doses needs a
+    dashboard doses repo + a VM field, or composing the existing `TodaysDosesViewModel`
+    into the Today screen — a follow-up, not this pass.
+  - **`cached*` = null/empty everywhere** — no on-device mirror read yet (same deferral
+    as the nutrition/goals/blood/workouts online-first passes). The VM's
+    no-Loading-reset invariant keeps the last Loaded value on a failed revalidate, so
+    online-first still degrades gracefully; it's just not cold-start offline-polished.
+    Recent-activity also has no persisted single-slot cache (Android uses a DataStore).
+  **Swift gotchas hit:** `CardStateLoaded` is GENERIC → the cast needs an explicit
+  arg (`as? CardStateLoaded<AnyObject>`), bare `as? CardStateLoaded` fails
+  "generic parameter 'T' could not be inferred"; the nutrition totals/target map was
+  too deep for the type-checker ("unable to type-check in reasonable time") → hoist
+  `.data` casts into `let` sub-expressions first. `MarkerTone.good` compares with `==`
+  (enum → class property). `Int32`→`Int()` for `setsLogged`/`totalSets`; `KotlinInt?`
+  →`.intValue`, `KotlinDouble?`→`.doubleValue`; `Instant`→`Date` via
+  `toEpochMilliseconds()/1000`; the Instant type bridges as `SharedCore.Kotlinx_datetimeInstant`.
+  `TodayWorkout` sealed cases export FLAT (`TodayWorkoutResume/Start/Completed/Hidden`),
+  switched via `case let x as SharedCore.TodayWorkoutResume`. Kotlin
+  `WorkoutProgramRepository` exposes only Flow reads (no suspend list/calendar) → the
+  dashboard workout repo resolves via `observePrograms().first()` /
+  `observeCalendar(...).first()`. Verified: compileKotlinJvm + assembleSharedCoreXCFramework
+  + iOS app BUILD SUCCEEDED.
