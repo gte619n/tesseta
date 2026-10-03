@@ -43,6 +43,7 @@ import com.gte619n.healthfitness.shared.db.MirrorDatabase
 import com.gte619n.healthfitness.shared.presentation.blood.BloodOverviewViewModel
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
 import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
+import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
@@ -193,6 +194,15 @@ object IosComposition {
      *  mirror. Mutations delegate to the networked impl. */
     fun goalsListViewModel(): GoalsListViewModel =
         GoalsListViewModel(MirrorGoalsRepository(HttpGoalsRepository(client()), mirrorStore(), syncEngine()))
+
+    /** Goal roadmap (deep goal — phases + steps). Same mirror-read construction as
+     *  the list factory; the VM drives step done-toggle + reset-to-auto (online
+     *  PATCH, mirror reconciled on the next pull). */
+    fun goalRoadmapViewModel(goalId: String): GoalRoadmapViewModel =
+        GoalRoadmapViewModel(
+            goalId = goalId,
+            repository = MirrorGoalsRepository(HttpGoalsRepository(client()), mirrorStore(), syncEngine()),
+        )
 
     /**
      * Blood / Labs overview — networked over the existing endpoints

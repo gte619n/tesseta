@@ -1,20 +1,22 @@
 import SwiftUI
-// import SharedCore  // GoalRoadmapViewModel, GoalRoadmapUiState, GoalDeep, Phase, Step — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave E3 (Goals). Parity target: Android
-/// `feature-goals/.../GoalRoadmapScreen` + `GoalRoadmapViewModel`. A vertical
-/// timeline of phases, each with its steps; steps toggle done through the shared
-/// VM's `toggleStep` intent (optimistic pending state disables the checkbox).
+/// IMPL-IOS-01 Phase 3 Wave E3 (Goals) — networked shared screen. Parity target:
+/// Android `feature-goals/.../GoalRoadmapScreen` + `GoalRoadmapViewModel`. A
+/// vertical timeline of phases, each with its steps; MANUAL steps toggle done
+/// through the shared VM's `toggleStep` intent (optimistic pending disables the
+/// checkbox), and overridden metric steps expose a "Reset to auto" affordance
+/// routing to `resetStepToAuto`.
 ///
-/// Observes the SHARED `GoalRoadmapViewModel`
-/// (shared/.../presentation/goals/GoalRoadmapViewModel.kt) via the
-/// `ObservableViewModel` bridge — same shape as the medications detail view.
+/// Backed by the SHARED `GoalRoadmapViewModel`
+/// (shared/.../presentation/goals/GoalRoadmapViewModel.kt) over the mirror-backed
+/// `MirrorGoalsRepository`, observed via `collectFlow` + a static `map(...)` to
+/// the local mirror structs — the same SKIE-free pattern as `GoalsListView`.
 struct GoalRoadmapView: View {
 
     let goalId: String
 
-    // MARK: Local mirrors (deleted post-0D — the view reads the SKIE-bridged
-    // `GoalRoadmapUiState`/`GoalDeep` directly).
+    // MARK: Local mirrors
 
     enum PhaseStatus { case locked, active, completed }
 
@@ -25,6 +27,8 @@ struct GoalRoadmapView: View {
         let done: Bool
         let manual: Bool     // MANUAL steps are user-checkable; metric steps auto-evaluate
         let regressed: Bool
+        let metricReadout: String?   // "restingHr < 60 for 30d" etc, for bound steps
+        let canResetToAuto: Bool     // overridden metric step → offer "Reset to auto"
     }
 
     struct PhaseRow: Identifiable, Hashable {
@@ -44,23 +48,34 @@ struct GoalRoadmapView: View {
         var error: String?
     }
 
-    @State private var state = ScreenState()
+    private let vm: GoalRoadmapViewModel
+    @State private var state: ScreenState
+    @State private var subscription: FlowSubscription?
+
+    init(goalId: String) {
+        self.goalId = goalId
+        let model = IosComposition.shared.goalRoadmapViewModel(goalId: goalId)
+        self.vm = model
+        _state = State(initialValue: Self.map(model.state.value as! GoalRoadmapUiState))
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle(state.title.isEmpty ? "Roadmap" : state.title)
             .navigationBarTitleDisplayMode(.inline)
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(GoalRoadmapViewModel(goalId: goalId, repo: DI.goalsRepository))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .accessibilityIdentifier("goal-roadmap")  // IMPL-E2E-01 shared id
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? GoalRoadmapUiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
     private var content: some View {
-        if state.loading {
+        if state.loading && state.phases.isEmpty {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = state.error, state.phases.isEmpty {
             ContentUnavailableView("Couldn’t load goal", systemImage: "target",
@@ -77,7 +92,8 @@ struct GoalRoadmapView: View {
                         PhaseCard(
                             phase: phase,
                             pendingStepIds: state.pendingStepIds,
-                            onToggle: { step in toggle(step) }
+                            onToggle: { step in toggle(step) },
+                            onReset: { step in reset(step) }
                         )
                     }
                 }
@@ -88,11 +104,138 @@ struct GoalRoadmapView: View {
     }
 
     private func toggle(_ step: StepRow) {
-        // Post-0D: vm.wrapped.toggleStep(phaseId: step.phaseId, stepId: step.id, done: !step.done)
-        _ = step
+        vm.toggleStep(phaseId: step.phaseId, stepId: step.id, done: !step.done)
     }
 
-    // static func map(_ s: GoalRoadmapUiState) -> ScreenState { ... }  // Phase 0D
+    private func reset(_ step: StepRow) {
+        vm.resetStepToAuto(phaseId: step.phaseId, stepId: step.id)
+    }
+
+    // MARK: Map shared UiState → local mirror
+
+    static func map(_ s: GoalRoadmapUiState) -> ScreenState {
+        guard let goal = s.goal else {
+            return ScreenState(
+                loading: s.loading,
+                title: "",
+                summary: "",
+                phases: [],
+                pendingStepIds: pendingIds(s),
+                error: s.error
+            )
+        }
+
+        let orderedPhases = goal.phases.sorted { $0.orderIndex < $1.orderIndex }
+        let phaseRows: [PhaseRow] = orderedPhases.map { phase in
+            let steps = phase.steps.sorted { $0.orderIndex < $1.orderIndex }.map { step in
+                mapStep(step, phase: phase)
+            }
+            return PhaseRow(
+                id: phase.phaseId,
+                title: phase.title,
+                dateRange: dateRange(phase.targetStartDate, phase.targetEndDate),
+                status: mapStatus(phase.status),
+                steps: steps
+            )
+        }
+
+        return ScreenState(
+            loading: s.loading,
+            title: goal.title,
+            summary: summary(orderedPhases),
+            phases: phaseRows,
+            pendingStepIds: pendingIds(s),
+            error: s.error
+        )
+    }
+
+    private static func pendingIds(_ s: GoalRoadmapUiState) -> Set<String> {
+        Set(s.pendingStepIds.compactMap { $0 as? String })
+    }
+
+    private static func mapStatus(_ status: SharedCore.PhaseStatus) -> PhaseStatus {
+        if status == SharedCore.PhaseStatus.completed { return .completed }
+        if status == SharedCore.PhaseStatus.active { return .active }
+        return .locked
+    }
+
+    private static func mapStep(_ step: SharedCore.Step, phase: SharedCore.Phase) -> StepRow {
+        let isManual = step.kind == SharedCore.StepKind.manual
+        let regressed = step.metricRegressed?.boolValue ?? false
+        return StepRow(
+            id: step.stepId,
+            phaseId: phase.phaseId,
+            title: step.title,
+            done: step.done,
+            manual: isManual,
+            regressed: regressed,
+            metricReadout: metricReadout(step),
+            canResetToAuto: step.manualOverride
+                && !isManual
+                && phase.status != SharedCore.PhaseStatus.locked
+        )
+    }
+
+    // "restingHr < 60 for 30d" — mirrors Android's StepRow metric readout.
+    private static func metricReadout(_ step: SharedCore.Step) -> String? {
+        guard let m = step.metric else { return nil }
+        let base = "\(m.metricKey) \(m.comparator.symbol) \(formatTarget(m.targetValue))"
+        if step.kind == SharedCore.StepKind.sustained, let w = m.windowDays?.intValue {
+            return base + " for \(w)d"
+        }
+        return base
+    }
+
+    private static func formatTarget(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(value)
+    }
+
+    // "Phase 2 of 4 · 7 of 19 steps" — parity with Android GoalProgress.summary.
+    private static func summary(_ phases: [SharedCore.Phase]) -> String {
+        let total = phases.count
+        let activeIndex = phases.firstIndex { $0.status == SharedCore.PhaseStatus.active }
+        let completed = phases.filter { $0.status == SharedCore.PhaseStatus.completed }.count
+        let allSteps = phases.flatMap { $0.steps }
+        let doneSteps = allSteps.filter { $0.done }.count
+
+        let phasePart: String
+        if let idx = activeIndex {
+            phasePart = "Phase \(idx + 1) of \(total)"
+        } else if completed == total && total > 0 {
+            phasePart = "All \(total) phases complete"
+        } else {
+            phasePart = "\(total) phases"
+        }
+        return "\(phasePart) · \(doneSteps) of \(allSteps.count) steps"
+    }
+
+    // "MAY 28 → JUL 12" range, or nil if neither date parses.
+    private static func dateRange(_ start: String?, _ end: String?) -> String? {
+        let s = capsDate(start)
+        let e = capsDate(end)
+        if s == nil && e == nil { return nil }
+        return "\(s ?? "—") → \(e ?? "—")"
+    }
+
+    private static let isoParser: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate]
+        return f
+    }()
+
+    private static let capsFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
+    private static func capsDate(_ raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let datePart = String(raw.prefix(10))
+        guard let date = isoParser.date(from: datePart) else { return nil }
+        return capsFormatter.string(from: date).uppercased()
+    }
 }
 
 // MARK: - Phase card
@@ -101,6 +244,7 @@ private struct PhaseCard: View {
     let phase: GoalRoadmapView.PhaseRow
     let pendingStepIds: Set<String>
     let onToggle: (GoalRoadmapView.StepRow) -> Void
+    let onReset: (GoalRoadmapView.StepRow) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -122,7 +266,8 @@ private struct PhaseCard: View {
                     step: step,
                     pending: pendingStepIds.contains(step.id),
                     locked: phase.status == .locked,
-                    onToggle: { onToggle(step) }
+                    onToggle: { onToggle(step) },
+                    onReset: { onReset(step) }
                 )
             }
         }
@@ -154,6 +299,7 @@ private struct StepRowView: View {
     let pending: Bool
     let locked: Bool
     let onToggle: () -> Void
+    let onReset: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -170,6 +316,11 @@ private struct StepRowView: View {
                     .font(.hfBodyMd)
                     .foregroundStyle(Theme.textPrimary)
                     .strikethrough(step.done, color: Theme.textTertiary)
+                if let readout = step.metricReadout {
+                    Text(readout)
+                        .font(.hfMonoSm)
+                        .foregroundStyle(Theme.textSecondary)
+                }
                 if step.regressed {
                     Text("Metric regressed")
                         .font(.hfCapsSm)
@@ -178,6 +329,19 @@ private struct StepRowView: View {
                     Text("Auto-tracked")
                         .font(.hfCapsSm)
                         .foregroundStyle(Theme.textQuaternary)
+                }
+                if step.canResetToAuto {
+                    Button(action: onReset) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10))
+                            Text("Reset to auto").font(.hfCapsSm)
+                        }
+                        .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(pending)
+                    .padding(.top, 2)
                 }
             }
             Spacer(minLength: 0)

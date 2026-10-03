@@ -461,3 +461,39 @@ review.
   dashboard workout repo resolves via `observePrograms().first()` /
   `observeCalendar(...).first()`. Verified: compileKotlinJvm + assembleSharedCoreXCFramework
   + iOS app BUILD SUCCEEDED.
+- **(Goals ROADMAP wired, 2026-10-03)** Bound `GoalRoadmapView` (the deep-goal
+  phases+steps timeline) to the shared `GoalRoadmapViewModel` via the same SKIE-free
+  `collectFlow` + static `map(...)` → local-mirror pattern. New
+  `IosComposition.goalRoadmapViewModel(goalId:)` constructs the VM over the SAME
+  `MirrorGoalsRepository(HttpGoalsRepository, mirrorStore, syncEngine)` the list factory
+  uses (REUSED the already-built repo — no new goals repo). Wired the read path (deep
+  goal → ordered phases/steps) and all intents the VM supports: `toggleStep` (MANUAL
+  step done-toggle; optimistic `pendingStepIds` disables the checkbox) and
+  `resetStepToAuto`. **Recovered the two gap-report-flagged dropped affordances:** the
+  per-step METRIC READOUT (`"<metricKey> <comparator.symbol> <target>[ for <windowDays>d]"`
+  for bound steps, SUSTAINED-only window suffix) and the "Reset to auto" button (shown
+  only on overridden non-MANUAL steps in a non-locked phase) — both are verbatim ports of
+  Android `GoalRoadmapScreen.StepRow`. The `"Phase N of M · X of Y steps"` summary +
+  date-range ("MAY 28 → JUL 12") formatting are ported from Android `GoalsFormat`
+  (`GoalProgress.summary` / `formatDateRange`) into the Swift `map(...)` (Swift
+  `DateFormatter`/`ISO8601DateFormatter`, date-only prefix(10) parse). The VM already
+  intentionally OMITS the Android "Update nutrition"/`applyNutrition` action (cross-domain
+  Workouts/Nutrition shared types not ported into Goals) — nothing to wire there.
+  **Skipped (separate task): `GoalsChatView`** — it needs the SSE streaming transport
+  (`GoalsChatViewModel(sseClient:chatRepository:idGenerator:json:)`), which is a
+  build-not-wire task (no shared SSE client wired on iOS yet, same gap as the lab-PDF/
+  Designer chat flows); left on its local-mock state, still compiles. **Swift gotchas
+  hit:** `GoalRoadmapUiState` is FLAT (not nested) with `pendingStepIds` as
+  `NSSet<NSString *>` → `Set(s.pendingStepIds.compactMap { $0 as? String })`;
+  `GoalDeep`/`Phase`.`description` collide → `description_`; `Step.metricRegressed` is
+  `KotlinBoolean?` → `.boolValue`; `StepMetricBinding.windowDays` is `KotlinInt?` →
+  `.intValue` (`targetValue` is a non-null `double`); nested-type qualify
+  `SharedCore.Step`/`SharedCore.Phase`/`SharedCore.PhaseStatus`/`SharedCore.StepKind`
+  (bare `Step`/`PhaseStatus` shadow the app-local structs); enums compare with `==`
+  (`status == SharedCore.PhaseStatus.completed`, `kind == SharedCore.StepKind.manual`,
+  `kind == .sustained`); `collectFlow` hands the closure `Any` (cast `as? GoalRoadmapUiState`
+  first). Changed `GoalRoadmapView`'s implicit memberwise init to an explicit `init(goalId:)`
+  that builds the VM (same shape as `GoalsListView`) — no callers yet (`GoalsRoute.roadmap`
+  has no live `.navigationDestination` consumer), signature unchanged. Verified:
+  compileKotlinJvm (UP-TO-DATE — factory is in iosMain) + assembleSharedCoreXCFramework
+  + iOS app BUILD SUCCEEDED.
