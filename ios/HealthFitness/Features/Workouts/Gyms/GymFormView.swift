@@ -1,5 +1,35 @@
 import SwiftUI
-// import SharedCore  // LocationFormState, Amenity — Phase 0D
+import SharedCore
+
+/// Bridges the local `GymFormView.FormModel` to/from the shared
+/// `LocationFormState` (the New/Edit VMs' `form` StateFlow). The per-day hours
+/// grid isn't surfaced in this form (only the 24-hour toggle), so `hours` is left
+/// empty on the way out; the shared `hoursForWire()` then omits them.
+enum GymForm {
+    static func toShared(_ model: GymFormView.FormModel) -> LocationFormState {
+        let amenities = model.amenities.compactMap { Amenity.companion.fromId(id: $0) }
+        return LocationFormState(
+            name: model.name,
+            address: model.address,
+            is24Hours: model.is24Hours,
+            hours: [:],
+            amenities: Set(amenities),
+            submitting: model.submitting,
+            error: model.error
+        )
+    }
+
+    static func fromShared(_ state: LocationFormState) -> GymFormView.FormModel {
+        GymFormView.FormModel(
+            name: state.name,
+            address: state.address,
+            is24Hours: state.is24Hours,
+            amenities: Set(state.amenities.compactMap { ($0 as? Amenity)?.id }),
+            submitting: state.submitting,
+            error: state.error
+        )
+    }
+}
 
 /// Shared gym-form surface used by both New and Edit (parity with the Android
 /// `LocationFormState` + the reused form composables). Pure UI over a local form

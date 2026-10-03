@@ -619,3 +619,57 @@ review.
   flattened nested-type names it guessed — the exports are DOTTED:
   `WorkoutPreferencesViewModel.SaveState`, `ProgressionConsoleViewModel.State/.Companion` —
   always grep the generated header's swift_name before referencing a nested Kotlin type.)
+- **(GYMS repos BUILT + list/detail/new/edit/scan WIRED, 2026-10-03)** Built the three
+  previously interface-only gym contracts as online-first Http impls (new
+  `HttpGymRepositories.kt`) over the EXISTING backend, matched 1:1 to Android's
+  `LocationApi`/`EquipmentApi`/`GymScanApi` and verified against the
+  `LocationController`/`EquipmentController`/`GymVideoScanController`:
+  `HttpLocationRepository` (GET/POST/PATCH/DELETE `api/me/gyms` + `/default` + multipart
+  `/photo`), `HttpEquipmentRepository` (`GET api/equipment/{id}`), `HttpGymScanRepository`
+  (register → signed-URL PUT → start → poll → confirm). New factories in `IosComposition`
+  (`gymsListViewModel`, `gymDetailViewModel`, `makeNewGymViewModel`, `editGymViewModel`,
+  `gymScanViewModel`) sharing one `HttpLocationRepository`+`HttpEquipmentRepository`; wired
+  all five gym Swift views via the SKIE-free `collectFlow` + static `map(...)` pattern. The
+  `WorkoutsHubView` dispatcher arms for the gym routes were already in place.
+  **Wire subtleties (verified against backend):**
+  - **Gym-hours map keys serialize LOWERCASE** (`"mon"`…`"sun"`) via
+    `DayOfWeekJacksonConfig`'s key (de)serializer — NOT the enum name. The shared
+    `Location`/`Create`/`UpdateLocationRequest` type `hours` as `Map<DayOfWeek, HoursSlot>`,
+    whose default kotlinx enum-key codec would emit UPPERCASE. Avoided the custom-KSerializer
+    route (the `DayOfWeek.kt` Phase-1C TODO) by keeping private wire DTOs keyed by a plain
+    `String` and mapping to/from `DayOfWeek` explicitly (`name.lowercase()` out,
+    case-insensitive match in). This resolves the doc's standing hours-serializer TODO for
+    the iOS read/write path.
+  - `create`/`update` return `WriteResult<LocationResponse>` with `@JsonUnwrapped` body — the
+    LocationResponse fields are FLAT plus a sibling `lastUpdate`; a lenient decode straight
+    into the wire DTO drops `lastUpdate` (no envelope unwrap).
+  - **No per-equipment DELETE endpoint exists** on the gym controller (Android's `LocationApi`
+    declares one but the backend has only PATCH-specs + the scan-confirm add path). So
+    `removeEquipment` reads the current `equipmentIds`, drops the one, and PATCHes the reduced
+    list — matches the only server-supported detach path.
+  - The cover photo is a multipart POST (field `file`) to `…/gyms/{id}/photo`; the scan video
+    is a direct-to-GCS signed PUT via a SEPARATE bare `HttpClient()` (no Authorization / JSON
+    content-type, mirroring Android's `SignedUploadClient`) so GCS accepts the raw bytes.
+  **SKIPPED (separate author-the-VM task, as the brief allows):** the manual add-equipment
+  and per-gym spec-OVERRIDE dialogs — there are NO shared `AddEquipmentViewModel` /
+  `EquipmentOverrideViewModel` in `presentation/workouts/` (only `GymsList/GymDetail/NewGym/
+  EditGym/GymScan` VMs exist), and the per-gym equipment-specs PATCH
+  (`updateEquipmentSpecs`) is not on any shared repo interface. Those are a backend-VM-port
+  task, not a wire-up. The gym form's per-day HOURS grid is also not surfaced in the shared
+  `LocationFormState`-backed `GymFormView` (only the 24-hour toggle), so `hours` is sent empty
+  (the shared `hoursForWire()` then omits it) — parity with the current form's capability; a
+  per-day hours editor is a follow-up.
+  **Swift gotchas hit:** a Kotlin factory whose ObjC selector STARTS WITH `new`
+  (`newGymViewModel`) collides with the ObjC `new` method family and is **silently DROPPED
+  from the generated header** (the build then fails "no member newGymViewModel") — renamed to
+  `makeNewGymViewModel`. Also: an incremental `assembleSharedCoreXCFramework` can report
+  UP-TO-DATE and leave a stale header; a real iosMain source change forces the re-export. The
+  nested VM states export DOTTED (`GymsListViewModel.UiState`, `GymDetailViewModel.UiState`,
+  `GymScanViewModel.{Stage,Row,UiState}`); `Amenity.companion.fromId(id:)`; `PendingUpload`
+  needs a Swift `Data → KotlinByteArray` bridge (`KotlinByteArray(size:)` + `set(index:value:)`
+  with `Int8(bitPattern:)`); `LocationFormState.hours` is a NON-optional `NSDictionary` (pass
+  `[:]`); `Set<Amenity>` bridges to the `NSSet<Amenity>` the form state wants; the `rows` map is
+  `NSDictionary<KotlinInt, Row>` (key with `KotlinInt(int:)`); `Stage`/enums compare with `==`;
+  `collectFlow` hands the closure `Any` (cast first); `uploading` Flow value is `KotlinBoolean`
+  (`.boolValue`). Verified: compileKotlinJvm + assembleSharedCoreXCFramework + iOS app
+  BUILD SUCCEEDED.

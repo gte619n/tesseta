@@ -11,7 +11,10 @@ import com.gte619n.healthfitness.shared.data.HttpDashboardProfileRepository
 import com.gte619n.healthfitness.shared.data.HttpDashboardRecentActivityRepository
 import com.gte619n.healthfitness.shared.data.HttpDashboardWorkoutRepository
 import com.gte619n.healthfitness.shared.data.HttpDexaScanRepository
+import com.gte619n.healthfitness.shared.data.HttpEquipmentRepository
 import com.gte619n.healthfitness.shared.data.HttpFoodRepository
+import com.gte619n.healthfitness.shared.data.HttpGymScanRepository
+import com.gte619n.healthfitness.shared.data.HttpLocationRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
@@ -64,6 +67,11 @@ import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettings
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.WorkoutPreferencesViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.EditGymViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.GymDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.GymScanViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.GymsListViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.NewGymViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.ProgramDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.ProgressionConsoleViewModel
 import com.gte619n.healthfitness.shared.presentation.workouts.ProgramsListViewModel
@@ -469,6 +477,64 @@ object IosComposition {
      */
     fun workoutLibraryViewModel(): WorkoutLibraryViewModel =
         WorkoutLibraryViewModel(repository = adHocLibraryRepo)
+
+    // MARK: - Gyms (locations / equipment / video scan) — Phase 3 Wave D(iii)
+    //
+    // Three previously interface-only contracts, now online-first Http impls over
+    // the EXISTING backend (LocationController / EquipmentController /
+    // GymVideoScanController). One shared [HttpLocationRepository] +
+    // [HttpEquipmentRepository] keeps the list/detail/new/edit screens consistent
+    // within a session. The scan repo needs a BARE second client for the signed-URL
+    // PUT (no Authorization / JSON content-type, so GCS accepts the raw-bytes PUT).
+
+    private val locationRepo by lazy { HttpLocationRepository(client()) }
+    private val equipmentRepo by lazy { HttpEquipmentRepository(client()) }
+
+    /** A no-auth, no-default-headers client for direct-to-GCS signed uploads. */
+    private val uploadClient by lazy { HttpClient() }
+
+    /** Gyms list — gym CRUD read (online-first); routes to detail / new. */
+    fun gymsListViewModel(): GymsListViewModel =
+        GymsListViewModel(repo = locationRepo)
+
+    /**
+     * One gym's detail — cover/hours/amenities + attached equipment (each
+     * removable via a reduced-ids PATCH), set-default, delete. The equipment
+     * catalog rows are fetched per attached id through [equipmentRepo].
+     */
+    fun gymDetailViewModel(locationId: String): GymDetailViewModel =
+        GymDetailViewModel(
+            locationId = locationId,
+            repo = locationRepo,
+            equipmentRepo = equipmentRepo,
+        )
+
+    /**
+     * Create a gym — binds the shared form; `submit` pops to the new detail.
+     * NOTE: named `makeNewGymViewModel` (not `newGymViewModel`) because a Kotlin
+     * ObjC export whose selector starts with `new` collides with the ObjC `new`
+     * method family and is silently DROPPED from the generated header.
+     */
+    fun makeNewGymViewModel(): NewGymViewModel =
+        NewGymViewModel(repo = locationRepo)
+
+    /**
+     * Edit a gym — form + cover-photo upload/delete (multipart POST / DELETE
+     * `…/gyms/{id}/photo`). The picked PhotosPicker image is streamed as a
+     * [com.gte619n.healthfitness.shared.data.PendingUpload].
+     */
+    fun editGymViewModel(locationId: String): EditGymViewModel =
+        EditGymViewModel(locationId = locationId, repo = locationRepo)
+
+    /**
+     * Gym equipment video scan (IMPL-GYM-003) — register → signed-URL PUT → start →
+     * poll → review → confirm. The signed upload uses the bare [uploadClient].
+     */
+    fun gymScanViewModel(locationId: String): GymScanViewModel =
+        GymScanViewModel(
+            locationId = locationId,
+            repo = HttpGymScanRepository(client = client(), uploadClient = uploadClient),
+        )
 
     // MARK: - Today dashboard (Phase 3 Wave A1 — iOS wiring)
     //
