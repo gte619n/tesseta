@@ -12,6 +12,14 @@ import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsCoachAudioPrefere
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsUnitPreferencesRepository
 import com.gte619n.healthfitness.shared.net.ApiClient
 import com.gte619n.healthfitness.shared.net.SessionTokenProvider
+import com.gte619n.healthfitness.shared.sync.KtorSyncApi
+import com.gte619n.healthfitness.shared.sync.MirrorDatabaseFactory
+import com.gte619n.healthfitness.shared.sync.PayloadCipher
+import com.gte619n.healthfitness.shared.sync.SqlDelightMirrorStore
+import com.gte619n.healthfitness.shared.sync.SqlDelightOutboxStore
+import com.gte619n.healthfitness.shared.sync.SyncEngine
+import com.gte619n.healthfitness.shared.sync.SyncEngineImpl
+import com.gte619n.healthfitness.shared.db.MirrorDatabase
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
@@ -40,14 +48,67 @@ object IosComposition {
     private var httpClient: HttpClient? = null
     private val unitPrefs by lazy { NSUserDefaultsUnitPreferencesRepository() }
 
-    /** Wire the shared REST client. `baseUrl` is normalized to end with "/". */
-    fun configure(baseUrl: String, tokenProvider: SessionTokenProvider) {
+    // MARK: - Offline-sync graph (Phase E-core)
+    //
+    // Built ONCE in [configure] and held for the app's lifetime: one SQLDelight
+    // mirror DB + its generic mirror/outbox stores + the Ktor sync API + the sync
+    // engine. Phases D/E/G consume these via the internal accessors below. The
+    // PHI columns are encrypted through the injected [PayloadCipher] (Swift
+    // Keychain + CryptoKit on device; NoopPayloadCipher in JVM tests).
+    private var mirrorDb: MirrorDatabase? = null
+    private var mirrorStoreRef: SqlDelightMirrorStore? = null
+    private var outboxStoreRef: SqlDelightOutboxStore? = null
+    private var syncEngineRef: SyncEngine? = null
+
+    /**
+     * Wire the shared REST client AND the offline-sync graph. Called once at
+     * launch from Swift.
+     *
+     * @param baseUrl normalized to end with "/".
+     * @param tokenProvider Keychain-backed session token source for the Ktor client.
+     * @param cipher Keychain/CryptoKit AES-GCM cipher for the mirror's PHI columns.
+     * @param deviceId stable per-install UUID (minted + persisted by the Swift
+     *   caller in UserDefaults) — sent as `X-HF-Origin-Device` so the backend can
+     *   suppress echoing a device's own writes back to it.
+     */
+    fun configure(
+        baseUrl: String,
+        tokenProvider: SessionTokenProvider,
+        cipher: PayloadCipher,
+        deviceId: String,
+    ) {
         val normalized = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
-        httpClient = ApiClient.create(normalized, tokenProvider)
+        val http = ApiClient.create(normalized, tokenProvider)
+        httpClient = http
+
+        // Open the mirror DB and build the sync graph once. NativeSqliteDriver is
+        // instantiated here for the first time (watch for libsqlite3 at app link).
+        val db = MirrorDatabaseFactory().open()
+        val mirror = SqlDelightMirrorStore(db, cipher)
+        val outbox = SqlDelightOutboxStore(db, cipher)
+        val api = KtorSyncApi(http, deviceId)
+        mirrorDb = db
+        mirrorStoreRef = mirror
+        outboxStoreRef = outbox
+        syncEngineRef = SyncEngineImpl(api, mirror, outbox)
     }
 
     private fun client(): HttpClient =
         httpClient ?: error("IosComposition.configure(...) must be called at launch")
+
+    // MARK: - Offline-sync accessors (consumed by Phases D/E/G)
+
+    /** The generic mirror store (read-through cache). */
+    fun mirrorStore(): SqlDelightMirrorStore =
+        mirrorStoreRef ?: error("IosComposition.configure(...) must be called at launch")
+
+    /** The durable outbox (local writes survive offline / process death). */
+    fun outboxStore(): SqlDelightOutboxStore =
+        outboxStoreRef ?: error("IosComposition.configure(...) must be called at launch")
+
+    /** The sync engine (pull loop + outbox drain); drives the first-sync gate. */
+    fun syncEngine(): SyncEngine =
+        syncEngineRef ?: error("IosComposition.configure(...) must be called at launch")
 
     // MARK: - Screen factories
 

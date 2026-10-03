@@ -187,3 +187,18 @@ review.
   NOT yet implemented — full backfill for now (heavier but correct); revisit if
   first sync is slow.
 <!-- Sub-agents: append your decisions below this line. -->
+- **(Phase F+DI)** `PayloadCipher.decrypt` is non-throwing in the Kotlin interface,
+  so the iOS `KeychainPayloadCipher` **fails closed by returning an empty string**
+  on an undecryptable token (wrong key / tampered / truncated). Empty is not valid
+  JSON, so every downstream `Json.decodeFromString` throws rather than handing a
+  caller plaintext garbage — PHI can't leak from a bad decrypt. Alternative
+  (make the interface `@Throws`) was rejected to keep the hot read path simple;
+  revisit if a caller needs to distinguish "absent" from "corrupt". Key is a 256-bit
+  CryptoKit `SymmetricKey` in the Keychain (`kSecAttrAccessibleAfterFirstUnlock` so
+  background sync can open the mirror while locked); `wipeKey()` exists for Phase E
+  sign-out. `deviceId` is a UserDefaults UUID (resets on reinstall — a fresh install
+  is a fresh mirror; a Keychain id could survive deletion and wrongly alias).
+- **(Env note)** `:core:jvmTest` wedges in this worktree (daemon/test-worker lock
+  contention) even with `--no-daemon`; verify shared changes with
+  `:core:assembleSharedCoreXCFramework` + the app build. Agents: don't block on
+  jvmTest — if it hangs >2min, kill + skip it for iOS-only phases.

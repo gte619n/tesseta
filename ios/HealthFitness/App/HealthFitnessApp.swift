@@ -56,12 +56,16 @@ final class AppState {
         let tokenStore = KeychainTokenStore()
         self.auth = AuthState(tokenStore: tokenStore)
         self.sync = SyncBridge()
-        // Wire the shared KMP REST client once (Phase 1C): networked screens reuse
-        // the existing backend endpoints with the Keychain session token login
-        // established. On-device screens (units) don't need it.
+        // Wire the shared KMP REST client + offline-sync graph once (Phase 1C /
+        // Phase E-core): networked screens reuse the existing backend endpoints
+        // with the Keychain session token login established; the mirror DB is
+        // AES-GCM-encrypted via the Keychain cipher and tagged with a stable
+        // per-install device id. On-device screens (units) don't need the client.
         IosComposition.shared.configure(
             baseUrl: AppConfig.backendBaseURL.absoluteString,
-            tokenProvider: KeychainTokenProvider(store: tokenStore))
+            tokenProvider: KeychainTokenProvider(store: tokenStore),
+            cipher: KeychainPayloadCipher(),
+            deviceId: DeviceIdentity.current)
         // Offline-first cached-session launch (parity with Android
         // AuthCoordinator): resolve auth state from the Keychain synchronously,
         // no network on the launch path.
