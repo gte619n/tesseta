@@ -1,6 +1,7 @@
 package com.gte619n.healthfitness.integrations.nutrition;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealAnalysis;
 import com.gte619n.healthfitness.core.nutrition.MealPhotoAnalyzer.MealItem;
@@ -99,6 +100,27 @@ class MealPhotoExtractorTest {
 
         args.remove("brand");
         assertThat(MealPhotoExtractor.toAnalysis(args).brand()).isNull();
+    }
+
+    @Test
+    void toItems_derivesAlcoholFromAbv_whenGramsOmitted() {
+        // A photographed beer: the model gives ABV% but omits alcoholGrams. Derive
+        // it so the entry gets its alcohol calories and auto-routes to Drinks.
+        // 5% ABV → 5×0.789 = 3.945 g/100 g, ×7 ≈ 27.6 kcal/100 g (plus mixer carbs).
+        Map<String, Object> beer = orderedMap(
+            "name", "Lager beer",
+            "estimatedPortionGrams", 350.0,
+            "macrosPer100g", orderedMap(
+                "caloriesKcal", 0.0,
+                "proteinGrams", 0.0,
+                "carbsGrams", 3.0,
+                "fatGrams", 0.0,
+                "abvPercent", 5.0));
+
+        List<MealItem> items = MealPhotoExtractor.toItems(orderedMap("items", List.of(beer)));
+
+        assertThat(items.get(0).macrosPer100g().alcoholGrams()).isCloseTo(3.945, within(0.01));
+        assertThat(items.get(0).macrosPer100g().caloriesKcal()).isCloseTo(12.0 + 27.6, within(0.2));
     }
 
     @Test
