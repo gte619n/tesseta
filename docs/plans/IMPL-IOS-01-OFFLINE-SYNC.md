@@ -552,3 +552,63 @@ review.
     so they stay on local-mock. **Recommendation:** wire these together with the FCM
     deep-link handler that mints the `MealAdjustViewModel`/`LeftoverViewModel` from the
     notification payload (a notifications task), not the plain repo rail.
+- **(Medications CRUD repos BUILT + detail/doses/add/reminders WIRED, 2026-10-03)**
+  Closed the only remaining SKIP from the secondary-detail pass. **Repos built** (new
+  `HttpMedicationRepositories.kt`, all online-first `MutableStateFlow + onStart` like
+  `HttpMedicationRepository`, matched to the backend controllers 1:1):
+  - `HttpMedicationCrudRepository` — list(`GET …/medications?status=`), today
+    (`GET …/today?date=`, reactive StateFlow), create/update/dosage/discontinue/
+    reactivate/delete. **Wire shapes verified against the backend:** the detail
+    `GET …/{id}` returns a FLAT `MedicationDetailResponse` (all `Medication` fields +
+    `history` inline) — the shared `MedicationDetail` is NESTED `{medication, history}`,
+    so I decode a private flat `MedicationDetailWire` and assemble. create/update/dosage/
+    discontinue/reactivate all return a `WriteResult<T>` = `{data, lastUpdate}` envelope,
+    so `create()` unwraps `.data` (the other mutations ignore the body). `cachedDetail`
+    throws (no mirror on online-first) — the VM's `runCatching` swallows it and falls back
+    to the network `get()`.
+  - `HttpAdherenceRepository` — logDose(`POST …/{id}/adherence`), undoDose
+    (`DELETE …/{id}/adherence/{date}/{window}`), markMissed (POST with `missed:true`). It
+    SHARES the crud repo instance and kicks `refreshTodaysDoses()` after each write so the
+    single reactive today's-doses StateFlow re-emits (online-first stand-in for Android's
+    mirror re-emit — no manual optimistic flip in the view, parity preserved).
+    `takenWindowsFor`/`recordedWindowsFor` are best-effort (derive today's taken windows
+    from the cached projection; the backend has no cross-med adherence-by-date endpoint —
+    Android reads these from the mirror) and are on NO wired view's path.
+  - `HttpReminderSettingsRepository` — `GET`/`PUT …/reminder-settings`; decodes 1:1 into
+    the shared `ReminderSettings` (enum-name map keys match). `getCached` serves the last
+    in-memory read then defaults (no persisted cache online-first).
+  - `HttpDrugRepository` — catalog `GET /api/drugs` (live). **DEGRADED:** `lookupStream`
+    emits a single `DrugLookupEvent.NotFound` — the AI SSE lookup
+    (`POST /api/drugs/lookup/stream`) has no shared KMP SSE client yet (same gap as the
+    lab-PDF / Designer / GoalsChat flows). The Add screen stays usable via catalog match +
+    manual entry; TODO noted in the repo.
+  **Factories** (IosComposition): `medicationDetailViewModel(medicationId:)`,
+  `todaysDosesViewModel()` (crud shared between the crud+adherence repos),
+  `addMedicationViewModel()` (`isOnline` pinned `MutableStateFlow(true)` — no connectivity
+  source yet), `reminderSettingsViewModel()`. `onReplan` is a no-op everywhere (no shared
+  reminder scheduler; the platform replans its local notifications separately).
+  **Views wired** (all `collectFlow` + static `map(...)` → local mirror, SKIE-free):
+  `MedicationDetailView` (observes state + reminder + `deleted`→dismiss; discontinue uses
+  the default OTHER reason + today end-date — a detailed reason sheet is a follow-up;
+  reminder toggle → onReminderChange+saveReminder), `TodaysDosesView` (toggle → `vm.toggle`),
+  `AddMedicationView` (onQueryChange/selectDrug/startManualEntry/backToSearch/submit; builds
+  `CreateMedicationRequest` + `InlineReminderConfig`, drug search degrades gracefully),
+  `ReminderSettingsView` (master switch + per-window `DatePicker`↔"HH:mm" + per-med mutes →
+  setEnabled/setWindowTime/setMedEnabled, save). **Degraded/skipped:** only the AI drug SSE
+  lookup (above). **Swift gotchas hit:** the `*/`-in-KDoc trap bit again inside a backticked
+  path (`.../*Api.kt`) → "Unclosed comment" — rephrase without `*`. `MedicationDetailUiState`/
+  `TodaysDosesUiState` sealed cases export FLAT (`…UiStateReady/Error/Loading`); the
+  `AddMedicationUiState`/`ReminderSettingsUiState` are data-class structs (flat props);
+  `AddMedicationUiState.Step` is the NESTED `SharedCore.AddMedicationUiState.Step`
+  (`.search/.form/.custom`), enums compared with `==`. `Boolean` flow value →
+  `as? KotlinBoolean` then `.boolValue` (the `deleted` flow + `vm.online.value`). `Int?` ctor
+  args → `KotlinInt?` (FrequencyConfig timesPerPeriod passed nil); `LocalDate` built via
+  `Kotlinx_datetimeLocalDate(year:monthNumber:dayOfMonth:)`; `Instant`→`Date` via
+  `toEpochMilliseconds()/1000` (type `SharedCore.Kotlinx_datetimeInstant`); `TimeWindow`/
+  `DiscontinueReason`/`FrequencyType` qualify `SharedCore.X` and compare with `==`. The four
+  `MedicationsRoute` destinations still have no live `.navigationDestination` consumer (the
+  views compile + work when reached; `MedicationDetailView` now takes `init(medicationId:)`
+  matching `.detail(String)`). **For the next area:** the SSE transport (drug lookup, GoalsChat,
+  Designer chat, lab/DEXA PDF) is now the dominant un-wired gap across the app — building ONE
+  shared KMP SSE client would unblock all of them at once. Verified: compileKotlinJvm +
+  assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED.

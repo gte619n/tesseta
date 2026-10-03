@@ -1,47 +1,66 @@
 import SwiftUI
-// import SharedCore  // AddMedicationViewModel, AddMedicationUiState, Drug, DrugLookupEvent — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave B — the add-medication flow. Parity target: Android
+/// IMPL-IOS-01 — the add-medication flow. Parity target: Android
 /// `feature-medical/.../add/AddMedicationScreen.kt` + `AddMedicationViewModel`.
 ///
-/// Three steps mirror the shared `AddMedicationUiState.Step`:
-///   SEARCH  — catalog search + debounced online-only AI drug lookup (SSE)
-///   FORM    — dose / unit / frequency / inline reminder for a picked drug
-///   CUSTOM  — manual entry when there is no catalog/AI match
+/// Backed by the SHARED `AddMedicationViewModel` over the online-first
+/// `HttpDrugRepository` (catalog search) + `HttpMedicationCrudRepository` (create) +
+/// `HttpReminderSettingsRepository` (inline reminder override). Three steps mirror the
+/// shared `AddMedicationUiState.Step` (SEARCH → FORM → CUSTOM). Observed via
+/// `collectFlow`, the same SKIE-free pattern as `MedicationsListView`.
 ///
-/// On submit the shared VM creates the medication AND merges the inline reminder
-/// override onto the shared `ReminderSettings` doc, then re-plans — which is what
-/// the D9 `LocalReminderScheduler` re-reads (via the shared `ReminderPlanner`) to
-/// schedule the new med's notifications. The view holds no scheduling logic.
-///
-/// Follows the reference `MedicationsListView` pattern: a local mirror of the
-/// shared step/UiState, replaced post-0D by the SKIE-bridged types.
+/// DEGRADED: the AI SSE drug lookup is not available on iOS yet (no shared SSE
+/// client), so `HttpDrugRepository.lookupStream` emits a single NotFound — the
+/// search step falls back to catalog match + "Enter manually". Catalog search,
+/// manual entry, create, and the reminder toggle are all fully wired.
 struct AddMedicationView: View {
-
-    enum Step { case search, form, custom }
 
     struct DrugRow: Identifiable {
         let id: String
+        let drug: Drug          // the shared type, for selectDrug
         let name: String
         let form: String
     }
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var step: Step = .search
-    @State private var query: String = ""
+    private let vm: AddMedicationViewModel
+    @State private var step: AddMedicationUiState.Step
     @State private var results: [DrugRow] = []
     @State private var isLooking = false
     @State private var isOnline = true
+    @State private var subscription: FlowSubscription?
 
     // FORM / CUSTOM inputs (local drafts; committed via the shared VM's submit()).
+    @State private var query = ""
     @State private var customName = ""
+    @State private var selectedDrug: Drug?
     @State private var dose = ""
     @State private var unit = "mg"
-    @State private var frequency: Frequency = .daily
+    @State private var frequency: FrequencyChoice = .daily
     @State private var reminderEnabled = true
 
-    enum Frequency: String, CaseIterable { case daily = "Daily", weekly = "Weekly", monthly = "Monthly", prn = "As needed" }
+    enum FrequencyChoice: String, CaseIterable {
+        case daily = "Daily", weekly = "Weekly", monthly = "Monthly", prn = "As needed"
+        var config: FrequencyConfig {
+            let type: FrequencyType
+            switch self {
+            case .daily:   type = SharedCore.FrequencyType.daily
+            case .weekly:  type = SharedCore.FrequencyType.weekly
+            case .monthly: type = SharedCore.FrequencyType.monthly
+            case .prn:     type = SharedCore.FrequencyType.prn
+            }
+            return FrequencyConfig(type: type, timesPerPeriod: nil, specificDays: nil, cycle: nil)
+        }
+    }
+
+    init() {
+        let model = IosComposition.shared.addMedicationViewModel()
+        self.vm = model
+        let initial = model.state.value as! AddMedicationUiState
+        _step = State(initialValue: initial.step)
+    }
 
     var body: some View {
         content
@@ -49,25 +68,24 @@ struct AddMedicationView: View {
             .navigationTitle(navTitle)
             .navigationBarTitleDisplayMode(.inline)
             .accessibilityIdentifier("med-add-screen")  // IMPL-E2E-01 shared id
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(AddMedicationViewModel(...))
-        //     await vm.observe(vm.wrapped.state) { self.apply($0) }
-        // }
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? AddMedicationUiState { apply(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     private var navTitle: String {
-        switch step {
-        case .search: return "Add medication"
-        case .form, .custom: return "Details"
-        }
+        step == SharedCore.AddMedicationUiState.Step.search ? "Add medication" : "Details"
     }
 
     @ViewBuilder
     private var content: some View {
-        switch step {
-        case .search: searchStep
-        case .form, .custom: formStep
+        if step == SharedCore.AddMedicationUiState.Step.search {
+            searchStep
+        } else {
+            formStep
         }
     }
 
@@ -78,7 +96,7 @@ struct AddMedicationView: View {
             Section {
                 TextField("Search medications", text: $query)
                     .textInputAutocapitalization(.words)
-                    .onChange(of: query) { _, _ in onQueryChange() }
+                    .onChange(of: query) { _, newValue in vm.onQueryChange(query: newValue) }
             }
 
             if isLooking {
@@ -94,7 +112,7 @@ struct AddMedicationView: View {
             if !results.isEmpty {
                 Section("Matches") {
                     ForEach(results) { drug in
-                        Button { select(drug) } label: {
+                        Button { vm.selectDrug(drug: drug.drug) } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(drug.name).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
                                 Text(drug.form).font(.hfBodySm).foregroundStyle(Theme.textSecondary)
@@ -106,7 +124,7 @@ struct AddMedicationView: View {
             }
 
             Section {
-                Button("Enter manually") { step = .custom }
+                Button("Enter manually") { vm.startManualEntry() }
                     .font(.hfBodyMd)
             }
         }
@@ -117,9 +135,13 @@ struct AddMedicationView: View {
 
     private var formStep: some View {
         Form {
-            if step == .custom {
+            if step == SharedCore.AddMedicationUiState.Step.custom {
                 Section("Medication") {
                     TextField("Name", text: $customName)
+                }
+            } else if let name = selectedDrug?.name {
+                Section("Medication") {
+                    Text(name).font(.hfBodyMd)
                 }
             }
             Section("Dose") {
@@ -129,7 +151,7 @@ struct AddMedicationView: View {
             }
             Section("Schedule") {
                 Picker("Frequency", selection: $frequency) {
-                    ForEach(Frequency.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(FrequencyChoice.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
             }
             Section("Reminders") {
@@ -140,7 +162,7 @@ struct AddMedicationView: View {
             Section {
                 Button("Save medication") { submit() }
                     .disabled(!canSave)
-                Button("Back to search") { step = .search }
+                Button("Back to search") { vm.backToSearch() }
                     .foregroundStyle(Theme.textSecondary)
             }
         }
@@ -148,29 +170,48 @@ struct AddMedicationView: View {
     }
 
     private var canSave: Bool {
-        let hasName = step != .custom || !customName.trimmingCharacters(in: .whitespaces).isEmpty
+        let isCustom = step == SharedCore.AddMedicationUiState.Step.custom
+        let hasName = !isCustom || !customName.trimmingCharacters(in: .whitespaces).isEmpty
         return hasName && Double(dose) != nil
     }
 
-    // MARK: intents (delegate to the shared VM post-0D)
-
-    private func onQueryChange() {
-        // Post-0D: vm.wrapped.onQueryChange(query) — the shared VM filters the
-        // cached catalog and, if no match + online + >=3 chars, debounces the SSE
-        // lookup. `results`/`isLooking`/`step` come back through the observed state.
-    }
-
-    private func select(_ drug: DrugRow) {
-        // Post-0D: vm.wrapped.selectDrug(drug.shared) → advances to FORM.
-        step = .form
-    }
+    // MARK: intents
 
     private func submit() {
-        // Post-0D: build CreateMedicationRequest + InlineReminderConfig and call
-        // vm.wrapped.submit(request, reminder) { _ in dismiss() }. The shared VM
-        // creates the med, persists the reminder override, and re-plans (D9).
-        dismiss()
+        guard let doseValue = Double(dose) else { return }
+        let isCustom = step == SharedCore.AddMedicationUiState.Step.custom
+        let request = CreateMedicationRequest(
+            drugId: isCustom ? nil : selectedDrug?.drugId,
+            customName: isCustom ? customName.trimmingCharacters(in: .whitespaces) : nil,
+            customCategory: nil,
+            customForm: nil,
+            dose: doseValue,
+            unit: unit.isEmpty ? "mg" : unit,
+            frequency: frequency.config,
+            timeSlots: [],
+            notes: nil,
+            prescribedBy: nil,
+            correlatedMarkers: [],
+        )
+        let reminder = InlineReminderConfig(enabled: reminderEnabled, times: [:])
+        vm.submit(request: request, reminder: reminder) { _ in dismiss() }
     }
 
-    // private func apply(_ s: AddMedicationUiState) { ... }  // Phase 0D
+    // MARK: apply observed state
+
+    private func apply(_ s: AddMedicationUiState) {
+        step = s.step
+        isLooking = s.isLooking
+        isOnline = (vm.online.value as? KotlinBoolean)?.boolValue ?? true
+        selectedDrug = s.selectedDrug
+        // Pre-fill the unit from a picked drug the first time we land on the form.
+        if let picked = s.selectedDrug, unit == "mg" { unit = picked.defaultUnit }
+        results = s.filteredCatalog.map { drug in
+            DrugRow(id: drug.drugId, drug: drug, name: drug.name, form: formLabel(drug.form))
+        }
+    }
+
+    private func formLabel(_ form: DrugForm) -> String {
+        form.name.replacingOccurrences(of: "_", with: " ").capitalized
+    }
 }

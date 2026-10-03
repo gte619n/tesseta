@@ -15,6 +15,10 @@ import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
+import com.gte619n.healthfitness.shared.data.HttpAdherenceRepository
+import com.gte619n.healthfitness.shared.data.HttpDrugRepository
+import com.gte619n.healthfitness.shared.data.HttpMedicationCrudRepository
+import com.gte619n.healthfitness.shared.data.HttpReminderSettingsRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutStreakSettingsRepository
 import com.gte619n.healthfitness.shared.data.MirrorGoalsRepository
@@ -45,7 +49,11 @@ import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyComposi
 import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.AddMedicationViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.MedicationDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.ReminderSettingsViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.TodaysDosesViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTargetViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
@@ -63,6 +71,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -190,6 +199,62 @@ object IosComposition {
     /** Medications list — mirror-read (offline/instant), delta-pull refreshed. */
     fun medicationsViewModel(): MedicationsViewModel =
         MedicationsViewModel(MirrorMedicationRepository(mirrorStore(), syncEngine()))
+
+    /**
+     * Medication detail — online-first CRUD over the existing medications endpoints
+     * ([HttpMedicationCrudRepository]) + the reminder-settings doc
+     * ([HttpReminderSettingsRepository]). Drives dose/schedule/start-date change,
+     * discontinue/reactivate/delete, and the inline per-med reminder edit. `cachedDetail`
+     * throws on this online-first repo (no mirror), so the VM's cold-open seed is skipped
+     * and the network `get()` fills the detail. `onReplan` is a no-op (no shared reminder
+     * scheduler; the platform replans its local notifications separately).
+     */
+    fun medicationDetailViewModel(medicationId: String): MedicationDetailViewModel =
+        MedicationDetailViewModel(
+            medicationId = medicationId,
+            medications = HttpMedicationCrudRepository(client()),
+            reminderSettings = HttpReminderSettingsRepository(client()),
+        )
+
+    /**
+     * Today's doses checklist — one reactive source ([HttpMedicationCrudRepository.observeTodaysDoses]).
+     * The adherence repo SHARES that crud instance so a log/undo kicks a today-refresh and
+     * the checklist re-emits live (online-first stand-in for Android's mirror re-emit).
+     */
+    fun todaysDosesViewModel(): TodaysDosesViewModel {
+        val crud = HttpMedicationCrudRepository(client())
+        return TodaysDosesViewModel(
+            medications = crud,
+            adherence = HttpAdherenceRepository(client(), crud),
+        )
+    }
+
+    /**
+     * Add medication — catalog search + manual entry + create (online-first). The AI
+     * SSE drug lookup DEGRADES (no shared SSE client yet): [HttpDrugRepository.lookupStream]
+     * emits a single NotFound, so the search step falls back to catalog match + manual
+     * entry rather than hanging. `isOnline` is pinned true (no connectivity source yet).
+     */
+    fun addMedicationViewModel(): AddMedicationViewModel {
+        val crud = HttpMedicationCrudRepository(client())
+        return AddMedicationViewModel(
+            drugs = HttpDrugRepository(client()),
+            medications = crud,
+            reminderSettings = HttpReminderSettingsRepository(client()),
+            isOnline = MutableStateFlow(true),
+        )
+    }
+
+    /**
+     * Reminder settings — master switch + per-window default times + per-medication
+     * overrides over the existing reminder-settings doc + the active-meds list
+     * (online-first). `onReplan` is a no-op (platform replans locally).
+     */
+    fun reminderSettingsViewModel(): ReminderSettingsViewModel =
+        ReminderSettingsViewModel(
+            settingsRepo = HttpReminderSettingsRepository(client()),
+            medications = HttpMedicationCrudRepository(client()),
+        )
 
     /** Goals list — mirror-read (offline/instant); deep goal assembled from the
      *  mirror. Mutations delegate to the networked impl. */
