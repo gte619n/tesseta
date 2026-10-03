@@ -324,3 +324,38 @@ review.
     `ios/HealthFitness/`, upload an APNs auth key, verify on device). These are real
     secrets/accounts, not code.
   All: assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED; commonMain compiles.
+- **(Blood + Body-Composition screens wired, 2026-10-03)** Bound `BloodOverviewView`
+  and `BodyCompositionView` to their shared VMs (same SKIE-free `collectFlow` + map-to-
+  local-mirror pattern as `NutritionTodayView`). New online-first repos in commonMain
+  over the EXISTING backend (matched to Android's `BloodApi`/`DexaScanApi`/
+  `BodyCompositionApi`): `HttpBloodReadingRepository` (GET/POST/DELETE api/me/blood),
+  `HttpBloodTestReportRepository` (…/reports + per-report GET + PDF bytes),
+  `HttpBodyCompositionRepository` (GET api/me/body-composition — snapshot DERIVED in the
+  repo, a faithful port of Android's `buildSnapshot` incl. the 7d/90d deltas + 90-day
+  weight/body-fat series; lenient nullable DTO drops incomplete rows like
+  `toDomainOrNull`), and `HttpDexaScanRepository` (list/detail/field-PATCH/delete/PDF).
+  All MutableStateFlow+onStart like `HttpMedicationRepository`; online-first was chosen
+  over mirror-read because the overview snapshot needs client-side ASSEMBLY from
+  per-metric rows (same deferral rationale as the nutrition/goals read-assembly pass).
+  New `IosComposition.bloodOverviewViewModel()` / `bodyCompositionViewModel()` factories
+  (the latter reuses the on-device `unitPrefs` for weight-unit projection).
+  **Platform-stubbed (recorded, NOT wired):** the lab-PDF and DEXA-PDF uploads are
+  online-only multipart-SSE AI flows (D17) with NO shared KMP client (Android's
+  `MultipartSseClient` has no port) — both `upload`/`uploadPdf` emit a single
+  graceful `Failed` so the upload sheets degrade; the document-picker + SSE stream is
+  a separate platform task. Marker/report/scan DETAIL screens + Add-reading were left
+  on their existing local-mock state (out of scope; they still compile).
+  **Swift gotchas hit:** nested Kotlin enums export with dotted swift_names —
+  `SharedCore.ExtractedMarker.Flag` (`.h`/`.l`) and `SharedCore.LatestMarker.Source`
+  (`.manual`/`.lab`/`.none`), NOT top-level; the body-comp UiState is the nested
+  `BodyCompositionViewModel.UiState`, while the Blood sealed UiState's cases are the
+  top-level `BloodOverviewViewModelUiState{Ready,Error,Loading}`. `collectFlow` hands
+  the closure an `Any` (cast with `as?` first). Kotlin `LocalDate`→`Date` via
+  `toEpochDays()*86400`; `Instant`→`Date` via `toEpochMilliseconds()/1000`. Kotlin
+  enums compare with `==`. `readBytes()` is deprecated → `readRawBytes()`.
+  **For the next area (Workouts browse):** reuse this exact shape — add an online-first
+  `Http*Repository` (MutableStateFlow+onStart) matching the Android API paths, an
+  `IosComposition` factory, then bind the view via `collectFlow` + a static `map(...)`
+  to the pre-existing local mirror structs; qualify shared types `SharedCore.X` and
+  check the generated header for nested/underscored exported names before writing Swift.
+  Verified: compileKotlinJvm + assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED.

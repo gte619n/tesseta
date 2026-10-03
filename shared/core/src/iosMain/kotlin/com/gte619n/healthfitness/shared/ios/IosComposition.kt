@@ -1,5 +1,9 @@
 package com.gte619n.healthfitness.shared.ios
 
+import com.gte619n.healthfitness.shared.data.HttpBloodReadingRepository
+import com.gte619n.healthfitness.shared.data.HttpBloodTestReportRepository
+import com.gte619n.healthfitness.shared.data.HttpBodyCompositionRepository
+import com.gte619n.healthfitness.shared.data.HttpDexaScanRepository
 import com.gte619n.healthfitness.shared.data.HttpFoodRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
 import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
@@ -26,6 +30,8 @@ import com.gte619n.healthfitness.shared.sync.SqlDelightOutboxStore
 import com.gte619n.healthfitness.shared.sync.SyncEngine
 import com.gte619n.healthfitness.shared.sync.SyncEngineImpl
 import com.gte619n.healthfitness.shared.db.MirrorDatabase
+import com.gte619n.healthfitness.shared.presentation.blood.BloodOverviewViewModel
+import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
 import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
@@ -171,6 +177,33 @@ object IosComposition {
      *  mirror. Mutations delegate to the networked impl. */
     fun goalsListViewModel(): GoalsListViewModel =
         GoalsListViewModel(MirrorGoalsRepository(HttpGoalsRepository(client()), mirrorStore(), syncEngine()))
+
+    /**
+     * Blood / Labs overview — networked over the existing endpoints
+     * (`GET/POST/DELETE api/me/blood` + `/reports`). Online-first repos; the
+     * tracked-marker derivation + offline-never-blank behaviour live in the shared
+     * VM. The lab-PDF upload (multipart SSE) is platform-stubbed (no shared SSE
+     * client yet) — the repo emits a graceful Failed.
+     */
+    fun bloodOverviewViewModel(): BloodOverviewViewModel =
+        BloodOverviewViewModel(
+            readings = HttpBloodReadingRepository(client()),
+            reports = HttpBloodTestReportRepository(client()),
+        )
+
+    /**
+     * Body-composition overview — networked over `GET api/me/body-composition`
+     * (snapshot DERIVED in the repo, porting Android's buildSnapshot) + the DEXA
+     * scan list/detail/patch (`api/me/dexa/scans`). Pull-only (no outbox). DEXA PDF
+     * upload is platform-stubbed. Weight-unit projection reads the on-device unit
+     * prefs (same source as Units/Profile).
+     */
+    fun bodyCompositionViewModel(): BodyCompositionViewModel =
+        BodyCompositionViewModel(
+            bodyRepo = HttpBodyCompositionRepository(client()),
+            dexaRepo = HttpDexaScanRepository(client()),
+            unitPrefsRepo = unitPrefs,
+        )
 
     /**
      * Nutrition Today — networked (GET/POST/PATCH/DELETE api/me/nutrition/…).
