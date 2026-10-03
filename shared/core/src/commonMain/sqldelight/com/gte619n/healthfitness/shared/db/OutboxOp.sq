@@ -1,0 +1,45 @@
+-- IMPL-IOS-01 Phase 1C — the durable write queue. Each local mutation parks one
+-- row here; the drain replays it to the backend with its idempotencyKey, then
+-- deletes it. docCipher is the app-layer ENCRYPTED request payload (null for
+-- DELETE). seq is a monotonic per-device ordering key (replay in seq order).
+-- retries/nextAttemptAt drive jittered backoff; lastError is diagnostic.
+CREATE TABLE outboxOp (
+    id             TEXT NOT NULL PRIMARY KEY,
+    collection     TEXT NOT NULL,
+    entityId       TEXT NOT NULL,
+    operation      TEXT NOT NULL,
+    docCipher      TEXT,
+    idempotencyKey TEXT NOT NULL,
+    seq            INTEGER NOT NULL,
+    retries        INTEGER NOT NULL DEFAULT 0,
+    enqueuedAt     TEXT NOT NULL,
+    nextAttemptAt  TEXT NOT NULL,
+    lastError      TEXT
+);
+
+CREATE INDEX outboxOp_seq ON outboxOp(seq);
+
+insert:
+INSERT OR REPLACE INTO outboxOp(id, collection, entityId, operation, docCipher, idempotencyKey, seq, retries, enqueuedAt, nextAttemptAt, lastError)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+listDue:
+SELECT * FROM outboxOp WHERE nextAttemptAt <= ? ORDER BY seq ASC;
+
+listAll:
+SELECT * FROM outboxOp ORDER BY seq ASC;
+
+pendingCount:
+SELECT COUNT(*) FROM outboxOp;
+
+maxSeq:
+SELECT MAX(seq) FROM outboxOp;
+
+recordFailure:
+UPDATE outboxOp SET retries = ?, nextAttemptAt = ?, lastError = ? WHERE id = ?;
+
+deleteById:
+DELETE FROM outboxOp WHERE id = ?;
+
+clearAll:
+DELETE FROM outboxOp;
