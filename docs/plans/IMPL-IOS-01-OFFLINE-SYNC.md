@@ -302,3 +302,25 @@ review.
   while BGTask + foreground pull run. Gotcha: `MessagingDelegate` callback must be
   `nonisolated` (the class is @MainActor via UIApplicationDelegate). Verified: assemble
   + app BUILD SUCCEEDED (first Firebase SPM compile).
+- **(Remaining follow-ups closed, 2026-10-03)** Merged origin/main (#292, backend-only
+  drink-alcohol-calorie fix — nothing for the shared/iOS layer). Then:
+  - **Nutrition + Goals mirror-read (#2 completion).** New `assembleNutritionDay` /
+    `assembleGoalDeep` shared helpers + `SqlDelightMirrorStore.activeRecords` (snapshot).
+    `MirrorNutritionDayRepository` (interface-delegates to Http; overrides `cachedDay`
+    = assemble from the mirror, and `day` = network + seed the mirror keyed by plain
+    entryId to match the sync engine) — a safe, no-regression offline read-through cache
+    (observeDay/mutations stay on the working network impl). `MirrorGoalsRepository`
+    (delegates to Http; `observeGoals` + `observeGoalDeep` read/assemble from GOALS/
+    GOAL_PHASES/GOAL_STEPS mirror rows, onStart pull; mutations delegate). Decode shapes
+    verified against the nutritionEntries/goals fixtures. NOTE: compile- + fixture-
+    verified, NOT device-verified — a signed-in device pass is still owed.
+  - **Orphaned-set detection (#3 completion).** `validPrescriptionKeys(scheduled)` now
+    drives `ParkedCompletion.orphanedSetCount` (logged sets whose key left the current
+    plan) and `restoreParked` drops orphans rather than restoring stale keys.
+  - **Push activation (#4 completion).** The code is fully wired + guarded; the only
+    remainder is owner provisioning — documented step-by-step in
+    `ios/Config/PUSH-SETUP.md` (add the iOS app to Firebase project `health-fitness-160`
+    for bundle `com.gte619n.healthfitness`, drop `GoogleService-Info.plist` into
+    `ios/HealthFitness/`, upload an APNs auth key, verify on device). These are real
+    secrets/accounts, not code.
+  All: assembleSharedCoreXCFramework + iOS app BUILD SUCCEEDED; commonMain compiles.
