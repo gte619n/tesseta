@@ -1,11 +1,15 @@
 # HealthFitness — iOS client
 
 Native SwiftUI app (iPhone + iPad) for the HealthFitness / tesseta platform,
-built on the shared Kotlin Multiplatform core. This is **IMPL-IOS-01 Phase 2A**:
-the app shell — navigation skeleton, design system, auth/sync scaffolding. Most
-feature screens are stubs; the shared core is referenced but not yet built.
+built on the shared Kotlin Multiplatform core. The offline-first data layer
+(SQLDelight mirror + outbox + delta-sync engine + AES-GCM payload cipher) is in
+place and **33 screens are bound to the shared KMP ViewModels**; the
+`SharedCore.xcframework` is built and linked. Everything is compile/archive-green
+but **not yet run signed-in on a device** — see the live status below.
 
-See the plan: [`docs/plans/IMPL-IOS-01-ios-client-parity.md`](../docs/plans/IMPL-IOS-01-ios-client-parity.md).
+- **Current status & remaining gaps (SSOT):** [`docs/plans/IMPL-IOS-01-STATUS.md`](../docs/plans/IMPL-IOS-01-STATUS.md)
+- Plan / spec: [`docs/plans/IMPL-IOS-01-ios-client-parity.md`](../docs/plans/IMPL-IOS-01-ios-client-parity.md)
+- Per-phase + per-screen decisions log: [`docs/plans/IMPL-IOS-01-OFFLINE-SYNC.md`](../docs/plans/IMPL-IOS-01-OFFLINE-SYNC.md)
 
 ## Requirements
 
@@ -34,19 +38,20 @@ outbox, repositories, ViewModels) exported as an **XCFramework via SKIE**
 (Touchlab) so Kotlin `Flow`/`StateFlow` surface as Swift `AsyncSequence` and
 sealed classes as Swift enums (D1).
 
-Produce it (once Phase 0D / Phase 1 land) from `shared/`:
+Produce it from `shared/` **before** running `xcodegen generate` / `xcodebuild`
+(the app links it as a required framework; a clean checkout has no `build/`):
 
 ```sh
 cd shared
-./gradlew :core:assembleSharedCoreXCFramework
+./gradlew :core:assembleSharedCoreReleaseXCFramework
 # emits shared/core/build/XCFrameworks/release/SharedCore.xcframework
+# (or :core:assembleSharedCoreXCFramework for both debug + release)
 ```
 
-`project.yml` references it as a local Swift package at
-`../shared/core/build/XCFrameworks/SharedCore`. Until it exists, the package
-dependency lines are **commented out** in `project.yml`, and every
-`import SharedCore` call site in this shell is stubbed/commented — so the shell
-generates and builds on its own.
+`project.yml` links it directly at
+`../shared/core/build/XCFrameworks/release/SharedCore.xcframework`. The CI and
+TestFlight release workflows build it in a dedicated step before xcodebuild/gym;
+building locally follows the same order.
 
 ## Auth configuration (login)
 
@@ -77,9 +82,15 @@ sign-in on the simulator** — DEBUG builds expose a "Dev sign-in (UAT)" button
 (`/api/auth/dev-login`) that works against any non-prod backend with no Google
 account.
 
-## What's real vs. stubbed in this phase (2A/2B)
+## What's wired
 
-**Real, usable now:**
+> For the authoritative, dated breakdown of what's done vs. the remaining gaps
+> (on-device verification, TestFlight/push activation, author-new-VM features),
+> see [`docs/plans/IMPL-IOS-01-STATUS.md`](../docs/plans/IMPL-IOS-01-STATUS.md).
+> The summary below covers the app shell + auth; the sync engine and the 33
+> feature screens on shared ViewModels landed on top of it.
+
+**App shell & auth:**
 - Adaptive navigation root (`RootView`): `TabView` on compact (iPhone),
   `NavigationSplitView` on regular width (iPad) — the D16 600dp↔size-class
   breakpoint parity, with a "More" bucket on phone mirroring Android's MoreScreen.
@@ -104,12 +115,16 @@ account.
 - SwiftLint config; XcodeGen spec with app + unit-test (Swift Testing) + UI-test
   (XCUITest) targets.
 
-**Stubbed (pins the API/shape; wiring lands in the noted phase):**
-- `SyncBridge` (2C) — the SKIE Flow-collection API, foreground/push/BGTask pull.
-- All `Features/*` screens — one View per top-level destination with a
-  doc-comment naming its Android parity screen(s) + shared ViewModel.
-- `CollectionRegistryBridgeTest` (Swift Testing) — `.disabled` until the
-  XCFramework exists.
+**Built on top of the shell (see STATUS for detail):**
+- The offline-first data layer: SQLDelight mirror + outbox + delta-sync engine +
+  AES-GCM `PayloadCipher`, `SyncBridge` (foreground/BGTask pull, first-sync gate),
+  sign-out wipe, parked-op recovery.
+- 33 `Features/*` screens bound to the shared KMP ViewModels, over the networked
+  `Http*Repository` layer + `KtorSseClient` streaming transport.
+
+**Still open (see STATUS §"What's NOT done"):** on-device verification, push (FCM)
+activation, several author-new-shared-VM features, and platform services
+(med-reminder scheduling, TTS coach voice).
 
 ## Layout
 
