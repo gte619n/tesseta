@@ -55,6 +55,43 @@ jobs:
         id: buildnum
         run: echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
+      # The app targets the iOS 26 SDK (project.yml deploymentTarget 26.0, no
+      # @available guards per D16), so CI must use Xcode 26 — the runner image
+      # default (Xcode 16.x) ships the iOS 18 SDK and cannot compile the sources.
+      # Pick the highest installed Xcode 26.x so we don't pin an exact point
+      # release; fails loudly if none is present rather than silently building
+      # against the wrong SDK.
+      - name: Select Xcode 26
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n1)/Contents/Developer"
+          xcodebuild -version
+
+      # gym builds the SwiftUI app, which links SharedCore.xcframework. That
+      # framework is produced by the KMP :core module and is NOT committed (it
+      # lives under shared/core/build/), so it must be built on a clean checkout
+      # before xcodebuild runs — otherwise gym fails with "no XCFramework found".
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      - name: Build SharedCore XCFramework (release)
+        working-directory: shared
+        run: ./gradlew :core:assembleSharedCoreReleaseXCFramework
+
+      # The .xcodeproj is generated from project.yml (not committed, to avoid
+      # merge-hostile .pbxproj), so gym has nothing to build until XcodeGen runs.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
       - name: Set up Ruby + fastlane (bundler)
         uses: ruby/setup-ruby@354a1ad156761f5ee2b7b13fa8e09943a5e8d252 # v1.229.0
         with:

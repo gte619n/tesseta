@@ -145,6 +145,34 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      # The app targets the iOS 26 SDK (project.yml deploymentTarget 26.0, no
+      # @available guards per D16). The runner image default is Xcode 16.x (iOS 18
+      # SDK), which cannot compile the sources, so select the highest installed
+      # Xcode 26.x. Fails loudly if none is present rather than building against
+      # the wrong SDK.
+      - name: Select Xcode 26
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n1)/Contents/Developer"
+          xcodebuild -version
+
+      # The app links SharedCore.xcframework, produced by the KMP :core module and
+      # NOT committed (lives under shared/core/build/). It must be built on a clean
+      # checkout before xcodebuild, or the build fails with "no XCFramework found".
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build SharedCore XCFramework (release)
+        working-directory: shared
+        run: ./gradlew :core:assembleSharedCoreReleaseXCFramework
+
       # XcodeGen turns the committed project.yml into HealthFitness.xcodeproj. Keeping
       # the .xcodeproj out of git avoids merge conflicts on the generated file.
       - name: Install XcodeGen
