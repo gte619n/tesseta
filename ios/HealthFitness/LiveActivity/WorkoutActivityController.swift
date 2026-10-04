@@ -98,8 +98,10 @@ final class WorkoutActivityController {
     /// Pure mapping: session snapshot → ActivityKit content-state. The rest
     /// countdown becomes a wall-clock `restEndsAt` (now + remaining) so the widget
     /// counts it down itself. Exposed `static` + pure so the mapping is tested
-    /// without requesting a real activity.
-    static func contentState(
+    /// without requesting a real activity. `nonisolated` because it touches no
+    /// main-actor state — it lets the synchronous tests call it directly (the
+    /// enclosing controller is `@MainActor` only for its ActivityKit lifecycle).
+    nonisolated static func contentState(
         from snapshot: Snapshot,
         now: Date = .now
     ) -> WorkoutActivityAttributes.ContentState {

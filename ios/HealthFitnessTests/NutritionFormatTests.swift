@@ -20,8 +20,11 @@ struct NutritionFormatTests {
         #expect(out.proteinGrams == 24)
         #expect(out.carbsGrams == 48)
         #expect(out.fatGrams == 12)
-        #expect(out.fiberGrams == 7.2)
-        #expect(out.sugarGrams == 19.2)
+        // fiber/sugar are non-terminating binary fractions (3 × 2.4 = 7.1999…);
+        // forPortion keeps full IEEE-754 precision to match Android's math, so
+        // compare with a tolerance (display formatting is what rounds).
+        #expect(abs((out.fiberGrams ?? .nan) - 7.2) < 0.0001)
+        #expect(abs((out.sugarGrams ?? .nan) - 19.2) < 0.0001)
     }
 
     @Test("forPortion respects the 0.5× quantity step")
