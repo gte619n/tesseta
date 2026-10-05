@@ -92,11 +92,30 @@ fun fixedRepTarget(p: Prescription): Int? =
         p.repsMax ?: p.repsMin
     }
 
-/** "45 lb" for a loaded target, "BW" for a bodyweight movement, null when unknown. */
+/**
+ * Whether this exercise's load is LOGGED PER HAND — a bilateral dumbbell lift or a
+ * dual/functional-cable movement. Display-only heuristic that mirrors the backend
+ * {@code LoadConventionResolver}'s name fallback, so the coaching screen can label
+ * the per-hand number ("55 lb/hand") instead of letting it read as a light total.
+ * The logged number itself is unchanged — this only drives the label. A single
+ * dumbbell held in both hands (goblet, pullover) IS the total, so it stays total.
+ */
+fun isPerHandLoad(p: Prescription): Boolean {
+    val n = p.exercise?.name?.lowercase() ?: return false
+    val single = listOf("goblet", "single dumbbell", "single-dumbbell", "one dumbbell", "dumbbell pullover")
+    if (single.any { n.contains(it) }) return false
+    val perHand = listOf("dumbbell", "db ", "dual cable", "dual-cable", "functional trainer", "cable crossover")
+    return perHand.any { n.contains(it) }
+}
+
+/** The weight unit for a prescription: "lb/hand" for a per-hand load, else "lb". */
+fun weightUnitLabel(p: Prescription): String = if (isPerHandLoad(p)) "lb/hand" else "lb"
+
+/** "45 lb" (or "55 lb/hand" for a per-hand load), "BW" for bodyweight, null when unknown. */
 private fun weightTargetLabel(p: Prescription): String? {
     val lbs = p.targetWeightLbs
     return when {
-        lbs != null && lbs > 0.0 -> "${trimNumber(lbs)} lb"
+        lbs != null && lbs > 0.0 -> "${trimNumber(lbs)} ${weightUnitLabel(p)}"
         p.isBodyweight -> "BW"
         else -> null
     }

@@ -173,6 +173,18 @@ interface WorkoutProgramApi {
         @Body body: LastSetsRequest,
     ): Map<String, List<LoggedSetDto>>
 
+    /**
+     * Recent logged sets for ONE exercise across all of the caller's programs
+     * (incl. archived/imported), newest first — each with date, load, reps and
+     * effort (RIR / legacy RPE). Backs the coaching screen's per-exercise history
+     * popup. [limit] is clamped server-side to [0, 100].
+     */
+    @GET("api/me/workout-programs/exercises/{exerciseId}/history")
+    suspend fun exerciseHistory(
+        @Path("exerciseId") exerciseId: String,
+        @Query("limit") limit: Int = 40,
+    ): List<ExerciseSetLogDto>
+
     // The program's effective nutrition guidance (active phase's, else
     // program-level); 204 → null body.
     @GET("api/me/workout-programs/{id}/nutrition-guidance")

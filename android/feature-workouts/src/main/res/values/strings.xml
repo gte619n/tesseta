@@ -112,4 +112,11 @@
         <item quantity="one">%1$d set done</item>
         <item quantity="other">All %1$d sets done</item>
     </plurals>
+    <string name="workout_session_history_title">Your history</string>
+    <string name="workout_session_history_empty">No logged history yet for this exercise.</string>
+    <string name="workout_session_history_undated">Earlier</string>
+    <plurals name="workout_session_history_sets">
+        <item quantity="one">%1$d set</item>
+        <item quantity="other">%1$d sets</item>
+    </plurals>
 </resources>
