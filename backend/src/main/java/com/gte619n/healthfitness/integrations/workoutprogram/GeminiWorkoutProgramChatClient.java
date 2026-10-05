@@ -109,7 +109,13 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
         // result back as a function response and re-invoke. The propose tool is
         // terminal (its args become the proposal — no function response needed).
         for (int round = 0; round < MAX_TOOL_ROUNDS && proposal == null; round++) {
-            List<FunctionCall> dataCalls = new ArrayList<>();
+            // Capture the raw model Part objects (not just the FunctionCall) for any
+            // data-tool call: Gemini 3 thinking models attach a thought_signature to
+            // the functionCall Part, and that signature MUST be echoed back verbatim
+            // on the next request or the API 400s ("Function call is missing a
+            // thought_signature in functionCall parts"). Part.fromFunctionCall(name,
+            // args) drops it, so we re-send the original Parts instead.
+            List<Part> dataCallParts = new ArrayList<>();
             com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.Usage roundUsage =
                 com.gte619n.healthfitness.integrations.ai.GeminiUsageExtractor.Usage.EMPTY;
             try (ResponseStream<GenerateContentResponse> stream =
@@ -124,23 +130,29 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
                         text.append(delta);
                         if (onToken != null) onToken.accept(delta);
                     }
-                    List<FunctionCall> calls = chunk.functionCalls();
-                    if (calls == null) continue;
-                    for (FunctionCall call : calls) {
+                    List<Part> parts = chunk.parts();
+                    if (parts == null) continue;
+                    for (Part part : parts) {
+                        FunctionCall call = part.functionCall().orElse(null);
+                        if (call == null) continue;
                         String name = call.name().orElse(null);
                         if (TOOL_NAME.equals(name)) {
                             if (proposal == null) proposal = toProgram(call.args().orElse(Map.of()));
                         } else if (TOOL_EXERCISE_HISTORY.equals(name) || TOOL_LAB_HISTORY.equals(name)) {
-                            dataCalls.add(call);
+                            dataCallParts.add(part);
                         }
                     }
                 }
             }
             inTokens += roundUsage.inputTokens();
             outTokens += roundUsage.outputTokens();
-            if (proposal != null || dataCalls.isEmpty()) break;
-            // Append the model's tool-call turn + our function responses, then loop.
-            for (FunctionCall call : dataCalls) {
+            if (proposal != null || dataCallParts.isEmpty()) break;
+            // One model turn carrying the model's original functionCall Parts verbatim
+            // (preserving each thought_signature), followed by one user turn with the
+            // matching function responses in the same order.
+            List<Part> responseParts = new ArrayList<>();
+            for (Part part : dataCallParts) {
+                FunctionCall call = part.functionCall().orElseThrow();
                 String name = call.name().orElse("");
                 Map<String, Object> args = call.args().orElse(Map.of());
                 Map<String, Object> result;
@@ -150,11 +162,10 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
                     result = Map.of("error", e.getMessage() == null ? "tool failed" : e.getMessage());
                 }
                 if (result == null) result = Map.of();
-                contents.add(Content.builder().role("model")
-                    .parts(List.of(Part.fromFunctionCall(name, args))).build());
-                contents.add(Content.builder().role("user")
-                    .parts(List.of(Part.fromFunctionResponse(name, result))).build());
+                responseParts.add(Part.fromFunctionResponse(name, result));
             }
+            contents.add(Content.builder().role("model").parts(dataCallParts).build());
+            contents.add(Content.builder().role("user").parts(responseParts).build());
         }
         } catch (RuntimeException e) {
             recorder.recordError(
@@ -452,11 +463,23 @@ public class GeminiWorkoutProgramChatClient implements WorkoutProgramChatClient 
             actually lifted (last-performed date → staleness, best recent set, e1RM, \
             typical RPE, rep ranges, recent volume trend). Use it.
             - When you know an exercise's e1RM, prescribe a concrete targetWeightLbs = \
-            e1RM × the target intensity for the rep/RPE goal, then DISCOUNT for layoff \
-            and ease-in: <2 weeks stale none, 2–6w about −10%, 6–12w about −20%, >12w \
-            about −30% and start sub-maximal. An explicit "ease in" intent compounds \
-            the discount and caps the early ramp. Set loadBasis to a short rationale, \
-            e.g. "e1RM 205 from 185x5 ~8wk ago, -10% ease-in".
+            e1RM × the target intensity for the rep/RPE goal.
+            - NEVER MOVE THE LIFTER BACKWARDS. Anchor to what they are CURRENTLY \
+            lifting — the digest's best recent set (and get_exercise_history for the \
+            latest sessions). The prescribed load at the target reps must be at or \
+            ABOVE their most recent working sets at a comparable rep count; do not \
+            cherry-pick an older, lighter session to justify a lower number. If the \
+            new block uses higher reps than they last trained, expect a somewhat \
+            lighter load for those reps — but still grounded in the current e1RM, not \
+            discounted below it.
+            - DISCOUNT ONLY FOR A REAL LAYOFF, driven by the last-performed staleness: \
+            <2 weeks → NO discount (they are training now — prescribe at/above current \
+            load), 2–6w about −10%, 6–12w about −20%, >12w about −30% and start \
+            sub-maximal. Do NOT apply an "ease-in" discount to a currently-trained \
+            lift just because the PROGRAM is new — ease-in is for a genuine break from \
+            that movement, not a fresh plan. Only an explicit user "ease in" request \
+            may compound it. Set loadBasis to a short rationale, e.g. "e1RM 205 from \
+            185x5 ~8wk ago, -10% ease-in", or "holding your current 65x9 working load".
             - For lifts with NO logged history, omit targetWeightLbs and prescribe by \
             RPE or %1RM. Imported weight-only rows are a low-confidence floor — let \
             them inform, never anchor.

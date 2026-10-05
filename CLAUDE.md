@@ -99,6 +99,14 @@
   upload the bytes. Set `mediaResolution = MEDIA_RESOLUTION_LOW` to cut video
   token cost (~100 tok/s vs ~300 at default). Small images still go inline via
   `Part.fromBytes`.
+- **Multi-turn Gemini tool loops must preserve `thought_signature`.** Gemini 3
+  thinking models attach a `thought_signature` to each `functionCall` Part; when
+  you send the model's tool-call turn back (model turn + your `functionResponse`)
+  echo those Parts **verbatim** — capture them from `chunk.parts()`, don't rebuild
+  with `Part.fromFunctionCall(name, args)`, which drops the signature and 400s
+  (`Function call is missing a thought_signature in functionCall parts`). Only
+  agentic loops (tool call → feed result → re-invoke) hit this; single-shot
+  terminal tool calls don't. See `GeminiWorkoutProgramChatClient`.
 
 ## Never
 - Commit secrets, service account JSON keys, OAuth client secrets, or

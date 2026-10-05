@@ -5,6 +5,7 @@ import com.gte619n.healthfitness.domain.workouts.program.Block
 import com.gte619n.healthfitness.domain.workouts.program.BlockType
 import com.gte619n.healthfitness.domain.workouts.program.DeloadModifier
 import com.gte619n.healthfitness.domain.workouts.program.DemoFrame
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSetLog
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.Intensity
 import com.gte619n.healthfitness.domain.workouts.program.IntensityKind
@@ -61,6 +62,29 @@ data class RunDayRequest(
  */
 data class LastSetsRequest(
     val exerciseIds: List<String>,
+)
+
+/**
+ * One historical logged set from GET .../exercises/{id}/history — backs the
+ * coaching screen's per-exercise history popup. [date] is an ISO LocalDate
+ * string (yyyy-MM-dd); all fields nullable so imported/legacy rows decode.
+ */
+data class ExerciseSetLogDto(
+    val date: String? = null,
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+    val rir: Double? = null,
+    val rirSource: String? = null,
+    val rpe: Double? = null,
+)
+
+fun ExerciseSetLogDto.toDomain(): ExerciseSetLog = ExerciseSetLog(
+    date = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+    weightLbs = weightLbs,
+    reps = reps,
+    rir = rir,
+    rirSource = rirSource,
+    rpe = rpe,
 )
 
 /**

@@ -99,7 +99,8 @@ public class ExercisePerformanceDigestService {
                 .thenComparing(p -> p.completedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
                 .reversed())
             .limit(Math.max(0, limit))
-            .map(p -> new ExerciseSetLog(p.date, p.weightLbs, p.reps, p.rpe, p.programId))
+            .map(p -> new ExerciseSetLog(
+                p.date, p.weightLbs, p.reps, p.rpe, p.rir, p.rirSource, p.programId))
             .toList();
     }
 
@@ -163,7 +164,8 @@ public class ExercisePerformanceDigestService {
                                 .computeIfAbsent(rx.exerciseId(), k -> new ArrayList<>())
                                 .add(new PerformedSet(
                                     date, set.weightLbs(), set.reps(), set.rpe(),
-                                    set.completedAt(), program.programId()));
+                                    set.completedAt(), program.programId(),
+                                    set.rir(), set.rirSource() == null ? null : set.rirSource().name()));
                         }
                     }
                 }
@@ -184,7 +186,8 @@ public class ExercisePerformanceDigestService {
                                 .computeIfAbsent(rx.exerciseId(), k -> new ArrayList<>())
                                 .add(new PerformedSet(
                                     ps.date(), set.weightLbs(), set.reps(), set.rpe(),
-                                    set.completedAt(), ps.sourceId()));
+                                    set.completedAt(), ps.sourceId(),
+                                    set.rir(), set.rirSource() == null ? null : set.rirSource().name()));
                         }
                     }
                 }
@@ -286,6 +289,6 @@ public class ExercisePerformanceDigestService {
     /** Flattened performed set, internal to the scan/derivation fold. */
     record PerformedSet(
         LocalDate date, Double weightLbs, Integer reps, Double rpe,
-        Instant completedAt, String programId
+        Instant completedAt, String programId, Double rir, String rirSource
     ) {}
 }
