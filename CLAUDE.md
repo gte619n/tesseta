@@ -78,6 +78,10 @@
   `feature/<slug>` (e.g. `feature/build_fixes`).
 - Branch from `origin/main`:
   `git worktree add -b feature/<slug> .worktrees/<slug> origin/main`
+- Android Gradle builds require the web OAuth client id (injected from a secret
+  in CI). Locally / in a fresh worktree pass a stub to compile/test without it:
+  `-PwebOauthClientId=000000.apps.googleusercontent.com`. Also recreate the
+  gitignored `local.properties` (`sdk.dir=<android-sdk path>`) per worktree.
 
 ## AI Models
 - **General AI work** (text generation, parsing, extraction, lookup):
@@ -144,6 +148,12 @@
   BOM-managed transitive version via an `extra["<lib>.version"]` property in
   `backend/build.gradle.kts` (see the existing block there). This runs only at
   deploy time, not in PR CI, so it can silently keep prod on a stale revision.
+  When the only fixed version is a **major** upgrade (e.g. a Spring Framework 7
+  fix for a Boot 3.x app) so the `extra[...]` override can't apply, suppress the
+  finding in the repo-root **`.trivyignore`** (wired via `--ignorefile=.trivyignore`
+  on the `scan-image` step) — ONLY for a provably non-reachable CVE, and each entry
+  must carry a dated justification + a removal condition. The scan step runs with
+  `cwd=/workspace`, so the file lives at the repo root, not under `backend/`.
 - **Cloud Run Jobs reuse the backend image, which is tuned for 2Gi.** The image
   `ENTRYPOINT` hardcodes `-XX:MaxRAMPercentage=65.0` (`backend/Dockerfile`), so
   any Cloud Run surface running it — service *or* job — must be provisioned
@@ -190,6 +200,13 @@ local pnpm refuses to run. Match it, run tooling via the local binaries
   `export CLOUDSDK_AUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)`.
 - Gotcha: GNU `timeout` is NOT installed — don't wrap gcloud/curl in it; it
   fails with 'command not found' and looks like an auth/API failure.
+- **Reading a failed Cloud Build's logs headless:** `gcloud builds log <id>`
+  needs user creds (fails 'Reauthentication') — export
+  `CLOUDSDK_AUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)`
+  first. The Cloud Logging `entries:list` server filter on
+  `resource.labels.build_id` returns 0 for build logs; filter by
+  `logName=".../logs/cloudbuild"` + a tight `timestamp` window and post-filter by
+  build_id client-side. The Trivy result is in the `scan-image` step lines.
 - `AGENTS.md` (formerly a never-filled placeholder for the Google Health API
   Parity Tool context file) was archived 2026-09 to
   `docs/archive/2026-09/AGENTS.md` — there is no `AGENTS.md` at the repo root.
