@@ -1,0 +1,13 @@
+# Trivy vulnerability suppressions for the backend image scan (backend/cloudbuild.yaml
+# `scan-image` step). Each entry MUST carry a dated justification and a removal
+# condition. Suppress ONLY non-reachable findings; never silence an exploitable one.
+
+# CVE-2026-47884 — spring-webmvc 6.2.19 (via Spring Boot 3.5.14).
+# CRITICAL RCE "via improper path limitation in XsltView". Not reachable in this
+# service: the backend is a pure JSON REST API (73 @RestController, 0 @Controller)
+# and uses NO server-rendered views — no XsltView / InternalResourceView / JSP /
+# FreeMarker view resolution anywhere, so the vulnerable code path is never invoked.
+# Trivy's only fixed version is 7.0.9 (Spring Framework 7 / Spring Boot 4), a major
+# breaking upgrade tracked separately.
+# Added 2026-10-06. REMOVE once the Spring Boot 4 upgrade lands (spring-webmvc >= 7.0.9).
+CVE-2026-47884
