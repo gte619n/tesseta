@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // SyncUiState + the shared SyncStatus signals — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave A2 — Settings › Sync log. Parity target (Android):
 /// `app/.../mobile/sync/SyncLogScreen.kt` + `SyncStatusViewModel` (the global
@@ -25,6 +25,9 @@ struct SyncDiagnosticsView: View {
         online: true, pendingCount: 0, failedCount: 0, updatedElsewhere: false, lastError: nil
     )
 
+    private let vm = IosComposition.shared.syncStatusViewModel()
+    @State private var subscription: FlowSubscription?
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -42,14 +45,23 @@ struct SyncDiagnosticsView: View {
         .background(Theme.canvas)
         .navigationTitle("Sync log")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            // vm.wrapped.refresh()  — foreground delta pull
+        .refreshable { vm.refresh() }
+        .onAppear {
+            subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                if let s = value as? SyncStatusViewModel.UiState { status = Self.map(s) }
+            }
         }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(SyncStatusViewModel(...))
-        //     await vm.observe(vm.wrapped.state) { self.status = Self.map($0) }
-        // }
+        .onDisappear { subscription?.cancel() }
+    }
+
+    static func map(_ s: SyncStatusViewModel.UiState) -> SyncStatus {
+        SyncStatus(
+            online: true,  // no shared reachability source yet
+            pendingCount: Int(s.pendingCount),
+            failedCount: Int(s.failedCount),
+            updatedElsewhere: false,
+            lastError: s.lastError,
+        )
     }
 
     private var statusCard: some View {
@@ -71,7 +83,7 @@ struct SyncDiagnosticsView: View {
         SettingsCard(title: "Actions",
                      description: "Re-send anything that hasn’t reached the server") {
             Button {
-                // vm.wrapped.retry()  — re-arm FAILED rows + drain the outbox
+                vm.retry()  // re-arm FAILED rows + drain the outbox
             } label: {
                 Text(status.failedCount > 0 ? "Retry failed changes" : "Sync now")
             }

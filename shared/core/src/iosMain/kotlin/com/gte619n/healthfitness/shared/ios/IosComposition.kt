@@ -65,6 +65,7 @@ import com.gte619n.healthfitness.shared.presentation.blood.UploadLabReportViewMo
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.DexaScanDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.UploadDexaViewModel
+import com.gte619n.healthfitness.shared.presentation.sync.SyncStatusViewModel
 import kotlinx.coroutines.flow.flowOf
 import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
@@ -433,6 +434,10 @@ object IosComposition {
             unitPrefsRepo = unitPrefs,
             scanId = scanId,
         )
+
+    /** Settings › Sync log: queued/failed outbox counts + last error, retry, refresh. */
+    fun syncStatusViewModel(): SyncStatusViewModel =
+        SyncStatusViewModel(outbox = outboxStore(), engine = syncEngine())
 
     /** Lab-report PDF upload → extract → save (online-only AI flow, D17). */
     fun uploadLabReportViewModel(): UploadLabReportViewModel =
