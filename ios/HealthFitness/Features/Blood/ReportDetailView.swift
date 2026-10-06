@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // ReportDetailViewModel, its UiState, BloodTestReport, ExtractedMarker — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E1 — lab-report detail. Parity target (Android):
 /// feature-blood `ReportDetailScreen` + `components/ExtractedMarkerRow` +
@@ -24,15 +24,28 @@ struct ReportDetailView: View {
         case error(String)
     }
 
+    private let vm: ReportDetailViewModel
     @State private var state: ScreenState = .loading
+    @State private var subscription: FlowSubscription?
     @State private var showDeleteConfirm = false
     @Environment(\.dismiss) private var dismiss
+
+    init(reportId: String) {
+        self.reportId = reportId
+        self.vm = IosComposition.shared.reportDetailViewModel(reportId: reportId)
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Lab report")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? ReportDetailViewModelUiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
             .toolbar {
                 if case .ready = state {
                     ToolbarItem(placement: .primaryAction) {
@@ -100,7 +113,32 @@ struct ReportDetailView: View {
         dismiss()
     }
 
-    // static func map(_ s: ReportDetailViewModel.UiState) -> ScreenState { ... }  // Phase 0D
+    // MARK: shared UiState → local ScreenState
+
+    static func map(_ s: ReportDetailViewModelUiState) -> ScreenState {
+        switch s {
+        case let ready as ReportDetailViewModelUiStateReady:
+            return .ready(mapReport(ready.report))
+        case let error as ReportDetailViewModelUiStateError:
+            return .error(error.message)
+        default:
+            return .loading
+        }
+    }
+
+    private static func mapReport(_ r: SharedCore.BloodTestReport) -> BloodTestReport {
+        BloodTestReport(
+            reportId: r.reportId,
+            sampleDate: r.sampleDate.map { Date(timeIntervalSince1970: Double($0.toEpochDays()) * 86_400) },
+            labSource: r.labSource,
+            markers: r.markers.map { e in
+                let flag: ExtractedMarker.Flag?
+                if let f = e.flag { flag = (f == SharedCore.ExtractedMarker.Flag.h) ? .high : .low } else { flag = nil }
+                return ExtractedMarker(name: e.name, value: e.value?.doubleValue, unit: e.unit, flag: flag)
+            },
+            pdfDownloadPath: r.pdfDownloadPath,
+        )
+    }
 }
 
 /// One extracted marker row — parity with Android's `ExtractedMarkerRow` (name,

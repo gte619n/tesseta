@@ -56,8 +56,12 @@ import com.gte619n.healthfitness.shared.sync.SqlDelightOutboxStore
 import com.gte619n.healthfitness.shared.sync.SyncEngine
 import com.gte619n.healthfitness.shared.sync.SyncEngineImpl
 import com.gte619n.healthfitness.shared.db.MirrorDatabase
+import com.gte619n.healthfitness.shared.domain.blood.BloodMarker
 import com.gte619n.healthfitness.shared.presentation.blood.BloodOverviewViewModel
+import com.gte619n.healthfitness.shared.presentation.blood.MarkerDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.blood.ReportDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
+import com.gte619n.healthfitness.shared.presentation.bodycomposition.DexaScanDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsChatViewModel
@@ -397,6 +401,33 @@ object IosComposition {
             bodyRepo = HttpBodyCompositionRepository(client()),
             dexaRepo = HttpDexaScanRepository(client()),
             unitPrefsRepo = unitPrefs,
+        )
+
+    /**
+     * Blood marker drill-down: readings table + history chart for one marker.
+     * Takes the marker's enum NAME (the iOS mirror's rawValue == the shared enum
+     * name) so the Swift side doesn't have to bridge the 9-case enum.
+     */
+    fun markerDetailViewModel(markerName: String): MarkerDetailViewModel =
+        MarkerDetailViewModel(
+            readings = HttpBloodReadingRepository(client()),
+            reports = HttpBloodTestReportRepository(client()),
+            marker = BloodMarker.valueOf(markerName),
+        )
+
+    /** Lab-report drill-down: the parsed report + its extracted marker values. */
+    fun reportDetailViewModel(reportId: String): ReportDetailViewModel =
+        ReportDetailViewModel(
+            reports = HttpBloodTestReportRepository(client()),
+            reportId = reportId,
+        )
+
+    /** DEXA scan drill-down: composition breakdown + optimistic patch/delete. */
+    fun dexaScanDetailViewModel(scanId: String): DexaScanDetailViewModel =
+        DexaScanDetailViewModel(
+            repo = HttpDexaScanRepository(client()),
+            unitPrefsRepo = unitPrefs,
+            scanId = scanId,
         )
 
     /**

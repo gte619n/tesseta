@@ -1,6 +1,6 @@
 import SwiftUI
 import Charts
-// import SharedCore  // MarkerDetailViewModel, its UiState, LatestMarker, HistoryRow — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E1 — single-marker detail. Parity target (Android):
 /// feature-blood `MarkerDetailScreen` + `components/MarkerHistoryChart` — a
@@ -20,20 +20,27 @@ struct MarkerDetailView: View {
         case error(String)
     }
 
+    private let vm: MarkerDetailViewModel
     @State private var state: ScreenState = .loading
+    @State private var subscription: FlowSubscription?
+
+    init(marker: BloodMarker) {
+        self.marker = marker
+        // rawValue == the shared BloodMarker enum name (valueOf on the Kotlin side).
+        self.vm = IosComposition.shared.markerDetailViewModel(markerName: marker.rawValue)
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle(marker.displayName)
             .navigationBarTitleDisplayMode(.inline)
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(MarkerDetailViewModel(readings: DI.bloodReadingRepo,
-        //                                                        reports: DI.bloodReportRepo,
-        //                                                        marker: marker.shared))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? MarkerDetailViewModelUiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
@@ -100,7 +107,56 @@ struct MarkerDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // static func map(_ s: MarkerDetailViewModel.UiState) -> ScreenState { ... }  // Phase 0D
+    // MARK: shared UiState → local ScreenState
+
+    static func map(_ s: MarkerDetailViewModelUiState) -> ScreenState {
+        switch s {
+        case let ready as MarkerDetailViewModelUiStateReady:
+            return .ready(marker: mapMarker(ready.latest), rows: ready.rows.map(mapHistoryRow))
+        case let error as MarkerDetailViewModelUiStateError:
+            return .error(error.message)
+        default:  // Loading
+            return .loading
+        }
+    }
+
+    private static func mapMarker(_ m: SharedCore.LatestMarker) -> LatestMarker {
+        LatestMarker(
+            marker: BloodMarker(rawValue: m.marker.name) ?? .ldl,
+            value: m.value?.doubleValue,
+            unit: m.unit,
+            sampleDate: m.sampleDate.map(localDateToDate),
+            source: mapSource(m.source),
+            history: m.history.map(mapHistoryPoint),
+        )
+    }
+
+    private static func mapHistoryPoint(_ p: SharedCore.MarkerHistoryPoint) -> MarkerHistoryPoint {
+        MarkerHistoryPoint(
+            date: localDateToDate(p.date),
+            value: p.value,
+            isLab: !(p.source is MarkerHistoryPointSourceManual),
+        )
+    }
+
+    private static func mapHistoryRow(_ r: MarkerDetailViewModel.HistoryRow) -> MarkerHistoryRow {
+        MarkerHistoryRow(
+            date: localDateToDate(r.date),
+            value: r.value,
+            unit: r.unit,
+            sourceLabel: r.sourceLabel,
+        )
+    }
+
+    private static func mapSource(_ s: SharedCore.LatestMarker.Source) -> LatestMarker.Source {
+        if s == SharedCore.LatestMarker.Source.manual { return .manual }
+        if s == SharedCore.LatestMarker.Source.lab { return .lab }
+        return .none
+    }
+
+    private static func localDateToDate(_ d: Kotlinx_datetimeLocalDate) -> Date {
+        Date(timeIntervalSince1970: Double(d.toEpochDays()) * 86_400)
+    }
 }
 
 // MARK: - Trend chart
