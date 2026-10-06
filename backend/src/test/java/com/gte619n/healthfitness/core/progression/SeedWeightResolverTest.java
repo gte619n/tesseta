@@ -43,9 +43,24 @@ class SeedWeightResolverTest {
             ex("Dumbbell Deadlift", MovementPattern.HINGE, Mechanic.COMPOUND));
         // The dumbbell variant is logged per hand, so its seed must be lighter —
         // roughly half — rather than the absurd 95 lb "deadlift" the old table gave.
+        // Half of 95 is 47.5, which is no dumbbell anyone owns: the seed snaps DOWN
+        // to the 5 lb rack step (45), never up.
         assertThat(dumbbell).isLessThan(barbell);
-        assertThat(dumbbell).isEqualTo(barbell / 2.0);
+        assertThat(dumbbell).isEqualTo(45.0);
         assertThat(dumbbell).isGreaterThanOrEqualTo(SeedWeightResolver.FLOOR_LBS);
+    }
+
+    @Test
+    void everySeedLandsOnARealFivePoundStep() {
+        for (MovementPattern pattern : MovementPattern.values()) {
+            for (String name : List.of("Dumbbell Deadlift", "Barbell Row", "Dumbbell Curl",
+                "Cable Push-down", "Lateral Raise", "Weighted Crunch")) {
+                double seed = SeedWeightResolver.seedWeightLbs(ex(name, pattern, Mechanic.COMPOUND));
+                assertThat(seed % SeedWeightResolver.SEED_INCREMENT_LBS)
+                    .as("%s / %s seeds %s", name, pattern, seed)
+                    .isEqualTo(0.0);
+            }
+        }
     }
 
     @Test

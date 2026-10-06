@@ -426,6 +426,222 @@ class WorkoutScheduleServiceTest {
     }
 
     @Test
+    void continuationResumesDemonstratedLoadWhenStoredPrescriptionIsStale() {
+        // Prod bug (2026-10-06): the athlete's newest COMPLETED session was minted
+        // same-day from the author template (stored rx 160 × 12–15, rationale-less)
+        // but they actually lifted 180 × 8 on every set. The engine's derived next
+        // prescription had nowhere to land (no future sessions existed), so the
+        // continuation copied the stale stored 160 forward. The demonstrated top
+        // set must win, and the band must widen to admit the demonstrated reps.
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Press", 0, List.of(
+                new Prescription("legpress", 0, 4, 12, 15, null, null, 90, null, null, null, null,
+                    160.0, "Matches your recent 160x15 performance.")))));
+        ProgramPhase phase = new ProgramPhase(null, "Block", null, 0, null,
+            4, null, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(6), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = tday.dayId();
+
+        // Newest completed session: stored rx is the stale template (160 × 12–15),
+        // logged sets show the athlete actually did 180 × 8 on all four sets.
+        Prescription doneRx = new Prescription("legpress", 0, 4, 12, 15, null, null, 90, null, null, null,
+            List.of(
+                new LoggedSet(180.0, 8, null, null, java.time.Instant.now()),
+                new LoggedSet(180.0, 8, null, null, java.time.Instant.now()),
+                new LoggedSet(180.0, 8, null, null, java.time.Instant.now()),
+                new LoggedSet(180.0, 8, null, null, java.time.Instant.now())),
+            160.0, "Matches your recent 160x15 performance.", null);
+        LocalDate doneDate = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .minusWeeks(1);
+        scheduled.save(new ScheduledWorkout("u1", pid, doneDate + "_" + dayId, doneDate,
+            phaseId, dayId, "Lower", 4, false, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Press", 0, List.of(doneRx)))),
+            java.time.Instant.now(), 3600, null));
+        programService.setStatus("u1", pid, ProgramStatus.COMPLETED);
+
+        List<ScheduledWorkout> appended =
+            scheduleService.continueProgram("u1", pid, ContinuationScope.WEEK);
+        Prescription resumed = appended.get(0).session().blocks().get(0).prescriptions().get(0);
+
+        assertEquals(180.0, resumed.targetWeightLbs(),
+            "demonstrated 180×8 beats the stale stored 160 template target");
+        assertEquals(8, resumed.repsMin(), "band widens down to the demonstrated reps");
+        assertEquals(15, resumed.repsMax());
+        assertTrue(resumed.loadBasis() != null && resumed.loadBasis().contains("180"),
+            "load basis names the demonstrated set, was: " + resumed.loadBasis());
+    }
+
+    @Test
+    void demonstratedLoadFillsInWhenStoredTargetWasNeverStamped() {
+        // Prod bug sibling: an exercise whose stored prescriptions NEVER carried a
+        // target (the engine's writeback had nowhere to land) kept resuming null —
+        // so the response assembler re-seeded a "first-time lift" guess (the
+        // 47.5 lb dumbbell deadlift) despite weeks of real 75 lb logs.
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(
+                new Prescription("dbdl", 0, 4, 10, 12, null, null, 90, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Block", null, 0, null,
+            4, null, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(6), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = tday.dayId();
+
+        // Newest completed: stored target null (template never stamped), logged 75×8.
+        Prescription doneRx = new Prescription("dbdl", 0, 4, 10, 12, null, null, 90, null, null, null,
+            List.of(new LoggedSet(75.0, 8, null, null, java.time.Instant.now())),
+            null, null, null);
+        LocalDate doneDate = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .minusWeeks(1);
+        scheduled.save(new ScheduledWorkout("u1", pid, doneDate + "_" + dayId, doneDate,
+            phaseId, dayId, "Lower", 4, false, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(doneRx)))),
+            java.time.Instant.now(), 3600, null));
+
+        // Both rails resume the demonstrated 75 WITH its reps: the ad-hoc mint...
+        ScheduledWorkout minted = scheduleService.materializeOne("u1", pid, phaseId, dayId, LocalDate.now());
+        Prescription mintedRx = minted.session().blocks().get(0).prescriptions().get(0);
+        assertEquals(75.0, mintedRx.targetWeightLbs(),
+            "mint resumes the demonstrated load instead of leaving null (which re-seeds a guess)");
+        assertEquals(4, mintedRx.sets());
+        assertEquals(8, mintedRx.repsMin(),
+            "reps travel WITH the weight — the band admits the 8 reps the 75 was lifted for");
+        assertEquals(12, mintedRx.repsMax());
+
+        // ...and the continuation.
+        programService.setStatus("u1", pid, ProgramStatus.COMPLETED);
+        List<ScheduledWorkout> appended =
+            scheduleService.continueProgram("u1", pid, ContinuationScope.WEEK);
+        Prescription resumed = appended.get(0).session().blocks().get(0).prescriptions().get(0);
+        assertEquals(75.0, resumed.targetWeightLbs());
+        assertEquals(8, resumed.repsMin(), "continuation band admits the demonstrated 8 reps");
+    }
+
+    @Test
+    void materializeOneResumesEngineBandTogetherWithItsLoad() {
+        // "Run today" must resume weight AND the reps it was prescribed at as a
+        // unit: an engine-stamped 170 × 8–9 must not come back as 170 × the
+        // template's 12–15 band.
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Press", 0, List.of(
+                new Prescription("legpress", 0, 4, 12, 15, null, null, 90, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Block", null, 0, null,
+            4, null, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(6), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = tday.dayId();
+
+        // Newest working session: engine-stamped 170 at a tightened 8–9 band,
+        // performed exactly as prescribed (demo does not beat the stored target).
+        PrescriptionRationale rationale = new PrescriptionRationale(
+            ProgressionPath.WARMUP, Direction.UP, 10.0, null, null, Confidence.HIGH,
+            List.of("last: 160×15,15,15,15", "hit 12 on all sets → +10 lb"));
+        Prescription doneRx = new Prescription("legpress", 0, 4, 8, 9, null, null, 90, null, null, null,
+            List.of(new LoggedSet(170.0, 8, null, null, java.time.Instant.now())),
+            170.0, "double progression", rationale);
+        LocalDate doneDate = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+            .minusWeeks(1);
+        scheduled.save(new ScheduledWorkout("u1", pid, doneDate + "_" + dayId, doneDate,
+            phaseId, dayId, "Lower", 3, false, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Press", 0, List.of(doneRx)))),
+            java.time.Instant.now(), 3600, null));
+
+        ScheduledWorkout minted = scheduleService.materializeOne("u1", pid, phaseId, dayId, LocalDate.now());
+        Prescription rx = minted.session().blocks().get(0).prescriptions().get(0);
+        assertEquals(170.0, rx.targetWeightLbs());
+        assertEquals(8, rx.repsMin(), "the band the 170 was prescribed at travels with it");
+        assertEquals(9, rx.repsMax());
+        assertEquals(4, rx.sets());
+        assertTrue(rx.rationale() != null && rx.rationale().direction() == Direction.UP);
+    }
+
+    @Test
+    void nullTargetWorkingPrescriptionNoLongerShadowsDeloadFallback() {
+        // The newest working session's rx carried no target (never stamped), while
+        // an older deload session's rx did. The old putIfAbsent let the null-target
+        // working rx claim the slot, so the resume carried nothing at all.
+        FakeProgramRepo programs = new FakeProgramRepo();
+        FakeScheduledRepo scheduled = new FakeScheduledRepo();
+        WorkoutProgramService programService = new WorkoutProgramService(programs);
+        WorkoutScheduleService scheduleService = new WorkoutScheduleService(programs, scheduled, programService);
+
+        WorkoutDay mon = new WorkoutDay(null, "Lower", DayOfWeek.MON, "home", 0,
+            List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(
+                new Prescription("dbdl", 0, 4, 10, 12, null, null, 90, null, null, null, null)))));
+        ProgramPhase phase = new ProgramPhase(null, "Block", null, 0, null,
+            4, 4, null, null, null, List.of(mon));
+        WorkoutProgram created = programService.create(new WorkoutProgram("u1", null, "Test", null, null,
+            ProgramStatus.DRAFT, ProgramSource.MANUAL, LocalDate.now().minusWeeks(6), null, null,
+            List.of(phase), null, null, null));
+        String pid = created.programId();
+        WorkoutDay tday = created.phases().get(0).days().get(0);
+        String phaseId = created.phases().get(0).phaseId();
+        String dayId = tday.dayId();
+        LocalDate thisMonday = LocalDate.now()
+            .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+
+        // Older deload session: rx DOES carry a target (65) — and no logged sets.
+        Prescription deloadRx = new Prescription("dbdl", 0, 2, 8, 9, null, null, 90, null, null, null,
+            null, 65.0, "double progression", null);
+        LocalDate deloadDate = thisMonday.minusWeeks(2);
+        scheduled.save(new ScheduledWorkout("u1", pid, deloadDate + "_" + dayId, deloadDate,
+            phaseId, dayId, "Lower", 4, true, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(deloadRx)))),
+            java.time.Instant.now(), 3600, null));
+
+        // Newest working session: null target, and no logged weights either.
+        Prescription workingRx = new Prescription("dbdl", 0, 4, 10, 12, null, null, 90, null, null, null,
+            null, null, null, null);
+        LocalDate workingDate = thisMonday.minusWeeks(1);
+        scheduled.save(new ScheduledWorkout("u1", pid, workingDate + "_" + dayId, workingDate,
+            phaseId, dayId, "Lower", 5, false, "home", ScheduledStatus.COMPLETED,
+            new WorkoutDay(tday.dayId(), tday.label(), tday.dayOfWeek(), tday.locationId(), tday.orderIndex(),
+                List.of(new Block(null, BlockType.MAIN, "Hinge", 0, List.of(workingRx)))),
+            java.time.Instant.now(), 3600, null));
+
+        ScheduledWorkout minted = scheduleService.materializeOne("u1", pid, phaseId, dayId, LocalDate.now());
+        Prescription rx = minted.session().blocks().get(0).prescriptions().get(0);
+        assertEquals(65.0, rx.targetWeightLbs(),
+            "the deload rx's real target is the last resort — better than resuming nothing");
+        assertEquals(4, rx.sets(), "volume stays the template's, not the deload's 2×8–9");
+        assertEquals(10, rx.repsMin());
+    }
+
+    @Test
     void ensureUpcomingAppendsNextCycleWhenProgramRanOut() {
         // #1: a still-followed program with no remaining future sessions is extended
         // in place so the athlete always has a next workout (lazy auto-continue).
