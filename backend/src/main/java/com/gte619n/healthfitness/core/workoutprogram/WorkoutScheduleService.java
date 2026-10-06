@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -111,16 +112,17 @@ public class WorkoutScheduleService {
         if (existing.isPresent()) {
             return existing.get();
         }
-        // Resume each exercise's last progressed LOAD (weight, load-basis, engine
-        // rationale) so a re-run picks up where training left off instead of
-        // resetting to the author's week-one template. Rep/set targets stay the
-        // template's — a redo outside a periodized deload must show the author's
-        // normal volume, not whatever a prior deload week compressed reps to (see
-        // resumeDayLoads). Carrying the rationale is also what keeps the coach's
-        // rep-target lead intact — without it the logger falls back to the stale
-        // last-session rep carry (the "announces 15, snaps to 8" bug).
+        // Resume each exercise's last progressed prescription — weight AND the rep
+        // band/set count it was prescribed (or demonstrated) at, since a load is
+        // only meaningful at its reps — so a re-run picks up where training left
+        // off instead of resetting to the author's week-one template. Deload
+        // history never contributes volume (latestCompletedPrescriptions strips
+        // it), so a redo can't inherit a deload week's compressed sets/reps.
+        // Carrying the rationale is also what keeps the coach's rep-target lead
+        // intact — without it the logger falls back to the stale last-session rep
+        // carry (the "announces 15, snaps to 8" bug).
         Map<String, Prescription> resumeByExercise = latestCompletedPrescriptions(userId, programId);
-        WorkoutDay resumed = resumeDayLoads(day, resumeByExercise);
+        WorkoutDay resumed = resumeDay(day, resumeByExercise);
         ScheduledWorkout session = new ScheduledWorkout(
             userId, programId, scheduledId,
             date, phaseId, dayId, day.label(),
@@ -250,40 +252,159 @@ public class WorkoutScheduleService {
      * exercise that has no non-deload history at all.
      */
     private Map<String, Prescription> latestCompletedPrescriptions(String userId, String programId) {
-        Map<String, Prescription> working = new HashMap<>();   // from real training weeks
-        Map<String, Prescription> deloadOnly = new HashMap<>(); // fallback when that's all there is
+        Map<String, Prescription> working = new HashMap<>();        // newest working rx (volume, maybe load)
+        Map<String, Prescription> workingLoad = new HashMap<>();    // newest working rx that CARRIES a target
+        Map<String, Demonstrated> demonstrated = new HashMap<>();   // newest top set actually lifted (working weeks)
+        Map<String, Prescription> deloadOnly = new HashMap<>();     // fallback when that's all there is
         // findByStatus returns newest scheduled-date first, so the first time we
-        // see an exercise is its most recent prescription (in each bucket).
+        // see an exercise is its most recent entry (in each bucket).
         for (ScheduledWorkout sw : scheduled.findByStatus(userId, programId, ScheduledStatus.COMPLETED)) {
             WorkoutDay snapshot = sw.session();
             if (snapshot == null || snapshot.blocks() == null) {
                 continue;
             }
-            Map<String, Prescription> target = sw.isDeload() ? deloadOnly : working;
             for (Block b : snapshot.blocks()) {
                 if (b.prescriptions() == null) {
                     continue;
                 }
                 for (Prescription rx : b.prescriptions()) {
-                    if (rx.exerciseId() != null) {
-                        target.putIfAbsent(rx.exerciseId(), rx);
+                    if (rx.exerciseId() == null) {
+                        continue;
+                    }
+                    if (sw.isDeload()) {
+                        // Deload loads are artificially suppressed (observe-only), so
+                        // neither their prescriptions nor their logged sets represent
+                        // the trajectory — keep them only as a last-resort fallback.
+                        deloadOnly.putIfAbsent(rx.exerciseId(), rx);
+                        continue;
+                    }
+                    working.putIfAbsent(rx.exerciseId(), rx);
+                    if (rx.targetWeightLbs() != null) {
+                        workingLoad.putIfAbsent(rx.exerciseId(), rx);
+                    }
+                    Demonstrated top = Demonstrated.topOf(rx, sw.date());
+                    if (top != null) {
+                        demonstrated.putIfAbsent(rx.exerciseId(), top);
                     }
                 }
             }
         }
-        for (Map.Entry<String, Prescription> e : deloadOnly.entrySet()) {
-            working.putIfAbsent(e.getKey(), e.getValue());
+        Map<String, Prescription> resume = new HashMap<>();
+        Set<String> ids = new HashSet<>(working.keySet());
+        ids.addAll(deloadOnly.keySet());
+        for (String id : ids) {
+            Prescription vol = working.get(id);
+            if (vol == null) {
+                // Deload-only history: last resort, and only its LOAD counts — a
+                // deload's compressed volume must never seed a working session.
+                resume.put(id, loadOnly(deloadOnly.get(id)));
+                continue;
+            }
+            resume.put(id, mergeResume(vol, workingLoad.get(id), demonstrated.get(id), deloadOnly.get(id)));
         }
-        return working;
+        return resume;
+    }
+
+    /** A deload rx reduced to its load fields: volume (sets/reps) never travels. */
+    private static Prescription loadOnly(Prescription rx) {
+        return new Prescription(
+            rx.exerciseId(), rx.orderIndex(), null, null, null,
+            rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(),
+            rx.notes(), rx.deloadModifier(), null,
+            rx.targetWeightLbs(), rx.loadBasis(), rx.rationale());
+    }
+
+    /** The heaviest set the athlete actually completed for an exercise in one session. */
+    private record Demonstrated(double weightLbs, int reps, LocalDate date) {
+        static Demonstrated topOf(Prescription rx, LocalDate date) {
+            if (rx.loggedSets() == null) return null;
+            Demonstrated top = null;
+            for (LoggedSet set : rx.loggedSets()) {
+                if (set == null || set.weightLbs() == null || set.weightLbs() <= 0) continue;
+                if (set.reps() == null || set.reps() <= 0) continue;
+                if (top == null || set.weightLbs() > top.weightLbs()) {
+                    top = new Demonstrated(set.weightLbs(), set.reps(), date);
+                }
+            }
+            return top;
+        }
+    }
+
+    /**
+     * The resume prescription for one exercise: volume from the newest working
+     * session, load from whichever is stronger evidence of where training left
+     * off. The stored pre-session target is NOT trusted on its own — when the
+     * athlete demonstrably lifted MORE than the newest stored target (they
+     * overrode the plan, or the stored rx is a stale template copy the engine
+     * never re-stamped), the demonstrated top set wins and the rep band widens
+     * to include the demonstrated reps. Without this a continuation can
+     * resurrect a week-one template weight the athlete outgrew weeks ago (the
+     * "did 180×8, got told 160×12–15" bug): the engine's derived next
+     * prescription is only stamped onto already-materialized future sessions,
+     * so a completion with nothing planned ahead silently drops the trajectory,
+     * and the athlete's actual performance is the only durable record of it.
+     */
+    private static Prescription mergeResume(
+        Prescription vol, Prescription loadRx, Demonstrated demo, Prescription deloadRx) {
+        // Stored-load candidate: newest working rx with a target; else the deload
+        // fallback's (no longer shadowed by a newer null-target working rx).
+        Prescription stored = loadRx != null ? loadRx
+            : (deloadRx != null && deloadRx.targetWeightLbs() != null ? deloadRx : null);
+        boolean demoWins = demo != null
+            && (stored == null || demo.weightLbs() > stored.targetWeightLbs());
+        if (!demoWins) {
+            if (stored == null || stored == vol) {
+                return vol; // nothing better than the newest working rx itself
+            }
+            if (loadRx != null) {
+                // A weight is only meaningful at the reps it was prescribed for:
+                // the stored working rx's band and set count travel WITH its load
+                // (an engine 170×8–9 must not come back as 170×12–15).
+                return new Prescription(
+                    vol.exerciseId(), vol.orderIndex(),
+                    loadRx.sets() != null ? loadRx.sets() : vol.sets(),
+                    loadRx.repsMin() != null ? loadRx.repsMin() : vol.repsMin(),
+                    loadRx.repsMax() != null ? loadRx.repsMax() : vol.repsMax(),
+                    vol.durationSeconds(), vol.intensity(), vol.restSeconds(), vol.tempo(),
+                    vol.notes(), vol.deloadModifier(), null,
+                    loadRx.targetWeightLbs(), loadRx.loadBasis(), loadRx.rationale());
+            }
+            // Deload last resort: its load rides on the newest WORKING volume —
+            // a deload's compressed sets/reps never count.
+            return new Prescription(
+                vol.exerciseId(), vol.orderIndex(), vol.sets(), vol.repsMin(), vol.repsMax(),
+                vol.durationSeconds(), vol.intensity(), vol.restSeconds(), vol.tempo(),
+                vol.notes(), vol.deloadModifier(), null,
+                stored.targetWeightLbs(), stored.loadBasis(), stored.rationale());
+        }
+        // Demonstrated performance wins: resume its weight, and make sure the rep
+        // band admits the reps it was actually lifted for (8 reps at 180 must not
+        // come back as a 12–15 band that reads as failure before the first set).
+        Integer repsMin = vol.repsMin() == null ? null : Math.min(vol.repsMin(), demo.reps());
+        Integer repsMax = vol.repsMax() == null ? null : Math.max(vol.repsMax(), demo.reps());
+        String basis = "Resumes your last logged " + fmtLbs(demo.weightLbs())
+            + " lb × " + demo.reps() + " (" + demo.date() + ").";
+        return new Prescription(
+            vol.exerciseId(), vol.orderIndex(), vol.sets(), repsMin, repsMax,
+            vol.durationSeconds(), vol.intensity(), vol.restSeconds(), vol.tempo(),
+            vol.notes(), vol.deloadModifier(), null,
+            demo.weightLbs(), basis, null);
+    }
+
+    private static String fmtLbs(double v) {
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
     }
 
     /**
      * Rebuild a day's prescriptions so each one resumes from the user's last
-     * logged prescription for that exercise (weight, rep band, set count,
-     * load-basis, and the engine rationale), while keeping the template's
-     * structure (order, rest, tempo, intensity, deload modifier). Logged sets
-     * are deliberately dropped — the appended session is PLANNED, not performed.
-     * Exercises with no history keep their template prescription untouched.
+     * working prescription for that exercise (weight TOGETHER with the rep band
+     * and set count it belongs to, load-basis, and the engine rationale), while
+     * keeping the template's structure (order, rest, tempo, intensity, deload
+     * modifier). Used by both {@link #continueProgram} and {@link #materializeOne}
+     * — the resume map already guarantees deload history contributes at most a
+     * load, never volume. Logged sets are deliberately dropped — the new session
+     * is PLANNED, not performed. Exercises with no history (or a resume entry
+     * with null fields) keep the template values via the per-field null-guards.
      */
     private static WorkoutDay resumeDay(WorkoutDay day, Map<String, Prescription> resumeByExercise) {
         if (day.blocks() == null || resumeByExercise.isEmpty()) {
@@ -311,51 +432,6 @@ public class WorkoutScheduleService {
                     rx.notes(), rx.deloadModifier(),
                     null, // PLANNED session — no logged sets carried forward
                     prev.targetWeightLbs(), prev.loadBasis(), prev.rationale()));
-            }
-            blocks.add(new Block(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
-        }
-        return new WorkoutDay(day.dayId(), day.label(), day.dayOfWeek(), day.locationId(),
-            day.orderIndex(), blocks);
-    }
-
-    /**
-     * Rebuild a day's prescriptions for an ad-hoc re-run ({@link #materializeOne})
-     * so each carries the user's last progressed LOAD (weight, load-basis, engine
-     * rationale) while keeping the template's rep band, set count, and structure.
-     *
-     * <p>Unlike {@link #resumeDay} (used by {@link #continueProgram}, which resumes
-     * the whole last-completed prescription including its reps/sets), a redo run
-     * outside a periodized week must show the author's NORMAL volume — not whatever
-     * a prior deload week compressed the reps/sets to. So only the load travels;
-     * the rep/set targets stay the template's. An exercise with no completed
-     * history — or whose last completed prescription carried no target (a
-     * bodyweight/timed movement) — keeps its template prescription untouched, so
-     * the seed-weight fallback in the response assembler still applies.
-     */
-    private static WorkoutDay resumeDayLoads(WorkoutDay day, Map<String, Prescription> resumeByExercise) {
-        if (day.blocks() == null || resumeByExercise.isEmpty()) {
-            return day;
-        }
-        List<Block> blocks = new ArrayList<>();
-        for (Block b : day.blocks()) {
-            if (b.prescriptions() == null) {
-                blocks.add(b);
-                continue;
-            }
-            List<Prescription> rxs = new ArrayList<>();
-            for (Prescription rx : b.prescriptions()) {
-                Prescription prev = resumeByExercise.get(rx.exerciseId());
-                if (prev == null || prev.targetWeightLbs() == null) {
-                    rxs.add(rx);
-                    continue;
-                }
-                rxs.add(new Prescription(
-                    rx.exerciseId(), rx.orderIndex(),
-                    rx.sets(), rx.repsMin(), rx.repsMax(),   // template volume — normal, not a deload's
-                    rx.durationSeconds(), rx.intensity(), rx.restSeconds(), rx.tempo(),
-                    rx.notes(), rx.deloadModifier(),
-                    null, // PLANNED session — no logged sets carried forward
-                    prev.targetWeightLbs(), prev.loadBasis(), prev.rationale())); // resumed load + rationale
             }
             blocks.add(new Block(b.blockId(), b.type(), b.title(), b.orderIndex(), rxs));
         }

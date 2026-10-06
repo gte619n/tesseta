@@ -443,14 +443,15 @@ class WorkoutProgramRepository @Inject internal constructor(
                     locationId = day.locationId,
                     locationName = day.locationName,
                     status = ScheduledStatus.PLANNED.name,
-                    // Resume each exercise's last progressed load (weight/basis/
-                    // rationale) from the mirrored completed sessions, keeping the
-                    // template's rep/set targets — the offline-mint mirror of the
-                    // backend's materializeOne/resumeDayLoads. Without this a redo
-                    // shows the author's week-one weights (and the seed's 95 lb
-                    // dumbbell), and — with no rationale — the logger falls back to
-                    // the stale last-session rep carry ("announces 15, snaps to 8").
-                    session = resumeDayLoads(programId, day),
+                    // Resume each exercise's last progressed prescription — weight
+                    // AND the rep band/sets it belongs to — from the mirrored
+                    // completed sessions (logged sets included, deload excluded):
+                    // the offline-mint mirror of the backend's
+                    // materializeOne/resumeDay. Without this a redo shows the
+                    // author's week-one weights (and the seed's 95 lb dumbbell),
+                    // and — with no rationale — the logger falls back to the stale
+                    // last-session rep carry ("announces 15, snaps to 8").
+                    session = resumeDay(programId, day),
                 )
                 // Mirrored clean+SYNCED, exactly like the server-returned row the
                 // online path used to store: the eventual completion upload owns
@@ -584,68 +585,141 @@ class WorkoutProgramRepository @Inject internal constructor(
     private fun decodeScheduled(json: String): ScheduledWorkoutDto? =
         runCatching { scheduledAdapter.fromJson(json) }.getOrNull()
 
+    /** The heaviest set actually completed for an exercise in one working session. */
+    private data class Demonstrated(val weightLbs: Double, val reps: Int, val date: LocalDate)
+
     /**
-     * Rebuild a template [day] for an offline redo so each prescription carries the
-     * user's last progressed LOAD (weight, load-basis, engine rationale) drawn from
-     * this program's mirrored COMPLETED sessions — while keeping the template's rep
-     * band and set count. The client-side mirror of the backend's
-     * [com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService] resumeDayLoads:
-     * a redo run outside a periodized deload must show normal volume with real
-     * weights, not the author's week-one template (or the seed's 95 lb dumbbell).
+     * Rebuild a template [day] for an offline redo so each prescription resumes the
+     * user's last progressed prescription — weight TOGETHER with the rep band/set
+     * count it belongs to — drawn from this program's mirrored COMPLETED sessions.
+     * The client-side mirror of the backend's
+     * [com.gte619n.healthfitness.core.workoutprogram.WorkoutScheduleService]
+     * latestCompletedPrescriptions/resumeDay:
      *
-     * Only the load travels: an exercise with no completed history — or whose last
-     * completed prescription carried no target (bodyweight/timed) — keeps its
-     * template prescription untouched.
+     * - The stored pre-session target is not trusted on its own: when the athlete
+     *   demonstrably lifted MORE than the newest stored target (they overrode the
+     *   plan, or the stored rx is a stale template copy the engine never
+     *   re-stamped), the demonstrated top logged set wins and the rep band widens
+     *   to admit the demonstrated reps.
+     * - A stored working rx's band and set count travel WITH its load (an engine
+     *   170×8–9 must not come back as 170×12–15).
+     * - Deload sessions never contribute volume or demonstrated sets (their loads
+     *   are artificially suppressed); a deload rx's LOAD is kept only as a
+     *   last-resort fallback for an exercise with no working history.
+     * - An exercise with no history keeps its template prescription untouched.
      */
-    private suspend fun resumeDayLoads(programId: String, day: WorkoutDayDto): WorkoutDayDto {
+    private suspend fun resumeDay(programId: String, day: WorkoutDayDto): WorkoutDayDto {
         val prefix = "$programId/"
-        // Newest completed prescription per exercise that carried a real target.
         val completed = scheduledDao.listActive()
             .filter { it.id.startsWith(prefix) }
             .mapNotNull { decodeScheduled(it.payloadJson) }
             .filter { it.status == ScheduledStatus.COMPLETED.name }
             .sortedByDescending { it.date }
         if (completed.isEmpty()) return day
-        // Prefer the last WORKING (non-deload) prescription per exercise: a deload
-        // week's load is artificially suppressed and must never seed a redo at full
-        // volume. A deload prescription is kept only as a fallback for an exercise
-        // with no non-deload history. Mirrors the backend's latestCompletedPrescriptions.
-        val resumeByExercise = HashMap<String, PrescriptionDto>()
+        // Newest-first single pass; the first time an exercise is seen in each
+        // bucket is its most recent entry.
+        val working = HashMap<String, PrescriptionDto>()
+        val workingLoad = HashMap<String, PrescriptionDto>()
+        val demonstrated = HashMap<String, Demonstrated>()
         val deloadFallback = HashMap<String, PrescriptionDto>()
         for (sw in completed) {
             val session = sw.session ?: continue
-            val target = if (sw.isDeload) deloadFallback else resumeByExercise
             for (block in session.blocks) {
                 for (rx in block.prescriptions) {
-                    if (rx.targetWeightLbs != null && !target.containsKey(rx.exerciseId)) {
-                        target[rx.exerciseId] = rx
+                    if (sw.isDeload) {
+                        deloadFallback.putIfAbsent(rx.exerciseId, rx)
+                        continue
                     }
+                    working.putIfAbsent(rx.exerciseId, rx)
+                    if (rx.targetWeightLbs != null) workingLoad.putIfAbsent(rx.exerciseId, rx)
+                    topLoggedSet(rx, sw.date)?.let { demonstrated.putIfAbsent(rx.exerciseId, it) }
                 }
             }
         }
-        for ((exerciseId, rx) in deloadFallback) {
-            resumeByExercise.putIfAbsent(exerciseId, rx)
-        }
-        if (resumeByExercise.isEmpty()) return day
+        if (working.isEmpty() && deloadFallback.isEmpty()) return day
         return day.copy(
             blocks = day.blocks.map { block ->
                 block.copy(
                     prescriptions = block.prescriptions.map { rx ->
-                        val prev = resumeByExercise[rx.exerciseId]
-                        if (prev == null) {
-                            rx
-                        } else {
-                            rx.copy(
-                                targetWeightLbs = prev.targetWeightLbs,
-                                loadBasis = prev.loadBasis,
-                                rationale = prev.rationale,
-                            )
-                        }
+                        mergeResume(
+                            template = rx,
+                            vol = working[rx.exerciseId],
+                            loadRx = workingLoad[rx.exerciseId],
+                            demo = demonstrated[rx.exerciseId],
+                            deloadRx = deloadFallback[rx.exerciseId],
+                        )
                     },
                 )
             },
         )
     }
+
+    private fun topLoggedSet(rx: PrescriptionDto, date: LocalDate): Demonstrated? =
+        rx.loggedSets.orEmpty()
+            .filter { (it.weightLbs ?: 0.0) > 0.0 && (it.reps ?: 0) > 0 }
+            .maxByOrNull { it.weightLbs!! }
+            ?.let { Demonstrated(it.weightLbs!!, it.reps!!, date) }
+
+    /** Backend mergeResume mirror, applied directly onto the template rx. */
+    private fun mergeResume(
+        template: PrescriptionDto,
+        vol: PrescriptionDto?,
+        loadRx: PrescriptionDto?,
+        demo: Demonstrated?,
+        deloadRx: PrescriptionDto?,
+    ): PrescriptionDto {
+        if (vol == null) {
+            // Deload-only history: last resort, and only its LOAD counts.
+            val d = deloadRx ?: return template
+            if (d.targetWeightLbs == null) return template
+            return template.copy(
+                targetWeightLbs = d.targetWeightLbs,
+                loadBasis = d.loadBasis,
+                rationale = d.rationale,
+            )
+        }
+        val stored = loadRx ?: deloadRx?.takeIf { it.targetWeightLbs != null }
+        val demoWins = demo != null &&
+            (stored?.targetWeightLbs == null || demo.weightLbs > stored.targetWeightLbs)
+        if (!demoWins) {
+            if (stored == null) return template
+            if (loadRx != null) {
+                // Load and the band/sets it was prescribed with travel together.
+                return template.copy(
+                    sets = loadRx.sets ?: template.sets,
+                    repsMin = loadRx.repsMin ?: template.repsMin,
+                    repsMax = loadRx.repsMax ?: template.repsMax,
+                    targetWeightLbs = loadRx.targetWeightLbs,
+                    loadBasis = loadRx.loadBasis,
+                    rationale = loadRx.rationale,
+                )
+            }
+            // Deload last resort: load only, volume from the newest working rx.
+            return template.copy(
+                sets = vol.sets ?: template.sets,
+                repsMin = vol.repsMin ?: template.repsMin,
+                repsMax = vol.repsMax ?: template.repsMax,
+                targetWeightLbs = stored.targetWeightLbs,
+                loadBasis = stored.loadBasis,
+                rationale = stored.rationale,
+            )
+        }
+        // Demonstrated performance wins: resume its weight and make sure the rep
+        // band admits the reps it was actually lifted for.
+        val baseMin = vol.repsMin ?: template.repsMin
+        val baseMax = vol.repsMax ?: template.repsMax
+        return template.copy(
+            sets = vol.sets ?: template.sets,
+            repsMin = baseMin?.let { minOf(it, demo!!.reps) },
+            repsMax = baseMax?.let { maxOf(it, demo!!.reps) },
+            targetWeightLbs = demo!!.weightLbs,
+            loadBasis = "Resumes your last logged ${fmtLbs(demo.weightLbs)} lb × ${demo.reps} (${demo.date}).",
+            rationale = null,
+        )
+    }
+
+    private fun fmtLbs(v: Double): String =
+        if (v == Math.rint(v)) v.toLong().toString() else v.toString()
 
     private fun WorkoutProgramDto.toRefreshRow() = MirrorRepositorySupport.RefreshRow(
         id = programId,
