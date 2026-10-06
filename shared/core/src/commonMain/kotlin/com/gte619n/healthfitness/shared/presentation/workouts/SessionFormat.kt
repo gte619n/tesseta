@@ -48,6 +48,8 @@ fun WorkoutSessionDraft.sessionSteps(): List<SessionStep> {
 data class SessionRow(
     val blockId: String,
     val orderIndex: Int,
+    /** The catalog exercise id — powers the per-exercise history popup. */
+    val exerciseId: String,
     val name: String,
     val blockTitle: String,
     val targetSummary: String,
@@ -65,6 +67,7 @@ fun WorkoutSessionDraft.sessionRows(): List<SessionRow> {
         SessionRow(
             blockId = step.key.blockId,
             orderIndex = step.key.orderIndex,
+            exerciseId = rx.exerciseId,
             name = rx.exercise?.name ?: "Exercise",
             blockTitle = step.block.title,
             targetSummary = sessionTargetSummary(rx),
@@ -88,7 +91,9 @@ private fun sessionTargetSummary(rx: Prescription): String {
     }
     val load = when {
         rx.isBodyweight -> " · body weight"
-        rx.targetWeightLbs != null -> " · ${formatLbs(rx.targetWeightLbs)} lb"
+        // Per-hand (dumbbell/dual-cable) loads read "55 lb/hand" so the number
+        // isn't mistaken for a light total; everything else is plain "lb".
+        rx.targetWeightLbs != null -> " · ${formatLbs(rx.targetWeightLbs)} ${weightUnitLabel(rx)}"
         else -> ""
     }
     return "$sets × $reps$load"
@@ -225,9 +230,37 @@ fun prefillFor(
                 val carried = previous?.reps
                 when {
                     engineTarget != null -> maxOf(engineTarget, carried ?: engineTarget)
-                    else -> carried ?: lastTime?.reps ?: prescription.repsMax ?: prescription.repsMin
+                    // Within-session carry stays literal (you just did those reps).
+                    // Only the CROSS-session fallback is floored to the band: a
+                    // fresh/refined program whose rep band jumped up must not prefill
+                    // below its own floor and render the suggestion red pre-lift.
+                    else -> carried ?: run {
+                        val fallback = lastTime?.reps ?: prescription.repsMax ?: prescription.repsMin
+                        val floor = prescription.repsMin
+                        if (fallback != null && floor != null) maxOf(fallback, floor) else fallback
+                    }
                 }
             },
         )
     }
 }
+
+/**
+ * True when a prescription's load is logged PER HAND (dumbbell / dual-cable),
+ * so the coaching screen labels the number "lb/hand" rather than letting a
+ * per-hand load read as a light total ("55 lb/hand" ≈ 110 total). Name-based
+ * fallback mirroring the backend LoadConventionResolver: single-implement
+ * movements (goblet, single dumbbell, dumbbell pullover) are NOT per-hand.
+ * Display-only — the logged number is unchanged.
+ */
+fun isPerHandLoad(p: Prescription): Boolean {
+    val n = p.exercise?.name?.lowercase() ?: return false
+    val single = listOf("goblet", "single dumbbell", "single-dumbbell", "one dumbbell", "dumbbell pullover")
+    if (single.any { n.contains(it) }) return false
+    val perHand = listOf("dumbbell", "db ", "dual cable", "dual-cable", "functional trainer", "cable crossover")
+    return perHand.any { n.contains(it) }
+}
+
+/** The weight unit for a prescription: "lb/hand" for a per-hand load, else "lb". */
+fun weightUnitLabel(p: Prescription): String = if (isPerHandLoad(p)) "lb/hand" else "lb"
+

@@ -189,6 +189,13 @@ class HttpWorkoutProgramRepository(
             map[exerciseId].orEmpty()
         }
 
+    override suspend fun exerciseHistory(exerciseId: String, limit: Int): Result<List<ExerciseHistoryEntry>> =
+        runCatching {
+            client.get("api/me/workout-programs/exercises/$exerciseId/history") {
+                parameter("limit", limit)
+            }.body()
+        }
+
     // --- Internals -----------------------------------------------------------
 
     private fun deepFlow(programId: String): MutableStateFlow<WorkoutProgram?> =

@@ -54,6 +54,7 @@ struct WorkoutSessionView: View {
         let id: String           // blockId#orderIndex
         let blockId: String      // carried so the row can rebuild its PrescriptionKey
         let orderIndex: Int
+        let exerciseId: String   // powers the per-exercise history popup
         let name: String
         let blockTitle: String
         let targetSummary: String   // "3 × 5–8 · 135 lb"
@@ -343,6 +344,7 @@ struct WorkoutSessionView: View {
                     id: "\(r.blockId)#\(r.orderIndex)",
                     blockId: r.blockId,
                     orderIndex: Int(r.orderIndex),
+                    exerciseId: r.exerciseId,
                     name: r.name,
                     blockTitle: r.blockTitle,
                     targetSummary: r.targetSummary,
@@ -407,6 +409,7 @@ private struct ExerciseCard: View {
     let row: WorkoutSessionView.ExerciseRow
     let onLogSet: () -> Void
     let onUndoSet: () -> Void
+    @State private var showHistory = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -418,6 +421,14 @@ private struct ExerciseCard: View {
                 if row.isCurrent {
                     Text("NOW").font(.hfCapsSm).foregroundStyle(Theme.accent)
                 }
+                // "How I did last time" — opens the per-exercise history popup so
+                // the athlete can sanity-check the coach's suggested load/reps.
+                Button { showHistory = true } label: {
+                    Image(systemName: "clock.arrow.circlepath").font(.hfBodySm)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.textTertiary)
+                .accessibilityLabel("Exercise history")
             }
             Text(row.targetSummary).font(.hfBodySm).foregroundStyle(Theme.textSecondary)
 
@@ -439,6 +450,87 @@ private struct ExerciseCard: View {
         .padding()
         .background(row.isCurrent ? Theme.accentBg : Theme.surface,
                     in: RoundedRectangle(cornerRadius: 12))
+        .sheet(isPresented: $showHistory) {
+            ExerciseHistorySheet(exerciseId: row.exerciseId, exerciseName: row.name)
+        }
+    }
+}
+
+// MARK: - Exercise history popup ("how I did last time")
+
+/// Recent logged sets for an exercise across all programs, grouped by date into
+/// sessions (newest first). Fetches once via the shared repo
+/// (`IosComposition.loadExerciseHistory`); read-only, best-effort.
+private struct ExerciseHistorySheet: View {
+    let exerciseId: String
+    let exerciseName: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var loading = true
+    @State private var sessions: [(date: String, sets: [SharedCore.ExerciseHistoryEntry])] = []
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if loading {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if sessions.isEmpty {
+                    ContentUnavailableView("No history yet",
+                                           systemImage: "clock.arrow.circlepath",
+                                           description: Text("Logged sets for \(exerciseName) will show up here."))
+                } else {
+                    List {
+                        ForEach(sessions, id: \.date) { session in
+                            Section(session.date) {
+                                ForEach(Array(session.sets.enumerated()), id: \.offset) { _, s in
+                                    HStack {
+                                        Text(setLine(s)).font(.hfBodySm).foregroundStyle(Theme.textPrimary)
+                                        Spacer()
+                                        if let rir = s.rir?.doubleValue {
+                                            Text("RIR \(WorkoutFormat.trimNumber(rir))")
+                                                .font(.hfCapsSm).foregroundStyle(Theme.textTertiary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(exerciseName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .task { await load() }
+    }
+
+    private func setLine(_ s: SharedCore.ExerciseHistoryEntry) -> String {
+        let reps = s.reps?.intValue
+        let weight = s.weightLbs?.doubleValue
+        switch (weight, reps) {
+        case let (w?, r?) where w > 0: return "\(WorkoutFormat.trimNumber(w)) lb × \(r)"
+        case let (_, r?): return "BW × \(r)"
+        case let (w?, nil) where w > 0: return "\(WorkoutFormat.trimNumber(w)) lb"
+        default: return "—"
+        }
+    }
+
+    private func load() async {
+        loading = true
+        let entries = (try? await IosComposition.shared.loadExerciseHistory(exerciseId: exerciseId)) ?? []
+        // Group by calendar date (the ISO date string's day part), newest first,
+        // preserving the server's newest-first ordering within and across days.
+        var order: [String] = []
+        var byDate: [String: [SharedCore.ExerciseHistoryEntry]] = [:]
+        for e in entries {
+            let day = String((e.date ?? "").prefix(10))
+            if day.isEmpty { continue }
+            if byDate[day] == nil { order.append(day) }
+            byDate[day, default: []].append(e)
+        }
+        sessions = order.map { (date: $0, sets: byDate[$0] ?? []) }
+        loading = false
     }
 }
 

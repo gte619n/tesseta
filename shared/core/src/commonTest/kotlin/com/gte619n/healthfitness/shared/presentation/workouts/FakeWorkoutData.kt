@@ -2,6 +2,7 @@ package com.gte619n.healthfitness.shared.presentation.workouts
 
 import com.gte619n.healthfitness.shared.data.AdHocLibraryItem
 import com.gte619n.healthfitness.shared.data.AdHocLibraryRepository
+import com.gte619n.healthfitness.shared.data.ExerciseHistoryEntry
 import com.gte619n.healthfitness.shared.data.WorkoutProgramRepository
 import com.gte619n.healthfitness.shared.data.WorkoutSessionRepository
 import com.gte619n.healthfitness.shared.data.WorkoutStreakSettingsRepository
@@ -187,6 +188,10 @@ class FakeWorkoutProgramRepository(
     override suspend fun lastSetsFor(programId: String, exerciseId: String): Result<List<LoggedSet>> =
         if (lastSetsFails) Result.failure(RuntimeException("offline"))
         else Result.success(lastSets[exerciseId] ?: emptyList())
+
+    var exerciseHistory: Map<String, List<ExerciseHistoryEntry>> = emptyMap()
+    override suspend fun exerciseHistory(exerciseId: String, limit: Int): Result<List<ExerciseHistoryEntry>> =
+        Result.success(exerciseHistory[exerciseId].orEmpty().take(limit))
 }
 
 /** Fake session repo; this agent only reads drafts/parked. */

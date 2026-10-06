@@ -29,6 +29,7 @@ import com.gte619n.healthfitness.shared.data.HttpReminderSettingsRepository
 import com.gte619n.healthfitness.shared.data.HttpAdHocLibraryRepository
 import com.gte619n.healthfitness.shared.data.HttpProgressionRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutGoalsRepository
+import com.gte619n.healthfitness.shared.data.ExerciseHistoryEntry
 import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutSettingsRepository
 import com.gte619n.healthfitness.shared.data.HttpWorkoutStreakSettingsRepository
@@ -457,6 +458,14 @@ object IosComposition {
 
     private val workoutProgramRepo by lazy { HttpWorkoutProgramRepository(client()) }
     private val workoutStreakRepo by lazy { HttpWorkoutStreakSettingsRepository(client()) }
+
+    /**
+     * One-shot fetch for the coaching screen's per-exercise history popup
+     * (`GET /api/me/workout-programs/exercises/{id}/history`). Kotlin suspend →
+     * Swift async; returns an empty list on any failure (offline / not persisted).
+     */
+    suspend fun loadExerciseHistory(exerciseId: String): List<ExerciseHistoryEntry> =
+        workoutProgramRepo.exerciseHistory(exerciseId, limit = 50).getOrDefault(emptyList())
 
     private fun workoutSessionRepository(): MirrorWorkoutSessionRepository =
         MirrorWorkoutSessionRepository(
