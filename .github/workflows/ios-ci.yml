@@ -60,6 +60,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    # Safety net: a wedged test must fail fast, not burn the 6h job ceiling. The
+    # KMP ViewModel/sync suites finish in a couple of minutes when healthy.
+    timeout-minutes: 20
     continue-on-error: true # TODO(D-EXEC-1): remove once Phase 0D toolchain migration lands
     defaults:
       run:
@@ -98,6 +101,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.changed == 'true'
     runs-on: macos-15
+    # Safety net: a wedged test must fail fast, not burn the 6h job ceiling.
+    # (macOS + Kotlin/Native is slower than the JVM job, hence the larger cap.)
+    timeout-minutes: 30
     continue-on-error: true # TODO(D-EXEC-1): remove once Phase 0D toolchain migration lands
     defaults:
       run:
