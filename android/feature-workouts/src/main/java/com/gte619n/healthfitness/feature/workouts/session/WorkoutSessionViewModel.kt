@@ -70,6 +70,15 @@ data class WorkoutSessionUiState(
      */
     val autoCompleted: Boolean = false,
     /**
+     * Per-exercise history for the coaching screen's history popup, loaded on
+     * demand when the popup opens for an exercise. [historyExerciseId] keys which
+     * exercise [history] holds (so reopening the same one is instant and switching
+     * exercises refetches); [historyLoading] covers the fetch. Newest set first.
+     */
+    val history: List<com.gte619n.healthfitness.domain.workouts.program.ExerciseSetLog> = emptyList(),
+    val historyExerciseId: String? = null,
+    val historyLoading: Boolean = false,
+    /**
      * #4 exercise substitution — the movements executable at this session's gym,
      * loaded on demand when the swap picker opens. [substituteLoading] covers the
      * fetch; [substituteError] is a best-effort load failure (offline).
@@ -290,6 +299,29 @@ class WorkoutSessionViewModel @Inject constructor(
 
     /** The route has played the completion chime; clear the one-shot flag. */
     fun consumeAutoCompleted() = _state.update { it.copy(autoCompleted = false) }
+
+    /**
+     * Load the per-exercise history for the coaching history popup, on demand when
+     * it opens. Best-effort (the repository swallows failures → empty list). Skips
+     * the fetch when the same exercise's history is already loaded, so reopening is
+     * instant; switching exercises refetches.
+     */
+    fun loadExerciseHistory(exerciseId: String) {
+        val s = _state.value
+        if (s.historyExerciseId == exerciseId && !s.historyLoading) return
+        _state.update { it.copy(historyLoading = true, historyExerciseId = exerciseId, history = emptyList()) }
+        viewModelScope.launch {
+            val sets = repository.exerciseHistory(exerciseId)
+            _state.update {
+                // Guard against a race where the user switched exercises mid-fetch.
+                if (it.historyExerciseId == exerciseId) {
+                    it.copy(historyLoading = false, history = sets)
+                } else {
+                    it
+                }
+            }
+        }
+    }
 
     /**
      * #4 — load the swap picker's ranked suggestions: movements executable at

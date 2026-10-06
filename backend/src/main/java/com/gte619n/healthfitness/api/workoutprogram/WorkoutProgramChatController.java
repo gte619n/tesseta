@@ -575,6 +575,7 @@ public class WorkoutProgramChatController {
                     m.put("date", s.date() == null ? null : s.date().toString());
                     m.put("weightLbs", s.weightLbs());
                     m.put("reps", s.reps());
+                    m.put("rir", s.rir());
                     m.put("rpe", s.rpe());
                     sets.add(m);
                 }

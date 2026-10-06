@@ -73,14 +73,16 @@ class SessionFormatTest {
 
     @Test
     fun `prefill falls back to the last session, then the designed target`() {
-        // No in-session carry -> the literal previous session (200 x 5).
+        // No in-session carry -> the literal previous session's WEIGHT (200). Reps
+        // are floored to the band (squat is 8-10): last session's 5 reps is below
+        // the floor, so the suggestion reads 8 rather than pre-rendering red.
         val fromHistory = prefillFor(
             squat,
             logged = emptyList(),
             lastSets = mapOf("ex-squat" to listOf(LoggedSet(weightLbs = 200.0, reps = 5))),
         )
         assertEquals(200.0, fromHistory.weightLbs)
-        assertEquals(5, fromHistory.reps)
+        assertEquals(8, fromHistory.reps)
 
         // No history either -> the designed reps target (fixture squat has no
         // target weight, so weight stays null).
@@ -327,6 +329,21 @@ class SessionFormatTest {
             lastSets = mapOf("ex-x" to listOf(LoggedSet(weightLbs = 95.0, reps = 10))),
         )
         assertEquals(95.0, prefill.weightLbs)
+    }
+
+    @Test
+    fun `prefill reps never fall below the band floor without a rationale`() {
+        // A freshly refined program (no engine rationale) whose rep band jumped UP
+        // must not carry last session's lower actual below the new floor — otherwise
+        // the pending set renders red (a miss) before a rep is logged. Band 12–15,
+        // last session 9 reps → suggest 12, not 9.
+        val prefill = prefillFor(
+            rx(repsMin = 12, repsMax = 15, targetWeightLbs = 55.0, rationale = null),
+            logged = emptyList(),
+            lastSets = mapOf("ex-x" to listOf(LoggedSet(weightLbs = 65.0, reps = 9))),
+        )
+        assertEquals(12, prefill.reps)
+        assertEquals(TargetOutcome.HIT, repsOutcome(rx(repsMin = 12, repsMax = 15), prefill.reps))
     }
 
     // ---- IMPL-PROG-02 F5/D5: reps reset to the band bottom on a weight increase ----

@@ -496,6 +496,26 @@ public class WorkoutProgramController {
     }
 
     /**
+     * Recent logged sets for ONE exercise across all of the caller's programs
+     * (incl. archived/imported), newest first — each with date, load, reps, and
+     * the effort (RIR / legacy RPE). Backs the coaching screen's per-exercise
+     * history popup so the athlete can see "how I did last time" and sanity-check
+     * the coach's suggested load/reps. Strictly user-scoped. {@code limit} is
+     * clamped to [0, 100].
+     */
+    @GetMapping("/exercises/{exerciseId}/history")
+    public List<ExerciseSetLogView> exerciseHistory(
+        @PathVariable String exerciseId,
+        @RequestParam(name = "limit", defaultValue = "40") int limit
+    ) {
+        String userId = currentUser.get().userId();
+        int capped = Math.min(Math.max(limit, 0), 100);
+        return digests.history(userId, exerciseId, capped).stream()
+            .map(ExerciseSetLogView::from)
+            .toList();
+    }
+
+    /**
      * Resilient sibling of {@link #sessionLastSets}: the client passes the
      * exerciseIds it already holds in its local session draft, so the "same as
      * last time" prefill resolves even before the current session exists

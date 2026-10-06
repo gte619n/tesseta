@@ -72,6 +72,21 @@ data class ExerciseSummary(
 )
 
 /**
+ * One historical logged set for a single exercise, flattened across every program
+ * (incl. archived/imported) and dated — backs the coaching screen's per-exercise
+ * history popup so the athlete can see "how I did last time". [date] is the day it
+ * was performed; the popup groups sets by date into sessions, newest first.
+ */
+data class ExerciseSetLog(
+    val date: LocalDate? = null,
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+    val rir: Double? = null,
+    val rirSource: String? = null,
+    val rpe: Double? = null,
+)
+
+/**
  * One performed set's full actuals (ADR-0012 Decision 2 / IMPL-17 D3). Every
  * field is nullable: imported-history rows are weight-only (reps null) and the
  * logger keeps everything beyond weight/reps skippable.

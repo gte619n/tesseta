@@ -162,8 +162,11 @@ class WorkoutSessionViewModelTest {
         advanceUntilIdle()
 
         val appended = sets.captured.single()
+        // Weight still carries from last time (200). Reps are floored to the band
+        // (squat is 8-10): last session's 5 is below the floor, so the first set
+        // suggests 8 rather than pre-rendering red against its own target.
         assertEquals(200.0, appended.weightLbs)
-        assertEquals(5, appended.reps)
+        assertEquals(8, appended.reps)
     }
 
     @Test

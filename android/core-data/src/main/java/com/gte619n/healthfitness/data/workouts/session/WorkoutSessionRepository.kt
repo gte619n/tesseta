@@ -17,6 +17,7 @@ import com.gte619n.healthfitness.data.workouts.program.WorkoutProgramApi
 import com.gte619n.healthfitness.data.workouts.program.toDomain
 import com.gte619n.healthfitness.data.workouts.program.toDto
 import com.gte619n.healthfitness.data.workouts.toSummary
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSetLog
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.ScheduledStatus
 import com.gte619n.healthfitness.domain.workouts.session.DraftStatus
@@ -447,6 +448,21 @@ class WorkoutSessionRepository(
 
         // Right side wins on key collision → the local fold takes precedence.
         remote + local
+    }
+
+    /**
+     * Recent logged sets for one exercise across all of the user's programs
+     * (newest first), for the coaching screen's per-exercise history popup.
+     * Best-effort: returns an empty list on any network/decode failure so the
+     * popup degrades gracefully to "no history yet".
+     */
+    suspend fun exerciseHistory(
+        exerciseId: String,
+        limit: Int = 40,
+    ): List<ExerciseSetLog> = withContext(io) {
+        runCatching {
+            api.exerciseHistory(exerciseId, limit).map { it.toDomain() }
+        }.getOrDefault(emptyList())
     }
 
     /**

@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.SwapHoriz
@@ -57,15 +58,19 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -98,6 +103,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.Kind
 import com.gte619n.healthfitness.data.workouts.session.WorkoutSessionTimers.RestTimer
 import com.gte619n.healthfitness.domain.workouts.program.BlockTypeLabels
+import com.gte619n.healthfitness.domain.workouts.program.ExerciseSetLog
 import com.gte619n.healthfitness.domain.workouts.program.ExerciseSummary
 import com.gte619n.healthfitness.domain.workouts.program.LoggedSet
 import com.gte619n.healthfitness.domain.workouts.program.Prescription
@@ -108,6 +114,7 @@ import com.gte619n.healthfitness.domain.workouts.session.PrescriptionKey
 import com.gte619n.healthfitness.domain.workouts.session.WorkoutSessionDraft
 import com.gte619n.healthfitness.feature.workouts.R
 import com.gte619n.healthfitness.feature.workouts.program.ProgramFixtures
+import com.gte619n.healthfitness.feature.workouts.program.isPerHandLoad
 import com.gte619n.healthfitness.feature.workouts.program.prescriptionTargetLine
 import com.gte619n.healthfitness.feature.workouts.program.ui.ExerciseThumbnail
 import com.gte619n.healthfitness.feature.workouts.program.ui.exerciseImageUrl
@@ -196,6 +203,7 @@ fun WorkoutSessionRoute(
         substituteLoading = state.substituteLoading,
         substituteError = state.substituteError,
         onLoadSubstitutes = viewModel::loadSubstituteOptions,
+        onLoadHistory = viewModel::loadExerciseHistory,
         onAdjust = viewModel::applyAdjustment,
         isOwner = state.isOwner,
         onFlagFrame = viewModel::flagFrame,
@@ -232,6 +240,8 @@ fun WorkoutSessionScreen(
     substituteLoading: Boolean = false,
     substituteError: String? = null,
     onLoadSubstitutes: (String) -> Unit = {},
+    // Per-exercise history popup: load the current exercise's past sessions on open.
+    onLoadHistory: (String) -> Unit = {},
     onAdjust: (PrescriptionKey, PrescriptionAdjustment) -> Unit = { _, _ -> },
     isOwner: Boolean = false,
     onFlagFrame: (String, String) -> Unit = { _, _ -> },
@@ -336,6 +346,10 @@ fun WorkoutSessionScreen(
                 substituteLoading = substituteLoading,
                 substituteError = substituteError,
                 onLoadSubstitutes = onLoadSubstitutes,
+                history = state.history,
+                historyLoading = state.historyLoading,
+                historyExerciseId = state.historyExerciseId,
+                onLoadHistory = onLoadHistory,
                 onAdjust = onAdjust,
                 isOwner = isOwner,
                 onFlagFrame = onFlagFrame,
@@ -417,6 +431,10 @@ private fun SessionBody(
     substituteLoading: Boolean,
     substituteError: String?,
     onLoadSubstitutes: (String) -> Unit,
+    history: List<ExerciseSetLog>,
+    historyLoading: Boolean,
+    historyExerciseId: String?,
+    onLoadHistory: (String) -> Unit,
     onAdjust: (PrescriptionKey, PrescriptionAdjustment) -> Unit,
     isOwner: Boolean,
     onFlagFrame: (String, String) -> Unit,
@@ -682,6 +700,10 @@ private fun SessionBody(
                     substituteLoading = substituteLoading,
                     substituteError = substituteError,
                     onLoadSubstitutes = onLoadSubstitutes,
+                    history = history,
+                    historyLoading = historyLoading,
+                    historyExerciseId = historyExerciseId,
+                    onLoadHistory = onLoadHistory,
                     onAdjust = { adjustment -> onAdjust(step.key, adjustment) },
                     isOwner = isOwner,
                     onFlagFrame = onFlagFrame,
@@ -835,6 +857,10 @@ private fun ExercisePage(
     substituteLoading: Boolean,
     substituteError: String?,
     onLoadSubstitutes: (String) -> Unit,
+    history: List<ExerciseSetLog>,
+    historyLoading: Boolean,
+    historyExerciseId: String?,
+    onLoadHistory: (String) -> Unit,
     onAdjust: (PrescriptionAdjustment) -> Unit,
     isOwner: Boolean,
     onFlagFrame: (String, String) -> Unit,
@@ -868,6 +894,7 @@ private fun ExercisePage(
 ) {
     val prescription = step.prescription
     var showSwap by remember(step.key) { mutableStateOf(false) }
+    var showHistory by remember(step.key) { mutableStateOf(false) }
     // Open the swap dialog when the overflow menu requests it for this page, then
     // consume the signal so returning here later can't re-open it.
     LaunchedEffect(openSwap) {
@@ -893,11 +920,30 @@ private fun ExercisePage(
         ) {
             SectionTitle(text = BlockTypeLabels.label(step.block.type), compact = true)
             Spacer(Modifier.height(8.dp))
-            Text(
-                prescription.exercise?.name ?: prescription.exerciseId,
-                style = Hf.type.headingLg.copy(fontSize = 24.sp),
-                color = Hf.colors.textPrimary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    prescription.exercise?.name ?: prescription.exerciseId,
+                    style = Hf.type.headingLg.copy(fontSize = 24.sp),
+                    color = Hf.colors.textPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                // See how you did previously on this lift — a small log (latest
+                // first: date, weight, reps, sets, RIR) to build confidence that
+                // the suggested load/reps follow your real history.
+                IconButton(
+                    onClick = {
+                        onLoadHistory(prescription.exerciseId)
+                        showHistory = true
+                    },
+                ) {
+                    Icon(
+                        Icons.Outlined.History,
+                        contentDescription = stringResource(R.string.workout_session_history_title),
+                        tint = Hf.colors.textSecondary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
             // Concrete plan: weight · sets × fixed-reps · rest (no RPE/tempo). The
             // ▲/▼ trend + delta + "why" is carried by the RationaleStrip below.
             val target = prescriptionTargetLine(prescription)
@@ -992,7 +1038,133 @@ private fun ExercisePage(
             onDismiss = { showSwap = false },
         )
     }
+    if (showHistory) {
+        ExerciseHistorySheet(
+            exerciseName = prescription.exercise?.name ?: prescription.exerciseId,
+            perHand = isPerHandLoad(prescription),
+            // Only show history that belongs to THIS exercise (the shared state may
+            // still hold a previous page's list for a frame while the fetch lands).
+            history = if (historyExerciseId == prescription.exerciseId) history else emptyList(),
+            loading = historyLoading && historyExerciseId == prescription.exerciseId,
+            onDismiss = { showHistory = false },
+        )
+    }
 }
+
+/**
+ * A bottom sheet logging how the athlete has done on this exercise before — their
+ * past sessions newest first, each with the date and every set's weight × reps and
+ * RIR. Lets them sanity-check the coach's suggested load/reps against what they've
+ * actually lifted. Data is best-effort (empty → "No logged history yet").
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExerciseHistorySheet(
+    exerciseName: String,
+    perHand: Boolean,
+    history: List<ExerciseSetLog>,
+    loading: Boolean,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                stringResource(R.string.workout_session_history_title),
+                style = Hf.type.headingMd,
+                color = Hf.colors.textPrimary,
+            )
+            Text(
+                exerciseName,
+                style = Hf.type.bodySm,
+                color = Hf.colors.textSecondary,
+            )
+            when {
+                loading -> Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator(color = Hf.colors.accent) }
+
+                history.isEmpty() -> Text(
+                    stringResource(R.string.workout_session_history_empty),
+                    style = Hf.type.bodyMd,
+                    color = Hf.colors.textSecondary,
+                    modifier = Modifier.padding(vertical = 16.dp),
+                )
+
+                else -> {
+                    val unit = if (perHand) "lb/hand" else "lb"
+                    // Group consecutive sets by their performed date (the list is
+                    // already newest-first) into one row per session.
+                    val sessions = remember(history) {
+                        history.groupBy { it.date }.entries.toList()
+                    }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        items(sessions.size) { i ->
+                            val (date, sets) = sessions[i]
+                            HistorySessionRow(date = date, sets = sets, unit = unit)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One past session in the history sheet: its date, set count, and each set. */
+@Composable
+private fun HistorySessionRow(
+    date: java.time.LocalDate?,
+    sets: List<ExerciseSetLog>,
+    unit: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                date?.format(HISTORY_DATE_FORMAT) ?: stringResource(R.string.workout_session_history_undated),
+                style = Hf.type.bodyMd.copy(fontWeight = FontWeight.SemiBold),
+                color = Hf.colors.textPrimary,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                pluralStringResource(R.plurals.workout_session_history_sets, sets.size, sets.size),
+                style = Hf.type.monoSm,
+                color = Hf.colors.textTertiary,
+            )
+        }
+        sets.forEach { s ->
+            val w = s.weightLbs
+            val weight = if (w != null && w > 0.0) formatWeight(w) else null
+            val reps = s.reps?.toString()
+            val main = when {
+                weight != null && reps != null -> "$weight $unit × $reps"
+                weight != null -> "$weight $unit"
+                reps != null -> "$reps reps"
+                else -> "—"
+            }
+            val rir = s.rir?.let {
+                val n = if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString()
+                " · RIR $n"
+            } ?: ""
+            Text(
+                main + rir,
+                style = Hf.type.monoMd,
+                color = Hf.colors.textSecondary,
+            )
+        }
+    }
+}
+
+private val HISTORY_DATE_FORMAT: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d")
 
 /**
  * The progression-engine "why" for this prescription: a ▲/▼ direction glyph +
@@ -1546,7 +1718,10 @@ internal fun ActiveRepCard(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SetFieldBox(
-                label = stringResource(R.string.workout_session_weight_header),
+                // Per-hand dumbbell/dual-cable loads are logged per hand; label the
+                // unit "lb/hand" so the number doesn't read as a light total.
+                label = stringResource(R.string.workout_session_weight_header) +
+                    if (isPerHandLoad(prescription)) "/hand" else "",
                 value = formatWeight(weight),
                 // Live target-vs-achieved: dips red the moment the staged load
                 // drops under the prescription, green once it meets it (#8).
@@ -1711,7 +1886,8 @@ private fun CompletedRepRow(
         )
         Spacer(Modifier.width(4.dp))
         CompletedValue(
-            text = "${formatWeight(set.weightLbs)} ${stringResource(R.string.workout_session_weight_header)}",
+            text = "${formatWeight(set.weightLbs)} ${stringResource(R.string.workout_session_weight_header)}" +
+                if (isPerHandLoad(prescription)) "/hand" else "",
             color = outcomeColor(weightOutcome(prescription, set.weightLbs)),
             onClick = { showWeight = true },
         )

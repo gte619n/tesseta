@@ -147,6 +147,21 @@ class ExercisePerformanceDigestServiceTest {
     }
 
     @Test
+    void historyCarriesRirAndSourceForTheCoachingPopup() {
+        seedProgram("p1");
+        seedCompleted("p1", TODAY.minusDays(1), "bench", List.of(
+            new LoggedSet(65.0, 9, null, 120, instant(TODAY.minusDays(1)), null,
+                2.0, com.gte619n.healthfitness.core.progression.RirSource.REPORTED)));
+
+        List<ExerciseSetLog> log = service.history(USER, "bench", 10);
+        assertEquals(1, log.size());
+        assertEquals(65.0, log.get(0).weightLbs(), 1e-9);
+        assertEquals(9, log.get(0).reps());
+        assertEquals(2.0, log.get(0).rir(), 1e-9);
+        assertEquals("REPORTED", log.get(0).rirSource());
+    }
+
+    @Test
     void digestOmitsExercisesWithoutHistory_andDigestAllCoversEverything() {
         seedProgram("p1");
         seedCompleted("p1", TODAY.minusDays(1), "curl",

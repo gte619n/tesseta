@@ -141,12 +141,27 @@ fun prefillFor(
             // count is safe — reps ≥ target keep the last-set RIR gate open and the
             // coach cue correct (the old concern was a lower carry suppressing them).
             // With no engine decision (static program) reps fall back to the carry.
+            // That fallback is clamped UP to the prescription's own band floor
+            // ([Prescription.repsMin]): a freshly generated/refined program has no
+            // engine rationale, so without this the pending reps would carry last
+            // session's actual from the OLD scheme — which, when the new band is
+            // higher (e.g. a 12–15 hypertrophy block after a 8–9 rep block), lands
+            // below the new floor and renders the suggestion RED (a miss) before a
+            // single rep is logged. Never propose fewer reps than the program asks.
             reps = run {
                 val engineTarget = targetReps(prescription)
                 val carried = previous?.reps
                 when {
                     engineTarget != null -> maxOf(engineTarget, carried ?: engineTarget)
-                    else -> carried ?: lastTime?.reps ?: prescription.repsMax ?: prescription.repsMin
+                    // Within-session carry stays literal (you just did those reps).
+                    // Only the CROSS-session fallback is floored to the band: a
+                    // fresh/refined program whose rep band jumped up must not prefill
+                    // below its own floor and render the suggestion red pre-lift.
+                    else -> carried ?: run {
+                        val fallback = lastTime?.reps ?: prescription.repsMax ?: prescription.repsMin
+                        val floor = prescription.repsMin
+                        if (fallback != null && floor != null) maxOf(fallback, floor) else fallback
+                    }
                 }
             },
         )
