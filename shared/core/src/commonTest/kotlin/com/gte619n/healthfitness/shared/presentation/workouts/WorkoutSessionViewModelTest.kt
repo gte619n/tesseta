@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.Instant
@@ -126,7 +127,11 @@ class WorkoutSessionViewModelTest {
         assertEquals(0, vm.state.value.draft?.totalLoggedSets)
 
         vm.logSet(key, LoggedSet(weightLbs = 135.0, reps = 8))
-        advanceUntilIdle()
+        // runCurrent (not advanceUntilIdle): logging starts the rest ticker, which
+        // re-arms a delay(1s) every tick off the wall clock. advanceUntilIdle would
+        // chase that reschedule forever here (now() is fixed, so remaining never
+        // hits 0). runCurrent drains the logSet work + the ticker's first emit.
+        runCurrent()
 
         // The write went through the repo (offline-first Room contract)...
         assertEquals(1, repo.updateSetsCalls)
@@ -139,6 +144,12 @@ class WorkoutSessionViewModelTest {
         assertNotNull(vm.restTimer.value)
         assertEquals(90, vm.restTimer.value?.totalSeconds)
         assertNull(vm.state.value.prompt)
+
+        // Stop the ticker before the body ends: runTest auto-drains with
+        // advanceUntilIdle on teardown, which would spin forever on the still-
+        // running wall-clock ticker (now() is fixed here). The other tests either
+        // dismiss rest or complete the session, which already clears it.
+        vm.dismissRest()
     }
 
     @Test
@@ -153,14 +164,14 @@ class WorkoutSessionViewModelTest {
         vm.now = { clock }
 
         vm.logSet(key, LoggedSet(weightLbs = 135.0, reps = 8))
-        advanceUntilIdle()
+        runCurrent() // ticker is now running — see note above; don't advanceUntilIdle
         assertEquals(90, vm.restTimer.value?.remainingSeconds)
         assertTrue(vm.restTimer.value?.isRunning == true)
 
         // Advance both real wall-clock and the coroutine scheduler by 3s.
         clock = FIXED_NOW.plusSecs(3)
         advanceTimeBy(3_000)
-        advanceUntilIdle()
+        runCurrent() // flush the 3 fired ticks; ticker still live, so not advanceUntilIdle
         // ONE source: remaining tracked wall-clock, no drift, no second state.
         assertEquals(87, vm.restTimer.value?.remainingSeconds)
 
@@ -176,7 +187,7 @@ class WorkoutSessionViewModelTest {
         advanceUntilIdle()
 
         vm.logSet(key, LoggedSet(weightLbs = 135.0, reps = 8))
-        advanceUntilIdle()
+        runCurrent() // ticker is now running — see note above; don't advanceUntilIdle
         // Mid-session: rest is running, no finish prompt.
         assertNotNull(vm.restTimer.value)
         assertNull(vm.state.value.prompt)
