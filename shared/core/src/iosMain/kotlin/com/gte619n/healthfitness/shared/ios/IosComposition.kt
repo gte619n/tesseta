@@ -56,12 +56,16 @@ import com.gte619n.healthfitness.shared.sync.SqlDelightOutboxStore
 import com.gte619n.healthfitness.shared.sync.SyncEngine
 import com.gte619n.healthfitness.shared.sync.SyncEngineImpl
 import com.gte619n.healthfitness.shared.db.MirrorDatabase
+import com.gte619n.healthfitness.shared.data.ConnectivityMonitor
 import com.gte619n.healthfitness.shared.domain.blood.BloodMarker
 import com.gte619n.healthfitness.shared.presentation.blood.BloodOverviewViewModel
 import com.gte619n.healthfitness.shared.presentation.blood.MarkerDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.blood.ReportDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.blood.UploadLabReportViewModel
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
 import com.gte619n.healthfitness.shared.presentation.bodycomposition.DexaScanDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.bodycomposition.UploadDexaViewModel
+import kotlinx.coroutines.flow.flowOf
 import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsChatViewModel
@@ -430,6 +434,20 @@ object IosComposition {
             scanId = scanId,
         )
 
+    /** Lab-report PDF upload → extract → save (online-only AI flow, D17). */
+    fun uploadLabReportViewModel(): UploadLabReportViewModel =
+        UploadLabReportViewModel(
+            reports = HttpBloodTestReportRepository(client()),
+            connectivity = AlwaysOnlineConnectivityMonitor,
+        )
+
+    /** DEXA PDF upload → parse → save (online-only AI flow, D17). */
+    fun uploadDexaViewModel(): UploadDexaViewModel =
+        UploadDexaViewModel(
+            repo = HttpDexaScanRepository(client()),
+            connectivity = AlwaysOnlineConnectivityMonitor,
+        )
+
     /**
      * Nutrition Today — networked (GET/POST/PATCH/DELETE api/me/nutrition/…).
      * Online-first: the op rail is inert ([NoopNutritionOpQueue]) until the durable
@@ -762,6 +780,16 @@ class FlowSubscription internal constructor(private val job: Job) {
     fun cancel() {
         job.cancel()
     }
+}
+
+/**
+ * Connectivity source for the online-only upload flows. iOS has no reachability
+ * monitor wired yet, so this reports always-online (parity with the other iOS
+ * repos that pin `isOnline = true`); a URLSession/NWPathMonitor-backed impl can
+ * replace it later. The upload itself still fails gracefully offline.
+ */
+private object AlwaysOnlineConnectivityMonitor : ConnectivityMonitor {
+    override val isOnline: Flow<Boolean> = flowOf(true)
 }
 
 /**

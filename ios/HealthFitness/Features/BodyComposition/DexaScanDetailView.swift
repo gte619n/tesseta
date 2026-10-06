@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLook
 import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E2 — DEXA scan detail. Parity target (Android):
@@ -27,6 +28,7 @@ struct DexaScanDetailView: View {
     @State private var state = ScreenState()
     @State private var subscription: FlowSubscription?
     @State private var showDeleteConfirm = false
+    @State private var pdfURL: URL?
     @Environment(\.dismiss) private var dismiss
 
     init(scanId: String) {
@@ -45,6 +47,7 @@ struct DexaScanDetailView: View {
                 }
             }
             .onDisappear { subscription?.cancel() }
+            .quickLookPreview($pdfURL)
             .toolbar {
                 if state.scan != nil {
                     ToolbarItem(placement: .primaryAction) {
@@ -155,11 +158,12 @@ struct DexaScanDetailView: View {
         vm.patchField(path: path, value: value.map { KotlinDouble(value: $0) })
     }
 
-    /// STUB — presents `QLPreviewController` over `vm.downloadPdf()` bytes
-    /// (QuickLook glue is the remaining platform piece of #6).
+    /// Download the scan PDF bytes (shared repo) → temp file → QuickLook.
     private func viewPdf() {
-        // let bytes = try await vm.downloadPdf()
-        // write to temp URL → QLPreviewController
+        Task {
+            guard let bytes = try? await vm.downloadPdf() else { return }
+            if let url = TempPdf.write(bytes.toData(), name: scanId) { pdfURL = url }
+        }
     }
 
     private func delete() {

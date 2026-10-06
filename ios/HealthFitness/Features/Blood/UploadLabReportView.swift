@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // UploadLabReportViewModel, its UiState — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E1 — lab-PDF upload (online-only AI flow, D17).
 /// Parity target (Android): feature-blood `UploadLabReportScreen` +
@@ -20,9 +20,13 @@ struct UploadLabReportView: View {
         case idle, uploading, extracting, saving, complete, failed(String)
     }
 
+    private let vm = IosComposition.shared.uploadLabReportViewModel()
     @State private var phase: Phase = .idle
     /// Mirror of the shared VM's `isOnline` — gates the picker (nothing queues offline).
     @State private var isOnline = true
+    @State private var showPicker = false
+    @State private var stateSub: FlowSubscription?
+    @State private var onlineSub: FlowSubscription?
 
     var body: some View {
         ScrollView {
@@ -47,13 +51,31 @@ struct UploadLabReportView: View {
         .onChange(of: phase) { _, newValue in
             if newValue == .complete { dismiss() }
         }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(UploadLabReportViewModel(reports: DI.bloodReportRepo,
-        //                                                           connectivity: DI.connectivity))
-        //     await vm.observe(vm.wrapped.state) { self.phase = Self.map($0) }
-        // }
-        // .task { await vm.observe(vm.wrapped.isOnline) { self.isOnline = $0 } }
+        .onAppear {
+            stateSub = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                if let s = value as? UploadLabReportViewModelUiState { phase = Self.map(s) }
+            }
+            onlineSub = IosComposition.shared.collectFlow(flow: vm.isOnline) { value in
+                if let b = value as? KotlinBoolean { isOnline = b.boolValue }
+            }
+        }
+        .onDisappear { stateSub?.cancel(); onlineSub?.cancel() }
+        .sheet(isPresented: $showPicker) {
+            DocumentPicker { fileName, data in
+                vm.upload(fileName: fileName, bytes: data.toKotlinByteArray())
+            }
+        }
+    }
+
+    static func map(_ s: UploadLabReportViewModelUiState) -> Phase {
+        switch s {
+        case is UploadLabReportViewModelUiStateUploading: return .uploading
+        case is UploadLabReportViewModelUiStateExtracting: return .extracting
+        case is UploadLabReportViewModelUiStateSaving: return .saving
+        case is UploadLabReportViewModelUiStateComplete: return .complete
+        case let f as UploadLabReportViewModelUiStateFailed: return .failed(f.error)
+        default: return .idle
+        }
     }
 
     // MARK: Phase stepper (parity with Android's UploadPhaseStepper)
@@ -126,16 +148,9 @@ struct UploadLabReportView: View {
         return rank(phase) > rank(target)
     }
 
-    /// STUB — presents a `UIDocumentPickerViewController` restricted to `.pdf`.
-    /// The real wrapper reads the picked file's bytes off the security-scoped URL
-    /// and calls `vm.upload(fileName:bytes:)`; here we only flip the local phase so
-    /// the stepper animates. Replace with the representable wrapper in platform glue.
+    /// Present the `.pdf` document picker; the pick callback reads the bytes and
+    /// drives the shared VM's upload → extract → save flow.
     private func presentDocumentPicker() {
-        // let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf])
-        // picker.delegate = coordinator  // → reads bytes → vm.upload(fileName:bytes:)
-        // UIApplication.topViewController?.present(picker, animated: true)
-        phase = .uploading
+        showPicker = true
     }
-
-    // static func map(_ s: UploadLabReportViewModel.UiState) -> Phase { ... }  // Phase 0D
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLook
 import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E1 — lab-report detail. Parity target (Android):
@@ -28,6 +29,7 @@ struct ReportDetailView: View {
     @State private var state: ScreenState = .loading
     @State private var subscription: FlowSubscription?
     @State private var showDeleteConfirm = false
+    @State private var pdfURL: URL?
     @Environment(\.dismiss) private var dismiss
 
     init(reportId: String) {
@@ -46,6 +48,7 @@ struct ReportDetailView: View {
                 }
             }
             .onDisappear { subscription?.cancel() }
+            .quickLookPreview($pdfURL)
             .toolbar {
                 if case .ready = state {
                     ToolbarItem(placement: .primaryAction) {
@@ -100,17 +103,16 @@ struct ReportDetailView: View {
         }
     }
 
-    /// STUB — writes `vm.downloadPdf(report:)` bytes to a temp URL and presents a
-    /// `QLPreviewController`. Real presentation is the remaining platform glue.
+    /// Download the report PDF bytes (shared repo) → temp file → QuickLook.
     private func viewPdf() {
-        // let bytes = try await vm.wrapped.downloadPdf(report: report)
-        // let url = FileManager.default.temporaryDirectory.appending(path: "\(reportId).pdf")
-        // try bytes.write(to: url); present QLPreviewController(url)
+        Task {
+            guard let bytes = try? await vm.downloadPdf() else { return }
+            if let url = TempPdf.write(bytes.toData(), name: reportId) { pdfURL = url }
+        }
     }
 
     private func delete() {
-        // Post-0D: vm.wrapped.delete { dismiss() }
-        dismiss()
+        vm.delete { dismiss() }
     }
 
     // MARK: shared UiState → local ScreenState

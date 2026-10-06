@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // UploadDexaViewModel, its UiState — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E2 — DEXA-PDF upload (online-only AI flow, D17/#41).
 /// Parity target (Android): feature-body-composition `upload/UploadDexaScreen` +
@@ -22,8 +22,12 @@ struct UploadDexaView: View {
         case failed(String)
     }
 
+    private let vm = IosComposition.shared.uploadDexaViewModel()
     @State private var phase: Phase = .idle
     @State private var isOnline = true
+    @State private var showPicker = false
+    @State private var stateSub: FlowSubscription?
+    @State private var onlineSub: FlowSubscription?
 
     var body: some View {
         ScrollView {
@@ -54,13 +58,33 @@ struct UploadDexaView: View {
         .onChange(of: phase) { _, newValue in
             if case .complete = newValue { dismiss() }
         }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(UploadDexaViewModel(repo: DI.dexaRepo,
-        //                                                      connectivity: DI.connectivity))
-        //     await vm.observe(vm.wrapped.state) { self.phase = Self.map($0) }
-        //     await vm.observe(vm.wrapped.isOnline) { self.isOnline = $0 }
-        // }
+        .onAppear {
+            stateSub = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                if let s = value as? UploadDexaViewModelUiState { phase = Self.map(s) }
+            }
+            onlineSub = IosComposition.shared.collectFlow(flow: vm.isOnline) { value in
+                if let b = value as? KotlinBoolean { isOnline = b.boolValue }
+            }
+        }
+        .onDisappear { stateSub?.cancel(); onlineSub?.cancel() }
+        .sheet(isPresented: $showPicker) {
+            DocumentPicker { fileName, data in
+                vm.upload(fileName: fileName, bytes: data.toKotlinByteArray())
+            }
+        }
+    }
+
+    static func map(_ s: UploadDexaViewModelUiState) -> Phase {
+        switch s {
+        case let p as UploadDexaViewModelUiStateInProgress:
+            return .inProgress(phase: p.phase, message: p.message)
+        case let c as UploadDexaViewModelUiStateComplete:
+            return .complete(scanId: c.scanId)
+        case let f as UploadDexaViewModelUiStateFailed:
+            return .failed(f.error)
+        default:
+            return .idle
+        }
     }
 
     @ViewBuilder
@@ -101,14 +125,9 @@ struct UploadDexaView: View {
         return false
     }
 
-    /// STUB — presents a `.pdf`-restricted `UIDocumentPickerViewController`; the
-    /// real wrapper reads bytes off the security-scoped URL and calls
-    /// `vm.upload(fileName:bytes:)`. Here we only flip the local phase.
+    /// Present the `.pdf` picker; the pick callback drives the shared VM's upload
+    /// (which enforces the 25 MB guard).
     private func presentDocumentPicker() {
-        // let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf])
-        // picker.delegate = coordinator  // → reads bytes → vm.upload(fileName:bytes:)
-        phase = .inProgress(phase: "uploading", message: "Saving your PDF")
+        showPicker = true
     }
-
-    // static func map(_ s: UploadDexaViewModel.UiState) -> Phase { ... }  // Phase 0D
 }
