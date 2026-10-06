@@ -81,10 +81,12 @@ rationale + every judgement call: [`IMPL-IOS-01-OFFLINE-SYNC.md`](IMPL-IOS-01-OF
    on a device/sim (can't be done headlessly here). All 33 screens + the sync engine
    are compile/build-verified only; runtime bridging issues (decode shapes, flows,
    actor hops) are unproven. **Do this before trusting breadth / before a real release.**
-2. **TestFlight / deploy** — not pushed, not merged, not released. The
-   `release-ios-on-main.yml` fastlane→TestFlight lane triggers only on push to `main`.
-   A device build also needs real signing (match + ASC key, already in GCP Secret
-   Manager) which the simulator builds skip (`CODE_SIGNING_ALLOWED=NO`).
+2. **TestFlight / deploy** — ✅ **DONE (2026-10-06): build 736 (v1.736) uploaded
+   and `VALID` in App Store Connect** via a local signed build (owner signing kit
+   at `~/.config/oxos-signing`; ASC key DY8X77HK4X; profile `match AppStore
+   com.gte619n.healthfitness`). The `release-ios-on-main.yml` fastlane→TestFlight
+   lane is also fixed (builds the XCFramework + runs xcodegen + selects Xcode 26)
+   but still needs the 5 D15 secrets mirrored into GitHub Actions to run in CI.
 3. **Push activation (FCM)** — code wired + guarded; needs a bundled
    `GoogleService-Info.plist` + an APNs auth key (deployment steps, see
    [`ios/Config/PUSH-SETUP.md`](../../ios/Config/PUSH-SETUP.md)). Dormant until then.
@@ -99,6 +101,20 @@ rationale + every judgement call: [`IMPL-IOS-01-OFFLINE-SYNC.md`](IMPL-IOS-01-OF
    proposal payload + deep-link); Sync Diagnostics (needs a sync-status VM);
    fully-reactive-offline `observeDay` (currently cold-start read-through cache).
 7. **android/ consumes shared** (D19/D20 soak gate) — untouched by design.
+8. **Workout-coach parity from `main` #297 (`166ff02c`, merged 2026-10-06)** — three
+   client-facing changes landed on Android/backend that iOS still lacks:
+   (a) **band-floor rep prefill** — `shared/.../SessionFormat` prefill must floor the
+   *cross-session* reps fallback to the prescription's `repsMin` (Android's
+   `prefillFor` now does; shared still carries the raw last-session reps → a
+   below-band carry paints pending reps red before lifting);
+   (b) **per-hand "lb/hand" label** — display-only label on the target line, rep card,
+   and logged rows when the lift is per-hand (needs a shared `isPerHandLoad` helper
+   mirroring `LoadConventionResolver` + iOS `WorkoutSessionView` rendering; the logged
+   number is unchanged);
+   (c) **exercise-history popup** — backend `GET /api/me/workout-programs/exercises/{id}/history`
+   (now merged) + RIR on `ExerciseSetLog`; iOS needs a shared repo consumer + a
+   bottom-sheet of past sessions on the exercise page. (The designer-prompt tightening
+   in the same commit is backend-only — no client work.)
 
 Correctly NOT VM-bound (not gaps): MoreView (static menu), ServingHintView /
 GymFormView / WorkoutRecapView (sub-components), WorkoutsHubView / SettingsView

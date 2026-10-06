@@ -34,6 +34,21 @@
 - Trunk-based dev on `main`. Feature branches named `feature/<slug>` (see
   Worktrees below for the exact form).
 - One commit per logical change. Don't squash unrelated work.
+- **Cross-client feature parity is mandatory — ship it everywhere or track the
+  gap.** A user-facing feature or behavior change must land on all clients it
+  applies to (Android, web, iOS), not just the one you're touching. **Android is
+  the reference implementation** (most complete); iOS is actively catching up, so
+  any Android change is a candidate iOS change. Put the logic in the KMP `shared/`
+  module whenever it's presentation/domain (formatting, prefill, state machines,
+  repositories) so iOS and Android don't re-derive it and drift — note that
+  `android/` still carries its own duplicate core (D19/D20), so a fix applied only
+  to `android/.../SessionFormat.kt` must also be applied to
+  `shared/.../presentation/.../SessionFormat.kt`. A new/changed backend endpoint
+  that a client consumes must get a consumer on every client. If you genuinely
+  cannot do the other platforms in the same change, record the deferred work in
+  [`docs/plans/IMPL-IOS-01-STATUS.md`](docs/plans/IMPL-IOS-01-STATUS.md) ("What's
+  NOT done") so it is tracked, never silently dropped. Parity is the default;
+  skipping a platform is a decision that must be written down.
 - **Android image loads don't share the API auth stack.** Coil's singleton
   `ImageLoader` (AppModule) uses its own OkHttp client — the Retrofit
   `AuthInterceptor`/bearer does NOT apply. Loading from an authenticated backend
