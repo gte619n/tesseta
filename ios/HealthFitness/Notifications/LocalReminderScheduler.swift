@@ -1,6 +1,6 @@
 import Foundation
+import SharedCore
 import UserNotifications
-// import SharedCore  // OutstandingDoses, ReminderPlanner, ReminderSettings, DueDose, Medication — Phase 0D
 
 /// IMPL-IOS-01 Phase 3 Wave B — D9 medication reminder delivery for iOS.
 ///
@@ -197,26 +197,30 @@ final class LocalReminderScheduler {
         let fireDate: Date
     }
 
-    /// Build the window's `PlannedDose`s from the shared planner. STUBBED where
-    /// SharedCore isn't built — the real body calls the shared KMP objects.
-    ///
-    /// - Note: post-0D this replaces the caller-supplied `plan:` — the app hands the
-    ///   scheduler `medications` + `settings` (SKIE-bridged) and the scheduler asks
-    ///   the shared planner for each of the next N days.
-    func plannedDoses(now: Date = Date()) -> [PlannedDose] {
-        // SharedCore (Phase 0D), for each day in 0..<ceil(windowHours/24):
-        //   let date = LocalDate from (now + dayOffset) in the current TimeZone
-        //   let due  = OutstandingDoses.scheduledFor(medications, settings, date)
-        //   due.map { d in
-        //       PlannedDose(medicationId: d.medicationId, name: d.name,
-        //                   windowLabel: d.window.name, doseSummary: "\(d.dose) \(d.unit)",
-        //                   fireDate: combine(date, d.time))  // d.time is the RESOLVED LocalTime
-        //   }
-        // Carryover overdue set (for the immediate "outstanding" post):
-        //   OutstandingDoses.outstanding(medications, settings, takenToday, nowLocalDateTime)
-        //
-        // Until the XCFramework lands, callers pass `plan:` directly to `replan`.
-        return []
+    /// Fetch the window's doses from the shared planner
+    /// (`IosComposition.plannedMedicationDoses` → `OutstandingDoses`) and map them
+    /// into schedulable `PlannedDose`s. The shared side owns all due-date / window-
+    /// time resolution; here we only convert the resolved fire instant to a `Date`.
+    /// Returns `[]` on any failure (offline / signed out).
+    func plannedDosesFromShared() async -> [PlannedDose] {
+        let days = Int32((windowHours + 23) / 24)   // ceil to whole days
+        let planned = (try? await IosComposition.shared.plannedMedicationDoses(days: days)) ?? []
+        return planned.map { p in
+            PlannedDose(
+                medicationId: p.medicationId,
+                name: p.name,
+                windowLabel: p.windowLabel,
+                doseSummary: p.doseSummary,
+                fireDate: Date(timeIntervalSince1970: Double(p.fireEpochMs) / 1000.0),
+            )
+        }
+    }
+
+    /// Fetch the shared plan and reschedule. Call on sign-in, sync completion,
+    /// foreground, and the local-midnight boundary — the moments the dose set or
+    /// the day can change. Idempotent (clear-then-schedule).
+    func replanFromShared(now: Date = Date()) async {
+        replan(plan: await plannedDosesFromShared(), now: now)
     }
 }
 

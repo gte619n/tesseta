@@ -91,11 +91,21 @@ import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutsHubViewMod
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import com.gte619n.healthfitness.shared.domain.medications.MedicationStatus
+import com.gte619n.healthfitness.shared.domain.medications.OutstandingDoses
+import com.gte619n.healthfitness.shared.domain.medications.TimeWindow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * IMPL-IOS-01 Phase 1C — the iOS composition root (DI) + the hand-rolled Flow
@@ -467,6 +477,57 @@ object IosComposition {
     suspend fun loadExerciseHistory(exerciseId: String): List<ExerciseHistoryEntry> =
         workoutProgramRepo.exerciseHistory(exerciseId, limit = 50).getOrDefault(emptyList())
 
+    /**
+     * D9 medication-reminder planning for iOS. Fetches the active meds + reminder
+     * settings and runs the shared [OutstandingDoses] planner over the next [days]
+     * days, returning platform-ready doses (resolved fire instant as epoch millis)
+     * for `LocalReminderScheduler` to turn into `UNCalendarNotificationTrigger`s.
+     * Only FUTURE doses are returned — overdue-but-untaken carryover is deferred
+     * (would need today's taken set to avoid re-notifying a taken dose). Suspend →
+     * Swift async; empty on any failure.
+     */
+    suspend fun plannedMedicationDoses(days: Int = 2): List<PlannedDoseIos> = runCatching {
+        val meds = HttpMedicationCrudRepository(client()).list(MedicationStatus.ACTIVE)
+        val settings = HttpReminderSettingsRepository(client()).get()
+        val tz = TimeZone.currentSystemDefault()
+        val now = Clock.System.now()
+        val today = now.toLocalDateTime(tz).date
+        val out = mutableListOf<PlannedDoseIos>()
+        for (offset in 0 until days) {
+            val date = today.plus(offset, DateTimeUnit.DAY)
+            for (due in OutstandingDoses.scheduledFor(meds, settings, date)) {
+                val fireInstant = date.atTime(due.time).toInstant(tz)
+                if (fireInstant > now) {
+                    val dose = if (due.dose == due.dose.toLong().toDouble())
+                        due.dose.toLong().toString() else due.dose.toString()
+                    out.add(
+                        PlannedDoseIos(
+                            medicationId = due.medicationId,
+                            name = due.name,
+                            windowLabel = due.window.name,
+                            doseSummary = "$dose ${due.unit}",
+                            fireEpochMs = fireInstant.toEpochMilliseconds(),
+                        ),
+                    )
+                }
+            }
+        }
+        out.toList()
+    }.getOrDefault(emptyList())
+
+    /**
+     * Log a dose taken from the reminder notification's "Take" action (parity with
+     * Android's per-med "✓"). [windowName] is the [TimeWindow] enum name carried in
+     * the notification. Best-effort; swallows failures (the in-app checklist is the
+     * durable path).
+     */
+    suspend fun logDoseTaken(medicationId: String, windowName: String) {
+        runCatching {
+            val crud = HttpMedicationCrudRepository(client())
+            HttpAdherenceRepository(client(), crud).logDose(medicationId, TimeWindow.valueOf(windowName))
+        }
+    }
+
     private fun workoutSessionRepository(): MirrorWorkoutSessionRepository =
         MirrorWorkoutSessionRepository(
             mirror = mirrorStore(),
@@ -671,3 +732,17 @@ class FlowSubscription internal constructor(private val job: Job) {
         job.cancel()
     }
 }
+
+/**
+ * A platform-ready medication dose for `LocalReminderScheduler` (D9): the shared
+ * planner's [OutstandingDoses]/[DoseTimeResolver] output flattened to primitives,
+ * with the resolved fire time as [fireEpochMs] so the Swift side never re-derives
+ * due dates or window times.
+ */
+data class PlannedDoseIos(
+    val medicationId: String,
+    val name: String,
+    val windowLabel: String,
+    val doseSummary: String,
+    val fireEpochMs: Long,
+)
