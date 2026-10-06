@@ -75,10 +75,17 @@ struct WorkoutSessionView: View {
     }
 
     private let vm: WorkoutSessionViewModel
+    /// On-device coach-audio prefs (rest beep / voice announcements). NSUserDefaults-backed.
+    private let coachAudioVM = IosComposition.shared.coachAudioViewModel()
     @State private var state = ScreenState()
     @State private var rest: RestState?
     @State private var stateSub: FlowSubscription?
     @State private var restSub: FlowSubscription?
+    @State private var coachSub: FlowSubscription?
+    /// Voice-announcement pref mirror (D-coach-audio); drives the spoken next-up cue.
+    @State private var voiceOn = true
+    /// Last exercise we spoke, so re-renders don't repeat the announcement.
+    @State private var lastAnnouncedExerciseId: String?
     /// Guards the one-shot beep: we only chime on the finished-EDGE of the single source.
     @State private var didChimeForCurrentRest = false
     @State private var feeling: Int?
@@ -113,8 +120,15 @@ struct WorkoutSessionView: View {
                 restSub = IosComposition.shared.collectFlow(flow: vm.restTimer) { value in
                     rest = Self.mapRest(value as? RestTimerState)
                 }
+                coachSub = IosComposition.shared.collectFlow(flow: coachAudioVM.settings) { value in
+                    if let s = value as? CoachAudioSettings { voiceOn = s.voiceAnnouncements }
+                }
             }
             .onChange(of: state.closed) { _, closed in if closed { dismiss() } }
+            // Speak the next-up exercise when it changes (D-coach-audio voice cue),
+            // only once the workout has started and the pref is on.
+            .onChange(of: currentExercise?.id) { _, _ in announceCurrentExerciseIfNeeded() }
+            .onChange(of: state.started) { _, started in if started { announceCurrentExerciseIfNeeded() } }
             .overlay { if let rest { restOverlay(rest) } }
             .sheet(item: promptBinding) { prompt in promptSheet(prompt) }
             .fullScreenCover(isPresented: Binding(get: { state.completed }, set: { _ in })) {
@@ -147,8 +161,23 @@ struct WorkoutSessionView: View {
             .onDisappear {
                 stateSub?.cancel()
                 restSub?.cancel()
+                coachSub?.cancel()
                 WorkoutActivityController.shared.end()
             }
+    }
+
+    /// The exercise the session is currently on (the row the coach is cueing).
+    private var currentExercise: ExerciseRow? {
+        state.exercises.first { $0.isCurrent }
+    }
+
+    /// Speak "Next up: …" for the current exercise, gated by the voice pref and
+    /// de-duplicated so a re-render of the same current exercise doesn't repeat it.
+    private func announceCurrentExerciseIfNeeded() {
+        guard voiceOn, state.started, let row = currentExercise else { return }
+        guard row.id != lastAnnouncedExerciseId else { return }
+        lastAnnouncedExerciseId = row.id
+        CoachVoice.shared.announceExercise(name: row.name, detail: row.targetSummary)
     }
 
     // MARK: Content
