@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // DexaScanDetailViewModel, its UiState, DexaScan, DexaRegionKey — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E2 — DEXA scan detail. Parity target (Android):
 /// feature-body-composition `detail/DexaScanDetailScreen` + `DexaRegionGrid` +
@@ -23,15 +23,28 @@ struct DexaScanDetailView: View {
         var error: String?
     }
 
+    private let vm: DexaScanDetailViewModel
     @State private var state = ScreenState()
+    @State private var subscription: FlowSubscription?
     @State private var showDeleteConfirm = false
     @Environment(\.dismiss) private var dismiss
+
+    init(scanId: String) {
+        self.scanId = scanId
+        self.vm = IosComposition.shared.dexaScanDetailViewModel(scanId: scanId)
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("DEXA scan")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? DexaScanDetailViewModel.UiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
             .toolbar {
                 if state.scan != nil {
                     ToolbarItem(placement: .primaryAction) {
@@ -137,23 +150,65 @@ struct DexaScanDetailView: View {
     }
 
     private func patchField(path: String, value: Double?) {
-        // Post-0D: vm.wrapped.patchField(path: path, value: value.map { KotlinDouble(value: $0) })
         // Optimistic mutation + PATCH happen in the shared VM; failures revert and
         // emit on the message flow.
+        vm.patchField(path: path, value: value.map { KotlinDouble(value: $0) })
     }
 
-    /// STUB — presents `QLPreviewController` over `vm.downloadPdf()` bytes.
+    /// STUB — presents `QLPreviewController` over `vm.downloadPdf()` bytes
+    /// (QuickLook glue is the remaining platform piece of #6).
     private func viewPdf() {
-        // let bytes = try await vm.wrapped.downloadPdf()
+        // let bytes = try await vm.downloadPdf()
         // write to temp URL → QLPreviewController
     }
 
     private func delete() {
-        // Post-0D: vm.wrapped.delete { dismiss() }
-        dismiss()
+        vm.delete { dismiss() }
     }
 
-    // static func map(_ s: DexaScanDetailViewModel.UiState) -> ScreenState { ... }  // Phase 0D
+    // MARK: shared UiState → local ScreenState
+
+    static func map(_ s: DexaScanDetailViewModel.UiState) -> ScreenState {
+        ScreenState(
+            scan: s.scan.map(mapScan),
+            loading: s.loading,
+            deleting: s.deleting,
+            error: s.error,
+        )
+    }
+
+    private static func mapScan(_ s: SharedCore.DexaScan) -> DexaScan {
+        var regions: [DexaRegionKey: DexaRegion] = [:]
+        func put(_ key: DexaRegionKey, _ r: SharedCore.DexaRegion?) {
+            if let r { regions[key] = mapRegion(r) }
+        }
+        put(.trunk, s.trunk); put(.android, s.android); put(.gynoid, s.gynoid)
+        put(.armsTotal, s.armsTotal); put(.armsRight, s.armsRight); put(.armsLeft, s.armsLeft)
+        put(.legsTotal, s.legsTotal); put(.legsRight, s.legsRight); put(.legsLeft, s.legsLeft)
+        return DexaScan(
+            scanId: s.scanId,
+            measuredOn: s.measuredOn.map { Date(timeIntervalSince1970: Double($0.toEpochDays()) * 86_400) },
+            sourceFacility: s.sourceFacility,
+            totalMassLb: s.totalMassLb?.doubleValue,
+            leanTissueLb: s.leanTissueLb?.doubleValue,
+            fatTissueLb: s.fatTissueLb?.doubleValue,
+            totalBodyFatPercent: s.totalBodyFatPercent?.doubleValue,
+            visceralFatLb: s.visceralFatLb?.doubleValue,
+            androidGynoidRatio: s.androidGynoidRatio?.doubleValue,
+            bmdTScore: s.bmdTScore?.doubleValue,
+            bmdZScore: s.bmdZScore?.doubleValue,
+            regions: regions,
+        )
+    }
+
+    private static func mapRegion(_ r: SharedCore.DexaRegion) -> DexaRegion {
+        DexaRegion(
+            totalMassLb: r.totalMassLb?.doubleValue,
+            leanTissueLb: r.leanTissueLb?.doubleValue,
+            fatTissueLb: r.fatTissueLb?.doubleValue,
+            regionFatPercent: r.regionFatPercent?.doubleValue,
+        )
+    }
 }
 
 /// Inline-editable numeric cell — parity with Android's `EditableNumberCell`.
