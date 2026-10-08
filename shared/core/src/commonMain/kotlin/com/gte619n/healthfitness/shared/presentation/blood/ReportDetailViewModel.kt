@@ -46,6 +46,14 @@ class ReportDetailViewModel(
     suspend fun downloadPdf(report: BloodTestReport): ByteArray =
         reports.downloadPdf(report.pdfDownloadPath)
 
+    /** No-arg variant for callers that don't retain the shared report (iOS maps to
+     * a local mirror): downloads the currently-loaded report's PDF. */
+    suspend fun downloadPdf(): ByteArray {
+        val report = (state.value as? UiState.Ready)?.report
+            ?: error("No report loaded")
+        return reports.downloadPdf(report.pdfDownloadPath)
+    }
+
     fun delete(onDeleted: () -> Unit) {
         viewModelScope.launch {
             runCatching { reports.delete(reportId) }

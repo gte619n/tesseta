@@ -94,6 +94,7 @@ struct MealSection: View {
     let onTapEntry: (Entry) -> Void
     let onReviewAdjust: (Entry) -> Void
     let onReviewLeftover: (Entry) -> Void
+    let onDelete: (Entry) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -107,7 +108,8 @@ struct MealSection: View {
                 NutritionEntryRow(entry: entry,
                                   onTap: { onTapEntry(entry) },
                                   onReviewAdjust: { onReviewAdjust(entry) },
-                                  onReviewLeftover: { onReviewLeftover(entry) })
+                                  onReviewLeftover: { onReviewLeftover(entry) },
+                                  onDelete: { onDelete(entry) })
             }
         }
     }
@@ -120,6 +122,7 @@ struct NutritionEntryRow: View {
     let onTap: () -> Void
     let onReviewAdjust: () -> Void
     let onReviewLeftover: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         Button(action: onTap) {
@@ -142,6 +145,13 @@ struct NutritionEntryRow: View {
         }
         .buttonStyle(.plain)
         .disabled(entry.isPendingSynthetic)
+        .contextMenu {
+            if !entry.isPendingSynthetic {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
 
     @ViewBuilder private var thumbnail: some View {

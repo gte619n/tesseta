@@ -1,25 +1,29 @@
 import SwiftUI
-// import SharedCore  // NutritionTodayViewModel, NutritionTodayUiState, NutritionDay, … — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave C — the nutrition day view (replaces the Wave-C
-/// stub). Parity target (Android): `NutritionTodayScreen` + `NutritionTodayViewModel`.
-/// Observes the SHARED `NutritionTodayViewModel`
-/// (shared/.../presentation/nutrition/NutritionTodayViewModel.kt) through the
-/// `ObservableViewModel` bridge — the view is a pure function of the shared
-/// UI state; all mutation/adjust/leftover logic lives on the shared VM.
+/// IMPL-IOS-01 (logging spine) — the nutrition day view, now bound to the SHARED
+/// `NutritionTodayViewModel` over the real backend
+/// (`HttpNutritionDayRepository` → GET/POST/PATCH/DELETE api/me/nutrition/…).
+/// Parity target (Android): `NutritionTodayScreen` + `NutritionTodayViewModel`.
 ///
-/// The screen: a day switcher, the macro-progress header (calories ring + the six
-/// nutrient bars off `NutrientRow`), meal-grouped entry rows (including the
-/// synthetic "logging…" rows the op-rail projects), and the capture/add
-/// affordances. The adjust-review, leftover-review, edit, and add sheets are
-/// driven off the shared VM's sheet-state ids.
+/// Follows the proven SKIE-free pattern (see `UnitsView`/`MedicationsListView`):
+/// subscribe to the Kotlin `StateFlow` via `IosComposition.collectFlow` and fold
+/// each emission through [map] into the local `ScreenState` mirror, so all the
+/// existing dashlet subviews (which read the app-local mirror types) are
+/// unchanged. Bare type names (`NutritionDay`, `Entry`, `Macros`, …) resolve to
+/// the app-local structs; the SKIE-bridged Kotlin inputs are read as
+/// `SharedCore.*` inside [map].
+///
+/// Wired this pass: networked read of the day, day navigation (prev/next), and
+/// pull-to-refresh. Add-food, edit, delete, adjust, and leftover affordances reuse
+/// the same repository + VM and land next.
 struct NutritionTodayView: View {
 
-    /// Local mirror of the shared `NutritionTodayUiState` (deleted post-0D, when
-    /// the view binds the SKIE-bridged state directly).
+    /// Local mirror of the shared `NutritionTodayUiState`, folded from each
+    /// StateFlow emission by [map].
     struct ScreenState {
         var loading = true
-        var date = "2026-09-23"
+        var date: String
         var day: NutritionDay?
         var error: String?
         var reviewingAdjustId: String?
@@ -29,12 +33,27 @@ struct NutritionTodayView: View {
         var addSheetOpen = false
     }
 
-    @State private var state = ScreenState()
+    private let vm: NutritionTodayViewModel
+    @State private var state: ScreenState
+    @State private var subscription: FlowSubscription?
+
+    init() {
+        let today = Self.todayISO()
+        self.vm = IosComposition.shared.nutritionTodayViewModel(initialDate: today)
+        _state = State(initialValue: ScreenState(date: today))
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Nutrition")
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? NutritionTodayUiState { state = Self.merge(s, into: state) }
+                }
+                vm.refresh()   // VM doesn't self-load; kick the first fetch
+            }
+            .onDisappear { subscription?.cancel() }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink(value: NutritionRoute.capture(date: state.date)) {
@@ -55,7 +74,8 @@ struct NutritionTodayView: View {
             }
             .sheet(item: Binding(get: { state.addSheetOpen ? AddSheetToken() : nil },
                                  set: { if $0 == nil { state.addSheetOpen = false } })) { _ in
-                AddFoodView(meal: Meal.forHour(Calendar.current.component(.hour, from: Date())))
+                AddFoodView(meal: Meal.forHour(Calendar.current.component(.hour, from: Date())),
+                            todayVM: vm)
             }
             .sheet(item: $state.editingEntry) { entry in
                 // A composite opens the ingredients editor; a single food the edit sheet.
@@ -69,13 +89,6 @@ struct NutritionTodayView: View {
                                  set: { if $0 == nil { closeLeftoverReview() } })) { entry in
                 LeftoverReviewView(date: state.date, entry: entry, leftover: leftoverFor(entry))
             }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(NutritionTodayViewModel(
-        //         repository: DI.nutritionDayRepository, ops: DI.nutritionOpQueue,
-        //         initialDate: state.date))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
     }
 
     @ViewBuilder
@@ -99,7 +112,8 @@ struct NutritionTodayView: View {
                         MealSection(group: group,
                                     onTapEntry: { state.editingEntry = $0 },
                                     onReviewAdjust: { state.reviewingAdjustId = $0.entryId },
-                                    onReviewLeftover: { state.reviewingLeftoverId = $0.entryId })
+                                    onReviewLeftover: { state.reviewingLeftoverId = $0.entryId },
+                                    onDelete: { vm.deleteEntry(entryId: $0.entryId) })
                     }
                     Button {
                         state.addSheetOpen = true
@@ -112,18 +126,19 @@ struct NutritionTodayView: View {
                 .padding()
                 .formMaxWidth()
             }
+            .refreshable { vm.onPullRefresh() }
         }
     }
 
     private var daySwitcher: some View {
         HStack {
-            Button { /* Post-0D: vm.wrapped.previousDay() */ } label: {
+            Button { vm.previousDay() } label: {
                 Image(systemName: "chevron.left")
             }
             Spacer()
             Text(state.date).font(.hfHeadingSm).foregroundStyle(Theme.textPrimary)
             Spacer()
-            Button { /* Post-0D: vm.wrapped.nextDay() */ } label: {
+            Button { vm.nextDay() } label: {
                 Image(systemName: "chevron.right")
             }
         }
@@ -154,10 +169,87 @@ struct NutritionTodayView: View {
     private var leftoverReviewEntry: Entry? { state.reviewingLeftoverId.flatMap(entry) }
     private func adjustmentFor(_ entry: Entry) -> MealAdjustment? { nil }  // carried by SKIE state post-0D
     private func leftoverFor(_ entry: Entry) -> Leftover? { nil }
-    private func closeAdjustReview() { state.reviewingAdjustId = nil }      // Post-0D: vm.wrapped.closeAdjustReview()
+    private func closeAdjustReview() { state.reviewingAdjustId = nil }
     private func closeLeftoverReview() { state.reviewingLeftoverId = nil }
 
-    // static func map(_ s: NutritionTodayUiState) -> ScreenState { ... }  // Phase 0D
+    // MARK: - Mapping (SKIE-bridged Kotlin state → local ScreenState mirror)
+    //
+    // Folds the networked VM state into the local mirror. Only the VM-owned fields
+    // (loading/date/day/error) are taken from the emission; the sheet-presentation
+    // ids (add/edit/review) stay local view state so a background re-emit never
+    // dismisses an open sheet.
+
+    static func merge(_ s: NutritionTodayUiState, into current: ScreenState) -> ScreenState {
+        var next = current
+        next.loading = s.loading
+        next.date = s.date
+        next.day = s.displayDay.map(mapDay)
+        next.error = s.error
+        return next
+    }
+
+    private static func mapMacros(_ m: SharedCore.Macros) -> Macros {
+        Macros(
+            caloriesKcal: m.caloriesKcal?.doubleValue,
+            proteinGrams: m.proteinGrams?.doubleValue,
+            carbsGrams: m.carbsGrams?.doubleValue,
+            fatGrams: m.fatGrams?.doubleValue,
+            fiberGrams: m.fiberGrams?.doubleValue,
+            sugarGrams: m.sugarGrams?.doubleValue
+        )
+    }
+
+    private static func mapIngredient(_ i: SharedCore.EntryIngredient) -> EntryIngredient {
+        EntryIngredient(
+            name: i.name,
+            foodId: i.foodId,
+            servingLabel: i.servingLabel,
+            servingGrams: i.servingGrams?.doubleValue,
+            quantity: i.quantity?.doubleValue,
+            macros: mapMacros(i.macros)
+        )
+    }
+
+    private static func mapEntry(_ e: SharedCore.Entry) -> Entry {
+        Entry(
+            entryId: e.entryId,
+            meal: e.meal,
+            foodId: e.foodId,
+            foodName: e.foodName,
+            servingLabel: e.servingLabel,
+            servingGrams: e.servingGrams?.doubleValue,
+            quantity: e.quantity,
+            macros: mapMacros(e.macros),
+            source: e.source,
+            imageUrl: e.imageUrl,
+            imageStatus: e.imageStatus,
+            analysisStatus: e.analysisStatus,
+            ingredients: e.ingredients?.map(mapIngredient)
+        )
+    }
+
+    private static func mapMealGroup(_ g: SharedCore.MealGroup) -> MealGroup {
+        MealGroup(meal: g.meal, subtotal: mapMacros(g.subtotal), entries: g.entries.map(mapEntry))
+    }
+
+    private static func mapDay(_ d: SharedCore.NutritionDay) -> NutritionDay {
+        NutritionDay(
+            date: d.date,
+            totals: mapMacros(d.totals),
+            target: d.target.map(mapMacros),
+            meals: d.meals.map(mapMealGroup)
+        )
+    }
+
+    /// Today's date as `yyyy-MM-dd` in the device's local time zone (the day key
+    /// the backend indexes nutrition days by).
+    private static func todayISO() -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date())
+    }
 }
 
 private struct AddSheetToken: Identifiable { let id = "add" }

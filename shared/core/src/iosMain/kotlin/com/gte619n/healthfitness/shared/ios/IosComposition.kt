@@ -1,24 +1,120 @@
 package com.gte619n.healthfitness.shared.ios
 
+import com.gte619n.healthfitness.shared.data.HttpBloodReadingRepository
+import com.gte619n.healthfitness.shared.data.HttpChatRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramChatRepository
+import com.gte619n.healthfitness.shared.data.KtorSseClient
+import com.gte619n.healthfitness.shared.data.HttpBloodTestReportRepository
+import com.gte619n.healthfitness.shared.data.HttpBodyCompositionRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardBloodMarkerRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardBodyCompositionRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardDailyMetricsRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardNutritionRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardProfileRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardRecentActivityRepository
+import com.gte619n.healthfitness.shared.data.HttpDashboardWorkoutRepository
+import com.gte619n.healthfitness.shared.data.HttpDexaScanRepository
+import com.gte619n.healthfitness.shared.data.HttpDrinkRepository
+import com.gte619n.healthfitness.shared.data.HttpEquipmentRepository
+import com.gte619n.healthfitness.shared.data.HttpFoodRepository
+import com.gte619n.healthfitness.shared.data.HttpGymScanRepository
+import com.gte619n.healthfitness.shared.data.HttpLocationRepository
 import com.gte619n.healthfitness.shared.data.HttpGoalsRepository
-import com.gte619n.healthfitness.shared.data.HttpMedicationRepository
+import com.gte619n.healthfitness.shared.data.HttpNutritionDayRepository
 import com.gte619n.healthfitness.shared.data.HttpProfileRepository
+import com.gte619n.healthfitness.shared.data.HttpAdherenceRepository
+import com.gte619n.healthfitness.shared.data.HttpDrugRepository
+import com.gte619n.healthfitness.shared.data.HttpMedicationCrudRepository
+import com.gte619n.healthfitness.shared.data.HttpReminderSettingsRepository
+import com.gte619n.healthfitness.shared.data.HttpAdHocLibraryRepository
+import com.gte619n.healthfitness.shared.data.HttpProgressionRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutGoalsRepository
+import com.gte619n.healthfitness.shared.data.ExerciseHistoryEntry
+import com.gte619n.healthfitness.shared.data.HttpWorkoutProgramRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutSettingsRepository
+import com.gte619n.healthfitness.shared.data.HttpWorkoutStreakSettingsRepository
+import com.gte619n.healthfitness.shared.data.MirrorGoalsRepository
+import com.gte619n.healthfitness.shared.data.MirrorMedicationRepository
+import com.gte619n.healthfitness.shared.data.MirrorNutritionDayRepository
+import com.gte619n.healthfitness.shared.data.MirrorProfileRepository
+import com.gte619n.healthfitness.shared.data.MirrorWorkoutSessionRepository
+import com.gte619n.healthfitness.shared.data.NoopNutritionOpQueue
+import com.gte619n.healthfitness.shared.domain.nutrition.Meal
+import com.gte619n.healthfitness.shared.presentation.nutrition.AddFoodViewModel
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsCoachAudioPreferences
 import com.gte619n.healthfitness.shared.data.ios.NSUserDefaultsUnitPreferencesRepository
 import com.gte619n.healthfitness.shared.net.ApiClient
 import com.gte619n.healthfitness.shared.net.SessionTokenProvider
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
+import kotlinx.serialization.Serializable
+import com.gte619n.healthfitness.shared.sync.KtorSyncApi
+import com.gte619n.healthfitness.shared.sync.MirrorDatabaseFactory
+import com.gte619n.healthfitness.shared.sync.PayloadCipher
+import com.gte619n.healthfitness.shared.sync.SqlDelightMirrorStore
+import com.gte619n.healthfitness.shared.sync.SqlDelightOutboxStore
+import com.gte619n.healthfitness.shared.sync.SyncEngine
+import com.gte619n.healthfitness.shared.sync.SyncEngineImpl
+import com.gte619n.healthfitness.shared.db.MirrorDatabase
+import com.gte619n.healthfitness.shared.data.ConnectivityMonitor
+import com.gte619n.healthfitness.shared.domain.blood.BloodMarker
+import com.gte619n.healthfitness.shared.presentation.blood.BloodOverviewViewModel
+import com.gte619n.healthfitness.shared.presentation.blood.MarkerDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.blood.ReportDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.blood.UploadLabReportViewModel
+import com.gte619n.healthfitness.shared.presentation.bodycomposition.BodyCompositionViewModel
+import com.gte619n.healthfitness.shared.presentation.bodycomposition.DexaScanDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.bodycomposition.UploadDexaViewModel
+import com.gte619n.healthfitness.shared.presentation.sync.SyncStatusViewModel
+import kotlinx.coroutines.flow.flowOf
+import com.gte619n.healthfitness.shared.presentation.dashboard.DashboardViewModel
+import com.gte619n.healthfitness.shared.presentation.goals.GoalRoadmapViewModel
+import com.gte619n.healthfitness.shared.presentation.goals.GoalsChatViewModel
 import com.gte619n.healthfitness.shared.presentation.goals.GoalsListViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutDesignerViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.AddMedicationViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.MedicationDetailViewModel
 import com.gte619n.healthfitness.shared.presentation.medications.MedicationsViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.ReminderSettingsViewModel
+import com.gte619n.healthfitness.shared.presentation.medications.TodaysDosesViewModel
+import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTargetViewModel
+import com.gte619n.healthfitness.shared.presentation.nutrition.NutritionTodayViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.CoachAudioSettingsViewModel
+import com.gte619n.healthfitness.shared.presentation.settings.DrinkSettingsViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.ProfileViewModel
 import com.gte619n.healthfitness.shared.presentation.settings.UnitsViewModel
+import com.gte619n.healthfitness.shared.presentation.settings.WorkoutPreferencesViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.EditGymViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.GymDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.GymScanViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.GymsListViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.NewGymViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.ProgramDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.ProgressionConsoleViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.ProgramsListViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutLibraryViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutDetailViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutHistoryViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutSessionViewModel
+import com.gte619n.healthfitness.shared.presentation.workouts.WorkoutsHubViewModel
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import com.gte619n.healthfitness.shared.domain.medications.MedicationStatus
+import com.gte619n.healthfitness.shared.domain.medications.OutstandingDoses
+import com.gte619n.healthfitness.shared.domain.medications.TimeWindow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atTime
+import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * IMPL-IOS-01 Phase 1C — the iOS composition root (DI) + the hand-rolled Flow
@@ -34,14 +130,98 @@ object IosComposition {
     private var httpClient: HttpClient? = null
     private val unitPrefs by lazy { NSUserDefaultsUnitPreferencesRepository() }
 
-    /** Wire the shared REST client. `baseUrl` is normalized to end with "/". */
-    fun configure(baseUrl: String, tokenProvider: SessionTokenProvider) {
+    // MARK: - Offline-sync graph (Phase E-core)
+    //
+    // Built ONCE in [configure] and held for the app's lifetime: one SQLDelight
+    // mirror DB + its generic mirror/outbox stores + the Ktor sync API + the sync
+    // engine. Phases D/E/G consume these via the internal accessors below. The
+    // PHI columns are encrypted through the injected [PayloadCipher] (Swift
+    // Keychain + CryptoKit on device; NoopPayloadCipher in JVM tests).
+    private var mirrorDb: MirrorDatabase? = null
+    private var mirrorStoreRef: SqlDelightMirrorStore? = null
+    private var outboxStoreRef: SqlDelightOutboxStore? = null
+    private var syncEngineRef: SyncEngine? = null
+    private var deviceIdRef: String = ""
+
+    /**
+     * Wire the shared REST client AND the offline-sync graph. Called once at
+     * launch from Swift.
+     *
+     * @param baseUrl normalized to end with "/".
+     * @param tokenProvider Keychain-backed session token source for the Ktor client.
+     * @param cipher Keychain/CryptoKit AES-GCM cipher for the mirror's PHI columns.
+     * @param deviceId stable per-install UUID (minted + persisted by the Swift
+     *   caller in UserDefaults) — sent as `X-HF-Origin-Device` so the backend can
+     *   suppress echoing a device's own writes back to it.
+     */
+    fun configure(
+        baseUrl: String,
+        tokenProvider: SessionTokenProvider,
+        cipher: PayloadCipher,
+        deviceId: String,
+    ) {
         val normalized = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
-        httpClient = ApiClient.create(normalized, tokenProvider)
+        val http = ApiClient.create(normalized, tokenProvider)
+        httpClient = http
+
+        // Open the mirror DB and build the sync graph once. NativeSqliteDriver is
+        // instantiated here for the first time (watch for libsqlite3 at app link).
+        val db = MirrorDatabaseFactory().open()
+        val mirror = SqlDelightMirrorStore(db, cipher)
+        val outbox = SqlDelightOutboxStore(db, cipher)
+        val api = KtorSyncApi(http, deviceId)
+        mirrorDb = db
+        mirrorStoreRef = mirror
+        outboxStoreRef = outbox
+        syncEngineRef = SyncEngineImpl(api, mirror, outbox)
+        deviceIdRef = deviceId
     }
+
+    /**
+     * Register (or refresh) this device's push token with the backend (D7):
+     * `PUT /api/me/devices/fcm {token, deviceId}`. Called from the Swift push layer
+     * when FCM hands up a token. No-op before [configure] / when signed out.
+     */
+    suspend fun registerPushToken(token: String) {
+        val http = httpClient ?: return
+        runCatching { http.put("api/me/devices/fcm") { setBody(FcmRegistration(token, deviceIdRef)) } }
+    }
+
+    @Serializable
+    private data class FcmRegistration(val token: String, val deviceId: String)
 
     private fun client(): HttpClient =
         httpClient ?: error("IosComposition.configure(...) must be called at launch")
+
+    // MARK: - Offline-sync accessors (consumed by Phases D/E/G)
+
+    /** The generic mirror store (read-through cache). */
+    fun mirrorStore(): SqlDelightMirrorStore =
+        mirrorStoreRef ?: error("IosComposition.configure(...) must be called at launch")
+
+    /** The durable outbox (local writes survive offline / process death). */
+    fun outboxStore(): SqlDelightOutboxStore =
+        outboxStoreRef ?: error("IosComposition.configure(...) must be called at launch")
+
+    /** The sync engine (pull loop + outbox drain); drives the first-sync gate. */
+    fun syncEngine(): SyncEngine =
+        syncEngineRef ?: error("IosComposition.configure(...) must be called at launch")
+
+    /** True once [configure] has built the sync graph (defensive guard for callers
+     *  that might fire before launch wiring, e.g. a scenePhase pull). */
+    fun isConfigured(): Boolean = syncEngineRef != null
+
+    /**
+     * Sign-out teardown (B-6 PHI-leak fix): wipe the on-device mirror rows + cursor
+     * and the outbox so a subsequent account can't read the previous user's cached
+     * data. The Keychain data key is dropped separately by the Swift auth layer
+     * ([KeychainPayloadCipher.wipeKey]), so any residual ciphertext is unreadable
+     * even before the rows clear. Safe to call before configure (no-op).
+     */
+    fun wipeLocalData() {
+        mirrorStoreRef?.wipeAllBlocking()
+        outboxStoreRef?.clearAllBlocking()
+    }
 
     // MARK: - Screen factories
 
@@ -54,17 +234,536 @@ object IosComposition {
     fun coachAudioViewModel(): CoachAudioSettingsViewModel =
         CoachAudioSettingsViewModel(coachAudioPrefs)
 
-    /** Settings › Profile — networked (GET/PATCH /api/me). */
+    /** Settings › Profile — mirror-read (offline/instant) + online PATCH /api/me. */
     fun profileViewModel(): ProfileViewModel =
-        ProfileViewModel(HttpProfileRepository(client()), unitPrefs)
+        ProfileViewModel(MirrorProfileRepository(mirrorStore(), client()), unitPrefs)
 
-    /** Medications list — networked (GET /api/me/medications). */
+    /** Medications list — mirror-read (offline/instant), delta-pull refreshed. */
     fun medicationsViewModel(): MedicationsViewModel =
-        MedicationsViewModel(HttpMedicationRepository(client()))
+        MedicationsViewModel(MirrorMedicationRepository(mirrorStore(), syncEngine()))
 
-    /** Goals list — networked (GET /api/me/goals). */
+    /**
+     * Medication detail — online-first CRUD over the existing medications endpoints
+     * ([HttpMedicationCrudRepository]) + the reminder-settings doc
+     * ([HttpReminderSettingsRepository]). Drives dose/schedule/start-date change,
+     * discontinue/reactivate/delete, and the inline per-med reminder edit. `cachedDetail`
+     * throws on this online-first repo (no mirror), so the VM's cold-open seed is skipped
+     * and the network `get()` fills the detail. `onReplan` is a no-op (no shared reminder
+     * scheduler; the platform replans its local notifications separately).
+     */
+    fun medicationDetailViewModel(medicationId: String): MedicationDetailViewModel =
+        MedicationDetailViewModel(
+            medicationId = medicationId,
+            medications = HttpMedicationCrudRepository(client()),
+            reminderSettings = HttpReminderSettingsRepository(client()),
+        )
+
+    /**
+     * Today's doses checklist — one reactive source ([HttpMedicationCrudRepository.observeTodaysDoses]).
+     * The adherence repo SHARES that crud instance so a log/undo kicks a today-refresh and
+     * the checklist re-emits live (online-first stand-in for Android's mirror re-emit).
+     */
+    fun todaysDosesViewModel(): TodaysDosesViewModel {
+        val crud = HttpMedicationCrudRepository(client())
+        return TodaysDosesViewModel(
+            medications = crud,
+            adherence = HttpAdherenceRepository(client(), crud),
+        )
+    }
+
+    /**
+     * Add medication — catalog search + manual entry + create (online-first). The AI
+     * SSE drug lookup DEGRADES (no shared SSE client yet): [HttpDrugRepository.lookupStream]
+     * emits a single NotFound, so the search step falls back to catalog match + manual
+     * entry rather than hanging. `isOnline` is pinned true (no connectivity source yet).
+     */
+    fun addMedicationViewModel(): AddMedicationViewModel {
+        val crud = HttpMedicationCrudRepository(client())
+        return AddMedicationViewModel(
+            drugs = HttpDrugRepository(client()),
+            medications = crud,
+            reminderSettings = HttpReminderSettingsRepository(client()),
+            isOnline = MutableStateFlow(true),
+        )
+    }
+
+    /**
+     * Reminder settings — master switch + per-window default times + per-medication
+     * overrides over the existing reminder-settings doc + the active-meds list
+     * (online-first). `onReplan` is a no-op (platform replans locally).
+     */
+    fun reminderSettingsViewModel(): ReminderSettingsViewModel =
+        ReminderSettingsViewModel(
+            settingsRepo = HttpReminderSettingsRepository(client()),
+            medications = HttpMedicationCrudRepository(client()),
+        )
+
+    /**
+     * Settings › Drinks — the phone-side drink MANAGEMENT surface (IMPL-DRINK-01):
+     * list my drinks, add one (AI analyze → review → save), edit, regenerate the
+     * glass image, reorder, archive. Online-first over the existing drink endpoints
+     * ([HttpDrinkRepository], == Android's `DrinkApi`). The shared VM owns the
+     * PENDING-image poll + optimistic reorder. NOT the Drink-Mode session feature
+     * (which has no shared VM).
+     */
+    fun drinkSettingsViewModel(): DrinkSettingsViewModel =
+        DrinkSettingsViewModel(HttpDrinkRepository(client()))
+
+    /** Goals list — mirror-read (offline/instant); deep goal assembled from the
+     *  mirror. Mutations delegate to the networked impl. */
     fun goalsListViewModel(): GoalsListViewModel =
-        GoalsListViewModel(HttpGoalsRepository(client()))
+        GoalsListViewModel(MirrorGoalsRepository(HttpGoalsRepository(client()), mirrorStore(), syncEngine()))
+
+    /** Goal roadmap (deep goal — phases + steps). Same mirror-read construction as
+     *  the list factory; the VM drives step done-toggle + reset-to-auto (online
+     *  PATCH, mirror reconciled on the next pull). */
+    fun goalRoadmapViewModel(goalId: String): GoalRoadmapViewModel =
+        GoalRoadmapViewModel(
+            goalId = goalId,
+            repository = MirrorGoalsRepository(HttpGoalsRepository(client()), mirrorStore(), syncEngine()),
+        )
+
+    /**
+     * The concrete shared SSE transport ([KtorSseClient]) over the authed Ktor
+     * client. Constructed with an EMPTY baseUrl so it resolves relative paths
+     * (`api/me/…`) against the client's `defaultRequest { url(baseUrl) }` exactly
+     * like every REST repo — the client already carries the Bearer token + the
+     * `HttpTimeout` plugin the stream's idle-cap needs. One instance serves both
+     * chat consumers (goals + the workout designer).
+     */
+    private fun sseClient(): KtorSseClient = KtorSseClient(http = client(), baseUrl = "")
+
+    /** Monotonic id source for the chat VMs — a fresh NSUUID per message/bubble. */
+    private val goalsIdGenerator =
+        com.gte619n.healthfitness.shared.presentation.goals.IdGenerator {
+            platform.Foundation.NSUUID().UUIDString()
+        }
+    private val designerIdGenerator =
+        com.gte619n.healthfitness.shared.presentation.workouts.IdGenerator {
+            platform.Foundation.NSUUID().UUIDString()
+        }
+
+    /**
+     * Goals coach CHAT (SSE). The shared VM owns the message stream + `send`
+     * intent: it opens [KtorSseClient] against `api/me/goals/chat`, folds assistant
+     * tokens into a growing markdown bubble, attaches the editable [GoalProposal]
+     * card, and commits it through [HttpChatRepository] (`…/commit`, thread
+     * list/delete). Faithful end-to-end — the goal proposal round-trips fully.
+     */
+    fun goalsChatViewModel(): GoalsChatViewModel =
+        GoalsChatViewModel(
+            sseClient = sseClient(),
+            chatRepository = HttpChatRepository(client()),
+            idGenerator = goalsIdGenerator,
+        )
+
+    /**
+     * Workout program DESIGNER chat (SSE). The shared VM loads the setup form
+     * (training days + a gym per day + an optional goal) from [HttpLocationRepository]
+     * + [HttpWorkoutGoalsRepository], then streams an AI program proposal over
+     * `api/me/workout-programs/chat` via [KtorSseClient] — the first turn packs the
+     * schedule/goal envelope the [KtorSseClient] splits back into the POST body.
+     * Commit/threads go through [HttpWorkoutProgramChatRepository].
+     *
+     * STREAMING + DISPLAY + discard are faithful. COMMIT is best-effort: the shared
+     * [ProgramProposal] is the display-only SUBSET of the streamed deep program
+     * (exerciseName, no exerciseId), so a commit that can't resolve an exercise
+     * surfaces the backend's 422 issues on the card (see the designer deferral in
+     * IMPL-IOS-01-OFFLINE-SYNC §"Decisions for review"). [programId] is reserved for
+     * the edit-in-place flow (IMPL-18b), not yet surfaced by the shared VM.
+     */
+    fun workoutDesignerViewModel(programId: String? = null): WorkoutDesignerViewModel =
+        WorkoutDesignerViewModel(
+            sseClient = sseClient(),
+            chatRepository = HttpWorkoutProgramChatRepository(client()),
+            locationRepository = locationRepo,
+            goalsRepository = workoutGoalsRepo,
+            idGenerator = designerIdGenerator,
+        )
+
+    /**
+     * Blood / Labs overview — networked over the existing endpoints
+     * (`GET/POST/DELETE api/me/blood` + `/reports`). Online-first repos; the
+     * tracked-marker derivation + offline-never-blank behaviour live in the shared
+     * VM. The lab-PDF upload (multipart SSE) is platform-stubbed (no shared SSE
+     * client yet) — the repo emits a graceful Failed.
+     */
+    fun bloodOverviewViewModel(): BloodOverviewViewModel =
+        BloodOverviewViewModel(
+            readings = HttpBloodReadingRepository(client()),
+            reports = HttpBloodTestReportRepository(client()),
+        )
+
+    /**
+     * Body-composition overview — networked over `GET api/me/body-composition`
+     * (snapshot DERIVED in the repo, porting Android's buildSnapshot) + the DEXA
+     * scan list/detail/patch (`api/me/dexa/scans`). Pull-only (no outbox). DEXA PDF
+     * upload is platform-stubbed. Weight-unit projection reads the on-device unit
+     * prefs (same source as Units/Profile).
+     */
+    fun bodyCompositionViewModel(): BodyCompositionViewModel =
+        BodyCompositionViewModel(
+            bodyRepo = HttpBodyCompositionRepository(client()),
+            dexaRepo = HttpDexaScanRepository(client()),
+            unitPrefsRepo = unitPrefs,
+        )
+
+    /**
+     * Blood marker drill-down: readings table + history chart for one marker.
+     * Takes the marker's enum NAME (the iOS mirror's rawValue == the shared enum
+     * name) so the Swift side doesn't have to bridge the 9-case enum.
+     */
+    fun markerDetailViewModel(markerName: String): MarkerDetailViewModel =
+        MarkerDetailViewModel(
+            readings = HttpBloodReadingRepository(client()),
+            reports = HttpBloodTestReportRepository(client()),
+            marker = BloodMarker.valueOf(markerName),
+        )
+
+    /** Lab-report drill-down: the parsed report + its extracted marker values. */
+    fun reportDetailViewModel(reportId: String): ReportDetailViewModel =
+        ReportDetailViewModel(
+            reports = HttpBloodTestReportRepository(client()),
+            reportId = reportId,
+        )
+
+    /** DEXA scan drill-down: composition breakdown + optimistic patch/delete. */
+    fun dexaScanDetailViewModel(scanId: String): DexaScanDetailViewModel =
+        DexaScanDetailViewModel(
+            repo = HttpDexaScanRepository(client()),
+            unitPrefsRepo = unitPrefs,
+            scanId = scanId,
+        )
+
+    /** Settings › Sync log: queued/failed outbox counts + last error, retry, refresh. */
+    fun syncStatusViewModel(): SyncStatusViewModel =
+        SyncStatusViewModel(outbox = outboxStore(), engine = syncEngine())
+
+    /** Lab-report PDF upload → extract → save (online-only AI flow, D17). */
+    fun uploadLabReportViewModel(): UploadLabReportViewModel =
+        UploadLabReportViewModel(
+            reports = HttpBloodTestReportRepository(client()),
+            connectivity = AlwaysOnlineConnectivityMonitor,
+        )
+
+    /** DEXA PDF upload → parse → save (online-only AI flow, D17). */
+    fun uploadDexaViewModel(): UploadDexaViewModel =
+        UploadDexaViewModel(
+            repo = HttpDexaScanRepository(client()),
+            connectivity = AlwaysOnlineConnectivityMonitor,
+        )
+
+    /**
+     * Nutrition Today — networked (GET/POST/PATCH/DELETE api/me/nutrition/…).
+     * Online-first: the op rail is inert ([NoopNutritionOpQueue]) until the durable
+     * capture/outbox layer lands, so the screen is read + direct entry logging.
+     * [initialDate] is today's ISO date, minted by the Swift caller in device tz.
+     */
+    fun nutritionTodayViewModel(initialDate: String): NutritionTodayViewModel =
+        NutritionTodayViewModel(
+            // Networked day + an offline read-through cache (cachedDay served from the
+            // mirror; day() seeds it). observeDay/mutations stay on the network impl.
+            repository = MirrorNutritionDayRepository(HttpNutritionDayRepository(client()), mirrorStore()),
+            ops = NoopNutritionOpQueue(),
+            initialDate = initialDate,
+        )
+
+    /**
+     * Nutrition daily macro-target editor (Settings/Nutrition › Daily targets) —
+     * networked over `GET/PUT api/me/nutrition/target` via [HttpNutritionDayRepository].
+     * The shared [NutritionTargetViewModel] loads the current target and saves an
+     * edited one (`saved` drives the one-shot confirmation). Read + save only; no
+     * mirror/outbox (a plain online form, same as Android).
+     */
+    fun nutritionTargetViewModel(): NutritionTargetViewModel =
+        NutritionTargetViewModel(repository = HttpNutritionDayRepository(client()))
+
+    /**
+     * Add-food sheet — networked catalog + saved-meal search (GET api/foods/search,
+     * api/me/nutrition/meals/search) + the one-tap recent-meals list. [mealWire] is
+     * the wire name of the meal being logged ("BREAKFAST"…); an unknown value falls
+     * back to SNACK. The actual logging goes through the shared Today VM the Swift
+     * caller already holds, so a logged entry refreshes the open day.
+     */
+    fun addFoodViewModel(mealWire: String): AddFoodViewModel =
+        AddFoodViewModel(
+            foods = HttpFoodRepository(client()),
+            nutrition = HttpNutritionDayRepository(client()),
+            currentMeal = Meal.entries.firstOrNull { it.wire == mealWire } ?: Meal.SNACK,
+        )
+
+    /**
+     * Workout session logger — the offline-first live session (ADR-0012 / Phase G).
+     * Backed by [MirrorWorkoutSessionRepository] on the shared mirror + outbox rail:
+     * every set edit is a LOCAL-ONLY dirty draft write (survives process death /
+     * offline), and finish/skip enqueue ONE idempotent completion PUT through the
+     * outbox. [programId]/[scheduledId] are the nav args the SwiftUI logger opens on.
+     */
+    fun workoutSessionViewModel(programId: String, scheduledId: String): WorkoutSessionViewModel =
+        WorkoutSessionViewModel(
+            repository = MirrorWorkoutSessionRepository(
+                mirror = mirrorStore(),
+                outbox = outboxStore(),
+                engine = syncEngine(),
+                client = client(),
+            ),
+            programId = programId,
+            scheduledId = scheduledId,
+        )
+
+    // MARK: - Workouts browse (Phase 3 Wave D — iOS wiring)
+    //
+    // One shared [HttpWorkoutProgramRepository] so the shallow-programs +
+    // deep-program caches stay warm across the hub / list / detail screens within a
+    // session (each ViewModel is still its own instance; they share the read-through
+    // cache). The live-session repo is rebuilt per factory, exactly as
+    // [workoutSessionViewModel] constructs it (mirror + outbox + engine + client) —
+    // the browse screens only READ drafts/parked completions from it.
+
+    private val workoutProgramRepo by lazy { HttpWorkoutProgramRepository(client()) }
+    private val workoutStreakRepo by lazy { HttpWorkoutStreakSettingsRepository(client()) }
+
+    /**
+     * One-shot fetch for the coaching screen's per-exercise history popup
+     * (`GET /api/me/workout-programs/exercises/{id}/history`). Kotlin suspend →
+     * Swift async; returns an empty list on any failure (offline / not persisted).
+     */
+    suspend fun loadExerciseHistory(exerciseId: String): List<ExerciseHistoryEntry> =
+        workoutProgramRepo.exerciseHistory(exerciseId, limit = 50).getOrDefault(emptyList())
+
+    /**
+     * D9 medication-reminder planning for iOS. Fetches the active meds + reminder
+     * settings and runs the shared [OutstandingDoses] planner over the next [days]
+     * days, returning platform-ready doses (resolved fire instant as epoch millis)
+     * for `LocalReminderScheduler` to turn into `UNCalendarNotificationTrigger`s.
+     * Only FUTURE doses are returned — overdue-but-untaken carryover is deferred
+     * (would need today's taken set to avoid re-notifying a taken dose). Suspend →
+     * Swift async; empty on any failure.
+     */
+    suspend fun plannedMedicationDoses(days: Int = 2): List<PlannedDoseIos> = runCatching {
+        val meds = HttpMedicationCrudRepository(client()).list(MedicationStatus.ACTIVE)
+        val settings = HttpReminderSettingsRepository(client()).get()
+        val tz = TimeZone.currentSystemDefault()
+        val now = Clock.System.now()
+        val today = now.toLocalDateTime(tz).date
+        val out = mutableListOf<PlannedDoseIos>()
+        for (offset in 0 until days) {
+            val date = today.plus(offset, DateTimeUnit.DAY)
+            for (due in OutstandingDoses.scheduledFor(meds, settings, date)) {
+                val fireInstant = date.atTime(due.time).toInstant(tz)
+                if (fireInstant > now) {
+                    val dose = if (due.dose == due.dose.toLong().toDouble())
+                        due.dose.toLong().toString() else due.dose.toString()
+                    out.add(
+                        PlannedDoseIos(
+                            medicationId = due.medicationId,
+                            name = due.name,
+                            windowLabel = due.window.name,
+                            doseSummary = "$dose ${due.unit}",
+                            fireEpochMs = fireInstant.toEpochMilliseconds(),
+                        ),
+                    )
+                }
+            }
+        }
+        out.toList()
+    }.getOrDefault(emptyList())
+
+    /**
+     * Log a dose taken from the reminder notification's "Take" action (parity with
+     * Android's per-med "✓"). [windowName] is the [TimeWindow] enum name carried in
+     * the notification. Best-effort; swallows failures (the in-app checklist is the
+     * durable path).
+     */
+    suspend fun logDoseTaken(medicationId: String, windowName: String) {
+        runCatching {
+            val crud = HttpMedicationCrudRepository(client())
+            HttpAdherenceRepository(client(), crud).logDose(medicationId, TimeWindow.valueOf(windowName))
+        }
+    }
+
+    private fun workoutSessionRepository(): MirrorWorkoutSessionRepository =
+        MirrorWorkoutSessionRepository(
+            mirror = mirrorStore(),
+            outbox = outboxStore(),
+            engine = syncEngine(),
+            client = client(),
+        )
+
+    /**
+     * Workouts hub — the read-first "This Week" landing (featured program +
+     * compliance grid + streak + resume/parked banners). KMP port of Android's
+     * `WorkoutsLandingViewModel`. Networked programs/calendar/stats reads; the
+     * compliance + streak maths are derived in the shared VM (ComplianceMath).
+     */
+    fun workoutsHubViewModel(): WorkoutsHubViewModel =
+        WorkoutsHubViewModel(
+            repository = workoutProgramRepo,
+            sessionRepository = workoutSessionRepository(),
+            settingsRepository = workoutStreakRepo,
+        )
+
+    /** Programs list — reactive shallow programs list (online-first). */
+    fun programsListViewModel(): ProgramsListViewModel =
+        ProgramsListViewModel(repository = workoutProgramRepo)
+
+    /**
+     * One program's detail (deep tree + this-week/past strips + activate / edit /
+     * continue / apply-nutrition / delete-session / restore-parked). Keyed by id.
+     */
+    fun programDetailViewModel(programId: String): ProgramDetailViewModel =
+        ProgramDetailViewModel(
+            repository = workoutProgramRepo,
+            sessionRepository = workoutSessionRepository(),
+            programId = programId,
+        )
+
+    /**
+     * A single workout day, read-only viewer + prior-performance last-sets hint +
+     * "run this workout today" (materializes a session dated today).
+     */
+    fun workoutDetailViewModel(
+        programId: String,
+        phaseId: String,
+        dayId: String,
+    ): WorkoutDetailViewModel =
+        WorkoutDetailViewModel(
+            repository = workoutProgramRepo,
+            programId = programId,
+            phaseId = phaseId,
+            dayId = dayId,
+        )
+
+    /** Read-only, paged Workout History (COMPLETED sessions, newest first). */
+    fun workoutHistoryViewModel(): WorkoutHistoryViewModel =
+        WorkoutHistoryViewModel(
+            repository = workoutProgramRepo,
+            sessionRepository = workoutSessionRepository(),
+        )
+
+    // MARK: - Workout preferences / progression console / ad-hoc library
+    //
+    // Three previously interface-only contracts, now online-first Http impls over
+    // the EXISTING backend (WorkoutSettingsApi / ProgressionApi / AdHocWorkoutController).
+
+    private val workoutSettingsRepo by lazy { HttpWorkoutSettingsRepository(client()) }
+    private val progressionRepo by lazy { HttpProgressionRepository(client()) }
+    private val workoutGoalsRepo by lazy { HttpWorkoutGoalsRepository(client()) }
+    private val adHocLibraryRepo by lazy { HttpAdHocLibraryRepository(client()) }
+
+    /**
+     * Workout preferences — free-text standing instructions the designer honors
+     * (synced via `GET/PUT api/me/workout-programs/settings`). Reactive cache read
+     * + capped save-through (parity with Android's WorkoutPreferencesViewModel).
+     */
+    fun workoutPreferencesViewModel(): WorkoutPreferencesViewModel =
+        WorkoutPreferencesViewModel(repository = workoutSettingsRepo)
+
+    /**
+     * Progression console — read-only engine outputs (week review / block params /
+     * strength / energy balance + active goal) with the mode pin. The progression
+     * MATH is the backend engine's; the VM only single-sources the presentation.
+     */
+    fun progressionConsoleViewModel(): ProgressionConsoleViewModel =
+        ProgressionConsoleViewModel(
+            repository = progressionRepo,
+            goals = workoutGoalsRepo,
+        )
+
+    /**
+     * Ad-hoc workout library — read-only list (IMPL-ADHOC-01). Online-first over
+     * `GET api/me/adhoc-workouts` (Android reads the mirror; iOS has no mirror read
+     * for it yet). Generate / run / archive are NOT in the shared VM/interface.
+     */
+    fun workoutLibraryViewModel(): WorkoutLibraryViewModel =
+        WorkoutLibraryViewModel(repository = adHocLibraryRepo)
+
+    // MARK: - Gyms (locations / equipment / video scan) — Phase 3 Wave D(iii)
+    //
+    // Three previously interface-only contracts, now online-first Http impls over
+    // the EXISTING backend (LocationController / EquipmentController /
+    // GymVideoScanController). One shared [HttpLocationRepository] +
+    // [HttpEquipmentRepository] keeps the list/detail/new/edit screens consistent
+    // within a session. The scan repo needs a BARE second client for the signed-URL
+    // PUT (no Authorization / JSON content-type, so GCS accepts the raw-bytes PUT).
+
+    private val locationRepo by lazy { HttpLocationRepository(client()) }
+    private val equipmentRepo by lazy { HttpEquipmentRepository(client()) }
+
+    /** A no-auth, no-default-headers client for direct-to-GCS signed uploads. */
+    private val uploadClient by lazy { HttpClient() }
+
+    /** Gyms list — gym CRUD read (online-first); routes to detail / new. */
+    fun gymsListViewModel(): GymsListViewModel =
+        GymsListViewModel(repo = locationRepo)
+
+    /**
+     * One gym's detail — cover/hours/amenities + attached equipment (each
+     * removable via a reduced-ids PATCH), set-default, delete. The equipment
+     * catalog rows are fetched per attached id through [equipmentRepo].
+     */
+    fun gymDetailViewModel(locationId: String): GymDetailViewModel =
+        GymDetailViewModel(
+            locationId = locationId,
+            repo = locationRepo,
+            equipmentRepo = equipmentRepo,
+        )
+
+    /**
+     * Create a gym — binds the shared form; `submit` pops to the new detail.
+     * NOTE: named `makeNewGymViewModel` (not `newGymViewModel`) because a Kotlin
+     * ObjC export whose selector starts with `new` collides with the ObjC `new`
+     * method family and is silently DROPPED from the generated header.
+     */
+    fun makeNewGymViewModel(): NewGymViewModel =
+        NewGymViewModel(repo = locationRepo)
+
+    /**
+     * Edit a gym — form + cover-photo upload/delete (multipart POST / DELETE
+     * `…/gyms/{id}/photo`). The picked PhotosPicker image is streamed as a
+     * [com.gte619n.healthfitness.shared.data.PendingUpload].
+     */
+    fun editGymViewModel(locationId: String): EditGymViewModel =
+        EditGymViewModel(locationId = locationId, repo = locationRepo)
+
+    /**
+     * Gym equipment video scan (IMPL-GYM-003) — register → signed-URL PUT → start →
+     * poll → review → confirm. The signed upload uses the bare [uploadClient].
+     */
+    fun gymScanViewModel(locationId: String): GymScanViewModel =
+        GymScanViewModel(
+            locationId = locationId,
+            repo = HttpGymScanRepository(client = client(), uploadClient = uploadClient),
+        )
+
+    // MARK: - Today dashboard (Phase 3 Wave A1 — iOS wiring)
+    //
+    // The shared [DashboardViewModel] takes SEVEN dashboard-scoped repositories,
+    // each a thin online-first Http impl over the EXISTING backend endpoints the
+    // feature screens already use (ports of Android's data.dashboard.*). The
+    // workout repo reuses the warm program cache ([workoutProgramRepo]) + a
+    // mirror-backed session repo for the reactive draft resume, and the
+    // body-composition repo for the completed-session recap bodyweight. No
+    // on-device mirror read yet — the `cached*` methods return null/empty and the
+    // VM falls through to the network `load*` (deferred mirror-read pass).
+
+    /** Today dashboard — the home screen, bound to the shared [DashboardViewModel]. */
+    fun dashboardViewModel(): DashboardViewModel {
+        val bodyComp = HttpDashboardBodyCompositionRepository(client())
+        return DashboardViewModel(
+            bodyComp = bodyComp,
+            dailyMetrics = HttpDashboardDailyMetricsRepository(client()),
+            blood = HttpDashboardBloodMarkerRepository(client()),
+            nutrition = HttpDashboardNutritionRepository(HttpNutritionDayRepository(client())),
+            recent = HttpDashboardRecentActivityRepository(client()),
+            workouts = HttpDashboardWorkoutRepository(
+                programs = workoutProgramRepo,
+                sessions = workoutSessionRepository(),
+                bodyComp = bodyComp,
+            ),
+            profile = HttpDashboardProfileRepository(HttpProfileRepository(client())),
+        )
+    }
 
     // MARK: - Flow bridge
 
@@ -87,3 +786,27 @@ class FlowSubscription internal constructor(private val job: Job) {
         job.cancel()
     }
 }
+
+/**
+ * Connectivity source for the online-only upload flows. iOS has no reachability
+ * monitor wired yet, so this reports always-online (parity with the other iOS
+ * repos that pin `isOnline = true`); a URLSession/NWPathMonitor-backed impl can
+ * replace it later. The upload itself still fails gracefully offline.
+ */
+private object AlwaysOnlineConnectivityMonitor : ConnectivityMonitor {
+    override val isOnline: Flow<Boolean> = flowOf(true)
+}
+
+/**
+ * A platform-ready medication dose for `LocalReminderScheduler` (D9): the shared
+ * planner's [OutstandingDoses]/[DoseTimeResolver] output flattened to primitives,
+ * with the resolved fire time as [fireEpochMs] so the Swift side never re-derives
+ * due dates or window times.
+ */
+data class PlannedDoseIos(
+    val medicationId: String,
+    val name: String,
+    val windowLabel: String,
+    val doseSummary: String,
+    val fireEpochMs: Long,
+)

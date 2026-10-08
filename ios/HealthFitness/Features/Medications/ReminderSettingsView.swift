@@ -1,80 +1,94 @@
 import SwiftUI
-// import SharedCore  // ReminderSettingsViewModel, ReminderSettingsUiState, TimeWindow — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave B — reminder settings. Parity target: Android
-/// `feature-medical/.../reminders/ReminderSettingsScreen.kt` +
-/// `ReminderSettingsViewModel`.
+/// IMPL-IOS-01 — reminder settings. Parity target: Android
+/// `feature-medical/.../reminders/ReminderSettingsScreen.kt` + `ReminderSettingsViewModel`.
 ///
-/// The master enable switch, the per-window default fire times (MORNING/AFTERNOON/
-/// EVENING/BEDTIME), and per-medication overrides (mute + custom slot times) all
-/// live on the shared `ReminderSettings` doc. On save the shared VM writes the doc
-/// AND re-plans — which is exactly the input the D9 `LocalReminderScheduler`
-/// re-reads through the shared `ReminderPlanner` to (re)schedule the next ~48h of
-/// `UNCalendarNotificationTrigger`s. This screen never computes fire times itself.
-///
-/// Follows the reference `MedicationsListView` pattern: local mirror of the shared
-/// UiState, replaced post-0D by the SKIE-bridged type.
+/// Backed by the SHARED `ReminderSettingsViewModel` over the online-first
+/// `HttpReminderSettingsRepository` + `HttpMedicationCrudRepository` (the active-meds
+/// list for the per-medication override rows). The master switch, per-window default
+/// fire times, and per-medication mutes all push into the VM's intents; `save()` writes
+/// the `ReminderSettings` doc. Observed via `collectFlow` + a static `map(...)`, the
+/// same SKIE-free pattern as `MedicationsListView`.
 struct ReminderSettingsView: View {
 
-    /// Mirror of the shared `TimeWindow` (kept local pre-0D; SKIE-bridged after).
-    enum Window: String, CaseIterable, Identifiable {
-        case morning = "Morning", afternoon = "Afternoon", evening = "Evening", bedtime = "Bedtime"
-        var id: String { rawValue }
-    }
-
+    /// Local mirror of a per-medication override row.
     struct MedOverride: Identifiable {
         let id: String
         let name: String
         var enabled: Bool
     }
 
-    @State private var loading = true
-    @State private var enabled = true
-    @State private var windowTimes: [Window: Date] = [:]
-    @State private var meds: [MedOverride] = []
-    @State private var saving = false
+    struct ScreenState {
+        var loading = true
+        var enabled = true
+        var windowTimes: [String: String] = [:]   // TimeWindow.name → "HH:mm"
+        var meds: [MedOverride] = []
+        var saving = false
+    }
+
+    private let vm: ReminderSettingsViewModel
+    @State private var state = ScreenState()
+    @State private var subscription: FlowSubscription?
+
+    private static let windows: [TimeWindow] = [
+        SharedCore.TimeWindow.morning,
+        SharedCore.TimeWindow.afternoon,
+        SharedCore.TimeWindow.evening,
+        SharedCore.TimeWindow.bedtime,
+    ]
+
+    init() {
+        self.vm = IosComposition.shared.reminderSettingsViewModel()
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Reminders")
+            .accessibilityIdentifier("reminder-settings")  // IMPL-E2E-01 shared id
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Save") { save() }.disabled(saving)
+                    Button("Save") { vm.save(onSaved: {}) }.disabled(state.saving)
                 }
             }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(ReminderSettingsViewModel(
-        //         settingsRepo: DI.reminderSettingsRepository,
-        //         medications: DI.medicationCrudRepository, onReplan: DI.replan))
-        //     await vm.observe(vm.wrapped.state) { self.apply($0) }
-        // }
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? ReminderSettingsUiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
     private var content: some View {
-        if loading {
+        if state.loading {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Form {
                 Section {
-                    Toggle("Medication reminders", isOn: $enabled)
+                    Toggle("Medication reminders", isOn: Binding(
+                        get: { state.enabled },
+                        set: { vm.setEnabled(enabled: $0) },
+                    ))
                 }
-                if enabled {
+                if state.enabled {
                     Section("Default times") {
-                        ForEach(Window.allCases) { window in
+                        ForEach(Self.windows, id: \.name) { window in
                             DatePicker(
-                                window.rawValue,
+                                Self.windowLabel(window),
                                 selection: bindingFor(window),
                                 displayedComponents: .hourAndMinute,
                             )
                         }
                     }
-                    if !meds.isEmpty {
+                    if !state.meds.isEmpty {
                         Section("Per medication") {
-                            ForEach($meds) { $med in
-                                Toggle(med.name, isOn: $med.enabled)
+                            ForEach(state.meds) { med in
+                                Toggle(med.name, isOn: Binding(
+                                    get: { med.enabled },
+                                    set: { vm.setMedEnabled(medicationId: med.id, enabled: $0) },
+                                ))
                             }
                         }
                     }
@@ -84,31 +98,67 @@ struct ReminderSettingsView: View {
         }
     }
 
-    private func bindingFor(_ window: Window) -> Binding<Date> {
+    // MARK: window-time binding (Date ⇄ "HH:mm" pushed into the VM)
+
+    private func bindingFor(_ window: TimeWindow) -> Binding<Date> {
         Binding(
-            get: { windowTimes[window] ?? Self.defaultTime(window) },
-            set: { windowTimes[window] = $0 },
+            get: { Self.parse(state.windowTimes[window.name]) ?? Self.defaultTime(window) },
+            set: { vm.setWindowTime(window: window, time: Self.format($0)) },
         )
     }
 
-    /// Built-in defaults (mirror shared `ReminderSettings.DEFAULT_WINDOW_TIMES`):
-    /// MORNING 06:00, AFTERNOON 12:00, EVENING 18:00, BEDTIME 21:30.
-    private static func defaultTime(_ window: Window) -> Date {
+    private static func parse(_ hhmm: String?) -> Date? {
+        guard let hhmm, let colon = hhmm.firstIndex(of: ":"),
+              let h = Int(hhmm[..<colon]),
+              let m = Int(hhmm[hhmm.index(after: colon)...]) else { return nil }
+        return Calendar.current.date(from: DateComponents(hour: h, minute: m))
+    }
+
+    private static func format(_ date: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+    }
+
+    private static func defaultTime(_ window: TimeWindow) -> Date {
         let comps: DateComponents
         switch window {
-        case .morning:   comps = DateComponents(hour: 6, minute: 0)
-        case .afternoon: comps = DateComponents(hour: 12, minute: 0)
-        case .evening:   comps = DateComponents(hour: 18, minute: 0)
-        case .bedtime:   comps = DateComponents(hour: 21, minute: 30)
+        case SharedCore.TimeWindow.morning:   comps = DateComponents(hour: 6, minute: 0)
+        case SharedCore.TimeWindow.afternoon: comps = DateComponents(hour: 12, minute: 0)
+        case SharedCore.TimeWindow.evening:   comps = DateComponents(hour: 18, minute: 0)
+        default:                              comps = DateComponents(hour: 21, minute: 30)  // bedtime
         }
         return Calendar.current.date(from: comps) ?? Date()
     }
 
-    private func save() {
-        // Post-0D: push the window times / mutes into the shared VM
-        // (setEnabled/setWindowTime/setMedEnabled) then vm.wrapped.save { }.
-        // The shared VM writes ReminderSettings and re-plans (D9 reschedule).
+    private static func windowLabel(_ window: TimeWindow) -> String {
+        switch window {
+        case SharedCore.TimeWindow.morning:   return "Morning"
+        case SharedCore.TimeWindow.afternoon: return "Afternoon"
+        case SharedCore.TimeWindow.evening:   return "Evening"
+        default:                              return "Bedtime"
+        }
     }
 
-    // private func apply(_ s: ReminderSettingsUiState) { ... }  // Phase 0D
+    // MARK: map
+
+    private static func map(_ s: ReminderSettingsUiState) -> ScreenState {
+        var out = ScreenState()
+        out.loading = s.loading
+        out.enabled = s.enabled
+        out.saving = s.saving
+
+        var times: [String: String] = [:]
+        for window in windows {
+            if let t = s.windowTimes[window] as? String { times[window.name] = t }
+        }
+        out.windowTimes = times
+
+        out.meds = s.medications.map { med in
+            let name = med.customName ?? med.drug?.name ?? "Medication"
+            let override = s.perMedication[med.medicationId]
+            let enabled = (override as? MedicationReminderOverride)?.enabled ?? true
+            return MedOverride(id: med.medicationId, name: name, enabled: enabled)
+        }
+        return out
+    }
 }

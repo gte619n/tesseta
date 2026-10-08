@@ -1,6 +1,6 @@
 import PhotosUI
 import SwiftUI
-// import SharedCore  // GymScanViewModel, its UiState/Stage/Row, ScanPreview — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave D(iii) — the gym equipment scan (IMPL-GYM-003).
 /// Parity target (Android): `feature-workouts/.../GymScanScreen.kt` +
@@ -8,11 +8,9 @@ import SwiftUI
 /// polls, and returns the detected equipment → the user reviews each row
 /// (use-match / create-new / skip, with a rename) → confirm.
 ///
-/// The scan uses the device camera (a video capture via `PhotosPicker` with
-/// `.videos`, or a `UIImagePickerController` camera source) as the equipment
-/// source; a lighter fallback lets the user skip the scan and add equipment
-/// manually. The heavy CV runs server-side (the VM's poll loop); on-device
-/// Vision is reserved for a future quick local pre-pass.
+/// The scan uses `PhotosPicker` with `.videos` as the equipment source; a lighter
+/// fallback lets the user skip the scan and add equipment manually. The heavy CV
+/// runs server-side (the VM's poll loop); edits route to the VM, which re-emits.
 struct GymScanView: View {
     let locationId: String
 
@@ -22,16 +20,23 @@ struct GymScanView: View {
         let id: Int              // index
         let parsedName: String
         let matchName: String?
-        var action: String       // USE_MATCH | CREATE_NEW | SKIP
-        var nameOverride: String
+        let action: String       // USE_MATCH | CREATE_NEW | SKIP
+        let nameOverride: String
     }
 
+    private let vm: GymScanViewModel
     @State private var stage: Stage = .idle
     @State private var items: [PreviewItem] = []
     @State private var addedCount = 0
     @State private var error: String?
     @State private var videoItem: PhotosPickerItem?
     @State private var showPicker = false
+    @State private var subscription: FlowSubscription?
+
+    init(locationId: String) {
+        self.locationId = locationId
+        self.vm = IosComposition.shared.gymScanViewModel(locationId: locationId)
+    }
 
     var body: some View {
         content
@@ -43,12 +48,45 @@ struct GymScanView: View {
                 guard let item else { return }
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self) {
-                        _ = data
-                        // vm.analyzeVideo(mimeType: "video/mp4", sizeBytes: Int64(data.count)) { data }
+                        let bytes = data.toKotlinByteArray()
+                        vm.analyzeVideo(mimeType: "video/mp4", sizeBytes: Int64(data.count)) { bytes }
                     }
                 }
             }
-        // Post-0D: .task { observe GymScanViewModel(locationId).state -> apply }
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? GymScanViewModel.UiState { apply(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
+    }
+
+    private func apply(_ s: GymScanViewModel.UiState) {
+        stage = Self.stage(s.stage)
+        error = s.error
+        addedCount = Int(s.result?.addedCount ?? 0)
+        let rows = s.rows  // NSDictionary<KotlinInt, Row>
+        items = (s.preview?.items ?? []).map { item -> PreviewItem in
+            let row = rows[KotlinInt(int: item.index)] as? GymScanViewModel.Row
+            return PreviewItem(
+                id: Int(item.index),
+                parsedName: item.parsed.name,
+                matchName: item.match?.name,
+                action: row?.action ?? item.action,
+                nameOverride: row?.nameOverride ?? item.parsed.name
+            )
+        }
+    }
+
+    private static func stage(_ s: GymScanViewModel.Stage) -> Stage {
+        switch s {
+        case GymScanViewModel.Stage.uploading: return .uploading
+        case GymScanViewModel.Stage.analyzing: return .analyzing
+        case GymScanViewModel.Stage.review: return .review
+        case GymScanViewModel.Stage.confirming: return .confirming
+        case GymScanViewModel.Stage.done: return .done
+        default: return .idle
+        }
     }
 
     @ViewBuilder
@@ -102,7 +140,7 @@ struct GymScanView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     if let error { Text(error).font(.hfBodySm).foregroundStyle(Theme.alert) }
-                    ForEach($items) { $item in
+                    ForEach(items) { item in
                         SettingsCard(title: item.matchName ?? item.parsedName) {
                             SegmentedChoice(
                                 options: [
@@ -110,14 +148,21 @@ struct GymScanView: View {
                                     ("CREATE_NEW", "New"),
                                     ("SKIP", "Skip"),
                                 ],
-                                selection: Binding(get: { Optional(item.action) },
-                                                   set: { item.action = $0 ?? item.action }),
+                                selection: Binding(
+                                    get: { Optional(item.action) },
+                                    set: { newValue in
+                                        if let a = newValue { vm.setRowAction(index: Int32(item.id), action: a) }
+                                    }
+                                ),
                                 isEnabled: item.matchName != nil || item.action != "USE_MATCH"
                             )
                             if item.action == "CREATE_NEW" {
-                                TextField("Name", text: $item.nameOverride)
-                                    .textFieldStyle(.plain).padding(10)
-                                    .background(Theme.canvasMuted, in: RoundedRectangle(cornerRadius: 10))
+                                TextField("Name", text: Binding(
+                                    get: { item.nameOverride },
+                                    set: { vm.setRowName(index: Int32(item.id), name: $0) }
+                                ))
+                                .textFieldStyle(.plain).padding(10)
+                                .background(Theme.canvasMuted, in: RoundedRectangle(cornerRadius: 10))
                             }
                         }
                     }
@@ -127,7 +172,7 @@ struct GymScanView: View {
             }
             Divider()
             Button {
-                // vm.confirm()
+                vm.confirm()
             } label: {
                 if stage == .confirming { ProgressView() } else { Text("Add equipment").frame(maxWidth: .infinity) }
             }

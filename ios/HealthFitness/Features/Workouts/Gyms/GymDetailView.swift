@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // GymDetailViewModel, its UiState, Location, Equipment — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave D(iii) — a single gym's detail.
 /// Parity target (Android): `feature-workouts/.../GymDetailScreen.kt` +
@@ -26,8 +26,16 @@ struct GymDetailView: View {
         case error(String)
     }
 
+    private let vm: GymDetailViewModel
     @State private var state: ScreenState = .loading
     @State private var showDeleteConfirm = false
+    @State private var subscription: FlowSubscription?
+    @Environment(\.dismiss) private var dismiss
+
+    init(locationId: String) {
+        self.locationId = locationId
+        self.vm = IosComposition.shared.gymDetailViewModel(locationId: locationId)
+    }
 
     var body: some View {
         content
@@ -36,11 +44,44 @@ struct GymDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    // NavigationLink(value: WorkoutsRoute.editGym(locationId: locationId)) { Text("Edit") }
-                    Text("Edit")
+                    NavigationLink(value: WorkoutsRoute.editGym(locationId: locationId)) { Text("Edit") }
                 }
             }
-        // Post-0D: .task { observe GymDetailViewModel(locationId).state }
+            .onAppear {
+                vm.refresh()
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? GymDetailViewModel.UiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
+    }
+
+    private static func map(_ s: GymDetailViewModel.UiState) -> ScreenState {
+        if let loc = s.location {
+            let gym = Gym(
+                name: loc.name,
+                address: loc.address,
+                coverPhotoUrl: loc.coverPhotoUrl,
+                hoursSummary: hoursSummary(loc),
+                amenities: loc.amenities.map { $0.label },
+                isDefault: loc.isDefault
+            )
+            let equipment = s.equipment.map { EquipmentRow(id: $0.equipmentId, name: $0.name, category: $0.category) }
+            return .ready(gym: gym, equipment: equipment)
+        }
+        if s.loading { return .loading }
+        if let error = s.error { return .error(error) }
+        return .loading
+    }
+
+    private static func hoursSummary(_ loc: Location) -> String {
+        if loc.is24Hours { return "Open 24 hours" }
+        let open = loc.hours?.count ?? 0
+        switch open {
+        case 0: return "Hours not set"
+        case 7: return "Open every day"
+        default: return "Open \(open) day\(open == 1 ? "" : "s") a week"
+        }
     }
 
     @ViewBuilder
@@ -59,7 +100,7 @@ struct GymDetailView: View {
                         if gym.isDefault {
                             Text("Default gym").font(.hfBodySm).foregroundStyle(Theme.accent)
                         } else {
-                            Button("Set as default") { /* vm.setDefault() */ }
+                            Button("Set as default") { vm.setDefault() }
                                 .buttonStyle(.bordered).tint(Theme.accent)
                         }
                         if !gym.amenities.isEmpty {
@@ -69,10 +110,10 @@ struct GymDetailView: View {
 
                     SettingsCard(title: "Equipment",
                                  description: "What the designer can program around.") {
-                        // NavigationLink(value: WorkoutsRoute.gymScan(locationId: locationId)) {
-                        Label("Scan to add equipment", systemImage: "camera.viewfinder")
-                            .font(.hfBodyMd).foregroundStyle(Theme.accent)
-                        // }
+                        NavigationLink(value: WorkoutsRoute.gymScan(locationId: locationId)) {
+                            Label("Scan to add equipment", systemImage: "camera.viewfinder")
+                                .font(.hfBodyMd).foregroundStyle(Theme.accent)
+                        }
                         if equipment.isEmpty {
                             Text("No equipment yet. Scan a walkthrough video to import it.")
                                 .font(.hfBodySm).foregroundStyle(Theme.textTertiary)
@@ -86,7 +127,7 @@ struct GymDetailView: View {
                                         }
                                     }
                                     Spacer()
-                                    Button { /* vm.removeEquipment(item.id) */ } label: {
+                                    Button { vm.removeEquipment(equipmentId: item.id) } label: {
                                         Image(systemName: "minus.circle").foregroundStyle(Theme.alert)
                                     }
                                     .buttonStyle(.plain)
@@ -101,7 +142,7 @@ struct GymDetailView: View {
                     }
                     .buttonStyle(.bordered)
                     .confirmationDialog("Delete this gym?", isPresented: $showDeleteConfirm) {
-                        Button("Delete", role: .destructive) { /* vm.delete { pop() } */ }
+                        Button("Delete", role: .destructive) { vm.delete { dismiss() } }
                     }
                 }
                 .padding()

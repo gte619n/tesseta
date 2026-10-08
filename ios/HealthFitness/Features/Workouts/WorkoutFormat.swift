@@ -17,6 +17,34 @@ enum WorkoutFormat {
         var durationSeconds: Int?
     }
 
+    /// "ACTIVE" → "Active", "AI_GENERATED" → "Ai Generated". Simple humanizer for
+    /// program/scheduled status enum names (mirrors the shared humanize()).
+    static func statusLabel(_ enumName: String) -> String {
+        enumName
+            .split(separator: "_")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+            .joined(separator: " ")
+    }
+
+    /// "Mon · Wed · Fri" — mirrors shared `trainingDaysSummary`. Empty → "".
+    /// Input is the UPPERCASE wire day names ("MON"…).
+    static func trainingDaysSummary(_ dayNames: [String]) -> String {
+        dayNames
+            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+            .joined(separator: " · ")
+    }
+
+    private static let shortDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE M/d"
+        return f
+    }()
+
+    /// "Mon 9/22" day-and-date label for a scheduled session.
+    static func dateLabel(_ date: Date) -> String {
+        shortDateFormatter.string(from: date).uppercased()
+    }
+
     static func trimNumber(_ value: Double) -> String {
         value == value.rounded() && abs(value) < 1e15
             ? String(Int(value))

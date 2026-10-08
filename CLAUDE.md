@@ -1,12 +1,18 @@
 # CLAUDE.md — project-wide guidance
 
 ## Architecture
-- **Three deployable components**, all in this monorepo:
+- **Three deployable apps + a shared library**, all in this monorepo:
   - `backend/` — Spring Boot 3.5 (Java 21), Gradle Kotlin DSL, single-module
   - `android/` — Native Android (Kotlin 2.0, Jetpack Compose, Material 3),
     multi-module, includes a Wear OS app
   - `web/` — Next.js 15 App Router (TypeScript strict, Tailwind v4, pnpm)
-- **Shared state**: backend owns Cloud Firestore (native mode). Both clients
+  - `ios/` — native SwiftUI app (iPhone + iPad), XcodeGen project, consumes the
+    shared KMP core as `SharedCore.xcframework`
+  - `shared/` — standalone Kotlin Multiplatform module (`:core`): the single
+    implementation of domain models, the offline sync engine (SQLDelight mirror +
+    outbox), and the presentation ViewModels the iOS app consumes (Android still
+    has its own duplicate core; the merge is gated behind D19/D20)
+- **Shared state**: backend owns Cloud Firestore (native mode). All clients
   read from the backend, not directly from Firestore.
 - **Hosting**: backend and web both deploy to Cloud Run in `us-central1`.
 
@@ -28,6 +34,21 @@
 - Trunk-based dev on `main`. Feature branches named `feature/<slug>` (see
   Worktrees below for the exact form).
 - One commit per logical change. Don't squash unrelated work.
+- **Cross-client feature parity is mandatory — ship it everywhere or track the
+  gap.** A user-facing feature or behavior change must land on all clients it
+  applies to (Android, web, iOS), not just the one you're touching. **Android is
+  the reference implementation** (most complete); iOS is actively catching up, so
+  any Android change is a candidate iOS change. Put the logic in the KMP `shared/`
+  module whenever it's presentation/domain (formatting, prefill, state machines,
+  repositories) so iOS and Android don't re-derive it and drift — note that
+  `android/` still carries its own duplicate core (D19/D20), so a fix applied only
+  to `android/.../SessionFormat.kt` must also be applied to
+  `shared/.../presentation/.../SessionFormat.kt`. A new/changed backend endpoint
+  that a client consumes must get a consumer on every client. If you genuinely
+  cannot do the other platforms in the same change, record the deferred work in
+  [`docs/plans/IMPL-IOS-01-STATUS.md`](docs/plans/IMPL-IOS-01-STATUS.md) ("What's
+  NOT done") so it is tracked, never silently dropped. Parity is the default;
+  skipping a platform is a decision that must be written down.
 - **Android image loads don't share the API auth stack.** Coil's singleton
   `ImageLoader` (AppModule) uses its own OkHttp client — the Retrofit
   `AuthInterceptor`/bearer does NOT apply. Loading from an authenticated backend
@@ -60,7 +81,10 @@
   advanced the cursor past them). The bump makes `ensureState` reset the cursor
   once for a backfilling full scan. This is client-local — do NOT bump
   `SYNC_SCHEMA_VERSION` (the wire/server D13 version) for this, or every pull
-  mismatches the server and wipe-loops.
+  mismatches the server and wipe-loops. The iOS client is now a THIRD routing
+  site: the shared KMP module has its own `CollectionRegistry` (`shared/.../sync/`,
+  guarded by its own `CollectionRegistryContractTest`) + `MIRROR_SCHEMA_VERSION` —
+  route new collections there too.
 - **Synced docs are emitted only via their `updatedAt` field — registration
   isn't enough.** Every backend write to a synced collection (including partial
   `update()` calls and manual Firestore REST patches) must stamp `updatedAt`
@@ -77,6 +101,25 @@
   `/api/outbox/replay`), not a bare server action, and apply optimistic UI. A new
   replayable endpoint must be added to `web/lib/offline/replay-endpoints.ts` (the
   authenticated-proxy allowlist) or the outbox refuses to enqueue it.
+
+## iOS / shared KMP
+- `shared/` is a **standalone Gradle build** (Kotlin 2.2, SQLDelight), separate
+  from `android/`; it builds `SharedCore.xcframework` (needs full Xcode) which the
+  `ios/` SwiftUI app links. Verify:
+  `cd shared && ./gradlew :core:assembleSharedCoreXCFramework`, then
+  `cd ios && xcodegen generate && xcodebuild -scheme HealthFitness -sdk iphonesimulator …`.
+- **SKIE is disabled under Xcode 26** — Kotlin Flows are bridged to SwiftUI by
+  hand via `IosComposition.collectFlow`; views map emissions into a local `@State`
+  mirror.
+- **KMP→Swift gotchas**: nested Kotlin types export DOTTED (`VM.State`, not
+  `VMState`) — grep the generated `SharedCore.h` `swift_name(...)` before
+  referencing one; a `new`-prefixed factory selector is silently dropped (use
+  `makeNew…`); a `data.X` colliding with another `X` exports as `X_`; nullable
+  `Double?` → Swift `KotlinDouble?.doubleValue`.
+- `:core:jvmTest` can wedge the Gradle daemon in a worktree; verify shared changes
+  via `:core:compileKotlinJvm` + `:core:assembleSharedCoreXCFramework` + the app build.
+- Status + decisions: [`docs/plans/IMPL-IOS-01-STATUS.md`](docs/plans/IMPL-IOS-01-STATUS.md),
+  [`docs/plans/IMPL-IOS-01-OFFLINE-SYNC.md`](docs/plans/IMPL-IOS-01-OFFLINE-SYNC.md).
 
 ## Worktrees
 - Worktrees live in `.worktrees/` at the repo root (not `.claude/worktrees/`).

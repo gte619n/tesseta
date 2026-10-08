@@ -1,25 +1,46 @@
 import SwiftUI
-// import SharedCore  // AddFoodViewModel, AddFoodUiState, Food, MealSearchResult, Entry — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave C — the add-food / saved-meal-relog sheet. Parity
-/// target (Android): `AddFoodSheet` + `AddFoodViewModel`. Backed by the SHARED
-/// `AddFoodViewModel` (local-first search: cached hits instantly, debounced
-/// network revalidation).
+/// IMPL-IOS-01 (logging spine) — the add-food / saved-meal-relog sheet, now bound
+/// to the shared `AddFoodViewModel` (local-first search: cached hits instantly,
+/// debounced network revalidation) over the real `api/foods/search` +
+/// `api/me/nutrition/meals/search` + recent-meals endpoints.
 ///
-/// Empty query → the one-tap "recent meals" list (re-logs via the Today VM).
-/// Typing → a "Saved meals" group above catalog-food results, plus a "quick add"
-/// and a "describe with AI" affordance.
+/// Search/recents state is read straight off the SKIE-bridged `AddFoodUiState`
+/// (SharedCore types, no local mirror — like `MedicationsListView`). The actual
+/// logging goes through the SHARED Today VM (`todayVM`) the parent holds, so a
+/// logged entry re-fetches and renders on the open day:
+///   - recent → `relogRecent`, saved meal → `logSavedMeal`,
+///   - catalog food → `ServingHintView` → `addCatalogEntry`,
+///   - describe → `describeMealAsync`.
 struct AddFoodView: View {
 
     let meal: Meal
+    let todayVM: NutritionTodayViewModel
 
     @Environment(\.dismiss) private var dismiss
+    private let vm: AddFoodViewModel
+    @State private var ui: AddFoodUiState
+    @State private var subscription: FlowSubscription?
     @State private var query = ""
-    @State private var searching = false
-    @State private var results: [Food] = []
-    @State private var mealResults: [MealSearchResult] = []
-    @State private var recents: [Entry] = []
-    @State private var recentsLoading = true
+
+    init(meal: Meal, todayVM: NutritionTodayViewModel) {
+        self.meal = meal
+        self.todayVM = todayVM
+        let model = IosComposition.shared.addFoodViewModel(mealWire: meal.rawValue)
+        self.vm = model
+        _ui = State(initialValue: model.state.value as! AddFoodUiState)
+    }
+
+    /// Local meal enum → the shared Kotlin `Meal` the VM log-intents expect.
+    private var sharedMeal: SharedCore.Meal {
+        switch meal {
+        case .breakfast: return .breakfast
+        case .lunch: return .lunch
+        case .dinner: return .dinner
+        case .snack: return .snack
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -27,75 +48,86 @@ struct AddFoodView: View {
                 if query.isEmpty {
                     Section("Describe") { describeRow }
                     Section("Recent") {
-                        if recentsLoading { ProgressView() }
-                        ForEach(recents) { entry in
-                            recentRow(entry)
-                        }
+                        if ui.recentsLoading && ui.recents.isEmpty { ProgressView() }
+                        ForEach(ui.recents, id: \.entryId) { recentRow($0) }
                     }
                 } else {
-                    if !mealResults.isEmpty {
+                    if !ui.mealResults.isEmpty {
                         Section("Saved meals") {
-                            ForEach(mealResults) { m in savedMealRow(m) }
+                            ForEach(ui.mealResults, id: \.mealId) { savedMealRow($0) }
                         }
                     }
                     Section("Foods") {
-                        if searching && results.isEmpty { ProgressView() }
-                        ForEach(results) { food in foodRow(food) }
+                        if ui.searching && ui.results.isEmpty { ProgressView() }
+                        ForEach(ui.results, id: \.foodId) { foodRow($0) }
                     }
                 }
             }
             .searchable(text: $query, prompt: "Search foods & meals")
-            .onChange(of: query) { _, _ in /* Post-0D: vm.wrapped.onQueryChange(query) */ }
+            .onChange(of: query) { _, newValue in vm.onQueryChange(query: newValue) }
             .navigationTitle("Add food")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .formMaxWidth()
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? AddFoodUiState { ui = s }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
         }
     }
 
     private var describeRow: some View {
         NavigationLink {
-            DescribeMealView(meal: meal) { dismiss() }
+            DescribeMealView(meal: meal) { text in
+                todayVM.describeMealAsync(meal: sharedMeal, description: text)
+                dismiss()
+            }
         } label: {
             Label("Describe a meal with AI", systemImage: "sparkles")
         }
     }
 
-    private func recentRow(_ entry: Entry) -> some View {
+    private func recentRow(_ entry: SharedCore.Entry) -> some View {
         Button {
-            // Post-0D: todayVM.relogRecent(meal, entry)
+            todayVM.relogRecent(meal: sharedMeal, entry: entry)
             dismiss()
         } label: {
             HStack {
                 Text(entry.foodName).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
                 Spacer()
-                Text(NutritionFormat.kcal(entry.macros.caloriesKcal))
+                Text(NutritionFormat.kcal(entry.macros.caloriesKcal?.doubleValue))
                     .font(.hfMonoSm).foregroundStyle(Theme.textSecondary)
             }
         }
     }
 
-    private func savedMealRow(_ m: MealSearchResult) -> some View {
+    private func savedMealRow(_ m: SharedCore.MealSearchResult) -> some View {
         Button {
-            // Post-0D: todayVM.logSavedMeal(meal, m)
+            todayVM.logSavedMeal(meal: sharedMeal, result: m)
             dismiss()
         } label: {
             HStack {
                 Image(systemName: "photo").foregroundStyle(Theme.textTertiary)
                 Text(m.name).font(.hfBodyMd)
                 Spacer()
-                Text(NutritionFormat.kcal(m.macros.caloriesKcal))
+                Text(NutritionFormat.kcal(m.macros.caloriesKcal?.doubleValue))
                     .font(.hfMonoSm).foregroundStyle(Theme.textSecondary)
             }
         }
         .swipeActions {
-            Button("Archive", role: .destructive) { /* vm.wrapped.onArchiveMeal(m.mealId) */ }
+            Button("Archive", role: .destructive) { vm.onArchiveMeal(mealId: m.mealId) }
         }
     }
 
-    private func foodRow(_ food: Food) -> some View {
+    private func foodRow(_ food: SharedCore.Food_) -> some View {
         NavigationLink {
-            ServingHintView(food: food, meal: meal) { dismiss() }
+            ServingHintView(food: Self.mapFood(food), meal: meal) { servingIndex, quantity in
+                todayVM.addCatalogEntry(meal: sharedMeal, food: food,
+                                        servingIndex: Int32(servingIndex), quantity: quantity)
+                dismiss()
+            }
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(food.name).font(.hfBodyMd)
@@ -105,15 +137,41 @@ struct AddFoodView: View {
             }
         }
         .swipeActions {
-            Button("Delete", role: .destructive) { /* vm.wrapped.onDeleteFood(food.foodId) */ }
+            Button("Delete", role: .destructive) { vm.onDeleteFood(foodId: food.foodId) }
         }
+    }
+
+    // MARK: - SharedCore.Food → local Food (for ServingHintView's local preview math)
+
+    private static func mapFood(_ f: SharedCore.Food_) -> Food {
+        Food(
+            foodId: f.foodId,
+            name: f.name,
+            brand: f.brand,
+            barcode: f.barcode,
+            macrosPer100g: mapMacros(f.macrosPer100g),
+            servingSizes: f.servingSizes.map { ServingSize(label: $0.label, grams: $0.grams) },
+            defaultServingIndex: Int(f.defaultServingIndex),
+            imageUrl: f.imageUrl
+        )
+    }
+
+    private static func mapMacros(_ m: SharedCore.Macros) -> Macros {
+        Macros(
+            caloriesKcal: m.caloriesKcal?.doubleValue,
+            proteinGrams: m.proteinGrams?.doubleValue,
+            carbsGrams: m.carbsGrams?.doubleValue,
+            fatGrams: m.fatGrams?.doubleValue,
+            fiberGrams: m.fiberGrams?.doubleValue,
+            sugarGrams: m.sugarGrams?.doubleValue
+        )
     }
 }
 
 /// The free-text "describe a meal" input (fire-and-forget async describe).
 struct DescribeMealView: View {
     let meal: Meal
-    let onDone: () -> Void
+    let onLog: (String) -> Void
     @State private var text = ""
 
     var body: some View {
@@ -122,8 +180,7 @@ struct DescribeMealView: View {
                 TextField("e.g. two eggs, toast, and black coffee", text: $text, axis: .vertical)
             }
             Button("Log it") {
-                // Post-0D: todayVM.describeMealAsync(meal, text)
-                onDone()
+                onLog(text.trimmingCharacters(in: .whitespacesAndNewlines))
             }
             .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
         }

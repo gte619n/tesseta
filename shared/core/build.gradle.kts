@@ -19,6 +19,11 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
+    // Phase 1C offline sync (IMPL-IOS-01): SQLDelight backs the on-device mirror +
+    // outbox + sync-state (3 generic tables). Chosen over Room-KMP for a
+    // battle-tested Kotlin/Native path; PHI payloads are app-layer encrypted
+    // (PayloadCipher) so the SQLite file itself holds only non-PHI metadata.
+    alias(libs.plugins.sqldelight)
     // SKIE is DISABLED: SKIE 0.10.4 (latest) predates Xcode 26 / Swift 6.3.3, and
     // the Swift overlay it emits isn't consumable by Xcode 26's build-system
     // module graph (proven: standalone swiftc loads it, Xcode never does). So we
@@ -68,16 +73,37 @@ kotlin {
             // REST repositories: JSON content negotiation over the shared Ktor client.
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
+            // Offline mirror/outbox persistence (SQLDelight).
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines.extensions)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.turbine)
         }
+        // SQLDelight's JVM driver backs the sync-engine tests (in-memory DB).
+        jvmMain.dependencies {
+            implementation(libs.sqldelight.sqlite.driver)
+        }
+        // SQLDelight's native driver opens the on-device SQLite mirror on ALL Apple
+        // targets (iosArm64 + iosSimulatorArm64 + the macosArm64 canary), so it lives
+        // in appleMain alongside the shared MirrorDatabaseFactory actual.
+        appleMain.dependencies {
+            implementation(libs.sqldelight.native.driver)
+        }
         // Ktor's Darwin engine backs the concrete KtorSseClient (+ the Phase-1C
         // network layer) on iOS; Android/JVM use the OkHttp engine.
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("MirrorDatabase") {
+            packageName.set("com.gte619n.healthfitness.shared.db")
         }
     }
 }

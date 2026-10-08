@@ -1,20 +1,17 @@
 import SwiftUI
-// import SharedCore  // WorkoutsHubViewModel, WorkoutsHubUiState, WorkoutProgram, ScheduledWorkout — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave D — the read-first "This Week" landing. Parity
-/// target: Android `WorkoutsLandingScreen` + `WorkoutsLandingViewModel` (ported to
-/// the shared `WorkoutsHubViewModel`). Observes the shared VM through the
-/// `ObservableViewModel` bridge; the view is a pure function of the shared UI
-/// state (compliance/streak are derived in shared `ComplianceMath`, never here).
+/// IMPL-IOS-01 Phase 3 Wave D — the read-first "This Week" landing, bound to the
+/// SHARED `WorkoutsHubViewModel` (KMP port of Android's `WorkoutsLandingViewModel`).
+/// The compliance + streak maths are derived in shared `ComplianceMath`, never
+/// here; this view is a pure function of the shared UI state.
 ///
 /// Sections: the featured program header, the current-week strip, the streak /
-/// weekly-progress line, a month compliance grid, plus resume / recovery banners
-/// and quick links out to Programs / History / Library. Empty states cover
-/// "no program yet" vs. "no active program".
+/// weekly-progress line, resume / recovery banners, and quick links out to
+/// Programs / History / Library. Empty states cover "no program yet" vs. "no
+/// active program".
 struct WorkoutsLandingView: View {
 
-    /// Local mirror of the shared `WorkoutsHubUiState` (deleted post-0D; the view
-    /// then switches on the SKIE-bridged type directly).
     struct ScreenState {
         var loading = true
         var hasAnyProgram = true
@@ -37,19 +34,34 @@ struct WorkoutsLandingView: View {
         let programId: String
     }
 
+    private let vm: WorkoutsHubViewModel
     @State private var state = ScreenState()
+    @State private var subscription: FlowSubscription?
+    @State private var resumeTarget: ResumeTarget?
+
+    private struct ResumeTarget: Identifiable, Hashable {
+        let programId: String
+        let scheduledId: String
+        var id: String { "\(programId)/\(scheduledId)" }
+    }
+
+    init() {
+        self.vm = IosComposition.shared.workoutsHubViewModel()
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(WorkoutsHubViewModel(
-        //         repository: DI.workoutProgramRepository,
-        //         sessionRepository: DI.workoutSessionRepository,
-        //         settingsRepository: DI.workoutSettingsRepository))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .accessibilityIdentifier("workouts-landing")
+            .navigationDestination(item: $resumeTarget) { t in
+                WorkoutSessionView(programId: t.programId, scheduledId: t.scheduledId)
+            }
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? WorkoutsHubUiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
@@ -75,6 +87,7 @@ struct WorkoutsLandingView: View {
                 .padding()
                 .formMaxWidth()
             }
+            .refreshable { vm.refresh() }
         }
     }
 
@@ -84,8 +97,6 @@ struct WorkoutsLandingView: View {
                                    description: Text("Design a program or browse the library to get started."))
             NavigationLink("Browse the library", value: WorkoutsRoute.library)
                 .font(.hfBodyMd)
-            // The "Design a program" entry point routes to the designer once the
-            // DESIGNER agent adds `WorkoutsRoute.designer`.
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -102,16 +113,19 @@ struct WorkoutsLandingView: View {
     @ViewBuilder
     private var resumeBannerIfNeeded: some View {
         if let sched = state.resumeScheduledId, let pid = state.programId {
-            // Deep-links into the live-session logger; wired once the LIVE-SESSION
-            // agent adds `WorkoutsRoute.session`. Rendered as a callout for now.
-            HStack {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                Text("Resume your in-progress workout").font(.hfBodyMd)
-                Spacer()
+            Button {
+                resumeTarget = ResumeTarget(programId: pid, scheduledId: sched)
+            } label: {
+                HStack {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Text("Resume your in-progress workout").font(.hfBodyMd)
+                    Spacer()
+                }
+                .padding()
+                .background(Theme.accentBg)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            .padding()
-            .background(Theme.accentBg)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .buttonStyle(.plain)
             .accessibilityIdentifier("resume-\(pid)-\(sched)")
         } else if let day = state.parkedDayLabel {
             HStack {
@@ -151,8 +165,6 @@ struct WorkoutsLandingView: View {
                     .foregroundStyle(Theme.textSecondary)
             } else {
                 ForEach(state.thisWeek) { row in
-                    // Opens the workout viewer; the live session start lives on the
-                    // detail (and, post live-session agent, the session route).
                     NavigationLink(value: WorkoutsRoute.programDetail(programId: row.programId)) {
                         HStack {
                             Image(systemName: row.completed ? "checkmark.circle.fill" : "circle")
@@ -192,5 +204,34 @@ struct WorkoutsLandingView: View {
         .padding()
     }
 
-    // static func map(_ s: WorkoutsHubUiState) -> ScreenState { ... }  // Phase 0D
+    // MARK: - Mapping
+
+    private static func map(_ s: WorkoutsHubUiState) -> ScreenState {
+        var out = ScreenState()
+        out.loading = s.loading
+        out.error = s.error
+        out.hasAnyProgram = s.hasAnyProgram
+        out.programTitle = s.program?.title
+        out.programId = s.program?.programId
+        out.weekStreak = Int(s.weekStreak)
+        out.completedThisWeek = Int(s.completedThisWeek)
+        out.weeklyStreakTarget = Int(s.weeklyStreakTarget)
+        out.resumeScheduledId = s.activeDraft?.scheduledId
+        out.parkedDayLabel = s.parkedCompletion?.dayLabel
+        let pid = s.program?.programId ?? ""
+        out.thisWeek = s.thisWeek.map { sw in
+            SessionRow(
+                id: sw.scheduledId,
+                dateLabel: WorkoutFormat.dateLabel(localDateToDate(sw.date)),
+                dayLabel: sw.dayLabel,
+                completed: sw.status == SharedCore.ScheduledStatus.completed,
+                programId: pid,
+            )
+        }
+        return out
+    }
+
+    private static func localDateToDate(_ d: Kotlinx_datetimeLocalDate) -> Date {
+        Date(timeIntervalSince1970: Double(d.toEpochDays()) * 86_400)
+    }
 }

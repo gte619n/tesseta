@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // GoalsChatViewModel, GoalsChatUiState, ChatMessage, GoalProposal — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave E3 (Goals). Parity target: Android
 /// `feature-goals/.../GoalsChatScreen` + `GoalsChatViewModel` + the reusable
@@ -8,12 +8,14 @@ import SwiftUI
 /// growing bubble rendered as markdown (native `AttributedString(markdown:)`,
 /// see ChatMarkdown), and an attached AI goal proposal renders an editable card.
 ///
-/// The shared `GoalsChatViewModel` OWNS the stream + `send` intent; this view is
-/// a pure function of its `GoalsChatUiState` (bridged through `ObservableViewModel`).
+/// Backed by the SHARED `GoalsChatViewModel` (sseClient + chatRepository +
+/// idGenerator) over the real SSE transport ([KtorSseClient]) + the networked
+/// commit/thread half ([HttpChatRepository]). Observed via `collectFlow` + a
+/// static `map(...)` to local mirror structs — the same SKIE-free pattern as
+/// `GoalRoadmapView`. The shared VM OWNS the stream + `send`/`commit`/`discard`.
 struct GoalsChatView: View {
 
-    // MARK: Local mirrors (deleted post-0D — the view switches on the SKIE-
-    // bridged `ChatMessage` sealed type directly).
+    // MARK: Local mirrors
 
     enum Role { case user, assistant }
 
@@ -22,7 +24,25 @@ struct GoalsChatView: View {
         let role: Role
         var text: String
         var streaming: Bool
-        var hasProposal: Bool
+        var proposal: ProposalView?
+    }
+
+    /// Flattened, display-ready view of the bridged `GoalProposal` + commit state.
+    struct ProposalView: Hashable {
+        let title: String
+        let domainLabel: String?
+        let targetDate: String?
+        let phases: [ProposalPhaseView]
+        let validationError: String?
+        let committedGoalId: String?   // non-nil once committed → collapsed state
+        let saving: Bool
+    }
+
+    struct ProposalPhaseView: Hashable, Identifiable {
+        let id = UUID()
+        let title: String
+        let steps: [String]        // "Run 5k · restingHr < 60 for 30d"
+        let validationError: String?
     }
 
     struct ScreenState {
@@ -31,16 +51,21 @@ struct GoalsChatView: View {
         var error: String?
     }
 
+    private let vm: GoalsChatViewModel
     @State private var state = ScreenState()
+    @State private var subscription: FlowSubscription?
     @State private var draft: String = ""
     @FocusState private var composerFocused: Bool
 
-    /// Empty-state prompts (mirror `GoalChatScope.suggestedPrompts` in the shared VM).
     private let suggestedPrompts = [
         "Help me build a plan to get my ApoB into optimal range",
         "Plan a 12-week strength base",
         "I want to improve my sleep score — design a roadmap",
     ]
+
+    init() {
+        self.vm = IosComposition.shared.goalsChatViewModel()
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,11 +76,13 @@ struct GoalsChatView: View {
         .background(Theme.canvas)
         .navigationTitle("Plan a goal")
         .navigationBarTitleDisplayMode(.inline)
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(GoalsChatViewModel(sse: DI.sseClient, ...))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+        .accessibilityIdentifier("goals-chat")  // IMPL-E2E-01 shared id
+        .onAppear {
+            subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                if let s = value as? GoalsChatUiState { state = Self.map(s) }
+            }
+        }
+        .onDisappear { subscription?.cancel() }
     }
 
     // MARK: Transcript
@@ -69,7 +96,9 @@ struct GoalsChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(state.messages) { message in
-                            MessageBubble(message: message)
+                            MessageBubble(message: message,
+                                          onCommit: { commit(message) },
+                                          onDiscard: { vm.discard(messageId: message.id) })
                                 .id(message.id)
                         }
                         if let error = state.error {
@@ -82,7 +111,6 @@ struct GoalsChatView: View {
                     .padding()
                     .formMaxWidth()
                 }
-                // Keep the newest tokens in view as the stream grows.
                 .onChange(of: state.messages.last?.text) {
                     if let last = state.messages.last {
                         withAnimation(.easeOut(duration: 0.15)) {
@@ -149,6 +177,8 @@ struct GoalsChatView: View {
         .background(Theme.surface)
     }
 
+    // The composer gate: a non-empty draft AND the VM not mid-stream (the shared
+    // `send` is a no-op while streaming; mirroring Android's isOnline/streaming gate).
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !state.streaming
     }
@@ -161,8 +191,82 @@ struct GoalsChatView: View {
     }
 
     private func send(_ text: String) {
-        // Post-0D: vm.wrapped.send(message: text)
-        _ = text
+        vm.send(message: text)
+    }
+
+    /// Commit the proposal on [message]. The VM re-validates server-side; a 400
+    /// re-seeds the card with inline `validationError` flags (no local edit model
+    /// yet — title/phase edits are a deferred affordance, see the designer note).
+    private func commit(_ message: Message) {
+        guard let assistant = vm.state.value as? GoalsChatUiState else { return }
+        guard let m = assistant.messages.first(where: { $0.id == message.id }) as? ChatMessageAssistant,
+              let proposal = m.proposal else { return }
+        vm.commit(messageId: message.id, edited: proposal)
+    }
+
+    // MARK: Map shared UiState → local mirror
+
+    static func map(_ s: GoalsChatUiState) -> ScreenState {
+        let msgs: [Message] = s.messages.compactMap { any in
+            if let u = any as? ChatMessageUser {
+                return Message(id: u.id, role: .user, text: u.text, streaming: false, proposal: nil)
+            }
+            if let a = any as? ChatMessageAssistant {
+                let committedId = s.committedGoalIds[a.id]
+                let saving = s.savingMessageIds.contains(a.id)
+                let proposal = a.proposal.map { mapProposal($0, committedGoalId: committedId, saving: saving) }
+                return Message(id: a.id, role: .assistant, text: a.text,
+                               streaming: a.streaming, proposal: proposal)
+            }
+            return nil
+        }
+        return ScreenState(messages: msgs, streaming: s.streaming, error: s.error)
+    }
+
+    private static func mapProposal(_ p: SharedCore.GoalProposal,
+                                    committedGoalId: String?,
+                                    saving: Bool) -> ProposalView {
+        let phases: [ProposalPhaseView] = p.phases.map { phase in
+            let steps = phase.steps.map { stepLine($0) }
+            return ProposalPhaseView(title: phase.title ?? "Phase",
+                                     steps: steps,
+                                     validationError: phase.validationError)
+        }
+        return ProposalView(
+            title: p.title ?? "Drafted roadmap",
+            domainLabel: p.domain.map { domainLabel($0) },
+            targetDate: p.targetDate,
+            phases: phases,
+            validationError: p.validationError,
+            committedGoalId: committedGoalId,
+            saving: saving
+        )
+    }
+
+    private static func stepLine(_ step: SharedCore.ProposalStep) -> String {
+        let title = step.title ?? "Step"
+        guard let m = step.metric, let key = m.metricKey, let cmp = m.comparator,
+              let target = m.targetValue?.doubleValue else {
+            return title
+        }
+        let targetStr = target == target.rounded() ? String(Int(target)) : String(target)
+        var readout = "\(key) \(cmp.symbol) \(targetStr)"
+        if step.kind == SharedCore.StepKind.sustained, let w = m.windowDays?.intValue {
+            readout += " for \(w)d"
+        }
+        return "\(title) · \(readout)"
+    }
+
+    private static func domainLabel(_ d: SharedCore.GoalDomain) -> String {
+        switch d {
+        case SharedCore.GoalDomain.cardiovascular: return "Cardiovascular"
+        case SharedCore.GoalDomain.bodyComposition: return "Body composition"
+        case SharedCore.GoalDomain.strength: return "Strength"
+        case SharedCore.GoalDomain.metabolic: return "Metabolic"
+        case SharedCore.GoalDomain.sleep: return "Sleep"
+        case SharedCore.GoalDomain.longevity: return "Longevity"
+        default: return "Other"
+        }
     }
 }
 
@@ -170,6 +274,8 @@ struct GoalsChatView: View {
 
 private struct MessageBubble: View {
     let message: GoalsChatView.Message
+    let onCommit: () -> Void
+    let onDiscard: () -> Void
 
     var body: some View {
         switch message.role {
@@ -189,7 +295,6 @@ private struct MessageBubble: View {
                     TypingIndicator()
                 } else if !message.text.isEmpty {
                     HStack {
-                        // Native markdown rendering of the streamed assistant text.
                         Text(ChatMarkdown.attributed(message.text))
                             .font(.hfBodyMd)
                             .foregroundStyle(Theme.textPrimary)
@@ -199,15 +304,14 @@ private struct MessageBubble: View {
                         Spacer(minLength: 40)
                     }
                 }
-                if message.hasProposal {
-                    ProposalCardPlaceholder()
+                if let proposal = message.proposal {
+                    ProposalCard(proposal: proposal, onCommit: onCommit, onDiscard: onDiscard)
                 }
             }
         }
     }
 }
 
-/// Three-dot typing indicator shown while the assistant bubble is empty + streaming.
 private struct TypingIndicator: View {
     @State private var phase = 0.0
     var body: some View {
@@ -230,26 +334,75 @@ private struct TypingIndicator: View {
     }
 }
 
-/// Placeholder for the editable AI goal-proposal card. Post-0D this reads the
-/// bridged `GoalProposal` off the assistant message and renders the full
-/// editable form (title/domain/target date + phases/steps + metric bindings)
-/// with inline `validationError` flags, then commits through `vm.commit(...)`.
-private struct ProposalCardPlaceholder: View {
+/// The editable AI goal-proposal card. Renders the drafted roadmap (title /
+/// domain / target date + phases/steps with inline `validationError` flags) and
+/// commits through `vm.commit(...)`. Once committed it collapses to a success
+/// row. NOTE (deferred): per-field INLINE EDITING of the proposal before commit
+/// (title/phase/step/metric fields) is not yet wired — the card commits the
+/// streamed proposal as-is; the server re-validates and re-flags fields on a 400.
+private struct ProposalCard: View {
+    let proposal: GoalsChatView.ProposalView
+    let onCommit: () -> Void
+    let onDiscard: () -> Void
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Drafted roadmap", systemImage: "target")
-                .font(.hfHeadingSm)
-                .foregroundStyle(Theme.textPrimary)
-            Text("Review and edit the phases, then save to create this goal.")
-                .font(.hfBodySm)
-                .foregroundStyle(Theme.textSecondary)
-            Button("Save goal") {}
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
+        if let goalId = proposal.committedGoalId {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.good)
+                Text("Goal created").font(.hfHeadingSm).foregroundStyle(Theme.textPrimary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Theme.accentBg, in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("goal-committed-\(goalId)")
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(proposal.title, systemImage: "target")
+                    .font(.hfHeadingSm)
+                    .foregroundStyle(Theme.textPrimary)
+                if let domain = proposal.domainLabel {
+                    Text(domain).font(.hfCapsSm).foregroundStyle(Theme.textTertiary)
+                }
+                if let target = proposal.targetDate {
+                    Text("Target: \(target)").font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+                }
+                ForEach(proposal.phases) { phase in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(phase.title).font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
+                        ForEach(phase.steps, id: \.self) { step in
+                            Text("• \(step)").font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+                        }
+                        if let err = phase.validationError {
+                            Text(err).font(.hfCapsSm).foregroundStyle(Theme.alert)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+                if let err = proposal.validationError {
+                    Text(err).font(.hfBodySm).foregroundStyle(Theme.alert)
+                }
+                HStack {
+                    Button(action: onCommit) {
+                        if proposal.saving {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Save goal")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .disabled(proposal.saving)
+                    Button("Discard", action: onDiscard)
+                        .buttonStyle(.bordered)
+                        .disabled(proposal.saving)
+                }
+                .padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Theme.accentBg, in: RoundedRectangle(cornerRadius: 12))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Theme.accentBg, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -262,7 +415,6 @@ private struct BubbleShape: Shape {
     func path(in rect: CGRect) -> Path {
         let r: CGFloat = 14
         let tail: CGFloat = 4
-        // The bottom tail corner is squared on the sending side.
         let bottomLeading = self.tail == .leading ? tail : r
         let bottomTrailing = self.tail == .trailing ? tail : r
         return Path(roundedRect: rect, cornerRadii: RectangleCornerRadii(

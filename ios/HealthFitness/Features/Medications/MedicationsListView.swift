@@ -24,6 +24,25 @@ struct MedicationsListView: View {
             .background(Theme.canvas)
             .navigationTitle("Medications")
             .accessibilityIdentifier("medications-list")  // IMPL-E2E-01 shared id
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink(value: MedicationsRoute.add) { Image(systemName: "plus") }
+                }
+                ToolbarItem(placement: .secondaryAction) {
+                    NavigationLink(value: MedicationsRoute.todaysDoses) { Label("Today's doses", systemImage: "checklist") }
+                }
+                ToolbarItem(placement: .secondaryAction) {
+                    NavigationLink(value: MedicationsRoute.reminderSettings) { Label("Reminders", systemImage: "bell") }
+                }
+            }
+            .navigationDestination(for: MedicationsRoute.self) { route in
+                switch route {
+                case .add: AddMedicationView()
+                case .detail(let id): MedicationDetailView(medicationId: id)
+                case .reminderSettings: ReminderSettingsView()
+                case .todaysDoses: TodaysDosesView()
+                }
+            }
             .onAppear {
                 subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
                     if let s = value as? MedicationsUiState { state = s }
@@ -68,14 +87,19 @@ struct MedicationsListView: View {
     }
 
     private func row(_ med: Medication) -> some View {
-        HStack {
-            Text(med.customName ?? med.drug?.name ?? "Medication")
-                .font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
-            Spacer()
-            Text("\(doseText(med.dose)) \(med.unit)")
-                .font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+        NavigationLink(value: MedicationsRoute.detail(med.medicationId)) {
+            HStack {
+                Text(med.customName ?? med.drug?.name ?? "Medication")
+                    .font(.hfBodyMd).foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Text("\(doseText(med.dose)) \(med.unit)")
+                    .font(.hfBodySm).foregroundStyle(Theme.textSecondary)
+                Image(systemName: "chevron.right").font(.hfCapsSm).foregroundStyle(Theme.textTertiary)
+            }
+            .contentShape(Rectangle())
+            .padding(.vertical, 6)
         }
-        .padding(.vertical, 6)
+        .buttonStyle(.plain)
     }
 
     private func doseText(_ dose: Double) -> String {

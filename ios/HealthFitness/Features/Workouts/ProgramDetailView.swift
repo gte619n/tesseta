@@ -1,17 +1,14 @@
 import SwiftUI
-// import SharedCore  // ProgramDetailViewModel, ProgramDetailUiState — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave D — one program's detail. Parity target: Android
-/// `ProgramDetailScreen` + `ProgramDetailViewModel` (ported to shared, keyed by
-/// `programId`). Shows the deep phase/day tree, the current-week strip, a
-/// "log a past session" pool, activate + edit-details + apply-nutrition actions,
-/// and the resume / parked-completion recovery banners.
+/// IMPL-IOS-01 Phase 3 Wave D — one program's detail, bound to the SHARED
+/// `ProgramDetailViewModel` (deep tree + this-week/past strips + activate / edit /
+/// apply-nutrition / delete-session / restore-parked, keyed by programId). Parity
+/// target: Android `ProgramDetailScreen` + `ProgramDetailViewModel`.
 ///
-/// Each day pushes `WorkoutsRoute.workoutDetail`; "Start" / "Resume" push toward
-/// the live-session route once the LIVE-SESSION agent adds it. Read paths are
-/// real (bound to the shared VM post-0D); the sheets/mutations are wired to the
-/// shared VM intents (`activate`, `saveEdit`, `applyNutrition`, `deleteSession`,
-/// `restoreParked`).
+/// Each day pushes `WorkoutsRoute.workoutDetail`; the resume banner deep-links the
+/// in-progress logger (`WorkoutsRoute.session`). "Refine with AI" routes to the
+/// designer once that agent wires `WorkoutsRoute.designer(programId:)`.
 struct ProgramDetailView: View {
 
     let programId: String
@@ -47,34 +44,54 @@ struct ProgramDetailView: View {
         let completed: Bool
     }
 
+    private let vm: ProgramDetailViewModel
     @State private var state = ScreenState()
+    @State private var subscription: FlowSubscription?
     @State private var showEdit = false
+    @State private var editTitle = ""
+    @State private var editDescription = ""
+    @State private var resumeTarget: ResumeTarget?
+
+    private struct ResumeTarget: Identifiable, Hashable {
+        let scheduledId: String
+        var id: String { scheduledId }
+    }
+
+    init(programId: String) {
+        self.programId = programId
+        self.vm = IosComposition.shared.programDetailViewModel(programId: programId)
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle(state.title.isEmpty ? "Program" : state.title)
             .navigationBarTitleDisplayMode(.inline)
+            .accessibilityIdentifier("program-detail")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("Edit details") { showEdit = true }
-                        if state.hasNutritionGuidance {
-                            Button("Apply nutrition target") { /* vm.applyNutrition() */ }
+                        Button("Edit details") {
+                            editTitle = state.title
+                            editDescription = state.description ?? ""
+                            showEdit = true
                         }
-                        // "Refine with AI" routes to the designer once the
-                        // DESIGNER agent adds `WorkoutsRoute.designer(programId:)`.
+                        if state.hasNutritionGuidance {
+                            Button("Apply nutrition target") { vm.applyNutrition() }
+                        }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
             }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(ProgramDetailViewModel(
-        //         repository: DI.workoutProgramRepository,
-        //         sessionRepository: DI.workoutSessionRepository,
-        //         programId: programId))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .sheet(isPresented: $showEdit) { editSheet }
+            .navigationDestination(item: $resumeTarget) { t in
+                WorkoutSessionView(programId: programId, scheduledId: t.scheduledId)
+            }
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? ProgramDetailUiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
@@ -86,12 +103,27 @@ struct ProgramDetailView: View {
                                    description: Text(error))
         } else {
             List {
+                if let resume = state.resumeScheduledId {
+                    Section {
+                        Button {
+                            resumeTarget = ResumeTarget(scheduledId: resume)
+                        } label: {
+                            Label("Resume your in-progress workout", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .accessibilityIdentifier("resume-\(programId)-\(resume)")
+                    }
+                }
                 if !state.activationIssues.isEmpty {
                     Section("Can’t activate yet") {
                         ForEach(state.activationIssues, id: \.self) { issue in
                             Label(issue, systemImage: "exclamationmark.triangle")
                                 .font(.hfBodySm).foregroundStyle(Theme.warn)
                         }
+                    }
+                } else if state.status != "Active" {
+                    Section {
+                        Button("Activate program") { vm.activate() }
+                            .buttonStyle(.borderedProminent).tint(Theme.accent)
                     }
                 }
                 if !state.thisWeek.isEmpty {
@@ -129,5 +161,91 @@ struct ProgramDetailView: View {
         }
     }
 
-    // static func map(_ s: ProgramDetailUiState) -> ScreenState { ... }  // Phase 0D
+    private var editSheet: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $editTitle)
+                TextField("Description", text: $editDescription, axis: .vertical)
+            }
+            .navigationTitle("Edit program")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showEdit = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        vm.saveEdit(title: editTitle,
+                                    description: editDescription.isEmpty ? nil : editDescription)
+                        showEdit = false
+                    }
+                    .disabled(editTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    // MARK: - Mapping
+
+    private static func map(_ s: ProgramDetailUiState) -> ScreenState {
+        var out = ScreenState()
+        out.loading = s.loading
+        out.error = s.error
+        out.activationIssues = s.activationIssues
+        out.resumeScheduledId = s.activeDraft?.scheduledId
+        if let program = s.program {
+            out.title = program.title
+            out.description = program.description_
+            out.goalTitle = program.goalTitle
+            out.status = WorkoutFormat.statusLabel(program.status.name)
+            out.phases = program.phases.map { phase in
+                PhaseSection(
+                    id: phase.phaseId,
+                    title: phase.title,
+                    focus: phase.focus,
+                    days: phase.days.map { day in
+                        DayRow(
+                            id: day.dayId,
+                            phaseId: phase.phaseId,
+                            dayId: day.dayId,
+                            label: day.label,
+                            detail: exerciseCountLabel(day),
+                            completed: false,
+                        )
+                    },
+                )
+            }
+        }
+        out.hasNutritionGuidance = s.nutritionGuidance.map { !$0.isEmpty } ?? false
+        out.thisWeek = s.thisWeek.map { mapScheduled($0, phaseFallback: s.program) }
+        out.pastSessions = s.pastSessions.map { mapScheduled($0, phaseFallback: s.program) }
+        return out
+    }
+
+    private static func mapScheduled(
+        _ sw: SharedCore.ScheduledWorkout,
+        phaseFallback: SharedCore.WorkoutProgram?,
+    ) -> DayRow {
+        DayRow(
+            id: sw.scheduledId,
+            phaseId: sw.phaseId,
+            dayId: sw.dayId,
+            label: sw.dayLabel,
+            detail: WorkoutFormat.dateLabel(localDateToDate(sw.date)),
+            completed: sw.status == SharedCore.ScheduledStatus.completed,
+        )
+    }
+
+    private static func exerciseCountLabel(_ day: SharedCore.WorkoutDay) -> String {
+        let n = day.blocks.reduce(0) { $0 + $1.prescriptions.count }
+        switch n {
+        case 0: return "No exercises"
+        case 1: return "1 exercise"
+        default: return "\(n) exercises"
+        }
+    }
+
+    private static func localDateToDate(_ d: Kotlinx_datetimeLocalDate) -> Date {
+        Date(timeIntervalSince1970: Double(d.toEpochDays()) * 86_400)
+    }
 }

@@ -116,7 +116,33 @@ interface WorkoutProgramRepository {
      * server-persisted yet — see the last-sets-404 memo). Online, best-effort.
      */
     suspend fun lastSetsFor(programId: String, exerciseId: String): Result<List<LoggedSet>>
+
+    // --- Per-exercise history (coaching screen "how I did last time" popup) ---
+
+    /**
+     * Recent logged sets for an exercise across ALL programs (newest first),
+     * powering the coaching ExercisePage history popup so the athlete can sanity-
+     * check the coach's suggested load/reps. `GET /api/me/workout-programs/
+     * exercises/{exerciseId}/history`. Online, best-effort; [limit] caps the rows.
+     */
+    suspend fun exerciseHistory(exerciseId: String, limit: Int = 50): Result<List<ExerciseHistoryEntry>>
 }
+
+/**
+ * One logged set in the per-exercise history popup (parity with the backend
+ * `ExerciseSetLogView`): the performed [date] (ISO-8601), the [weightLbs]/[reps]
+ * lifted, the effort ([rir] and/or legacy [rpe]), and the [rirSource] provenance.
+ * The client groups these by [date] into sessions, newest first.
+ */
+@Serializable
+data class ExerciseHistoryEntry(
+    val date: String? = null,
+    val weightLbs: Double? = null,
+    val reps: Int? = null,
+    val rir: Double? = null,
+    val rirSource: String? = null,
+    val rpe: Double? = null,
+)
 
 /**
  * Cross-program workout stats (the web Overview read-model, `GET /api/me/workout-stats`).

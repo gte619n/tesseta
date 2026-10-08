@@ -15,9 +15,13 @@ import kotlinx.coroutines.flow.Flow
 
 /** A local write awaiting replay. Mirrors the Android `OutboxEntity`. */
 data class OutboxOp(
+    /** Mutation id (PK); also the default Idempotency-Key for non-deterministic tables. */
     val id: String,
     val collection: String,
-    val docJson: String,
+    /** The document id the op targets — drives the replay URL (OutboxEndpointRegistry). */
+    val entityId: String,
+    /** Request payload (plaintext here; the store encrypts it at rest). Null for DELETE. */
+    val docJson: String?,
     val operation: Operation,
     val idempotencyKey: String,
     val enqueuedAt: String,
@@ -46,6 +50,16 @@ interface OutboxStore {
     suspend fun markPushed(id: String, serverLastUpdate: String?)
     suspend fun markFailed(id: String, error: String)
     fun pendingCount(): Flow<Int>
+
+    /** Hold an op OUT of the drain after a terminal (non-retryable) rejection, keeping
+     *  it for user-driven recovery instead of silently dropping it. */
+    suspend fun markParked(id: String, error: String?)
+    /** The currently parked ops (terminally rejected, awaiting restore/discard). */
+    suspend fun parked(): List<OutboxOp>
+    /** Reactive view of the parked ops (drives recovery banners, e.g. workout completion). */
+    fun observeParked(): Flow<List<OutboxOp>>
+    /** Drop a parked op (user discarded it, or it was restored to a fresh draft). */
+    suspend fun discard(id: String)
 }
 
 /** The HTTP surface both platforms hit (Ktor engine differs per target). */

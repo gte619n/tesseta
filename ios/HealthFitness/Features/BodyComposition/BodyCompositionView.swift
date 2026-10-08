@@ -1,19 +1,24 @@
 import SwiftUI
 import Charts
-// import SharedCore  // BodyCompositionViewModel, its UiState, snapshot, DexaScanSummary, WeightUnit — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave E2 — body-composition overview (replaces the Phase 2A
-/// stub). Parity target (Android): feature-body-composition
-/// `BodyCompositionScreen` + `BodyCompositionHero` + `WeightTrendChart` +
-/// `DexaScanCard` + `BodyCompositionViewModel` — a weight/body-fat hero with 7d/90d
-/// deltas, a 90-day weight trend (Swift Charts), and a DEXA-scan grid.
+/// IMPL-IOS-01 Phase 3 Wave E2 — body-composition overview, now bound to the SHARED
+/// `BodyCompositionViewModel` over the real backend
+/// (`HttpBodyCompositionRepository` → GET api/me/body-composition, snapshot DERIVED
+/// in shared; `HttpDexaScanRepository` → api/me/dexa/scans). Parity target
+/// (Android): feature-body-composition `BodyCompositionScreen` + hero + trend chart
+/// + DEXA grid.
 ///
-/// Observes the SHARED `BodyCompositionViewModel`; the snapshot math + weight-unit
-/// projection run in shared. Weight values are canonical kg; the view projects to
-/// the shared `weightUnit`.
+/// Follows the SKIE-free pattern: subscribe to the Kotlin `StateFlow`s via
+/// `IosComposition.collectFlow` and fold each emission through [map] into the local
+/// `ScreenState`/`WeightUnit` mirrors, so the existing hero/chart/row subviews are
+/// unchanged. The snapshot math + 90-day series are computed in shared; weight is
+/// canonical kg and the view projects to the shared `weightUnit`. Body composition
+/// is pull-only (D9) — read + refresh only; the DEXA PDF upload is a platform-
+/// stubbed affordance (document picker + multipart-SSE, no shared SSE client yet).
 struct BodyCompositionView: View {
 
-    /// Local mirror of the shared VM's `UiState` (deleted post-0D).
+    /// Local mirror of the shared VM's `UiState`.
     struct ScreenState {
         var snapshot: BodyCompositionSnapshot?
         var scans: [DexaScanSummary] = []
@@ -21,13 +26,30 @@ struct BodyCompositionView: View {
         var error: String?
     }
 
+    private let vm: BodyCompositionViewModel
     @State private var state = ScreenState()
     @State private var weightUnit: WeightUnit = .pounds
+    @State private var stateSub: FlowSubscription?
+    @State private var unitSub: FlowSubscription?
+
+    init() {
+        self.vm = IosComposition.shared.bodyCompositionViewModel()
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Body")
+            .accessibilityIdentifier("body-composition")  // IMPL-E2E-01 shared id
+            .onAppear {
+                stateSub = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? BodyCompositionViewModel.UiState { state = Self.map(s) }
+                }
+                unitSub = IosComposition.shared.collectFlow(flow: vm.weightUnit) { value in
+                    if let u = value as? SharedCore.WeightUnit { weightUnit = Self.map(u) }
+                }
+            }
+            .onDisappear { stateSub?.cancel(); unitSub?.cancel() }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink(value: BodyCompositionRoute.upload) {
@@ -41,14 +63,6 @@ struct BodyCompositionView: View {
                 case .scan(let id): DexaScanDetailView(scanId: id)
                 }
             }
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(BodyCompositionViewModel(bodyRepo: DI.bodyCompRepo,
-        //                                                           dexaRepo: DI.dexaRepo,
-        //                                                           unitPrefsRepo: DI.unitPrefs))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        //     await vm.observe(vm.wrapped.weightUnit) { self.weightUnit = Self.map($0) }
-        // }
     }
 
     @ViewBuilder
@@ -87,6 +101,7 @@ struct BodyCompositionView: View {
                 .padding(16)
                 .formMaxWidth()
             }
+            .refreshable { vm.refresh() }
         }
     }
 
@@ -129,8 +144,56 @@ struct BodyCompositionView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // static func map(_ s: BodyCompositionViewModel.UiState) -> ScreenState { ... }  // Phase 0D
-    // static func map(_ u: WeightUnit) -> WeightUnit { ... }
+    // MARK: - Mapping (SKIE-free: Kotlin state → local mirrors)
+
+    private static func map(_ s: BodyCompositionViewModel.UiState) -> ScreenState {
+        ScreenState(
+            snapshot: s.snapshot.map(mapSnapshot),
+            scans: s.dexaScans.map(mapScanSummary),
+            loading: s.loading,
+            error: s.error,
+        )
+    }
+
+    private static func map(_ u: SharedCore.WeightUnit) -> WeightUnit {
+        u == SharedCore.WeightUnit.kilograms ? .kilograms : .pounds
+    }
+
+    private static func mapSnapshot(_ s: SharedCore.BodyCompositionSnapshot) -> BodyCompositionSnapshot {
+        BodyCompositionSnapshot(
+            latestWeightKg: s.latestWeightKg?.doubleValue,
+            latestBodyFatPercent: s.latestBodyFatPercent?.doubleValue,
+            latestLeanMassKg: s.latestLeanMassKg?.doubleValue,
+            latestBmi: s.latestBmi?.doubleValue,
+            sevenDayDeltaKg: s.sevenDayDeltaKg?.doubleValue,
+            ninetyDayDeltaKg: s.ninetyDayDeltaKg?.doubleValue,
+            series90d: s.series90d.map(mapWeightPoint),
+        )
+    }
+
+    private static func mapWeightPoint(_ p: SharedCore.BodyCompositionPoint) -> WeightPoint {
+        WeightPoint(date: instantToDate(p.sampleTime), valueKg: p.value)
+    }
+
+    private static func mapScanSummary(_ d: SharedCore.DexaScanSummary) -> DexaScanSummary {
+        DexaScanSummary(
+            scanId: d.scanId,
+            measuredOn: d.measuredOn.map(localDateToDate),
+            sourceFacility: d.sourceFacility,
+            totalMassLb: d.totalMassLb?.doubleValue,
+            totalBodyFatPercent: d.totalBodyFatPercent?.doubleValue,
+        )
+    }
+
+    /// Kotlin `Instant` → Swift `Date`.
+    private static func instantToDate(_ i: Kotlinx_datetimeInstant) -> Date {
+        Date(timeIntervalSince1970: Double(i.toEpochMilliseconds()) / 1000.0)
+    }
+
+    /// Kotlin `LocalDate` → Swift `Date` (midnight UTC of that calendar day).
+    private static func localDateToDate(_ d: Kotlinx_datetimeLocalDate) -> Date {
+        Date(timeIntervalSince1970: Double(d.toEpochDays()) * 86_400)
+    }
 }
 
 // MARK: - Weight trend chart

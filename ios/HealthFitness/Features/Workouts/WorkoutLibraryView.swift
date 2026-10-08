@@ -1,5 +1,5 @@
 import SwiftUI
-// import SharedCore  // WorkoutLibraryViewModel, WorkoutLibraryUiState, AdHocLibraryItem — Phase 0D
+import SharedCore
 
 /// IMPL-IOS-01 Phase 3 Wave D — the ad-hoc workout library (IMPL-ADHOC-01).
 /// Parity target: Android `WorkoutLibraryScreen` + `WorkoutLibraryViewModel`
@@ -21,17 +21,26 @@ struct WorkoutLibraryView: View {
         let exerciseCountLabel: String  // "5 exercises"
     }
 
+    private let vm: WorkoutLibraryViewModel
     @State private var state = ScreenState()
+    @State private var subscription: FlowSubscription?
+
+    init() {
+        self.vm = IosComposition.shared.workoutLibraryViewModel()
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Library")
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(WorkoutLibraryViewModel(repository: DI.adHocLibraryRepository))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .accessibilityIdentifier("workout-library")  // IMPL-E2E-01 shared id
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    guard let s = value as? WorkoutLibraryUiState else { return }
+                    state = Self.map(s)
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
@@ -55,5 +64,23 @@ struct WorkoutLibraryView: View {
         }
     }
 
-    // static func map(_ s: WorkoutLibraryUiState) -> ScreenState { ... }  // Phase 0D
+    // MARK: Map shared UiState → local mirror
+
+    static func map(_ s: WorkoutLibraryUiState) -> ScreenState {
+        ScreenState(
+            loading: s.loading,
+            items: s.items.map { item in
+                LibraryRow(
+                    id: item.id,
+                    title: item.title,
+                    summary: item.summary,
+                    // The shallow list carries no exercise count (D7); fall back to the
+                    // purpose/summary hint when present, else a neutral label.
+                    exerciseCountLabel: item.exerciseCount > 0
+                        ? "\(item.exerciseCount) exercises"
+                        : (item.purpose ?? "Ad-hoc workout")
+                )
+            }
+        )
+    }
 }

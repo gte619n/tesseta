@@ -1,0 +1,19 @@
+-- IMPL-IOS-01 Phase 1C — the delta-pull cursor. The backend /api/me/sync is a
+-- unified delta with ONE opaque cursor; we key by `collection` so the schema can
+-- also hold per-collection cursors if that ever splits, but today a single row
+-- (collection = '__global__') carries the whole-account cursor. lastPulledAt is
+-- the serverTime of the last converged pull (diagnostics + recent-window gate).
+CREATE TABLE syncState (
+    collection   TEXT NOT NULL PRIMARY KEY,
+    cursor       TEXT,
+    lastPulledAt TEXT
+);
+
+get:
+SELECT * FROM syncState WHERE collection = ?;
+
+upsert:
+INSERT OR REPLACE INTO syncState(collection, cursor, lastPulledAt) VALUES (?, ?, ?);
+
+clearAll:
+DELETE FROM syncState;

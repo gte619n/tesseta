@@ -60,6 +60,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    # Safety net: a wedged test must fail fast, not burn the 6h job ceiling. The
+    # KMP ViewModel/sync suites finish in a couple of minutes when healthy.
+    timeout-minutes: 20
     continue-on-error: true # TODO(D-EXEC-1): remove once Phase 0D toolchain migration lands
     defaults:
       run:
@@ -98,6 +101,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.changed == 'true'
     runs-on: macos-15
+    # Safety net: a wedged test must fail fast, not burn the 6h job ceiling.
+    # (macOS + Kotlin/Native is slower than the JVM job, hence the larger cap.)
+    timeout-minutes: 30
     continue-on-error: true # TODO(D-EXEC-1): remove once Phase 0D toolchain migration lands
     defaults:
       run:
@@ -144,6 +150,34 @@ jobs:
         working-directory: ios
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # The app targets the iOS 26 SDK (project.yml deploymentTarget 26.0, no
+      # @available guards per D16). The runner image default is Xcode 16.x (iOS 18
+      # SDK), which cannot compile the sources, so select the highest installed
+      # Xcode 26.x. Fails loudly if none is present rather than building against
+      # the wrong SDK.
+      - name: Select Xcode 26
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n1)/Contents/Developer"
+          xcodebuild -version
+
+      # The app links SharedCore.xcframework, produced by the KMP :core module and
+      # NOT committed (lives under shared/core/build/). It must be built on a clean
+      # checkout before xcodebuild, or the build fails with "no XCFramework found".
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build SharedCore XCFramework (release)
+        working-directory: shared
+        run: ./gradlew :core:assembleSharedCoreReleaseXCFramework
 
       # XcodeGen turns the committed project.yml into HealthFitness.xcodeproj. Keeping
       # the .xcodeproj out of git avoids merge conflicts on the generated file.

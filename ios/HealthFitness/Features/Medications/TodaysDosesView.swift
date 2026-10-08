@@ -1,21 +1,18 @@
 import SwiftUI
-// import SharedCore  // TodaysDosesViewModel, TodaysDosesUiState, TodaysDose, TimeWindow — Phase 0D
+import SharedCore
 
-/// IMPL-IOS-01 Phase 3 Wave B — the dose checklist. Parity target: Android
+/// IMPL-IOS-01 — the dose checklist. Parity target: Android
 /// `feature-medical/.../today/TodaysDosesScreen.kt` + `TodaysDosesViewModel`.
 ///
-/// This is ALSO the D9 local-notification deep-link target: the "Take"/"Take all"
-/// / body tap on a medication reminder routes `healthfitness://dose-checklist/{id}`
-/// here via `NotificationDelegate` → `MedicationsRoute.todaysDoses` (see
-/// ios/HealthFitness/Notifications/). Toggling a dose logs to the shared adherence
-/// mirror, which re-emits through `observeTodaysDoses()` and both updates this
-/// list AND lets `LocalReminderScheduler` recompute the outstanding set — so a dose
-/// taken here silently clears/decrements the pending reminder (the Android
-/// "Take all left the reminder on screen" bug, fixed by the single reactive source).
+/// Backed by the SHARED `TodaysDosesViewModel` over the online-first
+/// `HttpMedicationCrudRepository` (reactive today's-doses) + `HttpAdherenceRepository`
+/// (log/undo). Toggling a dose routes to the VM, which writes adherence then kicks a
+/// today-refresh so the single reactive source re-emits and the list updates (parity
+/// with Android's mirror re-emit — no manual optimistic flip here). Observed via
+/// `collectFlow` + a static `map(...)`, the same SKIE-free pattern as `MedicationsListView`.
 ///
-/// Follows the reference `MedicationsListView` pattern: local ScreenState mirror of
-/// the shared sealed `TodaysDosesUiState`, replaced post-0D by switching directly on
-/// the SKIE-bridged enum.
+/// This is ALSO the D9 local-notification deep-link target
+/// (`healthfitness://dose-checklist/{id}` → `MedicationsRoute.todaysDoses`).
 struct TodaysDosesView: View {
 
     enum ScreenState {
@@ -26,26 +23,32 @@ struct TodaysDosesView: View {
 
     struct DoseRow: Identifiable {
         let id: String          // "medicationId:window"
-        let medicationId: String
+        let dose: TodaysDose    // the shared type, for the toggle intent
         let name: String
         let window: String      // TimeWindow label
-        let doseSummary: String // "1 tab"
+        let doseSummary: String // "1 mg"
         let taken: Bool
     }
 
+    private let vm: TodaysDosesViewModel
     @State private var state: ScreenState = .loading
+    @State private var subscription: FlowSubscription?
+
+    init() {
+        self.vm = IosComposition.shared.todaysDosesViewModel()
+    }
 
     var body: some View {
         content
             .background(Theme.canvas)
             .navigationTitle("Today’s doses")
-        // Post-0D:
-        // .task {
-        //     let vm = ObservableViewModel(TodaysDosesViewModel(
-        //         medications: DI.medicationCrudRepository,
-        //         adherence: DI.adherenceRepository))
-        //     await vm.observe(vm.wrapped.state) { self.state = Self.map($0) }
-        // }
+            .accessibilityIdentifier("todays-doses")  // IMPL-E2E-01 shared id
+            .onAppear {
+                subscription = IosComposition.shared.collectFlow(flow: vm.state) { value in
+                    if let s = value as? TodaysDosesUiState { state = Self.map(s) }
+                }
+            }
+            .onDisappear { subscription?.cancel() }
     }
 
     @ViewBuilder
@@ -65,7 +68,7 @@ struct TodaysDosesView: View {
                     Section("Due today") {
                         ForEach(doses) { dose in
                             Button {
-                                toggle(dose)
+                                vm.toggle(dose: dose.dose)
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: dose.taken ? "checkmark.circle.fill" : "circle")
@@ -89,12 +92,40 @@ struct TodaysDosesView: View {
         }
     }
 
-    private func toggle(_ dose: DoseRow) {
-        // Post-0D: vm.wrapped.toggle(dose.shared) — the shared VM writes to the
-        // adherence mirror; the reactive source re-emits and updates `state`.
-        // Optimistic local flip is intentionally NOT done here (the shared reactive
-        // source is the single source of truth — parity with Android).
+    // MARK: map
+
+    private static func map(_ s: TodaysDosesUiState) -> ScreenState {
+        switch s {
+        case let ready as TodaysDosesUiStateReady:
+            let rows = ready.doses.map { d in
+                DoseRow(
+                    id: "\(d.medicationId):\(d.window.name)",
+                    dose: d,
+                    name: d.drugName,
+                    window: windowLabel(d.window),
+                    doseSummary: "\(doseText(d.dose)) \(d.unit)",
+                    taken: d.taken,
+                )
+            }
+            return .ready(rows)
+        case let error as TodaysDosesUiStateError:
+            return .error(error.message)
+        default:
+            return .loading
+        }
     }
 
-    // static func map(_ s: TodaysDosesUiState) -> ScreenState { ... }  // Phase 0D
+    private static func doseText(_ dose: Double) -> String {
+        dose == dose.rounded() ? String(Int(dose)) : String(format: "%g", dose)
+    }
+
+    private static func windowLabel(_ window: TimeWindow) -> String {
+        switch window {
+        case SharedCore.TimeWindow.morning:   return "Morning"
+        case SharedCore.TimeWindow.afternoon: return "Afternoon"
+        case SharedCore.TimeWindow.evening:   return "Evening"
+        case SharedCore.TimeWindow.bedtime:   return "Bedtime"
+        default: return window.name
+        }
+    }
 }

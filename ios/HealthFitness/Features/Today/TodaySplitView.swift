@@ -36,9 +36,6 @@ struct TodaySplitView: View {
         switch state {
         case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .error(let message):
-            ContentUnavailableView("Couldn’t load your dashboard", systemImage: "square.grid.2x2",
-                                   description: Text(message))
         case .ready(let model):
             ScrollView {
                 VStack(alignment: .leading, spacing: 11) {

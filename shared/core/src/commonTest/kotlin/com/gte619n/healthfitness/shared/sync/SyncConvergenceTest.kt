@@ -215,7 +215,17 @@ class SyncConvergenceTest {
             ops[id] = ops.getValue(id).let { it.copy(retries = it.retries + 1, lastError = error) }
         }
         override fun pendingCount(): Flow<Int> = count
-        private fun pendingIds() = ops.keys.filter { it !in pushed }
+        private val parkedIds = mutableSetOf<String>()
+        override suspend fun markParked(id: String, error: String?) {
+            parkedIds += id; count.value = pendingIds().size
+        }
+        override suspend fun parked(): List<OutboxOp> = parkedIds.mapNotNull { ops[it] }
+        override fun observeParked(): Flow<List<OutboxOp>> =
+            MutableStateFlow(parkedIds.mapNotNull { ops[it] })
+        override suspend fun discard(id: String) {
+            ops.remove(id); parkedIds -= id; pushed -= id; count.value = pendingIds().size
+        }
+        private fun pendingIds() = ops.keys.filter { it !in pushed && it !in parkedIds }
     }
 
     // ---------------------------------------------------------------------------
@@ -272,6 +282,7 @@ class SyncConvergenceTest {
                     // row by this. Uniqueness across clients lives on idempotencyKey.
                     id = id,
                     collection = table,
+                    entityId = id,
                     docJson = value,
                     operation = op,
                     idempotencyKey = "$name-$id-${op.name}-$value",
@@ -416,6 +427,7 @@ class SyncConvergenceTest {
         val op = OutboxOp(
             id = "op-1",
             collection = MirrorTables.NUTRITION_ENTRIES,
+            entityId = "entry-1",
             docJson = "eggs",
             operation = OutboxOp.Operation.CREATE,
             idempotencyKey = "idem-eggs-1",
