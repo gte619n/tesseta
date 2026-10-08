@@ -119,6 +119,46 @@ class SyncEnginePullTest {
     }
 
     @Test
+    fun `scheduled delta lands under the composite mirror id and decodes as the calendar DTO`() = runTest {
+        // A scheduled doc exactly as the backend emits it: raw Firestore fields
+        // plus the scheduledId/updatedAt stamps. payloadWithId injects nothing
+        // for WORKOUT_SCHEDULED (no idField registered), so the payload must be
+        // self-describing — this pins the contract that lets a server-side
+        // prescription rewrite reach an already-mirrored phone.
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {"schemaVersion":1,"changes":[
+                  {"collection":"workoutPrograms/scheduled","id":"prog-1/2026-10-08_wd1","status":"ACTIVE",
+                   "lastUpdate":"2026-10-06T20:49:45Z",
+                   "doc":{"scheduledId":"2026-10-08_wd1","date":"2026-10-08","dayId":"wd1",
+                          "dayLabel":"Pull","weekIndexInPhase":2,"isDeload":false,"phaseId":"ph1",
+                          "locationId":"loc1","status":"PLANNED","updatedAt":"2026-10-06T20:49:45Z",
+                          "session":{"dayId":"wd1","label":"Pull","dayOfWeek":"THU","locationId":"loc1","orderIndex":0,
+                            "blocks":[{"blockId":"b1","type":"ACCESSORY","title":"Arms","orderIndex":0,
+                              "prescriptions":[{"exerciseId":"ex-curl","orderIndex":0,"sets":3,"repsMin":12,"repsMax":15,
+                                "targetWeightLbs":30.0,"restSeconds":60,"tempo":"2010",
+                                "intensity":{"kind":"RPE","value":8},"loadBasis":"Resumes your last logged 30 lb x 12"}]}]}}}
+                ],"nextCursor":"c","hasMore":false,"killSwitch":false}
+                """.trimIndent(),
+            ),
+        )
+
+        val result = engine.pull()
+        assertEquals(1, result.applied)
+
+        val row = mirror.getRow(MirrorTables.WORKOUT_SCHEDULED, "prog-1/2026-10-08_wd1")!!
+        val dto = SyncTestMoshi.instance
+            .adapter(com.gte619n.healthfitness.data.workouts.program.ScheduledWorkoutDto::class.java)
+            .fromJson(row.payloadJson)!!
+        assertEquals("2026-10-08_wd1", dto.scheduledId)
+        val rx = dto.session!!.blocks.single().prescriptions.single()
+        assertEquals(30.0, rx.targetWeightLbs!!, 0.0)
+        assertEquals(12, rx.repsMin!!)
+        assertEquals(15, rx.repsMax!!)
+    }
+
+    @Test
     fun `older incoming change is rejected by LWW`() = runTest {
         mirror.upsert(
             MirrorTables.MEDICATIONS,

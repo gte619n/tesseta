@@ -24,13 +24,16 @@ steps:
   # Vulnerability scan the image before it can ship. Fails the build on HIGH or
   # CRITICAL findings that have a fix available (--ignore-unfixed avoids blocking
   # on unfixable base-OS CVEs). Trivy authenticates to Artifact Registry via the
-  # build SA's ambient GCP credentials.
+  # build SA's ambient GCP credentials. --ignorefile points at the repo-root
+  # .trivyignore, where each suppressed CVE carries a dated, reachability-based
+  # justification and a removal condition (this step runs with cwd=/workspace).
   - id: scan-image
     name: aquasec/trivy:0.58.1
     args:
       - image
       - --severity=HIGH,CRITICAL
       - --ignore-unfixed
+      - --ignorefile=.trivyignore
       - --exit-code=1
       - us-central1-docker.pkg.dev/$PROJECT_ID/health-fitness/backend:$SHORT_SHA
 

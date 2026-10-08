@@ -63,8 +63,15 @@ public final class SeedWeightResolver {
         if (isPerHand(n)) {
             base = base / 2.0;
         }
+        // Snap to a load that physically exists: dumbbells and plate steps come in
+        // 5 lb increments, and the per-hand halving above can land off-rack (95/2 =
+        // 47.5 lb — no such dumbbell). Floor rather than round: a seed errs light.
+        base = ProgressionMath.floorToIncrement(base, SEED_INCREMENT_LBS);
         return Math.max(floor, base);
     }
+
+    /** Every seeded load must land on the gym's coarsest real step (5 lb dumbbells/plates). */
+    static final double SEED_INCREMENT_LBS = 5.0;
 
     /**
      * Whether the movement is logged per hand (a bilateral dumbbell lift or a

@@ -28,6 +28,7 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -96,11 +97,12 @@ class WorkoutSessionRepository(
             draftDao.getByKey(programId, scheduledId)?.toDomain()
                 ?.let { return@runCatching it }
 
-            val row = scheduledDao.getById(mirrorId(programId, scheduledId))
-                // Cold miss: the coach was opened before this session synced into
-                // the mirror. Best-effort fill from the network so it can still
-                // start; offline with nothing cached, surface a clear message.
-                ?: fetchAndMirrorScheduled(programId, scheduledId)
+            // Read-through, not mirror-first: the server rewrites this doc after
+            // it was first mirrored (progression writeback, continuation heals),
+            // and a stale mirror here means coaching the whole workout at the
+            // wrong weights. Refresh from the network at the moment the numbers
+            // matter; the mirror is the offline/kill-switch fallback.
+            val row = fetchAndMirrorScheduled(programId, scheduledId)
                 ?: error(
                     "This workout hasn't been downloaded yet. " +
                         "Connect to the internet once to start it.",
@@ -852,20 +854,26 @@ class WorkoutSessionRepository(
     data class StaleDraftResult(val finalized: Int, val discarded: Int)
 
     /**
-     * Cold-miss recovery for [start]: the scheduled session isn't in the mirror
-     * yet (e.g. the coach was opened before the schedule's first sync). Pull the
-     * program's whole schedule into the mirror and return the now-mirrored row, or
-     * null when offline / kill-switched with nothing to fetch (the caller then
-     * surfaces a clear "not downloaded yet" message rather than a raw error). Once
-     * the background [SyncEngine] has run normally this never executes.
+     * Read-through for [start]: fetch the program's schedule, mirror it, and
+     * return the fetched row. The network refresh is best-effort and time-boxed
+     * — offline, kill-switched, or slow, the stale mirror row is still returned
+     * so a workout can always start; null only when the session was never
+     * mirrored AND can't be fetched (the caller then surfaces a clear "not
+     * downloaded yet" message rather than a raw error).
      */
     private suspend fun fetchAndMirrorScheduled(
         programId: String,
         scheduledId: String,
     ): WorkoutScheduledEntity? {
-        if (support.killSwitchOn()) return null
-        runCatching {
-            val dtos = api.calendar(programId, "1970-01-01", "2999-12-31")
+        val mirrored = scheduledDao.getById(mirrorId(programId, scheduledId))
+        // A dirty row carries an un-synced local outcome (e.g. a pending
+        // completion) — newer truth than any server copy, so don't read through
+        // over it. Matches refreshInto's own per-row dirty guard.
+        if (support.killSwitchOn() || mirrored?.dirty == true) return mirrored
+        val fresh = runCatching {
+            val dtos = withTimeoutOrNull(SCHEDULED_READ_THROUGH_TIMEOUT_MS) {
+                api.calendar(programId, "1970-01-01", "2999-12-31")
+            } ?: return@runCatching null
             support.refreshInto(
                 MirrorTables.WORKOUT_SCHEDULED,
                 dtos.map {
@@ -876,8 +884,18 @@ class WorkoutSessionRepository(
                     )
                 },
             )
-        }
-        return scheduledDao.getById(mirrorId(programId, scheduledId))
+            dtos.firstOrNull { it.scheduledId == scheduledId }?.let {
+                WorkoutScheduledEntity(
+                    id = mirrorId(programId, scheduledId),
+                    payloadJson = scheduledAdapter.toJson(it),
+                    lastUpdate = clock(),
+                    status = SyncRowStatus.ACTIVE.name,
+                    dirty = false,
+                    syncState = SyncRowState.SYNCED.name,
+                )
+            }
+        }.getOrNull()
+        return fresh ?: mirrored
     }
 
     /** Build + upload the COMPLETED outcome for a draft (finish + stale sweep). */
@@ -1024,6 +1042,13 @@ class WorkoutSessionRepository(
         /** The IMPL-AND-20 sync id of one scheduled session's mirror row. */
         fun mirrorId(programId: String, scheduledId: String): String =
             "$programId/$scheduledId"
+
+        /**
+         * Bound on the [start] read-through refresh: long enough for a normal
+         * calendar fetch, short enough that a gym dead zone doesn't hold the
+         * coach screen hostage before falling back to the mirrored copy.
+         */
+        private const val SCHEDULED_READ_THROUGH_TIMEOUT_MS = 4_000L
 
         /**
          * ADR-0012 Decision 4: a draft idle for **more than** 24h is stale

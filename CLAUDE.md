@@ -85,6 +85,12 @@
   site: the shared KMP module has its own `CollectionRegistry` (`shared/.../sync/`,
   guarded by its own `CollectionRegistryContractTest`) + `MIRROR_SCHEMA_VERSION` —
   route new collections there too.
+- **Synced docs are emitted only via their `updatedAt` field — registration
+  isn't enough.** Every backend write to a synced collection (including partial
+  `update()` calls and manual Firestore REST patches) must stamp `updatedAt`
+  (`serverTimestamp()`), or the change is silently invisible to clients. The
+  emitted payload is the raw doc, so it must also carry every field the client
+  DTO requires without a default (e.g. `scheduled` stores its own `scheduledId`).
 - **Android Room schema bumps fail loud.** Bumping `HfDatabase` version requires a
   `Migration` in `ALL_MIGRATIONS` (+ bump `SCHEMA_VERSION`) and a fixture
   round-trip test; a missing forward migration now THROWS at open instead of
@@ -121,6 +127,10 @@
   `feature/<slug>` (e.g. `feature/build_fixes`).
 - Branch from `origin/main`:
   `git worktree add -b feature/<slug> .worktrees/<slug> origin/main`
+- Android Gradle builds require the web OAuth client id (injected from a secret
+  in CI). Locally / in a fresh worktree pass a stub to compile/test without it:
+  `-PwebOauthClientId=000000.apps.googleusercontent.com`. Also recreate the
+  gitignored `local.properties` (`sdk.dir=<android-sdk path>`) per worktree.
 
 ## AI Models
 - **General AI work** (text generation, parsing, extraction, lookup):
@@ -178,6 +188,11 @@
   break-glass bypass. Prod deploy = merge to `main`, so CI now gates deploys at
   the merge. The Cloud Build deploy still runs post-merge and can fail
   independently — watch the `deploy-*-on-main` check-runs on the merge commit.
+  The `e2e` / `e2e-local` check is **not** one of the six required checks and
+  runs on a self-hosted runner that may be offline — it can sit `QUEUED`
+  indefinitely without ever blocking merge. Never gate a merge or a CI-watch
+  loop on *all* checks completing; wait only on the six required ones (a
+  watch-all loop hangs forever on a stuck `e2e`).
 - **CI workflows run only on PRs targeting `main`.** A stacked PR (base =
   another feature branch) gets NO checks until it targets `main`; retarget its
   base (or close/reopen) to trigger CI before relying on it.
@@ -187,6 +202,12 @@
   BOM-managed transitive version via an `extra["<lib>.version"]` property in
   `backend/build.gradle.kts` (see the existing block there). This runs only at
   deploy time, not in PR CI, so it can silently keep prod on a stale revision.
+  When the only fixed version is a **major** upgrade (e.g. a Spring Framework 7
+  fix for a Boot 3.x app) so the `extra[...]` override can't apply, suppress the
+  finding in the repo-root **`.trivyignore`** (wired via `--ignorefile=.trivyignore`
+  on the `scan-image` step) — ONLY for a provably non-reachable CVE, and each entry
+  must carry a dated justification + a removal condition. The scan step runs with
+  `cwd=/workspace`, so the file lives at the repo root, not under `backend/`.
 - **Cloud Run Jobs reuse the backend image, which is tuned for 2Gi.** The image
   `ENTRYPOINT` hardcodes `-XX:MaxRAMPercentage=65.0` (`backend/Dockerfile`), so
   any Cloud Run surface running it — service *or* job — must be provisioned
@@ -233,6 +254,13 @@ local pnpm refuses to run. Match it, run tooling via the local binaries
   `export CLOUDSDK_AUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)`.
 - Gotcha: GNU `timeout` is NOT installed — don't wrap gcloud/curl in it; it
   fails with 'command not found' and looks like an auth/API failure.
+- **Reading a failed Cloud Build's logs headless:** `gcloud builds log <id>`
+  needs user creds (fails 'Reauthentication') — export
+  `CLOUDSDK_AUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)`
+  first. The Cloud Logging `entries:list` server filter on
+  `resource.labels.build_id` returns 0 for build logs; filter by
+  `logName=".../logs/cloudbuild"` + a tight `timestamp` window and post-filter by
+  build_id client-side. The Trivy result is in the `scan-image` step lines.
 - `AGENTS.md` (formerly a never-filled placeholder for the Google Health API
   Parity Tool context file) was archived 2026-09 to
   `docs/archive/2026-09/AGENTS.md` — there is no `AGENTS.md` at the repo root.

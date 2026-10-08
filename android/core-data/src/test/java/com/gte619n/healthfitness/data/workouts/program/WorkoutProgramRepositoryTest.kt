@@ -244,11 +244,12 @@ class WorkoutProgramRepositoryTest {
         coEvery { programDao.getById("p1") } returns entity("p1", deepAdapter.toJson(assembledDeep()))
         coEvery { scheduledDao.getById(any()) } returns null
         // A prior COMPLETED session for the same exercise: 185 lb with an engine
-        // rationale, compressed to 2×8 (a deload week).
+        // rationale, compressed to 2×8 (a deload week — and the ONLY history, so
+        // its load is the last-resort resume but its volume must not travel).
         val completed = ScheduledWorkoutDto(
             scheduledId = "2026-04-20_d1",
             date = java.time.LocalDate.parse("2026-04-20"),
-            phaseId = "ph1", dayId = "d1", status = "COMPLETED",
+            phaseId = "ph1", dayId = "d1", status = "COMPLETED", isDeload = true,
             session = WorkoutDayDto(
                 dayId = "d1", dayOfWeek = DayOfWeek.MON,
                 blocks = listOf(
@@ -268,7 +269,7 @@ class WorkoutProgramRepositoryTest {
         coEvery { scheduledDao.listActive() } returns listOf(
             WorkoutScheduledEntity(
                 "p1/2026-04-20_d1", scheduledAdapter.toJson(completed),
-                now.toEpochMilli(), "COMPLETED", false, "SYNCED",
+                now.toEpochMilli(), "COMPLETED", true, "SYNCED",
             ),
         )
         val rows = slot<List<MirrorRepositorySupport.RefreshRow>>()
@@ -288,6 +289,59 @@ class WorkoutProgramRepositoryTest {
         // and the redo is never flagged deload.
         assertEquals(3, rx.sets)
         assertEquals(false, minted.isDeload)
+    }
+
+    @Test
+    fun `runDayToday resumes demonstrated performance with its reps over a stale stored target`() = runBlocking {
+        // Prod bug (2026-10-06): newest completed session stored the stale template
+        // rx (160 × 12–15) but the athlete logged 180×8 on every set. The redo must
+        // announce 180 with a band that admits the 8 reps it was lifted for.
+        coEvery { programDao.getById("p1") } returns entity("p1", deepAdapter.toJson(assembledDeep()))
+        coEvery { scheduledDao.getById(any()) } returns null
+        val completed = ScheduledWorkoutDto(
+            scheduledId = "2026-04-20_d1",
+            date = java.time.LocalDate.parse("2026-04-20"),
+            phaseId = "ph1", dayId = "d1", status = "COMPLETED",
+            session = WorkoutDayDto(
+                dayId = "d1", dayOfWeek = DayOfWeek.MON,
+                blocks = listOf(
+                    BlockDto(
+                        blockId = "b1", type = "MAIN",
+                        prescriptions = listOf(
+                            PrescriptionDto(
+                                exerciseId = "ex1", sets = 4, repsMin = 12, repsMax = 15,
+                                targetWeightLbs = 160.0,
+                                loadBasis = "Matches your recent 160x15 performance.",
+                                loggedSets = listOf(
+                                    LoggedSetDto(weightLbs = 180.0, reps = 8),
+                                    LoggedSetDto(weightLbs = 180.0, reps = 8),
+                                    LoggedSetDto(weightLbs = 180.0, reps = 8),
+                                    LoggedSetDto(weightLbs = 180.0, reps = 8, rir = 0.0),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        coEvery { scheduledDao.listActive() } returns listOf(
+            WorkoutScheduledEntity(
+                "p1/2026-04-20_d1", scheduledAdapter.toJson(completed),
+                now.toEpochMilli(), "COMPLETED", false, "SYNCED",
+            ),
+        )
+        val rows = slot<List<MirrorRepositorySupport.RefreshRow>>()
+        coEvery { support.refreshInto(MirrorTables.WORKOUT_SCHEDULED, capture(rows)) } returns Unit
+
+        repo.runDayToday("p1", "ph1", "d1").getOrThrow()
+
+        val minted = scheduledAdapter.fromJson(rows.captured.single().payloadJson)!!
+        val rx = minted.session!!.blocks.single().prescriptions.single()
+        assertEquals(180.0, rx.targetWeightLbs)
+        assertEquals(8, rx.repsMin) // reps travel WITH the demonstrated weight
+        assertEquals(15, rx.repsMax)
+        assertEquals(4, rx.sets)
+        assertEquals(true, rx.loadBasis!!.contains("180"))
     }
 
     @Test
