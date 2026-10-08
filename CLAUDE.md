@@ -61,6 +61,12 @@
   once for a backfilling full scan. This is client-local — do NOT bump
   `SYNC_SCHEMA_VERSION` (the wire/server D13 version) for this, or every pull
   mismatches the server and wipe-loops.
+- **Synced docs are emitted only via their `updatedAt` field — registration
+  isn't enough.** Every backend write to a synced collection (including partial
+  `update()` calls and manual Firestore REST patches) must stamp `updatedAt`
+  (`serverTimestamp()`), or the change is silently invisible to clients. The
+  emitted payload is the raw doc, so it must also carry every field the client
+  DTO requires without a default (e.g. `scheduled` stores its own `scheduledId`).
 - **Android Room schema bumps fail loud.** Bumping `HfDatabase` version requires a
   `Migration` in `ALL_MIGRATIONS` (+ bump `SCHEMA_VERSION`) and a fixture
   round-trip test; a missing forward migration now THROWS at open instead of
