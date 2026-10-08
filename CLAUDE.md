@@ -145,6 +145,11 @@
   break-glass bypass. Prod deploy = merge to `main`, so CI now gates deploys at
   the merge. The Cloud Build deploy still runs post-merge and can fail
   independently — watch the `deploy-*-on-main` check-runs on the merge commit.
+  The `e2e` / `e2e-local` check is **not** one of the six required checks and
+  runs on a self-hosted runner that may be offline — it can sit `QUEUED`
+  indefinitely without ever blocking merge. Never gate a merge or a CI-watch
+  loop on *all* checks completing; wait only on the six required ones (a
+  watch-all loop hangs forever on a stuck `e2e`).
 - **CI workflows run only on PRs targeting `main`.** A stacked PR (base =
   another feature branch) gets NO checks until it targets `main`; retarget its
   base (or close/reopen) to trigger CI before relying on it.
