@@ -115,9 +115,25 @@
   `VMState`) — grep the generated `SharedCore.h` `swift_name(...)` before
   referencing one; a `new`-prefixed factory selector is silently dropped (use
   `makeNew…`); a `data.X` colliding with another `X` exports as `X_`; nullable
-  `Double?` → Swift `KotlinDouble?.doubleValue`.
+  `Double?` → Swift `KotlinDouble?.doubleValue`. And a **sealed** class's cases
+  export CONCATENATED (`VMUiStateReady`), while a **nested data class/object**
+  exports DOTTED (`VM.UiState`, `VM.HistoryRow`); grep `swift_name` to tell which
+  before referencing one.
 - `:core:jvmTest` can wedge the Gradle daemon in a worktree; verify shared changes
   via `:core:compileKotlinJvm` + `:core:assembleSharedCoreXCFramework` + the app build.
+- **A shared-VM test that leaves a self-ticking timer running wedges forever.**
+  `runTest` auto-runs `advanceUntilIdle` when the body ends; a VM coroutine that
+  re-arms `delay()` off a *fixed* test clock (e.g. `RestTimerHolder` re-deriving
+  remaining from a frozen `now()`) never goes idle, so the test spins — on CI it
+  burned to the 6h job ceiling. Stop the ticker before the body ends
+  (dismiss/complete) and use `runCurrent()` (not `advanceUntilIdle`) while it's
+  live. The `ios-ci` shared-test jobs carry `timeout-minutes` as a backstop.
+- **iOS CI/release must build the XCFramework + `xcodegen generate` + select
+  Xcode 26 before `xcodebuild`/gym.** `SharedCore.xcframework` is gitignored
+  (under `shared/core/build/`) so a clean checkout has nothing to link; the
+  `.xcodeproj` is generated, not committed; and the macOS runner defaults to
+  Xcode 16.x while the app needs the iOS 26 SDK. `ios-ci.yml` +
+  `release-ios-on-main.yml` do all three in steps — keep them.
 - Status + decisions: [`docs/plans/IMPL-IOS-01-STATUS.md`](docs/plans/IMPL-IOS-01-STATUS.md),
   [`docs/plans/IMPL-IOS-01-OFFLINE-SYNC.md`](docs/plans/IMPL-IOS-01-OFFLINE-SYNC.md).
 

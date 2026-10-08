@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
@@ -328,11 +329,22 @@ class MirrorWorkoutSessionRepository(
      */
     private suspend fun resolveScheduled(programId: String, scheduledId: String): ScheduledWorkout? {
         val id = mirrorId(programId, scheduledId)
-        mirror.record(MirrorTables.WORKOUT_SCHEDULED, id)
-            ?.takeIf { !it.dirty }
-            ?.let { decodeScheduled(it.payloadJson) }
-            ?.let { return it }
-        return fetchAndMirrorScheduled(programId, scheduledId)
+        val record = mirror.record(MirrorTables.WORKOUT_SCHEDULED, id)
+        val mirrored = record?.let { decodeScheduled(it.payloadJson) }
+        // A dirty row carries an un-synced local outcome (e.g. a pending
+        // completion) — newer truth than any server copy, so don't read through
+        // over it (matches Android's per-row dirty guard).
+        if (record?.dirty == true) return mirrored
+        // Read-through, NOT mirror-first: the server rewrites this doc after it was
+        // first mirrored (progression writeback, continuation heals), and a stale
+        // mirror here means coaching the whole workout at the wrong weights.
+        // Refresh from the network at the moment the numbers matter — time-boxed so
+        // a gym dead zone doesn't hold the coach screen hostage — and fall back to
+        // the mirrored copy offline/slow. (Parity with Android #300.)
+        val fresh = withTimeoutOrNull(SCHEDULED_READ_THROUGH_TIMEOUT_MS) {
+            fetchAndMirrorScheduled(programId, scheduledId)
+        }
+        return fresh ?: mirrored
     }
 
     /**
@@ -421,6 +433,14 @@ class MirrorWorkoutSessionRepository(
     private fun mint(): String = "ios-" + Random.nextLong().toString(16).removePrefix("-")
 
     private companion object {
+        /**
+         * Bound on the [start] read-through refresh (parity with Android #300):
+         * long enough for a normal calendar fetch, short enough that a gym dead
+         * zone doesn't hold the coach screen hostage before falling back to the
+         * mirrored copy.
+         */
+        const val SCHEDULED_READ_THROUGH_TIMEOUT_MS = 4_000L
+
         /** The sync id of one scheduled session's mirror row (parity with Android). */
         fun mirrorId(programId: String, scheduledId: String): String = "$programId/$scheduledId"
 
