@@ -156,6 +156,33 @@ class WorkoutSessionRepositoryTest {
     }
 
     @Test
+    fun `start reads through to the network so server rewrites beat a stale mirror`() = runTest {
+        // The mirrored copy predates a server-side prescription rewrite
+        // (progression writeback / continuation heal). Starting the workout must
+        // coach from the healed copy, not the stale mirror.
+        mirrorScheduled()
+        val healed = scheduledDto().copy(dayLabel = "Lower (healed)")
+        coEvery { api.calendar(PROGRAM_ID, any(), any()) } returns listOf(healed)
+
+        val draft = repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        assertEquals("Lower (healed)", draft.scheduled.dayLabel)
+        // The refresh also heals the mirror row itself, not just this draft.
+        val row = mirror.getRow(MirrorTables.WORKOUT_SCHEDULED, ENTITY_ID)
+        assertTrue(row!!.payloadJson.contains("Lower (healed)"))
+    }
+
+    @Test
+    fun `start falls back to the stale mirror when the refresh fails`() = runTest {
+        mirrorScheduled()
+        coEvery { api.calendar(PROGRAM_ID, any(), any()) } throws java.io.IOException("offline")
+
+        val draft = repo.start(PROGRAM_ID, SCHEDULED_ID).getOrThrow()
+
+        assertEquals("Lower", draft.scheduled.dayLabel)
+    }
+
+    @Test
     fun `start hydrates the draft from a completed snapshot's logged sets`() = runTest {
         // A finished session mirrored with actuals: opening it (to review) seeds
         // the draft with what was performed, not a blank sheet.

@@ -1,5 +1,6 @@
 package com.gte619n.healthfitness.persistence.workoutprogram;
 
+import static com.gte619n.healthfitness.persistence.FirestoreMapper.serverTimestamp;
 import static com.gte619n.healthfitness.persistence.FirestoreSupport.await;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentSnapshot;
@@ -131,7 +132,12 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
                 Object session = days.isEmpty() ? null : days.get(0);
                 batch.update(
                     collection(sw.userId(), sw.programId()).document(sw.scheduledId()),
-                    "session", session);
+                    "session", session,
+                    // Same delta-sync bookkeeping as toBody(): bump updatedAt so
+                    // the rewrite is emitted, and backfill scheduledId on docs
+                    // created before it was stored.
+                    "updatedAt", serverTimestamp(),
+                    "scheduledId", sw.scheduledId());
             }
             await(batch.commit());
         }
@@ -139,6 +145,15 @@ public class FirestoreScheduledWorkoutRepository implements ScheduledWorkoutRepo
 
     private static Map<String, Object> toBody(ScheduledWorkout sw) {
         Map<String, Object> body = new HashMap<>();
+        // scheduledId duplicates the doc id and updatedAt is write bookkeeping,
+        // but both are load-bearing for delta sync: FirestoreSyncChangeReader
+        // only emits docs that pass an `updatedAt >= cursor` scan, and the
+        // Android mirror decodes the raw doc as ScheduledWorkoutDto, whose
+        // required scheduledId the doc id alone can't supply. Without them a
+        // server-side rewrite (progression writeback, continuation heal) never
+        // reaches an already-mirrored phone.
+        body.put("scheduledId", sw.scheduledId());
+        body.put("updatedAt", serverTimestamp());
         body.put("date", sw.date().toString());
         body.put("phaseId", sw.phaseId());
         body.put("dayId", sw.dayId());
